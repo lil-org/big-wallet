@@ -11,4 +11,9 @@ class ViewController: NSViewController {
         label.stringValue = "yo"
     }
 
+    @IBAction func actionButtonTapped(_ sender: Any) {
+        Window.closeAll()
+        Window.activateSafari()
+    }
+    
 }

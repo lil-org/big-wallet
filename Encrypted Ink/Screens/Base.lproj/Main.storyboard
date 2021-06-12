@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <document type="com.apple.InterfaceBuilder3.Cocoa.Storyboard.XIB" version="3.0" toolsVersion="17701" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES" initialViewController="B8D-0N-5wS">
     <dependencies>
+        <deployment identifier="macosx"/>
         <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="17701"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
@@ -717,11 +718,23 @@
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
                                 </textFieldCell>
                             </textField>
+                            <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="t6z-sy-JB9">
+                                <rect key="frame" x="203" y="65" width="75" height="32"/>
+                                <buttonCell key="cell" type="push" title="Button" bezelStyle="rounded" alignment="center" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="WW9-Lc-I9e">
+                                    <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
+                                    <font key="font" metaFont="system"/>
+                                    <connections>
+                                        <action selector="actionButtonTapped:" target="XfG-lQ-9wD" id="hYm-ft-1Mx"/>
+                                    </connections>
+                                </buttonCell>
+                            </button>
                         </subviews>
                         <constraints>
                             <constraint firstItem="Tg9-eO-KYv" firstAttribute="centerY" secondItem="m2S-Jp-Qdl" secondAttribute="centerY" id="JEi-1A-C8Q"/>
                             <constraint firstAttribute="trailing" secondItem="Tg9-eO-KYv" secondAttribute="trailing" constant="20" id="c60-eY-yDQ"/>
                             <constraint firstItem="Tg9-eO-KYv" firstAttribute="leading" secondItem="m2S-Jp-Qdl" secondAttribute="leading" constant="20" id="dxN-kJ-I43"/>
+                            <constraint firstItem="t6z-sy-JB9" firstAttribute="centerX" secondItem="Tg9-eO-KYv" secondAttribute="centerX" id="eYc-tf-RqU"/>
+                            <constraint firstItem="t6z-sy-JB9" firstAttribute="top" secondItem="Tg9-eO-KYv" secondAttribute="bottom" constant="35" id="pQh-NS-rwd"/>
                         </constraints>
                     </view>
                     <connections>
