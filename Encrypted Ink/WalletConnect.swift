@@ -78,21 +78,16 @@ class WalletConnect {
     }
 
     func approveSign(id: Int64, payload: WCEthereumSignPayload, address: String, interactor: WCInteractor?) {
-        // TODO: use correct method
-        let message: String
+        var message: String?
         switch payload {
-        case let .sign(data: data, raw: raw):
-            message = "" // TODO: implement
+        case let .sign(data: data, raw: _):
+            message = String(data: data, encoding: .utf8)
         case let .personalSign(data: data, raw: _):
-            message = String(data: data, encoding: .utf8) ?? ""
+            message = String(data: data, encoding: .utf8)
         case let .signTypeData(id: _, data: _, raw: raw):
             if raw.count >= 2 {
                 message = raw[1]
-            } else {
-                message = ""
             }
-        default:
-            message = ""
         }
 
         showAlert(text: "Sign message", onOK: {
@@ -114,11 +109,24 @@ class WalletConnect {
 //        interactor?.approveRequest(id: id, result: hash.hexString).cauterize()
     }
 
-    func sign(id: Int64, message: String, payload: WCEthereumSignPayload, address: String, interactor: WCInteractor?) {  // only personal sign for now
+    func sign(id: Int64, message: String?, payload: WCEthereumSignPayload, address: String, interactor: WCInteractor?) {
         guard
-            let account = AccountsService.getAccounts().filter { $0.address == address.lowercased() }.first,
-            let result = try? Ethereum.signPersonal(message: message, account: account)
+            let message = message,
+            let account = AccountsService.getAccounts().filter({ $0.address == address.lowercased() }).first
         else {
+            rejectRequest(id: id, interactor: interactor, message: "Failed for some reason")
+            return
+        }
+        var signed: String?
+        switch payload {
+        case .personalSign:
+            signed = try? Ethereum.signPersonal(message: message, account: account)
+        case .signTypeData:
+            signed = try? Ethereum.sign(typedData: message, account: account)
+        case .sign:
+            signed = try? Ethereum.sign(message: message, account: account)
+        }
+        guard let result = signed else {
             rejectRequest(id: id, interactor: interactor, message: "Failed for some reason")
             return
         }
