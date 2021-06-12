@@ -4,10 +4,14 @@ import Cocoa
 
 class ViewController: NSViewController {
 
+    private var connectivity: NearbyConnectivity?
+    
+    @IBOutlet weak var label: NSTextField!
+    
     override func viewDidLoad() {
         super.viewDidLoad()
-
-        // Do any additional setup after loading the view.
+        label.stringValue = "yo"
+        connectivity = NearbyConnectivity(delegate: self)
     }
 
     override var representedObject: Any? {
@@ -16,4 +20,12 @@ class ViewController: NSViewController {
         }
     }
 
+}
+
+extension ViewController: NearbyConnectivityDelegate {
+    
+    func didFind(link: String) {
+        label.stringValue = link
+    }
+    
 }
