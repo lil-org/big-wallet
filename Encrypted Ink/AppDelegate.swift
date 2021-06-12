@@ -11,4 +11,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         agent.start()
     }
 
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // TODO: reopen correct screen
+        print("applicationShouldHandleReopen")
+        return true
+    }
+    
 }
