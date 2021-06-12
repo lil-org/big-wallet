@@ -133,18 +133,26 @@
 		2C19953E2674C4B900A8E370 /* Encrypted Ink */ = {
 			isa = PBXGroup;
 			children = (
-				0DB729012674E2DB0011F7A1 /* EIP712 */,
 				2C19953F2674C4B900A8E370 /* AppDelegate.swift */,
 				2C1995412674C4B900A8E370 /* ViewController.swift */,
-				2C1995552674D0F300A8E370 /* Ethereum.swift */,
-				2C8A09B42675101300993638 /* AccountsService.swift */,
 				2C1995732674E80E00A8E370 /* NearbyConnectivity.swift */,
+				2C8A09C2267513A700993638 /* Ethereum */,
 				2C1995432674C4BA00A8E370 /* Assets.xcassets */,
 				2C1995452674C4BA00A8E370 /* Main.storyboard */,
 				2C1995482674C4BA00A8E370 /* Info.plist */,
 				2C1995492674C4BA00A8E370 /* Encrypted_Ink.entitlements */,
 			);
 			path = "Encrypted Ink";
+			sourceTree = "<group>";
+		};
+		2C8A09C2267513A700993638 /* Ethereum */ = {
+			isa = PBXGroup;
+			children = (
+				2C1995552674D0F300A8E370 /* Ethereum.swift */,
+				2C8A09B42675101300993638 /* AccountsService.swift */,
+				0DB729012674E2DB0011F7A1 /* EIP712 */,
+			);
+			path = Ethereum;
 			sourceTree = "<group>";
 		};
 		FB5786212D81829B0FADBD25 /* Pods */ = {
