@@ -19,12 +19,14 @@ disabled_rules:
   - force_try
   - unused_setter_value
 
-
 opt_in_rules:
   - explicit_init
   - fatal_error_message
   - first_where
   - operator_usage_whitespace
+
+excluded:
+  - Pods
 
 shorthand_operator: warning
 empty_count: warning
