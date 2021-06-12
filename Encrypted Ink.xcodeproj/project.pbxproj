@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		0DB729122674E2DB0011F7A1 /* EIP712ParameterEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729022674E2DB0011F7A1 /* EIP712ParameterEncoder.swift */; };
-		0DB729132674E2DB0011F7A1 /* EIP712SignatureVerifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729032674E2DB0011F7A1 /* EIP712SignatureVerifier.swift */; };
 		0DB729142674E2DB0011F7A1 /* EIP712Parameter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729042674E2DB0011F7A1 /* EIP712Parameter.swift */; };
 		0DB729152674E2DB0011F7A1 /* EIP712Error.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729052674E2DB0011F7A1 /* EIP712Error.swift */; };
 		0DB729162674E2DB0011F7A1 /* EIP712SimpleValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729062674E2DB0011F7A1 /* EIP712SimpleValue.swift */; };
@@ -35,7 +34,6 @@
 
 /* Begin PBXFileReference section */
 		0DB729022674E2DB0011F7A1 /* EIP712ParameterEncoder.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712ParameterEncoder.swift; sourceTree = "<group>"; };
-		0DB729032674E2DB0011F7A1 /* EIP712SignatureVerifier.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712SignatureVerifier.swift; sourceTree = "<group>"; };
 		0DB729042674E2DB0011F7A1 /* EIP712Parameter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Parameter.swift; sourceTree = "<group>"; };
 		0DB729052674E2DB0011F7A1 /* EIP712Error.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Error.swift; sourceTree = "<group>"; };
 		0DB729062674E2DB0011F7A1 /* EIP712SimpleValue.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712SimpleValue.swift; sourceTree = "<group>"; };
@@ -81,7 +79,6 @@
 			isa = PBXGroup;
 			children = (
 				0DB729022674E2DB0011F7A1 /* EIP712ParameterEncoder.swift */,
-				0DB729032674E2DB0011F7A1 /* EIP712SignatureVerifier.swift */,
 				0DB729042674E2DB0011F7A1 /* EIP712Parameter.swift */,
 				0DB729052674E2DB0011F7A1 /* EIP712Error.swift */,
 				0DB729062674E2DB0011F7A1 /* EIP712SimpleValue.swift */,
@@ -313,7 +310,6 @@
 				0DB7291F2674E2DB0011F7A1 /* EIP712Representable.swift in Sources */,
 				0DB7291E2674E2DB0011F7A1 /* EIP712Signable.swift in Sources */,
 				0DB7291C2674E2DB0011F7A1 /* EIP712Value.swift in Sources */,
-				0DB729132674E2DB0011F7A1 /* EIP712SignatureVerifier.swift in Sources */,
 				2C1995562674D0F300A8E370 /* Ethereum.swift in Sources */,
 				2C1995742674E80E00A8E370 /* NearbyConnectivity.swift in Sources */,
 			);
