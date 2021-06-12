@@ -6,13 +6,19 @@ import MultipeerConnectivity
 private let serviceIdentifier = "connector"
 private let queue = DispatchQueue(label: serviceIdentifier, qos: .default)
 
+protocol NearbyConnectivityDelegate: AnyObject {
+    func didFind(link: String)
+}
+
 class NearbyConnectivity: NSObject {
     
+    private weak var connectivityDelegate: NearbyConnectivityDelegate?
     private var devicePeerID: MCPeerID!
     private var serviceBrowser: MCNearbyServiceBrowser!
     
-    init(link: String) {
+    init(delegate: NearbyConnectivityDelegate) {
         super.init()
+        connectivityDelegate = delegate
         devicePeerID = MCPeerID(displayName: UUID().uuidString)
         
         serviceBrowser = MCNearbyServiceBrowser(peer: devicePeerID, serviceType: serviceIdentifier)
@@ -41,8 +47,10 @@ class NearbyConnectivity: NSObject {
 extension NearbyConnectivity: MCNearbyServiceBrowserDelegate {
 
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) {
-        guard let info = info else { return }
-        // TODO: use received info
+        guard let info = info, let link = info["wclink"] else { return }
+        DispatchQueue.main.async { [weak connectivityDelegate] in
+            connectivityDelegate?.didFind(link: link)
+        }
     }
 
     func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) { }
