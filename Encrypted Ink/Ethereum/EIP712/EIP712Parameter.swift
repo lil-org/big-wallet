@@ -100,7 +100,6 @@ public enum EIP712ParameterType {
     }
 }
 
-
 public struct EIP712Parameter {
     
     public let name: String

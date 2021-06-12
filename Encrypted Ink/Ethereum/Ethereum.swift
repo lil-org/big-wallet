@@ -65,9 +65,7 @@ struct Ethereum {
     
     static func send(transaction: Transaction, account: Account) throws {
         let bytes = signedTransactionBytes(transaction: transaction, account: account)
-        let response = try SendRawTransactionProcedure(
-            network: network,
-            transactionBytes: bytes).call()
+        let response = try SendRawTransactionProcedure(network: network, transactionBytes: bytes).call()
     }
     
     private static func signedTransactionBytes(transaction: Transaction, account: Account) -> EthContractCallBytes {

@@ -99,7 +99,7 @@ public class EIP712TypedData {
     private func findTypeDependencies(primaryType: EIP712Type, types: [String: EIP712Type], results: [EIP712Type] = []) throws -> [EIP712Type] {
         
         var results = results
-        if (results.contains(where: { $0.name == primaryType.name} ) || types[primaryType.name] == nil) {
+        if (results.contains(where: { $0.name == primaryType.name }) || types[primaryType.name] == nil) {
             return results
         }
 

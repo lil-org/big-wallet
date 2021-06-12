@@ -29,6 +29,7 @@
 		2C19955B2674D54600A8E370 /* WalletConnect in Frameworks */ = {isa = PBXBuildFile; productRef = 2C19955A2674D54600A8E370 /* WalletConnect */; };
 		2C1995742674E80E00A8E370 /* NearbyConnectivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995732674E80E00A8E370 /* NearbyConnectivity.swift */; };
 		2C8A09B52675101300993638 /* AccountsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09B42675101300993638 /* AccountsService.swift */; };
+		2C8A09C6267513FC00993638 /* Agent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09C5267513FC00993638 /* Agent.swift */; };
 		88745B0F4DEE1F60AD0F02C3 /* Pods_Encrypted_Ink.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3704D7F64179CCDCE2E8C783 /* Pods_Encrypted_Ink.framework */; };
 /* End PBXBuildFile section */
 
@@ -59,6 +60,7 @@
 		2C1995552674D0F300A8E370 /* Ethereum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ethereum.swift; sourceTree = "<group>"; };
 		2C1995732674E80E00A8E370 /* NearbyConnectivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyConnectivity.swift; sourceTree = "<group>"; };
 		2C8A09B42675101300993638 /* AccountsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsService.swift; sourceTree = "<group>"; };
+		2C8A09C5267513FC00993638 /* Agent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent.swift; sourceTree = "<group>"; };
 		3704D7F64179CCDCE2E8C783 /* Pods_Encrypted_Ink.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Encrypted_Ink.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -134,11 +136,11 @@
 			isa = PBXGroup;
 			children = (
 				2C19953F2674C4B900A8E370 /* AppDelegate.swift */,
-				2C1995412674C4B900A8E370 /* ViewController.swift */,
+				2C8A09C5267513FC00993638 /* Agent.swift */,
 				2C1995732674E80E00A8E370 /* NearbyConnectivity.swift */,
+				2C8A09C92675142700993638 /* Screens */,
 				2C8A09C2267513A700993638 /* Ethereum */,
 				2C1995432674C4BA00A8E370 /* Assets.xcassets */,
-				2C1995452674C4BA00A8E370 /* Main.storyboard */,
 				2C1995482674C4BA00A8E370 /* Info.plist */,
 				2C1995492674C4BA00A8E370 /* Encrypted_Ink.entitlements */,
 			);
@@ -153,6 +155,15 @@
 				0DB729012674E2DB0011F7A1 /* EIP712 */,
 			);
 			path = Ethereum;
+			sourceTree = "<group>";
+		};
+		2C8A09C92675142700993638 /* Screens */ = {
+			isa = PBXGroup;
+			children = (
+				2C1995412674C4B900A8E370 /* ViewController.swift */,
+				2C1995452674C4BA00A8E370 /* Main.storyboard */,
+			);
+			path = Screens;
 			sourceTree = "<group>";
 		};
 		FB5786212D81829B0FADBD25 /* Pods */ = {
@@ -302,6 +313,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0DB729152674E2DB0011F7A1 /* EIP712Error.swift in Sources */,
+				2C8A09C6267513FC00993638 /* Agent.swift in Sources */,
 				0DB7291A2674E2DB0011F7A1 /* EIP712Type.swift in Sources */,
 				0DB7291D2674E2DB0011F7A1 /* EIP712Hashable.swift in Sources */,
 				0DB729162674E2DB0011F7A1 /* EIP712SimpleValue.swift in Sources */,

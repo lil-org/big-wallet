@@ -38,7 +38,7 @@ public extension EIP712Representable {
         return EIP712Type(name: typeName, parameters: try values().map { $0.parameter })
     }
     
-    func encodeType() throws ->  EIP712StructType {
+    func encodeType() throws -> EIP712StructType {
         
         let primary = try type()
         let referenced = try typeDependencies().filter { $0.name != primary.name }
