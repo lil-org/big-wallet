@@ -22,7 +22,7 @@
 		0DB7291F2674E2DB0011F7A1 /* EIP712Representable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729102674E2DB0011F7A1 /* EIP712Representable.swift */; };
 		0DB729202674E2DB0011F7A1 /* EIP712Domain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729112674E2DB0011F7A1 /* EIP712Domain.swift */; };
 		2C1995402674C4B900A8E370 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C19953F2674C4B900A8E370 /* AppDelegate.swift */; };
-		2C1995422674C4B900A8E370 /* AccountsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995412674C4B900A8E370 /* AccountsViewController.swift */; };
+		2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995412674C4B900A8E370 /* ImportViewController.swift */; };
 		2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995432674C4BA00A8E370 /* Assets.xcassets */; };
 		2C1995472674C4BA00A8E370 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995452674C4BA00A8E370 /* Main.storyboard */; };
 		2C1995562674D0F300A8E370 /* Ethereum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995552674D0F300A8E370 /* Ethereum.swift */; };
@@ -54,7 +54,7 @@
 		2179E47ED166F2C33B9718BA /* Pods-Encrypted Ink.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Encrypted Ink.release.xcconfig"; path = "Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink.release.xcconfig"; sourceTree = "<group>"; };
 		2C19953C2674C4B900A8E370 /* Encrypted Ink.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Encrypted Ink.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C19953F2674C4B900A8E370 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		2C1995412674C4B900A8E370 /* AccountsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsViewController.swift; sourceTree = "<group>"; };
+		2C1995412674C4B900A8E370 /* ImportViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportViewController.swift; sourceTree = "<group>"; };
 		2C1995432674C4BA00A8E370 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2C1995462674C4BA00A8E370 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		2C1995482674C4BA00A8E370 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -166,7 +166,7 @@
 		2C8A09C92675142700993638 /* Screens */ = {
 			isa = PBXGroup;
 			children = (
-				2C1995412674C4B900A8E370 /* AccountsViewController.swift */,
+				2C1995412674C4B900A8E370 /* ImportViewController.swift */,
 				2C1995452674C4BA00A8E370 /* Main.storyboard */,
 			);
 			path = Screens;
@@ -329,7 +329,7 @@
 				0DB729202674E2DB0011F7A1 /* EIP712Domain.swift in Sources */,
 				0DB729182674E2DB0011F7A1 /* EIP712Signer.swift in Sources */,
 				0DB729192674E2DB0011F7A1 /* EIP712TypedData.swift in Sources */,
-				2C1995422674C4B900A8E370 /* AccountsViewController.swift in Sources */,
+				2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */,
 				2C8A09B52675101300993638 /* AccountsService.swift in Sources */,
 				2C1995402674C4B900A8E370 /* AppDelegate.swift in Sources */,
 				0DB729142674E2DB0011F7A1 /* EIP712Parameter.swift in Sources */,

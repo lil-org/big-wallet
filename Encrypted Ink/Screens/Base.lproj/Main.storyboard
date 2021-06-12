@@ -679,15 +679,15 @@
                 <customObject id="YLy-65-1bz" customClass="NSFontManager"/>
                 <customObject id="Ady-hI-5gd" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="75" y="0.0"/>
+            <point key="canvasLocation" x="4" y="-166"/>
         </scene>
         <!--Window Controller-->
         <scene sceneID="R2V-B0-nI4">
             <objects>
-                <windowController storyboardIdentifier="AccountsViewController" id="B8D-0N-5wS" sceneMemberID="viewController">
+                <windowController storyboardIdentifier="ImportViewController" showSeguePresentationStyle="single" id="B8D-0N-5wS" sceneMemberID="viewController">
                     <window key="window" title="Encrypted Ink" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" releasedWhenClosed="NO" visibleAtLaunch="NO" animationBehavior="default" tabbingMode="disallowed" id="IQv-IB-iLA">
                         <windowStyleMask key="styleMask" titled="YES" closable="YES"/>
-                        <rect key="contentRect" x="561" y="393" width="480" height="270"/>
+                        <rect key="contentRect" x="561" y="393" width="250" height="350"/>
                         <rect key="screenRect" x="0.0" y="0.0" width="1680" height="1027"/>
                         <connections>
                             <outlet property="delegate" destination="B8D-0N-5wS" id="98r-iN-zZc"/>
@@ -699,29 +699,44 @@
                 </windowController>
                 <customObject id="Oky-zY-oP4" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="75" y="250"/>
+            <point key="canvasLocation" x="75" y="253.5"/>
         </scene>
-        <!--Accounts View Controller-->
+        <!--Import View Controller-->
         <scene sceneID="hIz-AP-VOD">
             <objects>
-                <viewController id="XfG-lQ-9wD" customClass="AccountsViewController" customModule="Encrypted_Ink" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController id="XfG-lQ-9wD" customClass="ImportViewController" customModule="Encrypted_Ink" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="m2S-Jp-Qdl">
-                        <rect key="frame" x="0.0" y="0.0" width="480" height="270"/>
+                        <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
-                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Tg9-eO-KYv">
-                                <rect key="frame" x="18" y="127" width="444" height="16"/>
-                                <textFieldCell key="cell" selectable="YES" alignment="center" title="Yo" id="wxx-wP-rw8">
-                                    <font key="font" metaFont="system"/>
+                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="feM-MO-Msf">
+                                <rect key="frame" x="14" y="258" width="222" height="68"/>
+                                <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Import Account" id="bI7-hT-bS8">
+                                    <font key="font" metaFont="systemHeavy" size="29"/>
                                     <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
                                 </textFieldCell>
                             </textField>
+                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" textCompletion="NO" translatesAutoresizingMaskIntoConstraints="NO" id="YPY-7C-6mv">
+                                <rect key="frame" x="45" y="108" width="160" height="120"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="160" id="Pi7-Hn-MhX"/>
+                                    <constraint firstAttribute="height" constant="120" id="WsU-g6-Y2a"/>
+                                </constraints>
+                                <textFieldCell key="cell" controlSize="large" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" state="on" borderStyle="border" focusRingType="none" alignment="left" placeholderString="Private key" drawsBackground="YES" id="qLb-bZ-IWI">
+                                    <font key="font" metaFont="system"/>
+                                    <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
+                                    <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                                </textFieldCell>
+                            </textField>
                             <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="t6z-sy-JB9">
-                                <rect key="frame" x="203" y="65" width="75" height="32"/>
-                                <buttonCell key="cell" type="push" title="Button" bezelStyle="rounded" alignment="center" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="WW9-Lc-I9e">
+                                <rect key="frame" x="100" y="44" width="51" height="40"/>
+                                <buttonCell key="cell" type="push" title="OK" bezelStyle="rounded" alignment="center" controlSize="large" enabled="NO" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="WW9-Lc-I9e">
                                     <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                     <font key="font" metaFont="system"/>
+                                    <string key="keyEquivalent" base64-UTF8="YES">
+DQ
+</string>
                                     <connections>
                                         <action selector="actionButtonTapped:" target="XfG-lQ-9wD" id="hYm-ft-1Mx"/>
                                     </connections>
@@ -729,20 +744,19 @@
                             </button>
                         </subviews>
                         <constraints>
-                            <constraint firstItem="Tg9-eO-KYv" firstAttribute="centerY" secondItem="m2S-Jp-Qdl" secondAttribute="centerY" id="JEi-1A-C8Q"/>
-                            <constraint firstAttribute="trailing" secondItem="Tg9-eO-KYv" secondAttribute="trailing" constant="20" id="c60-eY-yDQ"/>
-                            <constraint firstItem="Tg9-eO-KYv" firstAttribute="leading" secondItem="m2S-Jp-Qdl" secondAttribute="leading" constant="20" id="dxN-kJ-I43"/>
-                            <constraint firstItem="t6z-sy-JB9" firstAttribute="centerX" secondItem="Tg9-eO-KYv" secondAttribute="centerX" id="eYc-tf-RqU"/>
-                            <constraint firstItem="t6z-sy-JB9" firstAttribute="top" secondItem="Tg9-eO-KYv" secondAttribute="bottom" constant="35" id="pQh-NS-rwd"/>
+                            <constraint firstItem="feM-MO-Msf" firstAttribute="top" secondItem="m2S-Jp-Qdl" secondAttribute="top" constant="24" id="MQp-NN-Cn2"/>
+                            <constraint firstItem="t6z-sy-JB9" firstAttribute="top" secondItem="YPY-7C-6mv" secondAttribute="bottom" constant="30" id="WRF-fn-Hho"/>
+                            <constraint firstItem="feM-MO-Msf" firstAttribute="leading" secondItem="m2S-Jp-Qdl" secondAttribute="leading" constant="16" id="WXg-Wv-Eyh"/>
+                            <constraint firstItem="YPY-7C-6mv" firstAttribute="centerX" secondItem="m2S-Jp-Qdl" secondAttribute="centerX" id="cGD-Hm-XEo"/>
+                            <constraint firstItem="t6z-sy-JB9" firstAttribute="centerX" secondItem="m2S-Jp-Qdl" secondAttribute="centerX" id="chI-zB-bFc"/>
+                            <constraint firstAttribute="trailing" secondItem="feM-MO-Msf" secondAttribute="trailing" constant="16" id="k5R-iV-R6y"/>
+                            <constraint firstItem="YPY-7C-6mv" firstAttribute="top" secondItem="feM-MO-Msf" secondAttribute="bottom" constant="30" id="wQT-nA-szt"/>
                         </constraints>
                     </view>
-                    <connections>
-                        <outlet property="label" destination="Tg9-eO-KYv" id="I9b-uR-0Lj"/>
-                    </connections>
                 </viewController>
                 <customObject id="rPt-NT-nkU" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="75" y="647"/>
+            <point key="canvasLocation" x="75" y="740"/>
         </scene>
     </scenes>
 </document>

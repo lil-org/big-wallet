@@ -2,13 +2,12 @@
 
 import Cocoa
 
-class AccountsViewController: NSViewController {
+class ImportViewController: NSViewController {
     
     @IBOutlet weak var label: NSTextField!
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        label.stringValue = "yo"
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
