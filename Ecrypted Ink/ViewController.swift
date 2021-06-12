@@ -1,9 +1,4 @@
-//
-//  ViewController.swift
-//  Ecrypted Ink
-//
-//  Created by Ivan Grachev on 12.06.2021.
-//
+// Copyright © 2021 Encrypted Ink. All rights reserved.
 
 import Cocoa
 
@@ -21,6 +16,4 @@ class ViewController: NSViewController {
         }
     }
 
-
 }
-
