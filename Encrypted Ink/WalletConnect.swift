@@ -58,7 +58,7 @@ class WalletConnect {
     
     private func showAlert(text: String, onOK: () -> Void, onCancel: () -> Void) {
         let alert = NSAlert()
-        alert.messageText = "Sign message"
+        alert.messageText = text
         alert.addButton(withTitle: "OK")
         alert.addButton(withTitle: "Cancel")
         if alert.runModal() == NSApplication.ModalResponse.alertFirstButtonReturn {
