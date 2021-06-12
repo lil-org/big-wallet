@@ -22,7 +22,7 @@
 		2C1995432674C4BA00A8E370 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2C1995462674C4BA00A8E370 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		2C1995482674C4BA00A8E370 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		2C1995492674C4BA00A8E370 /* Ecrypted_Ink.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Ecrypted_Ink.entitlements; sourceTree = "<group>"; };
+		2C1995492674C4BA00A8E370 /* Encrypted_Ink.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Encrypted_Ink.entitlements; sourceTree = "<group>"; };
 		2C1995552674D0F300A8E370 /* Ethereum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ethereum.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -63,7 +63,7 @@
 				2C1995432674C4BA00A8E370 /* Assets.xcassets */,
 				2C1995452674C4BA00A8E370 /* Main.storyboard */,
 				2C1995482674C4BA00A8E370 /* Info.plist */,
-				2C1995492674C4BA00A8E370 /* Ecrypted_Ink.entitlements */,
+				2C1995492674C4BA00A8E370 /* Encrypted_Ink.entitlements */,
 			);
 			path = "Encrypted Ink";
 			sourceTree = "<group>";
@@ -304,17 +304,17 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "Ecrypted Ink/Ecrypted_Ink.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "Encrypted Ink/Encrypted_Ink.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				ENABLE_HARDENED_RUNTIME = YES;
-				INFOPLIST_FILE = "Ecrypted Ink/Info.plist";
+				INFOPLIST_FILE = "$(SRCROOT)/Encrypted Ink/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "lol.ivan.Ecrypted-Ink";
+				PRODUCT_BUNDLE_IDENTIFIER = "lol.ivan.Encrypted-Ink";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 			};
@@ -325,17 +325,17 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "Ecrypted Ink/Ecrypted_Ink.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "Encrypted Ink/Encrypted_Ink.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				ENABLE_HARDENED_RUNTIME = YES;
-				INFOPLIST_FILE = "Ecrypted Ink/Info.plist";
+				INFOPLIST_FILE = "$(SRCROOT)/Encrypted Ink/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "lol.ivan.Ecrypted-Ink";
+				PRODUCT_BUNDLE_IDENTIFIER = "lol.ivan.Encrypted-Ink";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 			};
