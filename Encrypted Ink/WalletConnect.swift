@@ -96,7 +96,7 @@ class WalletConnect {
         }
 
         showAlert(text: "Sign message", onOK: {
-            self.sign(id: id, payload: payload, address: address, interactor: interactor)
+            self.sign(id: id, message: message, payload: payload, address: address, interactor: interactor)
         }, onCancel: {
             self.rejectRequest(id: id, interactor: interactor, message: "User canceled")
         })
@@ -114,14 +114,16 @@ class WalletConnect {
 //        interactor?.approveRequest(id: id, result: hash.hexString).cauterize()
     }
 
-    func sign(id: Int64, payload: WCEthereumSignPayload, address: String, interactor: WCInteractor?) {
-//        let result = "0x" + rPart + sPart + vPart
-//        interactor?.approveRequest(id: id, result: result).cauterize()
-//
-//        let result = try? MessageSigner.shared.signTypedMessage(raw[1], account: account)
-//        interactor?.approveRequest(id: id, result: result).cauterize()
+    func sign(id: Int64, message: String, payload: WCEthereumSignPayload, address: String, interactor: WCInteractor?) {  // only personal sign for now
+        guard
+            let account = AccountsService.getAccounts().filter { $0.address == address.lowercased() }.first,
+            let result = try? Ethereum.signPersonal(message: message, account: account)
+        else {
+            rejectRequest(id: id, interactor: interactor, message: "Failed for some reason")
+            return
+        }
         
-//        rejectRequest(id: id, interactor: interactor, message: "Failed for some reason")
+        interactor?.approveRequest(id: id, result: result).cauterize()
     }
     
 }
