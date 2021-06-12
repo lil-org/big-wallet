@@ -16,7 +16,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		2C19953C2674C4B900A8E370 /* Ecrypted Ink.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Ecrypted Ink.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		2C19953C2674C4B900A8E370 /* Encrypted Ink.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Encrypted Ink.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C19953F2674C4B900A8E370 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		2C1995412674C4B900A8E370 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		2C1995432674C4BA00A8E370 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -41,7 +41,7 @@
 		2C1995332674C4B900A8E370 = {
 			isa = PBXGroup;
 			children = (
-				2C19953E2674C4B900A8E370 /* Ecrypted Ink */,
+				2C19953E2674C4B900A8E370 /* Encrypted Ink */,
 				2C19953D2674C4B900A8E370 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -49,12 +49,12 @@
 		2C19953D2674C4B900A8E370 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				2C19953C2674C4B900A8E370 /* Ecrypted Ink.app */,
+				2C19953C2674C4B900A8E370 /* Encrypted Ink.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		2C19953E2674C4B900A8E370 /* Ecrypted Ink */ = {
+		2C19953E2674C4B900A8E370 /* Encrypted Ink */ = {
 			isa = PBXGroup;
 			children = (
 				2C19953F2674C4B900A8E370 /* AppDelegate.swift */,
@@ -65,15 +65,15 @@
 				2C1995482674C4BA00A8E370 /* Info.plist */,
 				2C1995492674C4BA00A8E370 /* Ecrypted_Ink.entitlements */,
 			);
-			path = "Ecrypted Ink";
+			path = "Encrypted Ink";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		2C19953B2674C4B900A8E370 /* Ecrypted Ink */ = {
+		2C19953B2674C4B900A8E370 /* Encrypted Ink */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 2C19954C2674C4BA00A8E370 /* Build configuration list for PBXNativeTarget "Ecrypted Ink" */;
+			buildConfigurationList = 2C19954C2674C4BA00A8E370 /* Build configuration list for PBXNativeTarget "Encrypted Ink" */;
 			buildPhases = (
 				2C1995382674C4B900A8E370 /* Sources */,
 				2C1995392674C4B900A8E370 /* Frameworks */,
@@ -84,12 +84,12 @@
 			);
 			dependencies = (
 			);
-			name = "Ecrypted Ink";
+			name = "Encrypted Ink";
 			packageProductDependencies = (
 				2C19955A2674D54600A8E370 /* WalletConnect */,
 			);
 			productName = "Ecrypted Ink";
-			productReference = 2C19953C2674C4B900A8E370 /* Ecrypted Ink.app */;
+			productReference = 2C19953C2674C4B900A8E370 /* Encrypted Ink.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -106,7 +106,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 2C1995372674C4B900A8E370 /* Build configuration list for PBXProject "Ecrypted Ink" */;
+			buildConfigurationList = 2C1995372674C4B900A8E370 /* Build configuration list for PBXProject "Encrypted Ink" */;
 			compatibilityVersion = "Xcode 9.3";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -122,7 +122,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				2C19953B2674C4B900A8E370 /* Ecrypted Ink */,
+				2C19953B2674C4B900A8E370 /* Encrypted Ink */,
 			);
 		};
 /* End PBXProject section */
@@ -344,7 +344,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		2C1995372674C4B900A8E370 /* Build configuration list for PBXProject "Ecrypted Ink" */ = {
+		2C1995372674C4B900A8E370 /* Build configuration list for PBXProject "Encrypted Ink" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				2C19954A2674C4BA00A8E370 /* Debug */,
@@ -353,7 +353,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		2C19954C2674C4BA00A8E370 /* Build configuration list for PBXNativeTarget "Ecrypted Ink" */ = {
+		2C19954C2674C4BA00A8E370 /* Build configuration list for PBXNativeTarget "Encrypted Ink" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				2C19954D2674C4BA00A8E370 /* Debug */,
