@@ -12,7 +12,8 @@
 		2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995432674C4BA00A8E370 /* Assets.xcassets */; };
 		2C1995472674C4BA00A8E370 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995452674C4BA00A8E370 /* Main.storyboard */; };
 		2C1995562674D0F300A8E370 /* Ethereum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995552674D0F300A8E370 /* Ethereum.swift */; };
-		2C19955B2674D54600A8E370 /* BuildFile in Frameworks */ = {isa = PBXBuildFile; productRef = 2C19955A2674D54600A8E370 /* SwiftPackageProductDependency */; };
+		2C19955B2674D54600A8E370 /* WalletConnect in Frameworks */ = {isa = PBXBuildFile; productRef = 2C19955A2674D54600A8E370 /* WalletConnect */; };
+		2C1995742674E80E00A8E370 /* NearbyConnectivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995732674E80E00A8E370 /* NearbyConnectivity.swift */; };
 		88745B0F4DEE1F60AD0F02C3 /* Pods_Encrypted_Ink.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3704D7F64179CCDCE2E8C783 /* Pods_Encrypted_Ink.framework */; };
 /* End PBXBuildFile section */
 
@@ -27,6 +28,7 @@
 		2C1995482674C4BA00A8E370 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C1995492674C4BA00A8E370 /* Encrypted_Ink.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Encrypted_Ink.entitlements; sourceTree = "<group>"; };
 		2C1995552674D0F300A8E370 /* Ethereum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ethereum.swift; sourceTree = "<group>"; };
+		2C1995732674E80E00A8E370 /* NearbyConnectivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyConnectivity.swift; sourceTree = "<group>"; };
 		3704D7F64179CCDCE2E8C783 /* Pods_Encrypted_Ink.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Encrypted_Ink.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -35,7 +37,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2C19955B2674D54600A8E370 /* BuildFile in Frameworks */,
+				2C19955B2674D54600A8E370 /* WalletConnect in Frameworks */,
 				88745B0F4DEE1F60AD0F02C3 /* Pods_Encrypted_Ink.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -75,6 +77,7 @@
 				2C19953F2674C4B900A8E370 /* AppDelegate.swift */,
 				2C1995412674C4B900A8E370 /* ViewController.swift */,
 				2C1995552674D0F300A8E370 /* Ethereum.swift */,
+				2C1995732674E80E00A8E370 /* NearbyConnectivity.swift */,
 				2C1995432674C4BA00A8E370 /* Assets.xcassets */,
 				2C1995452674C4BA00A8E370 /* Main.storyboard */,
 				2C1995482674C4BA00A8E370 /* Info.plist */,
@@ -89,7 +92,6 @@
 				133FE10DD9778DE6E9745037 /* Pods-Encrypted Ink.debug.xcconfig */,
 				2179E47ED166F2C33B9718BA /* Pods-Encrypted Ink.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -113,7 +115,7 @@
 			);
 			name = "Encrypted Ink";
 			packageProductDependencies = (
-				2C19955A2674D54600A8E370 /* SwiftPackageProductDependency */,
+				2C19955A2674D54600A8E370 /* WalletConnect */,
 			);
 			productName = "Ecrypted Ink";
 			productReference = 2C19953C2674C4B900A8E370 /* Encrypted Ink.app */;
@@ -143,7 +145,7 @@
 			);
 			mainGroup = 2C1995332674C4B900A8E370;
 			packageReferences = (
-				2C1995592674D54600A8E370 /* RemoteSwiftPackageReference */,
+				2C1995592674D54600A8E370 /* XCRemoteSwiftPackageReference "wallet-connect-swift" */,
 			);
 			productRefGroup = 2C19953D2674C4B900A8E370 /* Products */;
 			projectDirPath = "";
@@ -233,6 +235,7 @@
 				2C1995422674C4B900A8E370 /* ViewController.swift in Sources */,
 				2C1995402674C4B900A8E370 /* AppDelegate.swift in Sources */,
 				2C1995562674D0F300A8E370 /* Ethereum.swift in Sources */,
+				2C1995742674E80E00A8E370 /* NearbyConnectivity.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -433,7 +436,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		2C1995592674D54600A8E370 /* RemoteSwiftPackageReference */ = {
+		2C1995592674D54600A8E370 /* XCRemoteSwiftPackageReference "wallet-connect-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/WalletConnect/wallet-connect-swift";
 			requirement = {
@@ -444,9 +447,9 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		2C19955A2674D54600A8E370 /* SwiftPackageProductDependency */ = {
+		2C19955A2674D54600A8E370 /* WalletConnect */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 2C1995592674D54600A8E370 /* RemoteSwiftPackageReference */;
+			package = 2C1995592674D54600A8E370 /* XCRemoteSwiftPackageReference "wallet-connect-swift" */;
 			productName = WalletConnect;
 		};
 /* End XCSwiftPackageProductDependency section */
