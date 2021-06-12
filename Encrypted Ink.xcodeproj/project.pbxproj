@@ -12,10 +12,13 @@
 		2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995432674C4BA00A8E370 /* Assets.xcassets */; };
 		2C1995472674C4BA00A8E370 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995452674C4BA00A8E370 /* Main.storyboard */; };
 		2C1995562674D0F300A8E370 /* Ethereum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995552674D0F300A8E370 /* Ethereum.swift */; };
-		2C19955B2674D54600A8E370 /* WalletConnect in Frameworks */ = {isa = PBXBuildFile; productRef = 2C19955A2674D54600A8E370 /* WalletConnect */; };
+		2C19955B2674D54600A8E370 /* BuildFile in Frameworks */ = {isa = PBXBuildFile; productRef = 2C19955A2674D54600A8E370 /* SwiftPackageProductDependency */; };
+		88745B0F4DEE1F60AD0F02C3 /* Pods_Encrypted_Ink.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3704D7F64179CCDCE2E8C783 /* Pods_Encrypted_Ink.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		133FE10DD9778DE6E9745037 /* Pods-Encrypted Ink.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Encrypted Ink.debug.xcconfig"; path = "Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink.debug.xcconfig"; sourceTree = "<group>"; };
+		2179E47ED166F2C33B9718BA /* Pods-Encrypted Ink.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Encrypted Ink.release.xcconfig"; path = "Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink.release.xcconfig"; sourceTree = "<group>"; };
 		2C19953C2674C4B900A8E370 /* Encrypted Ink.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Encrypted Ink.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C19953F2674C4B900A8E370 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		2C1995412674C4B900A8E370 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
@@ -24,6 +27,7 @@
 		2C1995482674C4BA00A8E370 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C1995492674C4BA00A8E370 /* Encrypted_Ink.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Encrypted_Ink.entitlements; sourceTree = "<group>"; };
 		2C1995552674D0F300A8E370 /* Ethereum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ethereum.swift; sourceTree = "<group>"; };
+		3704D7F64179CCDCE2E8C783 /* Pods_Encrypted_Ink.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Encrypted_Ink.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -31,18 +35,29 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2C19955B2674D54600A8E370 /* WalletConnect in Frameworks */,
+				2C19955B2674D54600A8E370 /* BuildFile in Frameworks */,
+				88745B0F4DEE1F60AD0F02C3 /* Pods_Encrypted_Ink.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		1C23D544A4EEFF8BDDA4F1A9 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				3704D7F64179CCDCE2E8C783 /* Pods_Encrypted_Ink.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		2C1995332674C4B900A8E370 = {
 			isa = PBXGroup;
 			children = (
 				2C19953E2674C4B900A8E370 /* Encrypted Ink */,
 				2C19953D2674C4B900A8E370 /* Products */,
+				FB5786212D81829B0FADBD25 /* Pods */,
+				1C23D544A4EEFF8BDDA4F1A9 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -68,6 +83,16 @@
 			path = "Encrypted Ink";
 			sourceTree = "<group>";
 		};
+		FB5786212D81829B0FADBD25 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				133FE10DD9778DE6E9745037 /* Pods-Encrypted Ink.debug.xcconfig */,
+				2179E47ED166F2C33B9718BA /* Pods-Encrypted Ink.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -75,10 +100,12 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2C19954C2674C4BA00A8E370 /* Build configuration list for PBXNativeTarget "Encrypted Ink" */;
 			buildPhases = (
+				C1B14E538147684B5908AEA3 /* [CP] Check Pods Manifest.lock */,
 				2C1995382674C4B900A8E370 /* Sources */,
 				2C1995392674C4B900A8E370 /* Frameworks */,
 				2C19953A2674C4B900A8E370 /* Resources */,
 				2C1995512674C6A100A8E370 /* ShellScript */,
+				9406EE6FCFB48CF1704D3928 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -86,7 +113,7 @@
 			);
 			name = "Encrypted Ink";
 			packageProductDependencies = (
-				2C19955A2674D54600A8E370 /* WalletConnect */,
+				2C19955A2674D54600A8E370 /* SwiftPackageProductDependency */,
 			);
 			productName = "Ecrypted Ink";
 			productReference = 2C19953C2674C4B900A8E370 /* Encrypted Ink.app */;
@@ -116,7 +143,7 @@
 			);
 			mainGroup = 2C1995332674C4B900A8E370;
 			packageReferences = (
-				2C1995592674D54600A8E370 /* XCRemoteSwiftPackageReference "wallet-connect-swift" */,
+				2C1995592674D54600A8E370 /* RemoteSwiftPackageReference */,
 			);
 			productRefGroup = 2C19953D2674C4B900A8E370 /* Products */;
 			projectDirPath = "";
@@ -156,6 +183,45 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "if which swiftlint >/dev/null; then\n  swiftlint\nelse\n  echo \"warning: SwiftLint not installed, download from https://github.com/realm/SwiftLint\"\nfi\n";
+		};
+		9406EE6FCFB48CF1704D3928 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		C1B14E538147684B5908AEA3 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-Encrypted Ink-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -301,6 +367,7 @@
 		};
 		2C19954D2674C4BA00A8E370 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 133FE10DD9778DE6E9745037 /* Pods-Encrypted Ink.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -322,6 +389,7 @@
 		};
 		2C19954E2674C4BA00A8E370 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 2179E47ED166F2C33B9718BA /* Pods-Encrypted Ink.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -365,7 +433,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		2C1995592674D54600A8E370 /* XCRemoteSwiftPackageReference "wallet-connect-swift" */ = {
+		2C1995592674D54600A8E370 /* RemoteSwiftPackageReference */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/WalletConnect/wallet-connect-swift";
 			requirement = {
@@ -376,9 +444,9 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		2C19955A2674D54600A8E370 /* WalletConnect */ = {
+		2C19955A2674D54600A8E370 /* SwiftPackageProductDependency */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 2C1995592674D54600A8E370 /* XCRemoteSwiftPackageReference "wallet-connect-swift" */;
+			package = 2C1995592674D54600A8E370 /* RemoteSwiftPackageReference */;
 			productName = WalletConnect;
 		};
 /* End XCSwiftPackageProductDependency section */

@@ -1,0 +1,6 @@
+framework module Web3Swift {
+  umbrella header "Web3Swift.io-umbrella.h"
+
+  export *
+  module * { export * }
+}

@@ -1,0 +1,41 @@
+PODS:
+  - BigInt (5.2.0)
+  - CryptoSwift (1.4.0)
+  - secp256k1.swift (0.1.4)
+  - SwiftyJSON (4.3.0)
+  - Web3Swift.io (0.0.4):
+    - BigInt (~> 5.0)
+    - CryptoSwift (~> 1.0)
+    - secp256k1.swift (~> 0.1)
+    - SwiftyJSON (~> 4.3)
+
+DEPENDENCIES:
+  - Web3Swift.io (from `https://github.com/grachyov/Web3Swift.git`, branch `develop`)
+
+SPEC REPOS:
+  trunk:
+    - BigInt
+    - CryptoSwift
+    - secp256k1.swift
+    - SwiftyJSON
+
+EXTERNAL SOURCES:
+  Web3Swift.io:
+    :branch: develop
+    :git: https://github.com/grachyov/Web3Swift.git
+
+CHECKOUT OPTIONS:
+  Web3Swift.io:
+    :commit: a606f5b3c2f4b02ed551dc96b1a1390265b4bb44
+    :git: https://github.com/grachyov/Web3Swift.git
+
+SPEC CHECKSUMS:
+  BigInt: f668a80089607f521586bbe29513d708491ef2f7
+  CryptoSwift: 7cc902df1784de3b389a387756c7d710f197730c
+  secp256k1.swift: a7e7a214f6db6ce5db32cc6b2b45e5c4dd633634
+  SwiftyJSON: 6faa0040f8b59dead0ee07436cbf76b73c08fd08
+  Web3Swift.io: 18fd06aed9d56df9c704f9c6f87b06675bb05b53
+
+PODFILE CHECKSUM: 430890280d47cab52bdc7a6b4c9230c4d27b08c5
+
+COCOAPODS: 1.10.0
