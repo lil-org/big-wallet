@@ -15,8 +15,8 @@ struct Transaction {
 
 struct Account {
     let privateKey: String
+    let address: String
 }
-
 
 struct Ethereum {
     
