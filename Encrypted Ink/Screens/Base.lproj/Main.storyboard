@@ -753,6 +753,10 @@ DQ
                             <constraint firstItem="YPY-7C-6mv" firstAttribute="top" secondItem="feM-MO-Msf" secondAttribute="bottom" constant="30" id="wQT-nA-szt"/>
                         </constraints>
                     </view>
+                    <connections>
+                        <outlet property="okButton" destination="t6z-sy-JB9" id="qrY-Ga-zC6"/>
+                        <outlet property="textField" destination="YPY-7C-6mv" id="8L3-RD-eXJ"/>
+                    </connections>
                 </viewController>
                 <customObject id="rPt-NT-nkU" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
             </objects>

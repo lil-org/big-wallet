@@ -7,6 +7,11 @@ struct AccountsService {
     
     private static let keychainKey = "EncryptedInkStorage"
     
+    static func validateAccountKey(_ key: String) -> Bool {
+        let address = try? EthPrivateKey(hex: key).address().value()
+        return address != nil
+    }
+    
     static func addAccount(privateKey: String) -> Account? {
         guard
             let addressBytes = try? EthPrivateKey(hex: privateKey).address().value()
