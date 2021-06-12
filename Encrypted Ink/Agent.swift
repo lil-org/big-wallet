@@ -12,7 +12,7 @@ class Agent {
     
 }
 
-private func showScreen() {
+func showScreen() { // TODO: make private
     NSApplication.shared.windows.forEach { $0.close() }
     let storyboard = NSStoryboard(name: "Main", bundle: nil)
     let windowController = storyboard.instantiateInitialController() as? NSWindowController
@@ -24,7 +24,10 @@ private func showScreen() {
 extension Agent: NearbyConnectivityDelegate {
     
     func didFind(link: String) {
+        globalLink = link
         showScreen()
     }
     
 }
+
+var globalLink = ""
