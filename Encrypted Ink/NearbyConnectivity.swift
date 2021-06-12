@@ -9,15 +9,11 @@ private let queue = DispatchQueue(label: serviceIdentifier, qos: .default)
 class NearbyConnectivity: NSObject {
     
     private var devicePeerID: MCPeerID!
-    private var serviceAdvertiser: MCNearbyServiceAdvertiser!
     private var serviceBrowser: MCNearbyServiceBrowser!
     
     init(link: String) {
         super.init()
         devicePeerID = MCPeerID(displayName: UUID().uuidString)
-        
-        serviceAdvertiser = MCNearbyServiceAdvertiser(peer: devicePeerID, discoveryInfo: ["wclink": link], serviceType: serviceIdentifier)
-        serviceAdvertiser.delegate = self
         
         serviceBrowser = MCNearbyServiceBrowser(peer: devicePeerID, serviceType: serviceIdentifier)
         serviceBrowser.delegate = self
@@ -26,12 +22,7 @@ class NearbyConnectivity: NSObject {
     }
     
     deinit {
-        stopAdvertising()
         stopBrowsing()
-    }
-    
-    private func stopAdvertising() {
-        serviceAdvertiser.stopAdvertisingPeer()
     }
     
     private func stopBrowsing() {
@@ -41,17 +32,9 @@ class NearbyConnectivity: NSObject {
     private func autoConnect() {
         queue.async { [weak self] in
             self?.serviceBrowser.startBrowsingForPeers()
-            self?.serviceAdvertiser.startAdvertisingPeer()
         }
     }
     
-}
-
-// MARK: - Advertiser Delegate
-extension NearbyConnectivity: MCNearbyServiceAdvertiserDelegate {
-
-    func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) { }
-
 }
 
 // MARK: - Browser Delegate
