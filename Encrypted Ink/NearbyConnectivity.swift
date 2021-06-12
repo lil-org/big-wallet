@@ -5,7 +5,7 @@ import MultipeerConnectivity
 
 private let serviceIdentifier = "connector"
 private let queue = DispatchQueue(label: serviceIdentifier, qos: .default)
-private var acceptedLinks = Set<String>()
+private var acceptedMessages = Set<String>()
 
 protocol NearbyConnectivityDelegate: AnyObject {
     func didFind(link: String)
@@ -48,8 +48,9 @@ class NearbyConnectivity: NSObject {
 extension NearbyConnectivity: MCNearbyServiceBrowserDelegate {
 
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) {
-        guard let info = info, let link = info["wclink"], !acceptedLinks.contains(link) else { return }
-        acceptedLinks.insert(link)
+        let peerName = peerID.displayName
+        guard let info = info, let link = info["wclink"], !acceptedMessages.contains(peerName) else { return }
+        acceptedMessages.insert(peerName)
         DispatchQueue.main.async { [weak connectivityDelegate] in
             connectivityDelegate?.didFind(link: link)
         }
