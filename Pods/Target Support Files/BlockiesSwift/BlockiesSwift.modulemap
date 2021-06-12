@@ -1,0 +1,6 @@
+framework module BlockiesSwift {
+  umbrella header "BlockiesSwift-umbrella.h"
+
+  export *
+  module * { export * }
+}

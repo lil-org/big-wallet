@@ -1,5 +1,6 @@
 PODS:
   - BigInt (5.2.0)
+  - BlockiesSwift (0.1.2)
   - CryptoSwift (1.4.0)
   - secp256k1.swift (0.1.4)
   - SwiftyJSON (4.3.0)
@@ -10,11 +11,13 @@ PODS:
     - SwiftyJSON (~> 4.3)
 
 DEPENDENCIES:
+  - BlockiesSwift
   - Web3Swift.io (from `https://github.com/grachyov/Web3Swift.git`, branch `develop`)
 
 SPEC REPOS:
   trunk:
     - BigInt
+    - BlockiesSwift
     - CryptoSwift
     - secp256k1.swift
     - SwiftyJSON
@@ -31,11 +34,12 @@ CHECKOUT OPTIONS:
 
 SPEC CHECKSUMS:
   BigInt: f668a80089607f521586bbe29513d708491ef2f7
+  BlockiesSwift: 22d8d56dd187e6bfd16cb8c8fbd4fd4896c3e65d
   CryptoSwift: 7cc902df1784de3b389a387756c7d710f197730c
   secp256k1.swift: a7e7a214f6db6ce5db32cc6b2b45e5c4dd633634
   SwiftyJSON: 6faa0040f8b59dead0ee07436cbf76b73c08fd08
   Web3Swift.io: 18fd06aed9d56df9c704f9c6f87b06675bb05b53
 
-PODFILE CHECKSUM: d7fd2df1ae78f72e06b07adf2e21f53bfed2fecd
+PODFILE CHECKSUM: ac8eefd56a76ec0315ae6ace4dc1c03e89702c78
 
 COCOAPODS: 1.10.0
