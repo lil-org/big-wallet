@@ -2,7 +2,7 @@
 
 import Cocoa
 
-class ViewController: NSViewController {
+class AccountsViewController: NSViewController {
     
     @IBOutlet weak var label: NSTextField!
     
