@@ -2,7 +2,6 @@
 
 import Foundation
 import WalletConnect
-import Cocoa // TODO: for testing purposes
 
 class WalletConnect {
  
