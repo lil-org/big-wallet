@@ -18,10 +18,6 @@ struct Account: Codable {
     let address: String
 }
 
-enum InternalError: Error {
-    case unknownError
-}
-
 struct Ethereum {
     
     private static let network: Network = AlchemyNetwork(
