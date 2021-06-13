@@ -48,12 +48,13 @@ class Agent {
     
     func connectWalletWithLink(_ link: String, account: Account) {
         WalletConnect.shared.connect(link: link, address: account.address) { connected in
-            // TODO: close here
-            // use connected value
+            Window.closeAll()
+            Window.activateSafari()
+            // TODO: show error if failed to connect
         }
-        // TODO: show spinner
-        Window.closeAll()
-        Window.activateSafari()
+        
+        let windowController = Window.showNew()
+        windowController.contentViewController = WaitingViewController.withReason("Connecting")
     }
     
 }
