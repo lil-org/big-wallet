@@ -693,13 +693,10 @@
                             <outlet property="delegate" destination="B8D-0N-5wS" id="98r-iN-zZc"/>
                         </connections>
                     </window>
-                    <connections>
-                        <segue destination="XfG-lQ-9wD" kind="relationship" relationship="window.shadowedContentViewController" id="cq2-FE-JQM"/>
-                    </connections>
                 </windowController>
                 <customObject id="Oky-zY-oP4" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="75" y="253.5"/>
+            <point key="canvasLocation" x="-220" y="740"/>
         </scene>
         <!--Import View Controller-->
         <scene sceneID="hIz-AP-VOD">
@@ -793,11 +790,11 @@ DQ
             <objects>
                 <viewController storyboardIdentifier="AccountsListViewController" id="29s-Rd-OUf" customClass="AccountsListViewController" customModule="Encrypted_Ink" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="Yjc-Zm-uZY">
-                        <rect key="frame" x="0.0" y="0.0" width="251" height="350"/>
+                        <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
                             <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="dkh-kG-EFj">
-                                <rect key="frame" x="54" y="292" width="144" height="34"/>
+                                <rect key="frame" x="53" y="292" width="144" height="34"/>
                                 <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Accounts" id="9No-vQ-vBK">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
                                     <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
@@ -805,12 +802,12 @@ DQ
                                 </textFieldCell>
                             </textField>
                             <scrollView autohidesScrollers="YES" horizontalLineScroll="40" horizontalPageScroll="10" verticalLineScroll="40" verticalPageScroll="10" hasHorizontalScroller="NO" usesPredominantAxisScrolling="NO" horizontalScrollElasticity="none" translatesAutoresizingMaskIntoConstraints="NO" id="7bs-Kr-ija">
-                                <rect key="frame" x="0.0" y="0.0" width="251" height="272"/>
-                                <clipView key="contentView" id="RjU-hi-SHx">
-                                    <rect key="frame" x="1" y="1" width="249" height="270"/>
+                                <rect key="frame" x="0.0" y="0.0" width="250" height="272"/>
+                                <clipView key="contentView" ambiguous="YES" id="RjU-hi-SHx">
+                                    <rect key="frame" x="1" y="1" width="248" height="270"/>
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <subviews>
-                                        <tableView verticalHuggingPriority="750" allowsExpansionToolTips="YES" columnAutoresizingStyle="lastColumnOnly" columnSelection="YES" multipleSelection="NO" autosaveColumns="NO" rowHeight="40" rowSizeStyle="automatic" viewBased="YES" id="glA-FK-Kdd">
+                                        <tableView verticalHuggingPriority="750" ambiguous="YES" allowsExpansionToolTips="YES" columnAutoresizingStyle="lastColumnOnly" columnSelection="YES" multipleSelection="NO" autosaveColumns="NO" rowHeight="40" rowSizeStyle="automatic" viewBased="YES" id="glA-FK-Kdd">
                                             <rect key="frame" x="0.0" y="0.0" width="249" height="270"/>
                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                             <size key="intercellSpacing" width="17" height="0.0"/>
@@ -872,6 +869,9 @@ DQ
                                         </tableView>
                                     </subviews>
                                 </clipView>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="250" id="zxW-2l-wsU"/>
+                                </constraints>
                                 <scroller key="horizontalScroller" hidden="YES" wantsLayer="YES" verticalHuggingPriority="750" horizontal="YES" id="IT1-B8-OHF">
                                     <rect key="frame" x="-100" y="-100" width="238" height="16"/>
                                     <autoresizingMask key="autoresizingMask"/>
@@ -882,7 +882,7 @@ DQ
                                 </scroller>
                             </scrollView>
                             <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="ngQ-Bn-Kwd">
-                                <rect key="frame" x="206" y="299" width="33" height="21"/>
+                                <rect key="frame" x="205" y="299" width="33" height="21"/>
                                 <buttonCell key="cell" type="inline" bezelStyle="inline" image="plus" catalog="system" imagePosition="only" alignment="center" lineBreakMode="truncatingTail" state="on" imageScaling="proportionallyDown" inset="2" id="JVh-da-a0h">
                                     <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                     <font key="font" metaFont="systemBold" size="21"/>
@@ -911,7 +911,7 @@ DQ
                 </viewController>
                 <customObject id="JTb-7y-Jwq" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="400" y="740"/>
+            <point key="canvasLocation" x="380" y="740"/>
         </scene>
     </scenes>
     <resources>

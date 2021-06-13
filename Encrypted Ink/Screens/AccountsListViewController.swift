@@ -4,7 +4,13 @@ import Cocoa
 
 class AccountsListViewController: NSViewController {
 
-    private var accounts = AccountsService.getAccounts()
+    private var accounts = [Account]()
+    
+    static func with(preloadedAccounts: [Account]) -> AccountsListViewController {
+        let new = instantiate(AccountsListViewController.self)
+        new.accounts = preloadedAccounts
+        return new
+    }
     
     @IBOutlet weak var titleLabel: NSTextField!
     @IBOutlet weak var tableView: NSTableView! {
@@ -21,12 +27,15 @@ class AccountsListViewController: NSViewController {
         menu.addItem(NSMenuItem(title: "Copy address", action: #selector(didClickCopyAddress(_:)), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Remove account", action: #selector(didClickRemoveAccount(_:)), keyEquivalent: ""))
         tableView.menu = menu
+        
+        if accounts.isEmpty {
+            accounts = AccountsService.getAccounts()
+        }
     }
     
     @IBAction func addButtonTapped(_ sender: NSButton) {
-        if let importViewController = storyboard?.instantiateController(withIdentifier: "ImportViewController") as? ImportViewController {
-            view.window?.contentViewController = importViewController
-        }
+        let importViewController = instantiate(ImportViewController.self)
+        view.window?.contentViewController = importViewController
     }
     
     @objc private func didClickCopyAddress(_ sender: AnyObject) {

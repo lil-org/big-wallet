@@ -33,14 +33,12 @@ class ImportViewController: NSViewController {
     }
  
     private func showAccountsList() {
-        if let accounts = storyboard?.instantiateController(withIdentifier: "AccountsListViewController") as? AccountsListViewController {
-            view.window?.contentViewController = accounts
-        }
+        let accountsListViewController = instantiate(AccountsListViewController.self)
+        view.window?.contentViewController = accountsListViewController
     }
     
     @IBAction func cancelButtonTapped(_ sender: NSButton) {
         showAccountsList()
-        // TODO: in some cases should close the window
     }
     
 }
