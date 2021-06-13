@@ -6,16 +6,18 @@ class ApproveViewController: NSViewController {
     
     @IBOutlet weak var titleLabel: NSTextField!
     
+    var completion: ((Bool) -> Void)!
+    
     override func viewDidLoad() {
         super.viewDidLoad()
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
-        
+        completion(true)
     }
     
     @IBAction func cancelButtonTapped(_ sender: NSButton) {
-        
+        completion(false)
     }
     
 }
