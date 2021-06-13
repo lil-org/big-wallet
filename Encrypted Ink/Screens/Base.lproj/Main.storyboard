@@ -1085,16 +1085,28 @@ DQ
                                     <real value="3.4028234663852886e+38"/>
                                 </customSpacing>
                             </stackView>
+                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="M1Q-Iu-4dD">
+                                <rect key="frame" x="34" y="175" width="182" height="25"/>
+                                <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Failed to connect" id="qy3-O0-p56">
+                                    <font key="font" metaFont="systemBold" size="21"/>
+                                    <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
+                                    <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                                </textFieldCell>
+                            </textField>
                         </subviews>
                         <constraints>
                             <constraint firstItem="owz-dg-x2C" firstAttribute="centerX" secondItem="cFH-jd-zLP" secondAttribute="centerX" id="0OK-ZZ-1lf"/>
                             <constraint firstItem="T7q-cN-jjc" firstAttribute="leading" secondItem="cFH-jd-zLP" secondAttribute="leading" constant="16" id="0mu-SM-Kvn"/>
                             <constraint firstAttribute="trailing" secondItem="T7q-cN-jjc" secondAttribute="trailing" constant="16" id="AOT-En-wYh"/>
+                            <constraint firstItem="M1Q-Iu-4dD" firstAttribute="trailing" secondItem="T7q-cN-jjc" secondAttribute="trailing" constant="-20" id="Gbp-eZ-HHz"/>
                             <constraint firstAttribute="bottom" secondItem="owz-dg-x2C" secondAttribute="bottom" constant="50" id="O7Z-WD-F1G"/>
+                            <constraint firstItem="M1Q-Iu-4dD" firstAttribute="centerY" secondItem="cFH-jd-zLP" secondAttribute="centerY" constant="-12" id="TQG-iy-bgb"/>
+                            <constraint firstItem="M1Q-Iu-4dD" firstAttribute="leading" secondItem="T7q-cN-jjc" secondAttribute="leading" constant="20" id="XO8-WA-SOb"/>
                             <constraint firstItem="T7q-cN-jjc" firstAttribute="top" secondItem="cFH-jd-zLP" secondAttribute="top" constant="24" id="qQl-EG-gwj"/>
                         </constraints>
                     </view>
                     <connections>
+                        <outlet property="messageLabel" destination="M1Q-Iu-4dD" id="s4z-1r-zIH"/>
                         <outlet property="titleLabel" destination="T7q-cN-jjc" id="nXO-3X-Qbu"/>
                     </connections>
                 </viewController>
