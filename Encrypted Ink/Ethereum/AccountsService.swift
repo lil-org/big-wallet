@@ -18,6 +18,7 @@ struct AccountsService {
         else {
             return nil
         }
+        // TODO: checksum address
         let address = addressBytes.toPrefixedHexString()
         let account = Account(privateKey: privateKey, address: address)
         var accounts = getAccounts()

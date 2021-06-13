@@ -32,6 +32,8 @@
 		2C8A09C6267513FC00993638 /* Agent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09C5267513FC00993638 /* Agent.swift */; };
 		2C8A09D42675184700993638 /* Window.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09D32675184700993638 /* Window.swift */; };
 		2C8A09D726751A0C00993638 /* WalletConnect.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09D626751A0C00993638 /* WalletConnect.swift */; };
+		2C8A09DF267579EA00993638 /* AccountsListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09DE267579EA00993638 /* AccountsListViewController.swift */; };
+		2C8A09E326757FC000993638 /* AccountCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09E226757FC000993638 /* AccountCellView.swift */; };
 		88745B0F4DEE1F60AD0F02C3 /* Pods_Encrypted_Ink.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3704D7F64179CCDCE2E8C783 /* Pods_Encrypted_Ink.framework */; };
 /* End PBXBuildFile section */
 
@@ -65,6 +67,8 @@
 		2C8A09C5267513FC00993638 /* Agent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent.swift; sourceTree = "<group>"; };
 		2C8A09D32675184700993638 /* Window.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Window.swift; sourceTree = "<group>"; };
 		2C8A09D626751A0C00993638 /* WalletConnect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletConnect.swift; sourceTree = "<group>"; };
+		2C8A09DE267579EA00993638 /* AccountsListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsListViewController.swift; sourceTree = "<group>"; };
+		2C8A09E226757FC000993638 /* AccountCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountCellView.swift; sourceTree = "<group>"; };
 		3704D7F64179CCDCE2E8C783 /* Pods_Encrypted_Ink.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Encrypted_Ink.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -167,6 +171,8 @@
 			isa = PBXGroup;
 			children = (
 				2C1995412674C4B900A8E370 /* ImportViewController.swift */,
+				2C8A09DE267579EA00993638 /* AccountsListViewController.swift */,
+				2C8A09E226757FC000993638 /* AccountCellView.swift */,
 				2C1995452674C4BA00A8E370 /* Main.storyboard */,
 			);
 			path = Screens;
@@ -326,6 +332,7 @@
 				0DB729162674E2DB0011F7A1 /* EIP712SimpleValue.swift in Sources */,
 				0DB729122674E2DB0011F7A1 /* EIP712ParameterEncoder.swift in Sources */,
 				2C8A09D726751A0C00993638 /* WalletConnect.swift in Sources */,
+				2C8A09E326757FC000993638 /* AccountCellView.swift in Sources */,
 				0DB729202674E2DB0011F7A1 /* EIP712Domain.swift in Sources */,
 				0DB729182674E2DB0011F7A1 /* EIP712Signer.swift in Sources */,
 				0DB729192674E2DB0011F7A1 /* EIP712TypedData.swift in Sources */,
@@ -339,6 +346,7 @@
 				0DB7291E2674E2DB0011F7A1 /* EIP712Signable.swift in Sources */,
 				0DB7291C2674E2DB0011F7A1 /* EIP712Value.swift in Sources */,
 				2C1995562674D0F300A8E370 /* Ethereum.swift in Sources */,
+				2C8A09DF267579EA00993638 /* AccountsListViewController.swift in Sources */,
 				2C1995742674E80E00A8E370 /* NearbyConnectivity.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

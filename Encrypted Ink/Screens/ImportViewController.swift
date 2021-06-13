@@ -16,6 +16,8 @@ class ImportViewController: NSViewController {
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
+        AccountsService.addAccount(privateKey: textField.stringValue)
+        
         // TODO: open accounts list
         
         WalletConnect.shared.connect(link: globalLink, address: "0xCf60CC6E4AD79187E7eBF62e0c21ae3a343180B2") { connected in
@@ -23,9 +25,13 @@ class ImportViewController: NSViewController {
             // use connected value
         }
         
+        if let accounts = storyboard?.instantiateController(withIdentifier: "AccountsListViewController") as? AccountsListViewController {
+            view.window?.contentViewController = accounts
+        }
+        
         // TODO: show spinner
-        Window.closeAll()
-        Window.activateSafari()
+//        Window.closeAll()
+//        Window.activateSafari()
     }
     
 }
