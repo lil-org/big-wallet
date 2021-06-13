@@ -6,6 +6,7 @@ import WalletConnect
 class Agent {
 
     static let shared = Agent()
+    private lazy var statusImage = NSImage(named: "Status")
     
     private init() {}
     private var statusBarItem: NSStatusItem!
@@ -64,7 +65,7 @@ class Agent {
     func setupStatusBarItem() {
         let statusBar = NSStatusBar.system
         statusBarItem = statusBar.statusItem(withLength: NSStatusItem.squareLength)
-        statusBarItem.button?.title = "🍎"
+        statusBarItem.button?.image = statusImage
         statusBarItem.button?.target = self
         statusBarItem.button?.action = #selector(statusBarButtonClicked(sender:))
         statusBarItem.button?.sendAction(on: [.leftMouseUp])
