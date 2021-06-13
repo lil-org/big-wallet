@@ -57,7 +57,8 @@ class WalletConnect {
     }
     
     private func approveTransaction(id: Int64, wct: WCEthereumTransaction, address: String, interactor: WCInteractor?) {
-        Agent.shared.showApprove(title: "Send Transaction", meta: "xxx ETH") { [weak self] approved in
+        let value = Double(UInt64(wct.value?.dropFirst(2) ?? "0", radix: 16) ?? 0) / 1e18
+        Agent.shared.showApprove(title: "Send Transaction", meta: "\(value) ETH") { [weak self] approved in
             if approved {
                 self?.sendTransaction(id: id, wct: wct, address: address, interactor: interactor)
             } else {
@@ -97,17 +98,29 @@ class WalletConnect {
     }
 
     func sendTransaction(id: Int64, wct: WCEthereumTransaction, address: String, interactor: WCInteractor?) {
-        let dict: [String: Any] = ["from": wct.from, "to": wct.to, "nonce": wct.nonce, "gasPrice": wct.gasPrice, "gas": wct.gas, "gasLimit": wct.gasLimit, "value": wct.value, "data": wct.data]
-        
-        // TODO: these are possible results
-//        rejectRequest(id: id, interactor: interactor, message: "Failed to send transaction") // TODO: show error in this case
-//        interactor?.approveRequest(id: id, result: hash.hexString).cauterize()
+        guard
+            let account = getAccountForAddress(address)
+        else {
+            rejectRequest(id: id, interactor: interactor, message: "Failed for some reason")
+            return
+        }
+        let transaction = Transaction(transactionsCount: wct.nonce,
+                                      gasPrice: wct.gasPrice,
+                                      gasEstimate: wct.gasLimit,
+                                      recipientAddress: wct.to ?? "",
+                                      weiAmount: wct.value ?? "",
+                                      contractCall: wct.data)
+        guard let hash = try? Ethereum.send(transaction: transaction, account: account) else {
+            rejectRequest(id: id, interactor: interactor, message: "Failed for some reason")
+            return
+        }
+        interactor?.approveRequest(id: id, result: hash).cauterize()
     }
 
     func sign(id: Int64, message: String?, payload: WCEthereumSignPayload, address: String, interactor: WCInteractor?) {
         guard
             let message = message,
-            let account = AccountsService.getAccounts().filter({ $0.address == address.lowercased() }).first
+            let account = getAccountForAddress(address)
         else {
             rejectRequest(id: id, interactor: interactor, message: "Failed for some reason")
             return
@@ -127,6 +140,11 @@ class WalletConnect {
         }
         
         interactor?.approveRequest(id: id, result: result).cauterize()
+    }
+    
+    private func getAccountForAddress(_ address: String) -> Account? {
+        let allAccounts = AccountsService.getAccounts()
+        return allAccounts.filter({ $0.address.lowercased() == address.lowercased() }).first
     }
     
 }
