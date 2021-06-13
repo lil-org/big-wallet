@@ -86,6 +86,13 @@ class Agent {
     
     private func proceedAfterAuthentication(reason: String, completion: @escaping (Bool) -> Void) {
         let context = LAContext()
+        
+        var error: NSError?
+        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
+            completion(true)
+            return
+        }
+        
         context.localizedCancelTitle = "Cancel"
         context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason ) { success, _ in
             DispatchQueue.main.async {
