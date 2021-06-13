@@ -46,11 +46,19 @@ class Agent {
         }
     }
     
-    func connectWalletWithLink(_ link: String, account: Account) {
-        WalletConnect.shared.connect(link: link, address: account.address) { connected in
-            Window.closeAll()
-            Window.activateSafari()
-            // TODO: show error if failed to connect
+    func showErrorMessage(_ message: String) {
+        let windowController = Window.showNew()
+        windowController.contentViewController = ErrorViewController.withMessage(message)
+    }
+    
+    private func connectWalletWithLink(_ link: String, account: Account) {
+        WalletConnect.shared.connect(link: link, address: account.address) { [weak self] connected in
+            if connected {
+                Window.closeAll()
+                Window.activateSafari()
+            } else {
+                self?.showErrorMessage("Failed to connect")
+            }
         }
         
         let windowController = Window.showNew()
