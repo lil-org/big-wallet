@@ -5,6 +5,7 @@ import Cocoa
 class ApproveViewController: NSViewController {
     
     @IBOutlet weak var titleLabel: NSTextField!
+    @IBOutlet var metaTextView: NSTextView!
     
     var approveTitle: String!
     var meta: String!
@@ -21,7 +22,7 @@ class ApproveViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         titleLabel.stringValue = approveTitle
-        // TODO: setup meta
+        metaTextView.string = meta
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {

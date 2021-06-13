@@ -1028,16 +1028,58 @@ DQ
                                     <real value="3.4028234663852886e+38"/>
                                 </customSpacing>
                             </stackView>
+                            <scrollView borderType="line" horizontalLineScroll="10" horizontalPageScroll="10" verticalLineScroll="10" verticalPageScroll="10" hasHorizontalScroller="NO" horizontalScrollElasticity="none" translatesAutoresizingMaskIntoConstraints="NO" id="Ra3-Vm-T8F">
+                                <rect key="frame" x="45" y="108" width="160" height="154"/>
+                                <clipView key="contentView" id="3HR-u1-79b">
+                                    <rect key="frame" x="1" y="1" width="158" height="152"/>
+                                    <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                                    <subviews>
+                                        <textView editable="NO" importsGraphics="NO" richText="NO" verticallyResizable="YES" spellingCorrection="YES" smartInsertDelete="YES" id="nek-dW-Y7v">
+                                            <rect key="frame" x="0.0" y="0.0" width="158" height="152"/>
+                                            <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                                            <color key="textColor" name="textColor" catalog="System" colorSpace="catalog"/>
+                                            <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                                            <size key="minSize" width="158" height="152"/>
+                                            <size key="maxSize" width="240" height="10000000"/>
+                                            <attributedString key="textStorage">
+                                                <fragment content="Meta">
+                                                    <attributes>
+                                                        <color key="NSColor" name="textColor" catalog="System" colorSpace="catalog"/>
+                                                        <font key="NSFont" metaFont="system"/>
+                                                        <paragraphStyle key="NSParagraphStyle" alignment="natural" lineBreakMode="wordWrapping" baseWritingDirection="natural" tighteningFactorForTruncation="0.0"/>
+                                                    </attributes>
+                                                </fragment>
+                                            </attributedString>
+                                            <color key="insertionPointColor" name="textColor" catalog="System" colorSpace="catalog"/>
+                                        </textView>
+                                    </subviews>
+                                </clipView>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="160" id="Hqk-Mb-P7g"/>
+                                </constraints>
+                                <scroller key="horizontalScroller" hidden="YES" wantsLayer="YES" verticalHuggingPriority="750" horizontal="YES" id="dRQ-3o-eKz">
+                                    <rect key="frame" x="-100" y="-100" width="240" height="16"/>
+                                    <autoresizingMask key="autoresizingMask"/>
+                                </scroller>
+                                <scroller key="verticalScroller" wantsLayer="YES" verticalHuggingPriority="750" horizontal="NO" id="GFp-c5-pAF">
+                                    <rect key="frame" x="143" y="1" width="16" height="152"/>
+                                    <autoresizingMask key="autoresizingMask"/>
+                                </scroller>
+                            </scrollView>
                         </subviews>
                         <constraints>
+                            <constraint firstItem="Ra3-Vm-T8F" firstAttribute="centerX" secondItem="xvx-vV-OZe" secondAttribute="centerX" id="6s2-VI-I5u"/>
                             <constraint firstAttribute="bottom" secondItem="Oc8-WJ-ABp" secondAttribute="bottom" constant="50" id="MEF-zm-wO6"/>
                             <constraint firstItem="Oc8-WJ-ABp" firstAttribute="centerX" secondItem="xvx-vV-OZe" secondAttribute="centerX" id="U7h-QO-Jgc"/>
                             <constraint firstItem="PdV-Nr-oOY" firstAttribute="leading" secondItem="xvx-vV-OZe" secondAttribute="leading" constant="16" id="UnE-yA-lAZ"/>
+                            <constraint firstItem="Oc8-WJ-ABp" firstAttribute="top" secondItem="Ra3-Vm-T8F" secondAttribute="bottom" constant="30" id="ZUN-bH-HYj"/>
                             <constraint firstAttribute="trailing" secondItem="PdV-Nr-oOY" secondAttribute="trailing" constant="16" id="c5r-UD-yuA"/>
+                            <constraint firstItem="Ra3-Vm-T8F" firstAttribute="top" secondItem="PdV-Nr-oOY" secondAttribute="bottom" constant="30" id="caG-6Y-meY"/>
                             <constraint firstItem="PdV-Nr-oOY" firstAttribute="top" secondItem="xvx-vV-OZe" secondAttribute="top" constant="24" id="tN4-Nf-2iW"/>
                         </constraints>
                     </view>
                     <connections>
+                        <outlet property="metaTextView" destination="nek-dW-Y7v" id="tX9-hL-ZQD"/>
                         <outlet property="titleLabel" destination="PdV-Nr-oOY" id="AZx-pJ-I7F"/>
                     </connections>
                 </viewController>
