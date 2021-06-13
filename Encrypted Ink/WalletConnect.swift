@@ -56,25 +56,14 @@ class WalletConnect {
         }
     }
     
-    private func showAlert(text: String, onOK: () -> Void, onCancel: () -> Void) {
-        let alert = NSAlert()
-        alert.messageText = text
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Cancel")
-        if alert.runModal() == NSApplication.ModalResponse.alertFirstButtonReturn {
-            onOK()
-        } else {
-            onCancel()
-        }
-        Window.activateSafari()
-    }
-    
     private func approveTransaction(id: Int64, wct: WCEthereumTransaction, address: String, interactor: WCInteractor?) {
-        showAlert(text: "Send transaction", onOK: {
-            self.sendTransaction(id: id, wct: wct, address: address, interactor: interactor)
-        }, onCancel: {
-            self.rejectRequest(id: id, interactor: interactor, message: "User canceled")
-        })
+        Agent.shared.showApprove(title: "Send Transaction", meta: "xxx ETH") { [weak self] approved in
+            if approved {
+                self?.sendTransaction(id: id, wct: wct, address: address, interactor: interactor)
+            } else {
+                self?.rejectRequest(id: id, interactor: interactor, message: "User canceled")
+            }
+        }
     }
 
     func approveSign(id: Int64, payload: WCEthereumSignPayload, address: String, interactor: WCInteractor?) {
@@ -90,11 +79,14 @@ class WalletConnect {
             }
         }
 
-        showAlert(text: "Sign message", onOK: {
-            self.sign(id: id, message: message, payload: payload, address: address, interactor: interactor)
-        }, onCancel: {
-            self.rejectRequest(id: id, interactor: interactor, message: "User canceled")
-        })
+        // TODO: vary title depending on sign type
+        Agent.shared.showApprove(title: "Sign message", meta: message ?? "") { [weak self] approved in
+            if approved {
+                self?.sign(id: id, message: message, payload: payload, address: address, interactor: interactor)
+            } else {
+                self?.rejectRequest(id: id, interactor: interactor, message: "User canceled")
+            }
+        }
     }
 
     func rejectRequest(id: Int64, interactor: WCInteractor?, message: String) {

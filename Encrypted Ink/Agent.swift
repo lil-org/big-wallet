@@ -46,6 +46,16 @@ class Agent {
         }
     }
     
+    func showApprove(title: String, meta: String, completion: @escaping (Bool) -> Void) {
+        let windowController = Window.showNew()
+        let approveViewController = ApproveViewController.with(title: title, meta: meta) { result in
+            completion(result)
+            Window.closeAll()
+            Window.activateSafari()
+        }
+        windowController.contentViewController = approveViewController
+    }
+    
     func showErrorMessage(_ message: String) {
         let windowController = Window.showNew()
         windowController.contentViewController = ErrorViewController.withMessage(message)
