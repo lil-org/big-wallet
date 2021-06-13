@@ -16,12 +16,33 @@ class AccountsListViewController: NSViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "Copy address", action: #selector(didClickCopyAddress(_:)), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Remove account", action: #selector(didClickRemoveAccount(_:)), keyEquivalent: ""))
+        tableView.menu = menu
     }
     
     @IBAction func addButtonTapped(_ sender: NSButton) {
         if let importViewController = storyboard?.instantiateController(withIdentifier: "ImportViewController") as? ImportViewController {
             view.window?.contentViewController = importViewController
         }
+    }
+    
+    @objc private func didClickCopyAddress(_ sender: AnyObject) {
+        let row = tableView.clickedRow
+        guard row >= 0 else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(accounts[row].address, forType: .string)
+    }
+
+    @objc private func didClickRemoveAccount(_ sender: AnyObject) {
+        let row = tableView.clickedRow
+        guard row >= 0 else { return }
+        AccountsService.removeAccount(accounts[row])
+        accounts.remove(at: row)
+        tableView.reloadData()
     }
     
 }
