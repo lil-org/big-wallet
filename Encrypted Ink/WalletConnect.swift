@@ -105,7 +105,7 @@ class WalletConnect {
         let dict: [String: Any] = ["from": wct.from, "to": wct.to, "nonce": wct.nonce, "gasPrice": wct.gasPrice, "gas": wct.gas, "gasLimit": wct.gasLimit, "value": wct.value, "data": wct.data]
         
         // TODO: these are possible results
-//        rejectRequest(id: id, interactor: interactor, message: "Failed to send transaction")
+//        rejectRequest(id: id, interactor: interactor, message: "Failed to send transaction") // TODO: show error in this case
 //        interactor?.approveRequest(id: id, result: hash.hexString).cauterize()
     }
 
