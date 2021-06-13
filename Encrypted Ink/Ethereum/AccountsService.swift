@@ -39,6 +39,11 @@ struct AccountsService {
         return loadAccountsFromKeychain() ?? []
     }
     
+    static func getAccountForAddress(_ address: String) -> Account? {
+        let allAccounts = getAccounts()
+        return allAccounts.first(where: { $0.address == address.lowercased() })
+    }
+    
     private static func saveInKeychain(accounts: [Account]) {
         guard let data = try? JSONEncoder().encode(accounts) else { return }
         let query = [kSecClass as String: kSecClassGenericPassword as String,

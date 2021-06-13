@@ -21,7 +21,6 @@
 		0DB7291E2674E2DB0011F7A1 /* EIP712Signable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB7290F2674E2DB0011F7A1 /* EIP712Signable.swift */; };
 		0DB7291F2674E2DB0011F7A1 /* EIP712Representable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729102674E2DB0011F7A1 /* EIP712Representable.swift */; };
 		0DB729202674E2DB0011F7A1 /* EIP712Domain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729112674E2DB0011F7A1 /* EIP712Domain.swift */; };
-		0DC750BE2675FEED00A2963C /* Errors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC750BD2675FEED00A2963C /* Errors.swift */; };
 		2C1995402674C4B900A8E370 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C19953F2674C4B900A8E370 /* AppDelegate.swift */; };
 		2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995412674C4B900A8E370 /* ImportViewController.swift */; };
 		2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995432674C4BA00A8E370 /* Assets.xcassets */; };
@@ -56,7 +55,6 @@
 		0DB7290F2674E2DB0011F7A1 /* EIP712Signable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Signable.swift; sourceTree = "<group>"; };
 		0DB729102674E2DB0011F7A1 /* EIP712Representable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Representable.swift; sourceTree = "<group>"; };
 		0DB729112674E2DB0011F7A1 /* EIP712Domain.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Domain.swift; sourceTree = "<group>"; };
-		0DC750BD2675FEED00A2963C /* Errors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Errors.swift; sourceTree = "<group>"; };
 		133FE10DD9778DE6E9745037 /* Pods-Encrypted Ink.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Encrypted Ink.debug.xcconfig"; path = "Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink.debug.xcconfig"; sourceTree = "<group>"; };
 		2179E47ED166F2C33B9718BA /* Pods-Encrypted Ink.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Encrypted Ink.release.xcconfig"; path = "Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink.release.xcconfig"; sourceTree = "<group>"; };
 		2C19953C2674C4B900A8E370 /* Encrypted Ink.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Encrypted Ink.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -154,7 +152,6 @@
 				2C19953F2674C4B900A8E370 /* AppDelegate.swift */,
 				2C8A09C5267513FC00993638 /* Agent.swift */,
 				2C8A09D626751A0C00993638 /* WalletConnect.swift */,
-				0DC750BD2675FEED00A2963C /* Errors.swift */,
 				2C8A09D32675184700993638 /* Window.swift */,
 				2C8A09C92675142700993638 /* Screens */,
 				2C8A09C2267513A700993638 /* Ethereum */,
@@ -347,7 +344,6 @@
 				0DB729152674E2DB0011F7A1 /* EIP712Error.swift in Sources */,
 				2C8A09C6267513FC00993638 /* Agent.swift in Sources */,
 				2C8A09D42675184700993638 /* Window.swift in Sources */,
-				0DC750BE2675FEED00A2963C /* Errors.swift in Sources */,
 				0DB7291A2674E2DB0011F7A1 /* EIP712Type.swift in Sources */,
 				0DB7291D2674E2DB0011F7A1 /* EIP712Hashable.swift in Sources */,
 				0DB729162674E2DB0011F7A1 /* EIP712SimpleValue.swift in Sources */,

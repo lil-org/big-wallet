@@ -99,7 +99,7 @@ class WalletConnect {
 
     func sendTransaction(id: Int64, wct: WCEthereumTransaction, address: String, interactor: WCInteractor?) {
         guard
-            let account = getAccountForAddress(address)
+            let account = AccountsService.getAccountForAddress(address)
         else {
             rejectRequest(id: id, interactor: interactor, message: "Failed for some reason")
             return
@@ -120,7 +120,7 @@ class WalletConnect {
     func sign(id: Int64, message: String?, payload: WCEthereumSignPayload, address: String, interactor: WCInteractor?) {
         guard
             let message = message,
-            let account = getAccountForAddress(address)
+            let account = AccountsService.getAccountForAddress(address)
         else {
             rejectRequest(id: id, interactor: interactor, message: "Failed for some reason")
             return
@@ -141,10 +141,4 @@ class WalletConnect {
         
         interactor?.approveRequest(id: id, result: result).cauterize()
     }
-    
-    private func getAccountForAddress(_ address: String) -> Account? {
-        let allAccounts = AccountsService.getAccounts()
-        return allAccounts.filter({ $0.address.lowercased() == address.lowercased() }).first
-    }
-    
 }

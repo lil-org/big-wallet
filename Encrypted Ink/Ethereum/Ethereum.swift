@@ -19,6 +19,11 @@ struct Account: Codable {
 }
 
 struct Ethereum {
+
+    enum Errors: Error {
+        case invalidInputData
+        case failedToSendTransaction
+    }
     
     private static let network: Network = AlchemyNetwork(
         chain: "mainnet",
@@ -60,7 +65,7 @@ struct Ethereum {
     
     static func sign(transaction: Transaction, account: Account) throws -> String {
         guard transaction.transactionsCount != nil, transaction.gasPrice != nil, transaction.gasEstimate != nil else {
-            throw Errors.unknown
+            throw Errors.invalidInputData
         }
         let bytes = signedTransactionBytes(transaction: transaction, account: account)
         return try bytes.value().toPrefixedHexString()
@@ -70,7 +75,7 @@ struct Ethereum {
         let bytes = signedTransactionBytes(transaction: transaction, account: account)
         let response = try SendRawTransactionProcedure(network: network, transactionBytes: bytes).call()
         guard let hash = response["result"].string else {
-            throw Errors.unknown
+            throw Errors.failedToSendTransaction
         }
         return hash
     }
