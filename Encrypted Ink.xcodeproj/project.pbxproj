@@ -34,6 +34,9 @@
 		2C8A09D726751A0C00993638 /* WalletConnect.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09D626751A0C00993638 /* WalletConnect.swift */; };
 		2C8A09DF267579EA00993638 /* AccountsListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09DE267579EA00993638 /* AccountsListViewController.swift */; };
 		2C8A09E326757FC000993638 /* AccountCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09E226757FC000993638 /* AccountCellView.swift */; };
+		2C8A09E82675960D00993638 /* ErrorViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09E72675960D00993638 /* ErrorViewController.swift */; };
+		2C8A09EB2675964700993638 /* ApproveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09EA2675964700993638 /* ApproveViewController.swift */; };
+		2C8A09EE2675965F00993638 /* WaitingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09ED2675965F00993638 /* WaitingViewController.swift */; };
 		88745B0F4DEE1F60AD0F02C3 /* Pods_Encrypted_Ink.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3704D7F64179CCDCE2E8C783 /* Pods_Encrypted_Ink.framework */; };
 /* End PBXBuildFile section */
 
@@ -69,6 +72,9 @@
 		2C8A09D626751A0C00993638 /* WalletConnect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletConnect.swift; sourceTree = "<group>"; };
 		2C8A09DE267579EA00993638 /* AccountsListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsListViewController.swift; sourceTree = "<group>"; };
 		2C8A09E226757FC000993638 /* AccountCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountCellView.swift; sourceTree = "<group>"; };
+		2C8A09E72675960D00993638 /* ErrorViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorViewController.swift; sourceTree = "<group>"; };
+		2C8A09EA2675964700993638 /* ApproveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveViewController.swift; sourceTree = "<group>"; };
+		2C8A09ED2675965F00993638 /* WaitingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitingViewController.swift; sourceTree = "<group>"; };
 		3704D7F64179CCDCE2E8C783 /* Pods_Encrypted_Ink.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Encrypted_Ink.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -148,6 +154,7 @@
 				2C1995732674E80E00A8E370 /* NearbyConnectivity.swift */,
 				2C8A09D626751A0C00993638 /* WalletConnect.swift */,
 				2C8A09D32675184700993638 /* Window.swift */,
+				2C8A09E5267595C200993638 /* Views */,
 				2C8A09C92675142700993638 /* Screens */,
 				2C8A09C2267513A700993638 /* Ethereum */,
 				2C1995432674C4BA00A8E370 /* Assets.xcassets */,
@@ -171,11 +178,21 @@
 			isa = PBXGroup;
 			children = (
 				2C1995412674C4B900A8E370 /* ImportViewController.swift */,
+				2C8A09E72675960D00993638 /* ErrorViewController.swift */,
+				2C8A09EA2675964700993638 /* ApproveViewController.swift */,
+				2C8A09ED2675965F00993638 /* WaitingViewController.swift */,
 				2C8A09DE267579EA00993638 /* AccountsListViewController.swift */,
-				2C8A09E226757FC000993638 /* AccountCellView.swift */,
 				2C1995452674C4BA00A8E370 /* Main.storyboard */,
 			);
 			path = Screens;
+			sourceTree = "<group>";
+		};
+		2C8A09E5267595C200993638 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				2C8A09E226757FC000993638 /* AccountCellView.swift */,
+			);
+			path = Views;
 			sourceTree = "<group>";
 		};
 		FB5786212D81829B0FADBD25 /* Pods */ = {
@@ -335,7 +352,9 @@
 				2C8A09E326757FC000993638 /* AccountCellView.swift in Sources */,
 				0DB729202674E2DB0011F7A1 /* EIP712Domain.swift in Sources */,
 				0DB729182674E2DB0011F7A1 /* EIP712Signer.swift in Sources */,
+				2C8A09EE2675965F00993638 /* WaitingViewController.swift in Sources */,
 				0DB729192674E2DB0011F7A1 /* EIP712TypedData.swift in Sources */,
+				2C8A09E82675960D00993638 /* ErrorViewController.swift in Sources */,
 				2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */,
 				2C8A09B52675101300993638 /* AccountsService.swift in Sources */,
 				2C1995402674C4B900A8E370 /* AppDelegate.swift in Sources */,
@@ -345,6 +364,7 @@
 				0DB7291F2674E2DB0011F7A1 /* EIP712Representable.swift in Sources */,
 				0DB7291E2674E2DB0011F7A1 /* EIP712Signable.swift in Sources */,
 				0DB7291C2674E2DB0011F7A1 /* EIP712Value.swift in Sources */,
+				2C8A09EB2675964700993638 /* ApproveViewController.swift in Sources */,
 				2C1995562674D0F300A8E370 /* Ethereum.swift in Sources */,
 				2C8A09DF267579EA00993638 /* AccountsListViewController.swift in Sources */,
 				2C1995742674E80E00A8E370 /* NearbyConnectivity.swift in Sources */,
