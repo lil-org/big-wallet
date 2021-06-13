@@ -4,6 +4,8 @@ import Cocoa
 
 class ImportViewController: NSViewController {
     
+    var onSelectedAccount: ((Account) -> Void)?
+    
     @IBOutlet weak var textField: NSTextField! {
         didSet {
             textField.delegate = self
@@ -16,24 +18,17 @@ class ImportViewController: NSViewController {
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
-        AccountsService.addAccount(privateKey: textField.stringValue)
-        
-        // TODO: open accounts list
-        
-        WalletConnect.shared.connect(link: globalLink, address: "0xCf60CC6E4AD79187E7eBF62e0c21ae3a343180B2") { connected in
-            // TODO: close here
-            // use connected value
+        if let account = AccountsService.addAccount(privateKey: textField.stringValue),
+           let onSelectedAccount = onSelectedAccount {
+            onSelectedAccount(account)
+        } else {
+            showAccountsList()
         }
-        
-        showAccountsList()
-        
-        // TODO: show spinner
-//        Window.closeAll()
-//        Window.activateSafari()
     }
  
     private func showAccountsList() {
         let accountsListViewController = instantiate(AccountsListViewController.self)
+        accountsListViewController.onSelectedAccount = onSelectedAccount
         view.window?.contentViewController = accountsListViewController
     }
     

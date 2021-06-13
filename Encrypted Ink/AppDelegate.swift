@@ -4,19 +4,18 @@ import Cocoa
 
 @NSApplicationMain
 class AppDelegate: NSObject, NSApplicationDelegate {
-
-    let agent = Agent()
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
     }
     
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        agent.start()
+        Agent.shared.start()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        agent.reopen()
+        // TODO: make sure it is called only when icon tapped
+        Agent.shared.reopen()
         return true
     }
     

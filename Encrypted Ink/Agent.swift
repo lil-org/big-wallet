@@ -4,18 +4,21 @@ import Cocoa
 
 class Agent {
 
+    static let shared = Agent()
     private var connectivity: NearbyConnectivity!
+    
+    private init() {}
     
     func start() {
         connectivity = NearbyConnectivity(delegate: self)
-        showInitialScreen(onAppStart: true)
+        showInitialScreen(onAppStart: true, wcLink: nil)
     }
     
     func reopen() {
-        showInitialScreen(onAppStart: false)
+        showInitialScreen(onAppStart: false, wcLink: nil)
     }
     
-    func showInitialScreen(onAppStart: Bool) {
+    func showInitialScreen(onAppStart: Bool, wcLink: String?) {
         let windowController: NSWindowController
         if onAppStart, let currentWindowController = Window.current {
             windowController = currentWindowController
@@ -24,12 +27,33 @@ class Agent {
             windowController = Window.showNew()
         }
         
+        var onSelectedAccount: ((Account) -> Void)?
+        if let link = wcLink {
+            onSelectedAccount = { [weak self] account in
+                self?.connectWalletWithLink(link, account: account)
+            }
+        }
+        
         let accounts = AccountsService.getAccounts()
         if !accounts.isEmpty {
-            windowController.contentViewController = AccountsListViewController.with(preloadedAccounts: accounts)
+            let accountsList = AccountsListViewController.with(preloadedAccounts: accounts)
+            accountsList.onSelectedAccount = onSelectedAccount
+            windowController.contentViewController = accountsList
         } else {
-            windowController.contentViewController = instantiate(ImportViewController.self)
+            let importViewController = instantiate(ImportViewController.self)
+            importViewController.onSelectedAccount = onSelectedAccount
+            windowController.contentViewController = importViewController
         }
+    }
+    
+    func connectWalletWithLink(_ link: String, account: Account) {
+        WalletConnect.shared.connect(link: link, address: account.address) { connected in
+            // TODO: close here
+            // use connected value
+        }
+        // TODO: show spinner
+        Window.closeAll()
+        Window.activateSafari()
     }
     
 }
@@ -37,10 +61,7 @@ class Agent {
 extension Agent: NearbyConnectivityDelegate {
     
     func didFind(link: String) {
-        globalLink = link
-        // showScreen() // TODO: should show account selection
+        showInitialScreen(onAppStart: false, wcLink: link)
     }
     
 }
-
-var globalLink = ""

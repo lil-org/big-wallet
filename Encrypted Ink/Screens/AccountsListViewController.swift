@@ -6,6 +6,8 @@ class AccountsListViewController: NSViewController {
 
     private var accounts = [Account]()
     
+    var onSelectedAccount: ((Account) -> Void)?
+    
     static func with(preloadedAccounts: [Account]) -> AccountsListViewController {
         let new = instantiate(AccountsListViewController.self)
         new.accounts = preloadedAccounts
@@ -31,10 +33,15 @@ class AccountsListViewController: NSViewController {
         if accounts.isEmpty {
             accounts = AccountsService.getAccounts()
         }
+        
+        if onSelectedAccount != nil {
+            titleLabel.stringValue = "Select\nAccount"
+        }
     }
     
     @IBAction func addButtonTapped(_ sender: NSButton) {
         let importViewController = instantiate(ImportViewController.self)
+        importViewController.onSelectedAccount = onSelectedAccount
         view.window?.contentViewController = importViewController
     }
     
@@ -59,8 +66,13 @@ class AccountsListViewController: NSViewController {
 extension AccountsListViewController: NSTableViewDelegate {
     
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
-        // TODO: jump somewhere else
-        return true
+        if let onSelectedAccount = onSelectedAccount {
+            let account = accounts[row]
+            onSelectedAccount(account)
+            return true
+        } else {
+            return false
+        }
     }
     
 }
