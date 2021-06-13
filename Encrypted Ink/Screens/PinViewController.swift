@@ -5,6 +5,7 @@ import Cocoa
 class PinViewController: NSViewController {
     
     @IBOutlet weak var titleLabel: NSTextField!
+    @IBOutlet weak var codeTextField: NSSecureTextField!
     
     override func viewDidLoad() {
         super.viewDidLoad()

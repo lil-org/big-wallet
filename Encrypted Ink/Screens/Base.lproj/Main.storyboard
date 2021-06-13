@@ -1211,16 +1211,33 @@ DQ
                                     <real value="3.4028234663852886e+38"/>
                                 </customSpacing>
                             </stackView>
+                            <secureTextField verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="bsj-p7-maG">
+                                <rect key="frame" x="45" y="177" width="160" height="20"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="160" id="PLH-bk-GPE"/>
+                                </constraints>
+                                <secureTextFieldCell key="cell" controlSize="large" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" borderStyle="border" alignment="center" placeholderString="Code" drawsBackground="YES" usesSingleLineMode="YES" id="Szl-cI-dPv">
+                                    <font key="font" metaFont="system"/>
+                                    <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
+                                    <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                                    <allowedInputSourceLocales>
+                                        <string>NSAllRomanInputSourcesLocaleIdentifier</string>
+                                    </allowedInputSourceLocales>
+                                </secureTextFieldCell>
+                            </secureTextField>
                         </subviews>
                         <constraints>
                             <constraint firstAttribute="trailing" secondItem="Gdw-Q4-bo0" secondAttribute="trailing" constant="16" id="4fz-Fl-fqu"/>
                             <constraint firstAttribute="bottom" secondItem="uA2-QK-zWz" secondAttribute="bottom" constant="50" id="VE0-jp-Gcl"/>
+                            <constraint firstItem="bsj-p7-maG" firstAttribute="centerX" secondItem="Efz-OH-wm2" secondAttribute="centerX" id="W8f-n7-ONU"/>
+                            <constraint firstItem="bsj-p7-maG" firstAttribute="centerY" secondItem="Efz-OH-wm2" secondAttribute="centerY" constant="-12" id="Z8A-Rh-Mhb"/>
                             <constraint firstItem="uA2-QK-zWz" firstAttribute="centerX" secondItem="Efz-OH-wm2" secondAttribute="centerX" id="iq3-hI-fal"/>
                             <constraint firstItem="Gdw-Q4-bo0" firstAttribute="leading" secondItem="Efz-OH-wm2" secondAttribute="leading" constant="16" id="oac-JJ-iVE"/>
                             <constraint firstItem="Gdw-Q4-bo0" firstAttribute="top" secondItem="Efz-OH-wm2" secondAttribute="top" constant="24" id="trL-WY-4xE"/>
                         </constraints>
                     </view>
                     <connections>
+                        <outlet property="codeTextField" destination="bsj-p7-maG" id="BA8-jH-AlN"/>
                         <outlet property="titleLabel" destination="Gdw-Q4-bo0" id="DEt-cI-9Qc"/>
                     </connections>
                 </viewController>
