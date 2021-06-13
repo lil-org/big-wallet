@@ -67,19 +67,22 @@ class WalletConnect {
 
     func approveSign(id: Int64, payload: WCEthereumSignPayload, address: String, interactor: WCInteractor?) {
         var message: String?
+        let alertTitle: String
         switch payload {
         case let .sign(data: data, raw: _):
             message = String(data: data, encoding: .utf8)
+            alertTitle = "Sign message"
         case let .personalSign(data: data, raw: _):
             message = String(data: data, encoding: .utf8)
+            alertTitle = "Sign personal message"
         case let .signTypeData(id: _, data: _, raw: raw):
+            alertTitle = "Sign typed data"
             if raw.count >= 2 {
                 message = raw[1]
             }
         }
 
-        // TODO: vary title depending on sign type
-        Agent.shared.showApprove(title: "Sign message", meta: message ?? "") { [weak self] approved in
+        Agent.shared.showApprove(title: alertTitle, meta: message ?? "") { [weak self] approved in
             if approved {
                 self?.sign(id: id, message: message, payload: payload, address: address, interactor: interactor)
             } else {
