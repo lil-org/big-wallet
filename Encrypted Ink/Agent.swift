@@ -2,6 +2,7 @@
 
 import Cocoa
 import WalletConnect
+import LocalAuthentication
 
 class Agent {
 
@@ -49,10 +50,14 @@ class Agent {
     
     func showApprove(title: String, meta: String, completion: @escaping (Bool) -> Void) {
         let windowController = Window.showNew()
-        let approveViewController = ApproveViewController.with(title: title, meta: meta) { result in
-            completion(result)
+        let approveViewController = ApproveViewController.with(title: title, meta: meta) { [weak self] result in
             Window.closeAll()
             Window.activateSafari()
+            if result {
+                self?.proceedAfterAuthentication(reason: title, completion: completion)
+            } else {
+                completion(result)
+            }
         }
         windowController.contentViewController = approveViewController
     }
@@ -77,6 +82,16 @@ class Agent {
         pasteboard.clearContents()
         let session = WalletConnect.shared.sessionWithLink(link)
         showInitialScreen(onAppStart: false, wcSession: session)
+    }
+    
+    private func proceedAfterAuthentication(reason: String, completion: @escaping (Bool) -> Void) {
+        let context = LAContext()
+        context.localizedCancelTitle = "Cancel"
+        context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason ) { success, _ in
+            DispatchQueue.main.async {
+                completion(success)
+            }
+        }
     }
     
     private func connectWallet(session: WCSession, account: Account) {
