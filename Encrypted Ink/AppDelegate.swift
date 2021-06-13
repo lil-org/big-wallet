@@ -11,10 +11,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         Agent.shared.start()
+        Agent.shared.setupStatusBarItem()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        // TODO: make sure it is called only when icon tapped
         Agent.shared.reopen()
         return true
     }

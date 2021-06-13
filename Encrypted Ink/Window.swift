@@ -19,6 +19,7 @@ struct Window {
     
     static func closeAll() {
         NSApplication.shared.windows.forEach { $0.close() }
+        Agent.shared.setupStatusBarItem()
     }
     
     static func activateSafari() {

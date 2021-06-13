@@ -10,11 +10,12 @@ class WalletConnect {
     
     private var interactors = [WCInteractor]()
     
-    func connect(link: String, address: String, completion: @escaping ((Bool) -> Void)) {
+    func sessionWithLink(_ link: String) -> WCSession? {
+        return WCSession.from(string: link)
+    }
+    
+    func connect(session: WCSession, address: String, completion: @escaping ((Bool) -> Void)) {
         let clientMeta = WCPeerMeta(name: "Encrypted Ink", url: "https://encrypted.ink")
-        guard let session = WCSession.from(string: link) else {
-            return
-        }
         
         let interactor = WCInteractor(session: session, meta: clientMeta, uuid: UUID())
         configure(interactor: interactor, address: address)

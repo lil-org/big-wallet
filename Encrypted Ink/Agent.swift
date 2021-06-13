@@ -1,24 +1,24 @@
 // Copyright © 2021 Encrypted Ink. All rights reserved.
 
 import Cocoa
+import WalletConnect
 
 class Agent {
 
     static let shared = Agent()
-    private var connectivity: NearbyConnectivity!
     
     private init() {}
+    private var statusBarItem: NSStatusItem!
     
     func start() {
-        connectivity = NearbyConnectivity(delegate: self)
-        showInitialScreen(onAppStart: true, wcLink: nil)
+        showInitialScreen(onAppStart: true, wcSession: nil)
     }
     
     func reopen() {
-        showInitialScreen(onAppStart: false, wcLink: nil)
+        showInitialScreen(onAppStart: false, wcSession: nil)
     }
     
-    func showInitialScreen(onAppStart: Bool, wcLink: String?) {
+    func showInitialScreen(onAppStart: Bool, wcSession: WCSession?) {
         let windowController: NSWindowController
         if onAppStart, let currentWindowController = Window.current {
             windowController = currentWindowController
@@ -28,9 +28,9 @@ class Agent {
         }
         
         var onSelectedAccount: ((Account) -> Void)?
-        if let link = wcLink {
+        if let wcSession = wcSession {
             onSelectedAccount = { [weak self] account in
-                self?.connectWalletWithLink(link, account: account)
+                self?.connectWallet(session: wcSession, account: account)
             }
         }
         
@@ -61,8 +61,25 @@ class Agent {
         windowController.contentViewController = ErrorViewController.withMessage(message)
     }
     
-    private func connectWalletWithLink(_ link: String, account: Account) {
-        WalletConnect.shared.connect(link: link, address: account.address) { [weak self] connected in
+    func setupStatusBarItem() {
+        let statusBar = NSStatusBar.system
+        statusBarItem = statusBar.statusItem(withLength: NSStatusItem.squareLength)
+        statusBarItem.button?.title = "🍎"
+        statusBarItem.button?.target = self
+        statusBarItem.button?.action = #selector(statusBarButtonClicked(sender:))
+        statusBarItem.button?.sendAction(on: [.leftMouseUp])
+    }
+    
+    @objc private func statusBarButtonClicked(sender: NSStatusBarButton) {
+        let pasteboard = NSPasteboard.general
+        let link = pasteboard.string(forType: .string) ?? ""
+        pasteboard.clearContents()
+        let session = WalletConnect.shared.sessionWithLink(link)
+        showInitialScreen(onAppStart: false, wcSession: session)
+    }
+    
+    private func connectWallet(session: WCSession, account: Account) {
+        WalletConnect.shared.connect(session: session, address: account.address) { [weak self] connected in
             if connected {
                 Window.closeAll()
                 Window.activateSafari()
@@ -73,14 +90,6 @@ class Agent {
         
         let windowController = Window.showNew()
         windowController.contentViewController = WaitingViewController.withReason("Connecting")
-    }
-    
-}
-
-extension Agent: NearbyConnectivityDelegate {
-    
-    func didFind(link: String) {
-        showInitialScreen(onAppStart: false, wcLink: link)
     }
     
 }
