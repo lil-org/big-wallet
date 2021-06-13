@@ -23,7 +23,7 @@ class WalletConnect {
         interactor.connect().done { connected in
             completion(connected)
         }.catch { error in
-            print(error)
+            completion(false)
         }
         interactors.append(interactor)
     }
@@ -32,26 +32,20 @@ class WalletConnect {
         let accounts = [address]
         let chainId = 1
 
-        interactor.onError = { error in
-            print(error)
-        }
+        interactor.onError = { _ in }
 
         interactor.onSessionRequest = { [weak interactor] (id, peerParam) in
             let peer = peerParam.peerMeta
             interactor?.approveSession(accounts: accounts, chainId: chainId).cauterize()
         }
 
-        interactor.onDisconnect = { (error) in
-            print(error)
-        }
+        interactor.onDisconnect = { _ in }
 
         interactor.eth.onSign = { [weak self, weak interactor] (id, payload) in
-            print(id, payload)
             self?.approveSign(id: id, payload: payload, address: address, interactor: interactor)
         }
 
         interactor.eth.onTransaction = { [weak self, weak interactor] (id, event, transaction) in
-            print(id, event, transaction)
             self?.approveTransaction(id: id, wct: transaction, address: address, interactor: interactor)
         }
     }
@@ -98,9 +92,7 @@ class WalletConnect {
     }
 
     func sendTransaction(id: Int64, wct: WCEthereumTransaction, address: String, interactor: WCInteractor?) {
-        guard
-            let account = AccountsService.getAccountForAddress(address)
-        else {
+        guard let account = AccountsService.getAccountForAddress(address) else {
             rejectRequest(id: id, interactor: interactor, message: "Failed for some reason")
             return
         }
@@ -118,10 +110,7 @@ class WalletConnect {
     }
 
     func sign(id: Int64, message: String?, payload: WCEthereumSignPayload, address: String, interactor: WCInteractor?) {
-        guard
-            let message = message,
-            let account = AccountsService.getAccountForAddress(address)
-        else {
+        guard let message = message, let account = AccountsService.getAccountForAddress(address) else {
             rejectRequest(id: id, interactor: interactor, message: "Failed for some reason")
             return
         }
@@ -138,7 +127,6 @@ class WalletConnect {
             rejectRequest(id: id, interactor: interactor, message: "Failed for some reason")
             return
         }
-        
         interactor?.approveRequest(id: id, result: result).cauterize()
     }
 }
