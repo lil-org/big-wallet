@@ -25,13 +25,22 @@ class ImportViewController: NSViewController {
             // use connected value
         }
         
-        if let accounts = storyboard?.instantiateController(withIdentifier: "AccountsListViewController") as? AccountsListViewController {
-            view.window?.contentViewController = accounts
-        }
+        showAccountsList()
         
         // TODO: show spinner
 //        Window.closeAll()
 //        Window.activateSafari()
+    }
+ 
+    private func showAccountsList() {
+        if let accounts = storyboard?.instantiateController(withIdentifier: "AccountsListViewController") as? AccountsListViewController {
+            view.window?.contentViewController = accounts
+        }
+    }
+    
+    @IBAction func cancelButtonTapped(_ sender: NSButton) {
+        showAccountsList()
+        // TODO: in some cases should close the window
     }
     
 }

@@ -729,27 +729,53 @@
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
                                 </textFieldCell>
                             </textField>
-                            <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="t6z-sy-JB9">
-                                <rect key="frame" x="100" y="44" width="51" height="40"/>
-                                <buttonCell key="cell" type="push" title="OK" bezelStyle="rounded" alignment="center" controlSize="large" enabled="NO" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="WW9-Lc-I9e">
-                                    <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
-                                    <font key="font" metaFont="system"/>
-                                    <string key="keyEquivalent" base64-UTF8="YES">
+                            <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="12" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="OMb-fe-Srm">
+                                <rect key="frame" x="69" y="50" width="113" height="28"/>
+                                <subviews>
+                                    <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="h7j-aQ-ZXs">
+                                        <rect key="frame" x="-6" y="-6" width="74" height="40"/>
+                                        <buttonCell key="cell" type="push" title="Cancel" bezelStyle="rounded" alignment="center" controlSize="large" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="Nwp-G5-xI6">
+                                            <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
+                                            <font key="font" metaFont="system"/>
+                                            <string key="keyEquivalent" base64-UTF8="YES">
+Gw
+</string>
+                                        </buttonCell>
+                                        <connections>
+                                            <action selector="cancelButtonTapped:" target="XfG-lQ-9wD" id="lum-2f-dbf"/>
+                                        </connections>
+                                    </button>
+                                    <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="t6z-sy-JB9">
+                                        <rect key="frame" x="68" y="-6" width="51" height="40"/>
+                                        <buttonCell key="cell" type="push" title="OK" bezelStyle="rounded" alignment="center" controlSize="large" enabled="NO" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="WW9-Lc-I9e">
+                                            <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
+                                            <font key="font" metaFont="system"/>
+                                            <string key="keyEquivalent" base64-UTF8="YES">
 DQ
 </string>
-                                    <connections>
-                                        <action selector="actionButtonTapped:" target="XfG-lQ-9wD" id="hYm-ft-1Mx"/>
-                                    </connections>
-                                </buttonCell>
-                            </button>
+                                            <connections>
+                                                <action selector="actionButtonTapped:" target="XfG-lQ-9wD" id="hYm-ft-1Mx"/>
+                                            </connections>
+                                        </buttonCell>
+                                    </button>
+                                </subviews>
+                                <visibilityPriorities>
+                                    <integer value="1000"/>
+                                    <integer value="1000"/>
+                                </visibilityPriorities>
+                                <customSpacing>
+                                    <real value="3.4028234663852886e+38"/>
+                                    <real value="3.4028234663852886e+38"/>
+                                </customSpacing>
+                            </stackView>
                         </subviews>
                         <constraints>
                             <constraint firstItem="feM-MO-Msf" firstAttribute="top" secondItem="m2S-Jp-Qdl" secondAttribute="top" constant="24" id="MQp-NN-Cn2"/>
-                            <constraint firstItem="t6z-sy-JB9" firstAttribute="top" secondItem="YPY-7C-6mv" secondAttribute="bottom" constant="30" id="WRF-fn-Hho"/>
+                            <constraint firstItem="OMb-fe-Srm" firstAttribute="centerX" secondItem="m2S-Jp-Qdl" secondAttribute="centerX" id="QGc-kP-8g8"/>
                             <constraint firstItem="feM-MO-Msf" firstAttribute="leading" secondItem="m2S-Jp-Qdl" secondAttribute="leading" constant="16" id="WXg-Wv-Eyh"/>
                             <constraint firstItem="YPY-7C-6mv" firstAttribute="centerX" secondItem="m2S-Jp-Qdl" secondAttribute="centerX" id="cGD-Hm-XEo"/>
-                            <constraint firstItem="t6z-sy-JB9" firstAttribute="centerX" secondItem="m2S-Jp-Qdl" secondAttribute="centerX" id="chI-zB-bFc"/>
                             <constraint firstAttribute="trailing" secondItem="feM-MO-Msf" secondAttribute="trailing" constant="16" id="k5R-iV-R6y"/>
+                            <constraint firstItem="OMb-fe-Srm" firstAttribute="top" secondItem="YPY-7C-6mv" secondAttribute="bottom" constant="30" id="p6I-Yb-sBJ"/>
                             <constraint firstItem="YPY-7C-6mv" firstAttribute="top" secondItem="feM-MO-Msf" secondAttribute="bottom" constant="30" id="wQT-nA-szt"/>
                         </constraints>
                     </view>
