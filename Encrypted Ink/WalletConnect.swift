@@ -58,7 +58,7 @@ class WalletConnect {
     
     private func approveTransaction(id: Int64, wct: WCEthereumTransaction, address: String, interactor: WCInteractor?) {
         let value = Double(UInt64(wct.value?.dropFirst(2) ?? "0", radix: 16) ?? 0) / 1e18
-        Agent.shared.showApprove(title: "Send Transaction", meta: "\(value) ETH") { [weak self] approved in
+        Agent.shared.showApprove(title: "Send Transaction", meta: "value: \(value) ETH\ndata: \(wct.data)") { [weak self] approved in
             if approved {
                 self?.sendTransaction(id: id, wct: wct, address: address, interactor: interactor)
             } else {
