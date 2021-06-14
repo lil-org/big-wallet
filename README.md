@@ -1,3 +1,3 @@
-# Encrypted-Ink
+# Encrypted Ink
 
 Ethereum agent for MacOS.
