@@ -19,4 +19,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
     
+    func application(_ application: NSApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([NSUserActivityRestoring]) -> Void) -> Bool {
+        if let url = userActivity.webpageURL?.absoluteString {
+            print(url)
+        }
+        return true
+    }
+    
 }
