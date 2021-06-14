@@ -35,7 +35,7 @@ class WalletConnect {
         interactor.onError = { _ in }
 
         interactor.onSessionRequest = { [weak interactor] (id, peerParam) in
-            let peer = peerParam.peerMeta
+            let peer = peerParam.peerMeta // TODO: use this data for better UI
             interactor?.approveSession(accounts: accounts, chainId: chainId).cauterize()
         }
 
