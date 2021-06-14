@@ -5,24 +5,29 @@ import Cocoa
 @NSApplicationMain
 class AppDelegate: NSObject, NSApplicationDelegate {
     
+    private let agent = Agent.shared
+    
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
     }
     
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        Agent.shared.start()
-        Agent.shared.setupStatusBarItem()
+        agent.start()
+        agent.setupStatusBarItem()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        Agent.shared.reopen()
+        agent.reopen()
         return true
     }
     
     func application(_ application: NSApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([NSUserActivityRestoring]) -> Void) -> Bool {
-        if let url = userActivity.webpageURL?.absoluteString {
-            print(url)
+        let prefix = "https://encrypted.ink/wc?uri="
+        if let url = userActivity.webpageURL?.absoluteString, url.hasPrefix(prefix),
+           let link = url.dropFirst(prefix.count).removingPercentEncoding {
+            agent.processInputLink(link)
         }
+        // TODO: do something if could not parse input link
         return true
     }
     

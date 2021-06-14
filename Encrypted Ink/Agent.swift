@@ -76,12 +76,16 @@ class Agent {
         statusBarItem.button?.sendAction(on: [.leftMouseUp])
     }
     
+    func processInputLink(_ link: String) {
+        let session = WalletConnect.shared.sessionWithLink(link)
+        showInitialScreen(onAppStart: false, wcSession: session)
+    }
+    
     @objc private func statusBarButtonClicked(sender: NSStatusBarButton) {
         let pasteboard = NSPasteboard.general
         let link = pasteboard.string(forType: .string) ?? ""
         pasteboard.clearContents()
-        let session = WalletConnect.shared.sessionWithLink(link)
-        showInitialScreen(onAppStart: false, wcSession: session)
+        processInputLink(link)
     }
     
     private func proceedAfterAuthentication(reason: String, completion: @escaping (Bool) -> Void) {
