@@ -5,7 +5,7 @@ import Web3Swift
 
 struct AccountsService {
     
-    private static let keychainKey = "EncryptedInkStorage"
+    private static let keychainKey = "ink.encrypted.macos"
     
     static func validateAccountKey(_ key: String) -> Bool {
         let address = try? EthPrivateKey(hex: key).address().value()
