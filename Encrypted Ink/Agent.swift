@@ -17,7 +17,7 @@ class Agent {
     }
     
     func reopen() {
-        showInitialScreen(onAppStart: false, wcSession: nil)
+        checkPasteboardAndOpen()
     }
     
     func showInitialScreen(onAppStart: Bool, wcSession: WCSession?) {
@@ -77,15 +77,26 @@ class Agent {
     }
     
     func processInputLink(_ link: String) {
-        let session = WalletConnect.shared.sessionWithLink(link)
+        let session = sessionWithLink(link)
         showInitialScreen(onAppStart: false, wcSession: session)
     }
     
-    @objc private func statusBarButtonClicked(sender: NSStatusBarButton) {
+    private func checkPasteboardAndOpen() {
         let pasteboard = NSPasteboard.general
         let link = pasteboard.string(forType: .string) ?? ""
-        pasteboard.clearContents()
-        processInputLink(link)
+        let session = sessionWithLink(link)
+        if session != nil {
+            pasteboard.clearContents()
+        }
+        showInitialScreen(onAppStart: false, wcSession: session)
+    }
+    
+    private func sessionWithLink(_ link: String) -> WCSession? {
+        return WalletConnect.shared.sessionWithLink(link)
+    }
+    
+    @objc private func statusBarButtonClicked(sender: NSStatusBarButton) {
+        checkPasteboardAndOpen()
     }
     
     private func proceedAfterAuthentication(reason: String, completion: @escaping (Bool) -> Void) {
