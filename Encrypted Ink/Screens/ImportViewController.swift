@@ -18,8 +18,8 @@ class ImportViewController: NSViewController {
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
-        if let account = AccountsService.addAccount(privateKey: textField.stringValue),
-           let onSelectedAccount = onSelectedAccount {
+        let account = AccountsService.addAccount(privateKey: textField.stringValue)
+        if let account = account, AccountsService.getAccounts().count == 1, let onSelectedAccount = onSelectedAccount {
             onSelectedAccount(account)
         } else {
             showAccountsList()
