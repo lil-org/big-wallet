@@ -22,9 +22,14 @@ struct Window {
         Agent.shared.setupStatusBarItem()
     }
     
-    static func activateSafari() {
-        if let browser = NSWorkspace().runningApplications.first(where: { $0.bundleIdentifier == "com.apple.Safari" }) {
-            browser.activate(options: .activateIgnoringOtherApps)
+    static func activateBrowser() {
+        // TODO: support more browsers
+        let apps = NSWorkspace().runningApplications
+        for bundleId in ["com.apple.Safari", "com.google.Chrome"] {
+            if let browser = apps.first(where: { $0.bundleIdentifier ==  bundleId}) {
+                browser.activate(options: .activateIgnoringOtherApps)
+                return
+            }
         }
     }
     
