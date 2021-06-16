@@ -55,10 +55,18 @@ class AccountsListViewController: NSViewController {
 
     @objc private func didClickRemoveAccount(_ sender: AnyObject) {
         let row = tableView.clickedRow
-        guard row >= 0 else { return }
-        AccountsService.removeAccount(accounts[row])
-        accounts.remove(at: row)
-        tableView.reloadData()
+        
+        let alert = NSAlert()
+        alert.messageText = "Removed accounts can't be recovered."
+        alert.alertStyle = .critical
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Remove anyway")
+        if alert.runModal() != .alertFirstButtonReturn {
+            guard row >= 0 else { return }
+            AccountsService.removeAccount(accounts[row])
+            accounts.remove(at: row)
+            tableView.reloadData()
+        }
     }
     
 }
