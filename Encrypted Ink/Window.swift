@@ -24,9 +24,8 @@ struct Window {
     
     static func activateBrowser() {
         // TODO: support more browsers
-        let apps = NSWorkspace().runningApplications
         for bundleId in ["com.apple.Safari", "com.google.Chrome"] {
-            if let browser = apps.first(where: { $0.bundleIdentifier ==  bundleId}) {
+            if let browser = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId).first {
                 browser.activate(options: .activateIgnoringOtherApps)
                 return
             }
