@@ -27,6 +27,7 @@
 		2C1995472674C4BA00A8E370 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995452674C4BA00A8E370 /* Main.storyboard */; };
 		2C1995562674D0F300A8E370 /* Ethereum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995552674D0F300A8E370 /* Ethereum.swift */; };
 		2C19955B2674D54600A8E370 /* WalletConnect in Frameworks */ = {isa = PBXBuildFile; productRef = 2C19955A2674D54600A8E370 /* WalletConnect */; };
+		2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6706A4267A6BFE006AAEF2 /* Bundle.swift */; };
 		2C8A09B52675101300993638 /* AccountsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09B42675101300993638 /* AccountsService.swift */; };
 		2C8A09C6267513FC00993638 /* Agent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09C5267513FC00993638 /* Agent.swift */; };
 		2C8A09D42675184700993638 /* Window.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09D32675184700993638 /* Window.swift */; };
@@ -65,6 +66,7 @@
 		2C1995482674C4BA00A8E370 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C1995492674C4BA00A8E370 /* Encrypted_Ink.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Encrypted_Ink.entitlements; sourceTree = "<group>"; };
 		2C1995552674D0F300A8E370 /* Ethereum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ethereum.swift; sourceTree = "<group>"; };
+		2C6706A4267A6BFE006AAEF2 /* Bundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bundle.swift; sourceTree = "<group>"; };
 		2C8A09B42675101300993638 /* AccountsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsService.swift; sourceTree = "<group>"; };
 		2C8A09C5267513FC00993638 /* Agent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent.swift; sourceTree = "<group>"; };
 		2C8A09D32675184700993638 /* Window.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Window.swift; sourceTree = "<group>"; };
@@ -153,6 +155,7 @@
 				2C8A09C5267513FC00993638 /* Agent.swift */,
 				2C8A09D626751A0C00993638 /* WalletConnect.swift */,
 				2C8A09D32675184700993638 /* Window.swift */,
+				2C6706A7267A6C04006AAEF2 /* Extensions */,
 				2C8A09C92675142700993638 /* Screens */,
 				2C8A09C2267513A700993638 /* Ethereum */,
 				2C8A09E5267595C200993638 /* Views */,
@@ -161,6 +164,14 @@
 				2C1995492674C4BA00A8E370 /* Encrypted_Ink.entitlements */,
 			);
 			path = "Encrypted Ink";
+			sourceTree = "<group>";
+		};
+		2C6706A7267A6C04006AAEF2 /* Extensions */ = {
+			isa = PBXGroup;
+			children = (
+				2C6706A4267A6BFE006AAEF2 /* Bundle.swift */,
+			);
+			path = Extensions;
 			sourceTree = "<group>";
 		};
 		2C8A09C2267513A700993638 /* Ethereum */ = {
@@ -342,6 +353,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0DB729152674E2DB0011F7A1 /* EIP712Error.swift in Sources */,
+				2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */,
 				2C8A09C6267513FC00993638 /* Agent.swift in Sources */,
 				2C8A09D42675184700993638 /* Window.swift in Sources */,
 				0DB7291A2674E2DB0011F7A1 /* EIP712Type.swift in Sources */,
