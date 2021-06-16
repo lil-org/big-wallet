@@ -4,6 +4,7 @@ import Cocoa
 
 class AccountsListViewController: NSViewController {
 
+    private let agent = Agent.shared
     private var accounts = [Account]()
     
     var onSelectedAccount: ((Account) -> Void)?
@@ -63,10 +64,19 @@ class AccountsListViewController: NSViewController {
         alert.addButton(withTitle: "Remove anyway")
         if alert.runModal() != .alertFirstButtonReturn {
             guard row >= 0 else { return }
-            AccountsService.removeAccount(accounts[row])
-            accounts.remove(at: row)
-            tableView.reloadData()
+            agent.proceedAfterAuthentication(reason: "Remove account") { [weak self] allowed in
+                Window.activateCurrent()
+                if allowed {
+                    self?.removeAccountAtIndex(row)
+                }
+            }
         }
+    }
+    
+    private func removeAccountAtIndex(_ index: Int) {
+        AccountsService.removeAccount(accounts[index])
+        accounts.remove(at: index)
+        tableView.reloadData()
     }
     
 }

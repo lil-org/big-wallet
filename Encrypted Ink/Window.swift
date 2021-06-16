@@ -11,6 +11,12 @@ struct Window {
         return windowController
     }
     
+    static func activateCurrent() {
+        if let current = current {
+            activate(current)
+        }
+    }
+    
     static func activate(_ windowController: NSWindowController) {
         windowController.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)

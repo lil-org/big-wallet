@@ -99,7 +99,7 @@ class Agent {
         checkPasteboardAndOpen()
     }
     
-    private func proceedAfterAuthentication(reason: String, completion: @escaping (Bool) -> Void) {
+    func proceedAfterAuthentication(reason: String, completion: @escaping (Bool) -> Void) {
         let context = LAContext()
         
         var error: NSError?
