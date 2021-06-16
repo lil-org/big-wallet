@@ -22,7 +22,7 @@ class ErrorViewController: NSViewController {
 
     @IBAction func actionButtonTapped(_ sender: Any) {
         Window.closeAll()
-        Window.activateSafari()
+        Window.activateBrowser()
     }
     
 }

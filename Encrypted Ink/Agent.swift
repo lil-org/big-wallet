@@ -52,7 +52,7 @@ class Agent {
         let windowController = Window.showNew()
         let approveViewController = ApproveViewController.with(title: title, meta: meta) { [weak self] result in
             Window.closeAll()
-            Window.activateSafari()
+            Window.activateBrowser()
             if result {
                 self?.proceedAfterAuthentication(reason: title, completion: completion)
             } else {
@@ -120,7 +120,7 @@ class Agent {
         WalletConnect.shared.connect(session: session, address: account.address) { [weak self] connected in
             if connected {
                 Window.closeAll()
-                Window.activateSafari()
+                Window.activateBrowser()
             } else {
                 self?.showErrorMessage("Failed to connect")
             }
