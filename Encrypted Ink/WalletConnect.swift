@@ -22,7 +22,8 @@ class WalletConnect {
 
         interactor.connect().done { connected in
             completion(connected)
-        }.catch { error in
+        }.catch { _ in
+            // TODO: display connection error
             completion(false)
         }
         interactors.append(interactor)
