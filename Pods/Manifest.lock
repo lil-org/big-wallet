@@ -2,8 +2,20 @@ PODS:
   - BigInt (5.2.0)
   - BlockiesSwift (0.1.2)
   - CryptoSwift (1.4.0)
+  - PromiseKit (6.15.3):
+    - PromiseKit/CorePromise (= 6.15.3)
+    - PromiseKit/Foundation (= 6.15.3)
+    - PromiseKit/UIKit (= 6.15.3)
+  - PromiseKit/CorePromise (6.15.3)
+  - PromiseKit/Foundation (6.15.3):
+    - PromiseKit/CorePromise
   - secp256k1.swift (0.1.4)
+  - Starscream (4.0.4)
   - SwiftyJSON (4.3.0)
+  - WalletConnect (0.1.0):
+    - CryptoSwift
+    - PromiseKit
+    - Starscream
   - Web3Swift.io (0.0.4):
     - BigInt (~> 5.0)
     - CryptoSwift (~> 1.0)
@@ -12,34 +24,46 @@ PODS:
 
 DEPENDENCIES:
   - BlockiesSwift
-  - Web3Swift.io (from `https://github.com/grachyov/Web3Swift.git`, branch `develop`)
+  - WalletConnect (from `https://github.com/grachyov/wallet-connect-swift`, branch `master`)
+  - Web3Swift.io (from `https://github.com/zeriontech/Web3Swift.git`, branch `develop`)
 
 SPEC REPOS:
   trunk:
     - BigInt
     - BlockiesSwift
     - CryptoSwift
+    - PromiseKit
     - secp256k1.swift
+    - Starscream
     - SwiftyJSON
 
 EXTERNAL SOURCES:
+  WalletConnect:
+    :branch: master
+    :git: https://github.com/grachyov/wallet-connect-swift
   Web3Swift.io:
     :branch: develop
-    :git: https://github.com/grachyov/Web3Swift.git
+    :git: https://github.com/zeriontech/Web3Swift.git
 
 CHECKOUT OPTIONS:
+  WalletConnect:
+    :commit: 689c28f519a615310d493a7e638974bfff6d0ce9
+    :git: https://github.com/grachyov/wallet-connect-swift
   Web3Swift.io:
-    :commit: a606f5b3c2f4b02ed551dc96b1a1390265b4bb44
-    :git: https://github.com/grachyov/Web3Swift.git
+    :commit: 4e04054ac06a9875137ebbfac5a4b8c9f94d49f6
+    :git: https://github.com/zeriontech/Web3Swift.git
 
 SPEC CHECKSUMS:
   BigInt: f668a80089607f521586bbe29513d708491ef2f7
   BlockiesSwift: 22d8d56dd187e6bfd16cb8c8fbd4fd4896c3e65d
   CryptoSwift: 7cc902df1784de3b389a387756c7d710f197730c
+  PromiseKit: 3b2b6995e51a954c46dbc550ce3da44fbfb563c5
   secp256k1.swift: a7e7a214f6db6ce5db32cc6b2b45e5c4dd633634
+  Starscream: 5178aed56b316f13fa3bc55694e583d35dd414d9
   SwiftyJSON: 6faa0040f8b59dead0ee07436cbf76b73c08fd08
+  WalletConnect: 366f1790394831a768dfc77c8c4f35f8fbdaae31
   Web3Swift.io: 18fd06aed9d56df9c704f9c6f87b06675bb05b53
 
-PODFILE CHECKSUM: ac8eefd56a76ec0315ae6ace4dc1c03e89702c78
+PODFILE CHECKSUM: ade248ecc3a8a618186e3d3d754de44149e11bd9
 
 COCOAPODS: 1.10.0

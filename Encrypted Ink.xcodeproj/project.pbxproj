@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 52;
+	objectVersion = 51;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -26,7 +26,6 @@
 		2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995432674C4BA00A8E370 /* Assets.xcassets */; };
 		2C1995472674C4BA00A8E370 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995452674C4BA00A8E370 /* Main.storyboard */; };
 		2C1995562674D0F300A8E370 /* Ethereum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995552674D0F300A8E370 /* Ethereum.swift */; };
-		2C19955B2674D54600A8E370 /* WalletConnect in Frameworks */ = {isa = PBXBuildFile; productRef = 2C19955A2674D54600A8E370 /* WalletConnect */; };
 		2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6706A4267A6BFE006AAEF2 /* Bundle.swift */; };
 		2C8A09B52675101300993638 /* AccountsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09B42675101300993638 /* AccountsService.swift */; };
 		2C8A09C6267513FC00993638 /* Agent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09C5267513FC00993638 /* Agent.swift */; };
@@ -85,7 +84,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2C19955B2674D54600A8E370 /* WalletConnect in Frameworks */,
 				88745B0F4DEE1F60AD0F02C3 /* Pods_Encrypted_Ink.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -235,7 +233,6 @@
 			);
 			name = "Encrypted Ink";
 			packageProductDependencies = (
-				2C19955A2674D54600A8E370 /* WalletConnect */,
 			);
 			productName = "Ecrypted Ink";
 			productReference = 2C19953C2674C4B900A8E370 /* Encrypted Ink.app */;
@@ -265,7 +262,6 @@
 			);
 			mainGroup = 2C1995332674C4B900A8E370;
 			packageReferences = (
-				2C1995592674D54600A8E370 /* XCRemoteSwiftPackageReference "wallet-connect-swift" */,
 			);
 			productRefGroup = 2C19953D2674C4B900A8E370 /* Products */;
 			projectDirPath = "";
@@ -588,25 +584,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		2C1995592674D54600A8E370 /* XCRemoteSwiftPackageReference "wallet-connect-swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/WalletConnect/wallet-connect-swift";
-			requirement = {
-				branch = master;
-				kind = branch;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		2C19955A2674D54600A8E370 /* WalletConnect */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 2C1995592674D54600A8E370 /* XCRemoteSwiftPackageReference "wallet-connect-swift" */;
-			productName = WalletConnect;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 2C1995342674C4B900A8E370 /* Project object */;
 }

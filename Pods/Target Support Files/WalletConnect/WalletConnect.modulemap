@@ -1,0 +1,6 @@
+framework module WalletConnect {
+  umbrella header "WalletConnect-umbrella.h"
+
+  export *
+  module * { export * }
+}
