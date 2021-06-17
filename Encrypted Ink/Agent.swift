@@ -75,6 +75,11 @@ class Agent {
         showInitialScreen(onAppStart: false, wcSession: session)
     }
     
+    func getAccountSelectionCompletionIfShouldSelect() -> ((Account) -> Void)? {
+        let session = getSessionFromPasteboard()
+        return onSelectedAccount(session: session)
+    }
+    
     private func onSelectedAccount(session: WCSession?) -> ((Account) -> Void)? {
         guard let session = session else { return nil }
         return { [weak self] account in

@@ -48,7 +48,10 @@ class AccountsListViewController: NSViewController {
     }
     
     @objc private func didBecomeActive() {
-        // TODO: check if there is something good in pasteboard
+        guard view.window?.isVisible == true else { return }
+        if let completion = agent.getAccountSelectionCompletionIfShouldSelect() {
+            onSelectedAccount = completion
+        }
         reloadTitle()
     }
     
