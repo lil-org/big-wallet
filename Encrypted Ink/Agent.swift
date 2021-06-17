@@ -29,21 +29,15 @@ class Agent {
             windowController = Window.showNew()
         }
         
-        var onSelectedAccount: ((Account) -> Void)?
-        if let wcSession = wcSession {
-            onSelectedAccount = { [weak self] account in
-                self?.connectWallet(session: wcSession, account: account)
-            }
-        }
-        
+        let completion = onSelectedAccount(session: wcSession)
         let accounts = AccountsService.getAccounts()
         if !accounts.isEmpty {
             let accountsList = AccountsListViewController.with(preloadedAccounts: accounts)
-            accountsList.onSelectedAccount = onSelectedAccount
+            accountsList.onSelectedAccount = completion
             windowController.contentViewController = accountsList
         } else {
             let importViewController = instantiate(ImportViewController.self)
-            importViewController.onSelectedAccount = onSelectedAccount
+            importViewController.onSelectedAccount = completion
             windowController.contentViewController = importViewController
         }
     }
@@ -81,13 +75,25 @@ class Agent {
         showInitialScreen(onAppStart: false, wcSession: session)
     }
     
-    private func checkPasteboardAndOpen() {
+    private func onSelectedAccount(session: WCSession?) -> ((Account) -> Void)? {
+        guard let session = session else { return nil }
+        return { [weak self] account in
+            self?.connectWallet(session: session, account: account)
+        }
+    }
+    
+    private func getSessionFromPasteboard() -> WCSession? {
         let pasteboard = NSPasteboard.general
         let link = pasteboard.string(forType: .string) ?? ""
         let session = sessionWithLink(link)
         if session != nil {
             pasteboard.clearContents()
         }
+        return session
+    }
+    
+    private func checkPasteboardAndOpen() {
+        let session = getSessionFromPasteboard()
         showInitialScreen(onAppStart: false, wcSession: session)
     }
     
