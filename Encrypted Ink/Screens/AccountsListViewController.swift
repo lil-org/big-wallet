@@ -35,9 +35,21 @@ class AccountsListViewController: NSViewController {
             accounts = AccountsService.getAccounts()
         }
         
-        if onSelectedAccount != nil {
-            titleLabel.stringValue = "Select\nAccount"
-        }
+        reloadTitle()
+        NotificationCenter.default.addObserver(self, selector: #selector(didBecomeActive), name: NSApplication.didBecomeActiveNotification, object: nil)
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    private func reloadTitle() {
+        titleLabel.stringValue = onSelectedAccount != nil ? "Select\nAccount" : "Accounts"
+    }
+    
+    @objc private func didBecomeActive() {
+        // TODO: check if there is something good in pasteboard
+        reloadTitle()
     }
     
     @IBAction func addButtonTapped(_ sender: NSButton) {
