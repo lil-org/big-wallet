@@ -73,6 +73,15 @@ class AccountsListViewController: NSViewController {
         }
     }
     
+    private func showInstructionsAlert() {
+        let alert = NSAlert()
+        alert.messageText = "How to start?"
+        alert.informativeText = "Press “Copy” under\nWalletConnect QR code\nand get back."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+    
     private func removeAccountAtIndex(_ index: Int) {
         AccountsService.removeAccount(accounts[index])
         accounts.remove(at: index)
@@ -89,6 +98,7 @@ extension AccountsListViewController: NSTableViewDelegate {
             onSelectedAccount(account)
             return true
         } else {
+            showInstructionsAlert()
             return false
         }
     }
