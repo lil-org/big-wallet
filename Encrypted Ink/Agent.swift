@@ -13,11 +13,11 @@ class Agent {
     private var statusBarItem: NSStatusItem!
     
     func start() {
-        showInitialScreen(onAppStart: true, wcSession: nil)
+        checkPasteboardAndOpen(onAppStart: true)
     }
     
     func reopen() {
-        checkPasteboardAndOpen()
+        checkPasteboardAndOpen(onAppStart: false)
     }
     
     func showInitialScreen(onAppStart: Bool, wcSession: WCSession?) {
@@ -97,9 +97,9 @@ class Agent {
         return session
     }
     
-    private func checkPasteboardAndOpen() {
+    private func checkPasteboardAndOpen(onAppStart: Bool) {
         let session = getSessionFromPasteboard()
-        showInitialScreen(onAppStart: false, wcSession: session)
+        showInitialScreen(onAppStart: onAppStart, wcSession: session)
     }
     
     private func sessionWithLink(_ link: String) -> WCSession? {
@@ -107,7 +107,7 @@ class Agent {
     }
     
     @objc private func statusBarButtonClicked(sender: NSStatusBarButton) {
-        checkPasteboardAndOpen()
+        checkPasteboardAndOpen(onAppStart: false)
     }
     
     func proceedAfterAuthentication(reason: String, completion: @escaping (Bool) -> Void) {
