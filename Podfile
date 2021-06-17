@@ -1,4 +1,5 @@
 platform :osx, '10.14'
+inhibit_all_warnings!
 
 target 'Encrypted Ink' do
   use_frameworks!
