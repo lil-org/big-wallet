@@ -781,13 +781,26 @@ DQ
                                     <real value="3.4028234663852886e+38"/>
                                 </customSpacing>
                             </stackView>
+                            <button hidden="YES" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="S2m-C4-rgm">
+                                <rect key="frame" x="55" y="16" width="141" height="16"/>
+                                <buttonCell key="cell" type="bevel" title="⊕ Create new account" bezelStyle="rounded" alignment="center" controlSize="large" imageScaling="proportionallyDown" inset="2" id="v8p-G2-RbU">
+                                    <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
+                                    <font key="font" metaFont="system"/>
+                                </buttonCell>
+                                <color key="contentTintColor" name="tertiaryLabelColor" catalog="System" colorSpace="catalog"/>
+                                <connections>
+                                    <action selector="newAccountButtonTapped:" target="XfG-lQ-9wD" id="ksf-aQ-Eqv"/>
+                                </connections>
+                            </button>
                         </subviews>
                         <constraints>
                             <constraint firstItem="feM-MO-Msf" firstAttribute="top" secondItem="m2S-Jp-Qdl" secondAttribute="top" constant="24" id="MQp-NN-Cn2"/>
                             <constraint firstItem="OMb-fe-Srm" firstAttribute="centerX" secondItem="m2S-Jp-Qdl" secondAttribute="centerX" id="QGc-kP-8g8"/>
+                            <constraint firstAttribute="bottom" secondItem="S2m-C4-rgm" secondAttribute="bottom" constant="16" id="QoN-Jg-nlN"/>
                             <constraint firstItem="feM-MO-Msf" firstAttribute="leading" secondItem="m2S-Jp-Qdl" secondAttribute="leading" constant="16" id="WXg-Wv-Eyh"/>
                             <constraint firstItem="YPY-7C-6mv" firstAttribute="centerX" secondItem="m2S-Jp-Qdl" secondAttribute="centerX" id="cGD-Hm-XEo"/>
                             <constraint firstAttribute="trailing" secondItem="feM-MO-Msf" secondAttribute="trailing" constant="16" id="k5R-iV-R6y"/>
+                            <constraint firstItem="S2m-C4-rgm" firstAttribute="centerX" secondItem="m2S-Jp-Qdl" secondAttribute="centerX" id="ouG-qw-jcj"/>
                             <constraint firstItem="OMb-fe-Srm" firstAttribute="top" secondItem="YPY-7C-6mv" secondAttribute="bottom" constant="30" id="p6I-Yb-sBJ"/>
                             <constraint firstItem="YPY-7C-6mv" firstAttribute="top" secondItem="feM-MO-Msf" secondAttribute="bottom" constant="30" id="wQT-nA-szt"/>
                         </constraints>
