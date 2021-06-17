@@ -88,10 +88,13 @@ class AccountsListViewController: NSViewController {
     private func showInstructionsAlert() {
         let alert = NSAlert()
         alert.messageText = "How to start?"
-        alert.informativeText = "Press “Copy” under\nWalletConnect QR code\nand get back."
+        alert.informativeText = "1. Press “Copy to clipboard”\nunder WalletConnect QR code.\n\n2. Launch Encrypted Ink."
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
-        alert.runModal()
+        alert.addButton(withTitle: "Open Zerion")
+        if alert.runModal() != .alertFirstButtonReturn, let url = URL(string: "https://app.zerion.io") {
+            NSWorkspace.shared.open(url)
+        }
     }
     
     private func removeAccountAtIndex(_ index: Int) {
