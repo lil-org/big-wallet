@@ -1261,6 +1261,75 @@ DQ
             </objects>
             <point key="canvasLocation" x="677" y="1177"/>
         </scene>
+        <!--Welcome View Controller-->
+        <scene sceneID="xdv-om-uKF">
+            <objects>
+                <viewController storyboardIdentifier="WelcomeViewController" id="42G-F4-o1P" customClass="WelcomeViewController" customModule="Encrypted_Ink" customModuleProvider="target" sceneMemberID="viewController">
+                    <view key="view" id="n8I-Pv-qZV">
+                        <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
+                        <autoresizingMask key="autoresizingMask"/>
+                        <subviews>
+                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="vxh-AZ-Ll4">
+                                <rect key="frame" x="14" y="292" width="222" height="34"/>
+                                <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Encrypted Ink" id="dja-pE-CfV">
+                                    <font key="font" metaFont="systemHeavy" size="29"/>
+                                    <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
+                                    <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                                </textFieldCell>
+                            </textField>
+                            <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="12" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="zQX-EK-b8k">
+                                <rect key="frame" x="80" y="50" width="91" height="28"/>
+                                <subviews>
+                                    <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="ADG-H0-CZa">
+                                        <rect key="frame" x="-6" y="-6" width="103" height="40"/>
+                                        <buttonCell key="cell" type="push" title="Get Started" bezelStyle="rounded" alignment="center" controlSize="large" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="jgC-3I-6bj">
+                                            <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
+                                            <font key="font" metaFont="system"/>
+                                            <string key="keyEquivalent" base64-UTF8="YES">
+DQ
+</string>
+                                            <connections>
+                                                <action selector="actionButtonTapped:" target="42G-F4-o1P" id="bQ4-aL-OKd"/>
+                                            </connections>
+                                        </buttonCell>
+                                    </button>
+                                </subviews>
+                                <visibilityPriorities>
+                                    <integer value="1000"/>
+                                </visibilityPriorities>
+                                <customSpacing>
+                                    <real value="3.4028234663852886e+38"/>
+                                </customSpacing>
+                            </stackView>
+                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="BvK-xX-gxC">
+                                <rect key="frame" x="26" y="162" width="198" height="50"/>
+                                <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Sign crypto transactions." id="4kF-cy-CbK">
+                                    <font key="font" metaFont="systemBold" size="21"/>
+                                    <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
+                                    <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                                </textFieldCell>
+                            </textField>
+                        </subviews>
+                        <constraints>
+                            <constraint firstItem="vxh-AZ-Ll4" firstAttribute="leading" secondItem="n8I-Pv-qZV" secondAttribute="leading" constant="16" id="2GM-cf-uH4"/>
+                            <constraint firstItem="BvK-xX-gxC" firstAttribute="trailing" secondItem="vxh-AZ-Ll4" secondAttribute="trailing" constant="-12" id="Abm-DF-vuk"/>
+                            <constraint firstAttribute="trailing" secondItem="vxh-AZ-Ll4" secondAttribute="trailing" constant="16" id="QMd-6k-AoX"/>
+                            <constraint firstItem="zQX-EK-b8k" firstAttribute="centerX" secondItem="n8I-Pv-qZV" secondAttribute="centerX" id="hP0-do-VO9"/>
+                            <constraint firstAttribute="bottom" secondItem="zQX-EK-b8k" secondAttribute="bottom" constant="50" id="hnV-5a-0gu"/>
+                            <constraint firstItem="BvK-xX-gxC" firstAttribute="centerY" secondItem="n8I-Pv-qZV" secondAttribute="centerY" constant="-12" id="iwn-Nu-KVg"/>
+                            <constraint firstItem="BvK-xX-gxC" firstAttribute="leading" secondItem="vxh-AZ-Ll4" secondAttribute="leading" constant="12" id="ntl-wz-qp6"/>
+                            <constraint firstItem="vxh-AZ-Ll4" firstAttribute="top" secondItem="n8I-Pv-qZV" secondAttribute="top" constant="24" id="wzk-IR-5rG"/>
+                        </constraints>
+                    </view>
+                    <connections>
+                        <outlet property="messageLabel" destination="BvK-xX-gxC" id="1F3-ae-gz2"/>
+                        <outlet property="titleLabel" destination="vxh-AZ-Ll4" id="JEh-av-Oj4"/>
+                    </connections>
+                </viewController>
+                <customObject id="Anv-AQ-Eke" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="677" y="315"/>
+        </scene>
     </scenes>
     <resources>
         <image name="NSApplicationIcon" width="32" height="32"/>
