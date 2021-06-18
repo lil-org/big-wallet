@@ -6,21 +6,26 @@ struct Keychain {
     
     private static let prefix = "ink.encrypted.macos."
     
-    private struct Key {
-        static let accounts = "ethereum.keys"
-        static let password = "password"
+    private enum Key: String {
+        case accounts = "ethereum.keys"
+        case password = "password"
     }
     
     static var password: String? {
-        return "" // TODO: implement
+        if let data = get(key: .password), let password = String(data: data, encoding: .utf8) {
+            return password
+        } else {
+            return nil
+        }
     }
     
     static func save(password: String) {
-        // TODO: implement
+        guard let data = password.data(using: .utf8) else { return }
+        save(data: data, key: .password)
     }
     
     static var accounts: [Account] {
-        if let data = get(key: Key.accounts), let accounts = try? JSONDecoder().decode([Account].self, from: data) {
+        if let data = get(key: .accounts), let accounts = try? JSONDecoder().decode([Account].self, from: data) {
             return accounts
         } else {
             return []
@@ -29,24 +34,23 @@ struct Keychain {
     
     static func save(accounts: [Account]) {
         guard let data = try? JSONEncoder().encode(accounts) else { return }
-        save(data: data, key: Key.password)
-        
+        save(data: data, key: .accounts)
     }
     
     // MARK: Private
     
-    private static func save(data: Data, key: String) {
+    private static func save(data: Data, key: Key) {
         let query = [kSecClass as String: kSecClassGenericPassword as String,
-                     kSecAttrAccount as String: prefix + key,
+                     kSecAttrAccount as String: prefix + key.rawValue,
                      kSecValueData as String: data] as [String: Any]
         SecItemDelete(query as CFDictionary)
         SecItemAdd(query as CFDictionary, nil)
     }
     
-    private static func get(key: String) -> Data? {
+    private static func get(key: Key) -> Data? {
         guard let returnDataQueryValue = kCFBooleanTrue else { return nil }
         let query = [kSecClass as String: kSecClassGenericPassword,
-                     kSecAttrAccount as String: prefix + key,
+                     kSecAttrAccount as String: prefix + key.rawValue,
                      kSecReturnData as String: returnDataQueryValue,
                      kSecMatchLimit as String: kSecMatchLimitOne] as [String: Any]
 
