@@ -1185,17 +1185,17 @@ DQ
             </objects>
             <point key="canvasLocation" x="380" y="1177"/>
         </scene>
-        <!--Pin View Controller-->
+        <!--Password View Controller-->
         <scene sceneID="Riu-mP-tQs">
             <objects>
-                <viewController storyboardIdentifier="PinViewController" id="KMi-XY-mOg" customClass="PinViewController" customModule="Encrypted_Ink" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="PasswordViewController" id="KMi-XY-mOg" customClass="PasswordViewController" customModule="Encrypted_Ink" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="Efz-OH-wm2">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
                             <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Gdw-Q4-bo0">
-                                <rect key="frame" x="14" y="292" width="222" height="34"/>
-                                <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Pin" id="8sq-L4-gvS">
+                                <rect key="frame" x="14" y="258" width="222" height="68"/>
+                                <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Create Password" id="8sq-L4-gvS">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
                                     <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -1245,7 +1245,7 @@ DQ
                                 <constraints>
                                     <constraint firstAttribute="width" constant="160" id="PLH-bk-GPE"/>
                                 </constraints>
-                                <secureTextFieldCell key="cell" controlSize="large" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" borderStyle="border" alignment="center" placeholderString="Code" drawsBackground="YES" usesSingleLineMode="YES" id="Szl-cI-dPv">
+                                <secureTextFieldCell key="cell" controlSize="large" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" borderStyle="border" alignment="center" placeholderString="Password" drawsBackground="YES" usesSingleLineMode="YES" id="Szl-cI-dPv">
                                     <font key="font" metaFont="system"/>
                                     <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -1266,7 +1266,9 @@ DQ
                         </constraints>
                     </view>
                     <connections>
-                        <outlet property="codeTextField" destination="bsj-p7-maG" id="BA8-jH-AlN"/>
+                        <outlet property="cancelButton" destination="cWf-at-SKV" id="bwN-MG-z5Z"/>
+                        <outlet property="okButton" destination="N8k-Bq-UNz" id="TCK-eo-6gc"/>
+                        <outlet property="passwordTextField" destination="bsj-p7-maG" id="pgZ-fr-vJO"/>
                         <outlet property="titleLabel" destination="Gdw-Q4-bo0" id="DEt-cI-9Qc"/>
                     </connections>
                 </viewController>

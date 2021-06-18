@@ -38,7 +38,7 @@
 		2C8A09EB2675964700993638 /* ApproveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09EA2675964700993638 /* ApproveViewController.swift */; };
 		2C8A09EE2675965F00993638 /* WaitingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09ED2675965F00993638 /* WaitingViewController.swift */; };
 		2C917429267D2A6E00049075 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C917428267D2A6E00049075 /* Keychain.swift */; };
-		2CDAB3722675B3F0009F8B97 /* PinViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CDAB3712675B3F0009F8B97 /* PinViewController.swift */; };
+		2CDAB3722675B3F0009F8B97 /* PasswordViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */; };
 		88745B0F4DEE1F60AD0F02C3 /* Pods_Encrypted_Ink.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3704D7F64179CCDCE2E8C783 /* Pods_Encrypted_Ink.framework */; };
 /* End PBXBuildFile section */
 
@@ -79,7 +79,7 @@
 		2C8A09EA2675964700993638 /* ApproveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveViewController.swift; sourceTree = "<group>"; };
 		2C8A09ED2675965F00993638 /* WaitingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitingViewController.swift; sourceTree = "<group>"; };
 		2C917428267D2A6E00049075 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
-		2CDAB3712675B3F0009F8B97 /* PinViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinViewController.swift; sourceTree = "<group>"; };
+		2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordViewController.swift; sourceTree = "<group>"; };
 		3704D7F64179CCDCE2E8C783 /* Pods_Encrypted_Ink.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Encrypted_Ink.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -191,7 +191,7 @@
 			children = (
 				2C1995412674C4B900A8E370 /* ImportViewController.swift */,
 				2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */,
-				2CDAB3712675B3F0009F8B97 /* PinViewController.swift */,
+				2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */,
 				2C8A09E72675960D00993638 /* ErrorViewController.swift */,
 				2C8A09EA2675964700993638 /* ApproveViewController.swift */,
 				2C8A09ED2675965F00993638 /* WaitingViewController.swift */,
@@ -380,7 +380,7 @@
 				2C8A09E82675960D00993638 /* ErrorViewController.swift in Sources */,
 				2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */,
 				2C8A09B52675101300993638 /* AccountsService.swift in Sources */,
-				2CDAB3722675B3F0009F8B97 /* PinViewController.swift in Sources */,
+				2CDAB3722675B3F0009F8B97 /* PasswordViewController.swift in Sources */,
 				2C1995402674C4B900A8E370 /* AppDelegate.swift in Sources */,
 				0DB729142674E2DB0011F7A1 /* EIP712Parameter.swift in Sources */,
 				0DB7291B2674E2DB0011F7A1 /* EIP712Hash.swift in Sources */,

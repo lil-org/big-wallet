@@ -11,6 +11,7 @@ class Agent {
     
     private init() {}
     private var statusBarItem: NSStatusItem!
+    private var hasPassword = Keychain.password != nil
     
     func start() {
         checkPasteboardAndOpen(onAppStart: true)
@@ -27,6 +28,16 @@ class Agent {
             Window.activate(windowController)
         } else {
             windowController = Window.showNew()
+        }
+        
+        guard hasPassword else {
+            let welcomeViewController = WelcomeViewController.new { [weak self] createdPassword in
+                guard createdPassword else { return }
+                self?.hasPassword = true
+                self?.showInitialScreen(onAppStart: onAppStart, wcSession: wcSession)
+            }
+            windowController.contentViewController = welcomeViewController
+            return
         }
         
         let completion = onSelectedAccount(session: wcSession)
