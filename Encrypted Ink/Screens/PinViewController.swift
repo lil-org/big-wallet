@@ -4,6 +4,10 @@ import Cocoa
 
 class PinViewController: NSViewController {
     
+    enum Mode {
+        case create, enter
+    }
+    
     @IBOutlet weak var titleLabel: NSTextField!
     @IBOutlet weak var codeTextField: NSSecureTextField!
     
