@@ -13,12 +13,12 @@ struct Window {
     
     static func activate(_ windowController: NSWindowController) {
         windowController.showWindow(nil)
-        activateApp()
-        windowController.window?.makeKeyAndOrderFront(nil)
+        activateWindow(windowController.window)
     }
     
-    static func activateApp() {
+    static func activateWindow(_ window: NSWindow?) {
         NSApp.activate(ignoringOtherApps: true)
+        window?.makeKeyAndOrderFront(nil)
     }
     
     static func closeAll() {

@@ -80,7 +80,7 @@ class AccountsListViewController: NSViewController {
         if alert.runModal() != .alertFirstButtonReturn {
             guard row >= 0 else { return }
             agent.proceedAfterAuthentication(reason: "Remove account") { [weak self] allowed in
-                Window.activateApp()
+                Window.activateWindow(self?.view.window)
                 if allowed {
                     self?.removeAccountAtIndex(row)
                 }
