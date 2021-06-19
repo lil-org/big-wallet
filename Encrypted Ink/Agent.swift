@@ -171,23 +171,27 @@ class Agent: NSObject {
         let willShowPasswordScreen = !canDoLocalAuthentication || requireAppPasswordScreen
         
         if willShowPasswordScreen {
-            let passwordViewController = PasswordViewController.with(mode: .enter, reason: reason) { success in
+            let passwordViewController = PasswordViewController.with(mode: .enter, reason: reason) { [weak context] success in
                 if let getBackTo = getBackTo {
                     on?.contentViewController = getBackTo
                 } else {
                     Window.closeAll()
+                }
+                if success {
+                    context?.invalidate()
                 }
                 completion(success)
             }
             on?.contentViewController = passwordViewController
         }
         
-        return
-        // TODO: implement on mac that supports LA
         if canDoLocalAuthentication {
             context.localizedCancelTitle = "Cancel"
-            context.evaluatePolicy(policy, localizedReason: reason ) { success, _ in
+            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason ) { [weak on] success, _ in
                 DispatchQueue.main.async {
+                    if !success && willShowPasswordScreen {
+                        Window.activateWindow(on)
+                    }
                     completion(success)
                 }
             }
