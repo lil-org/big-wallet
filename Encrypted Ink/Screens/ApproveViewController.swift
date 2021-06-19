@@ -6,6 +6,7 @@ class ApproveViewController: NSViewController {
     
     @IBOutlet weak var titleLabel: NSTextField!
     @IBOutlet var metaTextView: NSTextView!
+    @IBOutlet weak var okButton: NSButton!
     
     var approveTitle: String!
     var meta: String!
