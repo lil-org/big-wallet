@@ -4,9 +4,10 @@ import Cocoa
 
 class PasswordViewController: NSViewController {
     
-    static func with(mode: Mode, completion: ((Bool) -> Void)?) -> PasswordViewController {
+    static func with(mode: Mode, reason: String? = nil, completion: ((Bool) -> Void)?) -> PasswordViewController {
         let new = instantiate(PasswordViewController.self)
         new.mode = mode
+        new.reason = reason
         new.completion = completion
         return new
     }
@@ -16,6 +17,7 @@ class PasswordViewController: NSViewController {
     }
     
     private var mode = Mode.create
+    private var reason: String?
     private var passwordToRepeat: String?
     private var completion: ((Bool) -> Void)?
     
@@ -29,6 +31,7 @@ class PasswordViewController: NSViewController {
     }
     
     override func viewDidLoad() {
+        // TODO: display reason if there is some
         super.viewDidLoad()
         switchToMode(mode)
     }
@@ -60,7 +63,9 @@ class PasswordViewController: NSViewController {
                 completion?(true)
             }
         case .enter:
-            print("yo") // TODO: implement
+            if Keychain.password == passwordTextField.stringValue {
+                completion?(true)
+            }
         }
     }
     
@@ -71,7 +76,7 @@ class PasswordViewController: NSViewController {
         case .repeatAfterCreate:
             switchToMode(.create)
         case .enter:
-            Window.closeAll() // TODO: implement
+            completion?(false)
         }
     }
     
