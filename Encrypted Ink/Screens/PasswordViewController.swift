@@ -34,7 +34,8 @@ class PasswordViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         switchToMode(mode)
-        if let reason = reason {
+        // TODO: use enum for reason to avoid strings comparison
+        if let reason = reason, reason != "Start" {
             reasonLabel.stringValue = "to " + reason.lowercased()
         } else {
             reasonLabel.stringValue = ""
