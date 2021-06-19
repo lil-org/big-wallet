@@ -171,7 +171,7 @@ class Agent: NSObject {
         let willShowPasswordScreen = !canDoLocalAuthentication || requireAppPasswordScreen
         
         if willShowPasswordScreen {
-            let passwordViewController = PasswordViewController.with(mode: .enter, reason: reason) { [weak context] success in
+            let passwordViewController = PasswordViewController.with(mode: .enter, reason: reason) { [weak on, weak context] success in
                 if let getBackTo = getBackTo {
                     on?.contentViewController = getBackTo
                 } else {
