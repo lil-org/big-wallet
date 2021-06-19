@@ -1109,6 +1109,7 @@ DQ
                     </view>
                     <connections>
                         <outlet property="metaTextView" destination="nek-dW-Y7v" id="tX9-hL-ZQD"/>
+                        <outlet property="okButton" destination="xdD-3r-3YP" id="f8Z-et-2Th"/>
                         <outlet property="titleLabel" destination="PdV-Nr-oOY" id="AZx-pJ-I7F"/>
                     </connections>
                 </viewController>
