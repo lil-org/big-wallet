@@ -109,7 +109,7 @@ class Agent: NSObject {
         Window.activateWindow(nil)
         let alert = NSAlert()
         alert.messageText = "Quit Encrypted Ink?"
-        alert.informativeText = "It won't be able to show sign requests."
+        alert.informativeText = "You won't be able to sign requests."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "OK")
         alert.addButton(withTitle: "Cancel")
