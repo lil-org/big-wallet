@@ -12,6 +12,7 @@ class Agent: NSObject {
     private override init() { super.init() }
     private var statusBarItem: NSStatusItem!
     private var hasPassword = Keychain.password != nil
+    private var didEnterPasswordOnStart = false
     
     func start() {
         checkPasteboardAndOpen(onAppStart: true)
@@ -33,10 +34,21 @@ class Agent: NSObject {
         guard hasPassword else {
             let welcomeViewController = WelcomeViewController.new { [weak self] createdPassword in
                 guard createdPassword else { return }
+                self?.didEnterPasswordOnStart = true
                 self?.hasPassword = true
                 self?.showInitialScreen(onAppStart: onAppStart, wcSession: wcSession)
             }
             windowController.contentViewController = welcomeViewController
+            return
+        }
+        
+        guard didEnterPasswordOnStart else {
+            askAuthentication(on: windowController.window, requireAppPasswordScreen: true, reason: "Start") { [weak self] success in
+                if success {
+                    self?.didEnterPasswordOnStart = true
+                    self?.showInitialScreen(onAppStart: onAppStart, wcSession: wcSession)
+                }
+            }
             return
         }
         
@@ -56,11 +68,13 @@ class Agent: NSObject {
     func showApprove(title: String, meta: String, completion: @escaping (Bool) -> Void) {
         let windowController = Window.showNew()
         let approveViewController = ApproveViewController.with(title: title, meta: meta) { [weak self] result in
-            Window.closeAll()
-            Window.activateBrowser()
             if result {
-                self?.proceedAfterAuthentication(reason: title, completion: completion)
+                self?.askAuthentication(on: windowController.window, requireAppPasswordScreen: false, reason: title) { success in
+                    completion(success)
+                    Window.closeAllAndActivateBrowser()
+                }
             } else {
+                Window.closeAllAndActivateBrowser()
                 completion(result)
             }
         }
@@ -148,19 +162,34 @@ class Agent: NSObject {
         return WalletConnect.shared.sessionWithLink(link)
     }
     
-    func proceedAfterAuthentication(reason: String, completion: @escaping (Bool) -> Void) {
+    func askAuthentication(on: NSWindow?, getBackTo: NSViewController? = nil, requireAppPasswordScreen: Bool, reason: String, completion: @escaping (Bool) -> Void) {
         let context = LAContext()
-        
         var error: NSError?
-        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
-            completion(true)
-            return
+        let policy = LAPolicy.deviceOwnerAuthenticationWithBiometrics
+        
+        let canDoLocalAuthentication = context.canEvaluatePolicy(policy, error: &error)
+        let willShowPasswordScreen = !canDoLocalAuthentication || requireAppPasswordScreen
+        
+        if willShowPasswordScreen {
+            let passwordViewController = PasswordViewController.with(mode: .enter, reason: reason) { success in
+                if let getBackTo = getBackTo {
+                    on?.contentViewController = getBackTo
+                } else {
+                    Window.closeAll()
+                }
+                completion(success)
+            }
+            on?.contentViewController = passwordViewController
         }
         
-        context.localizedCancelTitle = "Cancel"
-        context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason ) { success, _ in
-            DispatchQueue.main.async {
-                completion(success)
+        return
+        // TODO: implement on mac that supports LA
+        if canDoLocalAuthentication {
+            context.localizedCancelTitle = "Cancel"
+            context.evaluatePolicy(policy, localizedReason: reason ) { success, _ in
+                DispatchQueue.main.async {
+                    completion(success)
+                }
             }
         }
     }
