@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.Cocoa.Storyboard.XIB" version="3.0" toolsVersion="17701" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES" initialViewController="B8D-0N-5wS">
+<document type="com.apple.InterfaceBuilder3.Cocoa.Storyboard.XIB" version="3.0" toolsVersion="18122" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES" initialViewController="B8D-0N-5wS">
     <dependencies>
         <deployment identifier="macosx"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="17701"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="18122"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <scenes>
@@ -842,7 +842,7 @@ DQ
                                             <color key="backgroundColor" name="controlBackgroundColor" catalog="System" colorSpace="catalog"/>
                                             <color key="gridColor" name="gridColor" catalog="System" colorSpace="catalog"/>
                                             <tableColumns>
-                                                <tableColumn width="225" minWidth="40" maxWidth="1000" id="Usc-6R-O3H">
+                                                <tableColumn width="193" minWidth="40" maxWidth="1000" id="Usc-6R-O3H">
                                                     <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border">
                                                         <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                         <color key="backgroundColor" name="headerColor" catalog="System" colorSpace="catalog"/>
@@ -855,11 +855,11 @@ DQ
                                                     <tableColumnResizingMask key="resizingMask" resizeWithTable="YES" userResizable="YES"/>
                                                     <prototypeCellViews>
                                                         <tableCellView identifier="AccountCellView" id="Lp1-Zy-70c" customClass="AccountCellView" customModule="Encrypted_Ink" customModuleProvider="target">
-                                                            <rect key="frame" x="0.0" y="0.0" width="237" height="40"/>
+                                                            <rect key="frame" x="10" y="0.0" width="205" height="40"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
                                                                 <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="pdB-jS-gKE">
-                                                                    <rect key="frame" x="67" y="5" width="30" height="30"/>
+                                                                    <rect key="frame" x="51" y="5" width="30" height="30"/>
                                                                     <constraints>
                                                                         <constraint firstAttribute="width" constant="30" id="Dmm-fG-F82"/>
                                                                         <constraint firstAttribute="height" constant="30" id="MNb-Zm-mjg"/>
@@ -872,7 +872,7 @@ DQ
                                                                     </userDefinedRuntimeAttributes>
                                                                 </imageView>
                                                                 <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="sef-hl-iPV">
-                                                                    <rect key="frame" x="101" y="8" width="62" height="25"/>
+                                                                    <rect key="frame" x="85" y="8" width="62" height="25"/>
                                                                     <textFieldCell key="cell" lineBreakMode="clipping" alignment="center" title="Label" id="2a6-9c-AzV">
                                                                         <font key="font" metaFont="systemBold" size="21"/>
                                                                         <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
@@ -1254,14 +1254,25 @@ DQ
                                     </allowedInputSourceLocales>
                                 </secureTextFieldCell>
                             </secureTextField>
+                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="H35-O5-AZi">
+                                <rect key="frame" x="18" y="234" width="214" height="16"/>
+                                <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Multiline Label" id="5g8-hW-z0n">
+                                    <font key="font" metaFont="system"/>
+                                    <color key="textColor" name="secondaryLabelColor" catalog="System" colorSpace="catalog"/>
+                                    <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                                </textFieldCell>
+                            </textField>
                         </subviews>
                         <constraints>
                             <constraint firstAttribute="trailing" secondItem="Gdw-Q4-bo0" secondAttribute="trailing" constant="16" id="4fz-Fl-fqu"/>
+                            <constraint firstAttribute="trailing" secondItem="H35-O5-AZi" secondAttribute="trailing" constant="20" id="UFe-Ed-Vnm"/>
                             <constraint firstAttribute="bottom" secondItem="uA2-QK-zWz" secondAttribute="bottom" constant="50" id="VE0-jp-Gcl"/>
                             <constraint firstItem="bsj-p7-maG" firstAttribute="centerX" secondItem="Efz-OH-wm2" secondAttribute="centerX" id="W8f-n7-ONU"/>
                             <constraint firstItem="bsj-p7-maG" firstAttribute="centerY" secondItem="Efz-OH-wm2" secondAttribute="centerY" constant="-12" id="Z8A-Rh-Mhb"/>
+                            <constraint firstItem="H35-O5-AZi" firstAttribute="top" secondItem="Gdw-Q4-bo0" secondAttribute="bottom" constant="8" id="bRV-7x-vLm"/>
                             <constraint firstItem="uA2-QK-zWz" firstAttribute="centerX" secondItem="Efz-OH-wm2" secondAttribute="centerX" id="iq3-hI-fal"/>
                             <constraint firstItem="Gdw-Q4-bo0" firstAttribute="leading" secondItem="Efz-OH-wm2" secondAttribute="leading" constant="16" id="oac-JJ-iVE"/>
+                            <constraint firstItem="H35-O5-AZi" firstAttribute="leading" secondItem="Efz-OH-wm2" secondAttribute="leading" constant="20" id="sdb-Rn-Lha"/>
                             <constraint firstItem="Gdw-Q4-bo0" firstAttribute="top" secondItem="Efz-OH-wm2" secondAttribute="top" constant="24" id="trL-WY-4xE"/>
                         </constraints>
                     </view>
@@ -1269,6 +1280,7 @@ DQ
                         <outlet property="cancelButton" destination="cWf-at-SKV" id="bwN-MG-z5Z"/>
                         <outlet property="okButton" destination="N8k-Bq-UNz" id="TCK-eo-6gc"/>
                         <outlet property="passwordTextField" destination="bsj-p7-maG" id="pgZ-fr-vJO"/>
+                        <outlet property="reasonLabel" destination="H35-O5-AZi" id="p0g-zP-hUc"/>
                         <outlet property="titleLabel" destination="Gdw-Q4-bo0" id="DEt-cI-9Qc"/>
                     </connections>
                 </viewController>

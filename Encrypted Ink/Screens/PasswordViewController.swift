@@ -21,6 +21,7 @@ class PasswordViewController: NSViewController {
     private var passwordToRepeat: String?
     private var completion: ((Bool) -> Void)?
     
+    @IBOutlet weak var reasonLabel: NSTextField!
     @IBOutlet weak var cancelButton: NSButton!
     @IBOutlet weak var okButton: NSButton!
     @IBOutlet weak var titleLabel: NSTextField!
@@ -31,9 +32,13 @@ class PasswordViewController: NSViewController {
     }
     
     override func viewDidLoad() {
-        // TODO: display reason if there is some
         super.viewDidLoad()
         switchToMode(mode)
+        if let reason = reason {
+            reasonLabel.stringValue = "to " + reason.lowercased()
+        } else {
+            reasonLabel.stringValue = ""
+        }
     }
 
     func switchToMode(_ mode: Mode) {
