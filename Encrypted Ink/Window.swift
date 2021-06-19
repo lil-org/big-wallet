@@ -21,6 +21,11 @@ struct Window {
         window?.makeKeyAndOrderFront(nil)
     }
     
+    static func closeAllAndActivateBrowser() {
+        closeAll()
+        activateBrowser()
+    }
+    
     static func closeAll() {
         NSApplication.shared.windows.forEach { $0.close() }
         Agent.shared.setupStatusBarItem()
