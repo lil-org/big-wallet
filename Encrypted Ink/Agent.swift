@@ -92,8 +92,16 @@ class Agent: NSObject {
     }()
     
     @objc private func didSelectQuitMenuItem() {
-        // TODO: show alert
-        NSApp.terminate(nil)
+        Window.activateWindow(nil)
+        let alert = NSAlert()
+        alert.messageText = "Quit Encrypted Ink?"
+        alert.informativeText = "It will not be able to show sign requests."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            NSApp.terminate(nil)
+        }
     }
     
     func setupStatusBarItem() {
