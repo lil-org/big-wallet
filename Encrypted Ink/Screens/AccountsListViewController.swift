@@ -91,7 +91,7 @@ class AccountsListViewController: NSViewController {
     private func showInstructionsAlert() {
         let alert = NSAlert()
         alert.messageText = "How to start?"
-        alert.informativeText = "1. Press “Copy to clipboard”\nunder WalletConnect QR code.\n\n2. Launch Encrypted Ink."
+        alert.informativeText = "1. Open your favourite dapp.\n\n2. Press “Copy to clipboard”\nunder WalletConnect QR code.\n\n3. Launch Encrypted Ink."
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
         alert.addButton(withTitle: "Open Zerion")
