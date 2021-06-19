@@ -189,7 +189,7 @@ class Agent: NSObject {
             context.localizedCancelTitle = "Cancel"
             context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason ) { [weak on] success, _ in
                 DispatchQueue.main.async {
-                    if !success && willShowPasswordScreen {
+                    if !success && willShowPasswordScreen && on?.isVisible == true {
                         Window.activateWindow(on)
                     }
                     completion(success)
