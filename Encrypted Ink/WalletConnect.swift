@@ -28,6 +28,12 @@ class WalletConnect {
         interactors.append(interactor)
     }
     
+    func killAllSessions() {
+        interactors.forEach {
+            $0.killSession().cauterize()
+        }
+    }
+    
     private func configure(interactor: WCInteractor, address: String) {
         let accounts = [address]
         let chainId = 1
