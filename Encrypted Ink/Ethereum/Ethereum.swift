@@ -4,20 +4,6 @@ import Foundation
 import Web3Swift
 import CryptoSwift
 
-struct Transaction {
-    let transactionsCount: String?
-    let gasPrice: String?
-    let gasEstimate: String?
-    let recipientAddress: String
-    let weiAmount: String
-    let contractCall: String
-}
-
-struct Account: Codable {
-    let privateKey: String
-    let address: String
-}
-
 struct Ethereum {
 
     enum Errors: Error {
@@ -63,14 +49,6 @@ struct Ethereum {
         return try signer.signatureData(hash: hash).toPrefixedHexString()
     }
     
-    static func sign(transaction: Transaction, account: Account) throws -> String {
-        guard transaction.transactionsCount != nil, transaction.gasPrice != nil, transaction.gasEstimate != nil else {
-            throw Errors.invalidInputData
-        }
-        let bytes = signedTransactionBytes(transaction: transaction, account: account)
-        return try bytes.value().toPrefixedHexString()
-    }
-    
     static func send(transaction: Transaction, account: Account) throws -> String {
         let bytes = signedTransactionBytes(transaction: transaction, account: account)
         let response = try SendRawTransactionProcedure(network: network, transactionBytes: bytes).call()
@@ -82,14 +60,19 @@ struct Ethereum {
     
     private static func signedTransactionBytes(transaction: Transaction, account: Account) -> EthContractCallBytes {
         let senderKey = EthPrivateKey(hex: account.privateKey)
-        let contractAddress = EthAddress(hex: transaction.recipientAddress)
-        let weiAmount = EthNumber(hex: transaction.weiAmount)
-        let functionCall = BytesFromHexString(hex: transaction.contractCall)
-
+        let contractAddress = EthAddress(hex: transaction.to)
+        let weiAmount: EthNumber
+        if let value = transaction.value {
+            weiAmount = EthNumber(hex: value)
+        } else {
+            weiAmount = EthNumber(value: 0)
+        }
+        let functionCall = BytesFromHexString(hex: transaction.data)
         let bytes: EthContractCallBytes
         if let gasPriceString = transaction.gasPrice {
             let gasPrice = EthNumber(hex: gasPriceString)
-            if let gasEstimateString = transaction.gasEstimate, let transctionCountString = transaction.transactionsCount {
+            if let gasEstimateString = transaction.gas,
+               let transctionCountString = transaction.nonce {
                 let gasEstimate = EthNumber(hex: gasEstimateString)
                 let transactionCount = EthNumber(hex: transctionCountString)
                 

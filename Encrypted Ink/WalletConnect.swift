@@ -93,16 +93,12 @@ class WalletConnect {
     }
 
     func sendTransaction(id: Int64, wct: WCEthereumTransaction, address: String, interactor: WCInteractor?) {
-        guard let account = AccountsService.getAccountForAddress(address) else {
+        guard let account = AccountsService.getAccountForAddress(address), let to = wct.to else {
+            // TODO: display error message
             rejectRequest(id: id, interactor: interactor, message: "Failed for some reason")
             return
         }
-        let transaction = Transaction(transactionsCount: wct.nonce,
-                                      gasPrice: wct.gasPrice,
-                                      gasEstimate: wct.gasLimit,
-                                      recipientAddress: wct.to ?? "",
-                                      weiAmount: wct.value ?? "",
-                                      contractCall: wct.data)
+        let transaction = Transaction(from: wct.from, to: to, nonce: wct.nonce, gasPrice: wct.gasPrice, gas: wct.gas, value: wct.value, data: wct.data)
         guard let hash = try? Ethereum.send(transaction: transaction, account: account) else {
             rejectRequest(id: id, interactor: interactor, message: "Failed to send")
             return

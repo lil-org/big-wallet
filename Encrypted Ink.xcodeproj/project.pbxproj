@@ -39,6 +39,8 @@
 		2C8A09EE2675965F00993638 /* WaitingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09ED2675965F00993638 /* WaitingViewController.swift */; };
 		2C917429267D2A6E00049075 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C917428267D2A6E00049075 /* Keychain.swift */; };
 		2CDAB3722675B3F0009F8B97 /* PasswordViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */; };
+		2CE3D012267F73C00032A62E /* Transaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D011267F73C00032A62E /* Transaction.swift */; };
+		2CE3D015267F73E80032A62E /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D014267F73E80032A62E /* Account.swift */; };
 		88745B0F4DEE1F60AD0F02C3 /* Pods_Encrypted_Ink.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3704D7F64179CCDCE2E8C783 /* Pods_Encrypted_Ink.framework */; };
 /* End PBXBuildFile section */
 
@@ -80,6 +82,8 @@
 		2C8A09ED2675965F00993638 /* WaitingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitingViewController.swift; sourceTree = "<group>"; };
 		2C917428267D2A6E00049075 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
 		2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordViewController.swift; sourceTree = "<group>"; };
+		2CE3D011267F73C00032A62E /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
+		2CE3D014267F73E80032A62E /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		3704D7F64179CCDCE2E8C783 /* Pods_Encrypted_Ink.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Encrypted_Ink.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -181,6 +185,8 @@
 			isa = PBXGroup;
 			children = (
 				2C1995552674D0F300A8E370 /* Ethereum.swift */,
+				2CE3D014267F73E80032A62E /* Account.swift */,
+				2CE3D011267F73C00032A62E /* Transaction.swift */,
 				0DB729012674E2DB0011F7A1 /* EIP712 */,
 			);
 			path = Ethereum;
@@ -383,6 +389,8 @@
 				2CDAB3722675B3F0009F8B97 /* PasswordViewController.swift in Sources */,
 				2C1995402674C4B900A8E370 /* AppDelegate.swift in Sources */,
 				0DB729142674E2DB0011F7A1 /* EIP712Parameter.swift in Sources */,
+				2CE3D015267F73E80032A62E /* Account.swift in Sources */,
+				2CE3D012267F73C00032A62E /* Transaction.swift in Sources */,
 				0DB7291B2674E2DB0011F7A1 /* EIP712Hash.swift in Sources */,
 				0DB729172674E2DB0011F7A1 /* EIP712StructType.swift in Sources */,
 				0DB7291F2674E2DB0011F7A1 /* EIP712Representable.swift in Sources */,
