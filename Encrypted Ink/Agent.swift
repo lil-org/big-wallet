@@ -170,8 +170,11 @@ class Agent: NSObject {
         let canDoLocalAuthentication = context.canEvaluatePolicy(policy, error: &error)
         let willShowPasswordScreen = !canDoLocalAuthentication || requireAppPasswordScreen
         
+        var passwordViewController: PasswordViewController?
         if willShowPasswordScreen {
-            let passwordViewController = PasswordViewController.with(mode: .enter, reason: reason) { [weak on, weak context] success in
+            passwordViewController = PasswordViewController.with(mode: .enter,
+                                                                 reason: reason,
+                                                                 isDisabledOnStart: canDoLocalAuthentication) { [weak on, weak context] success in
                 if let getBackTo = getBackTo {
                     on?.contentViewController = getBackTo
                 } else {
@@ -187,8 +190,9 @@ class Agent: NSObject {
         
         if canDoLocalAuthentication {
             context.localizedCancelTitle = "Cancel"
-            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason ) { [weak on] success, _ in
+            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason ) { [weak on, weak passwordViewController] success, _ in
                 DispatchQueue.main.async {
+                    passwordViewController?.enableInput()
                     if !success && willShowPasswordScreen && on?.isVisible == true {
                         Window.activateWindow(on)
                     }
