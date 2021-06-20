@@ -18,12 +18,14 @@ class WalletConnect {
         let clientMeta = WCPeerMeta(name: "Encrypted Ink", url: "https://encrypted.ink")
         
         let interactor = WCInteractor(session: session, meta: clientMeta, uuid: UUID())
+        let id = interactor.clientId
         configure(interactor: interactor, address: address)
 
         interactor.connect().done { connected in
             completion(connected)
-        }.catch { _ in
+        }.catch { [weak self] _ in
             completion(false)
+            self?.removeInteractor(id: id)
         }
         interactors.append(interactor)
     }
@@ -34,9 +36,14 @@ class WalletConnect {
         }
     }
     
+    private func removeInteractor(id: String) {
+        interactors.removeAll(where: { $0.clientId == id })
+    }
+    
     private func configure(interactor: WCInteractor, address: String) {
         let accounts = [address]
         let chainId = 1
+        let id = interactor.clientId
 
         interactor.onError = { _ in }
 
@@ -45,7 +52,9 @@ class WalletConnect {
             interactor?.approveSession(accounts: accounts, chainId: chainId).cauterize()
         }
 
-        interactor.onDisconnect = { _ in }
+        interactor.onDisconnect = { [weak self] _ in
+            self?.removeInteractor(id: id)
+        }
 
         interactor.eth.onSign = { [weak self, weak interactor] (id, payload) in
             self?.approveSign(id: id, payload: payload, address: address, interactor: interactor)
