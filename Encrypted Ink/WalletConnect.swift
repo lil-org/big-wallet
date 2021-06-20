@@ -17,7 +17,6 @@ class WalletConnect {
     func connect(session: WCSession, address: String, completion: @escaping ((Bool) -> Void)) {
         let clientMeta = WCPeerMeta(name: "Encrypted Ink", url: "https://encrypted.ink")
         
-        // TODO: use the same UUID across launches in order to restart sessions correctly
         let interactor = WCInteractor(session: session, meta: clientMeta, uuid: UUID())
         configure(interactor: interactor, address: address)
 
@@ -29,7 +28,7 @@ class WalletConnect {
         interactors.append(interactor)
     }
     
-    func configure(interactor: WCInteractor, address: String) {
+    private func configure(interactor: WCInteractor, address: String) {
         let accounts = [address]
         let chainId = 1
 
@@ -62,7 +61,7 @@ class WalletConnect {
         }
     }
 
-    func approveSign(id: Int64, payload: WCEthereumSignPayload, address: String, interactor: WCInteractor?) {
+    private func approveSign(id: Int64, payload: WCEthereumSignPayload, address: String, interactor: WCInteractor?) {
         var message: String?
         let title: String
         switch payload {
@@ -88,11 +87,11 @@ class WalletConnect {
         }
     }
 
-    func rejectRequest(id: Int64, interactor: WCInteractor?, message: String) {
+    private func rejectRequest(id: Int64, interactor: WCInteractor?, message: String) {
         interactor?.rejectRequest(id: id, message: message).cauterize()
     }
 
-    func sendTransaction(id: Int64, wct: WCEthereumTransaction, address: String, interactor: WCInteractor?) {
+    private func sendTransaction(id: Int64, wct: WCEthereumTransaction, address: String, interactor: WCInteractor?) {
         guard let account = AccountsService.getAccountForAddress(address), let to = wct.to else {
             // TODO: display error message
             rejectRequest(id: id, interactor: interactor, message: "Failed for some reason")
@@ -106,7 +105,7 @@ class WalletConnect {
         interactor?.approveRequest(id: id, result: hash).cauterize()
     }
 
-    func sign(id: Int64, message: String?, payload: WCEthereumSignPayload, address: String, interactor: WCInteractor?) {
+    private func sign(id: Int64, message: String?, payload: WCEthereumSignPayload, address: String, interactor: WCInteractor?) {
         guard let message = message, let account = AccountsService.getAccountForAddress(address) else {
             rejectRequest(id: id, interactor: interactor, message: "Failed for some reason")
             return
@@ -126,4 +125,5 @@ class WalletConnect {
         }
         interactor?.approveRequest(id: id, result: result).cauterize()
     }
+    
 }
