@@ -172,11 +172,19 @@
 				2C8A09C2267513A700993638 /* Ethereum */,
 				2C8A09E5267595C200993638 /* Views */,
 				2C1995432674C4BA00A8E370 /* Assets.xcassets */,
+				2C208AA126813497005BA500 /* Supporting Files */,
+			);
+			path = "Encrypted Ink";
+			sourceTree = "<group>";
+		};
+		2C208AA126813497005BA500 /* Supporting Files */ = {
+			isa = PBXGroup;
+			children = (
 				2C1995482674C4BA00A8E370 /* Info.plist */,
 				2C1995492674C4BA00A8E370 /* Encrypted_Ink.entitlements */,
 				2C208A9E26813408005BA500 /* Secrets.swift */,
 			);
-			path = "Encrypted Ink";
+			path = "Supporting Files";
 			sourceTree = "<group>";
 		};
 		2C6706A7267A6C04006AAEF2 /* Extensions */ = {
@@ -546,14 +554,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "Encrypted Ink/Encrypted_Ink.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "Encrypted Ink/Supporting Files/Encrypted_Ink.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				ENABLE_HARDENED_RUNTIME = YES;
-				INFOPLIST_FILE = "$(SRCROOT)/Encrypted Ink/Info.plist";
+				INFOPLIST_FILE = "$(SRCROOT)/Encrypted Ink/Supporting Files/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -573,14 +581,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "Encrypted Ink/Encrypted_Ink.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "Encrypted Ink/Supporting Files/Encrypted_Ink.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				ENABLE_HARDENED_RUNTIME = YES;
-				INFOPLIST_FILE = "$(SRCROOT)/Encrypted Ink/Info.plist";
+				INFOPLIST_FILE = "$(SRCROOT)/Encrypted Ink/Supporting Files/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
