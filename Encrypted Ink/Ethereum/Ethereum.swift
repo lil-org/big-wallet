@@ -13,7 +13,7 @@ struct Ethereum {
     
     private static let network: Network = AlchemyNetwork(
         chain: "mainnet",
-        apiKey: "xxx"
+        apiKey: Secrets.alchemy
     )
     
     static func sign(message: String, account: Account) throws -> String {
