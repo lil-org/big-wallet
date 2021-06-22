@@ -114,11 +114,7 @@ class Agent: NSObject {
         alert.addButton(withTitle: "OK")
         alert.addButton(withTitle: "Cancel")
         if alert.runModal() == .alertFirstButtonReturn {
-            statusBarItem = nil
-            WalletConnect.shared.killAllSessions()
-            DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(2)) {
-                NSApp.terminate(nil)
-            }
+            NSApp.terminate(nil)
         }
     }
     
