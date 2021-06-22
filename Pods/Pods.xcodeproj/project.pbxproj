@@ -583,7 +583,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		002B1E88BA14EBF633CD66EBFBA107E9 /* PromiseKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = PromiseKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		002B1E88BA14EBF633CD66EBFBA107E9 /* PromiseKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = PromiseKit.framework; path = PromiseKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		0046508D9780E369C56B8EFA99C6A92A /* NormalizedDecimalFromHex.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = NormalizedDecimalFromHex.swift; path = Web3Swift/DecimalScalar/NormalizedDecimalFromHex.swift; sourceTree = "<group>"; };
 		004E1D0D05862E304D054371522314A0 /* ABIMessage.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ABIMessage.swift; path = Web3Swift/ABI/Decoding/ABIMessage.swift; sourceTree = "<group>"; };
 		00B02E1C6CCCAA27D208D51A9D37EC9E /* URLPostRequest.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = URLPostRequest.swift; path = Web3Swift/Extensions/URLPostRequest.swift; sourceTree = "<group>"; };
@@ -722,10 +722,10 @@
 		3C0994ECE225E34E3A6FB1086FB8EFAB /* ISO78164Padding.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ISO78164Padding.swift; path = Sources/CryptoSwift/ISO78164Padding.swift; sourceTree = "<group>"; };
 		3C16624930481AECE7420FE233E56BF3 /* BlockCipher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BlockCipher.swift; path = Sources/CryptoSwift/BlockCipher.swift; sourceTree = "<group>"; };
 		3CB7236B5C4EED55151D9D7F9E04D361 /* after.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = after.m; path = Sources/after.m; sourceTree = "<group>"; };
-		3E5548DD8D1A4B03DD700C173134CA62 /* lax_der_privatekey_parsing.c */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.c; name = lax_der_privatekey_parsing.c; path = secp256k1/Classes/secp256k1/contrib/lax_der_privatekey_parsing.c; sourceTree = "<group>"; };
+		3E5548DD8D1A4B03DD700C173134CA62 /* lax_der_privatekey_parsing.c */ = {isa = PBXFileReference; includeInIndex = 1; name = lax_der_privatekey_parsing.c; path = secp256k1/Classes/secp256k1/contrib/lax_der_privatekey_parsing.c; sourceTree = "<group>"; };
 		3F82D6ACD87474BA955D3E74637452CD /* Web3Swift.io-dummy.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = "Web3Swift.io-dummy.m"; sourceTree = "<group>"; };
 		3FFA8DD29D6C2575334F2C567228DA7E /* BigUInt.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BigUInt.swift; path = Web3Swift/Extensions/BigUInt.swift; sourceTree = "<group>"; };
-		40CCE1281164DE769303759678296832 /* secp256k1.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = secp256k1.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		40CCE1281164DE769303759678296832 /* secp256k1.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = secp256k1.framework; path = secp256k1.swift.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		441AF7E0B64293C93BE8130AF89BCB45 /* SHA3.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SHA3.swift; path = Sources/CryptoSwift/SHA3.swift; sourceTree = "<group>"; };
 		4443FF22558B0CE6799E6CAF3BD545BB /* ObjectParameter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ObjectParameter.swift; path = Web3Swift/Params/ObjectParameter.swift; sourceTree = "<group>"; };
 		45900EF628872F3662CE9647F6D8847B /* NSNotificationCenter+Promise.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "NSNotificationCenter+Promise.swift"; path = "Extensions/Foundation/Sources/NSNotificationCenter+Promise.swift"; sourceTree = "<group>"; };
@@ -758,7 +758,7 @@
 		51CC8D7EC10AD09A3C2D9B421E86D6C5 /* scalar_8x32_impl.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = scalar_8x32_impl.h; path = secp256k1/Classes/secp256k1/src/scalar_8x32_impl.h; sourceTree = "<group>"; };
 		527111396936CD9CFCF888CF9DB987C5 /* BytesAsCollection.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BytesAsCollection.swift; path = Web3Swift/CollectionScalar/BytesAsCollection.swift; sourceTree = "<group>"; };
 		5335A140CF6AB53AF595C05B9C005771 /* WCBinanceTradeOrder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WCBinanceTradeOrder.swift; path = WalletConnect/Models/Binance/WCBinanceTradeOrder.swift; sourceTree = "<group>"; };
-		5391A6DC3453625EF6F6E688E6E71E0F /* Pods_Encrypted_Ink.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Encrypted_Ink.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		5391A6DC3453625EF6F6E688E6E71E0F /* Pods_Encrypted_Ink.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = Pods_Encrypted_Ink.framework; path = "Pods-Encrypted Ink.framework"; sourceTree = BUILT_PRODUCTS_DIR; };
 		543FAF7A2D29269FD445BF95CE742FBE /* WalletConnect.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; path = WalletConnect.modulemap; sourceTree = "<group>"; };
 		549023466B07AB7677AAFD1259BE3FF7 /* PromiseKit-dummy.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = "PromiseKit-dummy.m"; sourceTree = "<group>"; };
 		556E6E6D5E49423EEFE0CA61D46E9BED /* MappedCollection.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MappedCollection.swift; path = Web3Swift/CollectionScalar/MappedCollection.swift; sourceTree = "<group>"; };
@@ -859,7 +859,7 @@
 		83321A4DF29BDC14443A6D2D7F38F354 /* scratch_impl.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = scratch_impl.h; path = secp256k1/Classes/secp256k1/src/scratch_impl.h; sourceTree = "<group>"; };
 		838BD9341FCD1D7CAC3C1A9AAF839D8F /* SwiftyJSON.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = SwiftyJSON.debug.xcconfig; sourceTree = "<group>"; };
 		84063B956DB8EE729FD5AB0D5EE11399 /* join.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = join.m; path = Sources/join.m; sourceTree = "<group>"; };
-		8419D944E32D7066988C1BE350487E92 /* Web3Swift.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Web3Swift.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		8419D944E32D7066988C1BE350487E92 /* Web3Swift.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = Web3Swift.framework; path = Web3Swift.io.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		841C6438A238E4E3D4160D462ED9BBB3 /* WalletConnect.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = WalletConnect.debug.xcconfig; sourceTree = "<group>"; };
 		84E3B6D4403C6EA70C9A0F35E9054184 /* scalar_low_impl.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = scalar_low_impl.h; path = secp256k1/Classes/secp256k1/src/scalar_low_impl.h; sourceTree = "<group>"; };
 		8520739D4FFC62417312E951D03046F8 /* scalar_impl.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = scalar_impl.h; path = secp256k1/Classes/secp256k1/src/scalar_impl.h; sourceTree = "<group>"; };
@@ -869,7 +869,7 @@
 		87A6B72E717892285D2A943C8A1DCFF8 /* Web3Swift.io-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Web3Swift.io-Info.plist"; sourceTree = "<group>"; };
 		881FE164512B97D0F51BE2533FBF63AD /* Network.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Network.swift; path = Web3Swift/Network/Network.swift; sourceTree = "<group>"; };
 		88C27B6294AA2E246D4BE3130160A2EF /* NSURLSession+AnyPromise.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "NSURLSession+AnyPromise.h"; path = "Extensions/Foundation/Sources/NSURLSession+AnyPromise.h"; sourceTree = "<group>"; };
-		891B2270823847ED23F2ECFC28F935EC /* Starscream.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Starscream.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		891B2270823847ED23F2ECFC28F935EC /* Starscream.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = Starscream.framework; path = Starscream.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		89B4E3F7FC38EAC8B78F58C3265B8842 /* GetTransactionsCountProcedure.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = GetTransactionsCountProcedure.swift; path = Web3Swift/RemoteProcedure/GetTransactionsCountProcedure.swift; sourceTree = "<group>"; };
 		89CF7F7CC0F4A08F38AD2472F619B910 /* group_impl.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = group_impl.h; path = secp256k1/Classes/secp256k1/src/group_impl.h; sourceTree = "<group>"; };
 		8A61B62EF41125F66E998B621B591C82 /* Integer Conversion.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Integer Conversion.swift"; path = "Sources/Integer Conversion.swift"; sourceTree = "<group>"; };
@@ -889,7 +889,7 @@
 		91648E7E6A5904E45A860E3787428970 /* SizeBufferedBytes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SizeBufferedBytes.swift; path = Web3Swift/BytesScalar/SizeBufferedBytes.swift; sourceTree = "<group>"; };
 		9178E85C82B02E3D332008FE38529D53 /* SimpleBoolean.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SimpleBoolean.swift; path = Web3Swift/BooleanScalar/SimpleBoolean.swift; sourceTree = "<group>"; };
 		917ECFD35E333D440B2B1D2FD7D33D3E /* PromiseKit-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "PromiseKit-umbrella.h"; sourceTree = "<group>"; };
-		91BB24BA472AF523E913108C9AA301F2 /* BigInt.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = BigInt.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		91BB24BA472AF523E913108C9AA301F2 /* BigInt.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = BigInt.framework; path = BigInt.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		91C237F2D9CF482AB8A6358C9302A6D4 /* SwiftyJSON-prefix.pch */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "SwiftyJSON-prefix.pch"; sourceTree = "<group>"; };
 		936C531FAB3F5EA2CC084F7246590D72 /* WCEncryptor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WCEncryptor.swift; path = WalletConnect/WCEncryptor.swift; sourceTree = "<group>"; };
 		942277450C6857306A5507D0C6770556 /* field_10x26_impl.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = field_10x26_impl.h; path = secp256k1/Classes/secp256k1/src/field_10x26_impl.h; sourceTree = "<group>"; };
@@ -906,7 +906,7 @@
 		9BCA364DA49E522648B6305D2553EB88 /* SendRawTransactionProcedure.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SendRawTransactionProcedure.swift; path = Web3Swift/RemoteProcedure/SendRawTransactionProcedure.swift; sourceTree = "<group>"; };
 		9C8FF40BF04715676ED2170D13C9AE0B /* UnsignedNumbersEquality.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = UnsignedNumbersEquality.swift; path = Web3Swift/NumberScalar/UnsignedNumbersEquality.swift; sourceTree = "<group>"; };
 		9D31BAA5154B307FB7C00E11C6F3909B /* secp256k1.swift.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; path = secp256k1.swift.modulemap; sourceTree = "<group>"; };
-		9D940727FF8FB9C785EB98E56350EF41 /* Podfile */ = {isa = PBXFileReference; explicitFileType = text.script.ruby; includeInIndex = 1; indentWidth = 2; name = Podfile; path = ../Podfile; sourceTree = SOURCE_ROOT; tabWidth = 2; xcLanguageSpecificationIdentifier = xcode.lang.ruby; };
+		9D940727FF8FB9C785EB98E56350EF41 /* Podfile */ = {isa = PBXFileReference; explicitFileType = text.script.ruby; includeInIndex = 1; indentWidth = 2; lastKnownFileType = text; name = Podfile; path = ../Podfile; sourceTree = SOURCE_ROOT; tabWidth = 2; xcLanguageSpecificationIdentifier = xcode.lang.ruby; };
 		9EA1FEF8377F488A580ADD1F4CA03B86 /* LastBytes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LastBytes.swift; path = Web3Swift/BytesScalar/LastBytes.swift; sourceTree = "<group>"; };
 		9F50F265EA446D904E4C5BA6A92F74F7 /* FirstBytes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FirstBytes.swift; path = Web3Swift/BytesScalar/FirstBytes.swift; sourceTree = "<group>"; };
 		9FBAC1B489A81A51865DE5C29FC237AE /* CCM.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CCM.swift; path = Sources/CryptoSwift/BlockMode/CCM.swift; sourceTree = "<group>"; };
@@ -932,7 +932,7 @@
 		A9A335A5F7EC2769DDF7E9E5752D1E52 /* EstimateGasProcedure.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EstimateGasProcedure.swift; path = Web3Swift/RemoteProcedure/EstimateGasProcedure.swift; sourceTree = "<group>"; };
 		A9CDC8D3B6A9F6D201971D5455E6538F /* Square Root.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Square Root.swift"; path = "Sources/Square Root.swift"; sourceTree = "<group>"; };
 		AB3212EA08390D55D3858E557FBDA942 /* Web3Swift.io.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; path = Web3Swift.io.modulemap; sourceTree = "<group>"; };
-		AB71338AD5B910E479E42F75E2DEB354 /* lax_der_parsing.c */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.c; name = lax_der_parsing.c; path = secp256k1/Classes/secp256k1/contrib/lax_der_parsing.c; sourceTree = "<group>"; };
+		AB71338AD5B910E479E42F75E2DEB354 /* lax_der_parsing.c */ = {isa = PBXFileReference; includeInIndex = 1; name = lax_der_parsing.c; path = secp256k1/Classes/secp256k1/contrib/lax_der_parsing.c; sourceTree = "<group>"; };
 		AB967F3795CE87D9670528FBD516ED86 /* TransactionProcedure.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TransactionProcedure.swift; path = Web3Swift/RemoteProcedure/TransactionProcedure.swift; sourceTree = "<group>"; };
 		ABAB925ADC002A4BA995E67F8271901D /* String Conversion.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "String Conversion.swift"; path = "Sources/String Conversion.swift"; sourceTree = "<group>"; };
 		AD7B76368DCA92D2FC98F4A401C367DF /* PendingBlockChainState.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PendingBlockChainState.swift; path = Web3Swift/Blockchain/PendingBlockChainState.swift; sourceTree = "<group>"; };
@@ -952,7 +952,7 @@
 		B5B6C4725FA9AA99F013DBDEC9AB2D6A /* Authenticator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Authenticator.swift; path = Sources/CryptoSwift/Authenticator.swift; sourceTree = "<group>"; };
 		B620F5D66DEFA7126EDDB21D916F3C15 /* field_10x26.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = field_10x26.h; path = secp256k1/Classes/secp256k1/src/field_10x26.h; sourceTree = "<group>"; };
 		B6251DE8F0CB12ABA419496B714296F5 /* WCTrustTransaction.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WCTrustTransaction.swift; path = WalletConnect/Models/Trust/WCTrustTransaction.swift; sourceTree = "<group>"; };
-		B67DD4138C39D6137EC5CDC8FEB4C557 /* secp256k1.c */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.c; name = secp256k1.c; path = secp256k1/Classes/secp256k1/src/secp256k1.c; sourceTree = "<group>"; };
+		B67DD4138C39D6137EC5CDC8FEB4C557 /* secp256k1.c */ = {isa = PBXFileReference; includeInIndex = 1; name = secp256k1.c; path = secp256k1/Classes/secp256k1/src/secp256k1.c; sourceTree = "<group>"; };
 		B69048D1701F34365ED0F9875653DF7F /* HKDF.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = HKDF.swift; path = Sources/CryptoSwift/HKDF.swift; sourceTree = "<group>"; };
 		B6CCAB2FDEA5D8EC366E6431D0159AA6 /* SwiftyJSON.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SwiftyJSON.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B72402131C63FA649BAD00065546ABDD /* CryptoSwift.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; path = CryptoSwift.modulemap; sourceTree = "<group>"; };
@@ -960,7 +960,7 @@
 		B7614F1FB16671F4CEA6E6FB14EB88D9 /* BlockiesSwift-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "BlockiesSwift-umbrella.h"; sourceTree = "<group>"; };
 		B7A8261FC9DF19C4704C4BB6F15DF91A /* Guarantee.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Guarantee.swift; path = Sources/Guarantee.swift; sourceTree = "<group>"; };
 		B8D5EA947CA5670CF5B5F65F9D6ED821 /* BlockiesSwift-dummy.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = "BlockiesSwift-dummy.m"; sourceTree = "<group>"; };
-		B97C80F5A81B46A73ADF80BBB19FD043 /* BlockiesSwift.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = BlockiesSwift.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B97C80F5A81B46A73ADF80BBB19FD043 /* BlockiesSwift.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = BlockiesSwift.framework; path = BlockiesSwift.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B99223D7D00CB03CAC11E3A8A150A1F2 /* eckey_impl.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = eckey_impl.h; path = secp256k1/Classes/secp256k1/src/eckey_impl.h; sourceTree = "<group>"; };
 		B9969526737947CB4AD5EBD1F9156A6E /* SimpleBytes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SimpleBytes.swift; path = Web3Swift/BytesScalar/SimpleBytes.swift; sourceTree = "<group>"; };
 		BB4623E5D11D8B49CDF80BF3B94F92C6 /* BatchedCollection.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BatchedCollection.swift; path = Sources/CryptoSwift/BatchedCollection.swift; sourceTree = "<group>"; };
@@ -995,7 +995,7 @@
 		C8A75B09C3288B2150A9FDBB5C5A13BC /* EmptyBytes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EmptyBytes.swift; path = Web3Swift/BytesScalar/EmptyBytes.swift; sourceTree = "<group>"; };
 		C8DF4BE178EF7107ADD234806E0D74EA /* ZeroPadding.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ZeroPadding.swift; path = Sources/CryptoSwift/ZeroPadding.swift; sourceTree = "<group>"; };
 		C9C065913E24984BCF87BB1D19D21011 /* FirstBit.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FirstBit.swift; path = Web3Swift/BytesScalar/FirstBit.swift; sourceTree = "<group>"; };
-		C9F08E613ABE154366747FD3197DFB8D /* WalletConnect.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = WalletConnect.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		C9F08E613ABE154366747FD3197DFB8D /* WalletConnect.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = WalletConnect.framework; path = WalletConnect.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		CB4D9931AEA98A402BA3B6353C05D622 /* String+FoundationExtension.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "String+FoundationExtension.swift"; path = "Sources/CryptoSwift/Foundation/String+FoundationExtension.swift"; sourceTree = "<group>"; };
 		CB74CAE067765EF5D0D9F89CD62AE3BC /* BytesFromCompactHexString.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BytesFromCompactHexString.swift; path = Web3Swift/BytesScalar/BytesFromCompactHexString.swift; sourceTree = "<group>"; };
 		CBA1B96D3D5BED2534E91FA42433BCC0 /* Array+Foundation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Array+Foundation.swift"; path = "Sources/CryptoSwift/Foundation/Array+Foundation.swift"; sourceTree = "<group>"; };
@@ -1035,7 +1035,7 @@
 		E1F2FF7A25D4674B465EC416CAFD47AA /* Collection+Extension.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Collection+Extension.swift"; path = "Sources/CryptoSwift/Collection+Extension.swift"; sourceTree = "<group>"; };
 		E1FB1EC1CA2709CCBFA5B1674CD74CB6 /* PCBC.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PCBC.swift; path = Sources/CryptoSwift/BlockMode/PCBC.swift; sourceTree = "<group>"; };
 		E20862E16B6A03133FD6B4F62CB9E581 /* BytesAt.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BytesAt.swift; path = Web3Swift/BytesScalar/BytesAt.swift; sourceTree = "<group>"; };
-		E23C076BA70925415F490FEDB215DA92 /* SwiftyJSON.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SwiftyJSON.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		E23C076BA70925415F490FEDB215DA92 /* SwiftyJSON.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = SwiftyJSON.framework; path = SwiftyJSON.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E329770790F0A338F55886D3761540E8 /* BlockDecryptor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BlockDecryptor.swift; path = Sources/CryptoSwift/BlockDecryptor.swift; sourceTree = "<group>"; };
 		E5966817AD8F48298E7A1D70124BA2DC /* And.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = And.swift; path = Web3Swift/BooleanScalar/And.swift; sourceTree = "<group>"; };
 		E5C8A0A7B285033149284A6B4D2FC61D /* Color+HSL.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Color+HSL.swift"; path = "BlockiesSwift/Classes/Toolbox/Color+HSL.swift"; sourceTree = "<group>"; };
@@ -1078,7 +1078,7 @@
 		F759421C8B0DF002F075D57BF5903B2E /* CryptoSwift-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "CryptoSwift-umbrella.h"; sourceTree = "<group>"; };
 		F77EA0AC293887C8C68CB1C64FFEC5CF /* EthBlockHash.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EthBlockHash.swift; path = Web3Swift/Blocks/EthBlockHash.swift; sourceTree = "<group>"; };
 		F799093D03FC8FCA7A2EE04883FF03E2 /* SSLClientCertificate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SSLClientCertificate.swift; path = Sources/Starscream/SSLClientCertificate.swift; sourceTree = "<group>"; };
-		F81274EDB681F11E7CB05F7DCA2BB33C /* CryptoSwift.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = CryptoSwift.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		F81274EDB681F11E7CB05F7DCA2BB33C /* CryptoSwift.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = CryptoSwift.framework; path = CryptoSwift.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F883BE91813ABBC6B35E29FE22C384A6 /* TrimmedPrefixBytes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TrimmedPrefixBytes.swift; path = Web3Swift/BytesScalar/TrimmedPrefixBytes.swift; sourceTree = "<group>"; };
 		F8D485505DE95AE0883D3956DB3B401A /* BigEndianInteger.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BigEndianInteger.swift; path = Web3Swift/IntegerScalar/BigEndianInteger.swift; sourceTree = "<group>"; };
 		FA71AAF758BB66184FE097ABEB72D1C3 /* TagParameter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TagParameter.swift; path = Web3Swift/Params/TagParameter.swift; sourceTree = "<group>"; };
@@ -1292,6 +1292,7 @@
 				C8DF4BE178EF7107ADD234806E0D74EA /* ZeroPadding.swift */,
 				E4023CBBA30C446961DBD420E42BD4D4 /* Support Files */,
 			);
+			name = CryptoSwift;
 			path = CryptoSwift;
 			sourceTree = "<group>";
 		};
@@ -1337,6 +1338,7 @@
 				345C76D113ECC2B52290DCE1E1A61167 /* Words and Bits.swift */,
 				5F04150E54FE7DB0662457D3753C2348 /* Support Files */,
 			);
+			name = BigInt;
 			path = BigInt;
 			sourceTree = "<group>";
 		};
@@ -1389,6 +1391,7 @@
 				B6251DE8F0CB12ABA419496B714296F5 /* WCTrustTransaction.swift */,
 				623DA1AE971E839E89379C6C8DB7FE40 /* Support Files */,
 			);
+			name = WalletConnect;
 			path = WalletConnect;
 			sourceTree = "<group>";
 		};
@@ -1454,6 +1457,7 @@
 				0B6EE49068B1B5FA29A7E9002C2987FC /* SwiftyJSON.swift */,
 				478138BD18E61A99645E1DCAEBF5C967 /* Support Files */,
 			);
+			name = SwiftyJSON;
 			path = SwiftyJSON;
 			sourceTree = "<group>";
 		};
@@ -1509,6 +1513,7 @@
 				E5C8A0A7B285033149284A6B4D2FC61D /* Color+HSL.swift */,
 				502E4036C117650CAF05FB43B3208F69 /* Support Files */,
 			);
+			name = BlockiesSwift;
 			path = BlockiesSwift;
 			sourceTree = "<group>";
 		};
@@ -1519,6 +1524,7 @@
 				E63CDCA0D49FE038795F89614B9F220E /* Foundation */,
 				106827DC241A38FA8AF2DD5B38AD3F66 /* Support Files */,
 			);
+			name = PromiseKit;
 			path = PromiseKit;
 			sourceTree = "<group>";
 		};
@@ -1723,6 +1729,7 @@
 				A987C9AD061AA724B61EF9AB89F02498 /* Zero.swift */,
 				355CC04E2E3D6EFEEEF9C2A59EBEE490 /* Support Files */,
 			);
+			name = Web3Swift.io;
 			path = Web3Swift.io;
 			sourceTree = "<group>";
 		};
@@ -1782,6 +1789,7 @@
 				800179FCE94C8A7B68322DDF7AE891F4 /* util.h */,
 				67BF219EE6811DB6DBBA15024DC087E6 /* Support Files */,
 			);
+			name = secp256k1.swift;
 			path = secp256k1.swift;
 			sourceTree = "<group>";
 		};
@@ -1827,6 +1835,7 @@
 				7264D585D5E2BF033309A0EB293A20AD /* WebSocket.swift */,
 				16E22DBF68FE00F08DFA9C55ECCFB919 /* Support Files */,
 			);
+			name = Starscream;
 			path = Starscream;
 			sourceTree = "<group>";
 		};
@@ -2268,7 +2277,7 @@
 			isa = PBXProject;
 			attributes = {
 				LastSwiftUpdateCheck = 1100;
-				LastUpgradeCheck = 1240;
+				LastUpgradeCheck = 1100;
 			};
 			buildConfigurationList = 4821239608C13582E20E6DA73FD5F1F9 /* Build configuration list for PBXProject "Pods" */;
 			compatibilityVersion = "Xcode 10.0";
@@ -2983,6 +2992,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 838BD9341FCD1D7CAC3C1A9AAF839D8F /* SwiftyJSON.debug.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
@@ -3017,6 +3027,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 3538F6D07444C8C389EC4C565B56F5B8 /* Starscream.release.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
@@ -3052,6 +3063,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 2488B504D615B5761038E8CFD7476DE9 /* CryptoSwift.release.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
@@ -3087,6 +3099,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = EDDF50CA633B6FC03573DAAA0CA3140A /* PromiseKit.debug.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
@@ -3122,6 +3135,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 6AA5FB75CA6F63A07D51CD4AC32D585E /* CryptoSwift.debug.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
@@ -3157,6 +3171,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 5D329B036E8EFA50263B9AD119DFCD20 /* PromiseKit.release.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
@@ -3192,6 +3207,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 841C6438A238E4E3D4160D462ED9BBB3 /* WalletConnect.debug.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
@@ -3227,6 +3243,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 999F0229B72EFFFC846175BBE1B247E4 /* BlockiesSwift.debug.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
@@ -3262,6 +3279,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 8EB0442DC6978920878C849F92376EA3 /* secp256k1.swift.debug.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
@@ -3363,6 +3381,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 5A61E3D50B9BCD16155991A361F57D96 /* Web3Swift.io.release.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
@@ -3399,6 +3418,7 @@
 			baseConfigurationReference = A4680116E33A9890C6B909A6C3879001 /* Pods-Encrypted Ink.release.xcconfig */;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
@@ -3435,6 +3455,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 2C9979B54CFE8C1617EEB77CDFD47CA5 /* SwiftyJSON.release.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
@@ -3469,6 +3490,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 56793791FB5B6B5B6EB38EBED28FBCBF /* BlockiesSwift.release.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
@@ -3504,6 +3526,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = D0FE525CB6BE176600433A96A8BAAEBB /* Web3Swift.io.debug.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
@@ -3539,6 +3562,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = C340DE497E6E81979B13BEF892A4A445 /* Starscream.debug.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
@@ -3574,6 +3598,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 0BA33D2579F6953B599FE5D7B8391A2A /* WalletConnect.release.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
@@ -3610,6 +3635,7 @@
 			baseConfigurationReference = 8241028FECD52FAECC2D36F2424ED3B1 /* Pods-Encrypted Ink.debug.xcconfig */;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
@@ -3646,6 +3672,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 0846471DA56E703094E59C3F0E30CBD5 /* BigInt.release.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
@@ -3680,6 +3707,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 8AF4CAC6CD317C5E3B59543921416807 /* BigInt.debug.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
@@ -3714,6 +3742,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 2FE6B154D536BD33737BE94367F6A115 /* secp256k1.swift.release.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
