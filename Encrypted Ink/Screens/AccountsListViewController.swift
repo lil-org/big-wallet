@@ -72,7 +72,7 @@ class AccountsListViewController: NSViewController {
     @objc private func didClickRemoveAccount(_ sender: AnyObject) {
         let row = tableView.clickedRow
         
-        let alert = NSAlert()
+        let alert = Alert()
         alert.messageText = "Removed accounts can't be recovered."
         alert.alertStyle = .critical
         alert.addButton(withTitle: "Cancel")
@@ -89,7 +89,7 @@ class AccountsListViewController: NSViewController {
     }
     
     private func showInstructionsAlert() {
-        let alert = NSAlert()
+        let alert = Alert()
         alert.messageText = "How to start?"
         alert.informativeText = "1. Open your favourite dapp.\n\n2. Press “Copy to clipboard”\nunder WalletConnect QR code.\n\n3. Launch Encrypted Ink."
         alert.alertStyle = .informational

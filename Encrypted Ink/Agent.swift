@@ -13,6 +13,7 @@ class Agent: NSObject {
     private var statusBarItem: NSStatusItem!
     private var hasPassword = Keychain.password != nil
     private var didEnterPasswordOnStart = false
+    var statusBarButtonIsBlocked = false
     
     func start() {
         checkPasteboardAndOpen(onAppStart: true)
@@ -107,7 +108,7 @@ class Agent: NSObject {
     
     func warnBeforeQuitting() {
         Window.activateWindow(nil)
-        let alert = NSAlert()
+        let alert = Alert()
         alert.messageText = "Quit Encrypted Ink?"
         alert.informativeText = "You won't be able to sign requests."
         alert.alertStyle = .warning
@@ -116,6 +117,7 @@ class Agent: NSObject {
         if alert.runModal() == .alertFirstButtonReturn {
             NSApp.terminate(nil)
         }
+        setupStatusBarItem()
     }
     
     @objc private func didSelectQuitMenuItem() {
@@ -132,6 +134,7 @@ class Agent: NSObject {
     }
     
     @objc private func statusBarButtonClicked(sender: NSStatusBarButton) {
+        guard !statusBarButtonIsBlocked else { return }
         if let event = NSApp.currentEvent, event.type == .rightMouseUp {
             statusBarItem.menu = statusBarMenu
             statusBarItem.button?.performClick(nil)

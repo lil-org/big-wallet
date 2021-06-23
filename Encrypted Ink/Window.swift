@@ -26,9 +26,11 @@ struct Window {
         activateBrowser()
     }
     
-    static func closeAll() {
+    static func closeAll(updateStatusBarItem: Bool = true) {
         NSApplication.shared.windows.forEach { $0.close() }
-        Agent.shared.setupStatusBarItem()
+        if updateStatusBarItem {
+            Agent.shared.setupStatusBarItem()
+        }
     }
     
     static func activateBrowser() {
