@@ -105,7 +105,7 @@ class Agent: NSObject {
         return menu
     }()
     
-    @objc private func didSelectQuitMenuItem() {
+    func warnBeforeQuitting() {
         Window.activateWindow(nil)
         let alert = NSAlert()
         alert.messageText = "Quit Encrypted Ink?"
@@ -116,6 +116,10 @@ class Agent: NSObject {
         if alert.runModal() == .alertFirstButtonReturn {
             NSApp.terminate(nil)
         }
+    }
+    
+    @objc private func didSelectQuitMenuItem() {
+        warnBeforeQuitting()
     }
     
     func setupStatusBarItem() {

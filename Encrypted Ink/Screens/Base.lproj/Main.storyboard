@@ -50,7 +50,7 @@
                                         <menuItem isSeparatorItem="YES" id="kCx-OE-vgT"/>
                                         <menuItem title="Quit Encrypted Ink" keyEquivalent="q" id="4sb-4s-VLi">
                                             <connections>
-                                                <action selector="performClose:" target="Ady-hI-5gd" id="SLy-iy-wbX"/>
+                                                <action selector="didCmdQ:" target="Voe-Tx-rLC" id="xFN-c7-XvT"/>
                                             </connections>
                                         </menuItem>
                                     </items>

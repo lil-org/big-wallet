@@ -31,4 +31,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
     
+    @IBAction func didCmdQ(_ sender: Any) {
+        Window.closeAll()
+        agent.warnBeforeQuitting()
+    }
+    
 }
