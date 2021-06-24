@@ -75,9 +75,9 @@ class AccountsListViewController: NSViewController {
         let alert = Alert()
         alert.messageText = "Removed accounts can't be recovered."
         alert.alertStyle = .critical
-        alert.addButton(withTitle: "Cancel")
         alert.addButton(withTitle: "Remove anyway")
-        if alert.runModal() != .alertFirstButtonReturn {
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
             guard row >= 0 else { return }
             agent.askAuthentication(on: view.window, getBackTo: self, requireAppPasswordScreen: false, reason: "Remove account") { [weak self] allowed in
                 Window.activateWindow(self?.view.window)
