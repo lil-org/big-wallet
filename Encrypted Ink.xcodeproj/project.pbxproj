@@ -166,6 +166,7 @@
 				2C8A09C2267513A700993638 /* Ethereum */,
 				2C8A09E5267595C200993638 /* Views */,
 				2C1995432674C4BA00A8E370 /* Assets.xcassets */,
+				2C1995452674C4BA00A8E370 /* Main.storyboard */,
 				2C208AA126813497005BA500 /* Supporting Files */,
 			);
 			path = "Encrypted Ink";
@@ -210,7 +211,6 @@
 				2C8A09EA2675964700993638 /* ApproveViewController.swift */,
 				2C8A09ED2675965F00993638 /* WaitingViewController.swift */,
 				2C8A09DE267579EA00993638 /* AccountsListViewController.swift */,
-				2C1995452674C4BA00A8E370 /* Main.storyboard */,
 			);
 			path = Screens;
 			sourceTree = "<group>";
