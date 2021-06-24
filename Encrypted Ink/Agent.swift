@@ -24,8 +24,6 @@ class Agent: NSObject {
     }
     
     func showInitialScreen(wcSession: WCSession?) {
-        let windowController = Window.showNew()
-        
         guard hasPassword else {
             let welcomeViewController = WelcomeViewController.new { [weak self] createdPassword in
                 guard createdPassword else { return }
@@ -33,12 +31,13 @@ class Agent: NSObject {
                 self?.hasPassword = true
                 self?.showInitialScreen(wcSession: wcSession)
             }
+            let windowController = Window.showNew()
             windowController.contentViewController = welcomeViewController
             return
         }
         
         guard didEnterPasswordOnStart else {
-            askAuthentication(on: windowController.window, requireAppPasswordScreen: true, reason: "Start") { [weak self] success in
+            askAuthentication(on: nil, onStart: true, reason: "Start") { [weak self] success in
                 if success {
                     self?.didEnterPasswordOnStart = true
                     self?.showInitialScreen(wcSession: wcSession)
@@ -47,6 +46,7 @@ class Agent: NSObject {
             return
         }
         
+        let windowController = Window.showNew()
         let completion = onSelectedAccount(session: wcSession)
         let accounts = AccountsService.getAccounts()
         if !accounts.isEmpty {
@@ -64,7 +64,7 @@ class Agent: NSObject {
         let windowController = Window.showNew()
         let approveViewController = ApproveViewController.with(title: title, meta: meta) { [weak self] result in
             if result {
-                self?.askAuthentication(on: windowController.window, requireAppPasswordScreen: false, reason: title) { success in
+                self?.askAuthentication(on: windowController.window, onStart: false, reason: title) { success in
                     completion(success)
                     Window.closeAllAndActivateBrowser()
                 }
@@ -165,43 +165,37 @@ class Agent: NSObject {
         return WalletConnect.shared.sessionWithLink(link)
     }
     
-    func askAuthentication(on: NSWindow?, getBackTo: NSViewController? = nil, requireAppPasswordScreen: Bool, reason: String, completion: @escaping (Bool) -> Void) {
+    func askAuthentication(on: NSWindow?, getBackTo: NSViewController? = nil, onStart: Bool, reason: String, completion: @escaping (Bool) -> Void) {
         let context = LAContext()
         var error: NSError?
         let policy = LAPolicy.deviceOwnerAuthenticationWithBiometrics
-        
         let canDoLocalAuthentication = context.canEvaluatePolicy(policy, error: &error)
-        let willShowPasswordScreen = !canDoLocalAuthentication || requireAppPasswordScreen
         
-        var passwordViewController: PasswordViewController?
-        if willShowPasswordScreen {
-            passwordViewController = PasswordViewController.with(mode: .enter,
-                                                                 reason: reason,
-                                                                 isDisabledOnStart: canDoLocalAuthentication) { [weak on, weak context] success in
+        func showPasswordScreen() {
+            let window = on ?? Window.showNew().window
+            let passwordViewController = PasswordViewController.with(mode: .enter, reason: reason) { [weak window] success in
                 if let getBackTo = getBackTo {
-                    on?.contentViewController = getBackTo
+                    window?.contentViewController = getBackTo
                 } else {
                     Window.closeAll()
                 }
-                if success {
-                    context?.invalidate()
-                }
                 completion(success)
             }
-            on?.contentViewController = passwordViewController
+            window?.contentViewController = passwordViewController
         }
         
         if canDoLocalAuthentication {
             context.localizedCancelTitle = "Cancel"
-            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason ) { [weak on, weak passwordViewController] success, _ in
+            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason ) { [weak self] success, _ in
                 DispatchQueue.main.async {
-                    passwordViewController?.enableInput()
-                    if !success && willShowPasswordScreen && on?.isVisible == true {
-                        Window.activateWindow(on)
+                    if !success, onStart, self?.didEnterPasswordOnStart == false {
+                        showPasswordScreen()
                     }
                     completion(success)
                 }
             }
+        } else {
+            showPasswordScreen()
         }
     }
     

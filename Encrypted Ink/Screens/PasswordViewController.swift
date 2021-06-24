@@ -4,11 +4,10 @@ import Cocoa
 
 class PasswordViewController: NSViewController {
     
-    static func with(mode: Mode, reason: String? = nil, isDisabledOnStart: Bool = false, completion: ((Bool) -> Void)?) -> PasswordViewController {
+    static func with(mode: Mode, reason: String? = nil, completion: ((Bool) -> Void)?) -> PasswordViewController {
         let new = instantiate(PasswordViewController.self)
         new.mode = mode
         new.reason = reason
-        new.isDisabledOnStart = isDisabledOnStart
         new.completion = completion
         return new
     }
@@ -20,7 +19,6 @@ class PasswordViewController: NSViewController {
     private var mode = Mode.create
     private var reason: String?
     private var passwordToRepeat: String?
-    private var isDisabledOnStart = false
     private var completion: ((Bool) -> Void)?
     
     @IBOutlet weak var reasonLabel: NSTextField!
@@ -42,18 +40,6 @@ class PasswordViewController: NSViewController {
         } else {
             reasonLabel.stringValue = ""
         }
-        
-        if isDisabledOnStart {
-            passwordTextField.isEditable = false
-            passwordTextField.focusRingType = .none
-        }
-        
-    }
-
-    func enableInput() {
-        passwordTextField.isEditable = true
-        passwordTextField.focusRingType = .default
-        passwordTextField.becomeFirstResponder()
     }
     
     func switchToMode(_ mode: Mode) {
