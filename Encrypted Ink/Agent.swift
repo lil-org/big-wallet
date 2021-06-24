@@ -23,21 +23,15 @@ class Agent: NSObject {
         checkPasteboardAndOpen(onAppStart: false)
     }
     
-    func showInitialScreen(onAppStart: Bool, wcSession: WCSession?) {
-        let windowController: NSWindowController
-        if onAppStart, let currentWindowController = Window.current {
-            windowController = currentWindowController
-            Window.activate(windowController)
-        } else {
-            windowController = Window.showNew()
-        }
+    func showInitialScreen(wcSession: WCSession?) {
+        let windowController = Window.showNew()
         
         guard hasPassword else {
             let welcomeViewController = WelcomeViewController.new { [weak self] createdPassword in
                 guard createdPassword else { return }
                 self?.didEnterPasswordOnStart = true
                 self?.hasPassword = true
-                self?.showInitialScreen(onAppStart: onAppStart, wcSession: wcSession)
+                self?.showInitialScreen(wcSession: wcSession)
             }
             windowController.contentViewController = welcomeViewController
             return
@@ -47,7 +41,7 @@ class Agent: NSObject {
             askAuthentication(on: windowController.window, requireAppPasswordScreen: true, reason: "Start") { [weak self] success in
                 if success {
                     self?.didEnterPasswordOnStart = true
-                    self?.showInitialScreen(onAppStart: onAppStart, wcSession: wcSession)
+                    self?.showInitialScreen(wcSession: wcSession)
                 }
             }
             return
@@ -89,7 +83,7 @@ class Agent: NSObject {
     
     func processInputLink(_ link: String) {
         let session = sessionWithLink(link)
-        showInitialScreen(onAppStart: false, wcSession: session)
+        showInitialScreen(wcSession: session)
     }
     
     func getAccountSelectionCompletionIfShouldSelect() -> ((Account) -> Void)? {
@@ -164,7 +158,7 @@ class Agent: NSObject {
     
     private func checkPasteboardAndOpen(onAppStart: Bool) {
         let session = getSessionFromPasteboard()
-        showInitialScreen(onAppStart: onAppStart, wcSession: session)
+        showInitialScreen(wcSession: session)
     }
     
     private func sessionWithLink(_ link: String) -> WCSession? {
