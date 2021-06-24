@@ -71,7 +71,7 @@ class AccountsListViewController: NSViewController {
 
     @objc private func didClickRemoveAccount(_ sender: AnyObject) {
         let row = tableView.clickedRow
-        
+        guard row >= 0 else { return }
         let alert = Alert()
         alert.messageText = "Removed accounts can't be recovered."
         alert.alertStyle = .critical
