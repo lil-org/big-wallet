@@ -48,7 +48,7 @@ struct Window {
     }
     
     static var new: NSWindowController {
-        return NSStoryboard.main.instantiateInitialController() as! NSWindowController
+        return NSStoryboard.main.instantiateController(withIdentifier: "initial") as! NSWindowController
     }
     
 }
