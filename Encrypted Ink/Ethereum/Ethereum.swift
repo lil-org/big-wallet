@@ -102,4 +102,34 @@ struct Ethereum {
         return bytes
     }
     
+    private static func getGas(network: Network, from: String, to: String, gasPrice: EthNumber, weiAmount: EthNumber, data: String, completion: @escaping (Data?) -> Void) {
+        let gas = try? EthGasEstimate(
+            network: network,
+            senderAddress: EthAddress(hex: from),
+            recipientAddress: EthAddress(hex: to),
+            gasEstimate: EthGasEstimate(
+                network: network,
+                senderAddress: EthAddress(hex: from),
+                recipientAddress: EthAddress(hex: to),
+                gasPrice: gasPrice,
+                weiAmount: weiAmount,
+                contractCall: BytesFromHexString(hex: data)
+            ),
+            gasPrice: gasPrice,
+            weiAmount: weiAmount,
+            contractCall: BytesFromHexString(hex: data)
+        ).value()
+        completion(gas)
+    }
+    
+    private static func getGasPrice(completion: @escaping (EthNumber) -> Void) {
+        let gasPrice = EthNumber(hex: SimpleBytes { try EthGasPrice(network: network).value() })
+        completion(gasPrice)
+    }
+    
+    private static func getNonce(network: Network, from: String, completion: @escaping (Data?) -> Void) {
+        let data = try? EthTransactions(network: network, address: EthAddress(hex: from), blockChainState: PendingBlockChainState()).count().value()
+        completion(data)
+    }
+    
 }
