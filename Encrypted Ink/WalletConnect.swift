@@ -71,14 +71,22 @@ class WalletConnect {
             return
         }
         
-        let value = Double(UInt64(wct.value?.dropFirst(2) ?? "0", radix: 16) ?? 0) / 1e18
-        let transaction = Transaction(from: wct.from, to: to, nonce: wct.nonce, gasPrice: wct.gasPrice, gas: wct.gas, value: wct.value, data: wct.data)
-        
-        Agent.shared.showApprove(title: "Send Transaction", meta: "value: \(value) ETH\n\ndata: \(wct.data)") { [weak self, weak interactor] approved in
+        var transaction = Transaction(from: wct.from, to: to, nonce: wct.nonce, gasPrice: wct.gasPrice, gas: wct.gas, value: wct.value, data: wct.data)
+        let approveViewController = Agent.shared.showApprove(title: "Send Transaction", meta: transaction.meta) { [weak self, weak interactor] approved in
             if approved {
                 self?.sendTransaction(transaction, address: address, requestId: id, interactor: interactor)
             } else {
                 self?.rejectRequest(id: id, interactor: interactor, message: "User canceled")
+            }
+        }
+        
+        guard !transaction.hasFee else { return }
+        var didDisplayFee = false
+        Ethereum.prepareTransaction(transaction) { [weak approveViewController] updated in
+            transaction = updated
+            if !didDisplayFee, transaction.hasFee {
+                didDisplayFee = true
+                approveViewController?.setMeta(transaction.meta)
             }
         }
     }

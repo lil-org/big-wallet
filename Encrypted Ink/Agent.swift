@@ -60,7 +60,8 @@ class Agent: NSObject {
         }
     }
     
-    func showApprove(title: String, meta: String, completion: @escaping (Bool) -> Void) {
+    @discardableResult
+    func showApprove(title: String, meta: String, completion: @escaping (Bool) -> Void) -> ApproveViewController {
         let windowController = Window.showNew()
         let approveViewController = ApproveViewController.with(title: title, meta: meta) { [weak self] result in
             if result {
@@ -74,6 +75,7 @@ class Agent: NSObject {
             }
         }
         windowController.contentViewController = approveViewController
+        return approveViewController
     }
     
     func showErrorMessage(_ message: String) {

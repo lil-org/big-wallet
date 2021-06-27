@@ -10,6 +10,8 @@ struct Ethereum {
         case invalidInputData
         case failedToSendTransaction
     }
+
+    private static let queue = DispatchQueue(label: "Ethereum", qos: .default)
     
     private static let network: Network = AlchemyNetwork(
         chain: "mainnet",
@@ -61,12 +63,6 @@ struct Ethereum {
     private static func signedTransactionBytes(transaction: Transaction, account: Account) -> EthContractCallBytes {
         let senderKey = EthPrivateKey(hex: account.privateKey)
         let contractAddress = EthAddress(hex: transaction.to)
-        let weiAmount: EthNumber
-        if let value = transaction.value {
-            weiAmount = EthNumber(hex: value)
-        } else {
-            weiAmount = EthNumber(value: 0)
-        }
         let functionCall = BytesFromHexString(hex: transaction.data)
         let bytes: EthContractCallBytes
         if let gasPriceString = transaction.gasPrice {
@@ -82,54 +78,98 @@ struct Ethereum {
                                              gasEstimate: gasEstimate,
                                              senderKey: senderKey,
                                              contractAddress: contractAddress,
-                                             weiAmount: weiAmount,
+                                             weiAmount: transaction.weiAmount,
                                              functionCall: functionCall)
             } else {
                 bytes = EthContractCallBytes(network: network,
                                              gasPrice: gasPrice,
                                              senderKey: senderKey,
                                              contractAddress: contractAddress,
-                                             weiAmount: weiAmount,
+                                             weiAmount: transaction.weiAmount,
                                              functionCall: functionCall)
             }
         } else {
             bytes = EthContractCallBytes(network: network,
                                          senderKey: senderKey,
                                          contractAddress: contractAddress,
-                                         weiAmount: weiAmount,
+                                         weiAmount: transaction.weiAmount,
                                          functionCall: functionCall)
         }
         return bytes
     }
     
-    private static func getGas(network: Network, from: String, to: String, gasPrice: EthNumber, weiAmount: EthNumber, data: String, completion: @escaping (Data?) -> Void) {
-        let gas = try? EthGasEstimate(
-            network: network,
-            senderAddress: EthAddress(hex: from),
-            recipientAddress: EthAddress(hex: to),
-            gasEstimate: EthGasEstimate(
+    static func prepareTransaction(_ transaction: Transaction, completion: @escaping (Transaction) -> Void) {
+        var transaction = transaction
+        
+        if transaction.nonce == nil {
+            getNonce(from: transaction.from) { nonce in
+                transaction.nonce = nonce
+                completion(transaction)
+            }
+        }
+        
+        func getGasIfNeeded(gasPrice: String) {
+            guard transaction.gas == nil else { return }
+            getGas(from: transaction.from, to: transaction.to, gasPrice: gasPrice, weiAmount: transaction.weiAmount, data: transaction.data) { gas in
+                transaction.gas = gas
+                completion(transaction)
+            }
+        }
+        
+        if let gasPrice = transaction.gasPrice {
+            getGasIfNeeded(gasPrice: gasPrice)
+        } else {
+            getGasPrice { gasPrice in
+                transaction.gasPrice = gasPrice
+                completion(transaction)
+                if let gasPrice = gasPrice {
+                    getGasIfNeeded(gasPrice: gasPrice)
+                }
+            }
+        }
+        
+    }
+    
+    private static func getGas(from: String, to: String, gasPrice: String, weiAmount: EthNumber, data: String, completion: @escaping (String?) -> Void) {
+        queue.async {
+            let gas = try? EthGasEstimate(
                 network: network,
                 senderAddress: EthAddress(hex: from),
                 recipientAddress: EthAddress(hex: to),
-                gasPrice: gasPrice,
+                gasEstimate: EthGasEstimate(
+                    network: network,
+                    senderAddress: EthAddress(hex: from),
+                    recipientAddress: EthAddress(hex: to),
+                    gasPrice: EthNumber(hex: gasPrice),
+                    weiAmount: weiAmount,
+                    contractCall: BytesFromHexString(hex: data)
+                ),
+                gasPrice: EthNumber(hex: gasPrice),
                 weiAmount: weiAmount,
                 contractCall: BytesFromHexString(hex: data)
-            ),
-            gasPrice: gasPrice,
-            weiAmount: weiAmount,
-            contractCall: BytesFromHexString(hex: data)
-        ).value()
-        completion(gas)
+            ).value().toHexString()
+            DispatchQueue.main.async {
+                completion(gas)
+            }
+        }
     }
     
-    private static func getGasPrice(completion: @escaping (EthNumber) -> Void) {
-        let gasPrice = EthNumber(hex: SimpleBytes { try EthGasPrice(network: network).value() })
-        completion(gasPrice)
+    private static func getGasPrice(completion: @escaping (String?) -> Void) {
+        queue.async {
+            let gasPrice = try? EthGasPrice(network: network).value().toHexString()
+            DispatchQueue.main.async {
+                completion(gasPrice)
+            }
+        }
     }
     
-    private static func getNonce(network: Network, from: String, completion: @escaping (Data?) -> Void) {
-        let data = try? EthTransactions(network: network, address: EthAddress(hex: from), blockChainState: PendingBlockChainState()).count().value()
-        completion(data)
+    private static func getNonce(from: String, completion: @escaping (String?) -> Void) {
+        queue.async {
+            let nonce = try? EthTransactions(network: network, address: EthAddress(hex: from), blockChainState: PendingBlockChainState()).count().value().toHexString()
+            DispatchQueue.main.async {
+                completion(nonce)
+            }
+        }
     }
     
 }
