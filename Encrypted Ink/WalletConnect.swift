@@ -121,7 +121,7 @@ class WalletConnect {
         interactor?.rejectRequest(id: id, message: message).cauterize()
     }
 
-    private func sendTransaction(_ transaction : Transaction, address: String, requestId: Int64, interactor: WCInteractor?) {
+    private func sendTransaction(_ transaction: Transaction, address: String, requestId: Int64, interactor: WCInteractor?) {
         guard let account = AccountsService.getAccountForAddress(address) else {
             rejectRequest(id: requestId, interactor: interactor, message: "Failed for some reason")
             return
