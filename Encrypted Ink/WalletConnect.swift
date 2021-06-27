@@ -66,10 +66,17 @@ class WalletConnect {
     }
     
     private func approveTransaction(id: Int64, wct: WCEthereumTransaction, address: String, interactor: WCInteractor?) {
+        guard let to = wct.to else {
+            rejectRequest(id: id, interactor: interactor, message: "Something went wrong.")
+            return
+        }
+        
         let value = Double(UInt64(wct.value?.dropFirst(2) ?? "0", radix: 16) ?? 0) / 1e18
-        Agent.shared.showApprove(title: "Send Transaction", meta: "value: \(value) ETH\n\ndata: \(wct.data)") { [weak self] approved in
+        let transaction = Transaction(from: wct.from, to: to, nonce: wct.nonce, gasPrice: wct.gasPrice, gas: wct.gas, value: wct.value, data: wct.data)
+        
+        Agent.shared.showApprove(title: "Send Transaction", meta: "value: \(value) ETH\n\ndata: \(wct.data)") { [weak self, weak interactor] approved in
             if approved {
-                self?.sendTransaction(id: id, wct: wct, address: address, interactor: interactor)
+                self?.sendTransaction(transaction, address: address, requestId: id, interactor: interactor)
             } else {
                 self?.rejectRequest(id: id, interactor: interactor, message: "User canceled")
             }
@@ -93,7 +100,7 @@ class WalletConnect {
             }
         }
 
-        Agent.shared.showApprove(title: title, meta: message ?? "") { [weak self] approved in
+        Agent.shared.showApprove(title: title, meta: message ?? "") { [weak self, weak interactor] approved in
             if approved {
                 self?.sign(id: id, message: message, payload: payload, address: address, interactor: interactor)
             } else {
@@ -106,18 +113,16 @@ class WalletConnect {
         interactor?.rejectRequest(id: id, message: message).cauterize()
     }
 
-    private func sendTransaction(id: Int64, wct: WCEthereumTransaction, address: String, interactor: WCInteractor?) {
-        guard let account = AccountsService.getAccountForAddress(address), let to = wct.to else {
-            // TODO: display error message
-            rejectRequest(id: id, interactor: interactor, message: "Failed for some reason")
+    private func sendTransaction(_ transaction : Transaction, address: String, requestId: Int64, interactor: WCInteractor?) {
+        guard let account = AccountsService.getAccountForAddress(address) else {
+            rejectRequest(id: requestId, interactor: interactor, message: "Failed for some reason")
             return
         }
-        let transaction = Transaction(from: wct.from, to: to, nonce: wct.nonce, gasPrice: wct.gasPrice, gas: wct.gas, value: wct.value, data: wct.data)
         guard let hash = try? Ethereum.send(transaction: transaction, account: account) else {
-            rejectRequest(id: id, interactor: interactor, message: "Failed to send")
+            rejectRequest(id: requestId, interactor: interactor, message: "Failed to send")
             return
         }
-        interactor?.approveRequest(id: id, result: hash).cauterize()
+        interactor?.approveRequest(id: requestId, result: hash).cauterize()
     }
 
     private func sign(id: Int64, message: String?, payload: WCEthereumSignPayload, address: String, interactor: WCInteractor?) {
