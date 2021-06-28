@@ -32,10 +32,6 @@ class ImportViewController: NSViewController {
         view.window?.contentViewController = accountsListViewController
     }
     
-    @IBAction func newAccountButtonTapped(_ sender: Any) {
-        // TODO: implement creating account
-    }
-    
     @IBAction func cancelButtonTapped(_ sender: NSButton) {
         showAccountsList()
     }
