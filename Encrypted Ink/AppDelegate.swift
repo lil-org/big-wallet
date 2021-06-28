@@ -6,6 +6,7 @@ import Cocoa
 class AppDelegate: NSObject, NSApplicationDelegate {
     
     private let agent = Agent.shared
+    private let gasService = GasService.shared
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
@@ -13,7 +14,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         agent.start()
-        agent.setupStatusBarItem()
+        gasService.start()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

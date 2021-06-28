@@ -17,6 +17,7 @@ class Agent: NSObject {
     
     func start() {
         checkPasteboardAndOpen(onAppStart: true)
+        setupStatusBarItem()
     }
     
     func reopen() {
