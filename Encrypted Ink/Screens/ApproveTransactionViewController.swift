@@ -11,6 +11,7 @@ class ApproveTransactionViewController: NSViewController {
     @IBOutlet weak var slowSpeedLabel: NSTextField!
     @IBOutlet weak var fastSpeedLabel: NSTextField!
     
+    private let gasService = GasService.shared
     private var transaction: Transaction!
     private var completion: ((Transaction?) -> Void)!
     
@@ -40,7 +41,8 @@ class ApproveTransactionViewController: NSViewController {
         if metaTextView.string != meta {
             metaTextView.string = meta
         }
-        enableSpeedConfiguration(transaction.hasFee)
+        let info = gasService.currentInfo
+        enableSpeedConfiguration(transaction.hasFee && info != nil)
     }
     
     private func enableSpeedConfiguration(_ enable: Bool) {
