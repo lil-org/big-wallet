@@ -54,4 +54,14 @@ struct Transaction {
         return formatter.string(from: NSDecimalNumber(decimal: decimal))
     }
     
+    mutating func setGasPrice(value: Double, inRelationTo info: GasService.Info) {
+        // TODO: implement
+        gasPrice = nil
+    }
+    
+    func currentGasInRelationTo(info: GasService.Info) -> Double {
+        // TODO: implement
+        return 100
+    }
+    
 }
