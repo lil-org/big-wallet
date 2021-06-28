@@ -55,8 +55,19 @@ struct Transaction {
     }
     
     mutating func setGasPrice(value: Double, inRelationTo info: GasService.Info) {
-        // TODO: implement
-        gasPrice = nil
+        let tickValues = info.sortedValues
+        let tickValuesCount = tickValues.count
+        guard value >= 0, value <= 100, tickValuesCount > 1 else { return }
+        let step = Double(100) / Double(tickValuesCount - 1)
+        
+        for i in 1..<tickValuesCount where value <= step * Double(i) {
+            let partialStep = value - step * Double(i - 1)
+            let previousTickValue = tickValues[i - 1]
+            let nextTickValue = tickValues[i]
+            let current = previousTickValue + UInt((partialStep / step) * Double(nextTickValue - previousTickValue))
+            gasPrice = try? EthNumber(decimal: String(current)).value().toHexString()
+            return
+        }
     }
     
     func currentGasInRelationTo(info: GasService.Info) -> Double {
