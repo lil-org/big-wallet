@@ -71,22 +71,12 @@ class WalletConnect {
             return
         }
         
-        var transaction = Transaction(from: wct.from, to: to, nonce: wct.nonce, gasPrice: wct.gasPrice, gas: wct.gas, value: wct.value, data: wct.data)
-        let approveViewController = Agent.shared.showApprove(title: "Send Transaction", meta: transaction.meta) { [weak self, weak interactor] approved in
-            if approved {
+        let transaction = Transaction(from: wct.from, to: to, nonce: wct.nonce, gasPrice: wct.gasPrice, gas: wct.gas, value: wct.value, data: wct.data)
+        Agent.shared.showApprove(transaction: transaction) { [weak self, weak interactor] transaction in
+            if let transaction = transaction {
                 self?.sendTransaction(transaction, address: address, requestId: id, interactor: interactor)
             } else {
-                self?.rejectRequest(id: id, interactor: interactor, message: "User canceled")
-            }
-        }
-        
-        guard !transaction.hasFee else { return }
-        var didDisplayFee = false
-        Ethereum.prepareTransaction(transaction) { [weak approveViewController] updated in
-            transaction = updated
-            if !didDisplayFee, transaction.hasFee {
-                didDisplayFee = true
-                approveViewController?.setMeta(transaction.meta)
+                self?.rejectRequest(id: id, interactor: interactor, message: "Cancelled")
             }
         }
     }
@@ -112,7 +102,7 @@ class WalletConnect {
             if approved {
                 self?.sign(id: id, message: message, payload: payload, address: address, interactor: interactor)
             } else {
-                self?.rejectRequest(id: id, interactor: interactor, message: "User canceled")
+                self?.rejectRequest(id: id, interactor: interactor, message: "Cancelled")
             }
         }
     }
@@ -123,7 +113,7 @@ class WalletConnect {
 
     private func sendTransaction(_ transaction: Transaction, address: String, requestId: Int64, interactor: WCInteractor?) {
         guard let account = AccountsService.getAccountForAddress(address) else {
-            rejectRequest(id: requestId, interactor: interactor, message: "Failed for some reason")
+            rejectRequest(id: requestId, interactor: interactor, message: "Something went wrong.")
             return
         }
         guard let hash = try? Ethereum.send(transaction: transaction, account: account) else {
@@ -135,7 +125,7 @@ class WalletConnect {
 
     private func sign(id: Int64, message: String?, payload: WCEthereumSignPayload, address: String, interactor: WCInteractor?) {
         guard let message = message, let account = AccountsService.getAccountForAddress(address) else {
-            rejectRequest(id: id, interactor: interactor, message: "Failed for some reason")
+            rejectRequest(id: id, interactor: interactor, message: "Something went wrong.")
             return
         }
         var signed: String?
@@ -148,7 +138,7 @@ class WalletConnect {
             signed = try? Ethereum.sign(message: message, account: account)
         }
         guard let result = signed else {
-            rejectRequest(id: id, interactor: interactor, message: "Failed for some reason")
+            rejectRequest(id: id, interactor: interactor, message: "Something went wrong.")
             return
         }
         interactor?.approveRequest(id: id, result: result).cauterize()

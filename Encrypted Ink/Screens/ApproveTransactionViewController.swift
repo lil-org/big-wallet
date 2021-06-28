@@ -11,28 +11,36 @@ class ApproveTransactionViewController: NSViewController {
     @IBOutlet weak var slowSpeedLabel: NSTextField!
     @IBOutlet weak var fastSpeedLabel: NSTextField!
     
-    var approveTitle: String!
-    var meta: String!
-    var completion: ((Bool) -> Void)!
+    private var transaction: Transaction!
+    private var completion: ((Transaction?) -> Void)!
     
-    static func with(title: String, meta: String, completion: @escaping (Bool) -> Void) -> ApproveTransactionViewController {
+    static func with(transaction: Transaction, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self)
+        new.transaction = transaction
         new.completion = completion
-        new.meta = meta
-        new.approveTitle = title
         return new
-    }
-    
-    func setMeta(_ meta: String) {
-        self.meta = meta
-        updateDisplayedMeta()
     }
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        titleLabel.stringValue = approveTitle
-        updateDisplayedMeta()
-        enableSpeedConfiguration(false)
+        titleLabel.stringValue = Strings.sendTransaction
+        updateInterface()
+        prepareTransaction()
+    }
+    
+    private func prepareTransaction() {
+        Ethereum.prepareTransaction(transaction) { [weak self] updated in
+            self?.transaction = updated
+            self?.updateInterface()
+        }
+    }
+    
+    private func updateInterface() {
+        let meta = transaction.meta
+        if metaTextView.string != meta {
+            metaTextView.string = meta
+        }
+        enableSpeedConfiguration(transaction.hasFee)
     }
     
     private func enableSpeedConfiguration(_ enable: Bool) {
@@ -40,21 +48,17 @@ class ApproveTransactionViewController: NSViewController {
         fastSpeedLabel.alphaValue = enable ? 1 : 0.5
         speedSlider.isEnabled = enable
     }
-    
-    private func updateDisplayedMeta() {
-        metaTextView.string = meta
-    }
 
     @IBAction func sliderValueChanged(_ sender: NSSlider) {
         print(sender.intValue)
     }
     
     @IBAction func actionButtonTapped(_ sender: Any) {
-        completion(true)
+        completion(transaction)
     }
     
     @IBAction func cancelButtonTapped(_ sender: NSButton) {
-        completion(false)
+        completion(nil)
     }
     
 }

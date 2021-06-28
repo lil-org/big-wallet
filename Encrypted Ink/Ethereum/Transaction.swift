@@ -34,7 +34,7 @@ struct Transaction {
             let c = NSDecimalNumber(decimal: a).multiplying(by: NSDecimalNumber(decimal: b))
             fee = c.stringValue.prefix(8) + " ETH"
         } else {
-            fee = "Calculating"
+            fee = "Calculating…"
         }
         var result = [String]()
         if let value = value {

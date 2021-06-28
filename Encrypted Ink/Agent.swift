@@ -60,8 +60,23 @@ class Agent: NSObject {
         }
     }
     
-    @discardableResult
-    func showApprove(title: String, meta: String, completion: @escaping (Bool) -> Void) -> ApproveViewController {
+    func showApprove(transaction: Transaction, completion: @escaping (Transaction?) -> Void) {
+        let windowController = Window.showNew()
+        let approveViewController = ApproveTransactionViewController.with(transaction: transaction) { [weak self] transaction in
+            if transaction != nil {
+                self?.askAuthentication(on: windowController.window, onStart: false, reason: Strings.sendTransaction) { success in
+                    completion(success ? transaction : nil)
+                    Window.closeAllAndActivateBrowser()
+                }
+            } else {
+                Window.closeAllAndActivateBrowser()
+                completion(nil)
+            }
+        }
+        windowController.contentViewController = approveViewController
+    }
+    
+    func showApprove(title: String, meta: String, completion: @escaping (Bool) -> Void) {
         let windowController = Window.showNew()
         let approveViewController = ApproveViewController.with(title: title, meta: meta) { [weak self] result in
             if result {
@@ -75,7 +90,6 @@ class Agent: NSObject {
             }
         }
         windowController.contentViewController = approveViewController
-        return approveViewController
     }
     
     func showErrorMessage(_ message: String) {

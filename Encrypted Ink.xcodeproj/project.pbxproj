@@ -42,6 +42,7 @@
 		2C8A09EB2675964700993638 /* ApproveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09EA2675964700993638 /* ApproveViewController.swift */; };
 		2C8A09EE2675965F00993638 /* WaitingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09ED2675965F00993638 /* WaitingViewController.swift */; };
 		2C901C472689E6D400D0926A /* ApproveTransactionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C462689E6D400D0926A /* ApproveTransactionViewController.swift */; };
+		2C901C4A2689F01700D0926A /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C492689F01700D0926A /* Strings.swift */; };
 		2C917429267D2A6E00049075 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C917428267D2A6E00049075 /* Keychain.swift */; };
 		2CDAB3722675B3F0009F8B97 /* PasswordViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */; };
 		2CE3D012267F73C00032A62E /* Transaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D011267F73C00032A62E /* Transaction.swift */; };
@@ -87,6 +88,7 @@
 		2C8A09EA2675964700993638 /* ApproveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveViewController.swift; sourceTree = "<group>"; };
 		2C8A09ED2675965F00993638 /* WaitingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitingViewController.swift; sourceTree = "<group>"; };
 		2C901C462689E6D400D0926A /* ApproveTransactionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveTransactionViewController.swift; sourceTree = "<group>"; };
+		2C901C492689F01700D0926A /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		2C917428267D2A6E00049075 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
 		2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordViewController.swift; sourceTree = "<group>"; };
 		2CE3D011267F73C00032A62E /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
@@ -162,6 +164,7 @@
 				2C8A09D626751A0C00993638 /* WalletConnect.swift */,
 				2C528A15267FA8EB00CA3ADD /* Defaults.swift */,
 				2C8A09D32675184700993638 /* Window.swift */,
+				2C901C492689F01700D0926A /* Strings.swift */,
 				2C6706A7267A6C04006AAEF2 /* Extensions */,
 				2C8A09C92675142700993638 /* Screens */,
 				2C91742B267D2A7900049075 /* Services */,
@@ -384,6 +387,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2C901C4A2689F01700D0926A /* Strings.swift in Sources */,
 				0DB729152674E2DB0011F7A1 /* EIP712Error.swift in Sources */,
 				2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */,
 				2C8A09C6267513FC00993638 /* Agent.swift in Sources */,
