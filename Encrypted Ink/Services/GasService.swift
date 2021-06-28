@@ -13,6 +13,10 @@ class GasService {
         let slow: UInt
         let fast: UInt
         let rapid: UInt
+        
+        var sortedValues: [UInt] {
+            return Set([slow, standard, fast, rapid]).sorted()
+        }
     }
     
     static let shared = GasService()

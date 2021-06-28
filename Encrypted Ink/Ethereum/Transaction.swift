@@ -60,8 +60,29 @@ struct Transaction {
     }
     
     func currentGasInRelationTo(info: GasService.Info) -> Double {
-        // TODO: implement
-        return 100
+        guard let gasPrice = gasPrice,
+              let currentAsDecimal = try? EthNumber(hex: gasPrice).value().toDecimal() else { return 0 }
+        
+        let current = NSDecimalNumber(decimal: currentAsDecimal).uintValue
+        let tickValues = info.sortedValues
+        let tickValuesCount = tickValues.count
+        guard tickValuesCount > 1 else { return 0 }
+        
+        if current <= tickValues[0] {
+            return 0
+        } else if current >= tickValues[tickValuesCount - 1] {
+            return 100
+        }
+        
+        let step = Double(100) / Double(tickValuesCount - 1)
+        
+        for i in 1..<tickValuesCount where current < tickValues[i] {
+            let partialStep = Double(current - tickValues[i - 1]) / Double(tickValues[i] - tickValues[i - 1])
+            let fullSteps = Double(i - 1)
+            return (fullSteps + partialStep) * step
+        }
+        
+        return 0
     }
     
 }
