@@ -16,12 +16,12 @@ class Agent: NSObject {
     var statusBarButtonIsBlocked = false
     
     func start() {
-        checkPasteboardAndOpen(onAppStart: true)
+        checkPasteboardAndOpen()
         setupStatusBarItem()
     }
     
     func reopen() {
-        checkPasteboardAndOpen(onAppStart: false)
+        checkPasteboardAndOpen()
     }
     
     func showInitialScreen(wcSession: WCSession?) {
@@ -140,7 +140,7 @@ class Agent: NSObject {
     }
     
     @objc private func didSelectShowMenuItem() {
-        checkPasteboardAndOpen(onAppStart: false)
+        checkPasteboardAndOpen()
     }
     
     @objc private func didSelectQuitMenuItem() {
@@ -158,8 +158,13 @@ class Agent: NSObject {
     
     @objc private func statusBarButtonClicked(sender: NSStatusBarButton) {
         guard !statusBarButtonIsBlocked, let event = NSApp.currentEvent, event.type == .rightMouseUp || event.type == .leftMouseUp else { return }
-        statusBarItem.menu = statusBarMenu
-        statusBarItem.button?.performClick(nil)
+        
+        if let session = getSessionFromPasteboard() {
+            showInitialScreen(wcSession: session)
+        } else {
+            statusBarItem.menu = statusBarMenu
+            statusBarItem.button?.performClick(nil)
+        }
     }
     
     private func onSelectedAccount(session: WCSession?) -> ((Account) -> Void)? {
@@ -179,7 +184,7 @@ class Agent: NSObject {
         return session
     }
     
-    private func checkPasteboardAndOpen(onAppStart: Bool) {
+    private func checkPasteboardAndOpen() {
         let session = getSessionFromPasteboard()
         showInitialScreen(wcSession: session)
     }
