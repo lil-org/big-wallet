@@ -112,7 +112,7 @@ class Agent: NSObject {
         let menu = NSMenu(title: "Encrypted Ink")
         
         let showItem = NSMenuItem(title: "Show Encrypted Ink", action: #selector(didSelectShowMenuItem), keyEquivalent: "")
-        let quitItem = NSMenuItem(title: "Quit", action: #selector(didSelectQuitMenuItem), keyEquivalent: "")
+        let quitItem = NSMenuItem(title: "Quit", action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
         
         showItem.target = self
         quitItem.target = self
