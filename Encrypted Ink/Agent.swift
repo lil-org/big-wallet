@@ -110,10 +110,16 @@ class Agent: NSObject {
     
     lazy private var statusBarMenu: NSMenu = {
         let menu = NSMenu(title: "Encrypted Ink")
-        let quitItem = NSMenuItem(title: "Quit", action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
+        
+        let showItem = NSMenuItem(title: "Show Encrypted Ink", action: #selector(didSelectShowMenuItem), keyEquivalent: "")
+        let quitItem = NSMenuItem(title: "Quit", action: #selector(didSelectQuitMenuItem), keyEquivalent: "")
+        
+        showItem.target = self
         quitItem.target = self
         menu.delegate = self
+        menu.addItem(showItem)
         menu.addItem(quitItem)
+        
         return menu
     }()
     
@@ -133,6 +139,10 @@ class Agent: NSObject {
         }
     }
     
+    @objc private func didSelectShowMenuItem() {
+        checkPasteboardAndOpen(onAppStart: false)
+    }
+    
     @objc private func didSelectQuitMenuItem() {
         warnBeforeQuitting()
     }
@@ -147,13 +157,9 @@ class Agent: NSObject {
     }
     
     @objc private func statusBarButtonClicked(sender: NSStatusBarButton) {
-        guard !statusBarButtonIsBlocked else { return }
-        if let event = NSApp.currentEvent, event.type == .rightMouseUp {
-            statusBarItem.menu = statusBarMenu
-            statusBarItem.button?.performClick(nil)
-        } else {
-            checkPasteboardAndOpen(onAppStart: false)
-        }
+        guard !statusBarButtonIsBlocked, let event = NSApp.currentEvent, event.type == .rightMouseUp || event.type == .leftMouseUp else { return }
+        statusBarItem.menu = statusBarMenu
+        statusBarItem.button?.performClick(nil)
     }
     
     private func onSelectedAccount(session: WCSession?) -> ((Account) -> Void)? {
