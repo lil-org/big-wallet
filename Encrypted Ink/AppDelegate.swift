@@ -32,9 +32,4 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
     
-    @IBAction func didCmdQ(_ sender: Any) {
-        Window.closeAll(updateStatusBarItem: false)
-        agent.warnBeforeQuitting(updateStatusBarAfterwards: true)
-    }
-    
 }
