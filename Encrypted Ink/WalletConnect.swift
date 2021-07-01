@@ -9,6 +9,7 @@ class WalletConnect {
     private init() {}
     
     private var interactors = [WCInteractor]()
+    private var peers = [String: WCPeerMeta]()
     
     func sessionWithLink(_ link: String) -> WCSession? {
         return WCSession.from(string: link)
@@ -38,6 +39,7 @@ class WalletConnect {
     
     private func removeInteractor(id: String) {
         interactors.removeAll(where: { $0.clientId == id })
+        peers.removeValue(forKey: id)
     }
     
     private func configure(interactor: WCInteractor, address: String) {
@@ -47,8 +49,11 @@ class WalletConnect {
 
         interactor.onError = { _ in }
 
-        interactor.onSessionRequest = { [weak interactor] (id, peerParam) in
-            let peer = peerParam.peerMeta // TODO: use this data for better UI
+        interactor.onSessionRequest = { [weak self, weak interactor] (id, peerParam) in
+            let peer = peerParam.peerMeta
+            if let id = interactor?.clientId {
+                self?.peers[id] = peer
+            }
             interactor?.approveSession(accounts: accounts, chainId: chainId).cauterize()
         }
 
