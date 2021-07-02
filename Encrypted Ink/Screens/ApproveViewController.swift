@@ -1,6 +1,7 @@
 // Copyright © 2021 Encrypted Ink. All rights reserved.
 
 import Cocoa
+import WalletConnect
 
 class ApproveViewController: NSViewController {
     
@@ -12,7 +13,7 @@ class ApproveViewController: NSViewController {
     var meta: String!
     var completion: ((Bool) -> Void)!
     
-    static func with(title: String, meta: String, completion: @escaping (Bool) -> Void) -> ApproveViewController {
+    static func with(title: String, meta: String, peerMeta: WCPeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
         let new = instantiate(ApproveViewController.self)
         new.completion = completion
         new.meta = meta

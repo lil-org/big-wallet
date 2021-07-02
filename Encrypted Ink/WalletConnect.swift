@@ -42,6 +42,11 @@ class WalletConnect {
         peers.removeValue(forKey: id)
     }
     
+    private func getPeerOfInteractor(_ interactor: WCInteractor?) -> WCPeerMeta? {
+        guard let id = interactor?.clientId else { return nil }
+        return peers[id]
+    }
+    
     private func configure(interactor: WCInteractor, address: String) {
         let accounts = [address]
         let chainId = 1
@@ -76,8 +81,9 @@ class WalletConnect {
             return
         }
         
+        let peer = getPeerOfInteractor(interactor)
         let transaction = Transaction(from: wct.from, to: to, nonce: wct.nonce, gasPrice: wct.gasPrice, gas: wct.gas, value: wct.value, data: wct.data)
-        Agent.shared.showApprove(transaction: transaction) { [weak self, weak interactor] transaction in
+        Agent.shared.showApprove(transaction: transaction, peerMeta: peer) { [weak self, weak interactor] transaction in
             if let transaction = transaction {
                 self?.sendTransaction(transaction, address: address, requestId: id, interactor: interactor)
             } else {
@@ -103,7 +109,8 @@ class WalletConnect {
             }
         }
 
-        Agent.shared.showApprove(title: title, meta: message ?? "") { [weak self, weak interactor] approved in
+        let peer = getPeerOfInteractor(interactor)
+        Agent.shared.showApprove(title: title, meta: message ?? "", peerMeta: peer) { [weak self, weak interactor] approved in
             if approved {
                 self?.sign(id: id, message: message, payload: payload, address: address, interactor: interactor)
             } else {

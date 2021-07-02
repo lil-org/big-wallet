@@ -1,6 +1,7 @@
 // Copyright © 2021 Encrypted Ink. All rights reserved.
 
 import Cocoa
+import WalletConnect
 
 class ApproveTransactionViewController: NSViewController {
     
@@ -17,7 +18,7 @@ class ApproveTransactionViewController: NSViewController {
     private var completion: ((Transaction?) -> Void)!
     private var didEnableSpeedConfiguration = false
     
-    static func with(transaction: Transaction, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
+    static func with(transaction: Transaction, peerMeta: WCPeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self)
         new.transaction = transaction
         new.completion = completion

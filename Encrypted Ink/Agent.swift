@@ -61,9 +61,9 @@ class Agent: NSObject {
         }
     }
     
-    func showApprove(transaction: Transaction, completion: @escaping (Transaction?) -> Void) {
+    func showApprove(transaction: Transaction, peerMeta: WCPeerMeta?, completion: @escaping (Transaction?) -> Void) {
         let windowController = Window.showNew()
-        let approveViewController = ApproveTransactionViewController.with(transaction: transaction) { [weak self] transaction in
+        let approveViewController = ApproveTransactionViewController.with(transaction: transaction, peerMeta: peerMeta) { [weak self] transaction in
             if transaction != nil {
                 self?.askAuthentication(on: windowController.window, onStart: false, reason: Strings.sendTransaction) { success in
                     completion(success ? transaction : nil)
@@ -77,9 +77,9 @@ class Agent: NSObject {
         windowController.contentViewController = approveViewController
     }
     
-    func showApprove(title: String, meta: String, completion: @escaping (Bool) -> Void) {
+    func showApprove(title: String, meta: String, peerMeta: WCPeerMeta?, completion: @escaping (Bool) -> Void) {
         let windowController = Window.showNew()
-        let approveViewController = ApproveViewController.with(title: title, meta: meta) { [weak self] result in
+        let approveViewController = ApproveViewController.with(title: title, meta: meta, peerMeta: peerMeta) { [weak self] result in
             if result {
                 self?.askAuthentication(on: windowController.window, onStart: false, reason: title) { success in
                     completion(success)
