@@ -993,7 +993,7 @@ DQ
             <objects>
                 <viewController storyboardIdentifier="ApproveViewController" id="A70-cr-SWr" customClass="ApproveViewController" customModule="Encrypted_Ink" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="xvx-vV-OZe">
-                        <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
+                        <rect key="frame" x="0.0" y="0.0" width="250" height="372"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
                             <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="PdV-Nr-oOY">
@@ -1081,6 +1081,35 @@ DQ
                                     <autoresizingMask key="autoresizingMask"/>
                                 </scroller>
                             </scrollView>
+                            <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="6" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="YGo-wh-cCt">
+                                <rect key="frame" x="66" y="340" width="119" height="16"/>
+                                <subviews>
+                                    <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="q4c-q5-CsH">
+                                        <rect key="frame" x="0.0" y="0.0" width="16" height="16"/>
+                                        <constraints>
+                                            <constraint firstAttribute="width" constant="16" id="H1c-bs-rQy"/>
+                                            <constraint firstAttribute="height" constant="16" id="beh-4A-Dsj"/>
+                                        </constraints>
+                                        <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyDown" id="eOs-XT-voj"/>
+                                    </imageView>
+                                    <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="LKE-ra-fan">
+                                        <rect key="frame" x="20" y="0.0" width="101" height="16"/>
+                                        <textFieldCell key="cell" lineBreakMode="truncatingTail" title="Unknown dapp" id="lo2-i6-DId">
+                                            <font key="font" metaFont="systemBold"/>
+                                            <color key="textColor" name="secondaryLabelColor" catalog="System" colorSpace="catalog"/>
+                                            <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                                        </textFieldCell>
+                                    </textField>
+                                </subviews>
+                                <visibilityPriorities>
+                                    <integer value="1000"/>
+                                    <integer value="1000"/>
+                                </visibilityPriorities>
+                                <customSpacing>
+                                    <real value="3.4028234663852886e+38"/>
+                                    <real value="3.4028234663852886e+38"/>
+                                </customSpacing>
+                            </stackView>
                         </subviews>
                         <constraints>
                             <constraint firstItem="Ra3-Vm-T8F" firstAttribute="centerX" secondItem="xvx-vV-OZe" secondAttribute="centerX" id="6s2-VI-I5u"/>
@@ -1090,18 +1119,23 @@ DQ
                             <constraint firstItem="Oc8-WJ-ABp" firstAttribute="top" secondItem="Ra3-Vm-T8F" secondAttribute="bottom" constant="30" id="ZUN-bH-HYj"/>
                             <constraint firstAttribute="trailing" secondItem="PdV-Nr-oOY" secondAttribute="trailing" constant="16" id="c5r-UD-yuA"/>
                             <constraint firstItem="Ra3-Vm-T8F" firstAttribute="top" secondItem="PdV-Nr-oOY" secondAttribute="bottom" constant="18" id="caG-6Y-meY"/>
-                            <constraint firstItem="PdV-Nr-oOY" firstAttribute="top" secondItem="xvx-vV-OZe" secondAttribute="top" constant="24" id="tN4-Nf-2iW"/>
+                            <constraint firstItem="YGo-wh-cCt" firstAttribute="centerX" secondItem="xvx-vV-OZe" secondAttribute="centerX" id="idI-KT-MRM"/>
+                            <constraint firstAttribute="trailing" relation="greaterThanOrEqual" secondItem="YGo-wh-cCt" secondAttribute="trailing" constant="16" id="lh5-yf-zHX"/>
+                            <constraint firstItem="PdV-Nr-oOY" firstAttribute="top" secondItem="xvx-vV-OZe" secondAttribute="top" constant="46" id="tN4-Nf-2iW"/>
+                            <constraint firstItem="YGo-wh-cCt" firstAttribute="top" secondItem="xvx-vV-OZe" secondAttribute="top" constant="16" id="uko-0z-EmA"/>
                         </constraints>
                     </view>
                     <connections>
                         <outlet property="metaTextView" destination="nek-dW-Y7v" id="tX9-hL-ZQD"/>
                         <outlet property="okButton" destination="xdD-3r-3YP" id="f8Z-et-2Th"/>
+                        <outlet property="peerLogoImageView" destination="q4c-q5-CsH" id="ndd-hX-A0S"/>
+                        <outlet property="peerNameLabel" destination="LKE-ra-fan" id="rdG-Ew-TzR"/>
                         <outlet property="titleLabel" destination="PdV-Nr-oOY" id="AZx-pJ-I7F"/>
                     </connections>
                 </viewController>
                 <customObject id="96u-sn-bbR" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="75" y="1177"/>
+            <point key="canvasLocation" x="75" y="1188"/>
         </scene>
         <!--Error View Controller-->
         <scene sceneID="LSi-74-yAS">
@@ -1349,7 +1383,7 @@ DQ
             <objects>
                 <viewController storyboardIdentifier="ApproveTransactionViewController" id="eky-J7-eog" customClass="ApproveTransactionViewController" customModule="Encrypted_Ink" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="SAE-QE-uez">
-                        <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
+                        <rect key="frame" x="0.0" y="0.0" width="250" height="372"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
                             <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="g2G-lh-X1F">
@@ -1481,16 +1515,48 @@ DQ
                                     <real value="3.4028234663852886e+38"/>
                                 </customSpacing>
                             </stackView>
+                            <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="6" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="7ck-5c-yRP">
+                                <rect key="frame" x="66" y="338" width="119" height="16"/>
+                                <subviews>
+                                    <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="g8t-xf-H1l">
+                                        <rect key="frame" x="0.0" y="0.0" width="16" height="16"/>
+                                        <constraints>
+                                            <constraint firstAttribute="height" constant="16" id="dET-c7-cqQ"/>
+                                            <constraint firstAttribute="width" constant="16" id="tQe-uA-ymj"/>
+                                        </constraints>
+                                        <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyDown" id="DGI-qz-sBc"/>
+                                    </imageView>
+                                    <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Ji7-6C-gUp">
+                                        <rect key="frame" x="20" y="0.0" width="101" height="16"/>
+                                        <textFieldCell key="cell" lineBreakMode="truncatingTail" title="Unknown dapp" id="csk-3U-RLL">
+                                            <font key="font" metaFont="systemBold"/>
+                                            <color key="textColor" name="secondaryLabelColor" catalog="System" colorSpace="catalog"/>
+                                            <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                                        </textFieldCell>
+                                    </textField>
+                                </subviews>
+                                <visibilityPriorities>
+                                    <integer value="1000"/>
+                                    <integer value="1000"/>
+                                </visibilityPriorities>
+                                <customSpacing>
+                                    <real value="3.4028234663852886e+38"/>
+                                    <real value="3.4028234663852886e+38"/>
+                                </customSpacing>
+                            </stackView>
                         </subviews>
                         <constraints>
                             <constraint firstItem="7mi-1e-Qtu" firstAttribute="top" secondItem="g2G-lh-X1F" secondAttribute="bottom" constant="18" id="2fE-O4-HKm"/>
                             <constraint firstAttribute="trailing" secondItem="g2G-lh-X1F" secondAttribute="trailing" constant="16" id="Cdj-Od-fW4"/>
                             <constraint firstItem="pLD-2z-PFP" firstAttribute="leading" secondItem="EuZ-5b-EGk" secondAttribute="leading" id="DlA-rH-zOg"/>
-                            <constraint firstItem="g2G-lh-X1F" firstAttribute="top" secondItem="SAE-QE-uez" secondAttribute="top" constant="24" id="TXq-LB-RMX"/>
+                            <constraint firstItem="g2G-lh-X1F" firstAttribute="top" secondItem="SAE-QE-uez" secondAttribute="top" constant="46" id="TXq-LB-RMX"/>
                             <constraint firstItem="pLD-2z-PFP" firstAttribute="top" secondItem="7mi-1e-Qtu" secondAttribute="bottom" constant="18" id="U2U-wR-pBJ"/>
+                            <constraint firstItem="7ck-5c-yRP" firstAttribute="top" secondItem="SAE-QE-uez" secondAttribute="top" constant="18" id="UK5-G8-avO"/>
                             <constraint firstItem="g2G-lh-X1F" firstAttribute="leading" secondItem="SAE-QE-uez" secondAttribute="leading" constant="16" id="XkV-Kq-IsL"/>
                             <constraint firstItem="7mi-1e-Qtu" firstAttribute="centerX" secondItem="SAE-QE-uez" secondAttribute="centerX" id="efM-Hc-emL"/>
+                            <constraint firstAttribute="trailing" relation="greaterThanOrEqual" secondItem="7ck-5c-yRP" secondAttribute="trailing" constant="16" id="fxi-Yj-IYx"/>
                             <constraint firstItem="MlF-7E-1Jg" firstAttribute="top" secondItem="7mi-1e-Qtu" secondAttribute="bottom" constant="60" id="fxj-xB-6jl"/>
+                            <constraint firstItem="7ck-5c-yRP" firstAttribute="centerX" secondItem="SAE-QE-uez" secondAttribute="centerX" id="fzt-H0-jbx"/>
                             <constraint firstAttribute="bottom" secondItem="MlF-7E-1Jg" secondAttribute="bottom" constant="32" id="kh9-EE-Wve"/>
                             <constraint firstItem="MlF-7E-1Jg" firstAttribute="centerX" secondItem="SAE-QE-uez" secondAttribute="centerX" id="tP9-9m-RF4"/>
                             <constraint firstItem="pLD-2z-PFP" firstAttribute="trailing" secondItem="EuZ-5b-EGk" secondAttribute="trailing" id="yw1-06-Vz6"/>
@@ -1500,6 +1566,8 @@ DQ
                         <outlet property="fastSpeedLabel" destination="WJV-V3-GWm" id="lzX-wu-MdJ"/>
                         <outlet property="metaTextView" destination="EuZ-5b-EGk" id="UyV-K8-7Og"/>
                         <outlet property="okButton" destination="JBO-6Q-5eC" id="JHm-Kl-fys"/>
+                        <outlet property="peerLogoImageView" destination="g8t-xf-H1l" id="CqE-7d-LAU"/>
+                        <outlet property="peerNameLabel" destination="Ji7-6C-gUp" id="J9c-ml-tXd"/>
                         <outlet property="slowSpeedLabel" destination="Jcz-Um-efA" id="TBN-lQ-Njc"/>
                         <outlet property="speedSlider" destination="oWb-y6-1VO" id="cLg-Yg-DPd"/>
                         <outlet property="titleLabel" destination="g2G-lh-X1F" id="NWt-Lq-go1"/>
@@ -1507,7 +1575,7 @@ DQ
                 </viewController>
                 <customObject id="E6z-rT-Kks" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="-218" y="1177"/>
+            <point key="canvasLocation" x="-218" y="1188"/>
         </scene>
     </scenes>
     <resources>
