@@ -1383,11 +1383,11 @@ DQ
             <objects>
                 <viewController storyboardIdentifier="ApproveTransactionViewController" id="eky-J7-eog" customClass="ApproveTransactionViewController" customModule="Encrypted_Ink" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="SAE-QE-uez">
-                        <rect key="frame" x="0.0" y="0.0" width="250" height="372"/>
+                        <rect key="frame" x="0.0" y="0.0" width="250" height="390"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
                             <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="g2G-lh-X1F">
-                                <rect key="frame" x="14" y="292" width="222" height="34"/>
+                                <rect key="frame" x="14" y="310" width="222" height="34"/>
                                 <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Approve" id="t64-oP-3Nm">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
                                     <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
@@ -1434,7 +1434,7 @@ DQ
                                 </customSpacing>
                             </stackView>
                             <scrollView focusRingType="none" borderType="line" horizontalLineScroll="10" horizontalPageScroll="10" verticalLineScroll="10" verticalPageScroll="10" hasHorizontalScroller="NO" horizontalScrollElasticity="none" translatesAutoresizingMaskIntoConstraints="NO" id="7mi-1e-Qtu">
-                                <rect key="frame" x="45" y="120" width="160" height="154"/>
+                                <rect key="frame" x="45" y="138" width="160" height="154"/>
                                 <clipView key="contentView" id="lLN-8O-Blv">
                                     <rect key="frame" x="1" y="1" width="158" height="152"/>
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
@@ -1516,7 +1516,7 @@ DQ
                                 </customSpacing>
                             </stackView>
                             <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="6" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="7ck-5c-yRP">
-                                <rect key="frame" x="66" y="338" width="119" height="16"/>
+                                <rect key="frame" x="66" y="356" width="119" height="16"/>
                                 <subviews>
                                     <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="g8t-xf-H1l">
                                         <rect key="frame" x="0.0" y="0.0" width="16" height="16"/>
@@ -1544,18 +1544,29 @@ DQ
                                     <real value="3.4028234663852886e+38"/>
                                 </customSpacing>
                             </stackView>
+                            <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="xby-TM-Wec">
+                                <rect key="frame" x="28" y="111" width="194" height="14"/>
+                                <textFieldCell key="cell" lineBreakMode="truncatingTail" alignment="center" id="606-Ge-1Pk">
+                                    <font key="font" metaFont="system" size="11"/>
+                                    <color key="textColor" name="secondaryLabelColor" catalog="System" colorSpace="catalog"/>
+                                    <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                                </textFieldCell>
+                            </textField>
                         </subviews>
                         <constraints>
                             <constraint firstItem="7mi-1e-Qtu" firstAttribute="top" secondItem="g2G-lh-X1F" secondAttribute="bottom" constant="18" id="2fE-O4-HKm"/>
+                            <constraint firstItem="xby-TM-Wec" firstAttribute="leading" secondItem="SAE-QE-uez" secondAttribute="leading" constant="30" id="4WF-P9-OvZ"/>
+                            <constraint firstItem="oWb-y6-1VO" firstAttribute="top" secondItem="xby-TM-Wec" secondAttribute="bottom" constant="10" id="5N2-kr-8SP"/>
                             <constraint firstAttribute="trailing" secondItem="g2G-lh-X1F" secondAttribute="trailing" constant="16" id="Cdj-Od-fW4"/>
                             <constraint firstItem="pLD-2z-PFP" firstAttribute="leading" secondItem="EuZ-5b-EGk" secondAttribute="leading" id="DlA-rH-zOg"/>
+                            <constraint firstAttribute="trailing" secondItem="xby-TM-Wec" secondAttribute="trailing" constant="30" id="GHn-jB-MiX"/>
                             <constraint firstItem="g2G-lh-X1F" firstAttribute="top" secondItem="SAE-QE-uez" secondAttribute="top" constant="46" id="TXq-LB-RMX"/>
-                            <constraint firstItem="pLD-2z-PFP" firstAttribute="top" secondItem="7mi-1e-Qtu" secondAttribute="bottom" constant="18" id="U2U-wR-pBJ"/>
+                            <constraint firstItem="pLD-2z-PFP" firstAttribute="top" secondItem="7mi-1e-Qtu" secondAttribute="bottom" constant="36" id="U2U-wR-pBJ"/>
                             <constraint firstItem="7ck-5c-yRP" firstAttribute="top" secondItem="SAE-QE-uez" secondAttribute="top" constant="18" id="UK5-G8-avO"/>
                             <constraint firstItem="g2G-lh-X1F" firstAttribute="leading" secondItem="SAE-QE-uez" secondAttribute="leading" constant="16" id="XkV-Kq-IsL"/>
                             <constraint firstItem="7mi-1e-Qtu" firstAttribute="centerX" secondItem="SAE-QE-uez" secondAttribute="centerX" id="efM-Hc-emL"/>
                             <constraint firstAttribute="trailing" relation="greaterThanOrEqual" secondItem="7ck-5c-yRP" secondAttribute="trailing" constant="16" id="fxi-Yj-IYx"/>
-                            <constraint firstItem="MlF-7E-1Jg" firstAttribute="top" secondItem="7mi-1e-Qtu" secondAttribute="bottom" constant="60" id="fxj-xB-6jl"/>
+                            <constraint firstItem="MlF-7E-1Jg" firstAttribute="top" secondItem="7mi-1e-Qtu" secondAttribute="bottom" constant="78" id="fxj-xB-6jl"/>
                             <constraint firstItem="7ck-5c-yRP" firstAttribute="centerX" secondItem="SAE-QE-uez" secondAttribute="centerX" id="fzt-H0-jbx"/>
                             <constraint firstAttribute="bottom" secondItem="MlF-7E-1Jg" secondAttribute="bottom" constant="32" id="kh9-EE-Wve"/>
                             <constraint firstItem="MlF-7E-1Jg" firstAttribute="centerX" secondItem="SAE-QE-uez" secondAttribute="centerX" id="tP9-9m-RF4"/>
@@ -1564,6 +1575,7 @@ DQ
                     </view>
                     <connections>
                         <outlet property="fastSpeedLabel" destination="WJV-V3-GWm" id="lzX-wu-MdJ"/>
+                        <outlet property="gweiLabel" destination="xby-TM-Wec" id="3LN-nr-WNA"/>
                         <outlet property="metaTextView" destination="EuZ-5b-EGk" id="UyV-K8-7Og"/>
                         <outlet property="okButton" destination="JBO-6Q-5eC" id="JHm-Kl-fys"/>
                         <outlet property="peerLogoImageView" destination="g8t-xf-H1l" id="CqE-7d-LAU"/>
@@ -1575,7 +1587,7 @@ DQ
                 </viewController>
                 <customObject id="E6z-rT-Kks" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="-218" y="1188"/>
+            <point key="canvasLocation" x="-219" y="1197"/>
         </scene>
     </scenes>
     <resources>

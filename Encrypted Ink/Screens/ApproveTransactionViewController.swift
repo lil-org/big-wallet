@@ -6,6 +6,7 @@ import Kingfisher
 
 class ApproveTransactionViewController: NSViewController {
     
+    @IBOutlet weak var gweiLabel: NSTextField!
     @IBOutlet weak var titleLabel: NSTextField!
     @IBOutlet var metaTextView: NSTextView!
     @IBOutlet weak var okButton: NSButton!
