@@ -67,6 +67,9 @@ class ApproveTransactionViewController: NSViewController {
         if metaTextView.string != meta {
             metaTextView.string = meta
         }
+        if didEnableSpeedConfiguration, let gwei = transaction.gasPriceGwei {
+            gweiLabel.stringValue = "\(gwei) Gwei"
+        }
     }
     
     private func enableSpeedConfigurationIfNeeded() {

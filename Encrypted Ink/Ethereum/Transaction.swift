@@ -24,6 +24,13 @@ struct Transaction {
         return gas != nil && gasPrice != nil
     }
     
+    var gasPriceGwei: Int? {
+        guard let gasPrice = gasPrice,
+              let currentAsDecimal = try? EthNumber(hex: gasPrice).value().toDecimal() else { return nil }
+        let current = NSDecimalNumber(decimal: currentAsDecimal).uintValue / 1_000_000_000
+        return Int(current)
+    }
+    
     var meta: String {
         let value = ethString(hex: try? weiAmount.value().toHexString())
         let fee: String
