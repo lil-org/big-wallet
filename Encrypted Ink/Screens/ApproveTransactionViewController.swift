@@ -39,6 +39,7 @@ class ApproveTransactionViewController: NSViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        priceService.update()
         titleLabel.stringValue = Strings.sendTransaction
         setSpeedConfigurationViews(enabled: false)
         updateInterface()
