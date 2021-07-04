@@ -22,6 +22,7 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     private let gasService = GasService.shared
+    private let priceService = PriceService.shared
     private var currentGasInfo: GasService.Info?
     private var transaction: Transaction!
     private var completion: ((Transaction?) -> Void)!
