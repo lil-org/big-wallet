@@ -32,22 +32,24 @@ struct Transaction {
     }
     
     func description(ethPrice: Double?) -> String {
-        // TODO: use eth price
-        
-        let value = ethString(hex: try? weiAmount.value().toHexString())
         let fee: String
         if let gasPrice = gasPrice,
            let gas = gas,
            let a = try? EthNumber(hex: gasPrice).value().toNormalizedDecimal(power: 18),
            let b = try? EthNumber(hex: gas).value().toDecimal() {
             let c = NSDecimalNumber(decimal: a).multiplying(by: NSDecimalNumber(decimal: b))
-            fee = c.stringValue.prefix(8) + " ETH"
+            let costString = cost(value: c, price: ethPrice)
+            fee = c.stringValue.prefix(7) + " ETH" + costString
         } else {
             fee = "Calculating…"
         }
         var result = [String]()
-        if let value = value {
-            result.append("\(value) ETH")
+        if let decimal = try? weiAmount.value().toNormalizedDecimal(power: 18) {
+            let decimalNumber = NSDecimalNumber(decimal: decimal)
+            let cost = cost(value: decimalNumber, price: ethPrice)
+            if let value = ethString(decimalNumber: decimalNumber) {
+                result.append("\(value) ETH" + cost)
+            }
         }
         result.append("Fee: " + fee)
         result.append("Data: " + data)
@@ -55,12 +57,24 @@ struct Transaction {
         return result.joined(separator: "\n\n")
     }
     
-    private func ethString(hex: String?) -> String? {
-        guard let hex = hex, let decimal = try? EthNumber(hex: hex).value().toNormalizedDecimal(power: 18) else { return nil }
+    private func cost(value: NSDecimalNumber, price: Double?) -> String {
+        guard let price = price else { return "" }
+        let cost = value.multiplying(by: NSDecimalNumber(value: price))
+        let formatter = NumberFormatter()
+        formatter.decimalSeparator = "."
+        formatter.maximumFractionDigits = 1
+        if let costString = formatter.string(from: cost) {
+            return " ≈ $\(costString)"
+        } else {
+            return ""
+        }
+    }
+    
+    private func ethString(decimalNumber: NSDecimalNumber) -> String? {
         let formatter = NumberFormatter()
         formatter.decimalSeparator = "."
         formatter.maximumFractionDigits = 12
-        return formatter.string(from: NSDecimalNumber(decimal: decimal))
+        return formatter.string(from: decimalNumber)
     }
     
     mutating func setGasPrice(value: Double, inRelationTo info: GasService.Info) {
