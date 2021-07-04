@@ -65,16 +65,28 @@ struct Transaction {
         let tickValues = info.sortedValues
         let tickValuesCount = tickValues.count
         guard value >= 0, value <= 100, tickValuesCount > 1 else { return }
-        let step = Double(100) / Double(tickValuesCount - 1)
         
+        if value.isZero, let min = tickValues.first {
+            setGasPrice(value: min)
+            return
+        } else if value == 100, let max = tickValues.last {
+            setGasPrice(value: max)
+            return
+        }
+        
+        let step = Double(100) / Double(tickValuesCount - 1)
         for i in 1..<tickValuesCount where value <= step * Double(i) {
             let partialStep = value - step * Double(i - 1)
             let previousTickValue = tickValues[i - 1]
             let nextTickValue = tickValues[i]
             let current = previousTickValue + UInt((partialStep / step) * Double(nextTickValue - previousTickValue))
-            gasPrice = try? EthNumber(decimal: String(current)).value().toHexString()
+            setGasPrice(value: current)
             return
         }
+    }
+    
+    private mutating func setGasPrice(value: UInt) {
+        gasPrice = try? EthNumber(decimal: String(value)).value().toHexString()
     }
     
     func currentGasInRelationTo(info: GasService.Info) -> Double {
