@@ -64,7 +64,7 @@ class ApproveTransactionViewController: NSViewController {
     
     private func updateInterface() {
         enableSpeedConfigurationIfNeeded()
-        let meta = transaction.meta
+        let meta = transaction.description(ethPrice: priceService.currentPrice)
         if metaTextView.string != meta {
             metaTextView.string = meta
         }

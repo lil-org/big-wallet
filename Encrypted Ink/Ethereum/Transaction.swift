@@ -31,7 +31,9 @@ struct Transaction {
         return Int(current)
     }
     
-    var meta: String {
+    func description(ethPrice: Double?) -> String {
+        // TODO: use eth price
+        
         let value = ethString(hex: try? weiAmount.value().toHexString())
         let fee: String
         if let gasPrice = gasPrice,
