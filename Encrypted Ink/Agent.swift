@@ -112,14 +112,23 @@ class Agent: NSObject {
         let menu = NSMenu(title: "Encrypted Ink")
         
         let showItem = NSMenuItem(title: "Show Encrypted Ink", action: #selector(didSelectShowMenuItem), keyEquivalent: "")
-        let quitItem = NSMenuItem(title: "Quit", action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
+        let mailItem = NSMenuItem(title: "✉️ Drop us a line…", action: #selector(didSelectMailMenuItem), keyEquivalent: "")
+        let githubItem = NSMenuItem(title: "🛠 View source code on GitHub…", action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
+        let quitItem = NSMenuItem(title: "💀 Quit", action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
+        showItem.attributedTitle = NSAttributedString(string: "🌅 Show Encrypted Ink", attributes: [.font: NSFont.systemFont(ofSize: 21, weight: .bold)])
         
         showItem.target = self
+        githubItem.target = self
+        mailItem.target = self
         quitItem.target = self
+        
         menu.delegate = self
         menu.addItem(showItem)
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(githubItem)
+        menu.addItem(mailItem)
+        menu.addItem(NSMenuItem.separator())
         menu.addItem(quitItem)
-        
         return menu
     }()
     
@@ -136,6 +145,18 @@ class Agent: NSObject {
         }
         if updateStatusBarAfterwards {
             setupStatusBarItem()
+        }
+    }
+    
+    @objc private func didSelectGitHubMenuItem() {
+        if let url = URL(string: "https://github.com/zeriontech/Encrypted-Ink") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+    
+    @objc private func didSelectMailMenuItem() {
+        if let url = URL(string: "mailto:support@encrypted.ink") {
+            NSWorkspace.shared.open(url)
         }
     }
     
