@@ -9,8 +9,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let gasService = GasService.shared
     private let priceService = PriceService.shared
     
+    override init() {
+        super.init()
+        let manager = NSAppleEventManager.shared()
+        manager.setEventHandler(self, andSelector: #selector(self.getUrl(_:withReplyEvent:)),
+                                forEventClass: AEEventClass(kInternetEventClass),
+                                andEventID: AEEventID(kAEGetURL))
+    }
+    
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
+    }
+    
+    @objc private func getUrl(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
+        if let url = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue {
+            // TODO: handle all kinds of deep link
+            // TODO: do something if could not parse input link
+        }
     }
     
     func applicationDidFinishLaunching(_ aNotification: Notification) {
