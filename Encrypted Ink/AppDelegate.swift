@@ -22,10 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc private func getUrl(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
-        if let url = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue {
-            // TODO: handle all kinds of deep link
-            // TODO: do something if could not parse input link
-        }
+        processInput(url: event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue, prefix: "encryptedink://wc?uri=")
     }
     
     func applicationDidFinishLaunching(_ aNotification: Notification) {
@@ -40,13 +37,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func application(_ application: NSApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([NSUserActivityRestoring]) -> Void) -> Bool {
-        let prefix = "https://encrypted.ink/wc?uri="
-        if let url = userActivity.webpageURL?.absoluteString, url.hasPrefix(prefix),
+        processInput(url: userActivity.webpageURL?.absoluteString, prefix: "https://encrypted.ink/wc?uri=")
+        return true
+    }
+    
+    private func processInput(url: String?, prefix: String) {
+        if let url = url, url.hasPrefix(prefix),
            let link = url.dropFirst(prefix.count).removingPercentEncoding {
             agent.processInputLink(link)
         }
-        // TODO: do something if could not parse input link
-        return true
     }
     
 }
