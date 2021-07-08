@@ -49,7 +49,6 @@ class WalletConnect {
     private func configure(interactor: WCInteractor, address: String) {
         let accounts = [address]
         let chainId = 1
-        let id = interactor.clientId
 
         interactor.onError = { _ in }
 
@@ -61,8 +60,8 @@ class WalletConnect {
             interactor?.approveSession(accounts: accounts, chainId: chainId).cauterize()
         }
 
-        interactor.onDisconnect = { [weak self] _ in
-            self?.removeInteractor(id: id)
+        interactor.onDisconnect = { _ in
+            // TODO: reconnect when appropriate. should not reconnect when session is killed.
         }
 
         interactor.eth.onSign = { [weak self, weak interactor] (id, payload) in
