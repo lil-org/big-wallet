@@ -250,10 +250,11 @@ class Agent: NSObject {
     
     private func connectWallet(session: WCSession, account: Account) {
         let windowController = Window.showNew()
+        let window = windowController.window
         windowController.contentViewController = WaitingViewController.withReason("Connecting")
         
-        WalletConnect.shared.connect(session: session, address: account.address) { [weak windowController] _ in
-            if windowController?.window?.isVisible == true {
+        WalletConnect.shared.connect(session: session, address: account.address) { [weak window] _ in
+            if window?.isVisible == true {
                 Window.closeAllAndActivateBrowser()
             }
         }
