@@ -249,16 +249,14 @@ class Agent: NSObject {
     }
     
     private func connectWallet(session: WCSession, account: Account) {
-        WalletConnect.shared.connect(session: session, address: account.address) { [weak self] connected in
-            if connected {
-                Window.closeAllAndActivateBrowser()
-            } else {
-                self?.showErrorMessage("Failed to connect")
-            }
-        }
-        
         let windowController = Window.showNew()
         windowController.contentViewController = WaitingViewController.withReason("Connecting")
+        
+        WalletConnect.shared.connect(session: session, address: account.address) { [weak windowController] _ in
+            if windowController?.window?.isVisible == true {
+                Window.closeAllAndActivateBrowser()
+            }
+        }
     }
     
 }
