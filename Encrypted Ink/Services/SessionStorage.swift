@@ -16,11 +16,12 @@ class SessionStorage {
     private init() {}
     
     func loadAll() -> [Item] {
-        return []
+        return Defaults.storedSessions
     }
     
     func add(session: WCSession, address: String, uuid: UUID) {
-        // TODO: implement
+        let item = Item(session: session, address: address, uuid: uuid)
+        Defaults.storedSessions.append(item)
     }
     
 }

@@ -60,9 +60,10 @@ class WalletConnect {
             if let id = interactor?.clientId {
                 self?.peers[id] = peer
             }
-            if let session = interactor?.session {
+            if let session = interactor?.session, let uuid = UUID(uuidString: interactor?.clientId ?? "") {
                 WCSessionStore.store(session, peerId: peerParam.peerId, peerMeta: peer)
                 // TODO: store session if it is not already stored
+                self?.sessionStorage.add(session: session, address: address, uuid: uuid)
             }
             interactor?.approveSession(accounts: accounts, chainId: chainId).cauterize()
         }
