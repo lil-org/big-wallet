@@ -57,11 +57,17 @@ class WalletConnect {
             if let id = interactor?.clientId {
                 self?.peers[id] = peer
             }
+            if let session = interactor?.session {
+                WCSessionStore.store(session, peerId: peerParam.peerId, peerMeta: peer)
+                // TODO: store session if it is not already stored
+            }
             interactor?.approveSession(accounts: accounts, chainId: chainId).cauterize()
         }
 
-        interactor.onDisconnect = { _ in
-            // TODO: reconnect when appropriate. should not reconnect when session is killed.
+        interactor.onDisconnect = { [weak interactor] _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(10)) {
+                interactor?.resume() // TODO: reconnect when appropriate. should not reconnect when session is killed.
+            }
         }
 
         interactor.eth.onSign = { [weak self, weak interactor] (id, payload) in
