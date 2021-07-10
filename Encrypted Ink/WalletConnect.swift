@@ -5,6 +5,7 @@ import WalletConnect
 
 class WalletConnect {
  
+    private let sessionStorage = SessionStorage.shared
     static let shared = WalletConnect()
     private init() {}
     
@@ -15,9 +16,9 @@ class WalletConnect {
         return WCSession.from(string: link)
     }
     
-    func connect(session: WCSession, address: String, completion: @escaping ((Bool) -> Void)) {
+    func connect(session: WCSession, address: String, uuid: UUID = UUID(), completion: @escaping ((Bool) -> Void)) {
         let clientMeta = WCPeerMeta(name: "Encrypted Ink", url: "https://encrypted.ink", description: "Ethereum agent for macOS", icons: ["https://encrypted.ink/icon.png"])
-        let interactor = WCInteractor(session: session, meta: clientMeta, uuid: UUID())
+        let interactor = WCInteractor(session: session, meta: clientMeta, uuid: uuid)
         let id = interactor.clientId
         configure(interactor: interactor, address: address)
 
@@ -30,9 +31,11 @@ class WalletConnect {
         interactors.append(interactor)
     }
     
-    func killAllSessions() {
-        interactors.forEach {
-            $0.killSession().cauterize()
+    func restartSessions() {
+        let items = sessionStorage.loadAll()
+        for item in items {
+            connect(session: item.session, address: item.address, uuid: item.uuid) { _ in }
+            // TODO: maybe should remove from storage on unsuccessful connection attempt
         }
     }
     

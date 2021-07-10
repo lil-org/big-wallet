@@ -42,6 +42,7 @@ class Agent: NSObject {
                 if success {
                     self?.didEnterPasswordOnStart = true
                     self?.showInitialScreen(wcSession: wcSession)
+                    WalletConnect.shared.restartSessions()
                 }
             }
             return
