@@ -46,9 +46,9 @@ struct Transaction {
         var result = [String]()
         if let decimal = try? weiAmount.value().toNormalizedDecimal(power: 18) {
             let decimalNumber = NSDecimalNumber(decimal: decimal)
-            let cost = cost(value: decimalNumber, price: ethPrice)
+            let costString = cost(value: decimalNumber, price: ethPrice)
             if let value = ethString(decimalNumber: decimalNumber) {
-                result.append("\(value) ETH" + cost)
+                result.append("\(value) ETH" + costString)
             }
         }
         result.append("Fee: " + fee)
