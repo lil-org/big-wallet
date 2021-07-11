@@ -9,6 +9,7 @@ class SessionStorage {
         let session: WCSession
         let address: String
         let uuid: UUID
+        let sessionDetails: WCSessionRequestParam
     }
     
     static let shared = SessionStorage()
@@ -19,8 +20,8 @@ class SessionStorage {
         return Defaults.storedSessions
     }
     
-    func add(session: WCSession, address: String, uuid: UUID) {
-        let item = Item(session: session, address: address, uuid: uuid)
+    func add(session: WCSession, address: String, uuid: UUID, sessionDetails: WCSessionRequestParam) {
+        let item = Item(session: session, address: address, uuid: uuid, sessionDetails: sessionDetails)
         Defaults.storedSessions.append(item)
     }
     

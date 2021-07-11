@@ -35,6 +35,7 @@ class WalletConnect {
         let items = sessionStorage.loadAll()
         for item in items {
             connect(session: item.session, address: item.address, uuid: item.uuid) { _ in }
+            peers[item.sessionDetails.peerId] = item.sessionDetails.peerMeta
             // TODO: maybe should remove from storage on unsuccessful connection attempt
         }
     }
@@ -63,7 +64,7 @@ class WalletConnect {
             if let session = interactor?.session, let uuid = UUID(uuidString: interactor?.clientId ?? "") {
                 WCSessionStore.store(session, peerId: peerParam.peerId, peerMeta: peer)
                 // TODO: store session if it is not already stored
-                self?.sessionStorage.add(session: session, address: address, uuid: uuid)
+                self?.sessionStorage.add(session: session, address: address, uuid: uuid, sessionDetails: peerParam)
             }
             interactor?.approveSession(accounts: accounts, chainId: chainId).cauterize()
         }
