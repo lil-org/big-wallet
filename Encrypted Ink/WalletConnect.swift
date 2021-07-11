@@ -69,9 +69,10 @@ class WalletConnect {
             interactor?.approveSession(accounts: accounts, chainId: chainId).cauterize()
         }
 
-        interactor.onDisconnect = { [weak interactor] _ in
-            DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(10)) {
-                interactor?.resume() // TODO: reconnect when appropriate. should not reconnect when session is killed.
+        interactor.onDisconnect = { [weak interactor, weak self] _ in
+            // TODO: should not reconnect when session is killed.
+            if let interactor = interactor {
+                self?.reconnectWhenPossible(interactor: interactor)
             }
         }
 
@@ -81,6 +82,12 @@ class WalletConnect {
 
         interactor.eth.onTransaction = { [weak self, weak interactor] (id, event, transaction) in
             self?.approveTransaction(id: id, wct: transaction, address: address, interactor: interactor)
+        }
+    }
+    
+    private func reconnectWhenPossible(interactor: WCInteractor) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(10)) { [weak interactor] in
+            interactor?.resume() // TODO: reconnect when appropriate.
         }
     }
     
