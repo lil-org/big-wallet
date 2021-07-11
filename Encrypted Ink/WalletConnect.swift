@@ -27,6 +27,7 @@ class WalletConnect {
         }.catch { [weak self] _ in
             completion(false)
             self?.removeInteractor(id: id)
+            // TODO: maybe should retry here as well
         }
         interactors.append(interactor)
     }
