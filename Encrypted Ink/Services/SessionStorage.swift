@@ -36,11 +36,15 @@ class SessionStorage {
     }
     
     func add(interactor: WCInteractor, address: String, sessionDetails: WCSessionRequestParam) {
-        // TODO: store session if it is not already stored
-        // but maybe should update already stored values
         let item = Item(session: interactor.session, address: address, clientId: interactor.clientId, sessionDetails: sessionDetails)
         WCSessionStore.store(interactor.session, peerId: sessionDetails.peerId, peerMeta: sessionDetails.peerMeta)
         Defaults.storedSessions[interactor.clientId] = item
+        didInteractWith(clientId: interactor.clientId)
+    }
+    
+    func didInteractWith(clientId: String?) {
+        guard let clientId = clientId else { return }
+        Defaults.latestInteractionDates[clientId] = Date()
     }
     
     func shouldReconnect(interactor: WCInteractor) -> Bool {

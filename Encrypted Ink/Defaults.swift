@@ -15,4 +15,13 @@ struct Defaults {
         }
     }
     
+    static var latestInteractionDates: [String: Date] {
+        get {
+            return userDefaults.codableValue(type: [String: Date].self, forKey: "latestInteractionDates") ?? [:]
+        }
+        set {
+            userDefaults.setCodable(newValue, forKey: "latestInteractionDates")
+        }
+    }
+    
 }

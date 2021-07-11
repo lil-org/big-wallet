@@ -82,10 +82,12 @@ class WalletConnect {
 
         interactor.eth.onSign = { [weak self, weak interactor] (id, payload) in
             self?.approveSign(id: id, payload: payload, address: address, interactor: interactor)
+            self?.sessionStorage.didInteractWith(clientId: interactor?.clientId)
         }
 
         interactor.eth.onTransaction = { [weak self, weak interactor] (id, event, transaction) in
             self?.approveTransaction(id: id, wct: transaction, address: address, interactor: interactor)
+            self?.sessionStorage.didInteractWith(clientId: interactor?.clientId)
         }
     }
     
