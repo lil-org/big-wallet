@@ -41,6 +41,7 @@ class SessionStorage {
     
     func removeAll() {
         Defaults.storedSessions = [:]
+        Defaults.latestInteractionDates = [:]
     }
     
     func remove(clientId: String) {
