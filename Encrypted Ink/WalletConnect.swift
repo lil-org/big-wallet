@@ -45,6 +45,7 @@ class WalletConnect {
     private func removeInteractor(id: String) {
         interactors.removeAll(where: { $0.clientId == id })
         peers.removeValue(forKey: id)
+        // TODO: remove from storage as well
     }
     
     private func getPeerOfInteractor(_ interactor: WCInteractor?) -> WCPeerMeta? {
@@ -66,9 +67,11 @@ class WalletConnect {
         }
 
         interactor.onDisconnect = { [weak interactor, weak self] _ in
-            // TODO: should not reconnect when session is killed.
-            if let interactor = interactor {
+            guard let interactor = interactor else { return }
+            if self?.sessionStorage.shouldReconnect(interactor: interactor) == true {
                 self?.reconnectWhenPossible(interactor: interactor)
+            } else {
+                self?.removeInteractor(id: interactor.clientId)
             }
         }
 
