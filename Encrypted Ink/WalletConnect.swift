@@ -53,7 +53,7 @@ class WalletConnect {
     private func removeInteractor(id: String) {
         interactors.removeAll(where: { $0.clientId == id })
         peers.removeValue(forKey: id)
-        // TODO: remove from storage as well
+        sessionStorage.remove(clientId: id)
     }
     
     private func getPeerOfInteractor(_ interactor: WCInteractor?) -> WCPeerMeta? {

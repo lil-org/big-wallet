@@ -17,7 +17,7 @@ class SessionStorage {
     private init() {}
     
     func loadAll() -> [Item] {
-        let items = Defaults.storedSessions
+        let items = Array(Defaults.storedSessions.values)
         let wcItems = WCSessionStore.allSessions
         for item in items where wcItems[item.session.topic] == nil {
             WCSessionStore.store(item.session, peerId: item.sessionDetails.peerId, peerMeta: item.sessionDetails.peerMeta)
@@ -26,7 +26,13 @@ class SessionStorage {
     }
     
     func removeAll() {
-        Defaults.storedSessions = []
+        Defaults.storedSessions = [:]
+    }
+    
+    func remove(clientId: String) {
+        if let item = Defaults.storedSessions.removeValue(forKey: clientId) {
+            WCSessionStore.clear(item.session.topic)
+        }
     }
     
     func add(interactor: WCInteractor, address: String, sessionDetails: WCSessionRequestParam) {
@@ -34,7 +40,7 @@ class SessionStorage {
         // but maybe should update already stored values
         let item = Item(session: interactor.session, address: address, clientId: interactor.clientId, sessionDetails: sessionDetails)
         WCSessionStore.store(interactor.session, peerId: sessionDetails.peerId, peerMeta: sessionDetails.peerMeta)
-        Defaults.storedSessions.append(item)
+        Defaults.storedSessions[interactor.clientId] = item
     }
     
     func shouldReconnect(interactor: WCInteractor) -> Bool {
