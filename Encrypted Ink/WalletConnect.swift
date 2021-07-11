@@ -6,10 +6,19 @@ import WalletConnect
 class WalletConnect {
  
     private let sessionStorage = SessionStorage.shared
+    private let networkMonitor = NetworkMonitor.shared
     static let shared = WalletConnect()
-    private init() {}
+    
+    private init() {
+        NotificationCenter.default.addObserver(self, selector: #selector(connectionAppeared), name: .connectionAppeared, object: nil)
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
     
     private var interactors = [WCInteractor]()
+    private var interactorsPendingReconnection = [String: WCInteractor]()
     private var peers = [String: WCPeerMeta]()
     
     func sessionWithLink(_ link: String) -> WCSession? {
@@ -39,6 +48,20 @@ class WalletConnect {
             guard let uuid = UUID(uuidString: item.clientId) else { continue }
             connect(session: item.session, address: item.address, uuid: uuid) { _ in }
             peers[item.clientId] = item.sessionDetails.peerMeta
+        }
+    }
+    
+    @objc private func connectionAppeared() {
+        if !interactorsPendingReconnection.isEmpty {
+            reconnectPendingInteractors()
+        }
+    }
+    
+    private func reconnectPendingInteractors() {
+        let pending = interactorsPendingReconnection.values
+        interactorsPendingReconnection = [:]
+        pending.forEach {
+            $0.resume()
         }
     }
     
@@ -92,8 +115,13 @@ class WalletConnect {
     }
     
     private func reconnectWhenPossible(interactor: WCInteractor) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(10)) { [weak interactor] in
-            interactor?.resume() // TODO: reconnect when appropriate.
+        DispatchQueue.main.async { [weak self] in
+            self?.interactorsPendingReconnection[interactor.clientId] = interactor
+            if self?.interactorsPendingReconnection.count == 1 && self?.networkMonitor.hasConnection == true {
+                DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(7)) {
+                    self?.reconnectPendingInteractors()
+                }
+            }
         }
     }
     
