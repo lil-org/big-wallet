@@ -17,7 +17,12 @@ class SessionStorage {
     private init() {}
     
     func loadAll() -> [Item] {
-        return Defaults.storedSessions
+        let items = Defaults.storedSessions
+        let wcItems = WCSessionStore.allSessions
+        for item in items where wcItems[item.session.topic] == nil {
+            WCSessionStore.store(item.session, peerId: item.sessionDetails.peerId, peerMeta: item.sessionDetails.peerMeta)
+        }
+        return items
     }
     
     func removeAll() {
