@@ -8,6 +8,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let agent = Agent.shared
     private let gasService = GasService.shared
     private let priceService = PriceService.shared
+    private let networkMonitor = NetworkMonitor.shared
     
     override init() {
         super.init()
@@ -29,6 +30,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         agent.start()
         gasService.start()
         priceService.start()
+        networkMonitor.start()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
