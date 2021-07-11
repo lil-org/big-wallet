@@ -24,8 +24,10 @@ class SessionStorage {
         Defaults.storedSessions = []
     }
     
-    func add(session: WCSession, address: String, clientId: String, sessionDetails: WCSessionRequestParam) {
-        let item = Item(session: session, address: address, clientId: clientId, sessionDetails: sessionDetails)
+    func add(interactor: WCInteractor, address: String, sessionDetails: WCSessionRequestParam) {
+        // TODO: store session if it is not already stored
+        let item = Item(session: interactor.session, address: address, clientId: interactor.clientId, sessionDetails: sessionDetails)
+        WCSessionStore.store(interactor.session, peerId: sessionDetails.peerId, peerMeta: sessionDetails.peerMeta)
         Defaults.storedSessions.append(item)
     }
     

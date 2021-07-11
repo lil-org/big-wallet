@@ -59,16 +59,10 @@ class WalletConnect {
         interactor.onError = { _ in }
 
         interactor.onSessionRequest = { [weak self, weak interactor] (id, peerParam) in
-            let peer = peerParam.peerMeta
-            if let id = interactor?.clientId {
-                self?.peers[id] = peer
-            }
-            if let session = interactor?.session, let clientId = interactor?.clientId {
-                WCSessionStore.store(session, peerId: peerParam.peerId, peerMeta: peer)
-                // TODO: store session if it is not already stored
-                self?.sessionStorage.add(session: session, address: address, clientId: clientId, sessionDetails: peerParam)
-            }
-            interactor?.approveSession(accounts: accounts, chainId: chainId).cauterize()
+            guard let interactor = interactor else { return }
+            self?.peers[interactor.clientId] = peerParam.peerMeta
+            self?.sessionStorage.add(interactor: interactor, address: address, sessionDetails: peerParam)
+            interactor.approveSession(accounts: accounts, chainId: chainId).cauterize()
         }
 
         interactor.onDisconnect = { [weak interactor, weak self] _ in
