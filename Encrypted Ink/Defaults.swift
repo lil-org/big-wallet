@@ -6,9 +6,9 @@ struct Defaults {
  
     private static let userDefaults = UserDefaults.standard
 
-    static var storedSessions: [SessionStorage.Item] {
+    static var storedSessions: [String: SessionStorage.Item] {
         get {
-            return userDefaults.codableValue(type: [SessionStorage.Item].self, forKey: "storedSessions") ?? []
+            return userDefaults.codableValue(type: [String: SessionStorage.Item].self, forKey: "storedSessions") ?? [:]
         }
         set {
             userDefaults.setCodable(newValue, forKey: "storedSessions")
