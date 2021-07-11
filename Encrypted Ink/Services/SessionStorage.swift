@@ -8,7 +8,7 @@ class SessionStorage {
     struct Item: Codable {
         let session: WCSession
         let address: String
-        let uuid: UUID
+        let clientId: String
         let sessionDetails: WCSessionRequestParam
     }
     
@@ -20,8 +20,12 @@ class SessionStorage {
         return Defaults.storedSessions
     }
     
-    func add(session: WCSession, address: String, uuid: UUID, sessionDetails: WCSessionRequestParam) {
-        let item = Item(session: session, address: address, uuid: uuid, sessionDetails: sessionDetails)
+    func removeAll() {
+        Defaults.storedSessions = []
+    }
+    
+    func add(session: WCSession, address: String, clientId: String, sessionDetails: WCSessionRequestParam) {
+        let item = Item(session: session, address: address, clientId: clientId, sessionDetails: sessionDetails)
         Defaults.storedSessions.append(item)
     }
     
