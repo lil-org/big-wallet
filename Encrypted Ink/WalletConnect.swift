@@ -19,15 +19,15 @@ class WalletConnect {
     func connect(session: WCSession, address: String, uuid: UUID = UUID(), completion: @escaping ((Bool) -> Void)) {
         let clientMeta = WCPeerMeta(name: "Encrypted Ink", url: "https://encrypted.ink", description: "Ethereum agent for macOS", icons: ["https://encrypted.ink/icon.png"])
         let interactor = WCInteractor(session: session, meta: clientMeta, uuid: uuid)
-        let id = interactor.clientId
         configure(interactor: interactor, address: address)
 
         interactor.connect().done { connected in
             completion(connected)
-        }.catch { [weak self] _ in
+        }.catch { [weak self, weak interactor] _ in
             completion(false)
-            self?.removeInteractor(id: id)
-            // TODO: maybe should retry here as well
+            if let interactor = interactor {
+                self?.didDisconnect(interactor: interactor)
+            }
         }
         interactors.append(interactor)
     }
@@ -39,7 +39,14 @@ class WalletConnect {
             guard let uuid = UUID(uuidString: item.clientId) else { continue }
             connect(session: item.session, address: item.address, uuid: uuid) { _ in }
             peers[item.clientId] = item.sessionDetails.peerMeta
-            // TODO: maybe should remove from storage on unsuccessful connection attempt
+        }
+    }
+    
+    private func didDisconnect(interactor: WCInteractor) {
+        if sessionStorage.shouldReconnect(interactor: interactor) {
+            reconnectWhenPossible(interactor: interactor)
+        } else {
+            removeInteractor(id: interactor.clientId)
         }
     }
     
@@ -68,11 +75,8 @@ class WalletConnect {
         }
 
         interactor.onDisconnect = { [weak interactor, weak self] _ in
-            guard let interactor = interactor else { return }
-            if self?.sessionStorage.shouldReconnect(interactor: interactor) == true {
-                self?.reconnectWhenPossible(interactor: interactor)
-            } else {
-                self?.removeInteractor(id: interactor.clientId)
+            if let interactor = interactor {
+                self?.didDisconnect(interactor: interactor)
             }
         }
 
