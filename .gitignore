@@ -19,5 +19,6 @@ xcuserdata
 *.moved-aside
 *.xcuserstate
 .DS_Store
+Pods/
 
 Secrets.swift
