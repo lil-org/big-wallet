@@ -1,14 +1,16 @@
 // Copyright © 2021 Encrypted Ink. All rights reserved.
 
 import Foundation
-import Web3Swift
 import WalletCore
 
 struct AccountsService {
     
     static func validateAccountKey(_ key: String) -> Bool {
-        let address = try? EthPrivateKey(hex: key).address().value()
-        return address != nil
+        if let data = Data(hexString: key) {
+            return PrivateKey.isValid(data: data, curve: CoinType.ethereum.curve)
+        } else {
+            return false
+        }
     }
     
     static func addAccount(privateKey: String) -> Account? {
