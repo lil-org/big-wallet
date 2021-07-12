@@ -2,6 +2,7 @@
 
 import Foundation
 import Web3Swift
+import WalletCore
 
 struct AccountsService {
     
@@ -11,13 +12,10 @@ struct AccountsService {
     }
     
     static func addAccount(privateKey: String) -> Account? {
-        guard
-            let addressBytes = try? EthPrivateKey(hex: privateKey).address().value()
-        else {
-            return nil
-        }
-        // TODO: checksum address
-        let address = addressBytes.toPrefixedHexString()
+        guard let data = Data(hexString: privateKey),
+              let key = PrivateKey(data: data) else { return nil }
+        let address = CoinType.ethereum.deriveAddress(privateKey: key).lowercased()
+        // TODO: use checksum address
         let account = Account(privateKey: privateKey, address: address)
         var accounts = getAccounts()
         guard !accounts.contains(where: { $0.address == address }) else { return nil }
