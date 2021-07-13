@@ -5,20 +5,29 @@ import WalletCore
 
 struct AccountsService {
     
-    static func validateAccountKey(_ key: String) -> Bool {
-        if let data = Data(hexString: key) {
+    static func validateAccountInput(_ input: String) -> Bool {
+        if Mnemonic.isValid(mnemonic: input) {
+            return true
+        } else if let data = Data(hexString: input) {
             return PrivateKey.isValid(data: data, curve: CoinType.ethereum.curve)
         } else {
             return false
         }
     }
     
-    static func addAccount(privateKey: String) -> Account? {
-        guard let data = Data(hexString: privateKey),
-              let key = PrivateKey(data: data) else { return nil }
+    static func addAccount(input: String) -> Account? {
+        let key: PrivateKey
+        if Mnemonic.isValid(mnemonic: input) {
+            key = HDWallet(mnemonic: input, passphrase: "").getKeyForCoin(coin: .ethereum)
+        } else if let data = Data(hexString: input), let privateKey = PrivateKey(data: data) {
+            key = privateKey
+        } else {
+            return nil
+        }
+        
         let address = CoinType.ethereum.deriveAddress(privateKey: key).lowercased()
         // TODO: use checksum address
-        let account = Account(privateKey: privateKey, address: address)
+        let account = Account(privateKey: key.data.hexString, address: address)
         var accounts = getAccounts()
         guard !accounts.contains(where: { $0.address == address }) else { return nil }
         accounts.append(account)
