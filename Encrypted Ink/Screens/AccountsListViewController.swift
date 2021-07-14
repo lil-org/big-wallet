@@ -15,6 +15,14 @@ class AccountsListViewController: NSViewController {
         return new
     }
     
+    @IBOutlet weak var addButton: NSButton! {
+        didSet {
+            let menu = NSMenu()
+            addButton.menu = menu
+            menu.delegate = self
+        }
+    }
+    
     @IBOutlet weak var titleLabel: NSTextField!
     @IBOutlet weak var tableView: NSTableView! {
         didSet {
@@ -32,11 +40,15 @@ class AccountsListViewController: NSViewController {
         tableView.menu = menu
         
         if accounts.isEmpty {
-            accounts = AccountsService.getAccounts()
+            reloadAccounts()
         }
         
         reloadTitle()
         NotificationCenter.default.addObserver(self, selector: #selector(didBecomeActive), name: NSApplication.didBecomeActiveNotification, object: nil)
+    }
+    
+    private func reloadAccounts() {
+        accounts = AccountsService.getAccounts()
     }
     
     deinit {
@@ -56,6 +68,26 @@ class AccountsListViewController: NSViewController {
     }
     
     @IBAction func addButtonTapped(_ sender: NSButton) {
+        let menu = sender.menu
+        
+        menu?.addItem(NSMenuItem(title: "🌱 Create New", action: #selector(didClickCreateAccount), keyEquivalent: ""))
+        menu?.addItem(NSMenuItem(title: "💼 Import Existing", action: #selector(didClickImportAccount), keyEquivalent: ""))
+        
+        var origin = sender.frame.origin
+        origin.x += sender.frame.width
+        origin.y += sender.frame.height
+        
+        menu?.popUp(positioning: menu?.items.first, at: origin, in: view)
+    }
+    
+    @objc private func didClickCreateAccount() {
+        AccountsService.createAccount()
+        reloadAccounts()
+        tableView.reloadData()
+        // TODO: show backup phrase
+    }
+    
+    @objc private func didClickImportAccount() {
         let importViewController = instantiate(ImportViewController.self)
         importViewController.onSelectedAccount = onSelectedAccount
         view.window?.contentViewController = importViewController
@@ -137,6 +169,14 @@ extension AccountsListViewController: NSTableViewDataSource {
     
     func numberOfRows(in tableView: NSTableView) -> Int {
         return accounts.count
+    }
+    
+}
+
+extension AccountsListViewController: NSMenuDelegate {
+    
+    func menuDidClose(_ menu: NSMenu) {
+        menu.removeAllItems()
     }
     
 }

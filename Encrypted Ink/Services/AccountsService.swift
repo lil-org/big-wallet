@@ -15,6 +15,13 @@ struct AccountsService {
         }
     }
     
+    static func createAccount() {
+        guard let password = Keychain.password?.data(using: .utf8) else { return }
+        let key = StoredKey(name: "", password: password)
+        guard let privateKey = key.wallet(password: password)?.getKeyForCoin(coin: .ethereum) else { return }
+        _ = saveAccount(privateKey: privateKey)
+    }
+    
     static func addAccount(input: String) -> Account? {
         let key: PrivateKey
         if Mnemonic.isValid(mnemonic: input) {
@@ -24,16 +31,21 @@ struct AccountsService {
         } else if input.maybeJSON,
                   let json = input.data(using: .utf8),
                   let jsonKey = StoredKey.importJSON(json: json),
-                  let data = jsonKey.decryptPrivateKey(password: Data("1234".utf8)), // TODO: get password from user
+                  let data = jsonKey.decryptPrivateKey(password: Data("1234".utf8)), // TODO: get keystore password from user
                   let privateKey = PrivateKey(data: data) {
             key = privateKey
         } else {
             return nil
         }
         
-        let address = CoinType.ethereum.deriveAddress(privateKey: key).lowercased()
+        let account = saveAccount(privateKey: key)
+        return account
+    }
+    
+    private static func saveAccount(privateKey: PrivateKey) -> Account? {
+        let address = CoinType.ethereum.deriveAddress(privateKey: privateKey).lowercased()
         // TODO: use checksum address
-        let account = Account(privateKey: key.data.hexString, address: address)
+        let account = Account(privateKey: privateKey.data.hexString, address: address)
         var accounts = getAccounts()
         guard !accounts.contains(where: { $0.address == address }) else { return nil }
         accounts.append(account)

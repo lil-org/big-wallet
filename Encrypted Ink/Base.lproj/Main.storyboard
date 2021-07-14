@@ -809,9 +809,9 @@ DQ
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
-                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="dkh-kG-EFj">
+                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" textCompletion="NO" translatesAutoresizingMaskIntoConstraints="NO" id="dkh-kG-EFj">
                                 <rect key="frame" x="53" y="292" width="144" height="34"/>
-                                <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Accounts" id="9No-vQ-vBK">
+                                <textFieldCell key="cell" controlSize="large" selectable="YES" enabled="NO" allowsUndo="NO" alignment="center" title="Accounts" id="9No-vQ-vBK">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
                                     <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -920,6 +920,7 @@ DQ
                         </constraints>
                     </view>
                     <connections>
+                        <outlet property="addButton" destination="ngQ-Bn-Kwd" id="FlT-oq-C5e"/>
                         <outlet property="tableView" destination="glA-FK-Kdd" id="9aW-Qr-UuF"/>
                         <outlet property="titleLabel" destination="dkh-kG-EFj" id="xDn-bP-HWG"/>
                     </connections>
