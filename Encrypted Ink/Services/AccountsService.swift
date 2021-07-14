@@ -11,7 +11,7 @@ struct AccountsService {
         } else if let data = Data(hexString: input) {
             return PrivateKey.isValid(data: data, curve: CoinType.ethereum.curve)
         } else {
-            return false
+            return input.maybeJSON
         }
     }
     
@@ -20,6 +20,12 @@ struct AccountsService {
         if Mnemonic.isValid(mnemonic: input) {
             key = HDWallet(mnemonic: input, passphrase: "").getKeyForCoin(coin: .ethereum)
         } else if let data = Data(hexString: input), let privateKey = PrivateKey(data: data) {
+            key = privateKey
+        } else if input.maybeJSON,
+                  let json = input.data(using: .utf8),
+                  let jsonKey = StoredKey.importJSON(json: json),
+                  let data = jsonKey.decryptPrivateKey(password: Data("1234".utf8)), // TODO: get password from user
+                  let privateKey = PrivateKey(data: data) {
             key = privateKey
         } else {
             return nil
@@ -48,6 +54,14 @@ struct AccountsService {
     static func getAccountForAddress(_ address: String) -> Account? {
         let allAccounts = getAccounts()
         return allAccounts.first(where: { $0.address == address.lowercased() })
+    }
+    
+}
+
+private extension String {
+    
+    var maybeJSON: Bool {
+        return hasPrefix("{") && hasSuffix("}")
     }
     
 }
