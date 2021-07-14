@@ -1,7 +1,7 @@
 PODS:
   - BigInt (5.2.0)
   - BlockiesSwift (0.1.2)
-  - CryptoSwift (1.4.0)
+  - CryptoSwift (1.4.1)
   - Kingfisher (6.3.0)
   - PromiseKit (6.15.3):
     - PromiseKit/CorePromise (= 6.15.3)
@@ -14,11 +14,11 @@ PODS:
   - Starscream (3.1.1)
   - SwiftProtobuf (1.17.0)
   - SwiftyJSON (4.3.0)
-  - TrustWalletCoreMacOS (2.6.12.1):
-    - TrustWalletCoreMacOS/Core (= 2.6.12.1)
-  - TrustWalletCoreMacOS/Core (2.6.12.1):
+  - TrustWalletCoreMacOS (2.6.12.4):
+    - TrustWalletCoreMacOS/Core (= 2.6.12.4)
+  - TrustWalletCoreMacOS/Core (2.6.12.4):
     - TrustWalletCoreMacOS/Types
-  - TrustWalletCoreMacOS/Types (2.6.12.1):
+  - TrustWalletCoreMacOS/Types (2.6.12.4):
     - SwiftProtobuf
   - WalletConnect (0.1.0):
     - CryptoSwift
@@ -33,7 +33,7 @@ PODS:
 DEPENDENCIES:
   - BlockiesSwift
   - Kingfisher
-  - TrustWalletCoreMacOS
+  - TrustWalletCoreMacOS (= 2.6.12.4)
   - WalletConnect (from `https://github.com/grachyov/wallet-connect-swift`, branch `master`)
   - Web3Swift.io (from `https://github.com/zeriontech/Web3Swift.git`, branch `develop`)
 
@@ -69,17 +69,17 @@ CHECKOUT OPTIONS:
 SPEC CHECKSUMS:
   BigInt: f668a80089607f521586bbe29513d708491ef2f7
   BlockiesSwift: 22d8d56dd187e6bfd16cb8c8fbd4fd4896c3e65d
-  CryptoSwift: 7cc902df1784de3b389a387756c7d710f197730c
+  CryptoSwift: 0bc800a7e6a24c4fc9ebeab97d44b0d5f73a78bd
   Kingfisher: 6c3df386db71d82c0817a429d2c9421a77396529
   PromiseKit: 3b2b6995e51a954c46dbc550ce3da44fbfb563c5
   secp256k1.swift: a7e7a214f6db6ce5db32cc6b2b45e5c4dd633634
   Starscream: 4bb2f9942274833f7b4d296a55504dcfc7edb7b0
   SwiftProtobuf: 9c85136c6ba74b0a1b84279dbf0f6db8efb714e0
   SwiftyJSON: 6faa0040f8b59dead0ee07436cbf76b73c08fd08
-  TrustWalletCoreMacOS: d32d311a66a4a73ca3f2df60ea335ba97a858423
+  TrustWalletCoreMacOS: 3d2c29afa9f280bb3c2a47adb7fcdf55eefb23ae
   WalletConnect: 1df75d4355b1cacfc27d7ef2416fae43862d0eb4
   Web3Swift.io: 18fd06aed9d56df9c704f9c6f87b06675bb05b53
 
-PODFILE CHECKSUM: b33433241056512e581c586a1dc7c2627fc01c52
+PODFILE CHECKSUM: df8a2f6221781ce7a8000541726bd0cabb709af1
 
 COCOAPODS: 1.10.1

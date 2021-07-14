@@ -7,5 +7,5 @@ target 'Encrypted Ink' do
   pod 'BlockiesSwift'
   pod 'Kingfisher'
   pod 'WalletConnect', git: 'https://github.com/grachyov/wallet-connect-swift', branch: 'master'
-  pod 'TrustWalletCoreMacOS'
+  pod 'TrustWalletCoreMacOS', '2.6.12.4'
 end

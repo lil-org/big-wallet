@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		09646B0A20FEACA5CAB093BF /* Pods_Encrypted_Ink.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 100FF49FA53ACCE128D86D88 /* Pods_Encrypted_Ink.framework */; };
 		0DB729122674E2DB0011F7A1 /* EIP712ParameterEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729022674E2DB0011F7A1 /* EIP712ParameterEncoder.swift */; };
 		0DB729142674E2DB0011F7A1 /* EIP712Parameter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729042674E2DB0011F7A1 /* EIP712Parameter.swift */; };
 		0DB729152674E2DB0011F7A1 /* EIP712Error.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729052674E2DB0011F7A1 /* EIP712Error.swift */; };
@@ -22,6 +21,7 @@
 		0DB7291E2674E2DB0011F7A1 /* EIP712Signable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB7290F2674E2DB0011F7A1 /* EIP712Signable.swift */; };
 		0DB7291F2674E2DB0011F7A1 /* EIP712Representable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729102674E2DB0011F7A1 /* EIP712Representable.swift */; };
 		0DB729202674E2DB0011F7A1 /* EIP712Domain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729112674E2DB0011F7A1 /* EIP712Domain.swift */; };
+		28BDF30EBC80362870C988B6 /* Pods_Encrypted_Ink.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3E2A642C960E4952955E6E82 /* Pods_Encrypted_Ink.framework */; };
 		2C03D1D2269B407900EF10EA /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03D1D1269B407900EF10EA /* NetworkMonitor.swift */; };
 		2C03D1D5269B428C00EF10EA /* Notification.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03D1D4269B428C00EF10EA /* Notification.swift */; };
 		2C1995402674C4B900A8E370 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C19953F2674C4B900A8E370 /* AppDelegate.swift */; };
@@ -70,7 +70,6 @@
 		0DB7290F2674E2DB0011F7A1 /* EIP712Signable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Signable.swift; sourceTree = "<group>"; };
 		0DB729102674E2DB0011F7A1 /* EIP712Representable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Representable.swift; sourceTree = "<group>"; };
 		0DB729112674E2DB0011F7A1 /* EIP712Domain.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Domain.swift; sourceTree = "<group>"; };
-		100FF49FA53ACCE128D86D88 /* Pods_Encrypted_Ink.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Encrypted_Ink.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C03D1D1269B407900EF10EA /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		2C03D1D4269B428C00EF10EA /* Notification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notification.swift; sourceTree = "<group>"; };
 		2C19953C2674C4B900A8E370 /* Encrypted Ink.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Encrypted Ink.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -105,8 +104,9 @@
 		2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordViewController.swift; sourceTree = "<group>"; };
 		2CE3D011267F73C00032A62E /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
 		2CE3D014267F73E80032A62E /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
-		3A73512BAD412202C7FEE47F /* Pods-Encrypted Ink.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Encrypted Ink.release.xcconfig"; path = "Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink.release.xcconfig"; sourceTree = "<group>"; };
-		5D5B7FB8719AFFBA7D180C11 /* Pods-Encrypted Ink.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Encrypted Ink.debug.xcconfig"; path = "Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink.debug.xcconfig"; sourceTree = "<group>"; };
+		35AD6E3AC630C8A9B4EC16D9 /* Pods-Encrypted Ink.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Encrypted Ink.release.xcconfig"; path = "Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink.release.xcconfig"; sourceTree = "<group>"; };
+		3E2A642C960E4952955E6E82 /* Pods_Encrypted_Ink.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Encrypted_Ink.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		A858B0F7D88913EAB1FA50B0 /* Pods-Encrypted Ink.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Encrypted Ink.debug.xcconfig"; path = "Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -114,7 +114,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				09646B0A20FEACA5CAB093BF /* Pods_Encrypted_Ink.framework in Frameworks */,
+				28BDF30EBC80362870C988B6 /* Pods_Encrypted_Ink.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -156,7 +156,7 @@
 				2C19953E2674C4B900A8E370 /* Encrypted Ink */,
 				2C19953D2674C4B900A8E370 /* Products */,
 				FB5786212D81829B0FADBD25 /* Pods */,
-				FC39E7D2841BDD674B7E738B /* Frameworks */,
+				8E59B61AC986C705990A0C02 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -257,21 +257,21 @@
 			path = Services;
 			sourceTree = "<group>";
 		};
+		8E59B61AC986C705990A0C02 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				3E2A642C960E4952955E6E82 /* Pods_Encrypted_Ink.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		FB5786212D81829B0FADBD25 /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				5D5B7FB8719AFFBA7D180C11 /* Pods-Encrypted Ink.debug.xcconfig */,
-				3A73512BAD412202C7FEE47F /* Pods-Encrypted Ink.release.xcconfig */,
+				A858B0F7D88913EAB1FA50B0 /* Pods-Encrypted Ink.debug.xcconfig */,
+				35AD6E3AC630C8A9B4EC16D9 /* Pods-Encrypted Ink.release.xcconfig */,
 			);
 			path = Pods;
-			sourceTree = "<group>";
-		};
-		FC39E7D2841BDD674B7E738B /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				100FF49FA53ACCE128D86D88 /* Pods_Encrypted_Ink.framework */,
-			);
-			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -281,12 +281,12 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2C19954C2674C4BA00A8E370 /* Build configuration list for PBXNativeTarget "Encrypted Ink" */;
 			buildPhases = (
-				9C519BFB338230046103665E /* [CP] Check Pods Manifest.lock */,
+				3626CB05002789B293903501 /* [CP] Check Pods Manifest.lock */,
 				2C1995382674C4B900A8E370 /* Sources */,
 				2C1995392674C4B900A8E370 /* Frameworks */,
 				2C19953A2674C4B900A8E370 /* Resources */,
 				2C1995512674C6A100A8E370 /* ShellScript */,
-				93A4B814EC07C49CFA44CD46 /* [CP] Embed Pods Frameworks */,
+				DA399964E8F6C2CF5532D1CE /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -359,24 +359,7 @@
 			shellPath = /bin/sh;
 			shellScript = "if which swiftlint >/dev/null; then\n  swiftlint\nelse\n  echo \"warning: SwiftLint not installed, download from https://github.com/realm/SwiftLint\"\nfi\n";
 		};
-		93A4B814EC07C49CFA44CD46 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink-frameworks-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		9C519BFB338230046103665E /* [CP] Check Pods Manifest.lock */ = {
+		3626CB05002789B293903501 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -396,6 +379,23 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		DA399964E8F6C2CF5532D1CE /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -582,7 +582,7 @@
 		};
 		2C19954D2674C4BA00A8E370 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 5D5B7FB8719AFFBA7D180C11 /* Pods-Encrypted Ink.debug.xcconfig */;
+			baseConfigurationReference = A858B0F7D88913EAB1FA50B0 /* Pods-Encrypted Ink.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -609,7 +609,7 @@
 		};
 		2C19954E2674C4BA00A8E370 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 3A73512BAD412202C7FEE47F /* Pods-Encrypted Ink.release.xcconfig */;
+			baseConfigurationReference = 35AD6E3AC630C8A9B4EC16D9 /* Pods-Encrypted Ink.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
