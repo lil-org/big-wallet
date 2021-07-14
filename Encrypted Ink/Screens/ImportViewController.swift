@@ -9,6 +9,7 @@ class ImportViewController: NSViewController {
     @IBOutlet weak var textField: NSTextField! {
         didSet {
             textField.delegate = self
+            textField.placeholderString = "Options:\n\n• Ethereum Private Key\n• Secret Words\n• Keystore"
         }
     }
     @IBOutlet weak var okButton: NSButton!

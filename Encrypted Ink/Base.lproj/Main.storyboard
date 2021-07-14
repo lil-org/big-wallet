@@ -730,13 +730,13 @@
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
                                 </textFieldCell>
                             </textField>
-                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" textCompletion="NO" translatesAutoresizingMaskIntoConstraints="NO" id="YPY-7C-6mv">
-                                <rect key="frame" x="45" y="108" width="160" height="120"/>
+                            <textField focusRingType="none" verticalHuggingPriority="750" textCompletion="NO" translatesAutoresizingMaskIntoConstraints="NO" id="YPY-7C-6mv">
+                                <rect key="frame" x="30" y="90" width="190" height="150"/>
                                 <constraints>
-                                    <constraint firstAttribute="width" constant="160" id="Pi7-Hn-MhX"/>
-                                    <constraint firstAttribute="height" constant="120" id="WsU-g6-Y2a"/>
+                                    <constraint firstAttribute="width" constant="190" id="Pi7-Hn-MhX"/>
+                                    <constraint firstAttribute="height" constant="150" id="WsU-g6-Y2a"/>
                                 </constraints>
-                                <textFieldCell key="cell" controlSize="large" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" state="on" borderStyle="border" focusRingType="none" alignment="left" placeholderString="Ethereum Private Key or Secret Words" drawsBackground="YES" id="qLb-bZ-IWI">
+                                <textFieldCell key="cell" controlSize="large" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" state="on" borderStyle="border" focusRingType="none" alignment="left" placeholderString="Private Key or Secret Words or Keystore" drawsBackground="YES" id="qLb-bZ-IWI">
                                     <font key="font" metaFont="system"/>
                                     <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -789,7 +789,7 @@ DQ
                             <constraint firstItem="feM-MO-Msf" firstAttribute="leading" secondItem="m2S-Jp-Qdl" secondAttribute="leading" constant="16" id="WXg-Wv-Eyh"/>
                             <constraint firstItem="YPY-7C-6mv" firstAttribute="centerX" secondItem="m2S-Jp-Qdl" secondAttribute="centerX" id="cGD-Hm-XEo"/>
                             <constraint firstAttribute="trailing" secondItem="feM-MO-Msf" secondAttribute="trailing" constant="16" id="k5R-iV-R6y"/>
-                            <constraint firstItem="YPY-7C-6mv" firstAttribute="top" secondItem="feM-MO-Msf" secondAttribute="bottom" constant="30" id="wQT-nA-szt"/>
+                            <constraint firstItem="YPY-7C-6mv" firstAttribute="top" secondItem="feM-MO-Msf" secondAttribute="bottom" constant="18" id="wQT-nA-szt"/>
                         </constraints>
                     </view>
                     <connections>
