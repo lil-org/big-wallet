@@ -70,14 +70,18 @@ class AccountsListViewController: NSViewController {
     @IBAction func addButtonTapped(_ sender: NSButton) {
         let menu = sender.menu
         
-        menu?.addItem(NSMenuItem(title: "🌱 Create New", action: #selector(didClickCreateAccount), keyEquivalent: ""))
-        menu?.addItem(NSMenuItem(title: "💼 Import Existing", action: #selector(didClickImportAccount), keyEquivalent: ""))
+        let createItem = NSMenuItem(title: "", action: #selector(didClickCreateAccount), keyEquivalent: "")
+        let importItem = NSMenuItem(title: "", action: #selector(didClickImportAccount), keyEquivalent: "")
+        let font = NSFont.systemFont(ofSize: 21, weight: .bold)
+        createItem.attributedTitle = NSAttributedString(string: "🌱  Create New", attributes: [.font: font])
+        importItem.attributedTitle = NSAttributedString(string: "💼  Import Existing", attributes: [.font: font])
+        menu?.addItem(createItem)
+        menu?.addItem(importItem)
         
         var origin = sender.frame.origin
         origin.x += sender.frame.width
         origin.y += sender.frame.height
-        
-        menu?.popUp(positioning: menu?.items.first, at: origin, in: view)
+        menu?.popUp(positioning: createItem, at: origin, in: view)
     }
     
     @objc private func didClickCreateAccount() {
