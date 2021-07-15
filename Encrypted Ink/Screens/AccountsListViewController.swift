@@ -36,6 +36,8 @@ class AccountsListViewController: NSViewController {
         
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Copy address", action: #selector(didClickCopyAddress(_:)), keyEquivalent: ""))
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Show private key", action: #selector(didClickExportAccount(_:)), keyEquivalent: "")) // TODO: show different texts for secret words export
         menu.addItem(NSMenuItem(title: "Remove account", action: #selector(didClickRemoveAccount(_:)), keyEquivalent: ""))
         tableView.menu = menu
         
@@ -100,9 +102,7 @@ class AccountsListViewController: NSViewController {
     @objc private func didClickCopyAddress(_ sender: AnyObject) {
         let row = tableView.clickedRow
         guard row >= 0 else { return }
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(accounts[row].address, forType: .string)
+        NSPasteboard.general.clearAndSetString(accounts[row].address)
     }
 
     @objc private func didClickRemoveAccount(_ sender: AnyObject) {
@@ -114,13 +114,44 @@ class AccountsListViewController: NSViewController {
         alert.addButton(withTitle: "Remove anyway")
         alert.addButton(withTitle: "Cancel")
         if alert.runModal() == .alertFirstButtonReturn {
-            guard row >= 0 else { return }
             agent.askAuthentication(on: view.window, getBackTo: self, onStart: false, reason: "Remove account") { [weak self] allowed in
                 Window.activateWindow(self?.view.window)
                 if allowed {
                     self?.removeAccountAtIndex(row)
                 }
             }
+        }
+    }
+    
+    @objc private func didClickExportAccount(_ sender: AnyObject) {
+        // TODO: show different texts for secret words export
+        let row = tableView.clickedRow
+        guard row >= 0 else { return }
+        let alert = Alert()
+        alert.messageText = "Private key gives full access to your funds."
+        alert.alertStyle = .critical
+        alert.addButton(withTitle: "I understand the risks")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            agent.askAuthentication(on: view.window, getBackTo: self, onStart: false, reason: "Show private key") { [weak self] allowed in
+                Window.activateWindow(self?.view.window)
+                if allowed {
+                    self?.showPrivateKey(index: row)
+                }
+            }
+        }
+    }
+    
+    private func showPrivateKey(index: Int) {
+        let privateKey = accounts[index].privateKey
+        let alert = Alert()
+        alert.messageText = "Private key"
+        alert.informativeText = privateKey
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Copy")
+        if alert.runModal() != .alertFirstButtonReturn {
+            NSPasteboard.general.clearAndSetString(privateKey)
         }
     }
     
