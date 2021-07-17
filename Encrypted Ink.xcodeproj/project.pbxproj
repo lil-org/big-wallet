@@ -43,6 +43,7 @@
 		2C8A09E82675960D00993638 /* ErrorViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09E72675960D00993638 /* ErrorViewController.swift */; };
 		2C8A09EB2675964700993638 /* ApproveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09EA2675964700993638 /* ApproveViewController.swift */; };
 		2C8A09EE2675965F00993638 /* WaitingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09ED2675965F00993638 /* WaitingViewController.swift */; };
+		2C8E47A326A322E8007B8354 /* RightClickTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8E47A226A322E8007B8354 /* RightClickTableView.swift */; };
 		2C901C472689E6D400D0926A /* ApproveTransactionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C462689E6D400D0926A /* ApproveTransactionViewController.swift */; };
 		2C901C4A2689F01700D0926A /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C492689F01700D0926A /* Strings.swift */; };
 		2C901C4D268A033100D0926A /* GasService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C4C268A033100D0926A /* GasService.swift */; };
@@ -95,6 +96,7 @@
 		2C8A09E72675960D00993638 /* ErrorViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorViewController.swift; sourceTree = "<group>"; };
 		2C8A09EA2675964700993638 /* ApproveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveViewController.swift; sourceTree = "<group>"; };
 		2C8A09ED2675965F00993638 /* WaitingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitingViewController.swift; sourceTree = "<group>"; };
+		2C8E47A226A322E8007B8354 /* RightClickTableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RightClickTableView.swift; sourceTree = "<group>"; };
 		2C901C462689E6D400D0926A /* ApproveTransactionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveTransactionViewController.swift; sourceTree = "<group>"; };
 		2C901C492689F01700D0926A /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		2C901C4C268A033100D0926A /* GasService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GasService.swift; sourceTree = "<group>"; };
@@ -242,6 +244,7 @@
 			isa = PBXGroup;
 			children = (
 				2C8A09E226757FC000993638 /* AccountCellView.swift */,
+				2C8E47A226A322E8007B8354 /* RightClickTableView.swift */,
 				2C78F8272683BDCC00C10670 /* Alert.swift */,
 			);
 			path = Views;
@@ -432,6 +435,7 @@
 				0DB729192674E2DB0011F7A1 /* EIP712TypedData.swift in Sources */,
 				2C8A09E82675960D00993638 /* ErrorViewController.swift in Sources */,
 				2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */,
+				2C8E47A326A322E8007B8354 /* RightClickTableView.swift in Sources */,
 				2C901C472689E6D400D0926A /* ApproveTransactionViewController.swift in Sources */,
 				2C8A09B52675101300993638 /* AccountsService.swift in Sources */,
 				2CDAB3722675B3F0009F8B97 /* PasswordViewController.swift in Sources */,

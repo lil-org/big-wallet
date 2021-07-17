@@ -24,7 +24,7 @@ class AccountsListViewController: NSViewController {
     }
     
     @IBOutlet weak var titleLabel: NSTextField!
-    @IBOutlet weak var tableView: NSTableView! {
+    @IBOutlet weak var tableView: RightClickTableView! {
         didSet {
             tableView.delegate = self
             tableView.dataSource = self
@@ -35,6 +35,7 @@ class AccountsListViewController: NSViewController {
         super.viewDidLoad()
         
         let menu = NSMenu()
+        menu.delegate = self
         menu.addItem(NSMenuItem(title: "Copy address", action: #selector(didClickCopyAddress(_:)), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Show private key", action: #selector(didClickExportAccount(_:)), keyEquivalent: "")) // TODO: show different texts for secret words export
@@ -100,13 +101,13 @@ class AccountsListViewController: NSViewController {
     }
     
     @objc private func didClickCopyAddress(_ sender: AnyObject) {
-        let row = tableView.clickedRow
+        let row = tableView.deselectedRow
         guard row >= 0 else { return }
         NSPasteboard.general.clearAndSetString(accounts[row].address)
     }
 
     @objc private func didClickRemoveAccount(_ sender: AnyObject) {
-        let row = tableView.clickedRow
+        let row = tableView.deselectedRow
         guard row >= 0 else { return }
         let alert = Alert()
         alert.messageText = "Removed accounts can't be recovered."
@@ -125,7 +126,7 @@ class AccountsListViewController: NSViewController {
     
     @objc private func didClickExportAccount(_ sender: AnyObject) {
         // TODO: show different texts for secret words export
-        let row = tableView.clickedRow
+        let row = tableView.deselectedRow
         guard row >= 0 else { return }
         let alert = Alert()
         alert.messageText = "Private key gives full access to your funds."
@@ -181,11 +182,12 @@ extension AccountsListViewController: NSTableViewDelegate {
         if let onSelectedAccount = onSelectedAccount {
             let account = accounts[row]
             onSelectedAccount(account)
-            return true
         } else {
-            showInstructionsAlert()
-            return false
+            Timer.scheduledTimer(withTimeInterval: 0.01, repeats: false) { [weak self] _ in
+                self?.tableView.menu?.popUp(positioning: tableView.menu?.items.first, at: NSEvent.mouseLocation, in: nil)
+            }
         }
+        return true
     }
     
 }
@@ -211,7 +213,12 @@ extension AccountsListViewController: NSTableViewDataSource {
 extension AccountsListViewController: NSMenuDelegate {
     
     func menuDidClose(_ menu: NSMenu) {
-        menu.removeAllItems()
+        if menu === addButton.menu {
+            menu.removeAllItems()
+        } else {
+            tableView.deselectedRow = tableView.selectedRow
+            tableView.deselectAll(nil)
+        }
     }
     
 }
