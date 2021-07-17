@@ -91,7 +91,7 @@ class AccountsListViewController: NSViewController {
         var origin = sender.frame.origin
         origin.x += sender.frame.width
         origin.y += sender.frame.height
-        menu?.popUp(positioning: createItem, at: origin, in: view)
+        menu?.popUp(positioning: nil, at: origin, in: view)
     }
     
     @objc private func didClickCreateAccount() {
@@ -194,7 +194,7 @@ extension AccountsListViewController: NSTableViewDelegate {
             Timer.scheduledTimer(withTimeInterval: 0.01, repeats: false) { [weak self] _ in
                 var point = NSEvent.mouseLocation
                 point.x += 1
-                self?.tableView.menu?.popUp(positioning: tableView.menu?.items.first, at: point, in: nil)
+                self?.tableView.menu?.popUp(positioning: nil, at: point, in: nil)
             }
         }
         return true
