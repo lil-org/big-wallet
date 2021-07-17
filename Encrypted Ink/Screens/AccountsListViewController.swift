@@ -34,13 +34,7 @@ class AccountsListViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        let menu = NSMenu()
-        menu.delegate = self
-        menu.addItem(NSMenuItem(title: "Copy address", action: #selector(didClickCopyAddress(_:)), keyEquivalent: ""))
-        menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Show private key", action: #selector(didClickExportAccount(_:)), keyEquivalent: "")) // TODO: show different texts for secret words export
-        menu.addItem(NSMenuItem(title: "Remove account", action: #selector(didClickRemoveAccount(_:)), keyEquivalent: ""))
-        tableView.menu = menu
+        setupAccountsMenu()
         
         if accounts.isEmpty {
             reloadAccounts()
@@ -48,6 +42,16 @@ class AccountsListViewController: NSViewController {
         
         reloadTitle()
         NotificationCenter.default.addObserver(self, selector: #selector(didBecomeActive), name: NSApplication.didBecomeActiveNotification, object: nil)
+    }
+    
+    private func setupAccountsMenu() {
+        let menu = NSMenu()
+        menu.delegate = self
+        menu.addItem(NSMenuItem(title: "Copy address", action: #selector(didClickCopyAddress(_:)), keyEquivalent: ""))
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Show private key", action: #selector(didClickExportAccount(_:)), keyEquivalent: "")) // TODO: show different texts for secret words export
+        menu.addItem(NSMenuItem(title: "Remove account", action: #selector(didClickRemoveAccount(_:)), keyEquivalent: ""))
+        tableView.menu = menu
     }
     
     private func reloadAccounts() {
