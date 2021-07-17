@@ -184,7 +184,9 @@ extension AccountsListViewController: NSTableViewDelegate {
             onSelectedAccount(account)
         } else {
             Timer.scheduledTimer(withTimeInterval: 0.01, repeats: false) { [weak self] _ in
-                self?.tableView.menu?.popUp(positioning: tableView.menu?.items.first, at: NSEvent.mouseLocation, in: nil)
+                var point = NSEvent.mouseLocation
+                point.x += 1
+                self?.tableView.menu?.popUp(positioning: tableView.menu?.items.first, at: point, in: nil)
             }
         }
         return true
