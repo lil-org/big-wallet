@@ -16,6 +16,7 @@ class PasswordViewController: NSViewController {
         case create, repeatAfterCreate, enter
     }
     
+    private let keychain = Keychain.shared
     private var mode = Mode.create
     private var reason: String?
     private var passwordToRepeat: String?
@@ -65,11 +66,11 @@ class PasswordViewController: NSViewController {
         case .repeatAfterCreate:
             let repeated = passwordTextField.stringValue
             if repeated == passwordToRepeat {
-                Keychain.save(password: repeated)
+                keychain.save(password: repeated)
                 completion?(true)
             }
         case .enter:
-            if Keychain.password == passwordTextField.stringValue {
+            if keychain.password == passwordTextField.stringValue {
                 completion?(true)
             }
         }

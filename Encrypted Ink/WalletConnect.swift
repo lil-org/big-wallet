@@ -7,6 +7,9 @@ class WalletConnect {
  
     private let sessionStorage = SessionStorage.shared
     private let networkMonitor = NetworkMonitor.shared
+    private let ethereum = Ethereum.shared
+    private let accountsService = AccountsService.shared
+    
     static let shared = WalletConnect()
     
     private init() {
@@ -174,11 +177,11 @@ class WalletConnect {
     }
 
     private func sendTransaction(_ transaction: Transaction, address: String, requestId: Int64, interactor: WCInteractor?) {
-        guard let account = AccountsService.getAccountForAddress(address) else {
+        guard let account = accountsService.getAccountForAddress(address) else {
             rejectRequest(id: requestId, interactor: interactor, message: "Something went wrong.")
             return
         }
-        guard let hash = try? Ethereum.send(transaction: transaction, account: account) else {
+        guard let hash = try? ethereum.send(transaction: transaction, account: account) else {
             rejectRequest(id: requestId, interactor: interactor, message: "Failed to send")
             return
         }
@@ -186,18 +189,18 @@ class WalletConnect {
     }
 
     private func sign(id: Int64, message: String?, payload: WCEthereumSignPayload, address: String, interactor: WCInteractor?) {
-        guard let message = message, let account = AccountsService.getAccountForAddress(address) else {
+        guard let message = message, let account = accountsService.getAccountForAddress(address) else {
             rejectRequest(id: id, interactor: interactor, message: "Something went wrong.")
             return
         }
         var signed: String?
         switch payload {
         case .personalSign:
-            signed = try? Ethereum.signPersonal(message: message, account: account)
+            signed = try? ethereum.signPersonal(message: message, account: account)
         case .signTypeData:
-            signed = try? Ethereum.sign(typedData: message, account: account)
+            signed = try? ethereum.sign(typedData: message, account: account)
         case .sign:
-            signed = try? Ethereum.sign(message: message, account: account)
+            signed = try? ethereum.sign(message: message, account: account)
         }
         guard let result = signed else {
             rejectRequest(id: id, interactor: interactor, message: "Something went wrong.")

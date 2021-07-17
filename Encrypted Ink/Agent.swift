@@ -11,7 +11,8 @@ class Agent: NSObject {
     
     private override init() { super.init() }
     private var statusBarItem: NSStatusItem!
-    private var hasPassword = Keychain.password != nil
+    private let accountsService = AccountsService.shared
+    private var hasPassword = Keychain.shared.password != nil
     private var didEnterPasswordOnStart = false
     var statusBarButtonIsBlocked = false
     
@@ -50,7 +51,7 @@ class Agent: NSObject {
         
         let windowController = Window.showNew()
         let completion = onSelectedAccount(session: wcSession)
-        let accounts = AccountsService.getAccounts()
+        let accounts = accountsService.getAccounts()
         if !accounts.isEmpty {
             let accountsList = AccountsListViewController.with(preloadedAccounts: accounts)
             accountsList.onSelectedAccount = completion

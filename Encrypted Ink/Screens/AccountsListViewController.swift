@@ -5,6 +5,7 @@ import Cocoa
 class AccountsListViewController: NSViewController {
 
     private let agent = Agent.shared
+    private let accountsService = AccountsService.shared
     private var accounts = [Account]()
     
     var onSelectedAccount: ((Account) -> Void)?
@@ -58,7 +59,7 @@ class AccountsListViewController: NSViewController {
     }
     
     private func reloadAccounts() {
-        accounts = AccountsService.getAccounts()
+        accounts = accountsService.getAccounts()
     }
     
     deinit {
@@ -95,7 +96,7 @@ class AccountsListViewController: NSViewController {
     }
     
     @objc private func didClickCreateAccount() {
-        AccountsService.createAccount()
+        accountsService.createAccount()
         reloadAccounts()
         tableView.reloadData()
         // TODO: show backup phrase
@@ -177,7 +178,7 @@ class AccountsListViewController: NSViewController {
     }
     
     private func removeAccountAtIndex(_ index: Int) {
-        AccountsService.removeAccount(accounts[index])
+        accountsService.removeAccount(accounts[index])
         accounts.remove(at: index)
         tableView.reloadData()
     }

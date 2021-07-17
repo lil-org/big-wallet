@@ -4,14 +4,18 @@ import Foundation
 
 struct Keychain {
     
-    private static let prefix = "ink.encrypted.macos."
+    private let prefix = "ink.encrypted.macos."
+    
+    private init() {}
+    
+    static let shared = Keychain()
     
     private enum Key: String {
         case accounts = "ethereum.keys"
         case password = "password"
     }
     
-    static var password: String? {
+    var password: String? {
         if let data = get(key: .password), let password = String(data: data, encoding: .utf8) {
             return password
         } else {
@@ -19,12 +23,12 @@ struct Keychain {
         }
     }
     
-    static func save(password: String) {
+    func save(password: String) {
         guard let data = password.data(using: .utf8) else { return }
         save(data: data, key: .password)
     }
     
-    static var accounts: [Account] {
+    var accounts: [Account] {
         if let data = get(key: .accounts), let accounts = try? JSONDecoder().decode([Account].self, from: data) {
             return accounts
         } else {
@@ -32,14 +36,14 @@ struct Keychain {
         }
     }
     
-    static func save(accounts: [Account]) {
+    func save(accounts: [Account]) {
         guard let data = try? JSONEncoder().encode(accounts) else { return }
         save(data: data, key: .accounts)
     }
     
     // MARK: Private
     
-    private static func save(data: Data, key: Key) {
+    private func save(data: Data, key: Key) {
         let query = [kSecClass as String: kSecClassGenericPassword as String,
                      kSecAttrAccount as String: prefix + key.rawValue,
                      kSecValueData as String: data] as [String: Any]
@@ -47,7 +51,7 @@ struct Keychain {
         SecItemAdd(query as CFDictionary, nil)
     }
     
-    private static func get(key: Key) -> Data? {
+    private func get(key: Key) -> Data? {
         guard let returnDataQueryValue = kCFBooleanTrue else { return nil }
         let query = [kSecClass as String: kSecClassGenericPassword,
                      kSecAttrAccount as String: prefix + key.rawValue,

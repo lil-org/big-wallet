@@ -11,14 +11,17 @@ struct Ethereum {
         case failedToSendTransaction
     }
 
-    private static let queue = DispatchQueue(label: "Ethereum", qos: .default)
+    private let queue = DispatchQueue(label: "Ethereum", qos: .default)
+    private init() {}
     
-    private static let network: Network = AlchemyNetwork(
+    static let shared = Ethereum()
+    
+    private let network: Network = AlchemyNetwork(
         chain: "mainnet",
         apiKey: Secrets.alchemy
     )
     
-    static func sign(message: String, account: Account) throws -> String {
+    func sign(message: String, account: Account) throws -> String {
         let ethPrivateKey = EthPrivateKey(hex: account.privateKey)
         
         let signature = SECP256k1Signature(
@@ -36,14 +39,14 @@ struct Ethereum {
         return data.toPrefixedHexString()
     }
     
-    static func signPersonal(message: String, account: Account) throws -> String {
+    func signPersonal(message: String, account: Account) throws -> String {
         let ethPrivateKey = EthPrivateKey(hex: account.privateKey)
         let signed = SignedPersonalMessageBytes(message: message, signerKey: ethPrivateKey)
         let data = try signed.value().toPrefixedHexString()
         return data
     }
     
-    static func sign(typedData: String, account: Account) throws -> String {
+    func sign(typedData: String, account: Account) throws -> String {
         let data = try EIP712TypedData(jsonString: typedData)
         let hash = EIP712Hash(domain: data.domain, typedData: data)
         let privateKey = EthPrivateKey(hex: account.privateKey)
@@ -51,7 +54,7 @@ struct Ethereum {
         return try signer.signatureData(hash: hash).toPrefixedHexString()
     }
     
-    static func send(transaction: Transaction, account: Account) throws -> String {
+    func send(transaction: Transaction, account: Account) throws -> String {
         let bytes = signedTransactionBytes(transaction: transaction, account: account)
         let response = try SendRawTransactionProcedure(network: network, transactionBytes: bytes).call()
         guard let hash = response["result"].string else {
@@ -60,7 +63,7 @@ struct Ethereum {
         return hash
     }
     
-    private static func signedTransactionBytes(transaction: Transaction, account: Account) -> EthContractCallBytes {
+    private func signedTransactionBytes(transaction: Transaction, account: Account) -> EthContractCallBytes {
         let senderKey = EthPrivateKey(hex: account.privateKey)
         let contractAddress = EthAddress(hex: transaction.to)
         let functionCall = BytesFromHexString(hex: transaction.data)
@@ -98,7 +101,7 @@ struct Ethereum {
         return bytes
     }
     
-    static func prepareTransaction(_ transaction: Transaction, completion: @escaping (Transaction) -> Void) {
+    func prepareTransaction(_ transaction: Transaction, completion: @escaping (Transaction) -> Void) {
         var transaction = transaction
         
         if transaction.nonce == nil {
@@ -130,7 +133,7 @@ struct Ethereum {
         
     }
     
-    private static func getGas(from: String, to: String, gasPrice: String, weiAmount: EthNumber, data: String, completion: @escaping (String?) -> Void) {
+    private func getGas(from: String, to: String, gasPrice: String, weiAmount: EthNumber, data: String, completion: @escaping (String?) -> Void) {
         queue.async {
             let gas = try? EthGasEstimate(
                 network: network,
@@ -154,7 +157,7 @@ struct Ethereum {
         }
     }
     
-    private static func getGasPrice(completion: @escaping (String?) -> Void) {
+    private func getGasPrice(completion: @escaping (String?) -> Void) {
         queue.async {
             let gasPrice = try? EthGasPrice(network: network).value().toHexString()
             DispatchQueue.main.async {
@@ -163,7 +166,7 @@ struct Ethereum {
         }
     }
     
-    private static func getNonce(from: String, completion: @escaping (String?) -> Void) {
+    private func getNonce(from: String, completion: @escaping (String?) -> Void) {
         queue.async {
             let nonce = try? EthTransactions(network: network, address: EthAddress(hex: from), blockChainState: PendingBlockChainState()).count().value().toHexString()
             DispatchQueue.main.async {

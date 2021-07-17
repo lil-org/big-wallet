@@ -22,6 +22,7 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     private let gasService = GasService.shared
+    private let ethereum = Ethereum.shared
     private let priceService = PriceService.shared
     private var currentGasInfo: GasService.Info?
     private var transaction: Transaction!
@@ -57,7 +58,7 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     private func prepareTransaction() {
-        Ethereum.prepareTransaction(transaction) { [weak self] updated in
+        ethereum.prepareTransaction(transaction) { [weak self] updated in
             self?.transaction = updated
             self?.updateInterface()
         }

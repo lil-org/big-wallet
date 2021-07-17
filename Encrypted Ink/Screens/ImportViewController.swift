@@ -4,6 +4,7 @@ import Cocoa
 
 class ImportViewController: NSViewController {
     
+    private let accountsService = AccountsService.shared
     var onSelectedAccount: ((Account) -> Void)?
     
     @IBOutlet weak var textField: NSTextField! {
@@ -19,8 +20,8 @@ class ImportViewController: NSViewController {
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
-        let account = AccountsService.addAccount(input: textField.stringValue)
-        if let account = account, AccountsService.getAccounts().count == 1, let onSelectedAccount = onSelectedAccount {
+        let account = accountsService.addAccount(input: textField.stringValue)
+        if let account = account, accountsService.getAccounts().count == 1, let onSelectedAccount = onSelectedAccount {
             onSelectedAccount(account)
         } else {
             showAccountsList()
@@ -42,7 +43,7 @@ class ImportViewController: NSViewController {
 extension ImportViewController: NSTextFieldDelegate {
     
     func controlTextDidChange(_ obj: Notification) {
-        okButton.isEnabled = AccountsService.validateAccountInput(textField.stringValue)
+        okButton.isEnabled = accountsService.validateAccountInput(textField.stringValue)
     }
     
 }

@@ -5,7 +5,13 @@ import WalletCore
 
 struct AccountsService {
     
-    static func validateAccountInput(_ input: String) -> Bool {
+    private init() {}
+    private let keychain = Keychain.shared
+    
+    static let shared = AccountsService()
+    
+    
+    func validateAccountInput(_ input: String) -> Bool {
         if Mnemonic.isValid(mnemonic: input) {
             return true
         } else if let data = Data(hexString: input) {
@@ -15,14 +21,14 @@ struct AccountsService {
         }
     }
     
-    static func createAccount() {
-        guard let password = Keychain.password?.data(using: .utf8) else { return }
+    func createAccount() {
+        guard let password = keychain.password?.data(using: .utf8) else { return }
         let key = StoredKey(name: "", password: password)
         guard let privateKey = key.wallet(password: password)?.getKeyForCoin(coin: .ethereum) else { return }
         _ = saveAccount(privateKey: privateKey)
     }
     
-    static func addAccount(input: String) -> Account? {
+    func addAccount(input: String) -> Account? {
         let key: PrivateKey
         if Mnemonic.isValid(mnemonic: input) {
             key = HDWallet(mnemonic: input, passphrase: "").getKeyForCoin(coin: .ethereum)
@@ -42,28 +48,28 @@ struct AccountsService {
         return account
     }
     
-    private static func saveAccount(privateKey: PrivateKey) -> Account? {
+    private func saveAccount(privateKey: PrivateKey) -> Account? {
         let address = CoinType.ethereum.deriveAddress(privateKey: privateKey).lowercased()
         // TODO: use checksum address
         let account = Account(privateKey: privateKey.data.hexString, address: address)
         var accounts = getAccounts()
         guard !accounts.contains(where: { $0.address == address }) else { return nil }
         accounts.append(account)
-        Keychain.save(accounts: accounts)
+        keychain.save(accounts: accounts)
         return account
     }
     
-    static func removeAccount(_ account: Account) {
+    func removeAccount(_ account: Account) {
         var accounts = getAccounts()
         accounts.removeAll(where: {$0.address == account.address })
-        Keychain.save(accounts: accounts)
+        keychain.save(accounts: accounts)
     }
     
-    static func getAccounts() -> [Account] {
-        return Keychain.accounts
+    func getAccounts() -> [Account] {
+        return keychain.accounts
     }
     
-    static func getAccountForAddress(_ address: String) -> Account? {
+    func getAccountForAddress(_ address: String) -> Account? {
         let allAccounts = getAccounts()
         return allAccounts.first(where: { $0.address == address.lowercased() })
     }
