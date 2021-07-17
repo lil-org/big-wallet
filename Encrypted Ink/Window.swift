@@ -4,6 +4,8 @@ import Cocoa
 
 struct Window {
     
+    private static let browsersBundleIds = Set(["com.apple.Safari", "com.google.Chrome"]) // TODO: support more browsers
+    
     static func showNew() -> NSWindowController {
         closeAll()
         let windowController = new
@@ -34,10 +36,22 @@ struct Window {
     }
     
     static func activateBrowser() {
-        // TODO: support more browsers
-        for bundleId in ["com.apple.Safari", "com.google.Chrome"] {
-            if let browser = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId).first {
-                browser.activate(options: .activateIgnoringOtherApps)
+        let browsers = NSWorkspace.shared.runningApplications.filter { app in
+            if let bundleId = app.bundleIdentifier {
+                return browsersBundleIds.contains(bundleId)
+            } else {
+                return false
+            }
+        }
+        
+        guard !browsers.isEmpty else { return }
+        
+        let browsersPids = Set(browsers.map { $0.processIdentifier })
+        let options = CGWindowListOption(arrayLiteral: [.excludeDesktopElements, .optionOnScreenOnly])
+        guard let windows = CGWindowListCopyWindowInfo(options, CGWindowID(0)) as? [[String: AnyObject]] else { return }
+        for window in windows {
+            if let pid = window[kCGWindowOwnerPID as String] as? pid_t, browsersPids.contains(pid) {
+                browsers.first(where: { $0.processIdentifier == pid })?.activate(options: .activateIgnoringOtherApps)
                 return
             }
         }
