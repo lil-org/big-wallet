@@ -48,9 +48,12 @@ class AccountsListViewController: NSViewController {
         let menu = NSMenu()
         menu.delegate = self
         menu.addItem(NSMenuItem(title: "Copy address", action: #selector(didClickCopyAddress(_:)), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "View on Zerion", action: #selector(didClickViewOnZerion(_:)), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Show private key", action: #selector(didClickExportAccount(_:)), keyEquivalent: "")) // TODO: show different texts for secret words export
         menu.addItem(NSMenuItem(title: "Remove account", action: #selector(didClickRemoveAccount(_:)), keyEquivalent: ""))
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "How to WalletConnect?", action: #selector(showInstructionsAlert), keyEquivalent: ""))
         tableView.menu = menu
     }
     
@@ -102,6 +105,15 @@ class AccountsListViewController: NSViewController {
         let importViewController = instantiate(ImportViewController.self)
         importViewController.onSelectedAccount = onSelectedAccount
         view.window?.contentViewController = importViewController
+    }
+    
+    @objc private func didClickViewOnZerion(_ sender: AnyObject) {
+        let row = tableView.deselectedRow
+        guard row >= 0 else { return }
+        let address = accounts[row].address
+        if let url = URL(string: "https://app.zerion.io/\(address)/overview") {
+            NSWorkspace.shared.open(url)
+        }
     }
     
     @objc private func didClickCopyAddress(_ sender: AnyObject) {
@@ -160,16 +172,8 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-    private func showInstructionsAlert() {
-        let alert = Alert()
-        alert.messageText = "How to start?"
-        alert.informativeText = "1. Open your favourite dapp.\n\n2. Press “Copy to clipboard”\nunder WalletConnect QR code.\n\n3. Launch Encrypted Ink."
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Open Zerion")
-        if alert.runModal() != .alertFirstButtonReturn, let url = URL(string: "https://app.zerion.io") {
-            NSWorkspace.shared.open(url)
-        }
+    @objc private func showInstructionsAlert() {
+        Alert.showWalletConnectInstructions()
     }
     
     private func removeAccountAtIndex(_ index: Int) {

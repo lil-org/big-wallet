@@ -113,18 +113,22 @@ class Agent: NSObject {
         let menu = NSMenu(title: "Encrypted Ink")
         
         let showItem = NSMenuItem(title: "Show Encrypted Ink", action: #selector(didSelectShowMenuItem), keyEquivalent: "")
+        let howToItem = NSMenuItem(title: "How to WalletConnect?", action: #selector(showInstructionsAlert), keyEquivalent: "")
         let mailItem = NSMenuItem(title: "Drop us a line…", action: #selector(didSelectMailMenuItem), keyEquivalent: "")
         let githubItem = NSMenuItem(title: "View on GitHub…", action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
         let quitItem = NSMenuItem(title: "Quit", action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
         showItem.attributedTitle = NSAttributedString(string: "👀 Show Encrypted Ink", attributes: [.font: NSFont.systemFont(ofSize: 21, weight: .bold)])
         
         showItem.target = self
+        howToItem.target = self
         githubItem.target = self
         mailItem.target = self
         quitItem.target = self
         
         menu.delegate = self
         menu.addItem(showItem)
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(howToItem)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(githubItem)
         menu.addItem(mailItem)
@@ -153,6 +157,11 @@ class Agent: NSObject {
         if let url = URL(string: "https://github.com/zeriontech/Encrypted-Ink") {
             NSWorkspace.shared.open(url)
         }
+    }
+    
+    @objc private func showInstructionsAlert() {
+        Window.activateWindow(nil)
+        Alert.showWalletConnectInstructions()
     }
     
     @objc private func didSelectMailMenuItem() {
