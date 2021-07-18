@@ -188,6 +188,7 @@ class AccountsListViewController: NSViewController {
 extension AccountsListViewController: NSTableViewDelegate {
     
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
+        guard tableView.selectedRow < 0 else { return false }
         if let onSelectedAccount = onSelectedAccount {
             let account = accounts[row]
             onSelectedAccount(account)
