@@ -10,7 +10,6 @@ struct AccountsService {
     
     static let shared = AccountsService()
     
-    
     func validateAccountInput(_ input: String) -> Bool {
         if Mnemonic.isValid(mnemonic: input) {
             return true

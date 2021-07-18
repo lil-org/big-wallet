@@ -4,7 +4,17 @@ import Cocoa
 
 struct Window {
     
-    private static let browsersBundleIds = Set(["com.apple.Safari", "com.google.Chrome"]) // TODO: support more browsers
+    private static let browsersBundleIds = Set([
+        "com.apple.Safari",
+        "com.google.Chrome",
+        "org.torproject.torbrowser",
+        "com.operasoftware.Opera",
+        "com.microsoft.edgemac",
+        "com.brave.Browser",
+        "org.mozilla.firefox",
+        "com.vivaldi.Vivaldi",
+        "ru.yandex.desktop.yandex-browser"
+    ])
     
     static func showNew() -> NSWindowController {
         closeAll()
