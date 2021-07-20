@@ -10,12 +10,6 @@ class AccountsListViewController: NSViewController {
     
     var onSelectedAccount: ((Account) -> Void)?
     
-    static func with(preloadedAccounts: [Account]) -> AccountsListViewController {
-        let new = instantiate(AccountsListViewController.self)
-        new.accounts = preloadedAccounts
-        return new
-    }
-    
     @IBOutlet weak var addButton: NSButton! {
         didSet {
             let menu = NSMenu()

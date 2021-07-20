@@ -51,16 +51,9 @@ class Agent: NSObject {
         
         let windowController = Window.showNew()
         let completion = onSelectedAccount(session: wcSession)
-        let accounts = accountsService.getAccounts()
-        if !accounts.isEmpty {
-            let accountsList = AccountsListViewController.with(preloadedAccounts: accounts)
-            accountsList.onSelectedAccount = completion
-            windowController.contentViewController = accountsList
-        } else {
-            let importViewController = instantiate(ImportViewController.self)
-            importViewController.onSelectedAccount = completion
-            windowController.contentViewController = importViewController
-        }
+        let accountsList = instantiate(AccountsListViewController.self)
+        accountsList.onSelectedAccount = completion
+        windowController.contentViewController = accountsList
     }
     
     func showApprove(transaction: Transaction, peerMeta: WCPeerMeta?, completion: @escaping (Transaction?) -> Void) {
