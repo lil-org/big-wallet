@@ -14,11 +14,11 @@ PODS:
   - Starscream (3.1.1)
   - SwiftProtobuf (1.17.0)
   - SwiftyJSON (4.3.0)
-  - TrustWalletCoreMacOS (2.6.12.4):
-    - TrustWalletCoreMacOS/Core (= 2.6.12.4)
-  - TrustWalletCoreMacOS/Core (2.6.12.4):
-    - TrustWalletCoreMacOS/Types
-  - TrustWalletCoreMacOS/Types (2.6.12.4):
+  - TrustWalletCore (2.6.16):
+    - TrustWalletCore/Core (= 2.6.16)
+  - TrustWalletCore/Core (2.6.16):
+    - TrustWalletCore/Types
+  - TrustWalletCore/Types (2.6.16):
     - SwiftProtobuf
   - WalletConnect (0.1.0):
     - CryptoSwift
@@ -33,7 +33,7 @@ PODS:
 DEPENDENCIES:
   - BlockiesSwift
   - Kingfisher
-  - TrustWalletCoreMacOS (= 2.6.12.4)
+  - TrustWalletCore
   - WalletConnect (from `https://github.com/grachyov/wallet-connect-swift`, branch `master`)
   - Web3Swift.io (from `https://github.com/zeriontech/Web3Swift.git`, branch `develop`)
 
@@ -48,7 +48,7 @@ SPEC REPOS:
     - Starscream
     - SwiftProtobuf
     - SwiftyJSON
-    - TrustWalletCoreMacOS
+    - TrustWalletCore
 
 EXTERNAL SOURCES:
   WalletConnect:
@@ -76,10 +76,10 @@ SPEC CHECKSUMS:
   Starscream: 4bb2f9942274833f7b4d296a55504dcfc7edb7b0
   SwiftProtobuf: 9c85136c6ba74b0a1b84279dbf0f6db8efb714e0
   SwiftyJSON: 6faa0040f8b59dead0ee07436cbf76b73c08fd08
-  TrustWalletCoreMacOS: 3d2c29afa9f280bb3c2a47adb7fcdf55eefb23ae
+  TrustWalletCore: 9d3842328ccb07c05abaf7e1cb2c19bdc3d52331
   WalletConnect: 1df75d4355b1cacfc27d7ef2416fae43862d0eb4
   Web3Swift.io: 18fd06aed9d56df9c704f9c6f87b06675bb05b53
 
-PODFILE CHECKSUM: df8a2f6221781ce7a8000541726bd0cabb709af1
+PODFILE CHECKSUM: 435285424c0821db925918dfd84843c031999350
 
 COCOAPODS: 1.10.1
