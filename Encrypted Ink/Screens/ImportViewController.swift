@@ -20,11 +20,10 @@ class ImportViewController: NSViewController {
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
-        let account = accountsService.addAccount(input: textField.stringValue)
-        if let account = account, accountsService.getAccounts().count == 1, let onSelectedAccount = onSelectedAccount {
-            onSelectedAccount(account)
-        } else {
+        if accountsService.addAccount(input: textField.stringValue) != nil {
             showAccountsList()
+        } else {
+            // TODO: show error message
         }
     }
  
