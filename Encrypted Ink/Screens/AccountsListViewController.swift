@@ -61,7 +61,7 @@ class AccountsListViewController: NSViewController {
     }
     
     private func reloadTitle() {
-        titleLabel.stringValue = onSelectedAccount != nil ? "Select\nAccount" : "Accounts"
+        titleLabel.stringValue = onSelectedAccount != nil && !accounts.isEmpty ? "Select\nAccount" : "Accounts"
     }
     
     @objc private func didBecomeActive() {
