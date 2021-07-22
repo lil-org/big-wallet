@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.Cocoa.Storyboard.XIB" version="3.0" toolsVersion="17701" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
+<document type="com.apple.InterfaceBuilder3.Cocoa.Storyboard.XIB" version="3.0" toolsVersion="18122" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
     <dependencies>
         <deployment identifier="macosx"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="17701"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="18122"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <scenes>
@@ -724,7 +724,7 @@
                         <subviews>
                             <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="feM-MO-Msf">
                                 <rect key="frame" x="14" y="258" width="222" height="68"/>
-                                <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Import Account" id="bI7-hT-bS8">
+                                <textFieldCell key="cell" controlSize="large" alignment="center" title="Import Account" id="bI7-hT-bS8">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
                                     <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -811,7 +811,7 @@ DQ
                         <subviews>
                             <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" textCompletion="NO" translatesAutoresizingMaskIntoConstraints="NO" id="dkh-kG-EFj">
                                 <rect key="frame" x="53" y="292" width="144" height="34"/>
-                                <textFieldCell key="cell" controlSize="large" selectable="YES" enabled="NO" allowsUndo="NO" alignment="center" title="Accounts" id="9No-vQ-vBK">
+                                <textFieldCell key="cell" controlSize="large" enabled="NO" allowsUndo="NO" alignment="center" title="Accounts" id="9No-vQ-vBK">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
                                     <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -939,7 +939,7 @@ DQ
                         <subviews>
                             <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="GMd-25-PjD">
                                 <rect key="frame" x="14" y="292" width="222" height="34"/>
-                                <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Waiting" id="Ab0-0l-hhQ">
+                                <textFieldCell key="cell" controlSize="large" alignment="center" title="Waiting" id="Ab0-0l-hhQ">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
                                     <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -999,7 +999,7 @@ DQ
                         <subviews>
                             <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="PdV-Nr-oOY">
                                 <rect key="frame" x="14" y="292" width="222" height="34"/>
-                                <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Approve" id="wVk-Ux-kpU">
+                                <textFieldCell key="cell" controlSize="large" alignment="center" title="Approve" id="wVk-Ux-kpU">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
                                     <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -1148,7 +1148,7 @@ DQ
                         <subviews>
                             <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="T7q-cN-jjc">
                                 <rect key="frame" x="14" y="292" width="222" height="34"/>
-                                <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Error" id="t7e-cO-oeN">
+                                <textFieldCell key="cell" controlSize="large" alignment="center" title="Error" id="t7e-cO-oeN">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
                                     <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -1217,7 +1217,7 @@ DQ
                         <subviews>
                             <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Gdw-Q4-bo0">
                                 <rect key="frame" x="14" y="258" width="222" height="68"/>
-                                <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Create Password" id="8sq-L4-gvS">
+                                <textFieldCell key="cell" controlSize="large" alignment="center" title="Create Password" id="8sq-L4-gvS">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
                                     <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -1320,7 +1320,7 @@ DQ
                         <subviews>
                             <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="vxh-AZ-Ll4">
                                 <rect key="frame" x="14" y="292" width="222" height="34"/>
-                                <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Encrypted Ink" id="dja-pE-CfV">
+                                <textFieldCell key="cell" controlSize="large" alignment="center" title="Encrypted Ink" id="dja-pE-CfV">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
                                     <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -1352,7 +1352,7 @@ DQ
                             </stackView>
                             <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="BvK-xX-gxC">
                                 <rect key="frame" x="26" y="162" width="198" height="50"/>
-                                <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Sign crypto transactions." id="4kF-cy-CbK">
+                                <textFieldCell key="cell" controlSize="large" alignment="center" title="Sign crypto transactions." id="4kF-cy-CbK">
                                     <font key="font" metaFont="systemBold" size="21"/>
                                     <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -1389,7 +1389,7 @@ DQ
                         <subviews>
                             <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="g2G-lh-X1F">
                                 <rect key="frame" x="14" y="310" width="222" height="34"/>
-                                <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Approve" id="t64-oP-3Nm">
+                                <textFieldCell key="cell" controlSize="large" alignment="center" title="Approve" id="t64-oP-3Nm">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
                                     <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
