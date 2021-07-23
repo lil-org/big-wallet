@@ -13,9 +13,13 @@ class Alert: NSAlert {
     }
     
     static func showWalletConnectInstructions() {
+        Alert.showWithMessage("1 — Open dapp website\n\n2 — Click “Copy to clipboard”\nunder WalletConnect QR code\n\n3 — Open Encrypted Ink", style: .informational)
+    }
+    
+    static func showWithMessage(_ message: String, style: NSAlert.Style) {
         let alert = Alert()
-        alert.messageText = "1 — Open dapp website\n\n2 — Click “Copy to clipboard”\nunder WalletConnect QR code\n\n3 — Open Encrypted Ink"
-        alert.alertStyle = .informational
+        alert.messageText = message
+        alert.alertStyle = style
         alert.addButton(withTitle: "OK")
         _ = alert.runModal()
     }

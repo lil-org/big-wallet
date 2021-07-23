@@ -10,13 +10,17 @@ struct AccountsService {
     
     static let shared = AccountsService()
     
-    func validateAccountInput(_ input: String) -> Bool {
+    enum InputValidationResult {
+        case valid, invalid, requiresPassword
+    }
+    
+    func validateAccountInput(_ input: String) -> InputValidationResult {
         if Mnemonic.isValid(mnemonic: input) {
-            return true
+            return .valid
         } else if let data = Data(hexString: input) {
-            return PrivateKey.isValid(data: data, curve: CoinType.ethereum.curve)
+            return PrivateKey.isValid(data: data, curve: CoinType.ethereum.curve) ? .valid : .invalid
         } else {
-            return input.maybeJSON
+            return input.maybeJSON ? .requiresPassword : .invalid
         }
     }
     
@@ -27,16 +31,17 @@ struct AccountsService {
         _ = saveAccount(privateKey: privateKey)
     }
     
-    func addAccount(input: String) -> Account? {
+    func addAccount(input: String, password: String?) -> Account? {
         let key: PrivateKey
         if Mnemonic.isValid(mnemonic: input) {
             key = HDWallet(mnemonic: input, passphrase: "").getKeyForCoin(coin: .ethereum)
         } else if let data = Data(hexString: input), let privateKey = PrivateKey(data: data) {
             key = privateKey
         } else if input.maybeJSON,
+                  let password = password,
                   let json = input.data(using: .utf8),
                   let jsonKey = StoredKey.importJSON(json: json),
-                  let data = jsonKey.decryptPrivateKey(password: Data("1234".utf8)), // TODO: get keystore password from user
+                  let data = jsonKey.decryptPrivateKey(password: Data(password.utf8)),
                   let privateKey = PrivateKey(data: data) {
             key = privateKey
         } else {

@@ -6,6 +6,7 @@ class ImportViewController: NSViewController {
     
     private let accountsService = AccountsService.shared
     var onSelectedAccount: ((Account) -> Void)?
+    private var inputValidationResult = AccountsService.InputValidationResult.invalid
     
     @IBOutlet weak var textField: NSTextField! {
         didSet {
@@ -20,13 +21,43 @@ class ImportViewController: NSViewController {
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
-        if accountsService.addAccount(input: textField.stringValue) != nil {
-            showAccountsList()
+        if inputValidationResult == .requiresPassword {
+            showPasswordAlert()
         } else {
-            // TODO: show error message
+            importWith(input: textField.stringValue, password: nil)
         }
     }
  
+    private func showPasswordAlert() {
+        let alert = Alert()
+        alert.messageText = "Enter keystore password."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Cancel")
+        
+        let passwordTextField = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 160, height: 20))
+        passwordTextField.bezelStyle = .roundedBezel
+        alert.accessoryView = passwordTextField
+        passwordTextField.isAutomaticTextCompletionEnabled = false
+        passwordTextField.alignment = .center
+        
+        DispatchQueue.main.async {
+            passwordTextField.becomeFirstResponder()
+        }
+        
+        if alert.runModal() == .alertFirstButtonReturn {
+            importWith(input: textField.stringValue, password: passwordTextField.stringValue)
+        }
+    }
+    
+    private func importWith(input: String, password: String?) {
+        if accountsService.addAccount(input: input, password: password) != nil {
+            showAccountsList()
+        } else {
+            Alert.showWithMessage("Failed to import account", style: .critical)
+        }
+    }
+    
     private func showAccountsList() {
         let accountsListViewController = instantiate(AccountsListViewController.self)
         accountsListViewController.onSelectedAccount = onSelectedAccount
@@ -42,7 +73,8 @@ class ImportViewController: NSViewController {
 extension ImportViewController: NSTextFieldDelegate {
     
     func controlTextDidChange(_ obj: Notification) {
-        okButton.isEnabled = accountsService.validateAccountInput(textField.stringValue)
+        inputValidationResult = accountsService.validateAccountInput(textField.stringValue)
+        okButton.isEnabled = inputValidationResult != .invalid
     }
     
 }
