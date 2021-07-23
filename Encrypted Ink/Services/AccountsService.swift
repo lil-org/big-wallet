@@ -78,7 +78,7 @@ struct AccountsService {
 private extension String {
     
     var maybeJSON: Bool {
-        return hasPrefix("{") && hasSuffix("}")
+        return hasPrefix("{") && hasSuffix("}") && count > 3
     }
     
 }
