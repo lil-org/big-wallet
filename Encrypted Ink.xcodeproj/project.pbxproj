@@ -52,7 +52,7 @@
 		2CC8946F269A2E8C00879245 /* SessionStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8946E269A2E8C00879245 /* SessionStorage.swift */; };
 		2CC89471269A334A00879245 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC89470269A334A00879245 /* UserDefaults.swift */; };
 		2CD0B3F526A0DAA900488D92 /* NSPasteboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0B3F426A0DAA900488D92 /* NSPasteboard.swift */; };
-		2CD0B3F726AC619900488D92 /* NewAccountOptionCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0B3F626AC619900488D92 /* NewAccountOptionCellView.swift */; };
+		2CD0B3F726AC619900488D92 /* AddAccountOptionCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0B3F626AC619900488D92 /* AddAccountOptionCellView.swift */; };
 		2CDAB3722675B3F0009F8B97 /* PasswordViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */; };
 		2CE3D012267F73C00032A62E /* Transaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D011267F73C00032A62E /* Transaction.swift */; };
 		2CE3D015267F73E80032A62E /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D014267F73E80032A62E /* Account.swift */; };
@@ -106,7 +106,7 @@
 		2CC8946E269A2E8C00879245 /* SessionStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStorage.swift; sourceTree = "<group>"; };
 		2CC89470269A334A00879245 /* UserDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaults.swift; sourceTree = "<group>"; };
 		2CD0B3F426A0DAA900488D92 /* NSPasteboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSPasteboard.swift; sourceTree = "<group>"; };
-		2CD0B3F626AC619900488D92 /* NewAccountOptionCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewAccountOptionCellView.swift; sourceTree = "<group>"; };
+		2CD0B3F626AC619900488D92 /* AddAccountOptionCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddAccountOptionCellView.swift; sourceTree = "<group>"; };
 		2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordViewController.swift; sourceTree = "<group>"; };
 		2CE3D011267F73C00032A62E /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
 		2CE3D014267F73E80032A62E /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
@@ -246,7 +246,7 @@
 			isa = PBXGroup;
 			children = (
 				2C8A09E226757FC000993638 /* AccountCellView.swift */,
-				2CD0B3F626AC619900488D92 /* NewAccountOptionCellView.swift */,
+				2CD0B3F626AC619900488D92 /* AddAccountOptionCellView.swift */,
 				2C8E47A226A322E8007B8354 /* RightClickTableView.swift */,
 				2C78F8272683BDCC00C10670 /* Alert.swift */,
 			);
@@ -436,7 +436,7 @@
 				2C8A09EE2675965F00993638 /* WaitingViewController.swift in Sources */,
 				2C797E7E267BB88800F2CE2D /* WelcomeViewController.swift in Sources */,
 				0DB729192674E2DB0011F7A1 /* EIP712TypedData.swift in Sources */,
-				2CD0B3F726AC619900488D92 /* NewAccountOptionCellView.swift in Sources */,
+				2CD0B3F726AC619900488D92 /* AddAccountOptionCellView.swift in Sources */,
 				2C8A09E82675960D00993638 /* ErrorViewController.swift in Sources */,
 				2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */,
 				2C8E47A326A322E8007B8354 /* RightClickTableView.swift in Sources */,

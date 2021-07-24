@@ -878,7 +878,7 @@ DQ
                                                                 <outlet property="addressTextField" destination="sef-hl-iPV" id="aGb-wC-t98"/>
                                                             </connections>
                                                         </tableCellView>
-                                                        <tableCellView identifier="NewAccountOptionCellView" id="1KM-PS-nEo" customClass="NewAccountOptionCellView" customModule="Encrypted_Ink" customModuleProvider="target">
+                                                        <tableCellView identifier="AddAccountOptionCellView" id="1KM-PS-nEo" customClass="AddAccountOptionCellView" customModule="Encrypted_Ink" customModuleProvider="target">
                                                             <rect key="frame" x="10" y="40" width="205" height="40"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>

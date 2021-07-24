@@ -2,7 +2,7 @@
 
 import Cocoa
 
-class NewAccountOptionCellView: NSTableRowView {
+class AddAccountOptionCellView: NSTableRowView {
 
     @IBOutlet weak var titleLabel: NSTextField!
     
