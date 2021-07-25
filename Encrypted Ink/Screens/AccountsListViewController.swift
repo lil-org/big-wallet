@@ -30,11 +30,7 @@ class AccountsListViewController: NSViewController {
         super.viewDidLoad()
         
         setupAccountsMenu()
-        
-        if accounts.isEmpty {
-            reloadAccounts()
-        }
-        
+        reloadAccounts()
         reloadTitle()
         NotificationCenter.default.addObserver(self, selector: #selector(didBecomeActive), name: NSApplication.didBecomeActiveNotification, object: nil)
     }
