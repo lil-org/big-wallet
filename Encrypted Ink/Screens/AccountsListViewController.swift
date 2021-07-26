@@ -10,6 +10,19 @@ class AccountsListViewController: NSViewController {
     
     var onSelectedAccount: ((Account) -> Void)?
     
+    enum AddAccountOption {
+        case createNew, importExisting
+        
+        var title: String {
+            switch self {
+            case .createNew:
+                return "🌱  Create New"
+            case .importExisting:
+                return "💼  Import Existing"
+            }
+        }
+    }
+    
     @IBOutlet weak var addButton: NSButton! {
         didSet {
             let menu = NSMenu()
@@ -74,8 +87,8 @@ class AccountsListViewController: NSViewController {
         let createItem = NSMenuItem(title: "", action: #selector(didClickCreateAccount), keyEquivalent: "")
         let importItem = NSMenuItem(title: "", action: #selector(didClickImportAccount), keyEquivalent: "")
         let font = NSFont.systemFont(ofSize: 21, weight: .bold)
-        createItem.attributedTitle = NSAttributedString(string: "🌱  Create New", attributes: [.font: font])
-        importItem.attributedTitle = NSAttributedString(string: "💼  Import Existing", attributes: [.font: font])
+        createItem.attributedTitle = NSAttributedString(string: AddAccountOption.createNew.title, attributes: [.font: font])
+        importItem.attributedTitle = NSAttributedString(string: AddAccountOption.importExisting.title, attributes: [.font: font])
         menu?.addItem(createItem)
         menu?.addItem(importItem)
         
