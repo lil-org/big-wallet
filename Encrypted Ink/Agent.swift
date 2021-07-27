@@ -111,7 +111,7 @@ class Agent: NSObject {
         let mailItem = NSMenuItem(title: "Drop us a line…", action: #selector(didSelectMailMenuItem), keyEquivalent: "")
         let githubItem = NSMenuItem(title: "View on GitHub…", action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
         let quitItem = NSMenuItem(title: "Quit", action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
-        showItem.attributedTitle = NSAttributedString(string: "👀 Show Encrypted Ink", attributes: [.font: NSFont.systemFont(ofSize: 21, weight: .bold)])
+        showItem.attributedTitle = NSAttributedString(string: "👀 Show Encrypted Ink", attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
         
         showItem.target = self
         howToItem.target = self
