@@ -7,8 +7,14 @@ class AccountsListViewController: NSViewController {
     private let agent = Agent.shared
     private let accountsService = AccountsService.shared
     private var accounts = [Account]()
+    private var cellModels = [CellModel]()
     
     var onSelectedAccount: ((Account) -> Void)?
+    
+    enum CellModel {
+        case account(Account)
+        case addAccountOption(AddAccountOption)
+    }
     
     enum AddAccountOption {
         case createNew, importExisting
