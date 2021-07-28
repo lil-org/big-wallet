@@ -883,8 +883,8 @@ DQ
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
                                                                 <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="BpB-tc-JdP">
-                                                                    <rect key="frame" x="14" y="8" width="177" height="25"/>
-                                                                    <textFieldCell key="cell" lineBreakMode="clipping" alignment="center" title="Label" id="FAR-3U-VR0">
+                                                                    <rect key="frame" x="18" y="8" width="181" height="25"/>
+                                                                    <textFieldCell key="cell" lineBreakMode="clipping" alignment="left" title="Label" id="FAR-3U-VR0">
                                                                         <font key="font" metaFont="systemBold" size="21"/>
                                                                         <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
                                                                         <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -893,8 +893,8 @@ DQ
                                                             </subviews>
                                                             <constraints>
                                                                 <constraint firstItem="BpB-tc-JdP" firstAttribute="centerY" secondItem="1KM-PS-nEo" secondAttribute="centerY" id="TPK-nv-hua"/>
-                                                                <constraint firstItem="BpB-tc-JdP" firstAttribute="leading" secondItem="1KM-PS-nEo" secondAttribute="leading" constant="16" id="UGV-sR-Wou"/>
-                                                                <constraint firstAttribute="trailing" secondItem="BpB-tc-JdP" secondAttribute="trailing" constant="16" id="YjX-hl-ACx"/>
+                                                                <constraint firstItem="BpB-tc-JdP" firstAttribute="leading" secondItem="1KM-PS-nEo" secondAttribute="leading" constant="20" id="UGV-sR-Wou"/>
+                                                                <constraint firstAttribute="trailing" secondItem="BpB-tc-JdP" secondAttribute="trailing" constant="8" id="YjX-hl-ACx"/>
                                                             </constraints>
                                                             <connections>
                                                                 <outlet property="titleLabel" destination="BpB-tc-JdP" id="E5r-c3-Wju"/>

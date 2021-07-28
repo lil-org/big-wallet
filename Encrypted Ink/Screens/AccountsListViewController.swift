@@ -51,6 +51,7 @@ class AccountsListViewController: NSViewController {
         setupAccountsMenu()
         reloadAccounts()
         reloadTitle()
+        updateCellModels()
         NotificationCenter.default.addObserver(self, selector: #selector(didBecomeActive), name: NSApplication.didBecomeActiveNotification, object: nil)
     }
     
@@ -77,6 +78,7 @@ class AccountsListViewController: NSViewController {
     
     private func reloadTitle() {
         titleLabel.stringValue = onSelectedAccount != nil && !accounts.isEmpty ? "Select\nAccount" : "Accounts"
+        addButton.isHidden = accounts.isEmpty
     }
     
     @objc private func didBecomeActive() {
@@ -107,6 +109,8 @@ class AccountsListViewController: NSViewController {
     @objc private func didClickCreateAccount() {
         accountsService.createAccount()
         reloadAccounts()
+        reloadTitle()
+        updateCellModels()
         tableView.reloadData()
         // TODO: show backup phrase
     }
@@ -189,7 +193,19 @@ class AccountsListViewController: NSViewController {
     private func removeAccountAtIndex(_ index: Int) {
         accountsService.removeAccount(accounts[index])
         accounts.remove(at: index)
+        reloadTitle()
+        updateCellModels()
         tableView.reloadData()
+    }
+    
+    private func updateCellModels() {
+        if accounts.isEmpty {
+            cellModels = [.addAccountOption(.createNew), .addAccountOption(.importExisting)]
+            tableView.shouldShowRightClickMenu = false
+        } else {
+            cellModels = accounts.map { .account($0) }
+            tableView.shouldShowRightClickMenu = true
+        }
     }
     
 }
@@ -198,17 +214,29 @@ extension AccountsListViewController: NSTableViewDelegate {
     
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
         guard tableView.selectedRow < 0 else { return false }
-        if let onSelectedAccount = onSelectedAccount {
-            let account = accounts[row]
-            onSelectedAccount(account)
-        } else {
-            Timer.scheduledTimer(withTimeInterval: 0.01, repeats: false) { [weak self] _ in
-                var point = NSEvent.mouseLocation
-                point.x += 1
-                self?.tableView.menu?.popUp(positioning: nil, at: point, in: nil)
+        let model = cellModels[row]
+        
+        switch model {
+        case let .account(account):
+            if let onSelectedAccount = onSelectedAccount {
+                onSelectedAccount(account)
+            } else {
+                Timer.scheduledTimer(withTimeInterval: 0.01, repeats: false) { [weak self] _ in
+                    var point = NSEvent.mouseLocation
+                    point.x += 1
+                    self?.tableView.menu?.popUp(positioning: nil, at: point, in: nil)
+                }
             }
+            return true
+        case let .addAccountOption(addAccountOption):
+            switch addAccountOption {
+            case .createNew:
+                didClickCreateAccount()
+            case .importExisting:
+                didClickImportAccount()
+            }
+            return false
         }
-        return true
     }
     
 }
@@ -216,17 +244,29 @@ extension AccountsListViewController: NSTableViewDelegate {
 extension AccountsListViewController: NSTableViewDataSource {
     
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-        let rowView = tableView.makeView(withIdentifier: NSUserInterfaceItemIdentifier("AccountCellView"), owner: self) as? AccountCellView
-        rowView?.setup(address: accounts[row].address)
-        return rowView
+        let model = cellModels[row]
+        switch model {
+        case let .account(account):
+            let rowView = tableView.makeView(withIdentifier: NSUserInterfaceItemIdentifier("AccountCellView"), owner: self) as? AccountCellView
+            rowView?.setup(address: account.address)
+            return rowView
+        case let .addAccountOption(addAccountOption):
+            let rowView = tableView.makeView(withIdentifier: NSUserInterfaceItemIdentifier("AddAccountOptionCellView"), owner: self) as? AddAccountOptionCellView
+            rowView?.setup(title: addAccountOption.title)
+            return rowView
+        }
     }
     
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-        return 50
+        if case .account = cellModels[row] {
+            return 50
+        } else {
+            return 44
+        }
     }
     
     func numberOfRows(in tableView: NSTableView) -> Int {
-        return accounts.count
+        return cellModels.count
     }
     
 }
