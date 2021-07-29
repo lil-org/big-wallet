@@ -14,6 +14,11 @@ class Agent: NSObject {
     private let accountsService = AccountsService.shared
     private var hasPassword = Keychain.shared.password != nil
     private var didEnterPasswordOnStart = false
+    
+    private var didStartInitialLAEvaluation = false
+    private var didCompleteInitialLAEvaluation = false
+    private var initialWCSession: WCSession?
+    
     var statusBarButtonIsBlocked = false
     
     func start() {
@@ -26,10 +31,19 @@ class Agent: NSObject {
     }
     
     func showInitialScreen(wcSession: WCSession?) {
+        let isEvaluatingInitialLA = didStartInitialLAEvaluation && !didCompleteInitialLAEvaluation
+        guard !isEvaluatingInitialLA else {
+            if wcSession != nil {
+                initialWCSession = wcSession
+            }
+            return
+        }
+        
         guard hasPassword else {
             let welcomeViewController = WelcomeViewController.new { [weak self] createdPassword in
                 guard createdPassword else { return }
                 self?.didEnterPasswordOnStart = true
+                self?.didCompleteInitialLAEvaluation = true
                 self?.hasPassword = true
                 self?.showInitialScreen(wcSession: wcSession)
             }
@@ -49,8 +63,16 @@ class Agent: NSObject {
             return
         }
         
+        let session: WCSession?
+        if wcSession == nil, initialWCSession != nil {
+            session = initialWCSession
+            initialWCSession = nil
+        } else {
+            session = wcSession
+        }
+        
         let windowController = Window.showNew()
-        let completion = onSelectedAccount(session: wcSession)
+        let completion = onSelectedAccount(session: session)
         let accountsList = instantiate(AccountsListViewController.self)
         accountsList.onSelectedAccount = completion
         windowController.contentViewController = accountsList
@@ -239,8 +261,10 @@ class Agent: NSObject {
         
         if canDoLocalAuthentication {
             context.localizedCancelTitle = "Cancel"
+            didStartInitialLAEvaluation = true
             context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason ) { [weak self] success, _ in
                 DispatchQueue.main.async {
+                    self?.didCompleteInitialLAEvaluation = true
                     if !success, onStart, self?.didEnterPasswordOnStart == false {
                         showPasswordScreen()
                     }
