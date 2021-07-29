@@ -10,6 +10,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let priceService = PriceService.shared
     private let networkMonitor = NetworkMonitor.shared
     
+    private var didFinishLaunching = false
+    private var initialInputLink: String?
+    
     override init() {
         super.init()
         let manager = NSAppleEventManager.shared()
@@ -31,6 +34,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         gasService.start()
         priceService.start()
         networkMonitor.start()
+        
+        didFinishLaunching = true
+        if let link = initialInputLink {
+            initialInputLink = nil
+            agent.processInputLink(link)
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -46,7 +55,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func processInput(url: String?, prefix: String) {
         if let url = url, url.hasPrefix(prefix),
            let link = url.dropFirst(prefix.count).removingPercentEncoding {
-            agent.processInputLink(link)
+            if didFinishLaunching {
+                agent.processInputLink(link)
+            } else {
+                initialInputLink = link
+            }
         }
     }
     
