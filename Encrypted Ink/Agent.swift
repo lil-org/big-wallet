@@ -132,12 +132,14 @@ class Agent: NSObject {
         let howToItem = NSMenuItem(title: "How to WalletConnect?", action: #selector(showInstructionsAlert), keyEquivalent: "")
         let mailItem = NSMenuItem(title: "Drop us a line…", action: #selector(didSelectMailMenuItem), keyEquivalent: "")
         let githubItem = NSMenuItem(title: "View on GitHub…", action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
+        let twitterItem = NSMenuItem(title: "Follow on Twitter…", action: #selector(didSelectTwitterMenuItem), keyEquivalent: "")
         let quitItem = NSMenuItem(title: "Quit", action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
         showItem.attributedTitle = NSAttributedString(string: "👀 Show Encrypted Ink", attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
         
         showItem.target = self
         howToItem.target = self
         githubItem.target = self
+        twitterItem.target = self
         mailItem.target = self
         quitItem.target = self
         
@@ -146,6 +148,7 @@ class Agent: NSObject {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(howToItem)
         menu.addItem(NSMenuItem.separator())
+        menu.addItem(twitterItem)
         menu.addItem(githubItem)
         menu.addItem(mailItem)
         menu.addItem(NSMenuItem.separator())
@@ -166,6 +169,12 @@ class Agent: NSObject {
         }
         if updateStatusBarAfterwards {
             setupStatusBarItem()
+        }
+    }
+    
+    @objc private func didSelectTwitterMenuItem() {
+        if let url = URL(string: "https://encrypted.ink/twitter") {
+            NSWorkspace.shared.open(url)
         }
     }
     
