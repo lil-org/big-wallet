@@ -41,6 +41,30 @@ struct Keychain {
         save(data: data, key: .accounts)
     }
     
+    // MARK: - WalletCore
+    
+    func getAllWalletsIds() -> [String] {
+        // TODO: implement
+        return []
+    }
+    
+    func getWalletData(id: String) -> Data? {
+        // TODO: implement
+        return nil
+    }
+    
+    func saveWallet(id: String, data: Data) throws {
+        // TODO: implement
+    }
+    
+    func removeWallet(id: String) throws {
+        // TODO: implement
+    }
+    
+    func removeAllWallets() throws {
+        // TODO: implement
+    }
+    
     // MARK: Private
     
     private func save(data: Data, key: Key) {
