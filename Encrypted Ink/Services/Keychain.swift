@@ -28,6 +28,8 @@ struct Keychain {
         save(data: data, key: .password)
     }
     
+    // MARK: - Legacy
+    
     var accounts: [AccountWithKey] {
         if let data = get(key: .accounts), let accounts = try? JSONDecoder().decode([AccountWithKey].self, from: data) {
             return accounts
