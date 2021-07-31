@@ -4,15 +4,32 @@ import Foundation
 
 struct Keychain {
     
-    private let prefix = "ink.encrypted.macos."
-    
     private init() {}
     
     static let shared = Keychain()
     
-    private enum Key: String {
-        case accounts = "ethereum.keys"
-        case password = "password"
+    private enum ItemKey {
+        
+        static let commonPrefix = "ink.encrypted.macos."
+        static let walletPrefix = "wallet."
+        
+        case accounts
+        case password
+        case wallet(id: String)
+        
+        var stringValue: String {
+            let key: String
+            switch self {
+            case .accounts:
+                key = "ethereum.keys"
+            case .password:
+                key = "password"
+            case let .wallet(id: id):
+                key = ItemKey.walletPrefix + id
+            }
+            return ItemKey.commonPrefix + key
+        }
+        
     }
     
     var password: String? {
@@ -51,39 +68,44 @@ struct Keychain {
     }
     
     func getWalletData(id: String) -> Data? {
-        // TODO: implement
-        return nil
+        return get(key: .wallet(id: id))
     }
     
     func saveWallet(id: String, data: Data) throws {
-        // TODO: implement
+        save(data: data, key: .wallet(id: id))
     }
     
     func removeWallet(id: String) throws {
-        // TODO: implement
+        removeData(forKey: .wallet(id: id))
     }
     
     func removeAllWallets() throws {
-        // TODO: implement
+        for id in getAllWalletsIds() {
+            removeData(forKey: .wallet(id: id))
+        }
     }
     
     // MARK: Private
     
-    private func save(data: Data, key: Key) {
-        let query = [kSecClass as String: kSecClassGenericPassword as String,
-                     kSecAttrAccount as String: prefix + key.rawValue,
-                     kSecValueData as String: data] as [String: Any]
+    private func save(data: Data, key: ItemKey) {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword as String,
+                                    kSecAttrAccount as String: key.stringValue,
+                                    kSecValueData as String: data]
         SecItemDelete(query as CFDictionary)
         SecItemAdd(query as CFDictionary, nil)
     }
     
-    private func get(key: Key) -> Data? {
-        guard let returnDataQueryValue = kCFBooleanTrue else { return nil }
-        let query = [kSecClass as String: kSecClassGenericPassword,
-                     kSecAttrAccount as String: prefix + key.rawValue,
-                     kSecReturnData as String: returnDataQueryValue,
-                     kSecMatchLimit as String: kSecMatchLimitOne] as [String: Any]
-
+    private func removeData(forKey key: ItemKey) {
+        let query = [kSecClass as String: kSecClassGenericPassword as String,
+                     kSecAttrAccount as String: key.stringValue]
+        SecItemDelete(query as CFDictionary)
+    }
+    
+    private func get(key: ItemKey) -> Data? {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                    kSecAttrAccount as String: key.stringValue,
+                                    kSecReturnData as String: true,
+                                    kSecMatchLimit as String: kSecMatchLimitOne]
         var dataTypeRef: AnyObject?
         let status: OSStatus = SecItemCopyMatching(query as CFDictionary, &dataTypeRef)
         if status == noErr, let data = dataTypeRef as? Data {
