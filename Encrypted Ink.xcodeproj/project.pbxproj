@@ -51,13 +51,11 @@
 		2CC0CDBE2692027E0072922A /* PriceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC0CDBD2692027E0072922A /* PriceService.swift */; };
 		2CC8946F269A2E8C00879245 /* SessionStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8946E269A2E8C00879245 /* SessionStorage.swift */; };
 		2CC89471269A334A00879245 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC89470269A334A00879245 /* UserDefaults.swift */; };
-		2CD0668A26B213E500728C20 /* EIKeystore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668926B213E500728C20 /* EIKeystore.swift */; };
-		2CD0668C26B2142000728C20 /* EIWallet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668B26B2142000728C20 /* EIWallet.swift */; };
 		2CD0B3F526A0DAA900488D92 /* NSPasteboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0B3F426A0DAA900488D92 /* NSPasteboard.swift */; };
 		2CD0B3F726AC619900488D92 /* AddAccountOptionCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0B3F626AC619900488D92 /* AddAccountOptionCellView.swift */; };
 		2CDAB3722675B3F0009F8B97 /* PasswordViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */; };
 		2CE3D012267F73C00032A62E /* Transaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D011267F73C00032A62E /* Transaction.swift */; };
-		2CE3D015267F73E80032A62E /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D014267F73E80032A62E /* Account.swift */; };
+		2CE3D015267F73E80032A62E /* AccountWithKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D014267F73E80032A62E /* AccountWithKey.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -107,13 +105,13 @@
 		2CC0CDBD2692027E0072922A /* PriceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceService.swift; sourceTree = "<group>"; };
 		2CC8946E269A2E8C00879245 /* SessionStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStorage.swift; sourceTree = "<group>"; };
 		2CC89470269A334A00879245 /* UserDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaults.swift; sourceTree = "<group>"; };
-		2CD0668926B213E500728C20 /* EIKeystore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EIKeystore.swift; sourceTree = "<group>"; };
-		2CD0668B26B2142000728C20 /* EIWallet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EIWallet.swift; sourceTree = "<group>"; };
+		2CD0668926B213E500728C20 /* WalletsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsManager.swift; sourceTree = "<group>"; };
+		2CD0668B26B2142000728C20 /* InkWallet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InkWallet.swift; sourceTree = "<group>"; };
 		2CD0B3F426A0DAA900488D92 /* NSPasteboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSPasteboard.swift; sourceTree = "<group>"; };
 		2CD0B3F626AC619900488D92 /* AddAccountOptionCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddAccountOptionCellView.swift; sourceTree = "<group>"; };
 		2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordViewController.swift; sourceTree = "<group>"; };
 		2CE3D011267F73C00032A62E /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
-		2CE3D014267F73E80032A62E /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
+		2CE3D014267F73E80032A62E /* AccountWithKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountWithKey.swift; sourceTree = "<group>"; };
 		35AD6E3AC630C8A9B4EC16D9 /* Pods-Encrypted Ink.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Encrypted Ink.release.xcconfig"; path = "Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink.release.xcconfig"; sourceTree = "<group>"; };
 		3E2A642C960E4952955E6E82 /* Pods_Encrypted_Ink.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Encrypted_Ink.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		A858B0F7D88913EAB1FA50B0 /* Pods-Encrypted Ink.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Encrypted Ink.debug.xcconfig"; path = "Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink.debug.xcconfig"; sourceTree = "<group>"; };
@@ -187,7 +185,7 @@
 				2C528A15267FA8EB00CA3ADD /* Defaults.swift */,
 				2C8A09D32675184700993638 /* Window.swift */,
 				2C901C492689F01700D0926A /* Strings.swift */,
-				2CD0668826B213BB00728C20 /* Keystore */,
+				2CD0668826B213BB00728C20 /* Wallets */,
 				2C6706A7267A6C04006AAEF2 /* Extensions */,
 				2C8A09C92675142700993638 /* Screens */,
 				2C91742B267D2A7900049075 /* Services */,
@@ -225,7 +223,7 @@
 			isa = PBXGroup;
 			children = (
 				2C1995552674D0F300A8E370 /* Ethereum.swift */,
-				2CE3D014267F73E80032A62E /* Account.swift */,
+				2CE3D014267F73E80032A62E /* AccountWithKey.swift */,
 				2CE3D011267F73C00032A62E /* Transaction.swift */,
 				0DB729012674E2DB0011F7A1 /* EIP712 */,
 			);
@@ -271,13 +269,13 @@
 			path = Services;
 			sourceTree = "<group>";
 		};
-		2CD0668826B213BB00728C20 /* Keystore */ = {
+		2CD0668826B213BB00728C20 /* Wallets */ = {
 			isa = PBXGroup;
 			children = (
-				2CD0668926B213E500728C20 /* EIKeystore.swift */,
-				2CD0668B26B2142000728C20 /* EIWallet.swift */,
+				2CD0668926B213E500728C20 /* WalletsManager.swift */,
+				2CD0668B26B2142000728C20 /* InkWallet.swift */,
 			);
-			path = Keystore;
+			path = Wallets;
 			sourceTree = "<group>";
 		};
 		8E59B61AC986C705990A0C02 /* Frameworks */ = {
@@ -428,7 +426,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2CD0668C26B2142000728C20 /* EIWallet.swift in Sources */,
 				2C901C4A2689F01700D0926A /* Strings.swift in Sources */,
 				0DB729152674E2DB0011F7A1 /* EIP712Error.swift in Sources */,
 				2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */,
@@ -451,7 +448,6 @@
 				2C8A09EE2675965F00993638 /* WaitingViewController.swift in Sources */,
 				2C797E7E267BB88800F2CE2D /* WelcomeViewController.swift in Sources */,
 				0DB729192674E2DB0011F7A1 /* EIP712TypedData.swift in Sources */,
-				2CD0668A26B213E500728C20 /* EIKeystore.swift in Sources */,
 				2CD0B3F726AC619900488D92 /* AddAccountOptionCellView.swift in Sources */,
 				2C8A09E82675960D00993638 /* ErrorViewController.swift in Sources */,
 				2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */,
@@ -464,7 +460,7 @@
 				2C901C4D268A033100D0926A /* GasService.swift in Sources */,
 				2C528A16267FA8EB00CA3ADD /* Defaults.swift in Sources */,
 				2CD0B3F526A0DAA900488D92 /* NSPasteboard.swift in Sources */,
-				2CE3D015267F73E80032A62E /* Account.swift in Sources */,
+				2CE3D015267F73E80032A62E /* AccountWithKey.swift in Sources */,
 				2CE3D012267F73C00032A62E /* Transaction.swift in Sources */,
 				0DB7291B2674E2DB0011F7A1 /* EIP712Hash.swift in Sources */,
 				0DB729172674E2DB0011F7A1 /* EIP712StructType.swift in Sources */,

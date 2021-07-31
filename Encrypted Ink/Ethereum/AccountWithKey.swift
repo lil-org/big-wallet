@@ -2,7 +2,7 @@
 
 import Foundation
 
-struct Account: Codable {
+struct AccountWithKey: Codable {
     let privateKey: String
     let address: String
 }

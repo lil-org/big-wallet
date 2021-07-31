@@ -28,15 +28,15 @@ struct Keychain {
         save(data: data, key: .password)
     }
     
-    var accounts: [Account] {
-        if let data = get(key: .accounts), let accounts = try? JSONDecoder().decode([Account].self, from: data) {
+    var accounts: [AccountWithKey] {
+        if let data = get(key: .accounts), let accounts = try? JSONDecoder().decode([AccountWithKey].self, from: data) {
             return accounts
         } else {
             return []
         }
     }
     
-    func save(accounts: [Account]) {
+    func save(accounts: [AccountWithKey]) {
         guard let data = try? JSONEncoder().encode(accounts) else { return }
         save(data: data, key: .accounts)
     }

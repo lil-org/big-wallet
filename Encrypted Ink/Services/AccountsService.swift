@@ -31,7 +31,7 @@ struct AccountsService {
         _ = saveAccount(privateKey: privateKey)
     }
     
-    func addAccount(input: String, password: String?) -> Account? {
+    func addAccount(input: String, password: String?) -> AccountWithKey? {
         let key: PrivateKey
         if Mnemonic.isValid(mnemonic: input) {
             key = HDWallet(mnemonic: input, passphrase: "").getKeyForCoin(coin: .ethereum)
@@ -52,10 +52,10 @@ struct AccountsService {
         return account
     }
     
-    private func saveAccount(privateKey: PrivateKey) -> Account? {
+    private func saveAccount(privateKey: PrivateKey) -> AccountWithKey? {
         let address = CoinType.ethereum.deriveAddress(privateKey: privateKey).lowercased()
         // TODO: use checksum address
-        let account = Account(privateKey: privateKey.data.hexString, address: address)
+        let account = AccountWithKey(privateKey: privateKey.data.hexString, address: address)
         var accounts = getAccounts()
         guard !accounts.contains(where: { $0.address == address }) else { return nil }
         accounts.append(account)
@@ -63,17 +63,17 @@ struct AccountsService {
         return account
     }
     
-    func removeAccount(_ account: Account) {
+    func removeAccount(_ account: AccountWithKey) {
         var accounts = getAccounts()
         accounts.removeAll(where: {$0.address == account.address })
         keychain.save(accounts: accounts)
     }
     
-    func getAccounts() -> [Account] {
+    func getAccounts() -> [AccountWithKey] {
         return keychain.accounts
     }
     
-    func getAccountForAddress(_ address: String) -> Account? {
+    func getAccountForAddress(_ address: String) -> AccountWithKey? {
         let allAccounts = getAccounts()
         return allAccounts.first(where: { $0.address == address.lowercased() })
     }
