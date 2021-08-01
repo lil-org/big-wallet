@@ -120,7 +120,7 @@ class Agent: NSObject {
         showInitialScreen(wcSession: session)
     }
     
-    func getAccountSelectionCompletionIfShouldSelect() -> ((AccountWithKey) -> Void)? {
+    func getAccountSelectionCompletionIfShouldSelect() -> ((LegacyAccountWithKey) -> Void)? {
         let session = getSessionFromPasteboard()
         return onSelectedAccount(session: session)
     }
@@ -223,7 +223,7 @@ class Agent: NSObject {
         }
     }
     
-    private func onSelectedAccount(session: WCSession?) -> ((AccountWithKey) -> Void)? {
+    private func onSelectedAccount(session: WCSession?) -> ((LegacyAccountWithKey) -> Void)? {
         guard let session = session else { return nil }
         return { [weak self] account in
             self?.connectWallet(session: session, account: account)
@@ -285,7 +285,7 @@ class Agent: NSObject {
         }
     }
     
-    private func connectWallet(session: WCSession, account: AccountWithKey) {
+    private func connectWallet(session: WCSession, account: LegacyAccountWithKey) {
         let windowController = Window.showNew()
         let window = windowController.window
         windowController.contentViewController = WaitingViewController.withReason("Connecting")

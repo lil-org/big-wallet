@@ -53,15 +53,15 @@ struct Keychain {
     
     // MARK: - Legacy
     
-    var accounts: [AccountWithKey] {
-        if let data = get(key: .accounts), let accounts = try? JSONDecoder().decode([AccountWithKey].self, from: data) {
+    var accounts: [LegacyAccountWithKey] {
+        if let data = get(key: .accounts), let accounts = try? JSONDecoder().decode([LegacyAccountWithKey].self, from: data) {
             return accounts
         } else {
             return []
         }
     }
     
-    func save(accounts: [AccountWithKey]) {
+    func save(accounts: [LegacyAccountWithKey]) {
         guard let data = try? JSONEncoder().encode(accounts) else { return }
         save(data: data, key: .accounts)
     }
