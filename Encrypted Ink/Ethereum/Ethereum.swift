@@ -21,7 +21,7 @@ struct Ethereum {
         apiKey: Secrets.alchemy
     )
     
-    func sign(message: String, account: AccountWithKey) throws -> String {
+    func sign(message: String, account: LegacyAccountWithKey) throws -> String {
         let ethPrivateKey = EthPrivateKey(hex: account.privateKey)
         
         let signature = SECP256k1Signature(
@@ -39,14 +39,14 @@ struct Ethereum {
         return data.toPrefixedHexString()
     }
     
-    func signPersonal(message: String, account: AccountWithKey) throws -> String {
+    func signPersonal(message: String, account: LegacyAccountWithKey) throws -> String {
         let ethPrivateKey = EthPrivateKey(hex: account.privateKey)
         let signed = SignedPersonalMessageBytes(message: message, signerKey: ethPrivateKey)
         let data = try signed.value().toPrefixedHexString()
         return data
     }
     
-    func sign(typedData: String, account: AccountWithKey) throws -> String {
+    func sign(typedData: String, account: LegacyAccountWithKey) throws -> String {
         let data = try EIP712TypedData(jsonString: typedData)
         let hash = EIP712Hash(domain: data.domain, typedData: data)
         let privateKey = EthPrivateKey(hex: account.privateKey)
@@ -54,7 +54,7 @@ struct Ethereum {
         return try signer.signatureData(hash: hash).toPrefixedHexString()
     }
     
-    func send(transaction: Transaction, account: AccountWithKey) throws -> String {
+    func send(transaction: Transaction, account: LegacyAccountWithKey) throws -> String {
         let bytes = signedTransactionBytes(transaction: transaction, account: account)
         let response = try SendRawTransactionProcedure(network: network, transactionBytes: bytes).call()
         guard let hash = response["result"].string else {
@@ -63,7 +63,7 @@ struct Ethereum {
         return hash
     }
     
-    private func signedTransactionBytes(transaction: Transaction, account: AccountWithKey) -> EthContractCallBytes {
+    private func signedTransactionBytes(transaction: Transaction, account: LegacyAccountWithKey) -> EthContractCallBytes {
         let senderKey = EthPrivateKey(hex: account.privateKey)
         let contractAddress = EthAddress(hex: transaction.to)
         let functionCall = BytesFromHexString(hex: transaction.data)

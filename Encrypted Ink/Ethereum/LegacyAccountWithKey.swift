@@ -2,7 +2,7 @@
 
 import Foundation
 
-struct AccountWithKey: Codable {
+struct LegacyAccountWithKey: Codable {
     let privateKey: String
     let address: String
 }

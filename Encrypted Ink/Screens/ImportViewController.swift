@@ -5,7 +5,7 @@ import Cocoa
 class ImportViewController: NSViewController {
     
     private let accountsService = AccountsService.shared
-    var onSelectedAccount: ((AccountWithKey) -> Void)?
+    var onSelectedAccount: ((LegacyAccountWithKey) -> Void)?
     private var inputValidationResult = AccountsService.InputValidationResult.invalid
     
     @IBOutlet weak var textField: NSTextField! {

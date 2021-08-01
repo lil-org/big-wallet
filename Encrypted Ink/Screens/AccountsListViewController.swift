@@ -6,13 +6,13 @@ class AccountsListViewController: NSViewController {
 
     private let agent = Agent.shared
     private let accountsService = AccountsService.shared
-    private var accounts = [AccountWithKey]()
+    private var accounts = [LegacyAccountWithKey]()
     private var cellModels = [CellModel]()
     
-    var onSelectedAccount: ((AccountWithKey) -> Void)?
+    var onSelectedAccount: ((LegacyAccountWithKey) -> Void)?
     
     enum CellModel {
-        case account(AccountWithKey)
+        case account(LegacyAccountWithKey)
         case addAccountOption(AddAccountOption)
     }
     
