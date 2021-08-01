@@ -6,9 +6,10 @@ import CryptoSwift
 
 struct Ethereum {
 
-    enum Errors: Error {
+    enum Error: Swift.Error {
         case invalidInputData
         case failedToSendTransaction
+        case keyNotFound
     }
 
     private let queue = DispatchQueue(label: "Ethereum", qos: .default)
@@ -21,8 +22,9 @@ struct Ethereum {
         apiKey: Secrets.alchemy
     )
     
-    func sign(message: String, account: LegacyAccountWithKey) throws -> String {
-        let ethPrivateKey = EthPrivateKey(hex: account.privateKey)
+    func sign(message: String, wallet: InkWallet) throws -> String {
+        guard let privateKeyString = wallet.ethereumPrivateKey else { throw Error.keyNotFound }
+        let ethPrivateKey = EthPrivateKey(hex: privateKeyString)
         
         let signature = SECP256k1Signature(
             privateKey: ethPrivateKey,
@@ -39,32 +41,35 @@ struct Ethereum {
         return data.toPrefixedHexString()
     }
     
-    func signPersonal(message: String, account: LegacyAccountWithKey) throws -> String {
-        let ethPrivateKey = EthPrivateKey(hex: account.privateKey)
+    func signPersonal(message: String, wallet: InkWallet) throws -> String {
+        guard let privateKeyString = wallet.ethereumPrivateKey else { throw Error.keyNotFound }
+        let ethPrivateKey = EthPrivateKey(hex: privateKeyString)
         let signed = SignedPersonalMessageBytes(message: message, signerKey: ethPrivateKey)
         let data = try signed.value().toPrefixedHexString()
         return data
     }
     
-    func sign(typedData: String, account: LegacyAccountWithKey) throws -> String {
+    func sign(typedData: String, wallet: InkWallet) throws -> String {
+        guard let privateKeyString = wallet.ethereumPrivateKey else { throw Error.keyNotFound }
         let data = try EIP712TypedData(jsonString: typedData)
         let hash = EIP712Hash(domain: data.domain, typedData: data)
-        let privateKey = EthPrivateKey(hex: account.privateKey)
+        let privateKey = EthPrivateKey(hex: privateKeyString)
         let signer = EIP712Signer(privateKey: privateKey)
         return try signer.signatureData(hash: hash).toPrefixedHexString()
     }
     
-    func send(transaction: Transaction, account: LegacyAccountWithKey) throws -> String {
-        let bytes = signedTransactionBytes(transaction: transaction, account: account)
+    func send(transaction: Transaction, wallet: InkWallet) throws -> String {
+        let bytes = try signedTransactionBytes(transaction: transaction, wallet: wallet)
         let response = try SendRawTransactionProcedure(network: network, transactionBytes: bytes).call()
         guard let hash = response["result"].string else {
-            throw Errors.failedToSendTransaction
+            throw Error.failedToSendTransaction
         }
         return hash
     }
     
-    private func signedTransactionBytes(transaction: Transaction, account: LegacyAccountWithKey) -> EthContractCallBytes {
-        let senderKey = EthPrivateKey(hex: account.privateKey)
+    private func signedTransactionBytes(transaction: Transaction, wallet: InkWallet) throws -> EthContractCallBytes {
+        guard let privateKeyString = wallet.ethereumPrivateKey else { throw Error.keyNotFound }
+        let senderKey = EthPrivateKey(hex: privateKeyString)
         let contractAddress = EthAddress(hex: transaction.to)
         let functionCall = BytesFromHexString(hex: transaction.data)
         let bytes: EthContractCallBytes

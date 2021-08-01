@@ -11,7 +11,6 @@ class Agent: NSObject {
     
     private override init() { super.init() }
     private var statusBarItem: NSStatusItem!
-    private let accountsService = AccountsService.shared
     private var hasPassword = Keychain.shared.password != nil
     private var didEnterPasswordOnStart = false
     
@@ -72,9 +71,9 @@ class Agent: NSObject {
         }
         
         let windowController = Window.showNew()
-        let completion = onSelectedAccount(session: session)
+        let completion = onSelectedWallet(session: session)
         let accountsList = instantiate(AccountsListViewController.self)
-        accountsList.onSelectedAccount = completion
+        accountsList.onSelectedWallet = completion
         windowController.contentViewController = accountsList
     }
     
@@ -120,9 +119,9 @@ class Agent: NSObject {
         showInitialScreen(wcSession: session)
     }
     
-    func getAccountSelectionCompletionIfShouldSelect() -> ((LegacyAccountWithKey) -> Void)? {
+    func getWalletSelectionCompletionIfShouldSelect() -> ((InkWallet) -> Void)? {
         let session = getSessionFromPasteboard()
-        return onSelectedAccount(session: session)
+        return onSelectedWallet(session: session)
     }
     
     lazy private var statusBarMenu: NSMenu = {
@@ -223,10 +222,10 @@ class Agent: NSObject {
         }
     }
     
-    private func onSelectedAccount(session: WCSession?) -> ((LegacyAccountWithKey) -> Void)? {
+    private func onSelectedWallet(session: WCSession?) -> ((InkWallet) -> Void)? {
         guard let session = session else { return nil }
-        return { [weak self] account in
-            self?.connectWallet(session: session, account: account)
+        return { [weak self] wallet in
+            self?.connectWallet(session: session, wallet: wallet)
         }
     }
     
@@ -285,12 +284,12 @@ class Agent: NSObject {
         }
     }
     
-    private func connectWallet(session: WCSession, account: LegacyAccountWithKey) {
+    private func connectWallet(session: WCSession, wallet: InkWallet) {
         let windowController = Window.showNew()
         let window = windowController.window
         windowController.contentViewController = WaitingViewController.withReason("Connecting")
         
-        WalletConnect.shared.connect(session: session, address: account.address) { [weak window] _ in
+        WalletConnect.shared.connect(session: session, walletId: wallet.id) { [weak window] _ in
             if window?.isVisible == true {
                 Window.closeAllAndActivateBrowser()
             }

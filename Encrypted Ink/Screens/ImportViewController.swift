@@ -4,9 +4,9 @@ import Cocoa
 
 class ImportViewController: NSViewController {
     
-    private let accountsService = AccountsService.shared
-    var onSelectedAccount: ((LegacyAccountWithKey) -> Void)?
-    private var inputValidationResult = AccountsService.InputValidationResult.invalid
+    private let walletsManager = WalletsManager.shared
+    var onSelectedWallet: ((InkWallet) -> Void)?
+    private var inputValidationResult = WalletsManager.InputValidationResult.invalid
     
     @IBOutlet weak var textField: NSTextField! {
         didSet {
@@ -51,16 +51,17 @@ class ImportViewController: NSViewController {
     }
     
     private func importWith(input: String, password: String?) {
-        if accountsService.addAccount(input: input, password: password) != nil {
+        do {
+            _ = try walletsManager.addWallet(input: input, inputPassword: password)
             showAccountsList()
-        } else {
+        } catch {
             Alert.showWithMessage("Failed to import account", style: .critical)
         }
     }
     
     private func showAccountsList() {
         let accountsListViewController = instantiate(AccountsListViewController.self)
-        accountsListViewController.onSelectedAccount = onSelectedAccount
+        accountsListViewController.onSelectedWallet = onSelectedWallet
         view.window?.contentViewController = accountsListViewController
     }
     
@@ -73,7 +74,7 @@ class ImportViewController: NSViewController {
 extension ImportViewController: NSTextFieldDelegate {
     
     func controlTextDidChange(_ obj: Notification) {
-        inputValidationResult = accountsService.validateAccountInput(textField.stringValue)
+        inputValidationResult = walletsManager.validateWalletInput(textField.stringValue)
         okButton.isEnabled = inputValidationResult != .invalid
     }
     

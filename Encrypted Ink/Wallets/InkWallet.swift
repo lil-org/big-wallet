@@ -43,3 +43,21 @@ final class InkWallet: Hashable, Equatable {
     }
     
 }
+
+extension InkWallet {
+    
+    var ethereumAddress: String? {
+        return accounts.first(where: { $0.coin == .ethereum })?.address
+    }
+    
+    var ethereumPrivateKey: String? {
+        guard let password = Keychain.shared.password,
+              let privateKey = try? privateKey(password: password, coin: .ethereum).data else { return nil }
+        return privateKey.hexString
+    }
+    
+    var isMnemonic: Bool {
+        return key.isMnemonic
+    }
+    
+}
