@@ -16,10 +16,6 @@ class WalletConnect {
         NotificationCenter.default.addObserver(self, selector: #selector(connectionAppeared), name: .connectionAppeared, object: nil)
     }
     
-    deinit {
-        NotificationCenter.default.removeObserver(self)
-    }
-    
     private var interactors = [WCInteractor]()
     private var interactorsPendingReconnection = [String: WCInteractor]()
     private var peers = [String: WCPeerMeta]()

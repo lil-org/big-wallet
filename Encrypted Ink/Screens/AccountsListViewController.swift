@@ -72,10 +72,6 @@ class AccountsListViewController: NSViewController {
         accounts = accountsService.getAccounts()
     }
     
-    deinit {
-        NotificationCenter.default.removeObserver(self)
-    }
-    
     private func reloadTitle() {
         titleLabel.stringValue = onSelectedAccount != nil && !accounts.isEmpty ? "Select\nAccount" : "Accounts"
         addButton.isHidden = accounts.isEmpty
