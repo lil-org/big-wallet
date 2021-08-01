@@ -65,17 +65,6 @@ struct Keychain {
         removeData(forKey: .legacyAccounts)
     }
     
-    // TODO: remove
-    var accounts: [LegacyAccountWithKey] {
-        return (try? getLegacyAccounts()) ?? []
-    }
-    
-    // TODO: remove
-    func save(accounts: [LegacyAccountWithKey]) throws {
-        guard let data = try? JSONEncoder().encode(accounts) else { return }
-        save(data: data, key: .legacyAccounts)
-    }
-    
     // MARK: - WalletCore
     
     func getAllWalletsIds() -> [String] {
