@@ -51,20 +51,6 @@ struct Keychain {
         save(data: data, key: .password)
     }
     
-    // MARK: - Legacy
-    
-    func getLegacyAccounts() throws -> [LegacyAccountWithKey] {
-        if let data = get(key: .legacyAccounts), let accounts = try? JSONDecoder().decode([LegacyAccountWithKey].self, from: data) {
-            return accounts
-        } else {
-            return []
-        }
-    }
-    
-    func removeLegacyAccounts() throws {
-        removeData(forKey: .legacyAccounts)
-    }
-    
     // MARK: - WalletCore
     
     func getAllWalletsIds() -> [String] {
@@ -89,6 +75,20 @@ struct Keychain {
         for id in getAllWalletsIds() {
             removeData(forKey: .wallet(id: id))
         }
+    }
+    
+    // MARK: - Legacy
+    
+    func getLegacyAccounts() throws -> [LegacyAccountWithKey] {
+        if let data = get(key: .legacyAccounts), let accounts = try? JSONDecoder().decode([LegacyAccountWithKey].self, from: data) {
+            return accounts
+        } else {
+            return []
+        }
+    }
+    
+    func removeLegacyAccounts() throws {
+        removeData(forKey: .legacyAccounts)
     }
     
     // MARK: Private
