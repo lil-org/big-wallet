@@ -59,14 +59,14 @@ struct AccountsService {
         var accounts = getAccounts()
         guard !accounts.contains(where: { $0.address == address }) else { return nil }
         accounts.append(account)
-        keychain.save(accounts: accounts)
+        try? keychain.save(accounts: accounts)
         return account
     }
     
     func removeAccount(_ account: LegacyAccountWithKey) {
         var accounts = getAccounts()
         accounts.removeAll(where: {$0.address == account.address })
-        keychain.save(accounts: accounts)
+        try? keychain.save(accounts: accounts)
     }
     
     func getAccounts() -> [LegacyAccountWithKey] {

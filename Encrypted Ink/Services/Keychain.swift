@@ -9,7 +9,7 @@ struct Keychain {
     static let shared = Keychain()
     
     private enum ItemKey {
-        case accounts
+        case legacyAccounts
         case password
         case wallet(id: String)
         
@@ -21,7 +21,7 @@ struct Keychain {
         var stringValue: String {
             let key: String
             switch self {
-            case .accounts:
+            case .legacyAccounts:
                 key = "ethereum.keys"
             case .password:
                 key = "password"
@@ -53,17 +53,27 @@ struct Keychain {
     
     // MARK: - Legacy
     
-    var accounts: [LegacyAccountWithKey] {
-        if let data = get(key: .accounts), let accounts = try? JSONDecoder().decode([LegacyAccountWithKey].self, from: data) {
+    func getLegacyAccounts() throws -> [LegacyAccountWithKey] {
+        if let data = get(key: .legacyAccounts), let accounts = try? JSONDecoder().decode([LegacyAccountWithKey].self, from: data) {
             return accounts
         } else {
             return []
         }
     }
     
-    func save(accounts: [LegacyAccountWithKey]) {
+    func removeLegacyAccounts() throws {
+        removeData(forKey: .legacyAccounts)
+    }
+    
+    // TODO: remove
+    var accounts: [LegacyAccountWithKey] {
+        return (try? getLegacyAccounts()) ?? []
+    }
+    
+    // TODO: remove
+    func save(accounts: [LegacyAccountWithKey]) throws {
         guard let data = try? JSONEncoder().encode(accounts) else { return }
-        save(data: data, key: .accounts)
+        save(data: data, key: .legacyAccounts)
     }
     
     // MARK: - WalletCore

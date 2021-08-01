@@ -14,6 +14,18 @@ final class WalletsManager {
 
     func start() {
         try? load()
+        try? migrateFromLegacyIfNeeded()
+    }
+    
+    private func migrateFromLegacyIfNeeded() throws {
+        let legacyAccountsWithKeys = try keychain.getLegacyAccounts()
+        guard !legacyAccountsWithKeys.isEmpty, let password = keychain.password else { return }
+        for legacyAccount in legacyAccountsWithKeys {
+            if let data = Data(hexString: legacyAccount.privateKey), let privateKey = PrivateKey(data: data) {
+                _ = try importPrivateKey(privateKey, name: legacyAccount.address, password: password, coin: .ethereum)
+            }
+        }
+        try keychain.removeLegacyAccounts()
     }
     
     private func load() throws {
