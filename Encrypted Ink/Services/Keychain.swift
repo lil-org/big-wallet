@@ -88,15 +88,19 @@ struct Keychain {
     // MARK: Private
     
     private func save(data: Data, key: ItemKey) {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword as String,
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                                     kSecAttrAccount as String: key.stringValue,
                                     kSecValueData as String: data]
         SecItemDelete(query as CFDictionary)
         SecItemAdd(query as CFDictionary, nil)
     }
     
+    private func allStoredItemsKeys() -> [String] {
+        return []
+    }
+    
     private func removeData(forKey key: ItemKey) {
-        let query = [kSecClass as String: kSecClassGenericPassword as String,
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                      kSecAttrAccount as String: key.stringValue]
         SecItemDelete(query as CFDictionary)
     }
@@ -106,9 +110,9 @@ struct Keychain {
                                     kSecAttrAccount as String: key.stringValue,
                                     kSecReturnData as String: true,
                                     kSecMatchLimit as String: kSecMatchLimitOne]
-        var dataTypeRef: AnyObject?
-        let status: OSStatus = SecItemCopyMatching(query as CFDictionary, &dataTypeRef)
-        if status == noErr, let data = dataTypeRef as? Data {
+        var item: CFTypeRef?
+        let status: OSStatus = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == noErr, let data = item as? Data {
             return data
         } else {
             return nil
