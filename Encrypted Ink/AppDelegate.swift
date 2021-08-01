@@ -9,6 +9,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let gasService = GasService.shared
     private let priceService = PriceService.shared
     private let networkMonitor = NetworkMonitor.shared
+    private let walletsManager = WalletsManager.shared
     
     private var didFinishLaunching = false
     private var initialInputLink: String?
@@ -34,6 +35,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         gasService.start()
         priceService.start()
         networkMonitor.start()
+        walletsManager.start()
         
         didFinishLaunching = true
         if let link = initialInputLink {

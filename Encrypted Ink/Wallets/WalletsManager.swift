@@ -6,13 +6,16 @@ import WalletCore
 
 final class WalletsManager {
 
+    static let shared = WalletsManager()
     private let keychain = Keychain.shared
     private(set) var wallets = [InkWallet]()
 
-    init() throws {
-        try load()
-    }
+    private init() {}
 
+    func start() {
+        try? load()
+    }
+    
     private func load() throws {
         let ids = keychain.getAllWalletsIds()
         for id in ids {
