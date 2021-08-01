@@ -4,7 +4,7 @@ import Cocoa
 
 class PasswordViewController: NSViewController {
     
-    static func with(mode: Mode, reason: String? = nil, completion: ((Bool) -> Void)?) -> PasswordViewController {
+    static func with(mode: Mode, reason: AuthenticationReason? = nil, completion: ((Bool) -> Void)?) -> PasswordViewController {
         let new = instantiate(PasswordViewController.self)
         new.mode = mode
         new.reason = reason
@@ -18,7 +18,7 @@ class PasswordViewController: NSViewController {
     
     private let keychain = Keychain.shared
     private var mode = Mode.create
-    private var reason: String?
+    private var reason: AuthenticationReason?
     private var passwordToRepeat: String?
     private var completion: ((Bool) -> Void)?
     
@@ -35,11 +35,12 @@ class PasswordViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         switchToMode(mode)
-        // TODO: use enum for reason to avoid strings comparison
-        if let reason = reason, reason != "Start" {
-            reasonLabel.stringValue = "to " + reason.lowercased()
-        } else {
+        
+        switch reason {
+        case .none, .start:
             reasonLabel.stringValue = ""
+        case .sendTransaction, .removeAccount, .showPrivateKey, .signAction:
+            reasonLabel.stringValue = "to " + (reason?.title.lowercased() ?? "")
         }
     }
     

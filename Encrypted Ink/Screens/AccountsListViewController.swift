@@ -145,7 +145,7 @@ class AccountsListViewController: NSViewController {
         alert.addButton(withTitle: "Remove anyway")
         alert.addButton(withTitle: "Cancel")
         if alert.runModal() == .alertFirstButtonReturn {
-            agent.askAuthentication(on: view.window, getBackTo: self, onStart: false, reason: "Remove account") { [weak self] allowed in
+            agent.askAuthentication(on: view.window, getBackTo: self, onStart: false, reason: .removeAccount) { [weak self] allowed in
                 Window.activateWindow(self?.view.window)
                 if allowed {
                     self?.removeAccountAtIndex(row)
@@ -164,7 +164,7 @@ class AccountsListViewController: NSViewController {
         alert.addButton(withTitle: "I understand the risks")
         alert.addButton(withTitle: "Cancel")
         if alert.runModal() == .alertFirstButtonReturn {
-            agent.askAuthentication(on: view.window, getBackTo: self, onStart: false, reason: "Show private key") { [weak self] allowed in
+            agent.askAuthentication(on: view.window, getBackTo: self, onStart: false, reason: .showPrivateKey) { [weak self] allowed in
                 Window.activateWindow(self?.view.window)
                 if allowed {
                     self?.showPrivateKey(index: row)

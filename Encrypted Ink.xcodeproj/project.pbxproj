@@ -21,6 +21,7 @@
 		0DB7291E2674E2DB0011F7A1 /* EIP712Signable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB7290F2674E2DB0011F7A1 /* EIP712Signable.swift */; };
 		0DB7291F2674E2DB0011F7A1 /* EIP712Representable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729102674E2DB0011F7A1 /* EIP712Representable.swift */; };
 		0DB729202674E2DB0011F7A1 /* EIP712Domain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729112674E2DB0011F7A1 /* EIP712Domain.swift */; };
+		0DC850E726B73A5900809E82 /* AuthenticationReason.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC850E626B73A5900809E82 /* AuthenticationReason.swift */; };
 		28BDF30EBC80362870C988B6 /* Pods_Encrypted_Ink.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3E2A642C960E4952955E6E82 /* Pods_Encrypted_Ink.framework */; };
 		2C03D1D2269B407900EF10EA /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03D1D1269B407900EF10EA /* NetworkMonitor.swift */; };
 		2C03D1D5269B428C00EF10EA /* Notification.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03D1D4269B428C00EF10EA /* Notification.swift */; };
@@ -73,6 +74,7 @@
 		0DB7290F2674E2DB0011F7A1 /* EIP712Signable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Signable.swift; sourceTree = "<group>"; };
 		0DB729102674E2DB0011F7A1 /* EIP712Representable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Representable.swift; sourceTree = "<group>"; };
 		0DB729112674E2DB0011F7A1 /* EIP712Domain.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Domain.swift; sourceTree = "<group>"; };
+		0DC850E626B73A5900809E82 /* AuthenticationReason.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationReason.swift; sourceTree = "<group>"; };
 		2C03D1D1269B407900EF10EA /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		2C03D1D4269B428C00EF10EA /* Notification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notification.swift; sourceTree = "<group>"; };
 		2C19953C2674C4B900A8E370 /* Encrypted Ink.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Encrypted Ink.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -158,6 +160,14 @@
 			path = Protocols;
 			sourceTree = "<group>";
 		};
+		0DC850E926B73A8200809E82 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				0DC850E626B73A5900809E82 /* AuthenticationReason.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
 		2C1995332674C4B900A8E370 = {
 			isa = PBXGroup;
 			children = (
@@ -185,6 +195,7 @@
 				2C528A15267FA8EB00CA3ADD /* Defaults.swift */,
 				2C8A09D32675184700993638 /* Window.swift */,
 				2C901C492689F01700D0926A /* Strings.swift */,
+				0DC850E926B73A8200809E82 /* Models */,
 				2CD0668826B213BB00728C20 /* Wallets */,
 				2C6706A7267A6C04006AAEF2 /* Extensions */,
 				2C8A09C92675142700993638 /* Screens */,
@@ -438,6 +449,7 @@
 				0DB7291D2674E2DB0011F7A1 /* EIP712Hashable.swift in Sources */,
 				0DB729162674E2DB0011F7A1 /* EIP712SimpleValue.swift in Sources */,
 				0DB729122674E2DB0011F7A1 /* EIP712ParameterEncoder.swift in Sources */,
+				0DC850E726B73A5900809E82 /* AuthenticationReason.swift in Sources */,
 				2C8A09D726751A0C00993638 /* WalletConnect.swift in Sources */,
 				2C03D1D2269B407900EF10EA /* NetworkMonitor.swift in Sources */,
 				2C8A09E326757FC000993638 /* AccountCellView.swift in Sources */,
