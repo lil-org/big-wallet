@@ -9,13 +9,14 @@ struct Keychain {
     static let shared = Keychain()
     
     private enum ItemKey {
-        
-        static let commonPrefix = "ink.encrypted.macos."
-        static let walletPrefix = "wallet."
-        
         case accounts
         case password
         case wallet(id: String)
+        
+        private static let commonPrefix = "ink.encrypted.macos."
+        private static let walletPrefix = "wallet."
+        private static let fullWalletPrefix = commonPrefix + walletPrefix
+        private static let fullWalletPrefixCount = fullWalletPrefix.count
         
         var stringValue: String {
             let key: String
@@ -28,6 +29,11 @@ struct Keychain {
                 key = ItemKey.walletPrefix + id
             }
             return ItemKey.commonPrefix + key
+        }
+        
+        static func walletId(key: String) -> String? {
+            guard key.hasPrefix(fullWalletPrefix) else { return nil }
+            return String(key.dropFirst(fullWalletPrefixCount))
         }
         
     }
@@ -63,8 +69,9 @@ struct Keychain {
     // MARK: - WalletCore
     
     func getAllWalletsIds() -> [String] {
-        // TODO: implement
-        return []
+        let allKeys = allStoredItemsKeys()
+        let ids = allKeys.compactMap { ItemKey.walletId(key: $0) }
+        return ids
     }
     
     func getWalletData(id: String) -> Data? {
@@ -96,7 +103,17 @@ struct Keychain {
     }
     
     private func allStoredItemsKeys() -> [String] {
-        return []
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                    kSecReturnData as String: false,
+                                    kSecReturnAttributes as String: true,
+                                    kSecMatchLimit as String: kSecMatchLimitAll]
+        var items: CFTypeRef?
+        let status: OSStatus = SecItemCopyMatching(query as CFDictionary, &items)
+        if status == noErr, let items = items as? [[String: Any]], !items.isEmpty {
+            return items.compactMap { $0[kSecAttrAccount as String] as? String }
+        } else {
+            return []
+        }
     }
     
     private func removeData(forKey key: ItemKey) {
