@@ -52,7 +52,7 @@ final class WalletsManager {
         let coin = CoinType.ethereum
         if Mnemonic.isValid(mnemonic: input) {
             return try importMnemonic(input, name: name, encryptPassword: password, coin: coin)
-        } else if let data = Data(hexString: input), let privateKey = PrivateKey(data: data) {
+        } else if let data = Data(hexString: input), PrivateKey.isValid(data: data, curve: coin.curve), let privateKey = PrivateKey(data: data) {
             return try importPrivateKey(privateKey, name: name, password: password, coin: coin)
         } else if input.maybeJSON, let inputPassword = inputPassword, let json = input.data(using: .utf8) {
             return try importJSON(json, name: name, password: inputPassword, newPassword: password, coin: coin)
