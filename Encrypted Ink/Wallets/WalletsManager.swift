@@ -38,8 +38,7 @@ final class WalletsManager {
     
     func createWallet() throws -> InkWallet {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
-        let name = "Wallet \(wallets.count + 1)" // TODO: finalize naming convention
-        return try createWallet(name: name, password: password, coin: .ethereum)
+        return try createWallet(name: defaultWalletName, password: password, coin: .ethereum)
     }
     
     func getWallet(id: String) -> InkWallet? {
@@ -48,7 +47,7 @@ final class WalletsManager {
     
     func addWallet(input: String, inputPassword: String?) throws -> InkWallet {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
-        let name = "Wallet \(wallets.count + 1)" // TODO: finalize naming convention
+        let name = defaultWalletName
         let coin = CoinType.ethereum
         if Mnemonic.isValid(mnemonic: input) {
             return try importMnemonic(input, name: name, encryptPassword: password, coin: coin)
@@ -152,7 +151,7 @@ final class WalletsManager {
         guard !legacyAccountsWithKeys.isEmpty, let password = keychain.password else { return }
         for legacyAccount in legacyAccountsWithKeys {
             if let data = Data(hexString: legacyAccount.privateKey), let privateKey = PrivateKey(data: data) {
-                _ = try importPrivateKey(privateKey, name: legacyAccount.address, password: password, coin: .ethereum)
+                _ = try importPrivateKey(privateKey, name: defaultWalletName, password: password, coin: .ethereum)
             }
         }
         try keychain.removeLegacyAccounts()
@@ -183,6 +182,8 @@ final class WalletsManager {
         guard let data = wallet.key.exportJSON() else { throw KeyStore.Error.invalidPassword }
         try keychain.saveWallet(id: wallet.id, data: data)
     }
+    
+    private var defaultWalletName = ""
     
     private func makeNewWalletId() -> String {
         let uuid = UUID().uuidString
