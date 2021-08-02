@@ -7,20 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0DB729122674E2DB0011F7A1 /* EIP712ParameterEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729022674E2DB0011F7A1 /* EIP712ParameterEncoder.swift */; };
-		0DB729142674E2DB0011F7A1 /* EIP712Parameter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729042674E2DB0011F7A1 /* EIP712Parameter.swift */; };
-		0DB729152674E2DB0011F7A1 /* EIP712Error.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729052674E2DB0011F7A1 /* EIP712Error.swift */; };
-		0DB729162674E2DB0011F7A1 /* EIP712SimpleValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729062674E2DB0011F7A1 /* EIP712SimpleValue.swift */; };
-		0DB729172674E2DB0011F7A1 /* EIP712StructType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729072674E2DB0011F7A1 /* EIP712StructType.swift */; };
-		0DB729182674E2DB0011F7A1 /* EIP712Signer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729082674E2DB0011F7A1 /* EIP712Signer.swift */; };
-		0DB729192674E2DB0011F7A1 /* EIP712TypedData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729092674E2DB0011F7A1 /* EIP712TypedData.swift */; };
-		0DB7291A2674E2DB0011F7A1 /* EIP712Type.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB7290A2674E2DB0011F7A1 /* EIP712Type.swift */; };
-		0DB7291B2674E2DB0011F7A1 /* EIP712Hash.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB7290B2674E2DB0011F7A1 /* EIP712Hash.swift */; };
-		0DB7291C2674E2DB0011F7A1 /* EIP712Value.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB7290D2674E2DB0011F7A1 /* EIP712Value.swift */; };
-		0DB7291D2674E2DB0011F7A1 /* EIP712Hashable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB7290E2674E2DB0011F7A1 /* EIP712Hashable.swift */; };
-		0DB7291E2674E2DB0011F7A1 /* EIP712Signable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB7290F2674E2DB0011F7A1 /* EIP712Signable.swift */; };
-		0DB7291F2674E2DB0011F7A1 /* EIP712Representable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729102674E2DB0011F7A1 /* EIP712Representable.swift */; };
-		0DB729202674E2DB0011F7A1 /* EIP712Domain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB729112674E2DB0011F7A1 /* EIP712Domain.swift */; };
 		28BDF30EBC80362870C988B6 /* Pods_Encrypted_Ink.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3E2A642C960E4952955E6E82 /* Pods_Encrypted_Ink.framework */; };
 		2C03D1D2269B407900EF10EA /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03D1D1269B407900EF10EA /* NetworkMonitor.swift */; };
 		2C03D1D5269B428C00EF10EA /* Notification.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03D1D4269B428C00EF10EA /* Notification.swift */; };
@@ -61,20 +47,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0DB729022674E2DB0011F7A1 /* EIP712ParameterEncoder.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712ParameterEncoder.swift; sourceTree = "<group>"; };
-		0DB729042674E2DB0011F7A1 /* EIP712Parameter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Parameter.swift; sourceTree = "<group>"; };
-		0DB729052674E2DB0011F7A1 /* EIP712Error.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Error.swift; sourceTree = "<group>"; };
-		0DB729062674E2DB0011F7A1 /* EIP712SimpleValue.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712SimpleValue.swift; sourceTree = "<group>"; };
-		0DB729072674E2DB0011F7A1 /* EIP712StructType.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712StructType.swift; sourceTree = "<group>"; };
-		0DB729082674E2DB0011F7A1 /* EIP712Signer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Signer.swift; sourceTree = "<group>"; };
-		0DB729092674E2DB0011F7A1 /* EIP712TypedData.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712TypedData.swift; sourceTree = "<group>"; };
-		0DB7290A2674E2DB0011F7A1 /* EIP712Type.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Type.swift; sourceTree = "<group>"; };
-		0DB7290B2674E2DB0011F7A1 /* EIP712Hash.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Hash.swift; sourceTree = "<group>"; };
-		0DB7290D2674E2DB0011F7A1 /* EIP712Value.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Value.swift; sourceTree = "<group>"; };
-		0DB7290E2674E2DB0011F7A1 /* EIP712Hashable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Hashable.swift; sourceTree = "<group>"; };
-		0DB7290F2674E2DB0011F7A1 /* EIP712Signable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Signable.swift; sourceTree = "<group>"; };
-		0DB729102674E2DB0011F7A1 /* EIP712Representable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Representable.swift; sourceTree = "<group>"; };
-		0DB729112674E2DB0011F7A1 /* EIP712Domain.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EIP712Domain.swift; sourceTree = "<group>"; };
 		2C03D1D1269B407900EF10EA /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		2C03D1D4269B428C00EF10EA /* Notification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notification.swift; sourceTree = "<group>"; };
 		2C19953C2674C4B900A8E370 /* Encrypted Ink.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Encrypted Ink.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -131,35 +103,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		0DB729012674E2DB0011F7A1 /* EIP712 */ = {
-			isa = PBXGroup;
-			children = (
-				0DB729022674E2DB0011F7A1 /* EIP712ParameterEncoder.swift */,
-				0DB729042674E2DB0011F7A1 /* EIP712Parameter.swift */,
-				0DB729052674E2DB0011F7A1 /* EIP712Error.swift */,
-				0DB729062674E2DB0011F7A1 /* EIP712SimpleValue.swift */,
-				0DB729072674E2DB0011F7A1 /* EIP712StructType.swift */,
-				0DB729082674E2DB0011F7A1 /* EIP712Signer.swift */,
-				0DB729092674E2DB0011F7A1 /* EIP712TypedData.swift */,
-				0DB7290A2674E2DB0011F7A1 /* EIP712Type.swift */,
-				0DB7290B2674E2DB0011F7A1 /* EIP712Hash.swift */,
-				0DB729112674E2DB0011F7A1 /* EIP712Domain.swift */,
-				0DB7290C2674E2DB0011F7A1 /* Protocols */,
-			);
-			path = EIP712;
-			sourceTree = "<group>";
-		};
-		0DB7290C2674E2DB0011F7A1 /* Protocols */ = {
-			isa = PBXGroup;
-			children = (
-				0DB7290D2674E2DB0011F7A1 /* EIP712Value.swift */,
-				0DB7290E2674E2DB0011F7A1 /* EIP712Hashable.swift */,
-				0DB7290F2674E2DB0011F7A1 /* EIP712Signable.swift */,
-				0DB729102674E2DB0011F7A1 /* EIP712Representable.swift */,
-			);
-			path = Protocols;
-			sourceTree = "<group>";
-		};
 		2C1995332674C4B900A8E370 = {
 			isa = PBXGroup;
 			children = (
@@ -228,7 +171,6 @@
 				2C1995552674D0F300A8E370 /* Ethereum.swift */,
 				2CE3D014267F73E80032A62E /* LegacyAccountWithKey.swift */,
 				2CE3D011267F73C00032A62E /* Transaction.swift */,
-				0DB729012674E2DB0011F7A1 /* EIP712 */,
 			);
 			path = Ethereum;
 			sourceTree = "<group>";
@@ -429,30 +371,22 @@
 			buildActionMask = 2147483647;
 			files = (
 				2C901C4A2689F01700D0926A /* Strings.swift in Sources */,
-				0DB729152674E2DB0011F7A1 /* EIP712Error.swift in Sources */,
 				2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */,
 				2CC0CDBE2692027E0072922A /* PriceService.swift in Sources */,
 				2C8A09C6267513FC00993638 /* Agent.swift in Sources */,
 				2C8A09D42675184700993638 /* Window.swift in Sources */,
-				0DB7291A2674E2DB0011F7A1 /* EIP712Type.swift in Sources */,
 				2C208A9F26813408005BA500 /* Secrets.swift in Sources */,
 				2CC8946F269A2E8C00879245 /* SessionStorage.swift in Sources */,
-				0DB7291D2674E2DB0011F7A1 /* EIP712Hashable.swift in Sources */,
-				0DB729162674E2DB0011F7A1 /* EIP712SimpleValue.swift in Sources */,
-				0DB729122674E2DB0011F7A1 /* EIP712ParameterEncoder.swift in Sources */,
 				2CD0669126B5537B00728C20 /* InkWallet.swift in Sources */,
 				2C8A09D726751A0C00993638 /* WalletConnect.swift in Sources */,
 				2C03D1D2269B407900EF10EA /* NetworkMonitor.swift in Sources */,
 				2C8A09E326757FC000993638 /* AccountCellView.swift in Sources */,
-				0DB729202674E2DB0011F7A1 /* EIP712Domain.swift in Sources */,
-				0DB729182674E2DB0011F7A1 /* EIP712Signer.swift in Sources */,
 				2C603D0226B6E13F00956955 /* String.swift in Sources */,
 				2CC89471269A334A00879245 /* UserDefaults.swift in Sources */,
 				2C78F8282683BDCC00C10670 /* Alert.swift in Sources */,
 				2C8A09EE2675965F00993638 /* WaitingViewController.swift in Sources */,
 				2C797E7E267BB88800F2CE2D /* WelcomeViewController.swift in Sources */,
 				2CD0669226B5537B00728C20 /* WalletsManager.swift in Sources */,
-				0DB729192674E2DB0011F7A1 /* EIP712TypedData.swift in Sources */,
 				2CD0B3F726AC619900488D92 /* AddAccountOptionCellView.swift in Sources */,
 				2C8A09E82675960D00993638 /* ErrorViewController.swift in Sources */,
 				2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */,
@@ -460,17 +394,11 @@
 				2C901C472689E6D400D0926A /* ApproveTransactionViewController.swift in Sources */,
 				2CDAB3722675B3F0009F8B97 /* PasswordViewController.swift in Sources */,
 				2C1995402674C4B900A8E370 /* AppDelegate.swift in Sources */,
-				0DB729142674E2DB0011F7A1 /* EIP712Parameter.swift in Sources */,
 				2C901C4D268A033100D0926A /* GasService.swift in Sources */,
 				2C528A16267FA8EB00CA3ADD /* Defaults.swift in Sources */,
 				2CD0B3F526A0DAA900488D92 /* NSPasteboard.swift in Sources */,
 				2CE3D015267F73E80032A62E /* LegacyAccountWithKey.swift in Sources */,
 				2CE3D012267F73C00032A62E /* Transaction.swift in Sources */,
-				0DB7291B2674E2DB0011F7A1 /* EIP712Hash.swift in Sources */,
-				0DB729172674E2DB0011F7A1 /* EIP712StructType.swift in Sources */,
-				0DB7291F2674E2DB0011F7A1 /* EIP712Representable.swift in Sources */,
-				0DB7291E2674E2DB0011F7A1 /* EIP712Signable.swift in Sources */,
-				0DB7291C2674E2DB0011F7A1 /* EIP712Value.swift in Sources */,
 				2C8A09EB2675964700993638 /* ApproveViewController.swift in Sources */,
 				2C03D1D5269B428C00EF10EA /* Notification.swift in Sources */,
 				2C1995562674D0F300A8E370 /* Ethereum.swift in Sources */,

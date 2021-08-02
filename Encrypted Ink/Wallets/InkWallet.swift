@@ -50,10 +50,13 @@ extension InkWallet {
         return accounts.first(where: { $0.coin == .ethereum })?.address
     }
     
-    var ethereumPrivateKey: String? {
-        guard let password = Keychain.shared.password,
-              let privateKey = try? privateKey(password: password, coin: .ethereum).data else { return nil }
-        return privateKey.hexString
+    var ethereumPrivateKey: PrivateKey? {
+        guard let password = Keychain.shared.password else { return nil }
+        return try? privateKey(password: password, coin: .ethereum)
+    }
+    
+    var ethereumPrivateKeyString: String? {
+        return ethereumPrivateKey?.data.hexString
     }
     
     var isMnemonic: Bool {

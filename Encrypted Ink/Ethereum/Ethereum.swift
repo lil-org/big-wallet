@@ -1,6 +1,7 @@
 // Copyright © 2021 Encrypted Ink. All rights reserved.
 
 import Foundation
+import WalletCore
 import Web3Swift
 import CryptoSwift
 
@@ -9,6 +10,7 @@ struct Ethereum {
     enum Error: Swift.Error {
         case invalidInputData
         case failedToSendTransaction
+        case failedToSign
         case keyNotFound
     }
 
@@ -23,7 +25,7 @@ struct Ethereum {
     )
     
     func sign(message: String, wallet: InkWallet) throws -> String {
-        guard let privateKeyString = wallet.ethereumPrivateKey else { throw Error.keyNotFound }
+        guard let privateKeyString = wallet.ethereumPrivateKeyString else { throw Error.keyNotFound }
         let ethPrivateKey = EthPrivateKey(hex: privateKeyString)
         
         let signature = SECP256k1Signature(
@@ -42,7 +44,7 @@ struct Ethereum {
     }
     
     func signPersonal(message: String, wallet: InkWallet) throws -> String {
-        guard let privateKeyString = wallet.ethereumPrivateKey else { throw Error.keyNotFound }
+        guard let privateKeyString = wallet.ethereumPrivateKeyString else { throw Error.keyNotFound }
         let ethPrivateKey = EthPrivateKey(hex: privateKeyString)
         let signed = SignedPersonalMessageBytes(message: message, signerKey: ethPrivateKey)
         let data = try signed.value().toPrefixedHexString()
@@ -50,12 +52,10 @@ struct Ethereum {
     }
     
     func sign(typedData: String, wallet: InkWallet) throws -> String {
-        guard let privateKeyString = wallet.ethereumPrivateKey else { throw Error.keyNotFound }
-        let data = try EIP712TypedData(jsonString: typedData)
-        let hash = EIP712Hash(domain: data.domain, typedData: data)
-        let privateKey = EthPrivateKey(hex: privateKeyString)
-        let signer = EIP712Signer(privateKey: privateKey)
-        return try signer.signatureData(hash: hash).toPrefixedHexString()
+        guard let ethereumPrivateKey = wallet.ethereumPrivateKey else { throw Error.keyNotFound }
+        let digest = EthereumAbi.encodeTyped(messageJson: typedData)
+        guard let signed = ethereumPrivateKey.sign(digest: digest, curve: CoinType.ethereum.curve)?.toPrefixedHexString() else { throw Error.failedToSign }
+        return signed
     }
     
     func send(transaction: Transaction, wallet: InkWallet) throws -> String {
@@ -68,7 +68,7 @@ struct Ethereum {
     }
     
     private func signedTransactionBytes(transaction: Transaction, wallet: InkWallet) throws -> EthContractCallBytes {
-        guard let privateKeyString = wallet.ethereumPrivateKey else { throw Error.keyNotFound }
+        guard let privateKeyString = wallet.ethereumPrivateKeyString else { throw Error.keyNotFound }
         let senderKey = EthPrivateKey(hex: privateKeyString)
         let contractAddress = EthAddress(hex: transaction.to)
         let functionCall = BytesFromHexString(hex: transaction.data)
