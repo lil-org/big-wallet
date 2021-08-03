@@ -12,7 +12,7 @@ class AccountsListViewController: NSViewController {
     var newWalletId: String?
     
     enum CellModel {
-        case wallet(InkWallet)
+        case wallet
         case addAccountOption(AddAccountOption)
     }
     
@@ -56,6 +56,11 @@ class AccountsListViewController: NSViewController {
         reloadTitle()
         updateCellModels()
         NotificationCenter.default.addObserver(self, selector: #selector(didBecomeActive), name: NSApplication.didBecomeActiveNotification, object: nil)
+    }
+    
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        blinkNewWalletCellIfNeeded()
     }
     
     private func setupAccountsMenu() {
@@ -106,18 +111,21 @@ class AccountsListViewController: NSViewController {
     }
     
     @objc private func didClickCreateAccount() {
-        _ = try? walletsManager.createWallet()
+        let wallet = try? walletsManager.createWallet()
+        newWalletId = wallet?.id
         reloadTitle()
         updateCellModels()
         tableView.reloadData()
-        blinkNewWalletCell()
+        blinkNewWalletCellIfNeeded()
         // TODO: show backup phrase
     }
     
-    private func blinkNewWalletCell() {
-        let row = cellModels.count - 1
+    private func blinkNewWalletCellIfNeeded() {
+        guard let id = newWalletId else { return }
+        newWalletId = nil
+        guard let row = wallets.firstIndex(where: { $0.id == id }), row < cellModels.count else { return }
         tableView.scrollRowToVisible(row)
-        (tableView.rowView(atRow: row, makeIfNecessary: false) as? AccountCellView)?.blink()
+        (tableView.rowView(atRow: row, makeIfNecessary: true) as? AccountCellView)?.blink()
     }
     
     @objc private func didClickImportAccount() {
@@ -219,7 +227,7 @@ class AccountsListViewController: NSViewController {
             cellModels = [.addAccountOption(.createNew), .addAccountOption(.importExisting)]
             tableView.shouldShowRightClickMenu = false
         } else {
-            cellModels = wallets.map { .wallet($0) }
+            cellModels = Array(repeating: CellModel.wallet, count: wallets.count)
             tableView.shouldShowRightClickMenu = true
         }
     }
@@ -233,7 +241,8 @@ extension AccountsListViewController: NSTableViewDelegate {
         let model = cellModels[row]
         
         switch model {
-        case let .wallet(wallet):
+        case .wallet:
+            let wallet = wallets[row]
             if let onSelectedWallet = onSelectedWallet {
                 onSelectedWallet(wallet)
             } else {
@@ -262,7 +271,8 @@ extension AccountsListViewController: NSTableViewDataSource {
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let model = cellModels[row]
         switch model {
-        case let .wallet(wallet):
+        case .wallet:
+            let wallet = wallets[row]
             let rowView = tableView.makeView(withIdentifier: NSUserInterfaceItemIdentifier("AccountCellView"), owner: self) as? AccountCellView
             rowView?.setup(address: wallet.ethereumAddress ?? "")
             return rowView
