@@ -52,21 +52,22 @@ class ImportViewController: NSViewController {
     
     private func importWith(input: String, password: String?) {
         do {
-            _ = try walletsManager.addWallet(input: input, inputPassword: password)
-            showAccountsList()
+            let wallet = try walletsManager.addWallet(input: input, inputPassword: password)
+            showAccountsList(newWalletId: wallet.id)
         } catch {
             Alert.showWithMessage("Failed to import account", style: .critical)
         }
     }
     
-    private func showAccountsList() {
+    private func showAccountsList(newWalletId: String?) {
         let accountsListViewController = instantiate(AccountsListViewController.self)
         accountsListViewController.onSelectedWallet = onSelectedWallet
+        accountsListViewController.newWalletId = newWalletId
         view.window?.contentViewController = accountsListViewController
     }
     
     @IBAction func cancelButtonTapped(_ sender: NSButton) {
-        showAccountsList()
+        showAccountsList(newWalletId: nil)
     }
     
 }

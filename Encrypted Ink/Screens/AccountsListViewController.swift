@@ -9,6 +9,7 @@ class AccountsListViewController: NSViewController {
     private var cellModels = [CellModel]()
     
     var onSelectedWallet: ((InkWallet) -> Void)?
+    var newWalletId: String?
     
     enum CellModel {
         case wallet(InkWallet)
