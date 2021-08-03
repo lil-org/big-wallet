@@ -39,7 +39,7 @@ class PasswordViewController: NSViewController {
         switch reason {
         case .none, .start:
             reasonLabel.stringValue = ""
-        case .sendTransaction, .removeAccount, .showPrivateKey, .signAction:
+        case .sendTransaction, .removeAccount, .showPrivateKey, .showSecretWords, .signAction:
             reasonLabel.stringValue = "to " + (reason?.title.lowercased() ?? "")
         }
     }

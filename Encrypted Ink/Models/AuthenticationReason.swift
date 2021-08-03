@@ -5,6 +5,7 @@ enum AuthenticationReason {
     case sendTransaction
     case removeAccount
     case showPrivateKey
+    case showSecretWords
     case signAction(title: String)
     
     var title: String {
@@ -17,6 +18,8 @@ enum AuthenticationReason {
             return "Remove account"
         case .showPrivateKey:
             return "Show private key"
+        case .showSecretWords:
+            return "Show secret words"
         case .signAction(let title):
             return title
         }
