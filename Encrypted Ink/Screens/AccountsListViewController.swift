@@ -109,7 +109,14 @@ class AccountsListViewController: NSViewController {
         reloadTitle()
         updateCellModels()
         tableView.reloadData()
+        blinkNewWalletCell()
         // TODO: show backup phrase
+    }
+    
+    private func blinkNewWalletCell() {
+        let row = cellModels.count - 1
+        tableView.scrollRowToVisible(row)
+        (tableView.rowView(atRow: row, makeIfNecessary: false) as? AccountCellView)?.blink()
     }
     
     @objc private func didClickImportAccount() {
