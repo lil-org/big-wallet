@@ -111,13 +111,25 @@ class AccountsListViewController: NSViewController {
     }
     
     @objc private func didClickCreateAccount() {
-        let wallet = try? walletsManager.createWallet()
-        newWalletId = wallet?.id
+        let alert = Alert()
+        alert.messageText = "Back up new account."
+        alert.informativeText = "You will see 12 secret words."
+        alert.alertStyle = .critical
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            createNewAccountAndShowSecretWords()
+        }
+    }
+    
+    private func createNewAccountAndShowSecretWords() {
+        guard let wallet = try? walletsManager.createWallet() else { return }
+        newWalletId = wallet.id
         reloadTitle()
         updateCellModels()
         tableView.reloadData()
         blinkNewWalletCellIfNeeded()
-        // TODO: show backup phrase
+        showKey(wallet: wallet, mnemonic: true)
     }
     
     private func blinkNewWalletCellIfNeeded() {
@@ -188,8 +200,10 @@ class AccountsListViewController: NSViewController {
     }
     
     private func showKey(index: Int, mnemonic: Bool) {
-        let wallet = wallets[index]
-        
+        showKey(wallet: wallets[index], mnemonic: mnemonic)
+    }
+    
+    private func showKey(wallet: InkWallet, mnemonic: Bool) {
         let secret: String
         if mnemonic, let mnemonicString = try? walletsManager.exportMnemonic(wallet: wallet) {
             secret = mnemonicString
