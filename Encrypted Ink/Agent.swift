@@ -77,9 +77,9 @@ class Agent: NSObject {
         windowController.contentViewController = accountsList
     }
     
-    func showApprove(transaction: Transaction, peerMeta: WCPeerMeta?, completion: @escaping (Transaction?) -> Void) {
+    func showApprove(transaction: Transaction, chain: EthereumChain, peerMeta: WCPeerMeta?, completion: @escaping (Transaction?) -> Void) {
         let windowController = Window.showNew()
-        let approveViewController = ApproveTransactionViewController.with(transaction: transaction, peerMeta: peerMeta) { [weak self] transaction in
+        let approveViewController = ApproveTransactionViewController.with(transaction: transaction, chain: chain, peerMeta: peerMeta) { [weak self] transaction in
             if transaction != nil {
                 self?.askAuthentication(on: windowController.window, onStart: false, reason: Strings.sendTransaction) { success in
                     completion(success ? transaction : nil)

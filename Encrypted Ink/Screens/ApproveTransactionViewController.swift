@@ -26,12 +26,14 @@ class ApproveTransactionViewController: NSViewController {
     private let priceService = PriceService.shared
     private var currentGasInfo: GasService.Info?
     private var transaction: Transaction!
+    private var chain: EthereumChain!
     private var completion: ((Transaction?) -> Void)!
     private var didEnableSpeedConfiguration = false
     private var peerMeta: WCPeerMeta?
     
-    static func with(transaction: Transaction, peerMeta: WCPeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
+    static func with(transaction: Transaction, chain: EthereumChain, peerMeta: WCPeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self)
+        new.chain = chain
         new.transaction = transaction
         new.completion = completion
         new.peerMeta = peerMeta
@@ -58,7 +60,7 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     private func prepareTransaction() {
-        ethereum.prepareTransaction(transaction) { [weak self] updated in
+        ethereum.prepareTransaction(transaction, chain: chain) { [weak self] updated in
             self?.transaction = updated
             self?.updateInterface()
         }
