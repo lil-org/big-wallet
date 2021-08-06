@@ -8,7 +8,8 @@ class AccountsListViewController: NSViewController {
     private let walletsManager = WalletsManager.shared
     private var cellModels = [CellModel]()
     
-    var onSelectedWallet: ((InkWallet) -> Void)?
+    private let chainId = 1
+    var onSelectedWallet: ((Int, InkWallet) -> Void)?
     var newWalletId: String?
     
     enum CellModel {
@@ -258,7 +259,7 @@ extension AccountsListViewController: NSTableViewDelegate {
         case .wallet:
             let wallet = wallets[row]
             if let onSelectedWallet = onSelectedWallet {
-                onSelectedWallet(wallet)
+                onSelectedWallet(chainId, wallet)
             } else {
                 Timer.scheduledTimer(withTimeInterval: 0.01, repeats: false) { [weak self] _ in
                     var point = NSEvent.mouseLocation

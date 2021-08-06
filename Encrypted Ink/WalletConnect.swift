@@ -28,10 +28,10 @@ class WalletConnect {
         return WCSession.from(string: link)
     }
     
-    func connect(session: WCSession, walletId: String, uuid: UUID = UUID(), completion: @escaping ((Bool) -> Void)) {
+    func connect(session: WCSession, chainId: Int, walletId: String, uuid: UUID = UUID(), completion: @escaping ((Bool) -> Void)) {
         let clientMeta = WCPeerMeta(name: "Encrypted Ink", url: "https://encrypted.ink", description: "Ethereum agent for macOS", icons: ["https://encrypted.ink/icon.png"])
         let interactor = WCInteractor(session: session, meta: clientMeta, uuid: uuid)
-        configure(interactor: interactor, walletId: walletId)
+        configure(interactor: interactor, chainId: chainId, walletId: walletId)
 
         interactor.connect().done { connected in
             completion(connected)
@@ -49,7 +49,7 @@ class WalletConnect {
         
         for item in items {
             guard let uuid = UUID(uuidString: item.clientId) else { continue }
-            connect(session: item.session, walletId: item.walletId, uuid: uuid) { _ in }
+            connect(session: item.session, chainId: item.chainId ?? 1, walletId: item.walletId, uuid: uuid) { _ in }
             peers[item.clientId] = item.sessionDetails.peerMeta
         }
     }
@@ -87,17 +87,16 @@ class WalletConnect {
         return peers[id]
     }
     
-    private func configure(interactor: WCInteractor, walletId: String) {
+    private func configure(interactor: WCInteractor, chainId: Int, walletId: String) {
         guard let address = walletsManager.getWallet(id: walletId)?.ethereumAddress else { return }
         let accounts = [address]
-        let chainId = 1
-
+        
         interactor.onError = { _ in }
 
         interactor.onSessionRequest = { [weak self, weak interactor] (id, peerParam) in
             guard let interactor = interactor else { return }
             self?.peers[interactor.clientId] = peerParam.peerMeta
-            self?.sessionStorage.add(interactor: interactor, walletId: walletId, sessionDetails: peerParam)
+            self?.sessionStorage.add(interactor: interactor, chainId: chainId, walletId: walletId, sessionDetails: peerParam)
             interactor.approveSession(accounts: accounts, chainId: chainId).cauterize()
         }
 

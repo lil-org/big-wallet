@@ -5,7 +5,7 @@ import Cocoa
 class ImportViewController: NSViewController {
     
     private let walletsManager = WalletsManager.shared
-    var onSelectedWallet: ((InkWallet) -> Void)?
+    var onSelectedWallet: ((Int, InkWallet) -> Void)?
     private var inputValidationResult = WalletsManager.InputValidationResult.invalid
     
     @IBOutlet weak var textField: NSTextField! {
