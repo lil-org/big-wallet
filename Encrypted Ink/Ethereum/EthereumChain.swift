@@ -12,4 +12,19 @@ enum EthereumChain: Int {
         return rawValue
     }
     
+    static let all: [EthereumChain] = [.main, .arbitrum, .polygon, .optimism]
+    
+    var name: String {
+        switch self {
+        case .main:
+            return "Ethereum Mainnet"
+        case .arbitrum:
+            return "Arbitrum"
+        case .optimism:
+            return "Optimism"
+        case .polygon:
+            return "Polygon"
+        }
+    }
+    
 }

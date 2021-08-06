@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.Cocoa.Storyboard.XIB" version="3.0" toolsVersion="18122" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
+<document type="com.apple.InterfaceBuilder3.Cocoa.Storyboard.XIB" version="3.0" toolsVersion="17701" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
     <dependencies>
         <deployment identifier="macosx"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="18122"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="17701"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <scenes>
@@ -818,13 +818,13 @@ DQ
                                 </textFieldCell>
                             </textField>
                             <scrollView autohidesScrollers="YES" horizontalLineScroll="40" horizontalPageScroll="0.0" verticalLineScroll="40" verticalPageScroll="10" hasHorizontalScroller="NO" usesPredominantAxisScrolling="NO" horizontalScrollElasticity="none" translatesAutoresizingMaskIntoConstraints="NO" id="7bs-Kr-ija">
-                                <rect key="frame" x="0.0" y="0.0" width="250" height="272"/>
+                                <rect key="frame" x="0.0" y="0.0" width="250" height="247"/>
                                 <clipView key="contentView" ambiguous="YES" id="RjU-hi-SHx">
-                                    <rect key="frame" x="1" y="1" width="248" height="270"/>
+                                    <rect key="frame" x="1" y="1" width="248" height="245"/>
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <subviews>
                                         <tableView verticalHuggingPriority="750" ambiguous="YES" allowsExpansionToolTips="YES" columnAutoresizingStyle="lastColumnOnly" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" typeSelect="NO" rowHeight="40" rowSizeStyle="automatic" viewBased="YES" id="glA-FK-Kdd" customClass="RightClickTableView" customModule="Encrypted_Ink" customModuleProvider="target">
-                                            <rect key="frame" x="0.0" y="0.0" width="248" height="270"/>
+                                            <rect key="frame" x="0.0" y="0.0" width="248" height="245"/>
                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                             <color key="backgroundColor" name="controlBackgroundColor" catalog="System" colorSpace="catalog"/>
                                             <color key="gridColor" name="gridColor" catalog="System" colorSpace="catalog"/>
@@ -842,7 +842,7 @@ DQ
                                                     <tableColumnResizingMask key="resizingMask" resizeWithTable="YES" userResizable="YES"/>
                                                     <prototypeCellViews>
                                                         <tableCellView identifier="AccountCellView" id="Lp1-Zy-70c" customClass="AccountCellView" customModule="Encrypted_Ink" customModuleProvider="target">
-                                                            <rect key="frame" x="10" y="0.0" width="205" height="40"/>
+                                                            <rect key="frame" x="0.0" y="0.0" width="205" height="40"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
                                                                 <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="pdB-jS-gKE">
@@ -879,7 +879,7 @@ DQ
                                                             </connections>
                                                         </tableCellView>
                                                         <tableCellView identifier="AddAccountOptionCellView" id="1KM-PS-nEo" customClass="AddAccountOptionCellView" customModule="Encrypted_Ink" customModuleProvider="target">
-                                                            <rect key="frame" x="10" y="40" width="205" height="40"/>
+                                                            <rect key="frame" x="0.0" y="40" width="205" height="40"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
                                                                 <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="BpB-tc-JdP">
@@ -928,21 +928,49 @@ DQ
                                     <action selector="addButtonTapped:" target="29s-Rd-OUf" id="MKz-Ok-RUY"/>
                                 </connections>
                             </button>
+                            <customView translatesAutoresizingMaskIntoConstraints="NO" id="YAr-gV-Zhp">
+                                <rect key="frame" x="0.0" y="247" width="250" height="40"/>
+                                <subviews>
+                                    <popUpButton verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="WBh-Qb-dhA">
+                                        <rect key="frame" x="47" y="6" width="157" height="25"/>
+                                        <popUpButtonCell key="cell" type="push" bezelStyle="rounded" alignment="center" lineBreakMode="truncatingTail" borderStyle="borderAndBezel" imageScaling="proportionallyDown" inset="2" id="A9Y-mW-lqk">
+                                            <behavior key="behavior" lightByBackground="YES" lightByGray="YES"/>
+                                            <font key="font" metaFont="menu"/>
+                                            <menu key="menu" id="bIv-hX-xgQ"/>
+                                        </popUpButtonCell>
+                                        <connections>
+                                            <action selector="chainButtonSelectionChanged:" target="29s-Rd-OUf" id="saG-Ti-VJD"/>
+                                        </connections>
+                                    </popUpButton>
+                                </subviews>
+                                <constraints>
+                                    <constraint firstItem="WBh-Qb-dhA" firstAttribute="leading" secondItem="YAr-gV-Zhp" secondAttribute="leading" constant="50" id="9XO-wX-7KM"/>
+                                    <constraint firstAttribute="height" constant="40" id="HaA-yk-eCj"/>
+                                    <constraint firstItem="WBh-Qb-dhA" firstAttribute="centerX" secondItem="YAr-gV-Zhp" secondAttribute="centerX" id="qJ6-QA-Eul"/>
+                                    <constraint firstItem="WBh-Qb-dhA" firstAttribute="centerY" secondItem="YAr-gV-Zhp" secondAttribute="centerY" id="yed-DU-Dih"/>
+                                </constraints>
+                            </customView>
                         </subviews>
                         <constraints>
                             <constraint firstItem="ngQ-Bn-Kwd" firstAttribute="leading" secondItem="dkh-kG-EFj" secondAttribute="trailing" constant="10" id="2jH-ov-jln"/>
                             <constraint firstItem="7bs-Kr-ija" firstAttribute="leading" secondItem="Yjc-Zm-uZY" secondAttribute="leading" id="3n0-jB-KwV"/>
                             <constraint firstAttribute="trailing" secondItem="7bs-Kr-ija" secondAttribute="trailing" id="6m3-S7-WJp"/>
                             <constraint firstAttribute="trailing" secondItem="ngQ-Bn-Kwd" secondAttribute="trailing" constant="12" id="Ln4-b5-NfT"/>
+                            <constraint firstItem="7bs-Kr-ija" firstAttribute="top" secondItem="YAr-gV-Zhp" secondAttribute="bottom" id="N0R-Qm-X3z"/>
                             <constraint firstItem="ngQ-Bn-Kwd" firstAttribute="firstBaseline" secondItem="dkh-kG-EFj" secondAttribute="firstBaseline" id="RDE-f4-Heb"/>
+                            <constraint firstItem="YAr-gV-Zhp" firstAttribute="top" secondItem="dkh-kG-EFj" secondAttribute="bottom" constant="5" id="eSI-xz-s5L"/>
+                            <constraint firstItem="YAr-gV-Zhp" firstAttribute="centerX" secondItem="Yjc-Zm-uZY" secondAttribute="centerX" id="ju9-P1-aBa"/>
+                            <constraint firstItem="YAr-gV-Zhp" firstAttribute="width" secondItem="Yjc-Zm-uZY" secondAttribute="width" id="mzg-kX-V5F"/>
                             <constraint firstItem="dkh-kG-EFj" firstAttribute="top" secondItem="Yjc-Zm-uZY" secondAttribute="top" constant="24" id="oaa-yR-g0U"/>
                             <constraint firstItem="dkh-kG-EFj" firstAttribute="centerX" secondItem="Yjc-Zm-uZY" secondAttribute="centerX" id="qoF-Dr-xWA"/>
-                            <constraint firstItem="7bs-Kr-ija" firstAttribute="top" secondItem="dkh-kG-EFj" secondAttribute="bottom" constant="20" id="w9v-GA-ZtN"/>
                             <constraint firstAttribute="bottom" secondItem="7bs-Kr-ija" secondAttribute="bottom" id="zCE-cx-u4r"/>
                         </constraints>
                     </view>
                     <connections>
                         <outlet property="addButton" destination="ngQ-Bn-Kwd" id="FlT-oq-C5e"/>
+                        <outlet property="chainButton" destination="WBh-Qb-dhA" id="Fyv-PN-1Ln"/>
+                        <outlet property="chainButtonContainer" destination="YAr-gV-Zhp" id="0qy-nB-KfB"/>
+                        <outlet property="chainButtonHeightConstraint" destination="HaA-yk-eCj" id="2KM-mU-OO6"/>
                         <outlet property="tableView" destination="glA-FK-Kdd" id="9aW-Qr-UuF"/>
                         <outlet property="titleLabel" destination="dkh-kG-EFj" id="xDn-bP-HWG"/>
                     </connections>
