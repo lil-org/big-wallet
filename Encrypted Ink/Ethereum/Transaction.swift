@@ -31,24 +31,27 @@ struct Transaction {
         return Int(current)
     }
     
-    func description(ethPrice: Double?) -> String {
+    func description(chain: EthereumChain, ethPrice: Double?) -> String {
+        let symbol = chain != .polygon ? "ETH" : "MATIC"
+        let showUSDPrice = chain != .polygon
+        
         let fee: String
         if let gasPrice = gasPrice,
            let gas = gas,
            let a = try? EthNumber(hex: gasPrice).value().toNormalizedDecimal(power: 18),
            let b = try? EthNumber(hex: gas).value().toDecimal() {
             let c = NSDecimalNumber(decimal: a).multiplying(by: NSDecimalNumber(decimal: b))
-            let costString = cost(value: c, price: ethPrice)
-            fee = c.stringValue.prefix(7) + " ETH" + costString
+            let costString = showUSDPrice ? cost(value: c, price: ethPrice) : ""
+            fee = c.stringValue.prefix(7) + " \(symbol)" + costString
         } else {
             fee = "Calculating…"
         }
         var result = [String]()
         if let decimal = try? weiAmount.value().toNormalizedDecimal(power: 18) {
             let decimalNumber = NSDecimalNumber(decimal: decimal)
-            let costString = cost(value: decimalNumber, price: ethPrice)
+            let costString = showUSDPrice ? cost(value: decimalNumber, price: ethPrice) : ""
             if let value = ethString(decimalNumber: decimalNumber) {
-                result.append("\(value) ETH" + costString)
+                result.append("\(value) \(symbol)" + costString)
             }
         }
         result.append("Fee: " + fee)
