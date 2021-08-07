@@ -13,7 +13,7 @@ enum EthereumChain: Int {
         return rawValue
     }
     
-    static let all: [EthereumChain] = [.main, .arbitrum, .polygon, .optimism]
+    static let all: [EthereumChain] = [.main, .polygon, .optimism, .binance]
     
     var name: String {
         switch self {
