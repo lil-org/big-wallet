@@ -5,7 +5,7 @@ import Web3Swift
 
 final class EthereumNetwork: Network {
     
-    static let allByChain: [EthereumChain: EthereumNetwork] = [
+    static let allByChain: [EthereumChain: Network] = [
         .main: EthereumNetwork(url: "https://eth-mainnet.alchemyapi.io/v2/" + Secrets.alchemy),
         .polygon: EthereumNetwork(url: "https://polygon-mainnet.g.alchemy.com/v2/" + Secrets.alchemy),
         .arbitrum: EthereumNetwork(url: "https://arb-mainnet.g.alchemy.com/v2/" + Secrets.alchemy),
