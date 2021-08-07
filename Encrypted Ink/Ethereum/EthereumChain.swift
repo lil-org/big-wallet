@@ -7,6 +7,7 @@ enum EthereumChain: Int {
     case arbitrum = 42161
     case polygon = 137
     case optimism = 10
+    case binance = 56
     
     var id: Int {
         return rawValue
@@ -24,6 +25,8 @@ enum EthereumChain: Int {
             return "Optimism"
         case .polygon:
             return "Polygon"
+        case .binance:
+            return "Binance Chain"
         }
     }
     
