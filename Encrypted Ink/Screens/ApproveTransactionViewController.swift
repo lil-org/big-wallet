@@ -6,7 +6,10 @@ import Kingfisher
 
 class ApproveTransactionViewController: NSViewController {
     
+    @IBOutlet weak var infoTextViewBottomConstraint: NSLayoutConstraint!
+    @IBOutlet weak var speedContainerStackView: NSStackView!
     @IBOutlet weak var gweiLabel: NSTextField!
+    
     @IBOutlet weak var titleLabel: NSTextField!
     @IBOutlet var metaTextView: NSTextView!
     @IBOutlet weak var okButton: NSButton!
@@ -67,6 +70,12 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     private func updateInterface() {
+        if chain != .main {
+            speedContainerStackView.isHidden = true
+            gweiLabel.isHidden = true
+            infoTextViewBottomConstraint.constant = 30
+        }
+        
         enableSpeedConfigurationIfNeeded()
         let meta = transaction.description(ethPrice: priceService.currentPrice)
         if metaTextView.string != meta {

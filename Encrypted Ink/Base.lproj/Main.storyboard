@@ -842,7 +842,7 @@ DQ
                                                     <tableColumnResizingMask key="resizingMask" resizeWithTable="YES" userResizable="YES"/>
                                                     <prototypeCellViews>
                                                         <tableCellView identifier="AccountCellView" id="Lp1-Zy-70c" customClass="AccountCellView" customModule="Encrypted_Ink" customModuleProvider="target">
-                                                            <rect key="frame" x="0.0" y="0.0" width="205" height="40"/>
+                                                            <rect key="frame" x="10" y="0.0" width="205" height="40"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
                                                                 <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="pdB-jS-gKE">
@@ -879,7 +879,7 @@ DQ
                                                             </connections>
                                                         </tableCellView>
                                                         <tableCellView identifier="AddAccountOptionCellView" id="1KM-PS-nEo" customClass="AddAccountOptionCellView" customModule="Encrypted_Ink" customModuleProvider="target">
-                                                            <rect key="frame" x="0.0" y="40" width="205" height="40"/>
+                                                            <rect key="frame" x="10" y="40" width="205" height="40"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
                                                                 <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="BpB-tc-JdP">
@@ -1627,11 +1627,13 @@ DQ
                     <connections>
                         <outlet property="fastSpeedLabel" destination="WJV-V3-GWm" id="lzX-wu-MdJ"/>
                         <outlet property="gweiLabel" destination="xby-TM-Wec" id="3LN-nr-WNA"/>
+                        <outlet property="infoTextViewBottomConstraint" destination="fxj-xB-6jl" id="f2p-uL-Wac"/>
                         <outlet property="metaTextView" destination="EuZ-5b-EGk" id="UyV-K8-7Og"/>
                         <outlet property="okButton" destination="JBO-6Q-5eC" id="JHm-Kl-fys"/>
                         <outlet property="peerLogoImageView" destination="g8t-xf-H1l" id="CqE-7d-LAU"/>
                         <outlet property="peerNameLabel" destination="Ji7-6C-gUp" id="J9c-ml-tXd"/>
                         <outlet property="slowSpeedLabel" destination="Jcz-Um-efA" id="TBN-lQ-Njc"/>
+                        <outlet property="speedContainerStackView" destination="pLD-2z-PFP" id="PV3-l7-3pR"/>
                         <outlet property="speedSlider" destination="oWb-y6-1VO" id="cLg-Yg-DPd"/>
                         <outlet property="titleLabel" destination="g2G-lh-X1F" id="NWt-Lq-go1"/>
                     </connections>
