@@ -32,8 +32,20 @@ struct Transaction {
     }
     
     func description(chain: EthereumChain, ethPrice: Double?) -> String {
-        let symbol = chain != .polygon ? "ETH" : "MATIC"
-        let showUSDPrice = chain != .polygon
+        let symbol: String
+        let showUSDPrice: Bool
+        
+        switch chain {
+        case .main, .arbitrum, .optimism:
+            symbol = "ETH"
+            showUSDPrice = true
+        case .polygon:
+            symbol = "MATIC"
+            showUSDPrice = false
+        case .binance:
+            symbol = "BNB"
+            showUSDPrice = false
+        }
         
         let fee: String
         if let gasPrice = gasPrice,
