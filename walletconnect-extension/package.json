@@ -1,0 +1,18 @@
+{
+  "name": "walletconnect-ext",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "dependencies": {
+    "@walletconnect/web3-provider": "^1.5.2",
+    "eth-provider": "^0.9.1",
+    "terser-webpack-plugin": "^4.2.3",
+    "web3": "^1.5.0",
+    "webpack": "4.x",
+    "webpack-cli": "3.x"
+  },
+  "scripts": {
+      "build": "webpack --config webpack.config.js && node src/main.js",
+      "extract": "mkdir .ext && cp -a dist .ext/ && cp -a img .ext/ && cp manifest.json .ext/ && cd .ext && zip -r ../build.zip . && cd .. && rm -rf .ext"
+  }
+}

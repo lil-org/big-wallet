@@ -1,0 +1,14 @@
+{
+    "name": "Encrypted-Ink-Safari",
+    "version": "1.0",
+    "description": "Start Encrypted Ink, even from websites without WalletConnect support.",
+    "content_scripts": [
+        {
+            "matches": ["http://*/*", "https://*/*"],
+            "run_at": "document_start",
+            "js": ["/dist/inject.js"],
+            "all_frames": true
+        }
+    ],
+    "manifest_version": 2
+}
