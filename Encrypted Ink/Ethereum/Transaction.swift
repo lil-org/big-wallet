@@ -36,7 +36,7 @@ struct Transaction {
         let showUSDPrice: Bool
         
         switch chain {
-        case .main, .arbitrum, .optimism:
+        case .main, .arbitrum, .optimism, .ronin:
             symbol = "ETH"
             showUSDPrice = true
         case .polygon:

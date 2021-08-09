@@ -8,12 +8,13 @@ enum EthereumChain: Int {
     case polygon = 137
     case optimism = 10
     case binance = 56
+    case ronin = 2020
     
     var id: Int {
         return rawValue
     }
     
-    static let all: [EthereumChain] = [.main, .polygon, .optimism, .binance]
+    static let all: [EthereumChain] = [.main, .polygon, .optimism, .binance, .ronin]
     
     var name: String {
         switch self {
@@ -27,6 +28,8 @@ enum EthereumChain: Int {
             return "Polygon"
         case .binance:
             return "Binance Smart Chain"
+        case .ronin:
+            return "Ronin"
         }
     }
     

@@ -10,6 +10,24 @@
 		28BDF30EBC80362870C988B6 /* Pods_Encrypted_Ink.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3E2A642C960E4952955E6E82 /* Pods_Encrypted_Ink.framework */; };
 		2C03D1D2269B407900EF10EA /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03D1D1269B407900EF10EA /* NetworkMonitor.swift */; };
 		2C03D1D5269B428C00EF10EA /* Notification.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03D1D4269B428C00EF10EA /* Notification.swift */; };
+		2C0EA9EA26C1E4910028818C /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2C0EA9E926C1E4910028818C /* Cocoa.framework */; };
+		2C0EA9F026C1E4910028818C /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 2C0EA9EF26C1E4910028818C /* _locales */; };
+		2C0EA9F226C1E4910028818C /* images in Resources */ = {isa = PBXBuildFile; fileRef = 2C0EA9F126C1E4910028818C /* images */; };
+		2C0EA9F426C1E4910028818C /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 2C0EA9F326C1E4910028818C /* manifest.json */; };
+		2C0EA9FA26C1E4910028818C /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = 2C0EA9F926C1E4910028818C /* popup.html */; };
+		2C0EA9FC26C1E4910028818C /* popup.css in Resources */ = {isa = PBXBuildFile; fileRef = 2C0EA9FB26C1E4910028818C /* popup.css */; };
+		2C0EA9FE26C1E4910028818C /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C0EA9FD26C1E4910028818C /* popup.js */; };
+		2C0EAA0326C1E4910028818C /* Encrypted-Ink-Safari.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2C0EA9E826C1E4910028818C /* Encrypted-Ink-Safari.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		2C0EAA0D26C1E4A30028818C /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0EAA0C26C1E4A30028818C /* SafariWebExtensionHandler.swift */; };
+		2C0EAA1C26C1E5980028818C /* PRIVACY.md in Resources */ = {isa = PBXBuildFile; fileRef = 2C0EAA1326C1E5950028818C /* PRIVACY.md */; };
+		2C0EAA1D26C1E5980028818C /* dist in Resources */ = {isa = PBXBuildFile; fileRef = 2C0EAA1426C1E5950028818C /* dist */; };
+		2C0EAA1E26C1E5980028818C /* webpack.config.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C0EAA1526C1E5960028818C /* webpack.config.js */; };
+		2C0EAA1F26C1E5980028818C /* yarn.lock in Resources */ = {isa = PBXBuildFile; fileRef = 2C0EAA1626C1E5960028818C /* yarn.lock */; };
+		2C0EAA2026C1E5980028818C /* src in Resources */ = {isa = PBXBuildFile; fileRef = 2C0EAA1726C1E5960028818C /* src */; };
+		2C0EAA2126C1E5980028818C /* package.json in Resources */ = {isa = PBXBuildFile; fileRef = 2C0EAA1826C1E5960028818C /* package.json */; };
+		2C0EAA2226C1E5980028818C /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 2C0EAA1926C1E5960028818C /* README.md */; };
+		2C0EAA2326C1E5980028818C /* node_modules in Resources */ = {isa = PBXBuildFile; fileRef = 2C0EAA1A26C1E5960028818C /* node_modules */; };
+		2C0EAA2426C1E5980028818C /* LICENSE.md in Resources */ = {isa = PBXBuildFile; fileRef = 2C0EAA1B26C1E5970028818C /* LICENSE.md */; };
 		2C1995402674C4B900A8E370 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C19953F2674C4B900A8E370 /* AppDelegate.swift */; };
 		2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995412674C4B900A8E370 /* ImportViewController.swift */; };
 		2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995432674C4BA00A8E370 /* Assets.xcassets */; };
@@ -50,9 +68,53 @@
 		2CE3D015267F73E80032A62E /* LegacyAccountWithKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D014267F73E80032A62E /* LegacyAccountWithKey.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		2C0EAA0126C1E4910028818C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2C1995342674C4B900A8E370 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2C0EA9E726C1E4910028818C;
+			remoteInfo = "Encrypted-Ink-Safari";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		2C0EAA0426C1E4910028818C /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				2C0EAA0326C1E4910028818C /* Encrypted-Ink-Safari.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		2C03D1D1269B407900EF10EA /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		2C03D1D4269B428C00EF10EA /* Notification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notification.swift; sourceTree = "<group>"; };
+		2C0EA9E826C1E4910028818C /* Encrypted-Ink-Safari.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Encrypted-Ink-Safari.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		2C0EA9E926C1E4910028818C /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = System/Library/Frameworks/Cocoa.framework; sourceTree = SDKROOT; };
+		2C0EA9EF26C1E4910028818C /* _locales */ = {isa = PBXFileReference; lastKnownFileType = folder; path = _locales; sourceTree = "<group>"; };
+		2C0EA9F126C1E4910028818C /* images */ = {isa = PBXFileReference; lastKnownFileType = folder; path = images; sourceTree = "<group>"; };
+		2C0EA9F326C1E4910028818C /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
+		2C0EA9F926C1E4910028818C /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = popup.html; sourceTree = "<group>"; };
+		2C0EA9FB26C1E4910028818C /* popup.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = popup.css; sourceTree = "<group>"; };
+		2C0EA9FD26C1E4910028818C /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = popup.js; sourceTree = "<group>"; };
+		2C0EA9FF26C1E4910028818C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		2C0EAA0026C1E4910028818C /* Encrypted_Ink_Safari.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Encrypted_Ink_Safari.entitlements; sourceTree = "<group>"; };
+		2C0EAA0C26C1E4A30028818C /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
+		2C0EAA1326C1E5950028818C /* PRIVACY.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = PRIVACY.md; sourceTree = "<group>"; };
+		2C0EAA1426C1E5950028818C /* dist */ = {isa = PBXFileReference; lastKnownFileType = folder; path = dist; sourceTree = "<group>"; };
+		2C0EAA1526C1E5960028818C /* webpack.config.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = webpack.config.js; sourceTree = "<group>"; };
+		2C0EAA1626C1E5960028818C /* yarn.lock */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = yarn.lock; sourceTree = "<group>"; };
+		2C0EAA1726C1E5960028818C /* src */ = {isa = PBXFileReference; lastKnownFileType = folder; path = src; sourceTree = "<group>"; };
+		2C0EAA1826C1E5960028818C /* package.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = package.json; sourceTree = "<group>"; };
+		2C0EAA1926C1E5960028818C /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		2C0EAA1A26C1E5960028818C /* node_modules */ = {isa = PBXFileReference; lastKnownFileType = folder; path = node_modules; sourceTree = "<group>"; };
+		2C0EAA1B26C1E5970028818C /* LICENSE.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = LICENSE.md; sourceTree = "<group>"; };
 		2C19953C2674C4B900A8E370 /* Encrypted Ink.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Encrypted Ink.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C19953F2674C4B900A8E370 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		2C1995412674C4B900A8E370 /* ImportViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportViewController.swift; sourceTree = "<group>"; };
@@ -100,6 +162,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		2C0EA9E526C1E4910028818C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2C0EA9EA26C1E4910028818C /* Cocoa.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2C1995392674C4B900A8E370 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -111,10 +181,52 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		2C0EA9EB26C1E4910028818C /* Encrypted-Ink-Safari */ = {
+			isa = PBXGroup;
+			children = (
+				2C0EA9FF26C1E4910028818C /* Info.plist */,
+				2C0EAA0C26C1E4A30028818C /* SafariWebExtensionHandler.swift */,
+				2C0EAA0026C1E4910028818C /* Encrypted_Ink_Safari.entitlements */,
+				2C0EA9EE26C1E4910028818C /* Resources */,
+			);
+			path = "Encrypted-Ink-Safari";
+			sourceTree = "<group>";
+		};
+		2C0EA9EE26C1E4910028818C /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				2C0EA9EF26C1E4910028818C /* _locales */,
+				2C0EA9F126C1E4910028818C /* images */,
+				2C0EA9F326C1E4910028818C /* manifest.json */,
+				2C0EAA1426C1E5950028818C /* dist */,
+				2C0EAA1B26C1E5970028818C /* LICENSE.md */,
+				2C0EAA1A26C1E5960028818C /* node_modules */,
+				2C0EAA1826C1E5960028818C /* package.json */,
+				2C0EAA1326C1E5950028818C /* PRIVACY.md */,
+				2C0EAA1926C1E5960028818C /* README.md */,
+				2C0EAA1726C1E5960028818C /* src */,
+				2C0EAA1526C1E5960028818C /* webpack.config.js */,
+				2C0EAA1626C1E5960028818C /* yarn.lock */,
+				2C0EAA1026C1E4B60028818C /* Popup */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		2C0EAA1026C1E4B60028818C /* Popup */ = {
+			isa = PBXGroup;
+			children = (
+				2C0EA9F926C1E4910028818C /* popup.html */,
+				2C0EA9FB26C1E4910028818C /* popup.css */,
+				2C0EA9FD26C1E4910028818C /* popup.js */,
+			);
+			path = Popup;
+			sourceTree = "<group>";
+		};
 		2C1995332674C4B900A8E370 = {
 			isa = PBXGroup;
 			children = (
 				2C19953E2674C4B900A8E370 /* Encrypted Ink */,
+				2C0EA9EB26C1E4910028818C /* Encrypted-Ink-Safari */,
 				2C19953D2674C4B900A8E370 /* Products */,
 				FB5786212D81829B0FADBD25 /* Pods */,
 				8E59B61AC986C705990A0C02 /* Frameworks */,
@@ -125,6 +237,7 @@
 			isa = PBXGroup;
 			children = (
 				2C19953C2674C4B900A8E370 /* Encrypted Ink.app */,
+				2C0EA9E826C1E4910028818C /* Encrypted-Ink-Safari.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -238,6 +351,7 @@
 			isa = PBXGroup;
 			children = (
 				3E2A642C960E4952955E6E82 /* Pods_Encrypted_Ink.framework */,
+				2C0EA9E926C1E4910028818C /* Cocoa.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -254,6 +368,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		2C0EA9E726C1E4910028818C /* Encrypted-Ink-Safari */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2C0EAA0726C1E4910028818C /* Build configuration list for PBXNativeTarget "Encrypted-Ink-Safari" */;
+			buildPhases = (
+				2C0EA9E426C1E4910028818C /* Sources */,
+				2C0EA9E526C1E4910028818C /* Frameworks */,
+				2C0EA9E626C1E4910028818C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Encrypted-Ink-Safari";
+			productName = "Encrypted-Ink-Safari";
+			productReference = 2C0EA9E826C1E4910028818C /* Encrypted-Ink-Safari.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		2C19953B2674C4B900A8E370 /* Encrypted Ink */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2C19954C2674C4BA00A8E370 /* Build configuration list for PBXNativeTarget "Encrypted Ink" */;
@@ -264,10 +395,12 @@
 				2C19953A2674C4B900A8E370 /* Resources */,
 				2C1995512674C6A100A8E370 /* ShellScript */,
 				DA399964E8F6C2CF5532D1CE /* [CP] Embed Pods Frameworks */,
+				2C0EAA0426C1E4910028818C /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				2C0EAA0226C1E4910028818C /* PBXTargetDependency */,
 			);
 			name = "Encrypted Ink";
 			productName = "Ecrypted Ink";
@@ -283,6 +416,10 @@
 				LastSwiftUpdateCheck = 1240;
 				LastUpgradeCheck = 1240;
 				TargetAttributes = {
+					2C0EA9E726C1E4910028818C = {
+						CreatedOnToolsVersion = 12.4;
+						LastSwiftMigration = 1240;
+					};
 					2C19953B2674C4B900A8E370 = {
 						CreatedOnToolsVersion = 12.4;
 					};
@@ -302,11 +439,34 @@
 			projectRoot = "";
 			targets = (
 				2C19953B2674C4B900A8E370 /* Encrypted Ink */,
+				2C0EA9E726C1E4910028818C /* Encrypted-Ink-Safari */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		2C0EA9E626C1E4910028818C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2C0EAA1F26C1E5980028818C /* yarn.lock in Resources */,
+				2C0EAA1D26C1E5980028818C /* dist in Resources */,
+				2C0EA9FC26C1E4910028818C /* popup.css in Resources */,
+				2C0EA9FA26C1E4910028818C /* popup.html in Resources */,
+				2C0EAA2226C1E5980028818C /* README.md in Resources */,
+				2C0EA9F226C1E4910028818C /* images in Resources */,
+				2C0EA9F426C1E4910028818C /* manifest.json in Resources */,
+				2C0EA9F026C1E4910028818C /* _locales in Resources */,
+				2C0EAA2026C1E5980028818C /* src in Resources */,
+				2C0EAA2126C1E5980028818C /* package.json in Resources */,
+				2C0EAA2426C1E5980028818C /* LICENSE.md in Resources */,
+				2C0EAA2326C1E5980028818C /* node_modules in Resources */,
+				2C0EAA1C26C1E5980028818C /* PRIVACY.md in Resources */,
+				2C0EA9FE26C1E4910028818C /* popup.js in Resources */,
+				2C0EAA1E26C1E5980028818C /* webpack.config.js in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2C19953A2674C4B900A8E370 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -379,6 +539,14 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		2C0EA9E426C1E4910028818C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2C0EAA0D26C1E4A30028818C /* SafariWebExtensionHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2C1995382674C4B900A8E370 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -425,6 +593,14 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		2C0EAA0226C1E4910028818C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2C0EA9E726C1E4910028818C /* Encrypted-Ink-Safari */;
+			targetProxy = 2C0EAA0126C1E4910028818C /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin PBXVariantGroup section */
 		2C1995452674C4BA00A8E370 /* Main.storyboard */ = {
 			isa = PBXVariantGroup;
@@ -437,6 +613,53 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		2C0EAA0526C1E4910028818C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = "Encrypted-Ink-Safari/Encrypted_Ink_Safari.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = "Encrypted-Ink-Safari/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 11.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "ink.encrypted.macos.Encrypted-Ink-Safari";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		2C0EAA0626C1E4910028818C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = "Encrypted-Ink-Safari/Encrypted_Ink_Safari.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = "Encrypted-Ink-Safari/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 11.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "ink.encrypted.macos.Encrypted-Ink-Safari";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		2C19954A2674C4BA00A8E370 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -556,6 +779,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = A858B0F7D88913EAB1FA50B0 /* Pods-Encrypted Ink.debug.xcconfig */;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Encrypted Ink/Supporting Files/Encrypted_Ink.entitlements";
@@ -583,6 +807,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 35AD6E3AC630C8A9B4EC16D9 /* Pods-Encrypted Ink.release.xcconfig */;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Encrypted Ink/Supporting Files/Encrypted_Ink.entitlements";
@@ -609,6 +834,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		2C0EAA0726C1E4910028818C /* Build configuration list for PBXNativeTarget "Encrypted-Ink-Safari" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2C0EAA0526C1E4910028818C /* Debug */,
+				2C0EAA0626C1E4910028818C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		2C1995372674C4B900A8E370 /* Build configuration list for PBXProject "Encrypted Ink" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

@@ -10,7 +10,8 @@ final class EthereumNetwork: Network {
         .polygon: EthereumNetwork(url: "https://polygon-mainnet.g.alchemy.com/v2/" + Secrets.alchemy),
         .arbitrum: EthereumNetwork(url: "https://arb-mainnet.g.alchemy.com/v2/" + Secrets.alchemy),
         .optimism: EthereumNetwork(url: "https://mainnet.optimism.io"),
-        .binance: EthereumNetwork(url: "https://bsc-dataseed.binance.org/")
+        .binance: EthereumNetwork(url: "https://bsc-dataseed.binance.org/"),
+        .ronin: EthereumNetwork(url: "https://api.roninchain.com/rpc/")
     ]
     
     private let origin: GethNetwork
