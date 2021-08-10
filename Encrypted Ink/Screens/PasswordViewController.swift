@@ -36,11 +36,10 @@ class PasswordViewController: NSViewController {
         super.viewDidLoad()
         switchToMode(mode)
         
-        switch reason {
-        case .none, .start:
+        if let reason = reason, reason != .start {
+            reasonLabel.stringValue = "to " + reason.title.lowercased()
+        } else {
             reasonLabel.stringValue = ""
-        case .sendTransaction, .removeAccount, .showPrivateKey, .showSecretWords, .signAction:
-            reasonLabel.stringValue = "to " + (reason?.title.lowercased() ?? "")
         }
     }
     
