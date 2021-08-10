@@ -131,7 +131,7 @@ class Agent: NSObject {
         let howToItem = NSMenuItem(title: "How to WalletConnect?", action: #selector(showInstructionsAlert), keyEquivalent: "")
         let mailItem = NSMenuItem(title: "Drop us a line…", action: #selector(didSelectMailMenuItem), keyEquivalent: "")
         let githubItem = NSMenuItem(title: "View on GitHub…", action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
-        let twitterItem = NSMenuItem(title: "Follow on Twitter…", action: #selector(didSelectTwitterMenuItem), keyEquivalent: "")
+        let twitterItem = NSMenuItem(title: "View on Twitter…", action: #selector(didSelectTwitterMenuItem), keyEquivalent: "")
         let quitItem = NSMenuItem(title: "Quit", action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
         showItem.attributedTitle = NSAttributedString(string: "👀 Show Encrypted Ink", attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
         
