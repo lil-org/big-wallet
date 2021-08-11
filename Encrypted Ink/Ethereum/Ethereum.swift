@@ -22,30 +22,20 @@ struct Ethereum {
     private let networks = EthereumNetwork.allByChain
     
     func sign(message: String, wallet: InkWallet) throws -> String {
-        guard let privateKeyString = wallet.ethereumPrivateKeyString else { throw Error.keyNotFound }
-        let ethPrivateKey = EthPrivateKey(hex: privateKeyString)
-        
-        let signature = SECP256k1Signature(
-            privateKey: ethPrivateKey,
-            message: UTF8StringBytes(string: message),
-            hashFunction: SHA3(variant: .keccak256).calculate
-        )
-        let data = try ConcatenatedBytes(
-            bytes: [
-                signature.r(),
-                signature.s(),
-                EthNumber(value: signature.recoverID().value() + 27)
-            ]
-        ).value()
-        return data.toPrefixedHexString()
+        return try sign(message: message, wallet: wallet, addPrefix: false)
     }
     
     func signPersonal(message: String, wallet: InkWallet) throws -> String {
-        guard let privateKeyString = wallet.ethereumPrivateKeyString else { throw Error.keyNotFound }
-        let ethPrivateKey = EthPrivateKey(hex: privateKeyString)
-        let signed = SignedPersonalMessageBytes(message: message, signerKey: ethPrivateKey)
-        let data = try signed.value().toPrefixedHexString()
-        return data
+        return try sign(message: message, wallet: wallet, addPrefix: true)
+    }
+    
+    private func sign(message: String, wallet: InkWallet, addPrefix: Bool) throws -> String {
+        guard let ethereumPrivateKey = wallet.ethereumPrivateKey else { throw Error.keyNotFound }
+        let withPrefixIfNeeded = (addPrefix ? "\u{19}Ethereum Signed Message:\n" + String(message.count) : "") + message
+        guard let data = withPrefixIfNeeded.data(using: .utf8) else { throw Error.invalidInputData }
+        guard var signed = ethereumPrivateKey.sign(digest: Hash.keccak256(data: data), curve: CoinType.ethereum.curve) else { throw Error.failedToSign }
+        signed[64] += 27
+        return signed.toPrefixedHexString()
     }
     
     func sign(typedData: String, wallet: InkWallet) throws -> String {
