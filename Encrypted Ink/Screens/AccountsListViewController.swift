@@ -8,7 +8,8 @@ class AccountsListViewController: NSViewController {
     private let walletsManager = WalletsManager.shared
     private var cellModels = [CellModel]()
     
-    var onSelectedWallet: ((InkWallet) -> Void)?
+    private var chain = EthereumChain.main
+    var onSelectedWallet: ((Int, InkWallet) -> Void)?
     var newWalletId: String?
     
     enum CellModel {
@@ -29,6 +30,9 @@ class AccountsListViewController: NSViewController {
         }
     }
     
+    @IBOutlet weak var chainButtonHeightConstraint: NSLayoutConstraint!
+    @IBOutlet weak var chainButtonContainer: NSView!
+    @IBOutlet weak var chainButton: NSPopUpButton!
     @IBOutlet weak var addButton: NSButton! {
         didSet {
             let menu = NSMenu()
@@ -53,7 +57,7 @@ class AccountsListViewController: NSViewController {
         super.viewDidLoad()
         
         setupAccountsMenu()
-        reloadTitle()
+        reloadHeader()
         updateCellModels()
         NotificationCenter.default.addObserver(self, selector: #selector(didBecomeActive), name: NSApplication.didBecomeActiveNotification, object: nil)
     }
@@ -76,9 +80,15 @@ class AccountsListViewController: NSViewController {
         tableView.menu = menu
     }
     
-    private func reloadTitle() {
-        titleLabel.stringValue = onSelectedWallet != nil && !wallets.isEmpty ? "Select\nAccount" : "Accounts"
+	private func reloadHeader() {
+        let canSelectAccount = onSelectedWallet != nil && !wallets.isEmpty
+        titleLabel.stringValue = canSelectAccount ? "Select\nAccount" : "Accounts"
         addButton.isHidden = wallets.isEmpty
+        chainButtonHeightConstraint.constant = canSelectAccount ? 40 : 15
+        chainButtonContainer.isHidden = !canSelectAccount
+        if canSelectAccount, chainButton.numberOfItems == 0 {
+            chainButton.addItems(withTitles: EthereumChain.all.map { $0.name })
+        }
     }
     
     @objc private func didBecomeActive() {
@@ -86,7 +96,14 @@ class AccountsListViewController: NSViewController {
         if let completion = agent.getWalletSelectionCompletionIfShouldSelect() {
             onSelectedWallet = completion
         }
-        reloadTitle()
+        reloadHeader()
+    }
+    
+    @IBAction func chainButtonSelectionChanged(_ sender: Any) {
+        guard let selectedItem = chainButton.selectedItem else { return }
+        let index = chainButton.index(of: selectedItem)
+        guard index >= 0 && index < EthereumChain.all.count else { return }
+        chain = EthereumChain.all[index]
     }
     
     @IBAction func addButtonTapped(_ sender: NSButton) {
@@ -107,13 +124,25 @@ class AccountsListViewController: NSViewController {
     }
     
     @objc private func didClickCreateAccount() {
-        let wallet = try? walletsManager.createWallet()
-        newWalletId = wallet?.id
-        reloadTitle()
+        let alert = Alert()
+        alert.messageText = "Back up new account."
+        alert.informativeText = "You will see 12 secret words."
+        alert.alertStyle = .critical
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            createNewAccountAndShowSecretWords()
+        }
+    }
+    
+    private func createNewAccountAndShowSecretWords() {
+        guard let wallet = try? walletsManager.createWallet() else { return }
+        newWalletId = wallet.id
+        reloadHeader()
         updateCellModels()
         tableView.reloadData()
         blinkNewWalletCellIfNeeded()
-        // TODO: show backup phrase
+        showKey(wallet: wallet, mnemonic: true)
     }
     
     private func blinkNewWalletCellIfNeeded() {
@@ -184,8 +213,10 @@ class AccountsListViewController: NSViewController {
     }
     
     private func showKey(index: Int, mnemonic: Bool) {
-        let wallet = wallets[index]
-        
+        showKey(wallet: wallets[index], mnemonic: mnemonic)
+    }
+    
+    private func showKey(wallet: InkWallet, mnemonic: Bool) {
         let secret: String
         if mnemonic, let mnemonicString = try? walletsManager.exportMnemonic(wallet: wallet) {
             secret = mnemonicString
@@ -213,7 +244,7 @@ class AccountsListViewController: NSViewController {
     private func removeAccountAtIndex(_ index: Int) {
         let wallet = wallets[index]
         try? walletsManager.delete(wallet: wallet)
-        reloadTitle()
+        reloadHeader()
         updateCellModels()
         tableView.reloadData()
     }
@@ -240,7 +271,7 @@ extension AccountsListViewController: NSTableViewDelegate {
         case .wallet:
             let wallet = wallets[row]
             if let onSelectedWallet = onSelectedWallet {
-                onSelectedWallet(wallet)
+                onSelectedWallet(chain.id, wallet)
             } else {
                 Timer.scheduledTimer(withTimeInterval: 0.01, repeats: false) { [weak self] _ in
                     var point = NSEvent.mouseLocation

@@ -38,6 +38,8 @@
 		2C901C4A2689F01700D0926A /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C492689F01700D0926A /* Strings.swift */; };
 		2C901C4D268A033100D0926A /* GasService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C4C268A033100D0926A /* GasService.swift */; };
 		2C917429267D2A6E00049075 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C917428267D2A6E00049075 /* Keychain.swift */; };
+		2C9F0B6526BDC9AF008FA3D6 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */; };
+		2C9F0B6826BDCB2E008FA3D6 /* EthereumChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */; };
 		2CC0CDBE2692027E0072922A /* PriceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC0CDBD2692027E0072922A /* PriceService.swift */; };
 		2CC8946F269A2E8C00879245 /* SessionStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8946E269A2E8C00879245 /* SessionStorage.swift */; };
 		2CC89471269A334A00879245 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC89470269A334A00879245 /* UserDefaults.swift */; };
@@ -84,6 +86,8 @@
 		2C901C492689F01700D0926A /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		2C901C4C268A033100D0926A /* GasService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GasService.swift; sourceTree = "<group>"; };
 		2C917428267D2A6E00049075 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
+		2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumNetwork.swift; sourceTree = "<group>"; };
+		2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumChain.swift; sourceTree = "<group>"; };
 		2CC0CDBD2692027E0072922A /* PriceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceService.swift; sourceTree = "<group>"; };
 		2CC8946E269A2E8C00879245 /* SessionStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStorage.swift; sourceTree = "<group>"; };
 		2CC89470269A334A00879245 /* UserDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaults.swift; sourceTree = "<group>"; };
@@ -189,6 +193,8 @@
 			isa = PBXGroup;
 			children = (
 				2C1995552674D0F300A8E370 /* Ethereum.swift */,
+				2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */,
+				2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */,
 				2CE3D014267F73E80032A62E /* LegacyAccountWithKey.swift */,
 				2CE3D011267F73C00032A62E /* Transaction.swift */,
 			);
@@ -396,11 +402,13 @@
 				2CC0CDBE2692027E0072922A /* PriceService.swift in Sources */,
 				2C8A09C6267513FC00993638 /* Agent.swift in Sources */,
 				2C8A09D42675184700993638 /* Window.swift in Sources */,
+				2C9F0B6526BDC9AF008FA3D6 /* EthereumNetwork.swift in Sources */,
 				2C208A9F26813408005BA500 /* Secrets.swift in Sources */,
 				2CC8946F269A2E8C00879245 /* SessionStorage.swift in Sources */,
 				0DC850E726B73A5900809E82 /* AuthenticationReason.swift in Sources */,
 				2CD0669126B5537B00728C20 /* InkWallet.swift in Sources */,
 				2C8A09D726751A0C00993638 /* WalletConnect.swift in Sources */,
+				2C9F0B6826BDCB2E008FA3D6 /* EthereumChain.swift in Sources */,
 				2C03D1D2269B407900EF10EA /* NetworkMonitor.swift in Sources */,
 				2C8A09E326757FC000993638 /* AccountCellView.swift in Sources */,
 				2C6B964C26B9D92500D2C819 /* NSColor.swift in Sources */,
@@ -570,7 +578,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 23;
+				CURRENT_PROJECT_VERSION = 26;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "$(SRCROOT)/Encrypted Ink/Supporting Files/Info.plist";
@@ -579,7 +587,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.15;
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.0.7;
 				PRODUCT_BUNDLE_IDENTIFIER = ink.encrypted.macos;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -597,7 +605,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 23;
+				CURRENT_PROJECT_VERSION = 26;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "$(SRCROOT)/Encrypted Ink/Supporting Files/Info.plist";
@@ -606,7 +614,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.15;
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.0.7;
 				PRODUCT_BUNDLE_IDENTIFIER = ink.encrypted.macos;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

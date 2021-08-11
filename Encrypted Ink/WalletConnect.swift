@@ -24,10 +24,10 @@ class WalletConnect {
         return WCSession.from(string: link)
     }
     
-    func connect(session: WCSession, walletId: String, uuid: UUID = UUID(), completion: @escaping ((Bool) -> Void)) {
+    func connect(session: WCSession, chainId: Int, walletId: String, uuid: UUID = UUID(), completion: @escaping ((Bool) -> Void)) {
         let clientMeta = WCPeerMeta(name: "Encrypted Ink", url: "https://encrypted.ink", description: "Ethereum agent for macOS", icons: ["https://encrypted.ink/icon.png"])
         let interactor = WCInteractor(session: session, meta: clientMeta, uuid: uuid)
-        configure(interactor: interactor, walletId: walletId)
+        configure(interactor: interactor, chainId: chainId, walletId: walletId)
 
         interactor.connect().done { connected in
             completion(connected)
@@ -45,7 +45,7 @@ class WalletConnect {
         
         for item in items {
             guard let uuid = UUID(uuidString: item.clientId) else { continue }
-            connect(session: item.session, walletId: item.walletId, uuid: uuid) { _ in }
+            connect(session: item.session, chainId: item.chainId ?? 1, walletId: item.walletId, uuid: uuid) { _ in }
             peers[item.clientId] = item.sessionDetails.peerMeta
         }
     }
@@ -83,17 +83,16 @@ class WalletConnect {
         return peers[id]
     }
     
-    private func configure(interactor: WCInteractor, walletId: String) {
+    private func configure(interactor: WCInteractor, chainId: Int, walletId: String) {
         guard let address = walletsManager.getWallet(id: walletId)?.ethereumAddress else { return }
         let accounts = [address]
-        let chainId = 1
-
+        
         interactor.onError = { _ in }
 
         interactor.onSessionRequest = { [weak self, weak interactor] (id, peerParam) in
             guard let interactor = interactor else { return }
             self?.peers[interactor.clientId] = peerParam.peerMeta
-            self?.sessionStorage.add(interactor: interactor, walletId: walletId, sessionDetails: peerParam)
+            self?.sessionStorage.add(interactor: interactor, chainId: chainId, walletId: walletId, sessionDetails: peerParam)
             interactor.approveSession(accounts: accounts, chainId: chainId).cauterize()
         }
 
@@ -109,7 +108,7 @@ class WalletConnect {
         }
 
         interactor.eth.onTransaction = { [weak self, weak interactor] (id, event, transaction) in
-            self?.approveTransaction(id: id, wct: transaction, walletId: walletId, interactor: interactor)
+            self?.approveTransaction(id: id, wct: transaction, walletId: walletId, chainId: chainId, interactor: interactor)
             self?.sessionStorage.didInteractWith(clientId: interactor?.clientId)
         }
     }
@@ -125,17 +124,17 @@ class WalletConnect {
         }
     }
     
-    private func approveTransaction(id: Int64, wct: WCEthereumTransaction, walletId: String, interactor: WCInteractor?) {
-        guard let to = wct.to else {
+    private func approveTransaction(id: Int64, wct: WCEthereumTransaction, walletId: String, chainId: Int, interactor: WCInteractor?) {
+        guard let to = wct.to, let chain = EthereumChain(rawValue: chainId) else {
             rejectRequest(id: id, interactor: interactor, message: "Something went wrong.")
             return
         }
         
         let peer = getPeerOfInteractor(interactor)
         let transaction = Transaction(from: wct.from, to: to, nonce: wct.nonce, gasPrice: wct.gasPrice, gas: wct.gas, value: wct.value, data: wct.data)
-        Agent.shared.showApprove(transaction: transaction, peerMeta: peer) { [weak self, weak interactor] transaction in
+        Agent.shared.showApprove(transaction: transaction, chain: chain, peerMeta: peer) { [weak self, weak interactor] transaction in
             if let transaction = transaction {
-                self?.sendTransaction(transaction, walletId: walletId, requestId: id, interactor: interactor)
+                self?.sendTransaction(transaction, walletId: walletId, chainId: chainId, requestId: id, interactor: interactor)
             } else {
                 self?.rejectRequest(id: id, interactor: interactor, message: "Cancelled")
             }
@@ -174,12 +173,12 @@ class WalletConnect {
         interactor?.rejectRequest(id: id, message: message).cauterize()
     }
 
-    private func sendTransaction(_ transaction: Transaction, walletId: String, requestId: Int64, interactor: WCInteractor?) {
-        guard let wallet = walletsManager.getWallet(id: walletId) else {
+    private func sendTransaction(_ transaction: Transaction, walletId: String, chainId: Int, requestId: Int64, interactor: WCInteractor?) {
+        guard let wallet = walletsManager.getWallet(id: walletId), let chain = EthereumChain(rawValue: chainId) else {
             rejectRequest(id: requestId, interactor: interactor, message: "Something went wrong.")
             return
         }
-        guard let hash = try? ethereum.send(transaction: transaction, wallet: wallet) else {
+        guard let hash = try? ethereum.send(transaction: transaction, wallet: wallet, chain: chain) else {
             rejectRequest(id: requestId, interactor: interactor, message: "Failed to send")
             return
         }

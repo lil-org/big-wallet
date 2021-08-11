@@ -77,9 +77,9 @@ class Agent: NSObject {
         windowController.contentViewController = accountsList
     }
     
-    func showApprove(transaction: Transaction, peerMeta: WCPeerMeta?, completion: @escaping (Transaction?) -> Void) {
+    func showApprove(transaction: Transaction, chain: EthereumChain, peerMeta: WCPeerMeta?, completion: @escaping (Transaction?) -> Void) {
         let windowController = Window.showNew()
-        let approveViewController = ApproveTransactionViewController.with(transaction: transaction, peerMeta: peerMeta) { [weak self] transaction in
+        let approveViewController = ApproveTransactionViewController.with(transaction: transaction, chain: chain, peerMeta: peerMeta) { [weak self] transaction in
             if transaction != nil {
                 self?.askAuthentication(on: windowController.window, onStart: false, reason: .sendTransaction) { success in
                     completion(success ? transaction : nil)
@@ -119,7 +119,7 @@ class Agent: NSObject {
         showInitialScreen(wcSession: session)
     }
     
-    func getWalletSelectionCompletionIfShouldSelect() -> ((InkWallet) -> Void)? {
+    func getWalletSelectionCompletionIfShouldSelect() -> ((Int, InkWallet) -> Void)? {
         let session = getSessionFromPasteboard()
         return onSelectedWallet(session: session)
     }
@@ -131,7 +131,7 @@ class Agent: NSObject {
         let howToItem = NSMenuItem(title: "How to WalletConnect?", action: #selector(showInstructionsAlert), keyEquivalent: "")
         let mailItem = NSMenuItem(title: "Drop us a line…", action: #selector(didSelectMailMenuItem), keyEquivalent: "")
         let githubItem = NSMenuItem(title: "View on GitHub…", action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
-        let twitterItem = NSMenuItem(title: "Follow on Twitter…", action: #selector(didSelectTwitterMenuItem), keyEquivalent: "")
+        let twitterItem = NSMenuItem(title: "View on Twitter…", action: #selector(didSelectTwitterMenuItem), keyEquivalent: "")
         let quitItem = NSMenuItem(title: "Quit", action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
         showItem.attributedTitle = NSAttributedString(string: "👀 Show Encrypted Ink", attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
         
@@ -222,10 +222,10 @@ class Agent: NSObject {
         }
     }
     
-    private func onSelectedWallet(session: WCSession?) -> ((InkWallet) -> Void)? {
+    private func onSelectedWallet(session: WCSession?) -> ((Int, InkWallet) -> Void)? {
         guard let session = session else { return nil }
-        return { [weak self] wallet in
-            self?.connectWallet(session: session, wallet: wallet)
+        return { [weak self] chainId, wallet in
+            self?.connectWallet(session: session, chainId: chainId, wallet: wallet)
         }
     }
     
@@ -284,12 +284,12 @@ class Agent: NSObject {
         }
     }
     
-    private func connectWallet(session: WCSession, wallet: InkWallet) {
+    private func connectWallet(session: WCSession, chainId: Int, wallet: InkWallet) {
         let windowController = Window.showNew()
         let window = windowController.window
         windowController.contentViewController = WaitingViewController.withReason("Connecting")
         
-        WalletConnect.shared.connect(session: session, walletId: wallet.id) { [weak window] _ in
+        WalletConnect.shared.connect(session: session, chainId: chainId, walletId: wallet.id) { [weak window] _ in
             if window?.isVisible == true {
                 Window.closeAllAndActivateBrowser()
             }
