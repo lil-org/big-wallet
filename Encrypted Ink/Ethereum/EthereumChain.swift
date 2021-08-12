@@ -9,11 +9,15 @@ enum EthereumChain: Int {
     case optimism = 10
     case binance = 56
     
+    // Testnets
+    case optimisticKovan = 69
+    
     var id: Int {
         return rawValue
     }
     
-    static let all: [EthereumChain] = [.main, .polygon, .optimism, .binance, .arbitrum]
+    static let allMainnets: [EthereumChain] = [.main, .polygon, .optimism, .binance, .arbitrum]
+    static let allTestnets: [EthereumChain] = [.optimisticKovan]
     
     var name: String {
         switch self {
@@ -22,25 +26,26 @@ enum EthereumChain: Int {
         case .optimism: return "Optimism"
         case .polygon: return "Polygon"
         case .binance: return "Binance Smart Chain"
+        case .optimisticKovan: return "Optimistic Kovan"
         }
     }
     
     var symbol: String {
         switch self {
-        case .main, .arbitrum, .optimism:
-            return "ETH"
         case .binance:
             return "BNB"
         case .polygon:
             return "MATIC"
+        default:
+            return "ETH"
         }
     }
     
     var hasUSDPrice: Bool {
         switch self {
-        case .main, .arbitrum, .optimism:
+        case .main, .optimism:
             return true
-        case .binance, .polygon:
+        default:
             return false
         }
     }
@@ -52,6 +57,8 @@ enum EthereumChain: Int {
         case .optimism: return "https://mainnet.optimism.io"
         case .polygon: return "https://polygon-mainnet.g.alchemy.com/v2/" + Secrets.alchemy
         case .binance: return "https://bsc-dataseed.binance.org/"
+        case .arbitrumTestnetV5: return "https://kovan5.arbitrum.io/rpc"
+        case .optimisticKovan: return "https://kovan.optimism.io"
         }
     }
     
