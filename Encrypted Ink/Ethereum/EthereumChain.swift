@@ -25,6 +25,26 @@ enum EthereumChain: Int {
         }
     }
     
+    var symbol: String {
+        switch self {
+        case .main, .arbitrum, .optimism:
+            return "ETH"
+        case .binance:
+            return "BNB"
+        case .polygon:
+            return "MATIC"
+        }
+    }
+    
+    var hasUSDPrice: Bool {
+        switch self {
+        case .main, .arbitrum, .optimism:
+            return true
+        case .binance, .polygon:
+            return false
+        }
+    }
+    
     var nodeURLString: String {
         switch self {
         case .main: return "https://eth-mainnet.alchemyapi.io/v2/" + Secrets.alchemy
