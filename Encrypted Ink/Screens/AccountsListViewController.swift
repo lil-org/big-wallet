@@ -8,7 +8,7 @@ class AccountsListViewController: NSViewController {
     private let walletsManager = WalletsManager.shared
     private var cellModels = [CellModel]()
     
-    private var chain = EthereumChain.main
+    private var chain = EthereumChain.ethereum
     var onSelectedWallet: ((Int, InkWallet) -> Void)?
     var newWalletId: String?
     
