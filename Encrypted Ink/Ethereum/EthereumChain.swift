@@ -17,16 +17,21 @@ enum EthereumChain: Int {
     
     var name: String {
         switch self {
-        case .main:
-            return "Ethereum Mainnet"
-        case .arbitrum:
-            return "Arbitrum"
-        case .optimism:
-            return "Optimism"
-        case .polygon:
-            return "Polygon"
-        case .binance:
-            return "Binance Smart Chain"
+        case .main: return "Ethereum Mainnet"
+        case .arbitrum: return "Arbitrum"
+        case .optimism: return "Optimism"
+        case .polygon: return "Polygon"
+        case .binance: return "Binance Smart Chain"
+        }
+    }
+    
+    var nodeURLString: String {
+        switch self {
+        case .main: return "https://eth-mainnet.alchemyapi.io/v2/" + Secrets.alchemy
+        case .arbitrum: return "https://arb-mainnet.g.alchemy.com/v2/" + Secrets.alchemy
+        case .optimism: return "https://mainnet.optimism.io"
+        case .polygon: return "https://polygon-mainnet.g.alchemy.com/v2/" + Secrets.alchemy
+        case .binance: return "https://bsc-dataseed.binance.org/"
         }
     }
     

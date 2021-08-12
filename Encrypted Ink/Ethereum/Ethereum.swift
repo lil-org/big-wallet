@@ -19,8 +19,6 @@ struct Ethereum {
     
     static let shared = Ethereum()
     
-    private let networks = EthereumNetwork.allByChain
-    
     func sign(message: String, wallet: InkWallet) throws -> String {
         return try sign(message: message, wallet: wallet, addPrefix: false)
     }
@@ -46,7 +44,7 @@ struct Ethereum {
     }
     
     func send(transaction: Transaction, wallet: InkWallet, chain: EthereumChain) throws -> String {
-        guard let network = networks[chain] else { throw Error.invalidInputData }
+        let network = EthereumNetwork.forChain(chain)
         let bytes = try signedTransactionBytes(transaction: transaction, wallet: wallet, chain: chain)
         let response = try SendRawTransactionProcedure(network: network, transactionBytes: bytes).call()
         guard let hash = response["result"].string else {
@@ -56,7 +54,7 @@ struct Ethereum {
     }
     
     private func signedTransactionBytes(transaction: Transaction, wallet: InkWallet, chain: EthereumChain) throws -> EthContractCallBytes {
-        guard let network = networks[chain] else { throw Error.invalidInputData }
+        let network = EthereumNetwork.forChain(chain)
         guard let privateKeyString = wallet.ethereumPrivateKeyString else { throw Error.keyNotFound }
         let senderKey = EthPrivateKey(hex: privateKeyString)
         let contractAddress = EthAddress(hex: transaction.to)
@@ -128,7 +126,7 @@ struct Ethereum {
     }
     
     private func getGas(chain: EthereumChain, from: String, to: String, gasPrice: String, weiAmount: EthNumber, data: String, completion: @escaping (String?) -> Void) {
-        guard let network = networks[chain] else { return }
+        let network = EthereumNetwork.forChain(chain)
         queue.async {
             let gas = try? EthGasEstimate(
                 network: network,
@@ -153,7 +151,7 @@ struct Ethereum {
     }
     
     private func getGasPrice(chain: EthereumChain, completion: @escaping (String?) -> Void) {
-        guard let network = networks[chain] else { return }
+        let network = EthereumNetwork.forChain(chain)
         queue.async {
             let gasPrice = try? EthGasPrice(network: network).value().toHexString()
             DispatchQueue.main.async {
@@ -163,7 +161,7 @@ struct Ethereum {
     }
     
     private func getNonce(chain: EthereumChain, from: String, completion: @escaping (String?) -> Void) {
-        guard let network = networks[chain] else { return }
+        let network = EthereumNetwork.forChain(chain)
         queue.async {
             let nonce = try? EthTransactions(network: network, address: EthAddress(hex: from), blockChainState: PendingBlockChainState()).count().value().toHexString()
             DispatchQueue.main.async {
