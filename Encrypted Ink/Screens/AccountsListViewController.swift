@@ -30,6 +30,7 @@ class AccountsListViewController: NSViewController {
         }
     }
     
+    private weak var testnetsMenuItem: NSMenuItem?
     @IBOutlet weak var chainButtonHeightConstraint: NSLayoutConstraint!
     @IBOutlet weak var chainButtonContainer: NSView!
     @IBOutlet weak var chainButton: NSPopUpButton!
@@ -90,8 +91,28 @@ class AccountsListViewController: NSViewController {
         addButton.isHidden = wallets.isEmpty
         chainButtonHeightConstraint.constant = canSelectAccount ? 40 : 15
         chainButtonContainer.isHidden = !canSelectAccount
-        if canSelectAccount, chainButton.numberOfItems == 0 {
-            chainButton.addItems(withTitles: EthereumChain.all.map { $0.name })
+        if canSelectAccount, chainButton.menu?.items.isEmpty == true {
+            let menu = NSMenu()
+            for mainnet in EthereumChain.allMainnets {
+                let item = NSMenuItem(title: mainnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
+                item.tag = mainnet.id
+                menu.addItem(item)
+            }
+            
+            let submenuItem = NSMenuItem()
+            submenuItem.title = "Testnets"
+            let submenu = NSMenu()
+            for testnet in EthereumChain.allTestnets {
+                let item = NSMenuItem(title: testnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
+                item.tag = testnet.id
+                submenu.addItem(item)
+            }
+            
+            submenuItem.submenu = submenu
+            menu.addItem(.separator())
+            menu.addItem(submenuItem)
+            testnetsMenuItem = submenuItem
+            chainButton.menu = menu
         }
     }
     
@@ -103,11 +124,24 @@ class AccountsListViewController: NSViewController {
         reloadHeader()
     }
     
-    @IBAction func chainButtonSelectionChanged(_ sender: Any) {
-        guard let selectedItem = chainButton.selectedItem else { return }
-        let index = chainButton.index(of: selectedItem)
-        guard index >= 0 && index < EthereumChain.all.count else { return }
-        chain = EthereumChain.all[index]
+    @objc private func didSelectChain(_ sender: AnyObject) {
+        guard let menuItem = sender as? NSMenuItem,
+              let selectedChain = EthereumChain(rawValue: menuItem.tag) else { return }
+        
+        if let index = chainButton.menu?.index(of: menuItem), index < 0 {
+            let submenu = menuItem.menu
+            submenu?.removeItem(menuItem)
+            
+            if submenu?.items.isEmpty == true, let testnetsMenuItem = testnetsMenuItem {
+                testnetsMenuItem.menu?.removeItem(testnetsMenuItem)
+                self.testnetsMenuItem = nil
+            }
+            
+            chainButton.menu?.addItem(menuItem)
+            chainButton.select(menuItem)
+        }
+        
+        chain = selectedChain
     }
     
     @IBAction func addButtonTapped(_ sender: NSButton) {
@@ -333,7 +367,7 @@ extension AccountsListViewController: NSMenuDelegate {
     func menuDidClose(_ menu: NSMenu) {
         if menu === addButton.menu {
             menu.removeAllItems()
-        } else {
+        } else if menu === tableView.menu {
             tableView.deselectedRow = tableView.selectedRow
             tableView.deselectAll(nil)
         }

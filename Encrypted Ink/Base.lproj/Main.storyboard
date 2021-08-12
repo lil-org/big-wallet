@@ -932,19 +932,16 @@ DQ
                                 <rect key="frame" x="0.0" y="247" width="250" height="40"/>
                                 <subviews>
                                     <popUpButton verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="WBh-Qb-dhA">
-                                        <rect key="frame" x="47" y="6" width="157" height="25"/>
+                                        <rect key="frame" x="37" y="6" width="177" height="25"/>
                                         <popUpButtonCell key="cell" type="push" bezelStyle="rounded" alignment="center" lineBreakMode="truncatingTail" borderStyle="borderAndBezel" imageScaling="proportionallyDown" inset="2" id="A9Y-mW-lqk">
                                             <behavior key="behavior" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="menu"/>
                                             <menu key="menu" id="bIv-hX-xgQ"/>
                                         </popUpButtonCell>
-                                        <connections>
-                                            <action selector="chainButtonSelectionChanged:" target="29s-Rd-OUf" id="saG-Ti-VJD"/>
-                                        </connections>
                                     </popUpButton>
                                 </subviews>
                                 <constraints>
-                                    <constraint firstItem="WBh-Qb-dhA" firstAttribute="leading" secondItem="YAr-gV-Zhp" secondAttribute="leading" constant="50" id="9XO-wX-7KM"/>
+                                    <constraint firstItem="WBh-Qb-dhA" firstAttribute="leading" secondItem="YAr-gV-Zhp" secondAttribute="leading" constant="40" id="9XO-wX-7KM"/>
                                     <constraint firstAttribute="height" constant="40" id="HaA-yk-eCj"/>
                                     <constraint firstItem="WBh-Qb-dhA" firstAttribute="centerX" secondItem="YAr-gV-Zhp" secondAttribute="centerX" id="qJ6-QA-Eul"/>
                                     <constraint firstItem="WBh-Qb-dhA" firstAttribute="centerY" secondItem="YAr-gV-Zhp" secondAttribute="centerY" id="yed-DU-Dih"/>
