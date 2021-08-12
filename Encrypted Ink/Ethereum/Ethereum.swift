@@ -39,8 +39,9 @@ struct Ethereum {
     func sign(typedData: String, wallet: InkWallet) throws -> String {
         guard let ethereumPrivateKey = wallet.ethereumPrivateKey else { throw Error.keyNotFound }
         let digest = EthereumAbi.encodeTyped(messageJson: typedData)
-        guard let signed = ethereumPrivateKey.sign(digest: digest, curve: CoinType.ethereum.curve)?.toPrefixedHexString() else { throw Error.failedToSign }
-        return signed
+        guard var signed = ethereumPrivateKey.sign(digest: digest, curve: CoinType.ethereum.curve) else { throw Error.failedToSign }
+        signed[64] += 27
+        return signed.toPrefixedHexString()
     }
     
     func send(transaction: Transaction, wallet: InkWallet, chain: EthereumChain) throws -> String {
