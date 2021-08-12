@@ -71,7 +71,7 @@ class AccountsListViewController: NSViewController {
         let menu = NSMenu()
         menu.delegate = self
         menu.addItem(NSMenuItem(title: "Copy address", action: #selector(didClickCopyAddress(_:)), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "View on Zerion", action: #selector(didClickViewOnZerion(_:)), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "View on Etherscan", action: #selector(didClickViewOnEtherscan(_:)), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Show account key", action: #selector(didClickExportAccount(_:)), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Remove account", action: #selector(didClickRemoveAccount(_:)), keyEquivalent: ""))
@@ -163,10 +163,10 @@ class AccountsListViewController: NSViewController {
         view.window?.contentViewController = importViewController
     }
     
-    @objc private func didClickViewOnZerion(_ sender: AnyObject) {
+    @objc private func didClickViewOnEtherscan(_ sender: AnyObject) {
         let row = tableView.deselectedRow
         guard row >= 0, let address = wallets[row].ethereumAddress else { return }
-        if let url = URL(string: "https://app.zerion.io/\(address)/overview") {
+        if let url = URL(string: "https://etherscan.io/address/\(address)") {
             NSWorkspace.shared.open(url)
         }
     }
