@@ -19,19 +19,20 @@ struct Ethereum {
     
     static let shared = Ethereum()
     
-    func sign(message: String, wallet: InkWallet) throws -> String {
-        return try sign(message: message, wallet: wallet, addPrefix: false)
+    func sign(data: Data, wallet: InkWallet) throws -> String {
+        return try sign(data: data, wallet: wallet, addPrefix: false)
     }
     
-    func signPersonal(message: String, wallet: InkWallet) throws -> String {
-        return try sign(message: message, wallet: wallet, addPrefix: true)
+    func signPersonalMessage(data: Data, wallet: InkWallet) throws -> String {
+        return try sign(data: data, wallet: wallet, addPrefix: true)
     }
     
-    private func sign(message: String, wallet: InkWallet, addPrefix: Bool) throws -> String {
+    private func sign(data: Data, wallet: InkWallet, addPrefix: Bool) throws -> String {
         guard let ethereumPrivateKey = wallet.ethereumPrivateKey else { throw Error.keyNotFound }
-        let withPrefixIfNeeded = (addPrefix ? "\u{19}Ethereum Signed Message:\n" + String(message.count) : "") + message
-        guard let data = withPrefixIfNeeded.data(using: .utf8) else { throw Error.invalidInputData }
-        guard var signed = ethereumPrivateKey.sign(digest: Hash.keccak256(data: data), curve: CoinType.ethereum.curve) else { throw Error.failedToSign }
+        let prefixString = addPrefix ? "\u{19}Ethereum Signed Message:\n" + String(data.count) : ""
+        guard let prefixData = prefixString.data(using: .utf8) else { throw Error.failedToSign }
+        let digest = Hash.keccak256(data: prefixData + data) 
+        guard var signed = ethereumPrivateKey.sign(digest: digest, curve: CoinType.ethereum.curve) else { throw Error.failedToSign }
         signed[64] += 27
         return signed.toPrefixedHexString()
     }
