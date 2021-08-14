@@ -186,6 +186,7 @@ class WalletConnect {
             return
         }
         interactor?.approveRequest(id: requestId, result: hash).cauterize()
+        ReviewRequster.requestReviewIfNeeded()
     }
 
     private func sign(id: Int64, payload: WCEthereumSignPayload, walletId: String, interactor: WCInteractor?) {
@@ -208,6 +209,7 @@ class WalletConnect {
             return
         }
         interactor?.approveRequest(id: id, result: result).cauterize()
+        ReviewRequster.requestReviewIfNeeded()
     }
     
 }
