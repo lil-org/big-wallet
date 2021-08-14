@@ -23,6 +23,8 @@
 		2C5FF97926C84F7B00B32ACC /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C5FF97726C84F7B00B32ACC /* Main.storyboard */; };
 		2C5FF97B26C84F7C00B32ACC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C5FF97A26C84F7C00B32ACC /* Assets.xcassets */; };
 		2C5FF97E26C84F7C00B32ACC /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C5FF97C26C84F7C00B32ACC /* LaunchScreen.storyboard */; };
+		2C5FF98C26C8567D00B32ACC /* Encrypted_Ink_ScreensaverView.h in Headers */ = {isa = PBXBuildFile; fileRef = 2C5FF98B26C8567D00B32ACC /* Encrypted_Ink_ScreensaverView.h */; };
+		2C5FF98E26C8567D00B32ACC /* Encrypted_Ink_ScreensaverView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2C5FF98D26C8567D00B32ACC /* Encrypted_Ink_ScreensaverView.m */; };
 		2C603D0226B6E13F00956955 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
 		2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6706A4267A6BFE006AAEF2 /* Bundle.swift */; };
 		2C6B964C26B9D92500D2C819 /* NSColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6B964B26B9D92500D2C819 /* NSColor.swift */; };
@@ -78,6 +80,10 @@
 		2C5FF97A26C84F7C00B32ACC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2C5FF97D26C84F7C00B32ACC /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		2C5FF97F26C84F7C00B32ACC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		2C5FF98926C8567D00B32ACC /* Encrypted Ink Screensaver.saver */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Encrypted Ink Screensaver.saver"; sourceTree = BUILT_PRODUCTS_DIR; };
+		2C5FF98B26C8567D00B32ACC /* Encrypted_Ink_ScreensaverView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Encrypted_Ink_ScreensaverView.h; sourceTree = "<group>"; };
+		2C5FF98D26C8567D00B32ACC /* Encrypted_Ink_ScreensaverView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Encrypted_Ink_ScreensaverView.m; sourceTree = "<group>"; };
+		2C5FF98F26C8567D00B32ACC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C603D0126B6E13F00956955 /* String.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = String.swift; sourceTree = "<group>"; };
 		2C6706A4267A6BFE006AAEF2 /* Bundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bundle.swift; sourceTree = "<group>"; };
 		2C6B964B26B9D92500D2C819 /* NSColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSColor.swift; sourceTree = "<group>"; };
@@ -131,6 +137,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2C5FF98626C8567D00B32ACC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -139,6 +152,7 @@
 			children = (
 				2C19953E2674C4B900A8E370 /* Encrypted Ink */,
 				2C5FF97026C84F7B00B32ACC /* Encrypted Ink iOS */,
+				2C5FF98A26C8567D00B32ACC /* Encrypted Ink Screensaver */,
 				2C19953D2674C4B900A8E370 /* Products */,
 				FB5786212D81829B0FADBD25 /* Pods */,
 				8E59B61AC986C705990A0C02 /* Frameworks */,
@@ -150,6 +164,7 @@
 			children = (
 				2C19953C2674C4B900A8E370 /* Encrypted Ink.app */,
 				2C5FF96F26C84F7B00B32ACC /* Encrypted Ink iOS.app */,
+				2C5FF98926C8567D00B32ACC /* Encrypted Ink Screensaver.saver */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -199,6 +214,16 @@
 				2C5FF97F26C84F7C00B32ACC /* Info.plist */,
 			);
 			path = "Encrypted Ink iOS";
+			sourceTree = "<group>";
+		};
+		2C5FF98A26C8567D00B32ACC /* Encrypted Ink Screensaver */ = {
+			isa = PBXGroup;
+			children = (
+				2C5FF98B26C8567D00B32ACC /* Encrypted_Ink_ScreensaverView.h */,
+				2C5FF98D26C8567D00B32ACC /* Encrypted_Ink_ScreensaverView.m */,
+				2C5FF98F26C8567D00B32ACC /* Info.plist */,
+			);
+			path = "Encrypted Ink Screensaver";
 			sourceTree = "<group>";
 		};
 		2C6706A7267A6C04006AAEF2 /* Extensions */ = {
@@ -293,6 +318,17 @@
 		};
 /* End PBXGroup section */
 
+/* Begin PBXHeadersBuildPhase section */
+		2C5FF98426C8567D00B32ACC /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2C5FF98C26C8567D00B32ACC /* Encrypted_Ink_ScreensaverView.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
 /* Begin PBXNativeTarget section */
 		2C19953B2674C4B900A8E370 /* Encrypted Ink */ = {
 			isa = PBXNativeTarget;
@@ -331,6 +367,24 @@
 			productReference = 2C5FF96F26C84F7B00B32ACC /* Encrypted Ink iOS.app */;
 			productType = "com.apple.product-type.application";
 		};
+		2C5FF98826C8567D00B32ACC /* Encrypted Ink Screensaver */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2C5FF99026C8567D00B32ACC /* Build configuration list for PBXNativeTarget "Encrypted Ink Screensaver" */;
+			buildPhases = (
+				2C5FF98426C8567D00B32ACC /* Headers */,
+				2C5FF98526C8567D00B32ACC /* Sources */,
+				2C5FF98626C8567D00B32ACC /* Frameworks */,
+				2C5FF98726C8567D00B32ACC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Encrypted Ink Screensaver";
+			productName = "Encrypted Ink Screensaver";
+			productReference = 2C5FF98926C8567D00B32ACC /* Encrypted Ink Screensaver.saver */;
+			productType = "com.apple.product-type.bundle";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -344,6 +398,9 @@
 						CreatedOnToolsVersion = 12.4;
 					};
 					2C5FF96E26C84F7B00B32ACC = {
+						CreatedOnToolsVersion = 12.5.1;
+					};
+					2C5FF98826C8567D00B32ACC = {
 						CreatedOnToolsVersion = 12.5.1;
 					};
 				};
@@ -363,6 +420,7 @@
 			targets = (
 				2C19953B2674C4B900A8E370 /* Encrypted Ink */,
 				2C5FF96E26C84F7B00B32ACC /* Encrypted Ink iOS */,
+				2C5FF98826C8567D00B32ACC /* Encrypted Ink Screensaver */,
 			);
 		};
 /* End PBXProject section */
@@ -385,6 +443,13 @@
 				2C5FF97E26C84F7C00B32ACC /* LaunchScreen.storyboard in Resources */,
 				2C5FF97B26C84F7C00B32ACC /* Assets.xcassets in Resources */,
 				2C5FF97926C84F7B00B32ACC /* Main.storyboard in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2C5FF98726C8567D00B32ACC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -502,6 +567,14 @@
 				2C5FF97626C84F7B00B32ACC /* ViewController.swift in Sources */,
 				2C5FF97226C84F7B00B32ACC /* AppDelegate.swift in Sources */,
 				2C5FF97426C84F7B00B32ACC /* SceneDelegate.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2C5FF98526C8567D00B32ACC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2C5FF98E26C8567D00B32ACC /* Encrypted_Ink_ScreensaverView.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -747,6 +820,36 @@
 			};
 			name = Release;
 		};
+		2C5FF99126C8567D00B32ACC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				INFOPLIST_FILE = "Encrypted Ink Screensaver/Info.plist";
+				INSTALL_PATH = "$(HOME)/Library/Screen Savers";
+				MACOSX_DEPLOYMENT_TARGET = 11.3;
+				PRODUCT_BUNDLE_IDENTIFIER = "ink.encrypted.Encrypted-Ink-Screensaver";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				WRAPPER_EXTENSION = saver;
+			};
+			name = Debug;
+		};
+		2C5FF99226C8567D00B32ACC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				INFOPLIST_FILE = "Encrypted Ink Screensaver/Info.plist";
+				INSTALL_PATH = "$(HOME)/Library/Screen Savers";
+				MACOSX_DEPLOYMENT_TARGET = 11.3;
+				PRODUCT_BUNDLE_IDENTIFIER = "ink.encrypted.Encrypted-Ink-Screensaver";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				WRAPPER_EXTENSION = saver;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -773,6 +876,15 @@
 			buildConfigurations = (
 				2C5FF98126C84F7C00B32ACC /* Debug */,
 				2C5FF98226C84F7C00B32ACC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2C5FF99026C8567D00B32ACC /* Build configuration list for PBXNativeTarget "Encrypted Ink Screensaver" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2C5FF99126C8567D00B32ACC /* Debug */,
+				2C5FF99226C8567D00B32ACC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
