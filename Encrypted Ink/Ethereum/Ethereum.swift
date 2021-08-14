@@ -3,7 +3,6 @@
 import Foundation
 import WalletCore
 import Web3Swift
-import CryptoSwift
 
 struct Ethereum {
 
