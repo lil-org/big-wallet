@@ -23,4 +23,6 @@ fallbackProvider.enable = () => {
   return wcProvider.enable();
 };
 
+// TODO: Should not replace wc with fallbackProvider
+// TODO: Should inject wc provider when opening the same dapp in a separate tab
 window.ethereum = fallbackProvider;
