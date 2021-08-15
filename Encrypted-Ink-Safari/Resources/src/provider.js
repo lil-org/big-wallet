@@ -7,7 +7,13 @@ const wcProvider = new WalletConnectProvider({
     56: "https://bsc-dataseed.binance.org",
     2020: "https://api.roninchain.com/rpc/",
     10: "https://mainnet.optimism.io"
-  }
+  },
+  qrcode: false,
+});
+
+wcProvider.connector.on("display_uri", (err, payload) => {
+    const uri = payload.params[0];
+    window.location.replace("encryptedink://wc?uri=" + uri);
 });
 
 const fallbackProvider = provider([""]);
