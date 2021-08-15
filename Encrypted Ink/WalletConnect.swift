@@ -144,23 +144,23 @@ class WalletConnect {
     private func approveSign(id: Int64, payload: WCEthereumSignPayload, walletId: String, interactor: WCInteractor?) {
         var message: String?
 
-        let signingItem: SigningItem
+        let approvalReason: ApprovalReason
         switch payload {
         case let .sign(data: data, raw: _):
             message = String(data: data, encoding: .utf8) ?? data.hexString
-            signingItem = .message
+            approvalReason = .signMessage
         case let .personalSign(data: data, raw: _):
             message = String(data: data, encoding: .utf8) ?? data.hexString
-            signingItem = .personalMessage
+            approvalReason = .signPersonalMessage
         case let .signTypeData(id: _, data: _, raw: raw):
-            signingItem = .typedData
+            approvalReason = .signTypedData
             if raw.count >= 2 {
                 message = raw[1]
             }
         }
 
         let peer = getPeerOfInteractor(interactor)
-        Agent.shared.showApprove(signingItem: signingItem, meta: message ?? "", peerMeta: peer) { [weak self, weak interactor] approved in
+        Agent.shared.showApprove(reason: approvalReason, meta: message ?? "", peerMeta: peer) { [weak self, weak interactor] approved in
             if approved {
                 self?.sign(id: id, payload: payload, walletId: walletId, interactor: interactor)
             } else {

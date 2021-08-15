@@ -1,28 +1,28 @@
 // Copyright © 2021 Encrypted Ink. All rights reserved.
 
-enum SigningItem {
-    case message
-    case personalMessage
-    case typedData
+enum ApprovalReason {
+    case signMessage
+    case signPersonalMessage
+    case signTypedData
     
     var asAuthenticationReason: AuthenticationReason {
         switch self {
-        case .message:
+        case .signMessage:
             return .signMessage
-        case .personalMessage:
+        case .signPersonalMessage:
             return .signPersonalMessage
-        case .typedData:
+        case .signTypedData:
             return .signTypedData
         }
     }
     
     var title: String {
         switch self {
-        case .message:
+        case .signMessage:
             return Strings.signMessage
-        case .personalMessage:
+        case .signPersonalMessage:
             return Strings.signPersonalMessage
-        case .typedData:
+        case .signTypedData:
             return Strings.signTypedData
         }
     }
