@@ -2,9 +2,7 @@ PODS:
   - BigInt (5.2.0)
   - BlockiesSwift (0.1.2)
   - CryptoSwift (1.4.1)
-  - Kingfisher (5.15.8):
-    - Kingfisher/Core (= 5.15.8)
-  - Kingfisher/Core (5.15.8)
+  - Kingfisher (6.3.1)
   - PromiseKit (6.15.3):
     - PromiseKit/CorePromise (= 6.15.3)
     - PromiseKit/Foundation (= 6.15.3)
@@ -16,11 +14,11 @@ PODS:
   - Starscream (3.1.1)
   - SwiftProtobuf (1.17.0)
   - SwiftyJSON (4.3.0)
-  - TrustWalletCore (2.6.16):
-    - TrustWalletCore/Core (= 2.6.16)
-  - TrustWalletCore/Core (2.6.16):
+  - TrustWalletCore (2.6.17):
+    - TrustWalletCore/Core (= 2.6.17)
+  - TrustWalletCore/Core (2.6.17):
     - TrustWalletCore/Types
-  - TrustWalletCore/Types (2.6.16):
+  - TrustWalletCore/Types (2.6.17):
     - SwiftProtobuf
   - WalletConnect (0.1.0):
     - CryptoSwift
@@ -34,7 +32,7 @@ PODS:
 
 DEPENDENCIES:
   - BlockiesSwift
-  - Kingfisher (~> 5.0)
+  - Kingfisher
   - TrustWalletCore
   - WalletConnect (from `https://github.com/grachyov/wallet-connect-swift`, branch `master`)
   - Web3Swift.io (from `https://github.com/zeriontech/Web3Swift.git`, branch `develop`)
@@ -72,16 +70,16 @@ SPEC CHECKSUMS:
   BigInt: f668a80089607f521586bbe29513d708491ef2f7
   BlockiesSwift: 22d8d56dd187e6bfd16cb8c8fbd4fd4896c3e65d
   CryptoSwift: 0bc800a7e6a24c4fc9ebeab97d44b0d5f73a78bd
-  Kingfisher: a3c03d702433fa6cfedabb2bddbe076fb8f2e902
+  Kingfisher: 016c8b653a35add51dd34a3aba36b580041acc74
   PromiseKit: 3b2b6995e51a954c46dbc550ce3da44fbfb563c5
   secp256k1.swift: a7e7a214f6db6ce5db32cc6b2b45e5c4dd633634
   Starscream: 4bb2f9942274833f7b4d296a55504dcfc7edb7b0
   SwiftProtobuf: 9c85136c6ba74b0a1b84279dbf0f6db8efb714e0
   SwiftyJSON: 6faa0040f8b59dead0ee07436cbf76b73c08fd08
-  TrustWalletCore: 9d3842328ccb07c05abaf7e1cb2c19bdc3d52331
+  TrustWalletCore: 48472eb39dab56bc5a94e626b24160c88bfb1ebf
   WalletConnect: 1df75d4355b1cacfc27d7ef2416fae43862d0eb4
   Web3Swift.io: 18fd06aed9d56df9c704f9c6f87b06675bb05b53
 
-PODFILE CHECKSUM: c3841a90049661c002c630eeb332566c663ce315
+PODFILE CHECKSUM: 435285424c0821db925918dfd84843c031999350
 
-COCOAPODS: 1.10.0
+COCOAPODS: 1.10.1
