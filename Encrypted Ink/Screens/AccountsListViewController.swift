@@ -81,11 +81,7 @@ class AccountsListViewController: NSViewController {
         tableView.menu = menu
     }
     
-    deinit {
-        NotificationCenter.default.removeObserver(self)
-    }
-    
-    private func reloadHeader() {
+	private func reloadHeader() {
         let canSelectAccount = onSelectedWallet != nil && !wallets.isEmpty
         titleLabel.stringValue = canSelectAccount ? "Select\nAccount" : "Accounts"
         addButton.isHidden = wallets.isEmpty
@@ -220,7 +216,7 @@ class AccountsListViewController: NSViewController {
         alert.addButton(withTitle: "Remove anyway")
         alert.addButton(withTitle: "Cancel")
         if alert.runModal() == .alertFirstButtonReturn {
-            agent.askAuthentication(on: view.window, getBackTo: self, onStart: false, reason: "Remove account") { [weak self] allowed in
+            agent.askAuthentication(on: view.window, getBackTo: self, onStart: false, reason: .removeAccount) { [weak self] allowed in
                 Window.activateWindow(self?.view.window)
                 if allowed {
                     self?.removeAccountAtIndex(row)
@@ -240,7 +236,7 @@ class AccountsListViewController: NSViewController {
         alert.addButton(withTitle: "I understand the risks")
         alert.addButton(withTitle: "Cancel")
         if alert.runModal() == .alertFirstButtonReturn {
-            let reason = "Show \(isMnemonic ? "secret words" : "private key")"
+            let reason: AuthenticationReason = isMnemonic ? .showSecretWords : .showPrivateKey
             agent.askAuthentication(on: view.window, getBackTo: self, onStart: false, reason: reason) { [weak self] allowed in
                 Window.activateWindow(self?.view.window)
                 if allowed {

@@ -52,7 +52,7 @@ class Agent: NSObject {
         }
         
         guard didEnterPasswordOnStart else {
-            askAuthentication(on: nil, onStart: true, reason: "Start") { [weak self] success in
+            askAuthentication(on: nil, onStart: true, reason: .start) { [weak self] success in
                 if success {
                     self?.didEnterPasswordOnStart = true
                     self?.showInitialScreen(wcSession: wcSession)
@@ -81,7 +81,7 @@ class Agent: NSObject {
         let windowController = Window.showNew()
         let approveViewController = ApproveTransactionViewController.with(transaction: transaction, chain: chain, peerMeta: peerMeta) { [weak self] transaction in
             if transaction != nil {
-                self?.askAuthentication(on: windowController.window, onStart: false, reason: Strings.sendTransaction) { success in
+                self?.askAuthentication(on: windowController.window, onStart: false, reason: .sendTransaction) { success in
                     completion(success ? transaction : nil)
                     Window.closeAllAndActivateBrowser()
                 }
@@ -93,11 +93,11 @@ class Agent: NSObject {
         windowController.contentViewController = approveViewController
     }
     
-    func showApprove(title: String, meta: String, peerMeta: WCPeerMeta?, completion: @escaping (Bool) -> Void) {
+    func showApprove(subject: ApprovalSubject, meta: String, peerMeta: WCPeerMeta?, completion: @escaping (Bool) -> Void) {
         let windowController = Window.showNew()
-        let approveViewController = ApproveViewController.with(title: title, meta: meta, peerMeta: peerMeta) { [weak self] result in
+        let approveViewController = ApproveViewController.with(subject: subject, meta: meta, peerMeta: peerMeta) { [weak self] result in
             if result {
-                self?.askAuthentication(on: windowController.window, onStart: false, reason: title) { success in
+                self?.askAuthentication(on: windowController.window, onStart: false, reason: subject.asAuthenticationReason) { success in
                     completion(success)
                     Window.closeAllAndActivateBrowser()
                 }
@@ -248,7 +248,7 @@ class Agent: NSObject {
         return WalletConnect.shared.sessionWithLink(link)
     }
     
-    func askAuthentication(on: NSWindow?, getBackTo: NSViewController? = nil, onStart: Bool, reason: String, completion: @escaping (Bool) -> Void) {
+    func askAuthentication(on: NSWindow?, getBackTo: NSViewController? = nil, onStart: Bool, reason: AuthenticationReason, completion: @escaping (Bool) -> Void) {
         let context = LAContext()
         var error: NSError?
         let policy = LAPolicy.deviceOwnerAuthenticationWithBiometrics
@@ -270,7 +270,7 @@ class Agent: NSObject {
         if canDoLocalAuthentication {
             context.localizedCancelTitle = "Cancel"
             didStartInitialLAEvaluation = true
-            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason ) { [weak self] success, _ in
+            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason.title) { [weak self] success, _ in
                 DispatchQueue.main.async {
                     self?.didCompleteInitialLAEvaluation = true
                     if !success, onStart, self?.didEnterPasswordOnStart == false {

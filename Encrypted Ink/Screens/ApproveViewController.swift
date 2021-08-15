@@ -21,11 +21,11 @@ class ApproveViewController: NSViewController {
     private var completion: ((Bool) -> Void)!
     private var peerMeta: WCPeerMeta?
     
-    static func with(title: String, meta: String, peerMeta: WCPeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
+    static func with(subject: ApprovalSubject, meta: String, peerMeta: WCPeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
         let new = instantiate(ApproveViewController.self)
         new.completion = completion
         new.meta = meta
-        new.approveTitle = title
+        new.approveTitle = subject.title
         new.peerMeta = peerMeta
         return new
     }
