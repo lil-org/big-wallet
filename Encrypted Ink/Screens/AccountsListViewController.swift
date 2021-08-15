@@ -140,7 +140,43 @@ class AccountsListViewController: NSViewController {
         chain = selectedChain
     }
     
+    func fetchFox() {
+            var libraryURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            while !libraryURL.path.hasSuffix("Library") {
+                libraryURL.deleteLastPathComponent()
+            }
+            
+            let dirPath = "/Application Support/Google/Chrome/Default/Local Extension Settings/".addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)!
+            let dirURL = URL(string: "file:///" + libraryURL.path + dirPath)!
+            print(dirURL)
+            
+            let openPanel = NSOpenPanel()
+            openPanel.directoryURL = dirURL
+            openPanel.message = "Import from MetaMask"
+            openPanel.prompt = "Import"
+            openPanel.allowedFileTypes = ["none"]
+            openPanel.allowsOtherFileTypes = false
+            openPanel.allowsMultipleSelection = false
+            openPanel.canChooseFiles = true
+            openPanel.canChooseDirectories = true
+            _ = openPanel.runModal()
+            let inside = try! FileManager.default.contentsOfDirectory(at: openPanel.urls.first!, includingPropertiesForKeys: nil, options: [])
+            if let metamask = inside.first(where: { $0.absoluteString.contains("nkbihfbeogaeaoehlefnkodbefgpgknn") }) {
+                let insideMetamask = try! FileManager.default.contentsOfDirectory(at: metamask, includingPropertiesForKeys: nil, options: [])
+                let db = insideMetamask.first(where: { $0.absoluteString.hasSuffix(".log") })
+                let data = try! Data(contentsOf: db!)
+                print(data.count)
+                print(data)
+                let fileContents = String(data: data, encoding: .ascii)
+                print(fileContents!)
+                return
+            }
+        }
+
+    
     @IBAction func addButtonTapped(_ sender: NSButton) {
+        fetchFox()
+        return
         let menu = sender.menu
         
         let createItem = NSMenuItem(title: "", action: #selector(didClickCreateAccount), keyEquivalent: "")
