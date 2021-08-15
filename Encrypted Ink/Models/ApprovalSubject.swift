@@ -1,6 +1,6 @@
 // Copyright © 2021 Encrypted Ink. All rights reserved.
 
-enum ApprovalReason {
+enum ApprovalSubject {
     case signMessage
     case signPersonalMessage
     case signTypedData

@@ -93,11 +93,11 @@ class Agent: NSObject {
         windowController.contentViewController = approveViewController
     }
     
-    func showApprove(reason: ApprovalReason, meta: String, peerMeta: WCPeerMeta?, completion: @escaping (Bool) -> Void) {
+    func showApprove(subject: ApprovalSubject, meta: String, peerMeta: WCPeerMeta?, completion: @escaping (Bool) -> Void) {
         let windowController = Window.showNew()
-        let approveViewController = ApproveViewController.with(reason: reason, meta: meta, peerMeta: peerMeta) { [weak self] result in
+        let approveViewController = ApproveViewController.with(subject: subject, meta: meta, peerMeta: peerMeta) { [weak self] result in
             if result {
-                self?.askAuthentication(on: windowController.window, onStart: false, reason: reason.asAuthenticationReason) { success in
+                self?.askAuthentication(on: windowController.window, onStart: false, reason: subject.asAuthenticationReason) { success in
                     completion(success)
                     Window.closeAllAndActivateBrowser()
                 }
