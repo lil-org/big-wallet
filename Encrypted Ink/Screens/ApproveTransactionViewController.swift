@@ -70,7 +70,7 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     private func updateInterface() {
-        if chain != .main {
+        if chain != .ethereum {
             speedContainerStackView.isHidden = true
             gweiLabel.isHidden = true
             infoTextViewBottomConstraint.constant = 30

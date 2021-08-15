@@ -147,10 +147,10 @@ class WalletConnect {
         let signingItem: SigningItem
         switch payload {
         case let .sign(data: data, raw: _):
-            message = String(data: data, encoding: .utf8)
+            message = String(data: data, encoding: .utf8) ?? data.hexString
             signingItem = .message
         case let .personalSign(data: data, raw: _):
-            message = String(data: data, encoding: .utf8)
+            message = String(data: data, encoding: .utf8) ?? data.hexString
             signingItem = .personalMessage
         case let .signTypeData(id: _, data: _, raw: raw):
             signingItem = .typedData
@@ -162,7 +162,7 @@ class WalletConnect {
         let peer = getPeerOfInteractor(interactor)
         Agent.shared.showApprove(signingItem: signingItem, meta: message ?? "", peerMeta: peer) { [weak self, weak interactor] approved in
             if approved {
-                self?.sign(id: id, message: message, payload: payload, walletId: walletId, interactor: interactor)
+                self?.sign(id: id, payload: payload, walletId: walletId, interactor: interactor)
             } else {
                 self?.rejectRequest(id: id, interactor: interactor, message: "Cancelled")
             }
@@ -183,27 +183,30 @@ class WalletConnect {
             return
         }
         interactor?.approveRequest(id: requestId, result: hash).cauterize()
+        ReviewRequster.requestReviewIfNeeded()
     }
 
-    private func sign(id: Int64, message: String?, payload: WCEthereumSignPayload, walletId: String, interactor: WCInteractor?) {
-        guard let message = message, let wallet = walletsManager.getWallet(id: walletId) else {
+    private func sign(id: Int64, payload: WCEthereumSignPayload, walletId: String, interactor: WCInteractor?) {
+        guard let wallet = walletsManager.getWallet(id: walletId) else {
             rejectRequest(id: id, interactor: interactor, message: "Something went wrong.")
             return
         }
         var signed: String?
         switch payload {
-        case .personalSign:
-            signed = try? ethereum.signPersonal(message: message, wallet: wallet)
-        case .signTypeData:
-            signed = try? ethereum.sign(typedData: message, wallet: wallet)
-        case .sign:
-            signed = try? ethereum.sign(message: message, wallet: wallet)
+        case let .personalSign(data: data, raw: _):
+            signed = try? ethereum.signPersonalMessage(data: data, wallet: wallet)
+        case let .signTypeData(id: _, data: _, raw: raw):
+            let typedData = raw.count >= 2 ? raw[1] : ""
+            signed = try? ethereum.sign(typedData: typedData, wallet: wallet)
+        case let .sign(data: data, raw: _):
+            signed = try? ethereum.sign(data: data, wallet: wallet)
         }
         guard let result = signed else {
             rejectRequest(id: id, interactor: interactor, message: "Something went wrong.")
             return
         }
         interactor?.approveRequest(id: id, result: result).cauterize()
+        ReviewRequster.requestReviewIfNeeded()
     }
     
 }

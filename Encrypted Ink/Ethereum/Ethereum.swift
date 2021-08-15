@@ -3,7 +3,6 @@
 import Foundation
 import WalletCore
 import Web3Swift
-import CryptoSwift
 
 struct Ethereum {
 
@@ -19,44 +18,34 @@ struct Ethereum {
     
     static let shared = Ethereum()
     
-    private let networks = EthereumNetwork.allByChain
-    
-    func sign(message: String, wallet: InkWallet) throws -> String {
-        guard let privateKeyString = wallet.ethereumPrivateKeyString else { throw Error.keyNotFound }
-        let ethPrivateKey = EthPrivateKey(hex: privateKeyString)
-        
-        let signature = SECP256k1Signature(
-            privateKey: ethPrivateKey,
-            message: UTF8StringBytes(string: message),
-            hashFunction: SHA3(variant: .keccak256).calculate
-        )
-        let data = try ConcatenatedBytes(
-            bytes: [
-                signature.r(),
-                signature.s(),
-                EthNumber(value: signature.recoverID().value() + 27)
-            ]
-        ).value()
-        return data.toPrefixedHexString()
+    func sign(data: Data, wallet: InkWallet) throws -> String {
+        return try sign(data: data, wallet: wallet, addPrefix: false)
     }
     
-    func signPersonal(message: String, wallet: InkWallet) throws -> String {
-        guard let privateKeyString = wallet.ethereumPrivateKeyString else { throw Error.keyNotFound }
-        let ethPrivateKey = EthPrivateKey(hex: privateKeyString)
-        let signed = SignedPersonalMessageBytes(message: message, signerKey: ethPrivateKey)
-        let data = try signed.value().toPrefixedHexString()
-        return data
+    func signPersonalMessage(data: Data, wallet: InkWallet) throws -> String {
+        return try sign(data: data, wallet: wallet, addPrefix: true)
+    }
+    
+    private func sign(data: Data, wallet: InkWallet, addPrefix: Bool) throws -> String {
+        guard let ethereumPrivateKey = wallet.ethereumPrivateKey else { throw Error.keyNotFound }
+        let prefixString = addPrefix ? "\u{19}Ethereum Signed Message:\n" + String(data.count) : ""
+        guard let prefixData = prefixString.data(using: .utf8) else { throw Error.failedToSign }
+        let digest = Hash.keccak256(data: prefixData + data) 
+        guard var signed = ethereumPrivateKey.sign(digest: digest, curve: CoinType.ethereum.curve) else { throw Error.failedToSign }
+        signed[64] += 27
+        return signed.toPrefixedHexString()
     }
     
     func sign(typedData: String, wallet: InkWallet) throws -> String {
         guard let ethereumPrivateKey = wallet.ethereumPrivateKey else { throw Error.keyNotFound }
         let digest = EthereumAbi.encodeTyped(messageJson: typedData)
-        guard let signed = ethereumPrivateKey.sign(digest: digest, curve: CoinType.ethereum.curve)?.toPrefixedHexString() else { throw Error.failedToSign }
-        return signed
+        guard var signed = ethereumPrivateKey.sign(digest: digest, curve: CoinType.ethereum.curve) else { throw Error.failedToSign }
+        signed[64] += 27
+        return signed.toPrefixedHexString()
     }
     
     func send(transaction: Transaction, wallet: InkWallet, chain: EthereumChain) throws -> String {
-        guard let network = networks[chain] else { throw Error.invalidInputData }
+        let network = EthereumNetwork.forChain(chain)
         let bytes = try signedTransactionBytes(transaction: transaction, wallet: wallet, chain: chain)
         let response = try SendRawTransactionProcedure(network: network, transactionBytes: bytes).call()
         guard let hash = response["result"].string else {
@@ -66,7 +55,7 @@ struct Ethereum {
     }
     
     private func signedTransactionBytes(transaction: Transaction, wallet: InkWallet, chain: EthereumChain) throws -> EthContractCallBytes {
-        guard let network = networks[chain] else { throw Error.invalidInputData }
+        let network = EthereumNetwork.forChain(chain)
         guard let privateKeyString = wallet.ethereumPrivateKeyString else { throw Error.keyNotFound }
         let senderKey = EthPrivateKey(hex: privateKeyString)
         let contractAddress = EthAddress(hex: transaction.to)
@@ -138,7 +127,7 @@ struct Ethereum {
     }
     
     private func getGas(chain: EthereumChain, from: String, to: String, gasPrice: String, weiAmount: EthNumber, data: String, completion: @escaping (String?) -> Void) {
-        guard let network = networks[chain] else { return }
+        let network = EthereumNetwork.forChain(chain)
         queue.async {
             let gas = try? EthGasEstimate(
                 network: network,
@@ -163,7 +152,7 @@ struct Ethereum {
     }
     
     private func getGasPrice(chain: EthereumChain, completion: @escaping (String?) -> Void) {
-        guard let network = networks[chain] else { return }
+        let network = EthereumNetwork.forChain(chain)
         queue.async {
             let gasPrice = try? EthGasPrice(network: network).value().toHexString()
             DispatchQueue.main.async {
@@ -173,7 +162,7 @@ struct Ethereum {
     }
     
     private func getNonce(chain: EthereumChain, from: String, completion: @escaping (String?) -> Void) {
-        guard let network = networks[chain] else { return }
+        let network = EthereumNetwork.forChain(chain)
         queue.async {
             let nonce = try? EthTransactions(network: network, address: EthAddress(hex: from), blockChainState: PendingBlockChainState()).count().value().toHexString()
             DispatchQueue.main.async {

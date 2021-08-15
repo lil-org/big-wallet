@@ -8,7 +8,7 @@ class AccountsListViewController: NSViewController {
     private let walletsManager = WalletsManager.shared
     private var cellModels = [CellModel]()
     
-    private var chain = EthereumChain.main
+    private var chain = EthereumChain.ethereum
     var onSelectedWallet: ((Int, InkWallet) -> Void)?
     var newWalletId: String?
     
@@ -30,6 +30,7 @@ class AccountsListViewController: NSViewController {
         }
     }
     
+    private weak var testnetsMenuItem: NSMenuItem?
     @IBOutlet weak var chainButtonHeightConstraint: NSLayoutConstraint!
     @IBOutlet weak var chainButtonContainer: NSView!
     @IBOutlet weak var chainButton: NSPopUpButton!
@@ -71,7 +72,7 @@ class AccountsListViewController: NSViewController {
         let menu = NSMenu()
         menu.delegate = self
         menu.addItem(NSMenuItem(title: "Copy address", action: #selector(didClickCopyAddress(_:)), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "View on Zerion", action: #selector(didClickViewOnZerion(_:)), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "View on Etherscan", action: #selector(didClickViewOnEtherscan(_:)), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Show account key", action: #selector(didClickExportAccount(_:)), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Remove account", action: #selector(didClickRemoveAccount(_:)), keyEquivalent: ""))
@@ -86,8 +87,28 @@ class AccountsListViewController: NSViewController {
         addButton.isHidden = wallets.isEmpty
         chainButtonHeightConstraint.constant = canSelectAccount ? 40 : 15
         chainButtonContainer.isHidden = !canSelectAccount
-        if canSelectAccount, chainButton.numberOfItems == 0 {
-            chainButton.addItems(withTitles: EthereumChain.all.map { $0.name })
+        if canSelectAccount, chainButton.menu?.items.isEmpty == true {
+            let menu = NSMenu()
+            for mainnet in EthereumChain.allMainnets {
+                let item = NSMenuItem(title: mainnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
+                item.tag = mainnet.id
+                menu.addItem(item)
+            }
+            
+            let submenuItem = NSMenuItem()
+            submenuItem.title = "Testnets"
+            let submenu = NSMenu()
+            for testnet in EthereumChain.allTestnets {
+                let item = NSMenuItem(title: testnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
+                item.tag = testnet.id
+                submenu.addItem(item)
+            }
+            
+            submenuItem.submenu = submenu
+            menu.addItem(.separator())
+            menu.addItem(submenuItem)
+            testnetsMenuItem = submenuItem
+            chainButton.menu = menu
         }
     }
     
@@ -99,11 +120,24 @@ class AccountsListViewController: NSViewController {
         reloadHeader()
     }
     
-    @IBAction func chainButtonSelectionChanged(_ sender: Any) {
-        guard let selectedItem = chainButton.selectedItem else { return }
-        let index = chainButton.index(of: selectedItem)
-        guard index >= 0 && index < EthereumChain.all.count else { return }
-        chain = EthereumChain.all[index]
+    @objc private func didSelectChain(_ sender: AnyObject) {
+        guard let menuItem = sender as? NSMenuItem,
+              let selectedChain = EthereumChain(rawValue: menuItem.tag) else { return }
+        
+        if let index = chainButton.menu?.index(of: menuItem), index < 0 {
+            let submenu = menuItem.menu
+            submenu?.removeItem(menuItem)
+            
+            if submenu?.items.isEmpty == true, let testnetsMenuItem = testnetsMenuItem {
+                testnetsMenuItem.menu?.removeItem(testnetsMenuItem)
+                self.testnetsMenuItem = nil
+            }
+            
+            chainButton.menu?.addItem(menuItem)
+            chainButton.select(menuItem)
+        }
+        
+        chain = selectedChain
     }
     
     @IBAction func addButtonTapped(_ sender: NSButton) {
@@ -159,10 +193,10 @@ class AccountsListViewController: NSViewController {
         view.window?.contentViewController = importViewController
     }
     
-    @objc private func didClickViewOnZerion(_ sender: AnyObject) {
+    @objc private func didClickViewOnEtherscan(_ sender: AnyObject) {
         let row = tableView.deselectedRow
         guard row >= 0, let address = wallets[row].ethereumAddress else { return }
-        if let url = URL(string: "https://app.zerion.io/\(address)/overview") {
+        if let url = URL(string: "https://etherscan.io/address/\(address)") {
             NSWorkspace.shared.open(url)
         }
     }
@@ -329,7 +363,7 @@ extension AccountsListViewController: NSMenuDelegate {
     func menuDidClose(_ menu: NSMenu) {
         if menu === addButton.menu {
             menu.removeAllItems()
-        } else {
+        } else if menu === tableView.menu {
             tableView.deselectedRow = tableView.selectedRow
             tableView.deselectAll(nil)
         }
