@@ -8,6 +8,7 @@ enum EthereumChain: Int {
     case polygon = 137
     case optimism = 10
     case binance = 56
+    case avalanche = 43114
     
     // Testnets
     case arbitrumRinkeby = 421611
@@ -19,13 +20,14 @@ enum EthereumChain: Int {
     case ethereumGoerli = 5
     case polygonMumbai = 80001
     case binanceTestnet = 97
+    case avalancheFuji = 43113
     
     var id: Int {
         return rawValue
     }
     
-    static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum]
-    static let allTestnets: [EthereumChain] = [.ethereumRopsten, .ethereumKovan, .ethereumRinkeby, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet]
+    static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum, .avalanche]
+    static let allTestnets: [EthereumChain] = [.ethereumRopsten, .ethereumKovan, .ethereumRinkeby, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji]
     
     var name: String {
         switch self {
@@ -34,6 +36,7 @@ enum EthereumChain: Int {
         case .optimism: return "Optimism"
         case .polygon: return "Polygon"
         case .binance: return "Binance Smart Chain"
+        case .avalanche: return "Avalanche"
         case .arbitrumRinkeby: return "Arbitrum Rinkeby"
         case .optimisticKovan: return "Optimistic Kovan"
         case .ethereumGoerli: return "Ethereum Görli"
@@ -43,6 +46,7 @@ enum EthereumChain: Int {
         case .ethereumRinkeby: return "Ethereum Rinkeby"
         case .arbitrumKovan: return "Arbitrum Kovan"
         case .binanceTestnet: return "BSC Testnet"
+        case .avalancheFuji: return "Avalanche FUJI"
         }
     }
     
@@ -54,6 +58,8 @@ enum EthereumChain: Int {
             return "MATIC"
         case .arbitrum, .arbitrumKovan, .arbitrumRinkeby, .ethereum, .ethereumGoerli, .ethereumKovan, .ethereumRinkeby, .optimism, .optimisticKovan, .ethereumRopsten:
             return "ETH"
+        case .avalanche, .avalancheFuji:
+            return "AVAX"
         }
     }
     
@@ -73,6 +79,7 @@ enum EthereumChain: Int {
         case .optimism: return "https://mainnet.optimism.io"
         case .polygon: return "https://polygon-mainnet.g.alchemy.com/v2/" + Secrets.alchemy
         case .binance: return "https://bsc-dataseed.binance.org/"
+        case .avalanche: return "https://api.avax.network/ext/bc/C/rpc"
         case .arbitrumRinkeby: return "https://rinkeby.arbitrum.io/rpc"
         case .arbitrumKovan: return "https://kovan5.arbitrum.io/rpc"
         case .optimisticKovan: return "https://kovan.optimism.io"
@@ -82,6 +89,7 @@ enum EthereumChain: Int {
         case .ethereumRinkeby: return "https://eth-rinkeby.alchemyapi.io/v2/" + Secrets.alchemy
         case .ethereumGoerli: return "https://eth-goerli.alchemyapi.io/v2/" + Secrets.alchemy
         case .binanceTestnet: return "https://data-seed-prebsc-1-s1.binance.org:8545/"
+        case .avalancheFuji: return "https://api.avax-test.network/ext/bc/C/rpc"
         }
     }
     
