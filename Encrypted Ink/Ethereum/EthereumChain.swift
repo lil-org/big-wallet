@@ -9,6 +9,7 @@ enum EthereumChain: Int {
     case optimism = 10
     case binance = 56
     case avalanche = 43114
+    case xDai = 100
     
     // Testnets
     case arbitrumRinkeby = 421611
@@ -26,7 +27,7 @@ enum EthereumChain: Int {
         return rawValue
     }
     
-    static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum, .avalanche]
+    static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum, .avalanche, .xDai]
     static let allTestnets: [EthereumChain] = [.ethereumRopsten, .ethereumKovan, .ethereumRinkeby, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji]
     
     var name: String {
@@ -37,6 +38,7 @@ enum EthereumChain: Int {
         case .polygon: return "Polygon"
         case .binance: return "Binance Smart Chain"
         case .avalanche: return "Avalanche"
+        case .xDai: return "xDai"
         case .arbitrumRinkeby: return "Arbitrum Rinkeby"
         case .optimisticKovan: return "Optimistic Kovan"
         case .ethereumGoerli: return "Ethereum Görli"
@@ -60,6 +62,8 @@ enum EthereumChain: Int {
             return "ETH"
         case .avalanche, .avalancheFuji:
             return "AVAX"
+        case .xDai:
+            return "xDai"
         }
     }
     
@@ -80,6 +84,7 @@ enum EthereumChain: Int {
         case .polygon: return "https://polygon-mainnet.g.alchemy.com/v2/" + Secrets.alchemy
         case .binance: return "https://bsc-dataseed.binance.org/"
         case .avalanche: return "https://api.avax.network/ext/bc/C/rpc"
+        case .xDai: return "https://rpc.xdaichain.com/"
         case .arbitrumRinkeby: return "https://rinkeby.arbitrum.io/rpc"
         case .arbitrumKovan: return "https://kovan5.arbitrum.io/rpc"
         case .optimisticKovan: return "https://kovan.optimism.io"
