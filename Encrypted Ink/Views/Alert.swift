@@ -25,3 +25,25 @@ class Alert: NSAlert {
     }
     
 }
+
+class PasswordAlert: Alert {
+    
+    var passwordTextField: NSSecureTextField!
+    
+    init(title: String) {
+        super.init()
+        
+        messageText = title
+        alertStyle = .informational
+        addButton(withTitle: "OK")
+        addButton(withTitle: "Cancel")
+        
+        let passwordTextField = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 160, height: 20))
+        passwordTextField.bezelStyle = .roundedBezel
+        accessoryView = passwordTextField
+        passwordTextField.isAutomaticTextCompletionEnabled = false
+        passwordTextField.alignment = .center
+        
+        self.passwordTextField = passwordTextField
+    }
+}

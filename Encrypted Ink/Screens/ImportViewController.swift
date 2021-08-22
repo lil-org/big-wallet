@@ -29,24 +29,13 @@ class ImportViewController: NSViewController {
     }
  
     private func showPasswordAlert() {
-        let alert = Alert()
-        alert.messageText = "Enter keystore password."
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Cancel")
-        
-        let passwordTextField = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 160, height: 20))
-        passwordTextField.bezelStyle = .roundedBezel
-        alert.accessoryView = passwordTextField
-        passwordTextField.isAutomaticTextCompletionEnabled = false
-        passwordTextField.alignment = .center
-        
+        let passwordAlert = PasswordAlert(title: "Enter keystore password.")
         DispatchQueue.main.async {
-            passwordTextField.becomeFirstResponder()
+            passwordAlert.passwordTextField.becomeFirstResponder()
         }
         
-        if alert.runModal() == .alertFirstButtonReturn {
-            importWith(input: textField.stringValue, password: passwordTextField.stringValue)
+        if passwordAlert.runModal() == .alertFirstButtonReturn {
+            importWith(input: textField.stringValue, password: passwordAlert.passwordTextField.stringValue)
         }
     }
     

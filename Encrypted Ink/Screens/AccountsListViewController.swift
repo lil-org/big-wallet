@@ -18,7 +18,7 @@ class AccountsListViewController: NSViewController {
     }
     
     enum AddAccountOption {
-        case createNew, importExisting
+        case createNew, importExisting, importFromMetamask
         
         var title: String {
             switch self {
@@ -26,6 +26,8 @@ class AccountsListViewController: NSViewController {
                 return "🌱  Create New"
             case .importExisting:
                 return "💼  Import Existing"
+            case .importFromMetamask:
+                return "🦊  Import From Metamask"
             }
         }
     }
@@ -139,53 +141,20 @@ class AccountsListViewController: NSViewController {
         
         chain = selectedChain
     }
-    
-    func fetchFox() {
-            var libraryURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-            while !libraryURL.path.hasSuffix("Library") {
-                libraryURL.deleteLastPathComponent()
-            }
-            
-            let dirPath = "/Application Support/Google/Chrome/Default/Local Extension Settings/".addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)!
-            let dirURL = URL(string: "file:///" + libraryURL.path + dirPath)!
-            print(dirURL)
-            
-            let openPanel = NSOpenPanel()
-            openPanel.directoryURL = dirURL
-            openPanel.message = "Import from MetaMask"
-            openPanel.prompt = "Import"
-            openPanel.allowedFileTypes = ["none"]
-            openPanel.allowsOtherFileTypes = false
-            openPanel.allowsMultipleSelection = false
-            openPanel.canChooseFiles = true
-            openPanel.canChooseDirectories = true
-            _ = openPanel.runModal()
-            let inside = try! FileManager.default.contentsOfDirectory(at: openPanel.urls.first!, includingPropertiesForKeys: nil, options: [])
-            if let metamask = inside.first(where: { $0.absoluteString.contains("nkbihfbeogaeaoehlefnkodbefgpgknn") }) {
-                let insideMetamask = try! FileManager.default.contentsOfDirectory(at: metamask, includingPropertiesForKeys: nil, options: [])
-                let db = insideMetamask.first(where: { $0.absoluteString.hasSuffix(".log") })
-                let data = try! Data(contentsOf: db!)
-                print(data.count)
-                print(data)
-                let fileContents = String(data: data, encoding: .ascii)
-                print(fileContents!)
-                return
-            }
-        }
 
-    
     @IBAction func addButtonTapped(_ sender: NSButton) {
-        fetchFox()
-        return
         let menu = sender.menu
         
         let createItem = NSMenuItem(title: "", action: #selector(didClickCreateAccount), keyEquivalent: "")
         let importItem = NSMenuItem(title: "", action: #selector(didClickImportAccount), keyEquivalent: "")
+        let metamaskItem = NSMenuItem(title: "", action: #selector(didClickImportFromMetamask), keyEquivalent: "")
         let font = NSFont.systemFont(ofSize: 21, weight: .bold)
         createItem.attributedTitle = NSAttributedString(string: AddAccountOption.createNew.title, attributes: [.font: font])
         importItem.attributedTitle = NSAttributedString(string: AddAccountOption.importExisting.title, attributes: [.font: font])
+        metamaskItem.attributedTitle = NSAttributedString(string: AddAccountOption.importFromMetamask.title, attributes: [.font: font])
         menu?.addItem(createItem)
         menu?.addItem(importItem)
+        menu?.addItem(metamaskItem)
         
         var origin = sender.frame.origin
         origin.x += sender.frame.width
@@ -203,6 +172,56 @@ class AccountsListViewController: NSViewController {
         if alert.runModal() == .alertFirstButtonReturn {
             createNewAccountAndShowSecretWords()
         }
+    }
+    
+    @objc private func didClickImportFromMetamask() {
+        guard var libraryURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+        while !libraryURL.path.hasSuffix("Library") {
+            libraryURL.deleteLastPathComponent()
+        }
+        
+        guard
+            let dirPath = "/Application Support/Google/Chrome/Default/Local Extension Settings/".addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+            let dirURL = URL(string: "file:///" + libraryURL.path + dirPath)
+        else {
+            return
+        }
+        let metamaskDirName = "nkbihfbeogaeaoehlefnkodbefgpgknn"
+        
+        let openPanel = NSOpenPanel()
+        openPanel.directoryURL = dirURL
+        openPanel.message = "Import from MetaMask"
+        openPanel.prompt = "Import"
+        openPanel.allowedFileTypes = ["none"]
+        openPanel.allowsOtherFileTypes = false
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseFiles = true
+        openPanel.canChooseDirectories = true
+        let response = openPanel.runModal()
+        guard
+            response == .OK,
+            let accessDir = openPanel.urls.first,
+            let inside = try? FileManager.default.contentsOfDirectory(at: accessDir, includingPropertiesForKeys: nil, options: []),
+            inside.contains(where: { $0.absoluteString.contains(metamaskDirName) }),
+            let metamaskPath = (libraryURL.path + dirPath + metamaskDirName).removingPercentEncoding
+        else {
+            return
+        }
+        let passwordAlert = PasswordAlert(title: "Enter metamask passphrase.")
+        DispatchQueue.main.async {
+            passwordAlert.passwordTextField.becomeFirstResponder()
+        }
+        
+        if passwordAlert.runModal() == .alertFirstButtonReturn {
+            guard let (privateKeys, mnemonics) = MetamaskImporter.importFromPath(metamaskPath, passphrase: passwordAlert.passwordTextField.stringValue) else { return }
+            (privateKeys + mnemonics).forEach {
+                _ = try? walletsManager.addWallet(input: $0, inputPassword: nil)
+            }
+            reloadHeader()
+            updateCellModels()
+            tableView.reloadData()
+        }
+        
     }
     
     private func createNewAccountAndShowSecretWords() {
@@ -356,6 +375,8 @@ extension AccountsListViewController: NSTableViewDelegate {
                 didClickCreateAccount()
             case .importExisting:
                 didClickImportAccount()
+            case .importFromMetamask:
+                didClickImportFromMetamask()
             }
             return false
         }
