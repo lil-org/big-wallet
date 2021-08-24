@@ -178,7 +178,7 @@ class Agent: NSObject {
     }
     
     @objc private func didSelectGitHubMenuItem() {
-        if let url = URL(string: "https://github.com/zeriontech/Encrypted-Ink") {
+        if let url = URL(string: "https://encrypted.ink/github") {
             NSWorkspace.shared.open(url)
         }
     }
