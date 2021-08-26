@@ -162,8 +162,8 @@ class AccountsListViewController: NSViewController {
         alert.messageText = "Back up new account."
         alert.informativeText = "You will see 12 secret words."
         alert.alertStyle = .critical
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: Strings.ok)
+        alert.addButton(withTitle: Strings.cancel)
         if alert.runModal() == .alertFirstButtonReturn {
             createNewAccountAndShowSecretWords()
         }
@@ -214,7 +214,7 @@ class AccountsListViewController: NSViewController {
         alert.messageText = "Removed accounts can't be recovered."
         alert.alertStyle = .critical
         alert.addButton(withTitle: "Remove anyway")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: Strings.cancel)
         if alert.runModal() == .alertFirstButtonReturn {
             agent.askAuthentication(on: view.window, getBackTo: self, onStart: false, reason: .removeAccount) { [weak self] allowed in
                 Window.activateWindow(self?.view.window)
@@ -234,7 +234,7 @@ class AccountsListViewController: NSViewController {
         alert.messageText = "\(isMnemonic ? "Secret words give" : "Private key gives") full access to your funds."
         alert.alertStyle = .critical
         alert.addButton(withTitle: "I understand the risks")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: Strings.cancel)
         if alert.runModal() == .alertFirstButtonReturn {
             let reason: AuthenticationReason = isMnemonic ? .showSecretWords : .showPrivateKey
             agent.askAuthentication(on: view.window, getBackTo: self, onStart: false, reason: reason) { [weak self] allowed in
@@ -264,7 +264,7 @@ class AccountsListViewController: NSViewController {
         alert.messageText = mnemonic ? "Secret words" : "Private key"
         alert.informativeText = secret
         alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: Strings.ok)
         alert.addButton(withTitle: "Copy")
         if alert.runModal() != .alertFirstButtonReturn {
             NSPasteboard.general.clearAndSetString(secret)

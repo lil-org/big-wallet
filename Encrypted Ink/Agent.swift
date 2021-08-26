@@ -161,8 +161,8 @@ class Agent: NSObject {
         alert.messageText = "Quit Encrypted Ink?"
         alert.informativeText = "You won't be able to sign requests."
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: Strings.ok)
+        alert.addButton(withTitle: Strings.cancel)
         if alert.runModal() == .alertFirstButtonReturn {
             NSApp.terminate(nil)
         }
@@ -268,7 +268,7 @@ class Agent: NSObject {
         }
         
         if canDoLocalAuthentication {
-            context.localizedCancelTitle = "Cancel"
+            context.localizedCancelTitle = Strings.cancel
             didStartInitialLAEvaluation = true
             context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason.title) { [weak self] success, _ in
                 DispatchQueue.main.async {

@@ -32,8 +32,8 @@ class ImportViewController: NSViewController {
         let alert = Alert()
         alert.messageText = "Enter keystore password."
         alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: Strings.ok)
+        alert.addButton(withTitle: Strings.cancel)
         
         let passwordTextField = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 160, height: 20))
         passwordTextField.bezelStyle = .roundedBezel
