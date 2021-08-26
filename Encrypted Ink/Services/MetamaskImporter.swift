@@ -83,19 +83,13 @@ class MetamaskImporter {
         }
     }
 
-    private struct KeyringVault: Codable {
-        let data: String
-        let iv: String
-        let salt: String
-    }
-    
     private static func keyFromPassword(password: String, salt: String) -> [UInt8]? {
         guard
             let passwordData = password.data(using: .utf8),
             let saltData = Data(base64Encoded: salt),
             let key = try? PKCS5.PBKDF2(password: passwordData.bytes,
                                         salt: saltData.bytes,
-                                        iterations: 10000,
+                                        iterations: 10000,  // See https://github.com/MetaMask/browser-passworder/blob/main/src/index.ts#L121
                                         variant: .sha256).calculate()
         else {
             return nil

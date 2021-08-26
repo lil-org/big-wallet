@@ -48,32 +48,29 @@ using namespace std;
     }
 }
 
-
 -(void)createDB:(NSString *) dbName {
   leveldb::Options options;
-//  options.create_if_missing = true;
+  options.create_if_missing = true;
   
-//  NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+  NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
   
   /* Lock Folder */
-//  NSError *error = nil;
-//  NSString *dbPath = [paths[0] stringByAppendingPathComponent:dbName];
-//    NSString *dbPath = @"/Users/vadimantiy/Downloads/nkbihfbeogaeaoehlefnkodbefgpgknn";
-    NSString *dbPath = @"/Users/vadimantiy/Library/Application\ Support/Google/Chrome/Default/Local\ Extension\ Settings/nkbihfbeogaeaoehlefnkodbefgpgknn";
+  NSError *error = nil;
+  NSString *dbPath = [paths[0] stringByAppendingPathComponent:dbName];
   /* Create lock file. For some reason, leveldb cannot create the LOCK directory. So we make it. */
-//  NSString *lockFolderPath = [dbPath stringByAppendingPathComponent:@"LOCK"];
+  NSString *lockFolderPath = [dbPath stringByAppendingPathComponent:@"LOCK"];
   
-//  NSFileManager *mgr = [NSFileManager defaultManager];
-//  if (![mgr fileExistsAtPath:lockFolderPath]) {
-//    NSURL *url = [NSURL fileURLWithPath:dbPath];
-//    [mgr createDirectoryAtURL:url withIntermediateDirectories:YES attributes:nil error:&error];
-//
-//    if (error != nil) {
-//        NSLog(@"%@", error);
-//        return;
-//    }
-//  }
-//  /* End lock folder */
+  NSFileManager *mgr = [NSFileManager defaultManager];
+  if (![mgr fileExistsAtPath:lockFolderPath]) {
+    NSURL *url = [NSURL fileURLWithPath:dbPath];
+    [mgr createDirectoryAtURL:url withIntermediateDirectories:YES attributes:nil error:&error];
+    
+    if (error != nil) {
+        NSLog(@"%@", error);
+        return;
+    }
+  }
+  /* End lock folder */
   
   leveldb::Status status = leveldb::DB::Open(options, [dbPath UTF8String], &self->db);
   if (false == status.ok()) {

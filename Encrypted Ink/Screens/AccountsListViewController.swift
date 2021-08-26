@@ -27,7 +27,7 @@ class AccountsListViewController: NSViewController {
             case .importExisting:
                 return "💼  Import Existing"
             case .importFromMetamask:
-                return "🦊  Import From Metamask"
+                return "🦊  Import From MetaMask"
             }
         }
     }
@@ -186,11 +186,11 @@ class AccountsListViewController: NSViewController {
         else {
             return
         }
-        let metamaskDirName = "nkbihfbeogaeaoehlefnkodbefgpgknn"
+        let metamaskDirectoryName = "nkbihfbeogaeaoehlefnkodbefgpgknn"
         
         let openPanel = NSOpenPanel()
         openPanel.directoryURL = dirURL
-        openPanel.message = "Import from MetaMask"
+        openPanel.message = "Press Enter to import"
         openPanel.prompt = "Import"
         openPanel.allowedFileTypes = ["none"]
         openPanel.allowsOtherFileTypes = false
@@ -200,14 +200,14 @@ class AccountsListViewController: NSViewController {
         let response = openPanel.runModal()
         guard
             response == .OK,
-            let accessDir = openPanel.urls.first,
-            let inside = try? FileManager.default.contentsOfDirectory(at: accessDir, includingPropertiesForKeys: nil, options: []),
-            inside.contains(where: { $0.absoluteString.contains(metamaskDirName) }),
-            let metamaskPath = (libraryURL.path + dirPath + metamaskDirName).removingPercentEncoding
+            let accessDirectory = openPanel.urls.first,
+            let inside = try? FileManager.default.contentsOfDirectory(at: accessDirectory, includingPropertiesForKeys: nil, options: []),
+            inside.contains(where: { $0.absoluteString.contains(metamaskDirectoryName) }),
+            let metamaskPath = (libraryURL.path + dirPath + metamaskDirectoryName).removingPercentEncoding
         else {
             return
         }
-        let passwordAlert = PasswordAlert(title: "Enter metamask passphrase.")
+        let passwordAlert = PasswordAlert(title: "Enter MetaMask passphrase.")
         DispatchQueue.main.async {
             passwordAlert.passwordTextField.becomeFirstResponder()
         }

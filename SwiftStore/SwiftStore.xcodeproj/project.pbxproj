@@ -23,7 +23,6 @@
 
 /* Begin PBXBuildFile section */
 		2EAADF2C1AF6F94600783BAD /* SwiftStore.h in Headers */ = {isa = PBXBuildFile; fileRef = 2EAADF2B1AF6F94600783BAD /* SwiftStore.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		2EAADF321AF6F94600783BAD /* SwiftStore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2EAADF261AF6F94600783BAD /* SwiftStore.framework */; };
 		2EAADF441AF6F97A00783BAD /* Store.h in Headers */ = {isa = PBXBuildFile; fileRef = 2EAADF421AF6F97A00783BAD /* Store.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		2EAADF451AF6F97A00783BAD /* Store.mm in Sources */ = {isa = PBXBuildFile; fileRef = 2EAADF431AF6F97A00783BAD /* Store.mm */; };
 		2EAADF921AF6FA1F00783BAD /* c.h in Headers */ = {isa = PBXBuildFile; fileRef = 2EAADF841AF6FA1F00783BAD /* c.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -41,17 +40,9 @@
 		2EAADF9E1AF6FA1F00783BAD /* table_builder.h in Headers */ = {isa = PBXBuildFile; fileRef = 2EAADF901AF6FA1F00783BAD /* table_builder.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		2EAADF9F1AF6FA1F00783BAD /* write_batch.h in Headers */ = {isa = PBXBuildFile; fileRef = 2EAADF911AF6FA1F00783BAD /* write_batch.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		2EAADFB01AF7086700783BAD /* SwiftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EAADFAF1AF7086700783BAD /* SwiftStore.swift */; };
-		2EAADFC11AF797D500783BAD /* SwiftStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EAADFC01AF797D500783BAD /* SwiftStoreTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		2EAADF331AF6F94600783BAD /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 2EAADF1D1AF6F94600783BAD /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 2EAADF251AF6F94600783BAD;
-			remoteInfo = SwiftStore;
-		};
 		2EAADFAC1AF6FC5D00783BAD /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 2EAADF1D1AF6F94600783BAD /* Project object */;
@@ -65,8 +56,6 @@
 		2EAADF261AF6F94600783BAD /* SwiftStore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SwiftStore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		2EAADF2A1AF6F94600783BAD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2EAADF2B1AF6F94600783BAD /* SwiftStore.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SwiftStore.h; sourceTree = "<group>"; };
-		2EAADF311AF6F94600783BAD /* SwiftStoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SwiftStoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		2EAADF371AF6F94600783BAD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2EAADF421AF6F97A00783BAD /* Store.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Store.h; sourceTree = "<group>"; };
 		2EAADF431AF6F97A00783BAD /* Store.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = Store.mm; sourceTree = "<group>"; };
 		2EAADF841AF6FA1F00783BAD /* c.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = c.h; sourceTree = "<group>"; };
@@ -84,8 +73,6 @@
 		2EAADF901AF6FA1F00783BAD /* table_builder.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = table_builder.h; sourceTree = "<group>"; };
 		2EAADF911AF6FA1F00783BAD /* write_batch.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = write_batch.h; sourceTree = "<group>"; };
 		2EAADFAF1AF7086700783BAD /* SwiftStore.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SwiftStore.swift; sourceTree = "<group>"; };
-		2EAADFBD1AF7969D00783BAD /* SwiftStoreTests-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "SwiftStoreTests-Bridging-Header.h"; sourceTree = "<group>"; };
-		2EAADFC01AF797D500783BAD /* SwiftStoreTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SwiftStoreTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -93,14 +80,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		2EAADF2E1AF6F94600783BAD /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				2EAADF321AF6F94600783BAD /* SwiftStore.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -119,7 +98,6 @@
 			children = (
 				2EAADF811AF6FA1F00783BAD /* leveldb */,
 				2EAADF281AF6F94600783BAD /* SwiftStore */,
-				2EAADF351AF6F94600783BAD /* SwiftStoreTests */,
 				2EAADF271AF6F94600783BAD /* Products */,
 				2E1245E01DEE9BF00058530A /* Frameworks */,
 			);
@@ -129,7 +107,6 @@
 			isa = PBXGroup;
 			children = (
 				2EAADF261AF6F94600783BAD /* SwiftStore.framework */,
-				2EAADF311AF6F94600783BAD /* SwiftStoreTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -150,24 +127,6 @@
 			isa = PBXGroup;
 			children = (
 				2EAADF2A1AF6F94600783BAD /* Info.plist */,
-			);
-			name = "Supporting Files";
-			sourceTree = "<group>";
-		};
-		2EAADF351AF6F94600783BAD /* SwiftStoreTests */ = {
-			isa = PBXGroup;
-			children = (
-				2EAADFC01AF797D500783BAD /* SwiftStoreTests.swift */,
-				2EAADFBD1AF7969D00783BAD /* SwiftStoreTests-Bridging-Header.h */,
-				2EAADF361AF6F94600783BAD /* Supporting Files */,
-			);
-			path = SwiftStoreTests;
-			sourceTree = "<group>";
-		};
-		2EAADF361AF6F94600783BAD /* Supporting Files */ = {
-			isa = PBXGroup;
-			children = (
-				2EAADF371AF6F94600783BAD /* Info.plist */,
 			);
 			name = "Supporting Files";
 			sourceTree = "<group>";
@@ -256,24 +215,6 @@
 			productReference = 2EAADF261AF6F94600783BAD /* SwiftStore.framework */;
 			productType = "com.apple.product-type.framework";
 		};
-		2EAADF301AF6F94600783BAD /* SwiftStoreTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 2EAADF3F1AF6F94600783BAD /* Build configuration list for PBXNativeTarget "SwiftStoreTests" */;
-			buildPhases = (
-				2EAADF2D1AF6F94600783BAD /* Sources */,
-				2EAADF2E1AF6F94600783BAD /* Frameworks */,
-				2EAADF2F1AF6F94600783BAD /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				2EAADF341AF6F94600783BAD /* PBXTargetDependency */,
-			);
-			name = SwiftStoreTests;
-			productName = SwiftStoreTests;
-			productReference = 2EAADF311AF6F94600783BAD /* SwiftStoreTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -286,10 +227,6 @@
 				ORGANIZATIONNAME = "Hemanta Sapkota";
 				TargetAttributes = {
 					2EAADF251AF6F94600783BAD = {
-						CreatedOnToolsVersion = 6.3.1;
-						LastSwiftMigration = 0800;
-					};
-					2EAADF301AF6F94600783BAD = {
 						CreatedOnToolsVersion = 6.3.1;
 						LastSwiftMigration = 0800;
 					};
@@ -313,20 +250,12 @@
 			targets = (
 				2EAADFA81AF6FC4F00783BAD /* SwiftStoreAG */,
 				2EAADF251AF6F94600783BAD /* SwiftStore */,
-				2EAADF301AF6F94600783BAD /* SwiftStoreTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		2EAADF241AF6F94600783BAD /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		2EAADF2F1AF6F94600783BAD /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -361,22 +290,9 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		2EAADF2D1AF6F94600783BAD /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				2EAADFC11AF797D500783BAD /* SwiftStoreTests.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		2EAADF341AF6F94600783BAD /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 2EAADF251AF6F94600783BAD /* SwiftStore */;
-			targetProxy = 2EAADF331AF6F94600783BAD /* PBXContainerItemProxy */;
-		};
 		2EAADFAD1AF6FC5D00783BAD /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 2EAADF251AF6F94600783BAD /* SwiftStore */;
@@ -554,45 +470,6 @@
 			};
 			name = Release;
 		};
-		2EAADF401AF6F94600783BAD /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_MODULES = YES;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(SDKROOT)/Developer/Library/Frameworks",
-					"$(inherited)",
-				);
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				INFOPLIST_FILE = SwiftStoreTests/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
-				PRODUCT_BUNDLE_IDENTIFIER = "com.laex.$(PRODUCT_NAME:rfc1034identifier)";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_OBJC_BRIDGING_HEADER = "SwiftStoreTests/SwiftStoreTests-Bridging-Header.h";
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
-			};
-			name = Debug;
-		};
-		2EAADF411AF6F94600783BAD /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_MODULES = YES;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(SDKROOT)/Developer/Library/Frameworks",
-					"$(inherited)",
-				);
-				INFOPLIST_FILE = SwiftStoreTests/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
-				PRODUCT_BUNDLE_IDENTIFIER = "com.laex.$(PRODUCT_NAME:rfc1034identifier)";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_OBJC_BRIDGING_HEADER = "SwiftStoreTests/SwiftStoreTests-Bridging-Header.h";
-				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
 		2EAADFAA1AF6FC4F00783BAD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -628,15 +505,6 @@
 			buildConfigurations = (
 				2EAADF3D1AF6F94600783BAD /* Debug */,
 				2EAADF3E1AF6F94600783BAD /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		2EAADF3F1AF6F94600783BAD /* Build configuration list for PBXNativeTarget "SwiftStoreTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				2EAADF401AF6F94600783BAD /* Debug */,
-				2EAADF411AF6F94600783BAD /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
