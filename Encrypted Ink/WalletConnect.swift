@@ -126,7 +126,7 @@ class WalletConnect {
     
     private func approveTransaction(id: Int64, wct: WCEthereumTransaction, walletId: String, chainId: Int, interactor: WCInteractor?) {
         guard let to = wct.to, let chain = EthereumChain(rawValue: chainId) else {
-            rejectRequest(id: id, interactor: interactor, message: "Something went wrong.")
+            rejectRequest(id: id, interactor: interactor, message: Strings.somethingWentWrong)
             return
         }
         
@@ -174,7 +174,7 @@ class WalletConnect {
 
     private func sendTransaction(_ transaction: Transaction, walletId: String, chainId: Int, requestId: Int64, interactor: WCInteractor?) {
         guard let wallet = walletsManager.getWallet(id: walletId), let chain = EthereumChain(rawValue: chainId) else {
-            rejectRequest(id: requestId, interactor: interactor, message: "Something went wrong.")
+            rejectRequest(id: requestId, interactor: interactor, message: Strings.somethingWentWrong)
             return
         }
         guard let hash = try? ethereum.send(transaction: transaction, wallet: wallet, chain: chain) else {
@@ -187,7 +187,7 @@ class WalletConnect {
 
     private func sign(id: Int64, payload: WCEthereumSignPayload, walletId: String, interactor: WCInteractor?) {
         guard let wallet = walletsManager.getWallet(id: walletId) else {
-            rejectRequest(id: id, interactor: interactor, message: "Something went wrong.")
+            rejectRequest(id: id, interactor: interactor, message: Strings.somethingWentWrong)
             return
         }
         var signed: String?
@@ -201,7 +201,7 @@ class WalletConnect {
             signed = try? ethereum.sign(data: data, wallet: wallet)
         }
         guard let result = signed else {
-            rejectRequest(id: id, interactor: interactor, message: "Something went wrong.")
+            rejectRequest(id: id, interactor: interactor, message: Strings.somethingWentWrong)
             return
         }
         interactor?.approveRequest(id: id, result: result).cauterize()

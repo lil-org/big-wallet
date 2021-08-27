@@ -10,5 +10,7 @@ struct Strings {
     static let signTypedData = "Sign Typed Data"
     static let cancel = "Cancel"
     static let ok = "OK"
+    static let connecting = "Connecting"
+    static let somethingWentWrong = "Something went wrong."
     
 }

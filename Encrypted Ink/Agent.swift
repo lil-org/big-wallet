@@ -287,7 +287,7 @@ class Agent: NSObject {
     private func connectWallet(session: WCSession, chainId: Int, wallet: InkWallet) {
         let windowController = Window.showNew()
         let window = windowController.window
-        windowController.contentViewController = WaitingViewController.withReason("Connecting")
+        windowController.contentViewController = WaitingViewController.withReason(Strings.connecting)
         
         WalletConnect.shared.connect(session: session, chainId: chainId, walletId: wallet.id) { [weak window] _ in
             if window?.isVisible == true {
