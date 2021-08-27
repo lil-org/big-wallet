@@ -195,7 +195,6 @@ class AccountsListViewController: NSViewController {
         openPanel.allowedFileTypes = ["none"]
         openPanel.allowsOtherFileTypes = false
         openPanel.allowsMultipleSelection = false
-        openPanel.canChooseFiles = true
         openPanel.canChooseDirectories = true
         let response = openPanel.runModal()
         guard
