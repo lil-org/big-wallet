@@ -2,11 +2,10 @@
 
 import SwiftStore
 import CryptoSwift
-import WalletCore
 
 class MetamaskImporter {
     
-    static func importFromPath(_ metamaskDir: String, passphrase: String) -> (privateKeys: [String], mnemonics: [String])? {
+    static func importFromPath(_ metamaskDir: String, passphrase: String) -> [InkWallet]? {
         guard
             let store = SwiftStore(dirPath: metamaskDir),
             let storageString = store.findKeys(key: "").first,
@@ -21,35 +20,30 @@ class MetamaskImporter {
             return nil
         }
         
-        var exportedPrivateKeys = [String]()
-        var exportedMnemonics = [String]()
+        var addedWallets = [InkWallet]()
         for account in parsedDecryptedStorage {
             guard let type = account["type"] as? String else { continue }
             if type == "Simple Key Pair" {
                 guard let privateKeys = account["data"] as? [String] else { continue }
-                exportedPrivateKeys.append(contentsOf: privateKeys)
+                for privateKey in privateKeys {
+                    if let inkWallet = try? WalletsManager.shared.addWallet(input: privateKey, inputPassword: nil) {
+                        addedWallets.append(inkWallet)
+                    }
+                }
             } else if type == "HD Key Tree" {
                 guard
                     let data = account["data"] as? [String: Any],
                     let mnemonic = data["mnemonic"] as? String,
                     let numberOfAccounts = data["numberOfAccounts"] as? Int,
-                    let hdPath = data["hdPath"] as? String
+                    let hdPath = data["hdPath"] as? String,
+                    let hdWallets = try? WalletsManager.shared.addHardWallets(mnemonic: mnemonic, numberOfAccounts: numberOfAccounts, hdPath: hdPath)
                 else {
                     continue
                 }
-                exportedMnemonics.append(mnemonic)
-                let wallet = HDWallet(mnemonic: mnemonic, passphrase: "")
-                let firstKey = wallet.getKeyForCoin(coin: .ethereum).data.hexString
-                
-                for accountIndex in 0..<numberOfAccounts {
-                    let privateKey = wallet.getKey(coin: .ethereum, derivationPath: hdPath + "/\(accountIndex)").data.hexString
-                    if privateKey != firstKey {
-                        exportedPrivateKeys.append(privateKey)
-                    }
-                }
+                addedWallets.append(contentsOf: hdWallets)
             }
         }
-        return (exportedPrivateKeys, exportedMnemonics)
+        return addedWallets
     }
     
     private struct MetamaskStorage: Decodable {

@@ -10,7 +10,7 @@ class AccountsListViewController: NSViewController {
     
     private var chain = EthereumChain.ethereum
     var onSelectedWallet: ((Int, InkWallet) -> Void)?
-    var newWalletId: String?
+    var newWalletIds = [String]()
     
     enum CellModel {
         case wallet
@@ -212,20 +212,19 @@ class AccountsListViewController: NSViewController {
         }
         
         if passwordAlert.runModal() == .alertFirstButtonReturn {
-            guard let (privateKeys, mnemonics) = MetamaskImporter.importFromPath(metamaskPath, passphrase: passwordAlert.passwordTextField.stringValue) else { return }
-            (privateKeys + mnemonics).forEach {
-                _ = try? walletsManager.addWallet(input: $0, inputPassword: nil)
-            }
+            guard let addedWallets = MetamaskImporter.importFromPath(metamaskPath, passphrase: passwordAlert.passwordTextField.stringValue) else { return }
+            newWalletIds = addedWallets.map { $0.id }
             reloadHeader()
             updateCellModels()
             tableView.reloadData()
+            blinkNewWalletCellIfNeeded()
         }
         
     }
     
     private func createNewAccountAndShowSecretWords() {
         guard let wallet = try? walletsManager.createWallet() else { return }
-        newWalletId = wallet.id
+        newWalletIds = [wallet.id]
         reloadHeader()
         updateCellModels()
         tableView.reloadData()
@@ -234,11 +233,15 @@ class AccountsListViewController: NSViewController {
     }
     
     private func blinkNewWalletCellIfNeeded() {
-        guard let id = newWalletId else { return }
-        newWalletId = nil
-        guard let row = wallets.firstIndex(where: { $0.id == id }), row < cellModels.count else { return }
-        tableView.scrollRowToVisible(row)
-        (tableView.rowView(atRow: row, makeIfNecessary: true) as? AccountCellView)?.blink()
+        guard !newWalletIds.isEmpty else { return }
+        let newRows = wallets.indices.filter { newWalletIds.contains(wallets[$0].id) && $0 < cellModels.count }
+        newWalletIds = []
+        if let lastNewRow = newRows.last {
+            tableView.scrollRowToVisible(lastNewRow)
+            newRows.forEach {
+                (tableView.rowView(atRow: $0, makeIfNecessary: true) as? AccountCellView)?.blink()
+            }
+        }
     }
     
     @objc private func didClickImportAccount() {

@@ -51,7 +51,9 @@ class ImportViewController: NSViewController {
     private func showAccountsList(newWalletId: String?) {
         let accountsListViewController = instantiate(AccountsListViewController.self)
         accountsListViewController.onSelectedWallet = onSelectedWallet
-        accountsListViewController.newWalletId = newWalletId
+        if let newWalletId = newWalletId {
+            accountsListViewController.newWalletIds = [newWalletId]
+        }
         view.window?.contentViewController = accountsListViewController
     }
     
