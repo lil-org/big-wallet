@@ -13,7 +13,7 @@ class MetamaskImporter {
         
         guard
             let dirPath = "/Application Support/Google/Chrome/Default/Local Extension Settings/".addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
-            let dirURL = URL(string: "file:///" + libraryURL.path + dirPath)
+            let dirURL = URL(string: "file:///" + libraryURL.appendingPathComponent(dirPath).absoluteString)
         else {
             return nil
         }
