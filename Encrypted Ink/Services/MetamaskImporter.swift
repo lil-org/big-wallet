@@ -5,6 +5,41 @@ import CryptoSwift
 
 class MetamaskImporter {
     
+    static func selectMetamaskDirectory() -> String? {
+        guard var libraryURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return nil }
+        while !libraryURL.path.hasSuffix("Library") {
+            libraryURL.deleteLastPathComponent()
+        }
+        
+        guard
+            let dirPath = "/Application Support/Google/Chrome/Default/Local Extension Settings/".addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+            let dirURL = URL(string: "file:///" + libraryURL.path + dirPath)
+        else {
+            return nil
+        }
+        let metamaskDirectoryName = "nkbihfbeogaeaoehlefnkodbefgpgknn"
+        
+        let openPanel = NSOpenPanel()
+        openPanel.directoryURL = dirURL
+        openPanel.message = "Select \(metamaskDirectoryName) directory."
+        openPanel.prompt = "Import"
+        openPanel.allowedFileTypes = ["none"]
+        openPanel.allowsOtherFileTypes = false
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = true
+        let response = openPanel.runModal()
+        guard
+            response == .OK,
+            let accessDirectory = openPanel.urls.first,
+            let inside = try? FileManager.default.contentsOfDirectory(at: accessDirectory, includingPropertiesForKeys: nil, options: []),
+            inside.contains(where: { $0.absoluteString.contains(metamaskDirectoryName) }),
+            let metamaskPath = (libraryURL.path + dirPath + metamaskDirectoryName).removingPercentEncoding
+        else {
+            return nil
+        }
+        return metamaskPath
+    }
+    
     static func importFromPath(_ metamaskDir: String, passphrase: String) -> [InkWallet]? {
         guard
             let store = SwiftStore(dirPath: metamaskDir),

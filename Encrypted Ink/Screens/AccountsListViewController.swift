@@ -175,44 +175,21 @@ class AccountsListViewController: NSViewController {
     }
     
     @objc private func didClickImportFromMetamask() {
-        guard var libraryURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
-        while !libraryURL.path.hasSuffix("Library") {
-            libraryURL.deleteLastPathComponent()
-        }
-        
-        guard
-            let dirPath = "/Application Support/Google/Chrome/Default/Local Extension Settings/".addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
-            let dirURL = URL(string: "file:///" + libraryURL.path + dirPath)
-        else {
+        guard let metamaskPath = MetamaskImporter.selectMetamaskDirectory() else {
+            Alert.showWithMessage("Something went wrong", style: .critical)
             return
         }
-        let metamaskDirectoryName = "nkbihfbeogaeaoehlefnkodbefgpgknn"
         
-        let openPanel = NSOpenPanel()
-        openPanel.directoryURL = dirURL
-        openPanel.message = "Select \(metamaskDirectoryName) directory."
-        openPanel.prompt = "Import"
-        openPanel.allowedFileTypes = ["none"]
-        openPanel.allowsOtherFileTypes = false
-        openPanel.allowsMultipleSelection = false
-        openPanel.canChooseDirectories = true
-        let response = openPanel.runModal()
-        guard
-            response == .OK,
-            let accessDirectory = openPanel.urls.first,
-            let inside = try? FileManager.default.contentsOfDirectory(at: accessDirectory, includingPropertiesForKeys: nil, options: []),
-            inside.contains(where: { $0.absoluteString.contains(metamaskDirectoryName) }),
-            let metamaskPath = (libraryURL.path + dirPath + metamaskDirectoryName).removingPercentEncoding
-        else {
-            return
-        }
         let passwordAlert = PasswordAlert(title: "Enter MetaMask passphrase.")
         DispatchQueue.main.async {
             passwordAlert.passwordTextField.becomeFirstResponder()
         }
         
         if passwordAlert.runModal() == .alertFirstButtonReturn {
-            guard let addedWallets = MetamaskImporter.importFromPath(metamaskPath, passphrase: passwordAlert.passwordTextField.stringValue) else { return }
+            guard let addedWallets = MetamaskImporter.importFromPath(metamaskPath, passphrase: passwordAlert.passwordTextField.stringValue) else {
+                Alert.showWithMessage("Failed to import from MetaMask. Make sure Google Chrome isn't running.", style: .critical)
+                return
+            }
             newWalletIds = addedWallets.map { $0.id }
             reloadHeader()
             updateCellModels()
