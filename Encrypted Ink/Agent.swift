@@ -125,7 +125,7 @@ class Agent: NSObject {
     }
     
     lazy private var statusBarMenu: NSMenu = {
-        let menu = NSMenu(title: "Encrypted Ink")
+        let menu = NSMenu(title: Strings.encryptedInk)
         
         let showItem = NSMenuItem(title: "Show Encrypted Ink", action: #selector(didSelectShowMenuItem), keyEquivalent: "")
         let howToItem = NSMenuItem(title: "How to WalletConnect?", action: #selector(showInstructionsAlert), keyEquivalent: "")
@@ -161,8 +161,8 @@ class Agent: NSObject {
         alert.messageText = "Quit Encrypted Ink?"
         alert.informativeText = "You won't be able to sign requests."
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: Strings.ok)
+        alert.addButton(withTitle: Strings.cancel)
         if alert.runModal() == .alertFirstButtonReturn {
             NSApp.terminate(nil)
         }
@@ -178,7 +178,7 @@ class Agent: NSObject {
     }
     
     @objc private func didSelectGitHubMenuItem() {
-        if let url = URL(string: "https://github.com/zeriontech/Encrypted-Ink") {
+        if let url = URL(string: "https://encrypted.ink/github") {
             NSWorkspace.shared.open(url)
         }
     }
@@ -268,7 +268,7 @@ class Agent: NSObject {
         }
         
         if canDoLocalAuthentication {
-            context.localizedCancelTitle = "Cancel"
+            context.localizedCancelTitle = Strings.cancel
             didStartInitialLAEvaluation = true
             context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason.title) { [weak self] success, _ in
                 DispatchQueue.main.async {
@@ -287,7 +287,7 @@ class Agent: NSObject {
     private func connectWallet(session: WCSession, chainId: Int, wallet: InkWallet) {
         let windowController = Window.showNew()
         let window = windowController.window
-        windowController.contentViewController = WaitingViewController.withReason("Connecting")
+        windowController.contentViewController = WaitingViewController.withReason(Strings.connecting)
         
         WalletConnect.shared.connect(session: session, chainId: chainId, walletId: wallet.id) { [weak window] _ in
             if window?.isVisible == true {

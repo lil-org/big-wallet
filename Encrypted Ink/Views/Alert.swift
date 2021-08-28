@@ -20,7 +20,7 @@ class Alert: NSAlert {
         let alert = Alert()
         alert.messageText = message
         alert.alertStyle = style
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: Strings.ok)
         _ = alert.runModal()
     }
     

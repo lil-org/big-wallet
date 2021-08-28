@@ -8,5 +8,12 @@ struct Strings {
     static let signMessage = "Sign Message"
     static let signPersonalMessage = "Sign Personal Message"
     static let signTypedData = "Sign Typed Data"
+    static let cancel = "Cancel"
+    static let ok = "OK"
+    static let connecting = "Connecting"
+    static let somethingWentWrong = "Something went wrong."
+    static let cancelled = "Cancelled"
+    static let failedToSend = "Failed to send"
+    static let encryptedInk = "Encrypted Ink"
     
 }
