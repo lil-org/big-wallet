@@ -125,7 +125,7 @@ class Agent: NSObject {
     }
     
     lazy private var statusBarMenu: NSMenu = {
-        let menu = NSMenu(title: "Encrypted Ink")
+        let menu = NSMenu(title: Strings.encryptedInk)
         
         let showItem = NSMenuItem(title: "Show Encrypted Ink", action: #selector(didSelectShowMenuItem), keyEquivalent: "")
         let howToItem = NSMenuItem(title: "How to WalletConnect?", action: #selector(showInstructionsAlert), keyEquivalent: "")

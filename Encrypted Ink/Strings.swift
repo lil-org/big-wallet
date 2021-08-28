@@ -12,5 +12,8 @@ struct Strings {
     static let ok = "OK"
     static let connecting = "Connecting"
     static let somethingWentWrong = "Something went wrong."
+    static let cancelled = "Cancelled"
+    static let failedToSend = "Failed to send"
+    static let encryptedInk = "Encrypted Ink"
     
 }
