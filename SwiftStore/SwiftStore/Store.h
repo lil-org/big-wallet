@@ -10,9 +10,10 @@
 
 @interface Store : NSObject
 
+NS_ASSUME_NONNULL_BEGIN
 -(instancetype)initWithDBName:(NSString *) dbName;
 
--(instancetype)initWithDirPath:(NSString *) dirPath;
+-(nullable instancetype)initWithDirPath:(NSString *) dirPath;
 
 -(NSString *)get:(NSString *)key;
 
@@ -29,3 +30,4 @@
 -(void)close;
 
 @end
+NS_ASSUME_NONNULL_END

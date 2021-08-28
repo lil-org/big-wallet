@@ -16,8 +16,12 @@ open class SwiftStore {
     db = Store(dbName: storeName)
   }
     
-  public init(dirPath: String) {
-    db = Store(dirPath: dirPath)
+  public init?(dirPath: String) {
+    if let db = Store(dirPath: dirPath) {
+        self.db = db
+    } else {
+        return nil
+    }
   }
   
   public subscript(key: String) -> String? {

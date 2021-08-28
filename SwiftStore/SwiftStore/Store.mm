@@ -29,22 +29,27 @@ using namespace std;
   return self;
 }
 
-- (instancetype) initWithDirPath:(NSString *) dirPath {
+- (nullable instancetype) initWithDirPath:(NSString *) dirPath {
   self = [super init];
   if (self) {
-    [self loadDB:dirPath];
+    bool succeeded = [self loadDB:dirPath];
+    if (succeeded == NO) {
+        return nil;
+    }
   }
   return self;
 }
 
--(void)loadDB:(NSString *) dirPath {
+-(bool)loadDB:(NSString *) dirPath {
     leveldb::Options options;
     leveldb::Status status = leveldb::DB::Open(options, [dirPath UTF8String], &self->db);
     if (false == status.ok()) {
         NSLog(@"ERROR: Unable to open/create database.");
         std::cout << status.ToString();
+        return NO;
     } else {
         NSLog(@"INFO: Database setup.");
+        return YES;
     }
 }
 

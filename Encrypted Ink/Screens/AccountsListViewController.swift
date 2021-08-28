@@ -190,7 +190,7 @@ class AccountsListViewController: NSViewController {
         
         let openPanel = NSOpenPanel()
         openPanel.directoryURL = dirURL
-        openPanel.message = "Press Enter to import"
+        openPanel.message = "Select \(metamaskDirectoryName) directory."
         openPanel.prompt = "Import"
         openPanel.allowedFileTypes = ["none"]
         openPanel.allowsOtherFileTypes = false

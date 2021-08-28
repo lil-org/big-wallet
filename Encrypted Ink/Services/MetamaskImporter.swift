@@ -7,8 +7,8 @@ import WalletCore
 class MetamaskImporter {
     
     static func importFromPath(_ metamaskDir: String, passphrase: String) -> (privateKeys: [String], mnemonics: [String])? {
-        let store = SwiftStore(dirPath: metamaskDir)
         guard
+            let store = SwiftStore(dirPath: metamaskDir),
             let storageString = store.findKeys(key: "").first,
             let storageData = storageString.data(using: .utf8),
             let storage = try? JSONDecoder().decode(MetamaskStorage.self, from: storageData),
