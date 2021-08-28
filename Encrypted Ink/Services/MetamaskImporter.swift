@@ -21,7 +21,7 @@ class MetamaskImporter {
         
         let openPanel = NSOpenPanel()
         openPanel.directoryURL = dirURL
-        openPanel.message = "Select \(metamaskDirectoryName) directory."
+        openPanel.message = "Press Enter to import"
         openPanel.prompt = "Import"
         openPanel.allowedFileTypes = ["none"]
         openPanel.allowsOtherFileTypes = false
