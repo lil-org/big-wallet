@@ -11,13 +11,10 @@ class MetamaskImporter {
             libraryURL.deleteLastPathComponent()
         }
         
-        guard
-            let dirPath = "/Application Support/Google/Chrome/Default/Local Extension Settings/".addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
-            let dirURL = URL(string: "file:///" + libraryURL.appendingPathComponent(dirPath).absoluteString)
-        else {
-            return nil
-        }
         let metamaskDirectoryName = "nkbihfbeogaeaoehlefnkodbefgpgknn"
+        let dirPath = "Application Support/Google/Chrome/Default/Local Extension Settings/\(metamaskDirectoryName)"
+        guard let dirURL = URL(string: libraryURL.appendingPathComponent(dirPath).absoluteString) else { return nil
+        }
         
         let openPanel = NSOpenPanel()
         openPanel.directoryURL = dirURL
@@ -33,7 +30,7 @@ class MetamaskImporter {
             let accessDirectory = openPanel.urls.first,
             let inside = try? FileManager.default.contentsOfDirectory(at: accessDirectory, includingPropertiesForKeys: nil, options: []),
             inside.contains(where: { $0.absoluteString.contains(metamaskDirectoryName) }),
-            let metamaskPath = (libraryURL.path + dirPath + metamaskDirectoryName).removingPercentEncoding
+            let metamaskPath = libraryURL.appendingPathComponent(dirPath).path.removingPercentEncoding
         else {
             return nil
         }
