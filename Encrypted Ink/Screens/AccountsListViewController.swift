@@ -27,7 +27,7 @@ class AccountsListViewController: NSViewController {
             case .importExisting:
                 return "💼  Import Existing"
             case .importFromMetamask:
-                return "🦊  Import From MetaMask"
+                return "🦊  Import from MetaMask"
             }
         }
     }
