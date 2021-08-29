@@ -68,7 +68,7 @@ class MetamaskImporter {
                     let mnemonic = data["mnemonic"] as? String,
                     let numberOfAccounts = data["numberOfAccounts"] as? Int,
                     let hdPath = data["hdPath"] as? String,
-                    let hdWallets = try? WalletsManager.shared.addHardWallets(mnemonic: mnemonic, numberOfAccounts: numberOfAccounts, hdPath: hdPath)
+                    let hdWallets = try? WalletsManager.shared.addHDWallets(mnemonic: mnemonic, numberOfAccounts: numberOfAccounts, hdPath: hdPath)
                 else {
                     continue
                 }

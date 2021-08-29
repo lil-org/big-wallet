@@ -175,7 +175,7 @@ class AccountsListViewController: NSViewController {
     }
     
     @objc private func didClickImportFromMetamask() {
-        guard !NSWorkspace.googleChromeIsRunning() else {
+        guard !NSRunningApplication.isGoogleChromeRunning else {
             Alert.showWithMessage("Please close Google Chrome and try again.", style: .critical)
             return
         }

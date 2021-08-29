@@ -8,7 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0D059AD226C2796200EE3023 /* ApprovalSubject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D059AD126C2796200EE3023 /* ApprovalSubject.swift */; };
-		0D5166F326DBB753001CBB4E /* NSWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D5166F226DBB753001CBB4E /* NSWorkspace.swift */; };
+		0D5166F326DBB753001CBB4E /* NSRunningApplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D5166F226DBB753001CBB4E /* NSRunningApplication.swift */; };
 		0D856A9C26D2C0840051C603 /* MetamaskImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D856A9B26D2C0840051C603 /* MetamaskImporter.swift */; };
 		0D856AB426D2C46C0051C603 /* SwiftStore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0D856AAC26D2C42C0051C603 /* SwiftStore.framework */; };
 		0D856AB526D2C46C0051C603 /* SwiftStore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 0D856AAC26D2C42C0051C603 /* SwiftStore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -91,7 +91,7 @@
 
 /* Begin PBXFileReference section */
 		0D059AD126C2796200EE3023 /* ApprovalSubject.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalSubject.swift; sourceTree = "<group>"; };
-		0D5166F226DBB753001CBB4E /* NSWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSWorkspace.swift; sourceTree = "<group>"; };
+		0D5166F226DBB753001CBB4E /* NSRunningApplication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSRunningApplication.swift; sourceTree = "<group>"; };
 		0D856A9B26D2C0840051C603 /* MetamaskImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetamaskImporter.swift; sourceTree = "<group>"; };
 		0D856AA526D2C42B0051C603 /* SwiftStore.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = SwiftStore.xcodeproj; path = SwiftStore/SwiftStore.xcodeproj; sourceTree = "<group>"; };
 		0DC850E626B73A5900809E82 /* AuthenticationReason.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationReason.swift; sourceTree = "<group>"; };
@@ -285,7 +285,7 @@
 			isa = PBXGroup;
 			children = (
 				2C6706A4267A6BFE006AAEF2 /* Bundle.swift */,
-				0D5166F226DBB753001CBB4E /* NSWorkspace.swift */,
+				0D5166F226DBB753001CBB4E /* NSRunningApplication.swift */,
 				2C03D1D4269B428C00EF10EA /* Notification.swift */,
 				2C603D0126B6E13F00956955 /* String.swift */,
 				2C6B964B26B9D92500D2C819 /* NSColor.swift */,
@@ -633,7 +633,7 @@
 				2C03D1D5269B428C00EF10EA /* Notification.swift in Sources */,
 				2C1995562674D0F300A8E370 /* Ethereum.swift in Sources */,
 				2C8A09DF267579EA00993638 /* AccountsListViewController.swift in Sources */,
-				0D5166F326DBB753001CBB4E /* NSWorkspace.swift in Sources */,
+				0D5166F326DBB753001CBB4E /* NSRunningApplication.swift in Sources */,
 				2C917429267D2A6E00049075 /* Keychain.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -60,7 +60,7 @@ final class WalletsManager {
         }
     }
     
-    func addHardWallets(mnemonic: String, numberOfAccounts: Int, hdPath: String) throws -> [InkWallet] {
+    func addHDWallets(mnemonic: String, numberOfAccounts: Int, hdPath: String) throws -> [InkWallet] {
         let hdWallet = HDWallet(mnemonic: mnemonic, passphrase: "")
         var addedWallets = [InkWallet]()
         let mnemonicWallet = try addWallet(input: mnemonic, inputPassword: nil)
