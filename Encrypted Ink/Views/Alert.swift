@@ -46,3 +46,19 @@ class PasswordAlert: Alert {
         accessoryView = passwordTextField
     }
 }
+
+class LoadingAlert: Alert {
+    
+    init(title: String) {
+        super.init()
+        
+        addButton(withTitle: "")
+        let button = buttons[0]
+        button.isHidden = true
+        messageText = title
+        let progress = NSProgressIndicator(frame: NSRect(x: 0, y: 0, width: 230, height: 20))
+        progress.style = .spinning
+        progress.startAnimation(nil)
+        accessoryView = progress
+    }
+}

@@ -175,8 +175,12 @@ class AccountsListViewController: NSViewController {
     }
     
     @objc private func didClickImportFromMetamask() {
+        guard !NSWorkspace.googleChromeIsRunning() else {
+            Alert.showWithMessage("Please close Google Chrome and try again.", style: .critical)
+            return
+        }
         guard let metamaskPath = MetamaskImporter.selectMetamaskDirectory() else {
-            Alert.showWithMessage("Something went wrong", style: .critical)
+            Alert.showWithMessage("Something went wrong.", style: .critical)
             return
         }
         
@@ -186,15 +190,26 @@ class AccountsListViewController: NSViewController {
         }
         
         if passwordAlert.runModal() == .alertFirstButtonReturn {
-            guard let addedWallets = MetamaskImporter.importFromPath(metamaskPath, passphrase: passwordAlert.passwordTextField.stringValue) else {
-                Alert.showWithMessage("Failed to import from MetaMask. Make sure Google Chrome isn't running.", style: .critical)
-                return
+            let passphrase = passwordAlert.passwordTextField.stringValue
+            let alert = LoadingAlert(title: "Please wait until import is finished.")
+            guard let window = view.window else { return }
+            alert.beginSheetModal(for: window, completionHandler: nil)
+            DispatchQueue.global(qos: .userInitiated).async {
+                let addedWallets = MetamaskImporter.importFromPath(metamaskPath, passphrase: passphrase)
+                DispatchQueue.main.async { [weak self] in
+                    self?.view.window?.endSheet(alert.window)
+
+                    if let addedWallets = addedWallets {
+                        self?.newWalletIds = addedWallets.map { $0.id }
+                        self?.reloadHeader()
+                        self?.updateCellModels()
+                        self?.tableView.reloadData()
+                        self?.blinkNewWalletCellIfNeeded()
+                    } else {
+                        Alert.showWithMessage("Failed to import from MetaMask.", style: .critical)
+                    }
+                }
             }
-            newWalletIds = addedWallets.map { $0.id }
-            reloadHeader()
-            updateCellModels()
-            tableView.reloadData()
-            blinkNewWalletCellIfNeeded()
         }
         
     }
