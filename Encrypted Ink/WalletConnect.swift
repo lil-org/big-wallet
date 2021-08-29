@@ -25,7 +25,7 @@ class WalletConnect {
     }
     
     func connect(session: WCSession, chainId: Int, walletId: String, uuid: UUID = UUID(), completion: @escaping ((Bool) -> Void)) {
-        let clientMeta = WCPeerMeta(name: Strings.encryptedInk, url: "https://encrypted.ink", description: "Ethereum agent for macOS", icons: ["https://encrypted.ink/icon.png"])
+        let clientMeta = WCPeerMeta(name: Strings.encryptedInk, url: "https://encrypted.ink", description: Strings.walletConnectClientDescription, icons: ["https://encrypted.ink/icon.png"])
         let interactor = WCInteractor(session: session, meta: clientMeta, uuid: uuid)
         configure(interactor: interactor, chainId: chainId, walletId: walletId)
 

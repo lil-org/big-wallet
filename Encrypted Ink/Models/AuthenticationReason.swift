@@ -13,15 +13,15 @@ enum AuthenticationReason {
     var title: String {
         switch self {
         case .start:
-            return "Start"
+            return Strings.start
         case .sendTransaction:
             return Strings.sendTransaction
         case .removeAccount:
-            return "Remove account"
+            return Strings.removeAccount
         case .showPrivateKey:
-            return "Show private key"
+            return Strings.showPrivateKey
         case .showSecretWords:
-            return "Show secret words"
+            return Strings.showSecretWords
         case .signMessage:
             return Strings.signMessage
         case .signPersonalMessage:

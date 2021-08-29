@@ -75,7 +75,7 @@ class AccountsListViewController: NSViewController {
         menu.addItem(NSMenuItem(title: "View on Etherscan", action: #selector(didClickViewOnEtherscan(_:)), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Show account key", action: #selector(didClickExportAccount(_:)), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Remove account", action: #selector(didClickRemoveAccount(_:)), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: Strings.removeAccount, action: #selector(didClickRemoveAccount(_:)), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "How to WalletConnect?", action: #selector(showInstructionsAlert), keyEquivalent: ""))
         tableView.menu = menu

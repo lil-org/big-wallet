@@ -23,5 +23,10 @@ struct Strings {
     static let dropUsALine = "Drop us a line…"
     static let viewOnGithub = "View on GitHub…"
     static let viewOnTwitter = "View on Twitter…"
+    static let walletConnectClientDescription = "Crypto wallet for macOS"
+    static let start = "Start"
+    static let removeAccount = "Remove account"
+    static let showPrivateKey = "Show private key"
+    static let showSecretWords = "Show secret words"
     
 }
