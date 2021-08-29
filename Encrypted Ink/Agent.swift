@@ -127,13 +127,13 @@ class Agent: NSObject {
     lazy private var statusBarMenu: NSMenu = {
         let menu = NSMenu(title: Strings.encryptedInk)
         
-        let showItem = NSMenuItem(title: "Show Encrypted Ink", action: #selector(didSelectShowMenuItem), keyEquivalent: "")
-        let howToItem = NSMenuItem(title: "How to WalletConnect?", action: #selector(showInstructionsAlert), keyEquivalent: "")
-        let mailItem = NSMenuItem(title: "Drop us a line…", action: #selector(didSelectMailMenuItem), keyEquivalent: "")
-        let githubItem = NSMenuItem(title: "View on GitHub…", action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
-        let twitterItem = NSMenuItem(title: "View on Twitter…", action: #selector(didSelectTwitterMenuItem), keyEquivalent: "")
-        let quitItem = NSMenuItem(title: "Quit", action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
-        showItem.attributedTitle = NSAttributedString(string: "👀 Show Encrypted Ink", attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
+        let showItem = NSMenuItem(title: Strings.showEncryptedInk, action: #selector(didSelectShowMenuItem), keyEquivalent: "")
+        let howToItem = NSMenuItem(title: Strings.howToWalletConnect, action: #selector(showInstructionsAlert), keyEquivalent: "")
+        let mailItem = NSMenuItem(title: Strings.dropUsALine, action: #selector(didSelectMailMenuItem), keyEquivalent: "")
+        let githubItem = NSMenuItem(title: Strings.viewOnGithub, action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
+        let twitterItem = NSMenuItem(title: Strings.viewOnTwitter, action: #selector(didSelectTwitterMenuItem), keyEquivalent: "")
+        let quitItem = NSMenuItem(title: Strings.quit, action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
+        showItem.attributedTitle = NSAttributedString(string: "👀 " + Strings.showEncryptedInk, attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
         
         showItem.target = self
         howToItem.target = self
@@ -158,8 +158,8 @@ class Agent: NSObject {
     func warnBeforeQuitting(updateStatusBarAfterwards: Bool = false) {
         Window.activateWindow(nil)
         let alert = Alert()
-        alert.messageText = "Quit Encrypted Ink?"
-        alert.informativeText = "You won't be able to sign requests."
+        alert.messageText = Strings.quitEncryptedInk
+        alert.informativeText = Strings.youWontBeAbleToSignRequests
         alert.alertStyle = .warning
         alert.addButton(withTitle: Strings.ok)
         alert.addButton(withTitle: Strings.cancel)
