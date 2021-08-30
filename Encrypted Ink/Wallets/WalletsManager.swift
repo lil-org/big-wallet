@@ -61,7 +61,9 @@ final class WalletsManager {
     }
     
     func addHDWallets(mnemonic: String, numberOfAccounts: Int, hdPath: String) throws -> [InkWallet] {
-        let hdWallet = HDWallet(mnemonic: mnemonic, passphrase: "")
+        guard let hdWallet = HDWallet(mnemonic: mnemonic, passphrase: "") else {
+            throw Error.invalidInput
+        }
         var addedWallets = [InkWallet]()
         let mnemonicWallet = try addWallet(input: mnemonic, inputPassword: nil)
         addedWallets.append(mnemonicWallet)
