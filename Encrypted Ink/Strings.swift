@@ -28,5 +28,8 @@ struct Strings {
     static let removeAccount = "Remove account"
     static let showPrivateKey = "Show private key"
     static let showSecretWords = "Show secret words"
+    static let enterKeystorePassword = "Enter keystore password."
+    static let importAccountTextFieldPlaceholder = "Options:\n\n• Ethereum Private Key\n• Secret Words\n• Keystore"
+    static let failedToImportAccount = "Failed to import account"
     
 }

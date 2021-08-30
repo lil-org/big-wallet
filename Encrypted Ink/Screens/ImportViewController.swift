@@ -11,7 +11,7 @@ class ImportViewController: NSViewController {
     @IBOutlet weak var textField: NSTextField! {
         didSet {
             textField.delegate = self
-            textField.placeholderString = "Options:\n\n• Ethereum Private Key\n• Secret Words\n• Keystore"
+            textField.placeholderString = Strings.importAccountTextFieldPlaceholder
         }
     }
     @IBOutlet weak var okButton: NSButton!
@@ -30,7 +30,7 @@ class ImportViewController: NSViewController {
  
     private func showPasswordAlert() {
         let alert = Alert()
-        alert.messageText = "Enter keystore password."
+        alert.messageText = Strings.enterKeystorePassword
         alert.alertStyle = .informational
         alert.addButton(withTitle: Strings.ok)
         alert.addButton(withTitle: Strings.cancel)
@@ -55,7 +55,7 @@ class ImportViewController: NSViewController {
             let wallet = try walletsManager.addWallet(input: input, inputPassword: password)
             showAccountsList(newWalletId: wallet.id)
         } catch {
-            Alert.showWithMessage("Failed to import account", style: .critical)
+            Alert.showWithMessage(Strings.failedToImportAccount, style: .critical)
         }
     }
     
