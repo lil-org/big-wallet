@@ -191,7 +191,7 @@ class AccountsListViewController: NSViewController {
         
         if passwordAlert.runModal() == .alertFirstButtonReturn {
             let passphrase = passwordAlert.passwordTextField.stringValue
-            let alert = LoadingAlert(title: "Please wait until import is finished.")
+            let alert = LoadingAlert(title: "Importing accounts from MetaMask...")
             guard let window = view.window else { return }
             alert.beginSheetModal(for: window, completionHandler: nil)
             DispatchQueue.global(qos: .userInitiated).async {
@@ -334,7 +334,7 @@ class AccountsListViewController: NSViewController {
     
     private func updateCellModels() {
         if wallets.isEmpty {
-            cellModels = [.addAccountOption(.createNew), .addAccountOption(.importExisting)]
+            cellModels = [.addAccountOption(.createNew), .addAccountOption(.importExisting), .addAccountOption(.importFromMetamask)]
             tableView.shouldShowRightClickMenu = false
         } else {
             cellModels = Array(repeating: CellModel.wallet, count: wallets.count)
