@@ -179,7 +179,12 @@ class AccountsListViewController: NSViewController {
             Alert.showWithMessage("Please close Google Chrome and try again.", style: .critical)
             return
         }
-        guard let metamaskPath = MetamaskImporter.selectMetamaskDirectory() else {
+        let metamaskPath: String
+        do {
+            metamaskPath = try MetamaskImporter.selectMetamaskDirectory()
+        } catch MetamaskImporter.MetamaskError.userClickedCancel {
+            return
+        } catch {
             Alert.showWithMessage("Something went wrong.", style: .critical)
             return
         }
@@ -200,7 +205,7 @@ class AccountsListViewController: NSViewController {
                 }
             }
             DispatchQueue.global(qos: .userInitiated).async {
-                let addedWallets = MetamaskImporter.importFromPath(metamaskPath, passphrase: passphrase)
+                let addedWallets = try? MetamaskImporter.importFromPath(metamaskPath, passphrase: passphrase)
                 DispatchQueue.main.async { [weak self] in
                     guard !didTapCancelButton else { return }
                     self?.view.window?.endSheet(alert.window)

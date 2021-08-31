@@ -5,15 +5,21 @@ import CryptoSwift
 
 class MetamaskImporter {
     
-    static func selectMetamaskDirectory() -> String? {
-        guard var libraryURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return nil }
+    enum MetamaskError: Error {
+        case userClickedCancel
+        case unknownError
+    }
+    
+    static func selectMetamaskDirectory() throws -> String {
+        guard var libraryURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { throw MetamaskError.unknownError }
         while !libraryURL.path.hasSuffix("Library") {
             libraryURL.deleteLastPathComponent()
         }
         
         let metamaskDirectoryName = "nkbihfbeogaeaoehlefnkodbefgpgknn"
         let dirPath = "Application Support/Google/Chrome/Default/Local Extension Settings/\(metamaskDirectoryName)"
-        guard let dirURL = URL(string: libraryURL.appendingPathComponent(dirPath).absoluteString) else { return nil
+        guard let dirURL = URL(string: libraryURL.appendingPathComponent(dirPath).absoluteString) else {
+            throw MetamaskError.unknownError
         }
         
         let openPanel = NSOpenPanel()
@@ -25,6 +31,9 @@ class MetamaskImporter {
         openPanel.allowsMultipleSelection = false
         openPanel.canChooseDirectories = true
         let response = openPanel.runModal()
+        if response == .cancel {
+            throw MetamaskError.userClickedCancel
+        }
         guard
             response == .OK,
             let accessDirectory = openPanel.urls.first,
@@ -32,13 +41,15 @@ class MetamaskImporter {
             inside.contains(where: { $0.absoluteString.contains(metamaskDirectoryName) }),
             let metamaskPath = libraryURL.appendingPathComponent(dirPath).path.removingPercentEncoding
         else {
-            return nil
+            throw MetamaskError.unknownError
         }
         return metamaskPath
     }
     
-    static func importFromPath(_ metamaskDir: String, passphrase: String) -> [InkWallet]? {
-        guard let store = SwiftStore(dirPath: metamaskDir) else { return nil }
+    static func importFromPath(_ metamaskDir: String, passphrase: String) throws -> [InkWallet] {
+        guard let store = SwiftStore(dirPath: metamaskDir) else {
+            throw MetamaskError.unknownError
+        }
         defer {
             store.close()
         }
@@ -52,7 +63,7 @@ class MetamaskImporter {
                                            password: passphrase),
             let parsedDecryptedStorage = (try? JSONSerialization.jsonObject(with: decryptedStorage, options: []) as? [[String: Any]])
         else {
-            return nil
+            throw MetamaskError.unknownError
         }
         
         var addedWallets = [InkWallet]()
