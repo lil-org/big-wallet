@@ -184,7 +184,7 @@ class AccountsListViewController: NSViewController {
             return
         }
         
-        let passwordAlert = PasswordAlert(title: "Enter MetaMask passphrase.")
+        let passwordAlert = PasswordAlert(title: "Enter MetaMask password.")
         DispatchQueue.main.async {
             passwordAlert.passwordTextField.becomeFirstResponder()
         }
@@ -193,10 +193,16 @@ class AccountsListViewController: NSViewController {
             let passphrase = passwordAlert.passwordTextField.stringValue
             let alert = LoadingAlert(title: "Importing accounts from MetaMask...")
             guard let window = view.window else { return }
-            alert.beginSheetModal(for: window, completionHandler: nil)
+            var didTapCancelButton = false
+            alert.beginSheetModal(for: window) { response in
+                if response == .alertFirstButtonReturn {
+                    didTapCancelButton = true
+                }
+            }
             DispatchQueue.global(qos: .userInitiated).async {
                 let addedWallets = MetamaskImporter.importFromPath(metamaskPath, passphrase: passphrase)
                 DispatchQueue.main.async { [weak self] in
+                    guard !didTapCancelButton else { return }
                     self?.view.window?.endSheet(alert.window)
 
                     if let addedWallets = addedWallets {

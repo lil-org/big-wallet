@@ -38,8 +38,11 @@ class MetamaskImporter {
     }
     
     static func importFromPath(_ metamaskDir: String, passphrase: String) -> [InkWallet]? {
+        guard let store = SwiftStore(dirPath: metamaskDir) else { return nil }
+        defer {
+            store.close()
+        }
         guard
-            let store = SwiftStore(dirPath: metamaskDir),
             let storageString = store.findKeys(key: "").first,
             let storageData = storageString.data(using: .utf8),
             let storage = try? JSONDecoder().decode(MetamaskStorage.self, from: storageData),

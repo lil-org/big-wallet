@@ -203,7 +203,6 @@
 		2C1995332674C4B900A8E370 = {
 			isa = PBXGroup;
 			children = (
-				0D856AA526D2C42B0051C603 /* SwiftStore.xcodeproj */,
 				2C19953E2674C4B900A8E370 /* Encrypted Ink */,
 				2C5FF97026C84F7B00B32ACC /* Encrypted Ink iOS */,
 				2C5FF98A26C8567D00B32ACC /* Encrypted Ink Screensaver */,
@@ -359,6 +358,7 @@
 		8E59B61AC986C705990A0C02 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				0D856AA526D2C42B0051C603 /* SwiftStore.xcodeproj */,
 				3E2A642C960E4952955E6E82 /* Pods_Encrypted_Ink.framework */,
 			);
 			name = Frameworks;

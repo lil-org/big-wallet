@@ -52,9 +52,7 @@ class LoadingAlert: Alert {
     init(title: String) {
         super.init()
         
-        addButton(withTitle: "")
-        let button = buttons[0]
-        button.isHidden = true
+        addButton(withTitle: Strings.cancel)
         messageText = title
         let progress = NSProgressIndicator(frame: NSRect(x: 0, y: 0, width: 230, height: 20))
         progress.style = .spinning
