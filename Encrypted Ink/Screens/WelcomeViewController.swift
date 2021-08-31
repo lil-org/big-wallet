@@ -17,7 +17,7 @@ class WelcomeViewController: NSViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        messageLabel.stringValue = "Sign crypto transactions.\n\nIn any browser.\n\nOn any website."
+        messageLabel.stringValue = Strings.welcomeScreenText
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
