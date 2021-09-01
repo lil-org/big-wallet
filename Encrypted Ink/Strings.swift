@@ -31,6 +31,9 @@ struct Strings {
     static let enterKeystorePassword = "Enter keystore password."
     static let importAccountTextFieldPlaceholder = "Options:\n\n• Ethereum Private Key\n• Secret Words\n• Keystore"
     static let failedToImportAccount = "Failed to import account"
-    static let welcomeScreenText =  "Sign crypto transactions.\n\nIn any browser.\n\nOn any website."
+    static let welcomeScreenText = "Sign crypto transactions.\n\nIn any browser.\n\nOn any website."
+    static let createPassword = "Create Password"
+    static let repeatPassword = "Repeat Password"
+    static let enterPassword = "Enter Password"
     
 }

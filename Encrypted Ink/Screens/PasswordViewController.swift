@@ -47,13 +47,13 @@ class PasswordViewController: NSViewController {
         self.mode = mode
         switch mode {
         case .create:
-            titleLabel.stringValue = "Create Password"
+            titleLabel.stringValue = Strings.createPassword
             passwordToRepeat = nil
         case .repeatAfterCreate:
-            titleLabel.stringValue = "Repeat Password"
+            titleLabel.stringValue = Strings.repeatPassword
             passwordToRepeat = passwordTextField.stringValue
         case .enter:
-            titleLabel.stringValue = "Enter Password"
+            titleLabel.stringValue = Strings.enterPassword
         }
         passwordTextField.stringValue = ""
         okButton.isEnabled = false
