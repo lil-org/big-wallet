@@ -35,5 +35,12 @@ struct Strings {
     static let createPassword = "Create Password"
     static let repeatPassword = "Repeat Password"
     static let enterPassword = "Enter Password"
+    static let copyAddress = "Copy address"
+    static let viewOnEtherscan = "View on Etherscan"
+    static let showAccountKey = "Show account key"
+    static let testnets = "Testnets"
+    static let backUpNewAccount = "Back up new account."
+    static let youWillSeeSecretWords = "You will see 12 secret words."
+    static let removedAccountsCantBeRecovered = "Removed accounts can't be recovered."
     
 }

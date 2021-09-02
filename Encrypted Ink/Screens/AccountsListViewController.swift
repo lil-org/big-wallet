@@ -71,13 +71,13 @@ class AccountsListViewController: NSViewController {
     private func setupAccountsMenu() {
         let menu = NSMenu()
         menu.delegate = self
-        menu.addItem(NSMenuItem(title: "Copy address", action: #selector(didClickCopyAddress(_:)), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "View on Etherscan", action: #selector(didClickViewOnEtherscan(_:)), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: Strings.copyAddress, action: #selector(didClickCopyAddress(_:)), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: Strings.viewOnEtherscan, action: #selector(didClickViewOnEtherscan(_:)), keyEquivalent: ""))
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Show account key", action: #selector(didClickExportAccount(_:)), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: Strings.showAccountKey, action: #selector(didClickExportAccount(_:)), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: Strings.removeAccount, action: #selector(didClickRemoveAccount(_:)), keyEquivalent: ""))
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "How to WalletConnect?", action: #selector(showInstructionsAlert), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: Strings.howToWalletConnect, action: #selector(showInstructionsAlert), keyEquivalent: ""))
         tableView.menu = menu
     }
     
@@ -96,7 +96,7 @@ class AccountsListViewController: NSViewController {
             }
             
             let submenuItem = NSMenuItem()
-            submenuItem.title = "Testnets"
+            submenuItem.title = Strings.testnets
             let submenu = NSMenu()
             for testnet in EthereumChain.allTestnets {
                 let item = NSMenuItem(title: testnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
@@ -159,8 +159,8 @@ class AccountsListViewController: NSViewController {
     
     @objc private func didClickCreateAccount() {
         let alert = Alert()
-        alert.messageText = "Back up new account."
-        alert.informativeText = "You will see 12 secret words."
+        alert.messageText = Strings.backUpNewAccount
+        alert.informativeText = Strings.youWillSeeSecretWords
         alert.alertStyle = .critical
         alert.addButton(withTitle: Strings.ok)
         alert.addButton(withTitle: Strings.cancel)
@@ -211,7 +211,7 @@ class AccountsListViewController: NSViewController {
         let row = tableView.deselectedRow
         guard row >= 0 else { return }
         let alert = Alert()
-        alert.messageText = "Removed accounts can't be recovered."
+        alert.messageText = Strings.removedAccountsCantBeRecovered
         alert.alertStyle = .critical
         alert.addButton(withTitle: "Remove anyway")
         alert.addButton(withTitle: Strings.cancel)
