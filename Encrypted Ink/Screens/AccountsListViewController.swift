@@ -213,7 +213,7 @@ class AccountsListViewController: NSViewController {
         let alert = Alert()
         alert.messageText = Strings.removedAccountsCantBeRecovered
         alert.alertStyle = .critical
-        alert.addButton(withTitle: "Remove anyway")
+        alert.addButton(withTitle: Strings.removeAnyway)
         alert.addButton(withTitle: Strings.cancel)
         if alert.runModal() == .alertFirstButtonReturn {
             agent.askAuthentication(on: view.window, getBackTo: self, onStart: false, reason: .removeAccount) { [weak self] allowed in

@@ -42,5 +42,6 @@ struct Strings {
     static let backUpNewAccount = "Back up new account."
     static let youWillSeeSecretWords = "You will see 12 secret words."
     static let removedAccountsCantBeRecovered = "Removed accounts can't be recovered."
+    static let removeAnyway = "Remove anyway"
     
 }
