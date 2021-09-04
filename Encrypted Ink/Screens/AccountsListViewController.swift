@@ -233,7 +233,7 @@ class AccountsListViewController: NSViewController {
         
         alert.messageText = "\(isMnemonic ? "Secret words give" : "Private key gives") full access to your funds."
         alert.alertStyle = .critical
-        alert.addButton(withTitle: "I understand the risks")
+        alert.addButton(withTitle: Strings.iUnderstandTheRisks)
         alert.addButton(withTitle: Strings.cancel)
         if alert.runModal() == .alertFirstButtonReturn {
             let reason: AuthenticationReason = isMnemonic ? .showSecretWords : .showPrivateKey
