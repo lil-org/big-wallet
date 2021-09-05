@@ -261,11 +261,11 @@ class AccountsListViewController: NSViewController {
         }
         
         let alert = Alert()
-        alert.messageText = mnemonic ? "Secret words" : "Private key"
+        alert.messageText = mnemonic ? Strings.secretWords : Strings.privateKey
         alert.informativeText = secret
         alert.alertStyle = .informational
         alert.addButton(withTitle: Strings.ok)
-        alert.addButton(withTitle: "Copy")
+        alert.addButton(withTitle: Strings.copy)
         if alert.runModal() != .alertFirstButtonReturn {
             NSPasteboard.general.clearAndSetString(secret)
         }

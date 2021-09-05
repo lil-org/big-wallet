@@ -44,5 +44,8 @@ struct Strings {
     static let removedAccountsCantBeRecovered = "Removed accounts can't be recovered."
     static let removeAnyway = "Remove anyway"
     static let iUnderstandTheRisks = "I understand the risks"
+    static let privateKey = "Private key"
+    static let secretWords = "Secret words"
+    static let copy = "Copy"
     
 }
