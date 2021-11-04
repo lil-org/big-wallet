@@ -1,4 +1,4 @@
-// Copyright © 2021 Encrypted Ink. All rights reserved.
+// Copyright © 2021 guanlong huang. All rights reserved.
 
 import Foundation
 import Web3Swift
