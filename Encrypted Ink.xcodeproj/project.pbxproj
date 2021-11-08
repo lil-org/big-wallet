@@ -12,6 +12,16 @@
 		28BDF30EBC80362870C988B6 /* Pods_Encrypted_Ink.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3E2A642C960E4952955E6E82 /* Pods_Encrypted_Ink.framework */; };
 		2C03D1D2269B407900EF10EA /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03D1D1269B407900EF10EA /* NetworkMonitor.swift */; };
 		2C03D1D5269B428C00EF10EA /* Notification.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03D1D4269B428C00EF10EA /* Notification.swift */; };
+		2C09CBA2273979C1009AD39B /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */; };
+		2C09CBA5273979C1009AD39B /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBA4273979C1009AD39B /* _locales */; };
+		2C09CBA7273979C1009AD39B /* images in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBA6273979C1009AD39B /* images */; };
+		2C09CBA9273979C1009AD39B /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBA8273979C1009AD39B /* manifest.json */; };
+		2C09CBAB273979C1009AD39B /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAA273979C1009AD39B /* background.js */; };
+		2C09CBAD273979C1009AD39B /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAC273979C1009AD39B /* content.js */; };
+		2C09CBAF273979C1009AD39B /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAE273979C1009AD39B /* popup.html */; };
+		2C09CBB1273979C1009AD39B /* popup.css in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBB0273979C1009AD39B /* popup.css */; };
+		2C09CBB3273979C1009AD39B /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBB2273979C1009AD39B /* popup.js */; };
+		2C09CBB9273979C1009AD39B /* Safari.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2C09CB9F273979C1009AD39B /* Safari.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2C1995402674C4B900A8E370 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C19953F2674C4B900A8E370 /* AppDelegate.swift */; };
 		2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995412674C4B900A8E370 /* ImportViewController.swift */; };
 		2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995432674C4BA00A8E370 /* Assets.xcassets */; };
@@ -61,11 +71,47 @@
 		2CE3D015267F73E80032A62E /* LegacyAccountWithKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D014267F73E80032A62E /* LegacyAccountWithKey.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		2C09CBB6273979C1009AD39B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2C1995342674C4B900A8E370 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2C09CB9E273979C1009AD39B;
+			remoteInfo = Safari;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		2C09CBB8273979C1009AD39B /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				2C09CBB9273979C1009AD39B /* Safari.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		0D059AD126C2796200EE3023 /* ApprovalSubject.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalSubject.swift; sourceTree = "<group>"; };
 		0DC850E626B73A5900809E82 /* AuthenticationReason.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationReason.swift; sourceTree = "<group>"; };
 		2C03D1D1269B407900EF10EA /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		2C03D1D4269B428C00EF10EA /* Notification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notification.swift; sourceTree = "<group>"; };
+		2C09CB9F273979C1009AD39B /* Safari.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = Safari.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
+		2C09CBA4273979C1009AD39B /* _locales */ = {isa = PBXFileReference; lastKnownFileType = folder; path = _locales; sourceTree = "<group>"; };
+		2C09CBA6273979C1009AD39B /* images */ = {isa = PBXFileReference; lastKnownFileType = folder; path = images; sourceTree = "<group>"; };
+		2C09CBA8273979C1009AD39B /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
+		2C09CBAA273979C1009AD39B /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = background.js; sourceTree = "<group>"; };
+		2C09CBAC273979C1009AD39B /* content.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = content.js; sourceTree = "<group>"; };
+		2C09CBAE273979C1009AD39B /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = popup.html; sourceTree = "<group>"; };
+		2C09CBB0273979C1009AD39B /* popup.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = popup.css; sourceTree = "<group>"; };
+		2C09CBB2273979C1009AD39B /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = popup.js; sourceTree = "<group>"; };
+		2C09CBB4273979C1009AD39B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		2C09CBB5273979C1009AD39B /* Safari.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Safari.entitlements; sourceTree = "<group>"; };
 		2C19953C2674C4B900A8E370 /* Encrypted Ink.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Encrypted Ink.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C19953F2674C4B900A8E370 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		2C1995412674C4B900A8E370 /* ImportViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportViewController.swift; sourceTree = "<group>"; };
@@ -126,6 +172,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		2C09CB9C273979C1009AD39B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2C1995392674C4B900A8E370 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -160,12 +213,39 @@
 			path = Models;
 			sourceTree = "<group>";
 		};
+		2C09CBA0273979C1009AD39B /* Safari */ = {
+			isa = PBXGroup;
+			children = (
+				2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */,
+				2C09CBB4273979C1009AD39B /* Info.plist */,
+				2C09CBB5273979C1009AD39B /* Safari.entitlements */,
+				2C09CBA3273979C1009AD39B /* Resources */,
+			);
+			path = Safari;
+			sourceTree = "<group>";
+		};
+		2C09CBA3273979C1009AD39B /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				2C09CBA4273979C1009AD39B /* _locales */,
+				2C09CBA6273979C1009AD39B /* images */,
+				2C09CBA8273979C1009AD39B /* manifest.json */,
+				2C09CBAA273979C1009AD39B /* background.js */,
+				2C09CBAC273979C1009AD39B /* content.js */,
+				2C09CBAE273979C1009AD39B /* popup.html */,
+				2C09CBB0273979C1009AD39B /* popup.css */,
+				2C09CBB2273979C1009AD39B /* popup.js */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		2C1995332674C4B900A8E370 = {
 			isa = PBXGroup;
 			children = (
 				2C19953E2674C4B900A8E370 /* Encrypted Ink */,
 				2C5FF97026C84F7B00B32ACC /* Encrypted Ink iOS */,
 				2C5FF98A26C8567D00B32ACC /* Encrypted Ink Screensaver */,
+				2C09CBA0273979C1009AD39B /* Safari */,
 				2C19953D2674C4B900A8E370 /* Products */,
 				FB5786212D81829B0FADBD25 /* Pods */,
 				8E59B61AC986C705990A0C02 /* Frameworks */,
@@ -178,6 +258,7 @@
 				2C19953C2674C4B900A8E370 /* Encrypted Ink.app */,
 				2C5FF96F26C84F7B00B32ACC /* Encrypted Ink iOS.app */,
 				2C5FF98926C8567D00B32ACC /* Encrypted Ink Screensaver.saver */,
+				2C09CB9F273979C1009AD39B /* Safari.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -344,6 +425,23 @@
 /* End PBXHeadersBuildPhase section */
 
 /* Begin PBXNativeTarget section */
+		2C09CB9E273979C1009AD39B /* Safari */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2C09CBBC273979C1009AD39B /* Build configuration list for PBXNativeTarget "Safari" */;
+			buildPhases = (
+				2C09CB9B273979C1009AD39B /* Sources */,
+				2C09CB9C273979C1009AD39B /* Frameworks */,
+				2C09CB9D273979C1009AD39B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Safari;
+			productName = Safari;
+			productReference = 2C09CB9F273979C1009AD39B /* Safari.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		2C19953B2674C4B900A8E370 /* Encrypted Ink */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2C19954C2674C4BA00A8E370 /* Build configuration list for PBXNativeTarget "Encrypted Ink" */;
@@ -354,10 +452,12 @@
 				2C19953A2674C4B900A8E370 /* Resources */,
 				2C1995512674C6A100A8E370 /* ShellScript */,
 				DA399964E8F6C2CF5532D1CE /* [CP] Embed Pods Frameworks */,
+				2C09CBB8273979C1009AD39B /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				2C09CBB7273979C1009AD39B /* PBXTargetDependency */,
 			);
 			name = "Encrypted Ink";
 			productName = "Ecrypted Ink";
@@ -405,9 +505,12 @@
 		2C1995342674C4B900A8E370 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastSwiftUpdateCheck = 1250;
+				LastSwiftUpdateCheck = 1300;
 				LastUpgradeCheck = 1240;
 				TargetAttributes = {
+					2C09CB9E273979C1009AD39B = {
+						CreatedOnToolsVersion = 13.0;
+					};
 					2C19953B2674C4B900A8E370 = {
 						CreatedOnToolsVersion = 12.4;
 					};
@@ -435,11 +538,27 @@
 				2C19953B2674C4B900A8E370 /* Encrypted Ink */,
 				2C5FF96E26C84F7B00B32ACC /* Encrypted Ink iOS */,
 				2C5FF98826C8567D00B32ACC /* Encrypted Ink Screensaver */,
+				2C09CB9E273979C1009AD39B /* Safari */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		2C09CB9D273979C1009AD39B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2C09CBAB273979C1009AD39B /* background.js in Resources */,
+				2C09CBB1273979C1009AD39B /* popup.css in Resources */,
+				2C09CBAF273979C1009AD39B /* popup.html in Resources */,
+				2C09CBA7273979C1009AD39B /* images in Resources */,
+				2C09CBA9273979C1009AD39B /* manifest.json in Resources */,
+				2C09CBA5273979C1009AD39B /* _locales in Resources */,
+				2C09CBAD273979C1009AD39B /* content.js in Resources */,
+				2C09CBB3273979C1009AD39B /* popup.js in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2C19953A2674C4B900A8E370 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -529,6 +648,14 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		2C09CB9B273979C1009AD39B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2C09CBA2273979C1009AD39B /* SafariWebExtensionHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2C1995382674C4B900A8E370 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -596,6 +723,14 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		2C09CBB7273979C1009AD39B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2C09CB9E273979C1009AD39B /* Safari */;
+			targetProxy = 2C09CBB6273979C1009AD39B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin PBXVariantGroup section */
 		2C1995452674C4BA00A8E370 /* Main.storyboard */ = {
 			isa = PBXVariantGroup;
@@ -624,6 +759,72 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		2C09CBBA273979C1009AD39B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
+				CODE_SIGN_ENTITLEMENTS = Safari/Safari.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Safari/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Safari;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 11.3;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ink.encrypted.macos.Safari;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		2C09CBBB273979C1009AD39B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
+				CODE_SIGN_ENTITLEMENTS = Safari/Safari.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Safari/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Safari;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 11.3;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ink.encrypted.macos.Safari;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		2C19954A2674C4BA00A8E370 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -743,6 +944,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = A858B0F7D88913EAB1FA50B0 /* Pods-Encrypted Ink.debug.xcconfig */;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Encrypted Ink/Supporting Files/Encrypted_Ink.entitlements";
@@ -770,6 +972,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 35AD6E3AC630C8A9B4EC16D9 /* Pods-Encrypted Ink.release.xcconfig */;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Encrypted Ink/Supporting Files/Encrypted_Ink.entitlements";
@@ -869,6 +1072,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		2C09CBBC273979C1009AD39B /* Build configuration list for PBXNativeTarget "Safari" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2C09CBBA273979C1009AD39B /* Debug */,
+				2C09CBBB273979C1009AD39B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		2C1995372674C4B900A8E370 /* Build configuration list for PBXProject "Encrypted Ink" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
