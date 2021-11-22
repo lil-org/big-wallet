@@ -20,8 +20,12 @@
     },
 
     "content_scripts": [{
-        "js": [ "content.js" ],
-        "matches": [ "file://*/*", "http://*/*", "https://*/*" ]
+        "matches": [ "file://*/*", "http://*/*", "https://*/*" ],
+        "run_at": "document_start",
+        "all_frames": true,
+        "js": [
+            "content.js"
+        ],
     }],
 
     "browser_action": {
@@ -34,5 +38,19 @@
         }
     },
 
-    "permissions": [ "nativeMessaging" ]
+    "permissions": [
+        "nativeMessaging",
+        "storage",
+        "unlimitedStorage",
+        "clipboardWrite",
+        "http://localhost:8545/",
+        "https://*.infura.io/",
+        "https://wallet.gridplus.io/*",
+        "activeTab",
+        "webRequest",
+        "*://*.eth/",
+        "notifications"
+      ],
+    
+    "web_accessible_resources": [ "trust-min.js" ],
 }

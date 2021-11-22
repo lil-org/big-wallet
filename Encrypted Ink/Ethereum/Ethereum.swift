@@ -28,9 +28,16 @@ struct Ethereum {
     
     private func sign(data: Data, wallet: InkWallet, addPrefix: Bool) throws -> String {
         guard let ethereumPrivateKey = wallet.ethereumPrivateKey else { throw Error.keyNotFound }
-        let prefixString = addPrefix ? "\u{19}Ethereum Signed Message:\n" + String(data.count) : ""
-        guard let prefixData = prefixString.data(using: .utf8) else { throw Error.failedToSign }
-        let digest = Hash.keccak256(data: prefixData + data) 
+        
+        let digest: Data
+        if addPrefix {
+            let prefixString = "\u{19}Ethereum Signed Message:\n" + String(data.count)
+            guard let prefixData = prefixString.data(using: .utf8) else { throw Error.failedToSign }
+            digest = Hash.keccak256(data: prefixData + data)
+        } else {
+            digest = data
+        }
+        
         guard var signed = ethereumPrivateKey.sign(digest: digest, curve: CoinType.ethereum.curve) else { throw Error.failedToSign }
         signed[64] += 27
         return signed.toPrefixedHexString()

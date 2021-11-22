@@ -10,9 +10,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let priceService = PriceService.shared
     private let networkMonitor = NetworkMonitor.shared
     private let walletsManager = WalletsManager.shared
+    private let walletConnect = WalletConnect.shared
     
     private var didFinishLaunching = false
-    private var initialInputLink: String?
+    private var initialExternalRequest: Agent.ExternalRequest?
     
     override init() {
         super.init()
@@ -27,7 +28,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc private func getUrl(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
-        processInput(url: event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue, prefix: "encryptedink://wc?uri=")
+        processInput(url: event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue)
     }
     
     func applicationDidFinishLaunching(_ aNotification: Notification) {
@@ -38,30 +39,44 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         walletsManager.start()
         
         didFinishLaunching = true
-        if let link = initialInputLink {
-            initialInputLink = nil
-            agent.processInputLink(link)
+        
+        if let externalRequest = initialExternalRequest {
+            initialExternalRequest = nil
+            agent.showInitialScreen(externalRequest: externalRequest)
         }
     }
-
+    
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         agent.reopen()
         return true
     }
     
     func application(_ application: NSApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([NSUserActivityRestoring]) -> Void) -> Bool {
-        processInput(url: userActivity.webpageURL?.absoluteString, prefix: "https://encrypted.ink/wc?uri=")
+        processInput(url: userActivity.webpageURL?.absoluteString)
         return true
     }
     
-    private func processInput(url: String?, prefix: String) {
-        if let url = url, url.hasPrefix(prefix),
-           let link = url.dropFirst(prefix.count).removingPercentEncoding {
-            if didFinishLaunching {
-                agent.processInputLink(link)
-            } else {
-                initialInputLink = link
+    private func processInput(url: String?) {
+        guard let url = url else { return }
+        
+        for scheme in ["https://encrypted.ink/wc?uri=", "encryptedink://wc?uri="] {
+            if url.hasPrefix(scheme), let link = url.dropFirst(scheme.count).removingPercentEncoding, let session = walletConnect.sessionWithLink(link) {
+                processExternalRequest(.wcSession(session))
+                return
             }
+        }
+        
+        let safariPrefix = "encryptedink://safari?request="
+        if url.hasPrefix(safariPrefix), let request = SafariRequest(query: String(url.dropFirst(safariPrefix.count))) {
+            processExternalRequest(.safari(request))
+        }
+    }
+    
+    private func processExternalRequest(_ externalRequest: Agent.ExternalRequest) {
+        if didFinishLaunching {
+            agent.showInitialScreen(externalRequest: externalRequest)
+        } else {
+            initialExternalRequest = externalRequest
         }
     }
     

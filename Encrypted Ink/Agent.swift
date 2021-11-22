@@ -5,9 +5,18 @@ import WalletConnect
 import LocalAuthentication
 
 class Agent: NSObject {
-
+    
+    enum ExternalRequest {
+        case wcSession(WCSession)
+        case safari(SafariRequest)
+    }
+    
     static let shared = Agent()
     private lazy var statusImage = NSImage(named: "Status")
+    
+    private let walletConnect = WalletConnect.shared
+    private let walletsManager = WalletsManager.shared
+    private let ethereum = Ethereum.shared
     
     private override init() { super.init() }
     private var statusBarItem: NSStatusItem!
@@ -16,7 +25,7 @@ class Agent: NSObject {
     
     private var didStartInitialLAEvaluation = false
     private var didCompleteInitialLAEvaluation = false
-    private var initialWCSession: WCSession?
+    private var initialExternalRequest: ExternalRequest?
     
     var statusBarButtonIsBlocked = false
     
@@ -29,11 +38,11 @@ class Agent: NSObject {
         checkPasteboardAndOpen()
     }
     
-    func showInitialScreen(wcSession: WCSession?) {
+    func showInitialScreen(externalRequest: ExternalRequest?) {
         let isEvaluatingInitialLA = didStartInitialLAEvaluation && !didCompleteInitialLAEvaluation
         guard !isEvaluatingInitialLA else {
-            if wcSession != nil {
-                initialWCSession = wcSession
+            if externalRequest != nil {
+                initialExternalRequest = externalRequest
             }
             return
         }
@@ -44,7 +53,7 @@ class Agent: NSObject {
                 self?.didEnterPasswordOnStart = true
                 self?.didCompleteInitialLAEvaluation = true
                 self?.hasPassword = true
-                self?.showInitialScreen(wcSession: wcSession)
+                self?.showInitialScreen(externalRequest: externalRequest)
             }
             let windowController = Window.showNew()
             windowController.contentViewController = welcomeViewController
@@ -55,26 +64,28 @@ class Agent: NSObject {
             askAuthentication(on: nil, onStart: true, reason: .start) { [weak self] success in
                 if success {
                     self?.didEnterPasswordOnStart = true
-                    self?.showInitialScreen(wcSession: wcSession)
-                    WalletConnect.shared.restartSessions()
+                    self?.showInitialScreen(externalRequest: externalRequest)
+                    self?.walletConnect.restartSessions()
                 }
             }
             return
         }
         
-        let session: WCSession?
-        if wcSession == nil, initialWCSession != nil {
-            session = initialWCSession
-            initialWCSession = nil
-        } else {
-            session = wcSession
-        }
+        let request = externalRequest ?? initialExternalRequest
+        initialExternalRequest = nil
         
-        let windowController = Window.showNew()
-        let completion = onSelectedWallet(session: session)
-        let accountsList = instantiate(AccountsListViewController.self)
-        accountsList.onSelectedWallet = completion
-        windowController.contentViewController = accountsList
+        if case let .safari(request) = request {
+            processSafariRequest(request)
+        } else {
+            let windowController = Window.showNew()
+            let accountsList = instantiate(AccountsListViewController.self)
+            
+            if case let .wcSession(session) = request {
+                accountsList.onSelectedWallet = onSelectedWallet(session: session)
+            }
+            
+            windowController.contentViewController = accountsList
+        }
     }
     
     func showApprove(transaction: Transaction, chain: EthereumChain, peerMeta: WCPeerMeta?, completion: @escaping (Transaction?) -> Void) {
@@ -112,11 +123,6 @@ class Agent: NSObject {
     func showErrorMessage(_ message: String) {
         let windowController = Window.showNew()
         windowController.contentViewController = ErrorViewController.withMessage(message)
-    }
-    
-    func processInputLink(_ link: String) {
-        let session = sessionWithLink(link)
-        showInitialScreen(wcSession: session)
     }
     
     func getWalletSelectionCompletionIfShouldSelect() -> ((Int, InkWallet) -> Void)? {
@@ -215,7 +221,7 @@ class Agent: NSObject {
         guard !statusBarButtonIsBlocked, let event = NSApp.currentEvent, event.type == .rightMouseUp || event.type == .leftMouseUp else { return }
         
         if let session = getSessionFromPasteboard() {
-            showInitialScreen(wcSession: session)
+            showInitialScreen(externalRequest: .wcSession(session))
         } else {
             statusBarItem.menu = statusBarMenu
             statusBarItem.button?.performClick(nil)
@@ -232,7 +238,7 @@ class Agent: NSObject {
     private func getSessionFromPasteboard() -> WCSession? {
         let pasteboard = NSPasteboard.general
         let link = pasteboard.string(forType: .string) ?? ""
-        let session = sessionWithLink(link)
+        let session = walletConnect.sessionWithLink(link)
         if session != nil {
             pasteboard.clearContents()
         }
@@ -240,12 +246,15 @@ class Agent: NSObject {
     }
     
     private func checkPasteboardAndOpen() {
-        let session = getSessionFromPasteboard()
-        showInitialScreen(wcSession: session)
-    }
-    
-    private func sessionWithLink(_ link: String) -> WCSession? {
-        return WalletConnect.shared.sessionWithLink(link)
+        let request: ExternalRequest?
+        
+        if let session = getSessionFromPasteboard() {
+            request = .wcSession(session)
+        } else {
+            request = .none
+        }
+        
+        showInitialScreen(externalRequest: request)
     }
     
     func askAuthentication(on: NSWindow?, getBackTo: NSViewController? = nil, onStart: Bool, reason: AuthenticationReason, completion: @escaping (Bool) -> Void) {
@@ -289,11 +298,100 @@ class Agent: NSObject {
         let window = windowController.window
         windowController.contentViewController = WaitingViewController.withReason(Strings.connecting)
         
-        WalletConnect.shared.connect(session: session, chainId: chainId, walletId: wallet.id) { [weak window] _ in
+        walletConnect.connect(session: session, chainId: chainId, walletId: wallet.id) { [weak window] _ in
             if window?.isVisible == true {
                 Window.closeAllAndActivateBrowser()
             }
         }
+    }
+    
+    // TODO: should receive account address from content script here.
+    // content script should know it since it injets it
+    private func processSafariRequest(_ safariRequest: SafariRequest) {
+        switch safariRequest.method {
+        case .signPersonalMessage:
+            guard let data = safariRequest.message else {
+                return // TODO: respond with error
+            }
+            
+            // TODO: display meta and peerMeta
+            showApprove(subject: .signPersonalMessage, meta: "", peerMeta: nil) { [weak self] approved in
+                if approved {
+                    self?.signPersonalMessage(adderss: safariRequest.address, data: data, requestId: safariRequest.id)
+                    // TODO: sign and respond
+                } else {
+                    ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(error: "Failed to sign"))
+                }
+            }
+        case .requestAccounts:
+            let windowController = Window.showNew()
+            let accountsList = instantiate(AccountsListViewController.self)
+            
+            accountsList.onSelectedWallet = { chainId, wallet in
+                // TODO: pass results
+                ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(results: [wallet.ethereumAddress ?? "weird address"], setAddress: true))
+                Window.closeAllAndActivateBrowser()
+            }
+            
+            windowController.contentViewController = accountsList
+        case .signMessage:
+            guard let data = safariRequest.message else {
+                return // TODO: respond with error
+            }
+            
+            // TODO: display meta and peerMeta
+            showApprove(subject: .signMessage, meta: "", peerMeta: nil) { [weak self] approved in
+                if approved {
+                    self?.signMessage(adderss: safariRequest.address, data: data, requestId: safariRequest.id)
+                    // TODO: sign and respond
+                } else {
+                    ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(error: "Failed to sign"))
+                }
+            }
+        case .signTypedMessage:
+            guard let raw = safariRequest.raw else {
+                print("yoyoyo no raw")
+                return // TODO: respond with error
+            }
+            print("yoyoyo raw:", raw)
+            
+            // TODO: display meta and peerMeta
+            showApprove(subject: .signTypedData, meta: "", peerMeta: nil) { [weak self] approved in
+                if approved {
+                    self?.signTypedData(adderss: safariRequest.address, raw: raw, requestId: safariRequest.id)
+                    // TODO: sign and respond
+                } else {
+                    ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(error: "Failed to sign"))
+                }
+            }
+        default:
+            // TODO: implement
+            break
+        }
+    }
+    
+    private func signTypedData(adderss: String, raw: String, requestId: Int) {
+        guard let wallet = walletsManager.getWallet(address: adderss) else {
+            return // TODO: respond with error
+        }
+        let signed = try? ethereum.sign(typedData: raw, wallet: wallet)
+        ExtensionBridge.respond(id: requestId, response: ResponseToExtension(result: signed ?? "weird address"))
+    }
+    
+    private func signMessage(adderss: String, data: Data, requestId: Int) {
+        guard let wallet = walletsManager.getWallet(address: adderss) else {
+            return // TODO: respond with error
+        }
+        let signed = try? ethereum.sign(data: data, wallet: wallet)
+        ExtensionBridge.respond(id: requestId, response: ResponseToExtension(result: signed ?? "weird address"))
+    }
+    
+    private func signPersonalMessage(adderss: String, data: Data, requestId: Int) {
+        guard let wallet = walletsManager.getWallet(address: adderss) else {
+            return // TODO: respond with error
+        }
+        let signed = try? ethereum.signPersonalMessage(data: data, wallet: wallet)
+        ExtensionBridge.respond(id: requestId, response: ResponseToExtension(result: signed ?? "weird address"))
     }
     
 }

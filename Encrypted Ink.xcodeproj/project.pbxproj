@@ -41,6 +41,13 @@
 		2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6706A4267A6BFE006AAEF2 /* Bundle.swift */; };
 		2C6B964C26B9D92500D2C819 /* NSColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6B964B26B9D92500D2C819 /* NSColor.swift */; };
 		2C6B964F26B9D98C00D2C819 /* Colors.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C6B964E26B9D98C00D2C819 /* Colors.xcassets */; };
+		2C773CCC273ACF0200F88D38 /* trust-min.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C773CCB273ACF0200F88D38 /* trust-min.js */; };
+		2C773F5C2742D483007B04E7 /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5B2742D483007B04E7 /* SafariRequest.swift */; };
+		2C773F5E27450B97007B04E7 /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
+		2C773F5F27450FBD007B04E7 /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
+		2C773F60274510F5007B04E7 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC89470269A334A00879245 /* UserDefaults.swift */; };
+		2C773F62274523DC007B04E7 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
+		2C773F63274523DC007B04E7 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
 		2C78F8282683BDCC00C10670 /* Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C78F8272683BDCC00C10670 /* Alert.swift */; };
 		2C797E7E267BB88800F2CE2D /* WelcomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */; };
 		2C8A09C6267513FC00993638 /* Agent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09C5267513FC00993638 /* Agent.swift */; };
@@ -138,6 +145,10 @@
 		2C6706A4267A6BFE006AAEF2 /* Bundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bundle.swift; sourceTree = "<group>"; };
 		2C6B964B26B9D92500D2C819 /* NSColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSColor.swift; sourceTree = "<group>"; };
 		2C6B964E26B9D98C00D2C819 /* Colors.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Colors.xcassets; sourceTree = "<group>"; };
+		2C773CCB273ACF0200F88D38 /* trust-min.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = "trust-min.js"; sourceTree = "<group>"; };
+		2C773F5B2742D483007B04E7 /* SafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariRequest.swift; sourceTree = "<group>"; };
+		2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionBridge.swift; sourceTree = "<group>"; };
+		2C773F61274523DC007B04E7 /* ResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseToExtension.swift; sourceTree = "<group>"; };
 		2C78F8272683BDCC00C10670 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alert.swift; sourceTree = "<group>"; };
 		2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeViewController.swift; sourceTree = "<group>"; };
 		2C8A09C5267513FC00993638 /* Agent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent.swift; sourceTree = "<group>"; };
@@ -209,6 +220,7 @@
 			children = (
 				0DC850E626B73A5900809E82 /* AuthenticationReason.swift */,
 				0D059AD126C2796200EE3023 /* ApprovalSubject.swift */,
+				2C773F5B2742D483007B04E7 /* SafariRequest.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -217,6 +229,8 @@
 			isa = PBXGroup;
 			children = (
 				2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */,
+				2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */,
+				2C773F61274523DC007B04E7 /* ResponseToExtension.swift */,
 				2C09CBB4273979C1009AD39B /* Info.plist */,
 				2C09CBB5273979C1009AD39B /* Safari.entitlements */,
 				2C09CBA3273979C1009AD39B /* Resources */,
@@ -230,8 +244,9 @@
 				2C09CBA4273979C1009AD39B /* _locales */,
 				2C09CBA6273979C1009AD39B /* images */,
 				2C09CBA8273979C1009AD39B /* manifest.json */,
-				2C09CBAA273979C1009AD39B /* background.js */,
 				2C09CBAC273979C1009AD39B /* content.js */,
+				2C09CBAA273979C1009AD39B /* background.js */,
+				2C773CCB273ACF0200F88D38 /* trust-min.js */,
 				2C09CBAE273979C1009AD39B /* popup.html */,
 				2C09CBB0273979C1009AD39B /* popup.css */,
 				2C09CBB2273979C1009AD39B /* popup.js */,
@@ -553,6 +568,7 @@
 				2C09CBAF273979C1009AD39B /* popup.html in Resources */,
 				2C09CBA7273979C1009AD39B /* images in Resources */,
 				2C09CBA9273979C1009AD39B /* manifest.json in Resources */,
+				2C773CCC273ACF0200F88D38 /* trust-min.js in Resources */,
 				2C09CBA5273979C1009AD39B /* _locales in Resources */,
 				2C09CBAD273979C1009AD39B /* content.js in Resources */,
 				2C09CBB3273979C1009AD39B /* popup.js in Resources */,
@@ -652,7 +668,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2C773F5E27450B97007B04E7 /* ExtensionBridge.swift in Sources */,
 				2C09CBA2273979C1009AD39B /* SafariWebExtensionHandler.swift in Sources */,
+				2C773F60274510F5007B04E7 /* UserDefaults.swift in Sources */,
+				2C773F63274523DC007B04E7 /* ResponseToExtension.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -666,6 +685,7 @@
 				2C8A09C6267513FC00993638 /* Agent.swift in Sources */,
 				2C8A09D42675184700993638 /* Window.swift in Sources */,
 				2C9F0B6526BDC9AF008FA3D6 /* EthereumNetwork.swift in Sources */,
+				2C773F62274523DC007B04E7 /* ResponseToExtension.swift in Sources */,
 				2C208A9F26813408005BA500 /* Secrets.swift in Sources */,
 				2CC8946F269A2E8C00879245 /* SessionStorage.swift in Sources */,
 				0DC850E726B73A5900809E82 /* AuthenticationReason.swift in Sources */,
@@ -677,6 +697,7 @@
 				2C8A09E326757FC000993638 /* AccountCellView.swift in Sources */,
 				2C6B964C26B9D92500D2C819 /* NSColor.swift in Sources */,
 				2C603D0226B6E13F00956955 /* String.swift in Sources */,
+				2C773F5C2742D483007B04E7 /* SafariRequest.swift in Sources */,
 				2CC89471269A334A00879245 /* UserDefaults.swift in Sources */,
 				2C78F8282683BDCC00C10670 /* Alert.swift in Sources */,
 				2C8A09EE2675965F00993638 /* WaitingViewController.swift in Sources */,
@@ -687,6 +708,7 @@
 				0D059AD226C2796200EE3023 /* ApprovalSubject.swift in Sources */,
 				2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */,
 				2C8E47A326A322E8007B8354 /* RightClickTableView.swift in Sources */,
+				2C773F5F27450FBD007B04E7 /* ExtensionBridge.swift in Sources */,
 				2C901C472689E6D400D0926A /* ApproveTransactionViewController.swift in Sources */,
 				2CDAB3722675B3F0009F8B97 /* PasswordViewController.swift in Sources */,
 				2C1995402674C4B900A8E370 /* AppDelegate.swift in Sources */,
