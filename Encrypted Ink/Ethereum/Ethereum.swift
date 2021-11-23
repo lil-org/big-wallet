@@ -26,14 +26,28 @@ struct Ethereum {
         return try sign(data: data, wallet: wallet, addPrefix: true)
     }
     
+    func recover(signature: Data, message: Data) -> String? {
+        guard let hash = prefixedDataHash(data: message),
+              let publicKey = PublicKey.recover(signature: signature, message: hash),
+              PublicKey.isValid(data: publicKey.data, type: publicKey.keyType) else {
+                  return nil
+              }
+        return CoinType.ethereum.deriveAddressFromPublicKey(publicKey: publicKey)
+    }
+    
+    private func prefixedDataHash(data: Data) -> Data? {
+        let prefixString = "\u{19}Ethereum Signed Message:\n" + String(data.count)
+        guard let prefixData = prefixString.data(using: .utf8) else { return nil }
+        return Hash.keccak256(data: prefixData + data)
+    }
+    
     private func sign(data: Data, wallet: InkWallet, addPrefix: Bool) throws -> String {
         guard let ethereumPrivateKey = wallet.ethereumPrivateKey else { throw Error.keyNotFound }
         
         let digest: Data
         if addPrefix {
-            let prefixString = "\u{19}Ethereum Signed Message:\n" + String(data.count)
-            guard let prefixData = prefixString.data(using: .utf8) else { throw Error.failedToSign }
-            digest = Hash.keccak256(data: prefixData + data)
+            guard let prefixedData = prefixedDataHash(data: data) else { throw Error.failedToSign }
+            digest = prefixedData
         } else {
             digest = data
         }

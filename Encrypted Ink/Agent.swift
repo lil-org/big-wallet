@@ -317,7 +317,7 @@ class Agent: NSObject {
             // TODO: display meta and peerMeta
             showApprove(subject: .signPersonalMessage, meta: "", peerMeta: nil) { [weak self] approved in
                 if approved {
-                    self?.signPersonalMessage(adderss: safariRequest.address, data: data, requestId: safariRequest.id)
+                    self?.signPersonalMessage(address: safariRequest.address, data: data, requestId: safariRequest.id)
                     // TODO: sign and respond
                 } else {
                     ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(error: "Failed to sign"))
@@ -342,7 +342,7 @@ class Agent: NSObject {
             // TODO: display meta and peerMeta
             showApprove(subject: .signMessage, meta: "", peerMeta: nil) { [weak self] approved in
                 if approved {
-                    self?.signMessage(adderss: safariRequest.address, data: data, requestId: safariRequest.id)
+                    self?.signMessage(address: safariRequest.address, data: data, requestId: safariRequest.id)
                     // TODO: sign and respond
                 } else {
                     ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(error: "Failed to sign"))
@@ -358,36 +358,73 @@ class Agent: NSObject {
             // TODO: display meta and peerMeta
             showApprove(subject: .signTypedData, meta: "", peerMeta: nil) { [weak self] approved in
                 if approved {
-                    self?.signTypedData(adderss: safariRequest.address, raw: raw, requestId: safariRequest.id)
+                    self?.signTypedData(address: safariRequest.address, raw: raw, requestId: safariRequest.id)
                     // TODO: sign and respond
                 } else {
                     ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(error: "Failed to sign"))
                 }
             }
+        case .signTransaction:
+            let chain = EthereumChain.ethereum // TODO: receive chain id here as well
+            guard let transaction = safariRequest.transaction else {
+                return // TODO: respond with error
+            }
+            let peer = WCPeerMeta(name: "Unknown", url: "") // TODO: pass valid peer meta
+            showApprove(transaction: transaction, chain: chain, peerMeta: peer) { [weak self] transaction in
+                if let transaction = transaction {
+                    self?.sendTransaction(transaction, address: safariRequest.address, chain: chain, requestId: safariRequest.id)
+                    // TODO: show some kind of spinner
+                    // TODO: actually send a transaction. What should be in a response?
+                } else {
+                    ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(error: "Canceled"))
+                    // TODO: looks like uniswap expects different response format
+                }
+            }
+        case .ecRecover:
+            if let (signature, message) = safariRequest.signatureAndMessage,
+               let recovered = ethereum.recover(signature: signature, message: message) {
+                ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(result: recovered))
+            } else {
+                ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(error: "Failed to verify"))
+            }
         default:
             // TODO: implement
+            // at least bring focus back to browser
             break
         }
     }
     
-    private func signTypedData(adderss: String, raw: String, requestId: Int) {
-        guard let wallet = walletsManager.getWallet(address: adderss) else {
+    // TODO: refactor in a way that there'd be only one sendTransaction for extension and for WalletConnect
+    private func sendTransaction(_ transaction: Transaction, address: String, chain: EthereumChain, requestId: Int) {
+        guard let wallet = walletsManager.getWallet(address: address) else {
+            return // TODO: respond with error
+        }
+        
+        guard let transactionHash = try? ethereum.send(transaction: transaction, wallet: wallet, chain: chain) else {
+            ExtensionBridge.respond(id: requestId, response: ResponseToExtension(error: "Failed to send"))
+            return // TODO: respond with error
+        }
+        ExtensionBridge.respond(id: requestId, response: ResponseToExtension(result: transactionHash))
+    }
+    
+    private func signTypedData(address: String, raw: String, requestId: Int) {
+        guard let wallet = walletsManager.getWallet(address: address) else {
             return // TODO: respond with error
         }
         let signed = try? ethereum.sign(typedData: raw, wallet: wallet)
         ExtensionBridge.respond(id: requestId, response: ResponseToExtension(result: signed ?? "weird address"))
     }
     
-    private func signMessage(adderss: String, data: Data, requestId: Int) {
-        guard let wallet = walletsManager.getWallet(address: adderss) else {
+    private func signMessage(address: String, data: Data, requestId: Int) {
+        guard let wallet = walletsManager.getWallet(address: address) else {
             return // TODO: respond with error
         }
         let signed = try? ethereum.sign(data: data, wallet: wallet)
         ExtensionBridge.respond(id: requestId, response: ResponseToExtension(result: signed ?? "weird address"))
     }
     
-    private func signPersonalMessage(adderss: String, data: Data, requestId: Int) {
-        guard let wallet = walletsManager.getWallet(address: adderss) else {
+    private func signPersonalMessage(address: String, data: Data, requestId: Int) {
+        guard let wallet = walletsManager.getWallet(address: address) else {
             return // TODO: respond with error
         }
         let signed = try? ethereum.signPersonalMessage(data: data, wallet: wallet)
