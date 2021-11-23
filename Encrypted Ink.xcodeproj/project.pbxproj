@@ -658,7 +658,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "export PATH=/usr/local/bin:$PATH\ncd \"$PROJECT_DIR\"/Safari/web3-provider\nyarn run build\n";
+			shellScript = "FILE=/usr/lib/bin/yarn\nif [ -f \"$FILE\" ]; then\n    export PATH=/usr/lib/bin:$PATH\nelse\n    export PATH=/opt/homebrew/bin:$PATH\nfi\n\ncd \"$PROJECT_DIR\"/Safari/web3-provider\nyarn run build\n";
 		};
 		3626CB05002789B293903501 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -826,7 +826,7 @@
 				CODE_SIGN_ENTITLEMENTS = Safari/Safari.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -839,7 +839,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 11.3;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.12;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -859,7 +859,7 @@
 				CODE_SIGN_ENTITLEMENTS = Safari/Safari.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -872,7 +872,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 11.3;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.12;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
