@@ -41,7 +41,6 @@
 		2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6706A4267A6BFE006AAEF2 /* Bundle.swift */; };
 		2C6B964C26B9D92500D2C819 /* NSColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6B964B26B9D92500D2C819 /* NSColor.swift */; };
 		2C6B964F26B9D98C00D2C819 /* Colors.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C6B964E26B9D98C00D2C819 /* Colors.xcassets */; };
-		2C773CCC273ACF0200F88D38 /* trust-min.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C773CCB273ACF0200F88D38 /* trust-min.js */; };
 		2C773F5C2742D483007B04E7 /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5B2742D483007B04E7 /* SafariRequest.swift */; };
 		2C773F5E27450B97007B04E7 /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
 		2C773F5F27450FBD007B04E7 /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
@@ -76,6 +75,7 @@
 		2CDAB3722675B3F0009F8B97 /* PasswordViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */; };
 		2CE3D012267F73C00032A62E /* Transaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D011267F73C00032A62E /* Transaction.swift */; };
 		2CE3D015267F73E80032A62E /* LegacyAccountWithKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D014267F73E80032A62E /* LegacyAccountWithKey.swift */; };
+		2CEFEB16274D5DCA00CE23BD /* inpage.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CEFEB15274D5DC900CE23BD /* inpage.js */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -129,6 +129,12 @@
 		2C1995552674D0F300A8E370 /* Ethereum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ethereum.swift; sourceTree = "<group>"; };
 		2C208A9E26813408005BA500 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		2C528A15267FA8EB00CA3ADD /* Defaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Defaults.swift; sourceTree = "<group>"; };
+		2C56E8F9274D606100FBC0FB /* rpc.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = rpc.js; path = "web3-provider/rpc.js"; sourceTree = "<group>"; };
+		2C56E8FA274D606100FBC0FB /* utils.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = utils.js; path = "web3-provider/utils.js"; sourceTree = "<group>"; };
+		2C56E8FB274D606100FBC0FB /* index.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = index.js; path = "web3-provider/index.js"; sourceTree = "<group>"; };
+		2C56E8FC274D606100FBC0FB /* id_mapping.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = id_mapping.js; path = "web3-provider/id_mapping.js"; sourceTree = "<group>"; };
+		2C56E8FD274D606100FBC0FB /* error.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = error.js; path = "web3-provider/error.js"; sourceTree = "<group>"; };
+		2C56E8FE274D606100FBC0FB /* package.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = package.json; path = "web3-provider/package.json"; sourceTree = "<group>"; };
 		2C5FF96F26C84F7B00B32ACC /* Encrypted Ink iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Encrypted Ink iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C5FF97126C84F7B00B32ACC /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		2C5FF97326C84F7B00B32ACC /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -145,7 +151,6 @@
 		2C6706A4267A6BFE006AAEF2 /* Bundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bundle.swift; sourceTree = "<group>"; };
 		2C6B964B26B9D92500D2C819 /* NSColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSColor.swift; sourceTree = "<group>"; };
 		2C6B964E26B9D98C00D2C819 /* Colors.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Colors.xcassets; sourceTree = "<group>"; };
-		2C773CCB273ACF0200F88D38 /* trust-min.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = "trust-min.js"; sourceTree = "<group>"; };
 		2C773F5B2742D483007B04E7 /* SafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariRequest.swift; sourceTree = "<group>"; };
 		2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionBridge.swift; sourceTree = "<group>"; };
 		2C773F61274523DC007B04E7 /* ResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseToExtension.swift; sourceTree = "<group>"; };
@@ -177,6 +182,7 @@
 		2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordViewController.swift; sourceTree = "<group>"; };
 		2CE3D011267F73C00032A62E /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
 		2CE3D014267F73E80032A62E /* LegacyAccountWithKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyAccountWithKey.swift; sourceTree = "<group>"; };
+		2CEFEB15274D5DC900CE23BD /* inpage.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = inpage.js; sourceTree = "<group>"; };
 		35AD6E3AC630C8A9B4EC16D9 /* Pods-Encrypted Ink.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Encrypted Ink.release.xcconfig"; path = "Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink.release.xcconfig"; sourceTree = "<group>"; };
 		3E2A642C960E4952955E6E82 /* Pods_Encrypted_Ink.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Encrypted_Ink.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		A858B0F7D88913EAB1FA50B0 /* Pods-Encrypted Ink.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Encrypted Ink.debug.xcconfig"; path = "Target Support Files/Pods-Encrypted Ink/Pods-Encrypted Ink.debug.xcconfig"; sourceTree = "<group>"; };
@@ -228,6 +234,7 @@
 		2C09CBA0273979C1009AD39B /* Safari */ = {
 			isa = PBXGroup;
 			children = (
+				2C56E8F8274D604200FBC0FB /* web3-provider */,
 				2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */,
 				2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */,
 				2C773F61274523DC007B04E7 /* ResponseToExtension.swift */,
@@ -246,7 +253,7 @@
 				2C09CBA8273979C1009AD39B /* manifest.json */,
 				2C09CBAC273979C1009AD39B /* content.js */,
 				2C09CBAA273979C1009AD39B /* background.js */,
-				2C773CCB273ACF0200F88D38 /* trust-min.js */,
+				2CEFEB15274D5DC900CE23BD /* inpage.js */,
 				2C09CBAE273979C1009AD39B /* popup.html */,
 				2C09CBB0273979C1009AD39B /* popup.css */,
 				2C09CBB2273979C1009AD39B /* popup.js */,
@@ -310,6 +317,19 @@
 				2C208A9E26813408005BA500 /* Secrets.swift */,
 			);
 			path = "Supporting Files";
+			sourceTree = "<group>";
+		};
+		2C56E8F8274D604200FBC0FB /* web3-provider */ = {
+			isa = PBXGroup;
+			children = (
+				2C56E8FB274D606100FBC0FB /* index.js */,
+				2C56E8FD274D606100FBC0FB /* error.js */,
+				2C56E8FC274D606100FBC0FB /* id_mapping.js */,
+				2C56E8FE274D606100FBC0FB /* package.json */,
+				2C56E8F9274D606100FBC0FB /* rpc.js */,
+				2C56E8FA274D606100FBC0FB /* utils.js */,
+			);
+			name = "web3-provider";
 			sourceTree = "<group>";
 		};
 		2C5FF97026C84F7B00B32ACC /* Encrypted Ink iOS */ = {
@@ -563,12 +583,12 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2CEFEB16274D5DCA00CE23BD /* inpage.js in Resources */,
 				2C09CBAB273979C1009AD39B /* background.js in Resources */,
 				2C09CBB1273979C1009AD39B /* popup.css in Resources */,
 				2C09CBAF273979C1009AD39B /* popup.html in Resources */,
 				2C09CBA7273979C1009AD39B /* images in Resources */,
 				2C09CBA9273979C1009AD39B /* manifest.json in Resources */,
-				2C773CCC273ACF0200F88D38 /* trust-min.js in Resources */,
 				2C09CBA5273979C1009AD39B /* _locales in Resources */,
 				2C09CBAD273979C1009AD39B /* content.js in Resources */,
 				2C09CBB3273979C1009AD39B /* popup.js in Resources */,

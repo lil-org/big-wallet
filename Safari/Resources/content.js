@@ -8,7 +8,7 @@ function injectScript() {
         const scriptTag = document.createElement('script');
         scriptTag.setAttribute('async', 'false');
         var request = new XMLHttpRequest();
-        request.open('GET', browser.extension.getURL('trust-min.js'), false);
+        request.open('GET', browser.extension.getURL('inpage.js'), false);
         request.send();
         scriptTag.textContent = request.responseText;
         container.insertBefore(scriptTag, container.children[0]);

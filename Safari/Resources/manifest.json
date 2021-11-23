@@ -57,5 +57,5 @@
         "notifications"
       ],
     
-    "web_accessible_resources": [ "trust-min.js" ],
+    "web_accessible_resources": [ "inpage.js" ],
 }
