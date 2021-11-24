@@ -212,11 +212,11 @@ class TokenaryWeb3Provider extends EventEmitter {
   }
 
   net_version() {
-    return this.chainId.toString(10) || null;
+    return parseInt(this.chainId, 16).toString(10) || null;
   }
 
   eth_chainId() {
-    return "0x" + this.chainId.toString(16);
+    return this.chainId;
   }
 
   eth_sign(payload) {
@@ -358,7 +358,7 @@ window.tokenary = {
 
 (function() {
     var config = {
-    chainId: 1, // "0x1" works for Zerion
+    chainId: "0x1",
     rpcUrl: "https://mainnet.infura.io/v3/3f99b6096fda424bbb26e17866dcddfc",
     isDebug: true
     };
