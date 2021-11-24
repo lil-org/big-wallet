@@ -1,8 +1,5 @@
-// Copyright © 2017-2020 Trust Wallet.
-//
-// This file is part of Trust. The full Trust copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
+// Copyright © 2021 Encrypted Ink. All rights reserved.
+// Rewrite of index.js from trust-web3-provider.
 
 "use strict";
 
@@ -13,7 +10,7 @@ import IdMapping from "./id_mapping";
 import { EventEmitter } from "events";
 import isUtf8 from "isutf8";
 
-class TrustWeb3Provider extends EventEmitter {
+class TokenaryWeb3Provider extends EventEmitter {
   constructor(config) {
     super();
     this.setConfig(config);
@@ -52,7 +49,7 @@ class TrustWeb3Provider extends EventEmitter {
   request(payload) {
     // this points to window in methods like web3.eth.getAccounts()
     var that = this;
-    if (!(this instanceof TrustWeb3Provider)) {
+    if (!(this instanceof TokenaryWeb3Provider)) {
       that = window.ethereum;
     }
     return that._request(payload, false);
@@ -98,7 +95,7 @@ class TrustWeb3Provider extends EventEmitter {
       default:
         throw new ProviderRpcError(
           4200,
-          `Trust does not support calling ${payload.method} synchronously without a callback. Please provide a callback parameter to call ${payload.method} asynchronously.`
+          `Tokenary does not support calling ${payload.method} synchronously without a callback. Please provide a callback parameter to call ${payload.method} asynchronously.`
         );
     }
     return response;
@@ -113,7 +110,7 @@ class TrustWeb3Provider extends EventEmitter {
     );
     // this points to window in methods like web3.eth.getAccounts()
     var that = this;
-    if (!(this instanceof TrustWeb3Provider)) {
+    if (!(this instanceof TokenaryWeb3Provider)) {
       that = window.ethereum;
     }
     if (Array.isArray(payload)) {
@@ -184,7 +181,7 @@ class TrustWeb3Provider extends EventEmitter {
         case "eth_subscribe":
           throw new ProviderRpcError(
             4200,
-            `Trust does not support calling ${payload.method}. Please use your own solution`
+            `Tokenary does not support calling ${payload.method}. Please use your own solution`
           );
         default:
           this.callbacks.delete(payload.id);
@@ -290,8 +287,8 @@ class TrustWeb3Provider extends EventEmitter {
         object: data,
         address: this.address,
       };
-      if (window.trustwallet.postMessage) {
-        window.trustwallet.postMessage(object);
+      if (window.tokanry.postMessage) {
+        window.tokenary.postMessage(object);
       } else {
         // old clients
         window.webkit.messageHandlers[handler].postMessage(object);
@@ -354,8 +351,8 @@ class TrustWeb3Provider extends EventEmitter {
   }
 }
 
-window.trustwallet = {
-  Provider: TrustWeb3Provider,
+window.tokenary = {
+  Provider: TokenaryWeb3Provider,
   postMessage: null,
 };
 
@@ -365,7 +362,7 @@ window.trustwallet = {
     rpcUrl: "https://mainnet.infura.io/v3/3f99b6096fda424bbb26e17866dcddfc",
     isDebug: true
     };
-    window.ethereum = new trustwallet.Provider(config);
+    window.ethereum = new tokenary.Provider(config);
 
     const handler = {
       get(target, property) {
@@ -374,7 +371,7 @@ window.trustwallet = {
     }
     window.web3 = new Proxy(window.ethereum, handler);
 
-    trustwallet.postMessage = (jsonString) => {
+    tokenary.postMessage = (jsonString) => {
         window.postMessage({direction: "from-page-script", message: jsonString}, "*");
     };
 })();

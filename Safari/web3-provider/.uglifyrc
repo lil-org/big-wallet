@@ -1,5 +1,5 @@
 {
   "mangle": {
-    "reserved": ["TrustWeb3Provider"]
+    "reserved": ["TokenaryWeb3Provider"]
   }
 }
