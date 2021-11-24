@@ -464,6 +464,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2C09CBBC273979C1009AD39B /* Build configuration list for PBXNativeTarget "Safari" */;
 			buildPhases = (
+				2C85D99C274E531100160AD5 /* ShellScript */,
 				2C09CB9B273979C1009AD39B /* Sources */,
 				2C09CB9C273979C1009AD39B /* Frameworks */,
 				2C09CB9D273979C1009AD39B /* Resources */,
@@ -481,7 +482,6 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2C19954C2674C4BA00A8E370 /* Build configuration list for PBXNativeTarget "Encrypted Ink" */;
 			buildPhases = (
-				2C56E8FF274D646C00FBC0FB /* ShellScript */,
 				3626CB05002789B293903501 /* [CP] Check Pods Manifest.lock */,
 				2C1995382674C4B900A8E370 /* Sources */,
 				2C1995392674C4B900A8E370 /* Frameworks */,
@@ -643,7 +643,7 @@
 			shellPath = /bin/sh;
 			shellScript = "export PATH=\"$PATH:/opt/homebrew/bin\"\n\nif which swiftlint; then\n    swiftlint\nelse\n  echo \"warning: SwiftLint not installed, download from https://github.com/realm/SwiftLint\"\nfi\n";
 		};
-		2C56E8FF274D646C00FBC0FB /* ShellScript */ = {
+		2C85D99C274E531100160AD5 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
