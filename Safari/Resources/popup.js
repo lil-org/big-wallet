@@ -1,1 +1,5 @@
-console.log("Hello World!", browser);
+function switchAccount() {
+    console.log("yo");
+}
+
+document.getElementById("account").onclick = switchAccount;
