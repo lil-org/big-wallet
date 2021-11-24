@@ -14,14 +14,11 @@ class TokenaryWeb3Provider extends EventEmitter {
     constructor(config) {
         super();
         this.setConfig(config);
-        
         this.idMapping = new IdMapping();
         this.callbacks = new Map();
         this.wrapResults = new Map();
         this.isMetaMask = true;
         this.isTokenary = true;
-        this.isDebug = !!config.isDebug;
-        
         this.emitConnect(config.chainId);
     }
     
@@ -40,10 +37,8 @@ class TokenaryWeb3Provider extends EventEmitter {
     
     setConfig(config) {
         this.setAddress(config.address);
-        
         this.chainId = config.chainId;
         this.rpc = new RPCServer(config.rpcUrl);
-        this.isDebug = !!config.isDebug;
     }
     
     request(payload) {
@@ -130,9 +125,6 @@ class TokenaryWeb3Provider extends EventEmitter {
      */
     _request(payload, wrapResult = true) {
         this.idMapping.tryIntifyId(payload);
-        if (this.isDebug) {
-            console.log(`==> _request payload ${JSON.stringify(payload)}`);
-        }
         return new Promise((resolve, reject) => {
             if (!payload.id) {
                 payload.id = Utils.genId();
@@ -189,9 +181,6 @@ class TokenaryWeb3Provider extends EventEmitter {
                     return this.rpc
                     .call(payload)
                     .then((response) => {
-                        if (this.isDebug) {
-                            console.log(`<== rpc response ${JSON.stringify(response)}`);
-                        }
                         wrapResult ? resolve(response) : resolve(response.result);
                     })
                     .catch(reject);
@@ -312,13 +301,6 @@ class TokenaryWeb3Provider extends EventEmitter {
         } else {
             data.result = result;
         }
-        if (this.isDebug) {
-            console.log(
-        `<== sendResponse id: ${id}, result: ${JSON.stringify(
-          result
-        )}, data: ${JSON.stringify(data)}`
-                        );
-        }
         if (callback) {
             wrapResult ? callback(null, data) : callback(null, result);
             this.callbacks.delete(id);
@@ -359,8 +341,7 @@ postMessage: null,
 (function() {
     var config = {
     chainId: "0x1",
-    rpcUrl: "https://mainnet.infura.io/v3/3f99b6096fda424bbb26e17866dcddfc",
-    isDebug: true
+    rpcUrl: "https://mainnet.infura.io/v3/3f99b6096fda424bbb26e17866dcddfc"
     };
     window.ethereum = new tokenary.Provider(config);
     
