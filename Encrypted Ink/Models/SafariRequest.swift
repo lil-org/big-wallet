@@ -13,6 +13,7 @@ struct SafariRequest {
         case requestAccounts
         case watchAsset
         case addEthereumChain
+        case switchAccount
     }
     
     private let json: [String: Any]
@@ -41,6 +42,10 @@ struct SafariRequest {
     
     private var parameters: [String: Any]? {
         return json["object"] as? [String: Any]
+    }
+    
+    var name: String {
+        return method.rawValue
     }
     
     var message: Data? {

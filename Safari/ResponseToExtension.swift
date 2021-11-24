@@ -4,40 +4,40 @@ import Foundation
 
 struct ResponseToExtension: Codable {
     
+    let name: String
     let result: String?
     let results: [String]?
     let error: String?
-    let setAddress: Bool?
     
     var json: [String: AnyHashable] {
         if let result = result {
-            return ["result": result]
+            return ["name": name, "result": result]
         } else if let results = results {
-            return ["results": results, "setAddress": setAddress ?? false]
+            return ["name": name, "results": results]
         } else if let error = error {
-            return ["error": error]
+            return ["name": name, "error": error]
         } else {
             return [:]
         }
     }
     
-    init(result: String) {
-        self.init(result: result, results: nil, error: nil, setAddress: nil)
+    init(name: String, result: String) {
+        self.init(name: name, result: result, results: nil, error: nil)
     }
     
-    init(results: [String], setAddress: Bool) {
-        self.init(result: nil, results: results, error: nil, setAddress: setAddress)
+    init(name: String, results: [String]) {
+        self.init(name: name, result: nil, results: results, error: nil)
     }
     
-    init(error: String) {
-        self.init(result: nil, results: nil, error: error, setAddress: nil)
+    init(name: String, error: String) {
+        self.init(name: name, result: nil, results: nil, error: error)
     }
     
-    private init(result: String?, results: [String]?, error: String?, setAddress: Bool?) {
+    private init(name: String, result: String?, results: [String]?, error: String?) {
+        self.name = name
         self.result = result
         self.results = results
         self.error = error
-        self.setAddress = setAddress
     }
     
 }

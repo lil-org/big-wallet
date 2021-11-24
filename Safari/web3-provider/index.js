@@ -360,11 +360,18 @@ postMessage: null,
 window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "from-content-script") {
         const response = event.data.response;
+        
+        if (response.name == "switchAccount") {
+            window.ethereum.emit("accountsChanged", response.results);
+            window.ethereum.setAddress(response.results[0]); // TODO: test with empty response array
+            return;
+        }
+        
         if ("result" in response) {
             window.ethereum.sendResponse(event.data.id, response.result);
         } else if ("results" in response) {
             window.ethereum.sendResponse(event.data.id, response.results);
-            if (response.setAddress == true) {
+            if (response.name == "requestAccounts") {
                 window.ethereum.setAddress(response.results[0]);
             }
         } else if ("error" in response) {

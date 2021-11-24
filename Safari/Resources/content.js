@@ -88,8 +88,7 @@ function processInpageMessage(message) {
 }
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    // TODO: process popup request
-    processInpageMessage({id: 0, name: "requestAccounts", object: {}, address: ""});
+    processInpageMessage(request);
 });
 
 // Receive from inpage
