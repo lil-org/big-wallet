@@ -287,7 +287,7 @@ class TokenaryWeb3Provider extends EventEmitter {
         object: data,
         address: this.address,
       };
-      if (window.tokanry.postMessage) {
+      if (window.tokenary.postMessage) {
         window.tokenary.postMessage(object);
       } else {
         // old clients
