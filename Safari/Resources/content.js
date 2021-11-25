@@ -87,8 +87,10 @@ function processInpageMessage(message) {
     });
 }
 
+// Receive from background
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    processInpageMessage(request);
+    const id = new Date().getTime() + Math.floor(Math.random() * 1000);
+    window.postMessage({direction: "from-content-script", response: request, id: id}, "*");
 });
 
 // Receive from inpage

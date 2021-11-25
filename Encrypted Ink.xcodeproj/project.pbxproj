@@ -18,9 +18,6 @@
 		2C09CBA9273979C1009AD39B /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBA8273979C1009AD39B /* manifest.json */; };
 		2C09CBAB273979C1009AD39B /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAA273979C1009AD39B /* background.js */; };
 		2C09CBAD273979C1009AD39B /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAC273979C1009AD39B /* content.js */; };
-		2C09CBAF273979C1009AD39B /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAE273979C1009AD39B /* popup.html */; };
-		2C09CBB1273979C1009AD39B /* popup.css in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBB0273979C1009AD39B /* popup.css */; };
-		2C09CBB3273979C1009AD39B /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBB2273979C1009AD39B /* popup.js */; };
 		2C09CBB9273979C1009AD39B /* Safari.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2C09CB9F273979C1009AD39B /* Safari.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2C1995402674C4B900A8E370 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C19953F2674C4B900A8E370 /* AppDelegate.swift */; };
 		2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995412674C4B900A8E370 /* ImportViewController.swift */; };
@@ -114,9 +111,6 @@
 		2C09CBA8273979C1009AD39B /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
 		2C09CBAA273979C1009AD39B /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = background.js; sourceTree = "<group>"; };
 		2C09CBAC273979C1009AD39B /* content.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = content.js; sourceTree = "<group>"; };
-		2C09CBAE273979C1009AD39B /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = popup.html; sourceTree = "<group>"; };
-		2C09CBB0273979C1009AD39B /* popup.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = popup.css; sourceTree = "<group>"; };
-		2C09CBB2273979C1009AD39B /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = popup.js; sourceTree = "<group>"; };
 		2C09CBB4273979C1009AD39B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C09CBB5273979C1009AD39B /* Safari.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Safari.entitlements; sourceTree = "<group>"; };
 		2C19953C2674C4B900A8E370 /* Encrypted Ink.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Encrypted Ink.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -254,9 +248,6 @@
 				2C09CBAC273979C1009AD39B /* content.js */,
 				2C09CBAA273979C1009AD39B /* background.js */,
 				2CEFEB15274D5DC900CE23BD /* inpage.js */,
-				2C09CBAE273979C1009AD39B /* popup.html */,
-				2C09CBB0273979C1009AD39B /* popup.css */,
-				2C09CBB2273979C1009AD39B /* popup.js */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -586,13 +577,10 @@
 			files = (
 				2CEFEB16274D5DCA00CE23BD /* inpage.js in Resources */,
 				2C09CBAB273979C1009AD39B /* background.js in Resources */,
-				2C09CBB1273979C1009AD39B /* popup.css in Resources */,
-				2C09CBAF273979C1009AD39B /* popup.html in Resources */,
 				2C09CBA7273979C1009AD39B /* images in Resources */,
 				2C09CBA9273979C1009AD39B /* manifest.json in Resources */,
 				2C09CBA5273979C1009AD39B /* _locales in Resources */,
 				2C09CBAD273979C1009AD39B /* content.js in Resources */,
-				2C09CBB3273979C1009AD39B /* popup.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
