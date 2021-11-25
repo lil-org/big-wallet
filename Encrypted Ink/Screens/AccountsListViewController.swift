@@ -9,7 +9,7 @@ class AccountsListViewController: NSViewController {
     private var cellModels = [CellModel]()
     
     private var chain = EthereumChain.ethereum
-    var onSelectedWallet: ((Int, InkWallet) -> Void)?
+    var onSelectedWallet: ((EthereumChain, InkWallet) -> Void)?
     var newWalletId: String?
     
     enum CellModel {
@@ -305,7 +305,7 @@ extension AccountsListViewController: NSTableViewDelegate {
         case .wallet:
             let wallet = wallets[row]
             if let onSelectedWallet = onSelectedWallet {
-                onSelectedWallet(chain.id, wallet)
+                onSelectedWallet(chain, wallet)
             } else {
                 Timer.scheduledTimer(withTimeInterval: 0.01, repeats: false) { [weak self] _ in
                     var point = NSEvent.mouseLocation

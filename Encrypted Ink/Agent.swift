@@ -125,7 +125,7 @@ class Agent: NSObject {
         windowController.contentViewController = ErrorViewController.withMessage(message)
     }
     
-    func getWalletSelectionCompletionIfShouldSelect() -> ((Int, InkWallet) -> Void)? {
+    func getWalletSelectionCompletionIfShouldSelect() -> ((EthereumChain, InkWallet) -> Void)? {
         let session = getSessionFromPasteboard()
         return onSelectedWallet(session: session)
     }
@@ -228,10 +228,10 @@ class Agent: NSObject {
         }
     }
     
-    private func onSelectedWallet(session: WCSession?) -> ((Int, InkWallet) -> Void)? {
+    private func onSelectedWallet(session: WCSession?) -> ((EthereumChain, InkWallet) -> Void)? {
         guard let session = session else { return nil }
-        return { [weak self] chainId, wallet in
-            self?.connectWallet(session: session, chainId: chainId, wallet: wallet)
+        return { [weak self] chain, wallet in
+            self?.connectWallet(session: session, chainId: chain.id, wallet: wallet)
         }
     }
     
@@ -327,9 +327,11 @@ class Agent: NSObject {
             let windowController = Window.showNew()
             let accountsList = instantiate(AccountsListViewController.self)
             
-            accountsList.onSelectedWallet = { chainId, wallet in
-                // TODO: pass chain info
-                let response = ResponseToExtension(name: safariRequest.name, results: [wallet.ethereumAddress ?? "weird address"], chainId: "", rpcURL: "")
+            accountsList.onSelectedWallet = { chain, wallet in
+                let response = ResponseToExtension(name: safariRequest.name,
+                                                   results: [wallet.ethereumAddress ?? "weird address"],
+                                                   chainId: chain.hexStringId,
+                                                   rpcURL: chain.nodeURLString)
                 ExtensionBridge.respond(id: safariRequest.id, response: response)
                 Window.closeAllAndActivateBrowser()
             }

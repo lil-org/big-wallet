@@ -27,6 +27,10 @@ enum EthereumChain: Int {
         return rawValue
     }
     
+    var hexStringId: String {
+        return "0x" + String(id, radix: 16, uppercase: false)
+    }
+    
     static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum, .avalanche, .xDai]
     static let allTestnets: [EthereumChain] = [.ethereumRopsten, .ethereumKovan, .ethereumRinkeby, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji]
     
