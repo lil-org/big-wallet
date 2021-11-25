@@ -125,7 +125,7 @@ class Agent: NSObject {
         windowController.contentViewController = ErrorViewController.withMessage(message)
     }
     
-    func getWalletSelectionCompletionIfShouldSelect() -> ((EthereumChain, InkWallet) -> Void)? {
+    func getWalletSelectionCompletionIfShouldSelect() -> ((EthereumChain?, InkWallet?) -> Void)? {
         let session = getSessionFromPasteboard()
         return onSelectedWallet(session: session)
     }
@@ -228,9 +228,10 @@ class Agent: NSObject {
         }
     }
     
-    private func onSelectedWallet(session: WCSession?) -> ((EthereumChain, InkWallet) -> Void)? {
+    private func onSelectedWallet(session: WCSession?) -> ((EthereumChain?, InkWallet?) -> Void)? {
         guard let session = session else { return nil }
         return { [weak self] chain, wallet in
+            guard let chain = chain, let wallet = wallet else { return }
             self?.connectWallet(session: session, chainId: chain.id, wallet: wallet)
         }
     }
@@ -328,11 +329,15 @@ class Agent: NSObject {
             let accountsList = instantiate(AccountsListViewController.self)
             
             accountsList.onSelectedWallet = { chain, wallet in
-                let response = ResponseToExtension(name: safariRequest.name,
-                                                   results: [wallet.ethereumAddress ?? "weird address"],
-                                                   chainId: chain.hexStringId,
-                                                   rpcURL: chain.nodeURLString)
-                ExtensionBridge.respond(id: safariRequest.id, response: response)
+                if let chain = chain, let wallet = wallet {
+                    let response = ResponseToExtension(name: safariRequest.name,
+                                                       results: [wallet.ethereumAddress ?? "weird address"],
+                                                       chainId: chain.hexStringId,
+                                                       rpcURL: chain.nodeURLString)
+                    ExtensionBridge.respond(id: safariRequest.id, response: response)
+                } else {
+                    ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, error: "Canceled"))
+                }
                 Window.closeAllAndActivateBrowser()
             }
             
