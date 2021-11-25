@@ -271,12 +271,7 @@ class TokenaryWeb3Provider extends EventEmitter {
      */
     postMessage(handler, id, data) {
         if (this.ready || handler === "requestAccounts") {
-            let object = {
-            id: id,
-            name: handler,
-            object: data,
-            address: this.address,
-            };
+            let object = {id: id, name: handler, object: data, address: this.address, networkId: this.net_version()};
             if (window.tokenary.postMessage) {
                 window.tokenary.postMessage(object);
             } else {

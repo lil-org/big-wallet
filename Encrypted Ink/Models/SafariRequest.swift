@@ -31,13 +31,13 @@ struct SafariRequest {
         guard let name = json["name"] as? String,
               let method = Method(rawValue: name),
               let id = json["id"] as? Int,
-              let addrerss = json["address"] as? String
+              let address = json["address"] as? String
         else { return nil }
         
         self.json = json
         self.method = method
         self.id = id
-        self.address = addrerss
+        self.address = address
     }
     
     private var parameters: [String: Any]? {
@@ -52,6 +52,14 @@ struct SafariRequest {
         if let hexString = parameters?["data"] as? String,
            let data = Data(hexString: hexString) {
             return data
+        } else {
+            return nil
+        }
+    }
+    
+    var chain: EthereumChain? {
+        if let network = json["networkId"] as? String, let networkId = Int(network) {
+            return EthereumChain(rawValue: networkId)
         } else {
             return nil
         }

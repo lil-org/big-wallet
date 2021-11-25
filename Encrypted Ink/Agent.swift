@@ -374,8 +374,7 @@ class Agent: NSObject {
                 }
             }
         case .signTransaction:
-            let chain = EthereumChain.ethereum // TODO: receive chain id here as well
-            guard let transaction = safariRequest.transaction else {
+            guard let transaction = safariRequest.transaction, let chain = safariRequest.chain else {
                 return // TODO: respond with error
             }
             let peer = WCPeerMeta(name: "Unknown", url: "") // TODO: pass valid peer meta
