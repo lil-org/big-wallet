@@ -328,9 +328,9 @@ class Agent: NSObject {
             let accountsList = instantiate(AccountsListViewController.self)
             
             accountsList.onSelectedWallet = { chainId, wallet in
-                // TODO: pass results
-                
-                ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, results: [wallet.ethereumAddress ?? "weird address"]))
+                // TODO: pass chain info
+                let response = ResponseToExtension(name: safariRequest.name, results: [wallet.ethereumAddress ?? "weird address"], chainId: "", rpcURL: "")
+                ExtensionBridge.respond(id: safariRequest.id, response: response)
                 Window.closeAllAndActivateBrowser()
             }
             
