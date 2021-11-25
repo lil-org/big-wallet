@@ -31,6 +31,7 @@ class ApproveTransactionViewController: NSViewController {
     private var transaction: Transaction!
     private var chain: EthereumChain!
     private var completion: ((Transaction?) -> Void)!
+    private var didCallCompletion = false
     private var didEnableSpeedConfiguration = false
     private var peerMeta: WCPeerMeta?
     
@@ -59,6 +60,18 @@ class ApproveTransactionViewController: NSViewController {
                     }
                 }
             }
+        }
+    }
+    
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        view.window?.delegate = self
+    }
+    
+    private func callCompletion(result: Transaction?) {
+        if !didCallCompletion {
+            didCallCompletion = true
+            completion(result)
         }
     }
     
@@ -109,11 +122,19 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     @IBAction func actionButtonTapped(_ sender: Any) {
-        completion(transaction)
+        callCompletion(result: transaction)
     }
     
     @IBAction func cancelButtonTapped(_ sender: NSButton) {
-        completion(nil)
+        callCompletion(result: nil)
+    }
+    
+}
+
+extension ApproveTransactionViewController: NSWindowDelegate {
+    
+    func windowWillClose(_ notification: Notification) {
+        callCompletion(result: nil)
     }
     
 }

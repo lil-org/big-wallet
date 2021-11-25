@@ -19,6 +19,7 @@ class ApproveViewController: NSViewController {
     private var approveTitle: String!
     private var meta: String!
     private var completion: ((Bool) -> Void)!
+    private var didCallCompletion = false
     private var peerMeta: WCPeerMeta?
     
     static func with(subject: ApprovalSubject, meta: String, peerMeta: WCPeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
@@ -51,16 +52,36 @@ class ApproveViewController: NSViewController {
         }
     }
     
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        view.window?.delegate = self
+    }
+    
     private func updateDisplayedMeta() {
         metaTextView.string = meta
     }
+    
+    private func callCompletion(result: Bool) {
+        if !didCallCompletion {
+            didCallCompletion = true
+            completion(result)
+        }
+    }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
-        completion(true)
+        callCompletion(result: true)
     }
     
     @IBAction func cancelButtonTapped(_ sender: NSButton) {
-        completion(false)
+        callCompletion(result: false)
+    }
+    
+}
+
+extension ApproveViewController: NSWindowDelegate {
+    
+    func windowWillClose(_ notification: Notification) {
+        callCompletion(result: false)
     }
     
 }
