@@ -82,7 +82,7 @@ enum EthereumChain: Int {
     
     var nodeURLString: String {
         switch self {
-        case .ethereum: return "https://eth-mainnet.alchemyapi.io/v2/" + Secrets.alchemy
+        case .ethereum: return "https://mainnet.infura.io/v3/3f99b6096fda424bbb26e17866dcddfc"
         case .arbitrum: return "https://arb-mainnet.g.alchemy.com/v2/" + Secrets.alchemy
         case .optimism: return "https://mainnet.optimism.io"
         case .polygon: return "https://polygon-mainnet.g.alchemy.com/v2/" + Secrets.alchemy
@@ -93,7 +93,7 @@ enum EthereumChain: Int {
         case .arbitrumKovan: return "https://kovan5.arbitrum.io/rpc"
         case .optimisticKovan: return "https://kovan.optimism.io"
         case .polygonMumbai: return "https://polygon-mumbai.g.alchemy.com/v2/" + Secrets.alchemy
-        case .ethereumRopsten: return "https://eth-ropsten.alchemyapi.io/v2/" + Secrets.alchemy
+        case .ethereumRopsten: return "https://ropsten.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161"
         case .ethereumKovan: return "https://eth-kovan.alchemyapi.io/v2/" + Secrets.alchemy
         case .ethereumRinkeby: return "https://eth-rinkeby.alchemyapi.io/v2/" + Secrets.alchemy
         case .ethereumGoerli: return "https://eth-goerli.alchemyapi.io/v2/" + Secrets.alchemy

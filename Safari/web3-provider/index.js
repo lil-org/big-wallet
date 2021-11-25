@@ -26,19 +26,30 @@ class TokenaryWeb3Provider extends EventEmitter {
         const lowerAddress = (address || "").toLowerCase();
         this.address = lowerAddress;
         this.ready = !!address;
-        for (var i = 0; i < window.frames.length; i++) {
-            const frame = window.frames[i];
-            if (frame.ethereum && frame.ethereum.isTokenary) {
-                frame.ethereum.address = lowerAddress;
-                frame.ethereum.ready = !!address;
-            }
+    }
+    
+    updateAccount(eventName, addresses, chainId, rpcUrl) {
+        window.ethereum.setAddress(addresses[0]);
+        
+        if (eventName == "switchAccount") {
+            window.ethereum.emit("accountsChanged", addresses);
+        }
+        
+        if (window.ethereum.rpc.rpcUrl != rpcUrl) {
+            this.rpc = new RPCServer(rpcUrl);
+        }
+        
+        if (window.ethereum.chainId != chainId) {
+            window.ethereum.chainId = chainId;
+            window.ethereum.emit("chainChanged", chainId);
+            window.ethereum.emit("networkChanged", window.ethereum.net_version());
         }
     }
     
     setConfig(config) {
-        this.setAddress(config.address);
         this.chainId = config.chainId;
         this.rpc = new RPCServer(config.rpcUrl);
+        this.setAddress("");
     }
     
     request(payload) {
@@ -61,9 +72,7 @@ class TokenaryWeb3Provider extends EventEmitter {
      * @deprecated Use request({method: "eth_requestAccounts"}) instead.
      */
     enable() {
-        console.log(
-                    'enable() is deprecated, please use window.ethereum.request({method: "eth_requestAccounts"}) instead.'
-                    );
+        console.log('enable() is deprecated, please use window.ethereum.request({method: "eth_requestAccounts"}) instead.');
         if (!window.ethereum.address) { // avoid double accounts request in uniswap
             return this.request({ method: "eth_requestAccounts", params: [] });
         }
@@ -88,10 +97,7 @@ class TokenaryWeb3Provider extends EventEmitter {
                 response.result = this.eth_chainId();
                 break;
             default:
-                throw new ProviderRpcError(
-                                           4200,
-                                           `Tokenary does not support calling ${payload.method} synchronously without a callback. Please provide a callback parameter to call ${payload.method} asynchronously.`
-                                           );
+                throw new ProviderRpcError(4200, `Tokenary does not support calling ${payload.method} synchronously without a callback. Please provide a callback parameter to call ${payload.method} asynchronously.`);
         }
         return response;
     }
@@ -100,9 +106,7 @@ class TokenaryWeb3Provider extends EventEmitter {
      * @deprecated Use request() method instead.
      */
     sendAsync(payload, callback) {
-        console.log(
-                    "sendAsync(data, callback) is deprecated, please use window.ethereum.request(data) instead."
-                    );
+        console.log("sendAsync(data, callback) is deprecated, please use window.ethereum.request(data) instead.");
         // this points to window in methods like web3.eth.getAccounts()
         var that = this;
         if (!(this instanceof TokenaryWeb3Provider)) {
@@ -171,10 +175,7 @@ class TokenaryWeb3Provider extends EventEmitter {
                 case "eth_newPendingTransactionFilter":
                 case "eth_uninstallFilter":
                 case "eth_subscribe":
-                    throw new ProviderRpcError(
-                                               4200,
-                                               `Tokenary does not support calling ${payload.method}. Please use your own solution`
-                                               );
+                    throw new ProviderRpcError(4200, `Tokenary does not support calling ${payload.method}. Please use your own solution`);
                 default:
                     this.callbacks.delete(payload.id);
                     this.wrapResults.delete(payload.id);
@@ -333,16 +334,10 @@ class TokenaryWeb3Provider extends EventEmitter {
     }
 }
 
-window.tokenary = {
-Provider: TokenaryWeb3Provider,
-postMessage: null,
-};
+window.tokenary = {Provider: TokenaryWeb3Provider, postMessage: null};
 
 (function() {
-    var config = {
-    chainId: "0x1",
-    rpcUrl: "https://mainnet.infura.io/v3/3f99b6096fda424bbb26e17866dcddfc"
-    };
+    var config = {chainId: "0x1", rpcUrl: "https://mainnet.infura.io/v3/3f99b6096fda424bbb26e17866dcddfc"};
     window.ethereum = new tokenary.Provider(config);
     
     const handler = {
@@ -361,18 +356,14 @@ window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "from-content-script") {
         const response = event.data.response;
         
-        if (response.name == "switchAccount") {
-            window.ethereum.emit("accountsChanged", response.results);
-            window.ethereum.setAddress(response.results[0]); // TODO: test with empty response array
-            return;
-        }
-        
         if ("result" in response) {
             window.ethereum.sendResponse(event.data.id, response.result);
         } else if ("results" in response) {
-            window.ethereum.sendResponse(event.data.id, response.results);
-            if (response.name == "requestAccounts") {
-                window.ethereum.setAddress(response.results[0]);
+            if (response.name != "switchAccount") {
+                window.ethereum.sendResponse(event.data.id, response.results);
+            }
+            if (response.name == "requestAccounts" || response.name == "switchAccount") {
+                window.ethereum.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
             }
         } else if ("error" in response) {
             window.ethereum.sendError(event.data.id, response.error);
