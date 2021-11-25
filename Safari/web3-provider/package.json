@@ -4,7 +4,7 @@
     "description": "Tokenary Web3 Provider",
     "main": "index.js",
     "scripts": {
-        "build": "rm ../Resources/inpage.js && parcel build index.js --no-source-maps -o inpage.js -d ../Resources",
+        "build": "rm ../Resources/inpage.js || true && parcel build index.js --no-source-maps -o inpage.js -d ../Resources",
         "lint": "eslint . --fix"
     },
     "repository": {
