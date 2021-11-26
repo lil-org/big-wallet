@@ -141,7 +141,6 @@ class TokenaryWeb3Provider extends EventEmitter {
                 }
             });
             this.wrapResults.set(payload.id, wrapResult);
-            
             switch (payload.method) {
                 case "eth_accounts":
                     return this.sendResponse(payload.id, this.eth_accounts());
@@ -265,7 +264,9 @@ class TokenaryWeb3Provider extends EventEmitter {
     }
     
     wallet_switchEthereumChain(payload) {
-        this.postMessage("switchEthereumChain", payload.id, payload.params[0]);
+        if (this.chainId != payload.params[0].chainId) {
+            this.postMessage("switchEthereumChain", payload.id, payload.params[0]);
+        }
     }
     
     wallet_addEthereumChain(payload) {
