@@ -75,6 +75,8 @@ class TokenaryWeb3Provider extends EventEmitter {
         console.log('enable() is deprecated, please use window.ethereum.request({method: "eth_requestAccounts"}) instead.');
         if (!window.ethereum.address) { // avoid double accounts request in uniswap
             return this.request({ method: "eth_requestAccounts", params: [] });
+        } else {
+            return this.request({ method: "eth_accounts", params: [] });
         }
     }
     
