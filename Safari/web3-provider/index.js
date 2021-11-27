@@ -20,12 +20,30 @@ class TokenaryWeb3Provider extends EventEmitter {
         this.isMetaMask = true;
         this.isTokenary = true;
         this.emitConnect(config.chainId);
+        
+        const originalOn = this.on;
+        this.on = (...args) => {
+            if (args[0] == "accountsChanged") {
+                const response = window.ethereum.responseToRepeat;
+                if (response != null) {
+                    if (response.results[0].toLowerCase() == window.ethereum.address) {
+                        window.ethereum.updateAccountWithDelay(response.name, response.results, response.chainId, response.rpcURL);
+                    }
+                    window.ethereum.responseToRepeat = null;
+                }
+            }
+            return originalOn.apply(this, args);
+        };
     }
     
     setAddress(address) {
         const lowerAddress = (address || "").toLowerCase();
         this.address = lowerAddress;
         this.ready = !!address;
+    }
+    
+    updateAccountWithDelay(eventName, addresses, chainId, rpcUrl) {
+        setTimeout( function() { window.ethereum.updateAccount(eventName, addresses, chainId, rpcUrl); }, 1);
     }
     
     updateAccount(eventName, addresses, chainId, rpcUrl) {
@@ -368,6 +386,9 @@ window.addEventListener("message", function(event) {
             }
             if (response.name == "requestAccounts" || response.name == "switchAccount") {
                 window.ethereum.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
+            }
+            if ("repeatOnSubscription" in response) {
+                window.ethereum.responseToRepeat = response;
             }
         } else if ("error" in response) {
             window.ethereum.sendError(event.data.id, response.error);
