@@ -310,6 +310,13 @@ class Agent: NSObject {
     // content script should know it since it injets it
     private func processSafariRequest(_ safariRequest: SafariRequest) {
         switch safariRequest.method {
+        case .switchEthereumChain:
+            if let chain = safariRequest.switchToChain {
+                // TODO: respond with new chain rpc
+            } else {
+                // TODO: respond with error
+            }
+            Window.closeAllAndActivateBrowser()
         case .signPersonalMessage:
             guard let data = safariRequest.message else {
                 return // TODO: respond with error

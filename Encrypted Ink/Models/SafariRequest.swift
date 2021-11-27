@@ -13,6 +13,7 @@ struct SafariRequest {
         case requestAccounts
         case watchAsset
         case addEthereumChain
+        case switchEthereumChain
         case switchAccount
     }
     
@@ -97,6 +98,16 @@ struct SafariRequest {
            let name = parameters?["chainName"] as? String,
            let urls = parameters?["rpcUrls"] as? [String] {
             return (chainId: chainId, name: name, rpcURLs: urls)
+        } else {
+            return nil
+        }
+    }
+    
+    var switchToChain: EthereumChain? {
+        if let chainId = (parameters?["chainId"] as? String)?.dropFirst(2),
+           let networkId = Int(chainId, radix: 16),
+           let chain = EthereumChain(rawValue: networkId) {
+            return chain
         } else {
             return nil
         }
