@@ -76,11 +76,32 @@ function blockedDomainCheck() {
 
 if (shouldInjectProvider()) {
     injectScript();
+    getLatestAccount();
+}
+
+function getLatestAccount() {
+    const storageItem = browser.storage.local.get(window.location.host);
+    storageItem.then((storage) => {
+        const latest = storage[window.location.host];
+        if (latest.results.length > 0 && latest.rpcURL.length > 0) {
+            const response = {results: latest.results, chainId: latest.chainId, name: "switchAccount", rpcURL: latest.rpcURL, repeatOnSubscription: true};
+            const id = new Date().getTime() + Math.floor(Math.random() * 1000);
+            window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
+        }
+    });
+}
+
+function storeAccountIfNeeded(request) {
+    if (window.location.host.length > 0 && (request.name == "requestAccounts" || request.name == "switchAccount")) {
+        const latest = {results: request.results, chainId: request.chainId, rpcURL: request.rpcURL};
+        browser.storage.local.set( {[window.location.host]: latest});
+    }
 }
 
 function processInpageMessage(message) {
     browser.runtime.sendMessage({ subject: "process-inpage-message", message: message }).then((response) => {
         window.postMessage({direction: "from-content-script", response: response, id: message.id}, "*");
+        storeAccountIfNeeded(response);
     });
 }
 
@@ -88,6 +109,7 @@ function processInpageMessage(message) {
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const id = new Date().getTime() + Math.floor(Math.random() * 1000);
     window.postMessage({direction: "from-content-script", response: request, id: id}, "*");
+    storeAccountIfNeeded(request);
 });
 
 // Receive from inpage
