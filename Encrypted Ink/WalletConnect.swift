@@ -130,7 +130,7 @@ class WalletConnect {
             return
         }
         
-        let peer = getPeerOfInteractor(interactor)
+        let peer = PeerMeta(wcPeerMeta: getPeerOfInteractor(interactor))
         let transaction = Transaction(from: wct.from, to: to, nonce: wct.nonce, gasPrice: wct.gasPrice, gas: wct.gas, value: wct.value, data: wct.data)
         Agent.shared.showApprove(transaction: transaction, chain: chain, peerMeta: peer) { [weak self, weak interactor] transaction in
             if let transaction = transaction {
@@ -158,7 +158,7 @@ class WalletConnect {
             }
         }
 
-        let peer = getPeerOfInteractor(interactor)
+        let peer = PeerMeta(wcPeerMeta: getPeerOfInteractor(interactor))
         Agent.shared.showApprove(subject: approvalSubject, meta: message ?? "", peerMeta: peer) { [weak self, weak interactor] approved in
             if approved {
                 self?.sign(id: id, payload: payload, walletId: walletId, interactor: interactor)

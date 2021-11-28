@@ -17,4 +17,9 @@ struct PeerMeta {
         self.iconURLString = wcPeerMeta?.icons.first
     }
     
+    init(title: String?, iconURLString: String?) {
+        self.title = title
+        self.iconURLString = iconURLString
+    }
+    
 }

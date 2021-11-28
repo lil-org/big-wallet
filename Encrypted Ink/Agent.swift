@@ -88,9 +88,9 @@ class Agent: NSObject {
         }
     }
     
-    func showApprove(transaction: Transaction, chain: EthereumChain, peerMeta: WCPeerMeta?, completion: @escaping (Transaction?) -> Void) {
+    func showApprove(transaction: Transaction, chain: EthereumChain, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) {
         let windowController = Window.showNew()
-        let approveViewController = ApproveTransactionViewController.with(transaction: transaction, chain: chain, peerMeta: PeerMeta(wcPeerMeta: peerMeta)) { [weak self] transaction in
+        let approveViewController = ApproveTransactionViewController.with(transaction: transaction, chain: chain, peerMeta: peerMeta) { [weak self] transaction in
             if transaction != nil {
                 self?.askAuthentication(on: windowController.window, onStart: false, reason: .sendTransaction) { success in
                     completion(success ? transaction : nil)
@@ -104,9 +104,9 @@ class Agent: NSObject {
         windowController.contentViewController = approveViewController
     }
     
-    func showApprove(subject: ApprovalSubject, meta: String, peerMeta: WCPeerMeta?, completion: @escaping (Bool) -> Void) {
+    func showApprove(subject: ApprovalSubject, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) {
         let windowController = Window.showNew()
-        let approveViewController = ApproveViewController.with(subject: subject, meta: meta, peerMeta: PeerMeta(wcPeerMeta: peerMeta)) { [weak self] result in
+        let approveViewController = ApproveViewController.with(subject: subject, meta: meta, peerMeta: peerMeta) { [weak self] result in
             if result {
                 self?.askAuthentication(on: windowController.window, onStart: false, reason: subject.asAuthenticationReason) { success in
                     completion(success)
@@ -309,6 +309,8 @@ class Agent: NSObject {
     // TODO: should receive account address from content script here.
     // content script should know it since it injets it
     private func processSafariRequest(_ safariRequest: SafariRequest) {
+        // TODO: pass favicon url
+        let peerMeta = PeerMeta(title: safariRequest.host, iconURLString: nil)
         switch safariRequest.method {
         case .switchEthereumChain:
             if let chain = safariRequest.switchToChain {
@@ -322,7 +324,7 @@ class Agent: NSObject {
                 return // TODO: respond with error
             }
             // TODO: display meta and peerMeta
-            showApprove(subject: .signPersonalMessage, meta: text, peerMeta: nil) { [weak self] approved in
+            showApprove(subject: .signPersonalMessage, meta: text, peerMeta: peerMeta) { [weak self] approved in
                 if approved {
                     self?.signPersonalMessage(address: safariRequest.address, data: data, request: safariRequest)
                     // TODO: sign and respond
@@ -355,7 +357,7 @@ class Agent: NSObject {
             }
             
             // TODO: display meta and peerMeta
-            showApprove(subject: .signMessage, meta: data.hexString, peerMeta: nil) { [weak self] approved in
+            showApprove(subject: .signMessage, meta: data.hexString, peerMeta: peerMeta) { [weak self] approved in
                 if approved {
                     self?.signMessage(address: safariRequest.address, data: data, request: safariRequest)
                     // TODO: sign and respond
@@ -371,7 +373,7 @@ class Agent: NSObject {
             print("yoyoyo raw:", raw)
             
             // TODO: display meta and peerMeta
-            showApprove(subject: .signTypedData, meta: raw, peerMeta: nil) { [weak self] approved in
+            showApprove(subject: .signTypedData, meta: raw, peerMeta: peerMeta) { [weak self] approved in
                 if approved {
                     self?.signTypedData(address: safariRequest.address, raw: raw, request: safariRequest)
                     // TODO: sign and respond
@@ -383,8 +385,7 @@ class Agent: NSObject {
             guard let transaction = safariRequest.transaction, let chain = safariRequest.chain else {
                 return // TODO: respond with error
             }
-            let peer = WCPeerMeta(name: "Unknown", url: "") // TODO: pass valid peer meta
-            showApprove(transaction: transaction, chain: chain, peerMeta: peer) { [weak self] transaction in
+            showApprove(transaction: transaction, chain: chain, peerMeta: peerMeta) { [weak self] transaction in
                 if let transaction = transaction {
                     self?.sendTransaction(transaction, address: safariRequest.address, chain: chain, request: safariRequest)
                     // TODO: show some kind of spinner
