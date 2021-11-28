@@ -21,7 +21,6 @@ class GasService {
     
     static let shared = GasService()
     
-    private var webSocketTask: URLSessionWebSocketTask?
     private let jsonDecoder = JSONDecoder()
     private let urlSession = URLSession(configuration: .default)
     
@@ -30,29 +29,22 @@ class GasService {
     var currentInfo: Info?
     
     func start() {
-        let url = URL(string: "wss://www.gasnow.org/ws/gasprice")!
-        webSocketTask?.cancel()
-        webSocketTask = urlSession.webSocketTask(with: url)
-        webSocketTask?.resume()
         getMessage()
     }
     
     private func getMessage() {
-        webSocketTask?.receive { [weak self] result in
-            if case let .success(message) = result,
-               case let .string(text) = message,
-               let data = text.data(using: .utf8),
-               let info = try? self?.jsonDecoder.decode(Message.self, from: data).data {
+        let url = URL(string: "https://etherchain.org/api/gasnow")!
+        let dataTask = urlSession.dataTask(with: url) { [weak self] (data, _, _) in
+            if let data = data, let info = try? self?.jsonDecoder.decode(Message.self, from: data).data {
                 DispatchQueue.main.async {
                     self?.currentInfo = info
                 }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(30)) {
                 self?.getMessage()
-            } else {
-                DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(8)) {
-                    self?.start()
-                }
             }
         }
+        dataTask.resume()
     }
     
 }
