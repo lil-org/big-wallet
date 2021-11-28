@@ -318,12 +318,11 @@ class Agent: NSObject {
             }
             Window.closeAllAndActivateBrowser()
         case .signPersonalMessage:
-            guard let data = safariRequest.message else {
+            guard let data = safariRequest.message, let text = String(data: data, encoding: .utf8) else {
                 return // TODO: respond with error
             }
-            
             // TODO: display meta and peerMeta
-            showApprove(subject: .signPersonalMessage, meta: "", peerMeta: nil) { [weak self] approved in
+            showApprove(subject: .signPersonalMessage, meta: text, peerMeta: nil) { [weak self] approved in
                 if approved {
                     self?.signPersonalMessage(address: safariRequest.address, data: data, request: safariRequest)
                     // TODO: sign and respond
@@ -356,7 +355,7 @@ class Agent: NSObject {
             }
             
             // TODO: display meta and peerMeta
-            showApprove(subject: .signMessage, meta: "", peerMeta: nil) { [weak self] approved in
+            showApprove(subject: .signMessage, meta: data.hexString, peerMeta: nil) { [weak self] approved in
                 if approved {
                     self?.signMessage(address: safariRequest.address, data: data, request: safariRequest)
                     // TODO: sign and respond
@@ -372,7 +371,7 @@ class Agent: NSObject {
             print("yoyoyo raw:", raw)
             
             // TODO: display meta and peerMeta
-            showApprove(subject: .signTypedData, meta: "", peerMeta: nil) { [weak self] approved in
+            showApprove(subject: .signTypedData, meta: raw, peerMeta: nil) { [weak self] approved in
                 if approved {
                     self?.signTypedData(address: safariRequest.address, raw: raw, request: safariRequest)
                     // TODO: sign and respond
