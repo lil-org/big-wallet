@@ -115,6 +115,17 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // Receive from inpage
 window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "from-page-script") {
+        event.data.message.favicon = getFavicon();
         processInpageMessage(event.data.message);
     }
 });
+
+var getFavicon = function() {
+    var nodeList = document.getElementsByTagName("link");
+    for (var i = 0; i < nodeList.length; i++) {
+        if ((nodeList[i].getAttribute("rel") == "icon") || (nodeList[i].getAttribute("rel") == "shortcut icon")) {
+            return nodeList[i].getAttribute("href");
+        }
+    }
+    return "";
+}

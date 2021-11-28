@@ -310,7 +310,7 @@ class Agent: NSObject {
     // content script should know it since it injets it
     private func processSafariRequest(_ safariRequest: SafariRequest) {
         // TODO: pass favicon url
-        let peerMeta = PeerMeta(title: safariRequest.host, iconURLString: nil)
+        let peerMeta = PeerMeta(title: safariRequest.host, iconURLString: safariRequest.iconURLString)
         switch safariRequest.method {
         case .switchEthereumChain:
             if let chain = safariRequest.switchToChain {

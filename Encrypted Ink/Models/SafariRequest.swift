@@ -23,6 +23,18 @@ struct SafariRequest {
     let id: Int
     let address: String
     let host: String?
+    private let favicon: String?
+    
+    var iconURLString: String? {
+        if let host = host, let favicon = favicon {
+            if favicon.first == "/" {
+                return "https://" + host + favicon
+            } else if favicon.first == "." {
+                return "https://" + host + favicon.dropFirst()
+            }
+        }
+        return nil
+    }
     
     init?(query: String) {
         guard let parametersString = query.removingPercentEncoding,
@@ -41,6 +53,7 @@ struct SafariRequest {
         self.id = id
         self.address = address
         self.host = json["host"] as? String
+        self.favicon = json["favicon"] as? String
     }
     
     private var parameters: [String: Any]? {
