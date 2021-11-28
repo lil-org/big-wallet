@@ -22,6 +22,7 @@ struct SafariRequest {
     let method: Method
     let id: Int
     let address: String
+    let host: String?
     
     init?(query: String) {
         guard let parametersString = query.removingPercentEncoding,
@@ -39,6 +40,7 @@ struct SafariRequest {
         self.method = method
         self.id = id
         self.address = address
+        self.host = json["host"] as? String
     }
     
     private var parameters: [String: Any]? {
