@@ -19,6 +19,7 @@
 		2C09CBAB273979C1009AD39B /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAA273979C1009AD39B /* background.js */; };
 		2C09CBAD273979C1009AD39B /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAC273979C1009AD39B /* content.js */; };
 		2C09CBB9273979C1009AD39B /* Safari.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2C09CB9F273979C1009AD39B /* Safari.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		2C0EE4022753874D00AC2AFA /* PeerMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0EE4012753874D00AC2AFA /* PeerMeta.swift */; };
 		2C1995402674C4B900A8E370 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C19953F2674C4B900A8E370 /* AppDelegate.swift */; };
 		2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995412674C4B900A8E370 /* ImportViewController.swift */; };
 		2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995432674C4BA00A8E370 /* Assets.xcassets */; };
@@ -113,6 +114,7 @@
 		2C09CBAC273979C1009AD39B /* content.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = content.js; sourceTree = "<group>"; };
 		2C09CBB4273979C1009AD39B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C09CBB5273979C1009AD39B /* Safari.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Safari.entitlements; sourceTree = "<group>"; };
+		2C0EE4012753874D00AC2AFA /* PeerMeta.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerMeta.swift; sourceTree = "<group>"; };
 		2C19953C2674C4B900A8E370 /* Encrypted Ink.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Encrypted Ink.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C19953F2674C4B900A8E370 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		2C1995412674C4B900A8E370 /* ImportViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportViewController.swift; sourceTree = "<group>"; };
@@ -220,6 +222,7 @@
 			children = (
 				0DC850E626B73A5900809E82 /* AuthenticationReason.swift */,
 				0D059AD126C2796200EE3023 /* ApprovalSubject.swift */,
+				2C0EE4012753874D00AC2AFA /* PeerMeta.swift */,
 				2C773F5B2742D483007B04E7 /* SafariRequest.swift */,
 			);
 			path = Models;
@@ -718,6 +721,7 @@
 				0DC850E726B73A5900809E82 /* AuthenticationReason.swift in Sources */,
 				2CAA412526C7CD93009F3535 /* ReviewRequester.swift in Sources */,
 				2CD0669126B5537B00728C20 /* InkWallet.swift in Sources */,
+				2C0EE4022753874D00AC2AFA /* PeerMeta.swift in Sources */,
 				2C8A09D726751A0C00993638 /* WalletConnect.swift in Sources */,
 				2C9F0B6826BDCB2E008FA3D6 /* EthereumChain.swift in Sources */,
 				2C03D1D2269B407900EF10EA /* NetworkMonitor.swift in Sources */,
