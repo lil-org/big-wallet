@@ -367,10 +367,8 @@ class Agent: NSObject {
             }
         case .signTypedMessage:
             guard let raw = safariRequest.raw else {
-                print("yoyoyo no raw")
                 return // TODO: respond with error
             }
-            print("yoyoyo raw:", raw)
             
             // TODO: display meta and peerMeta
             showApprove(subject: .signTypedData, meta: raw, peerMeta: peerMeta) { [weak self] approved in
