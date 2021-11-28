@@ -403,9 +403,8 @@ class Agent: NSObject {
                 ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, error: "Failed to verify"))
             }
         default:
-            // TODO: implement
-            // at least bring focus back to browser
-            break
+            // TODO: implement all cases
+            Window.closeAllAndActivateBrowser()
         }
     }
     
