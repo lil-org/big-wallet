@@ -92,7 +92,7 @@ function getLatestAccount() {
 }
 
 function storeAccountIfNeeded(request) {
-    if (window.location.host.length > 0 && (request.name == "requestAccounts" || request.name == "switchAccount")) {
+    if (window.location.host.length > 0 && (request.name == "requestAccounts" || request.name == "switchAccount" || request.name == "switchEthereumChain")) {
         const latest = {results: request.results, chainId: request.chainId, rpcURL: request.rpcURL};
         browser.storage.local.set( {[window.location.host]: latest});
     }

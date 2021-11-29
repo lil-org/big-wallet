@@ -314,9 +314,13 @@ class Agent: NSObject {
         switch safariRequest.method {
         case .switchEthereumChain:
             if let chain = safariRequest.switchToChain {
-                // TODO: respond with new chain rpc
+                let response = ResponseToExtension(name: safariRequest.name,
+                                                   results: [safariRequest.address],
+                                                   chainId: chain.hexStringId,
+                                                   rpcURL: chain.nodeURLString)
+                ExtensionBridge.respond(id: safariRequest.id, response: response)
             } else {
-                // TODO: respond with error
+                ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, error: "Failed to switch chain"))
             }
             Window.closeAllAndActivateBrowser(force: .safari)
         case .signPersonalMessage:

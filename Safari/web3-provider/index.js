@@ -388,10 +388,15 @@ window.addEventListener("message", function(event) {
         if ("result" in response) {
             window.ethereum.sendResponse(event.data.id, response.result);
         } else if ("results" in response) {
+            if (response.name == "switchEthereumChain") {
+                // Calling it before sending response matters for some dapps
+                window.ethereum.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
+            }
             if (response.name != "switchAccount") {
                 window.ethereum.sendResponse(event.data.id, response.results);
             }
             if (response.name == "requestAccounts" || response.name == "switchAccount") {
+                // Calling it after sending response matters for some dapps
                 window.ethereum.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
             }
             if ("repeatOnSubscription" in response) {
