@@ -19,7 +19,7 @@ struct Strings {
     static let quit = "Quit"
     static let quitEncryptedInk = "Quit Encrypted Ink?"
     static let youWontBeAbleToSignRequests = "You won't be able to sign requests."
-    static let howToWalletConnect = "How to WalletConnect?"
+    static let enableSafariExtension = "Enable Safari extension…"
     static let dropUsALine = "Drop us a line…"
     static let viewOnGithub = "View on GitHub…"
     static let viewOnTwitter = "View on Twitter…"

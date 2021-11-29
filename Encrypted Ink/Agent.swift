@@ -2,6 +2,7 @@
 
 import Cocoa
 import WalletConnect
+import SafariServices
 import LocalAuthentication
 
 class Agent: NSObject {
@@ -134,7 +135,7 @@ class Agent: NSObject {
         let menu = NSMenu(title: Strings.encryptedInk)
         
         let showItem = NSMenuItem(title: Strings.showEncryptedInk, action: #selector(didSelectShowMenuItem), keyEquivalent: "")
-        let howToItem = NSMenuItem(title: Strings.howToWalletConnect, action: #selector(showInstructionsAlert), keyEquivalent: "")
+        let safariItem = NSMenuItem(title: Strings.enableSafariExtension, action: #selector(enableSafariExtension), keyEquivalent: "")
         let mailItem = NSMenuItem(title: Strings.dropUsALine, action: #selector(didSelectMailMenuItem), keyEquivalent: "")
         let githubItem = NSMenuItem(title: Strings.viewOnGithub, action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
         let twitterItem = NSMenuItem(title: Strings.viewOnTwitter, action: #selector(didSelectTwitterMenuItem), keyEquivalent: "")
@@ -142,7 +143,7 @@ class Agent: NSObject {
         showItem.attributedTitle = NSAttributedString(string: "👀 " + Strings.showEncryptedInk, attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
         
         showItem.target = self
-        howToItem.target = self
+        safariItem.target = self
         githubItem.target = self
         twitterItem.target = self
         mailItem.target = self
@@ -151,7 +152,7 @@ class Agent: NSObject {
         menu.delegate = self
         menu.addItem(showItem)
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(howToItem)
+        menu.addItem(safariItem)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(twitterItem)
         menu.addItem(githubItem)
@@ -189,9 +190,8 @@ class Agent: NSObject {
         }
     }
     
-    @objc private func showInstructionsAlert() {
-        Window.activateWindow(nil)
-        Alert.showWalletConnectInstructions()
+    @objc private func enableSafariExtension() {
+        SFSafariApplication.showPreferencesForExtension(withIdentifier: "ink.encrypted.macos.Safari")
     }
     
     @objc private func didSelectMailMenuItem() {

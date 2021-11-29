@@ -85,8 +85,6 @@ class AccountsListViewController: NSViewController {
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: Strings.showAccountKey, action: #selector(didClickExportAccount(_:)), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: Strings.removeAccount, action: #selector(didClickRemoveAccount(_:)), keyEquivalent: ""))
-        menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: Strings.howToWalletConnect, action: #selector(showInstructionsAlert), keyEquivalent: ""))
         tableView.menu = menu
     }
     
@@ -278,10 +276,6 @@ class AccountsListViewController: NSViewController {
         if alert.runModal() != .alertFirstButtonReturn {
             NSPasteboard.general.clearAndSetString(secret)
         }
-    }
-    
-    @objc private func showInstructionsAlert() {
-        Alert.showWalletConnectInstructions()
     }
     
     private func removeAccountAtIndex(_ index: Int) {
