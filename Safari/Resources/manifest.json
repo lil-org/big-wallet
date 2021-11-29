@@ -4,7 +4,7 @@
     
     "name": "__MSG_extension_name__",
     "description": "__MSG_extension_description__",
-    "version": "1.0",
+    "version": "1.0.12",
     
     "icons": {
         "48": "images/icon-48.png",
@@ -23,9 +23,7 @@
         "matches": [ "file://*/*", "http://*/*", "https://*/*" ],
         "run_at": "document_start",
         "all_frames": true,
-        "js": [
-            "content.js"
-        ],
+        "js": [ "content.js" ]
     }],
     
     "browser_action": {
@@ -40,9 +38,6 @@
     "permissions": [
         "nativeMessaging",
         "storage",
-        "unlimitedStorage",
-        "clipboardWrite",
-        "http://localhost:8545/",
         "https://*.infura.io/",
         "https://*.infura.io/*",
         "https://*.infura.io/*/*",
@@ -51,10 +46,8 @@
         "https://*.alchemyapi.io/*/*",
         "https://wallet.gridplus.io/*",
         "activeTab",
-        "webRequest",
-        "*://*.eth/",
-        "notifications"
+        "webRequest"
     ],
     
-    "web_accessible_resources": [ "inpage.js" ],
+    "web_accessible_resources": [ "inpage.js" ]
 }
