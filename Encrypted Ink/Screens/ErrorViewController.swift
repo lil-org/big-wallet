@@ -21,7 +21,7 @@ class ErrorViewController: NSViewController {
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
-        Window.closeAllAndActivateBrowser()
+        Window.closeAllAndActivateBrowser(force: nil)
     }
     
 }

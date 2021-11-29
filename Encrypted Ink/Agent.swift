@@ -88,32 +88,32 @@ class Agent: NSObject {
         }
     }
     
-    func showApprove(transaction: Transaction, chain: EthereumChain, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) {
+    func showApprove(transaction: Transaction, chain: EthereumChain, peerMeta: PeerMeta?, browser: Browser?, completion: @escaping (Transaction?) -> Void) {
         let windowController = Window.showNew()
         let approveViewController = ApproveTransactionViewController.with(transaction: transaction, chain: chain, peerMeta: peerMeta) { [weak self] transaction in
             if transaction != nil {
                 self?.askAuthentication(on: windowController.window, onStart: false, reason: .sendTransaction) { success in
                     completion(success ? transaction : nil)
-                    Window.closeAllAndActivateBrowser()
+                    Window.closeAllAndActivateBrowser(force: browser)
                 }
             } else {
-                Window.closeAllAndActivateBrowser()
+                Window.closeAllAndActivateBrowser(force: browser)
                 completion(nil)
             }
         }
         windowController.contentViewController = approveViewController
     }
     
-    func showApprove(subject: ApprovalSubject, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) {
+    func showApprove(subject: ApprovalSubject, meta: String, peerMeta: PeerMeta?, browser: Browser?, completion: @escaping (Bool) -> Void) {
         let windowController = Window.showNew()
         let approveViewController = ApproveViewController.with(subject: subject, meta: meta, peerMeta: peerMeta) { [weak self] result in
             if result {
                 self?.askAuthentication(on: windowController.window, onStart: false, reason: subject.asAuthenticationReason) { success in
                     completion(success)
-                    Window.closeAllAndActivateBrowser()
+                    Window.closeAllAndActivateBrowser(force: browser)
                 }
             } else {
-                Window.closeAllAndActivateBrowser()
+                Window.closeAllAndActivateBrowser(force: browser)
                 completion(result)
             }
         }
@@ -301,7 +301,7 @@ class Agent: NSObject {
         
         walletConnect.connect(session: session, chainId: chainId, walletId: wallet.id) { [weak window] _ in
             if window?.isVisible == true {
-                Window.closeAllAndActivateBrowser()
+                Window.closeAllAndActivateBrowser(force: nil)
             }
         }
     }
@@ -318,12 +318,12 @@ class Agent: NSObject {
             } else {
                 // TODO: respond with error
             }
-            Window.closeAllAndActivateBrowser()
+            Window.closeAllAndActivateBrowser(force: .safari)
         case .signPersonalMessage:
             guard let data = safariRequest.message else { return }// TODO: respond with error
             let text = String(data: data, encoding: .utf8) ?? data.hexString
             // TODO: display meta and peerMeta
-            showApprove(subject: .signPersonalMessage, meta: text, peerMeta: peerMeta) { [weak self] approved in
+            showApprove(subject: .signPersonalMessage, meta: text, peerMeta: peerMeta, browser: .safari) { [weak self] approved in
                 if approved {
                     self?.signPersonalMessage(address: safariRequest.address, data: data, request: safariRequest)
                     // TODO: sign and respond
@@ -345,7 +345,7 @@ class Agent: NSObject {
                 } else {
                     ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, error: "Canceled"))
                 }
-                Window.closeAllAndActivateBrowser()
+                Window.closeAllAndActivateBrowser(force: .safari)
             }
             
             // TODO: pass cancel as well
@@ -356,7 +356,7 @@ class Agent: NSObject {
             }
             
             // TODO: display meta and peerMeta
-            showApprove(subject: .signMessage, meta: data.hexString, peerMeta: peerMeta) { [weak self] approved in
+            showApprove(subject: .signMessage, meta: data.hexString, peerMeta: peerMeta, browser: .safari) { [weak self] approved in
                 if approved {
                     self?.signMessage(address: safariRequest.address, data: data, request: safariRequest)
                     // TODO: sign and respond
@@ -368,7 +368,7 @@ class Agent: NSObject {
             guard let raw = safariRequest.raw else { return } // TODO: respond with error
             
             // TODO: display meta and peerMeta
-            showApprove(subject: .signTypedData, meta: raw, peerMeta: peerMeta) { [weak self] approved in
+            showApprove(subject: .signTypedData, meta: raw, peerMeta: peerMeta, browser: .safari) { [weak self] approved in
                 if approved {
                     self?.signTypedData(address: safariRequest.address, raw: raw, request: safariRequest)
                     // TODO: sign and respond
@@ -380,7 +380,7 @@ class Agent: NSObject {
             guard let transaction = safariRequest.transaction, let chain = safariRequest.chain else {
                 return // TODO: respond with error
             }
-            showApprove(transaction: transaction, chain: chain, peerMeta: peerMeta) { [weak self] transaction in
+            showApprove(transaction: transaction, chain: chain, peerMeta: peerMeta, browser: .safari) { [weak self] transaction in
                 if let transaction = transaction {
                     self?.sendTransaction(transaction, address: safariRequest.address, chain: chain, request: safariRequest)
                     // TODO: show some kind of spinner
@@ -397,10 +397,10 @@ class Agent: NSObject {
             } else {
                 ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, error: "Failed to verify"))
             }
-            Window.closeAllAndActivateBrowser()
+            Window.closeAllAndActivateBrowser(force: .safari)
         default:
             // TODO: implement all cases
-            Window.closeAllAndActivateBrowser()
+            Window.closeAllAndActivateBrowser(force: .safari)
         }
     }
     

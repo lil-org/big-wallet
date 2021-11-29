@@ -20,6 +20,7 @@
 		2C09CBAD273979C1009AD39B /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAC273979C1009AD39B /* content.js */; };
 		2C09CBB9273979C1009AD39B /* Safari.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2C09CB9F273979C1009AD39B /* Safari.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2C0EE4022753874D00AC2AFA /* PeerMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0EE4012753874D00AC2AFA /* PeerMeta.swift */; };
+		2C134BA627553EC500DAFBDB /* Browser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C134BA527553EC500DAFBDB /* Browser.swift */; };
 		2C1995402674C4B900A8E370 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C19953F2674C4B900A8E370 /* AppDelegate.swift */; };
 		2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995412674C4B900A8E370 /* ImportViewController.swift */; };
 		2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995432674C4BA00A8E370 /* Assets.xcassets */; };
@@ -115,6 +116,7 @@
 		2C09CBB4273979C1009AD39B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C09CBB5273979C1009AD39B /* Safari.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Safari.entitlements; sourceTree = "<group>"; };
 		2C0EE4012753874D00AC2AFA /* PeerMeta.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerMeta.swift; sourceTree = "<group>"; };
+		2C134BA527553EC500DAFBDB /* Browser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Browser.swift; sourceTree = "<group>"; };
 		2C19953C2674C4B900A8E370 /* Encrypted Ink.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Encrypted Ink.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C19953F2674C4B900A8E370 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		2C1995412674C4B900A8E370 /* ImportViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportViewController.swift; sourceTree = "<group>"; };
@@ -222,6 +224,7 @@
 			children = (
 				0DC850E626B73A5900809E82 /* AuthenticationReason.swift */,
 				0D059AD126C2796200EE3023 /* ApprovalSubject.swift */,
+				2C134BA527553EC500DAFBDB /* Browser.swift */,
 				2C0EE4012753874D00AC2AFA /* PeerMeta.swift */,
 				2C773F5B2742D483007B04E7 /* SafariRequest.swift */,
 			);
@@ -729,6 +732,7 @@
 				2C6B964C26B9D92500D2C819 /* NSColor.swift in Sources */,
 				2C603D0226B6E13F00956955 /* String.swift in Sources */,
 				2C773F5C2742D483007B04E7 /* SafariRequest.swift in Sources */,
+				2C134BA627553EC500DAFBDB /* Browser.swift in Sources */,
 				2CC89471269A334A00879245 /* UserDefaults.swift in Sources */,
 				2C78F8282683BDCC00C10670 /* Alert.swift in Sources */,
 				2C8A09EE2675965F00993638 /* WaitingViewController.swift in Sources */,
