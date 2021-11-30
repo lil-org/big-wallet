@@ -23,7 +23,6 @@ final class WalletsManager {
 
     func start() {
         try? load()
-        try? migrateFromLegacyIfNeeded()
     }
     
     func validateWalletInput(_ input: String) -> InputValidationResult {
@@ -148,17 +147,6 @@ final class WalletsManager {
             let wallet = TokenaryWallet(id: id, key: key)
             wallets.append(wallet)
         }
-    }
-    
-    private func migrateFromLegacyIfNeeded() throws {
-        let legacyAccountsWithKeys = try keychain.getLegacyAccounts()
-        guard !legacyAccountsWithKeys.isEmpty, let password = keychain.password else { return }
-        for legacyAccount in legacyAccountsWithKeys {
-            if let data = Data(hexString: legacyAccount.privateKey), let privateKey = PrivateKey(data: data) {
-                _ = try importPrivateKey(privateKey, name: defaultWalletName, password: password, coin: .ethereum)
-            }
-        }
-        try keychain.removeLegacyAccounts()
     }
     
     private func update(wallet: TokenaryWallet, password: String, newPassword: String, newName: String) throws {

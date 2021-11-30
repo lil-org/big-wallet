@@ -72,7 +72,6 @@
 		2CD0B3F726AC619900488D92 /* AddAccountOptionCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0B3F626AC619900488D92 /* AddAccountOptionCellView.swift */; };
 		2CDAB3722675B3F0009F8B97 /* PasswordViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */; };
 		2CE3D012267F73C00032A62E /* Transaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D011267F73C00032A62E /* Transaction.swift */; };
-		2CE3D015267F73E80032A62E /* LegacyAccountWithKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D014267F73E80032A62E /* LegacyAccountWithKey.swift */; };
 		2CEFEB16274D5DCA00CE23BD /* inpage.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CEFEB15274D5DC900CE23BD /* inpage.js */; };
 		AEFC8A66E33059C0C1BD4333 /* Pods_Tokenary.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5C66D3B2960393C7017D06D7 /* Pods_Tokenary.framework */; };
 /* End PBXBuildFile section */
@@ -180,7 +179,6 @@
 		2CD0B3F626AC619900488D92 /* AddAccountOptionCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddAccountOptionCellView.swift; sourceTree = "<group>"; };
 		2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordViewController.swift; sourceTree = "<group>"; };
 		2CE3D011267F73C00032A62E /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
-		2CE3D014267F73E80032A62E /* LegacyAccountWithKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyAccountWithKey.swift; sourceTree = "<group>"; };
 		2CEFEB15274D5DC900CE23BD /* inpage.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = inpage.js; sourceTree = "<group>"; };
 		5C66D3B2960393C7017D06D7 /* Pods_Tokenary.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Tokenary.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		71B9AF20CEBBF4476901E5FA /* Pods-Tokenary.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary.debug.xcconfig"; path = "Target Support Files/Pods-Tokenary/Pods-Tokenary.debug.xcconfig"; sourceTree = "<group>"; };
@@ -374,7 +372,6 @@
 				2C1995552674D0F300A8E370 /* Ethereum.swift */,
 				2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */,
 				2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */,
-				2CE3D014267F73E80032A62E /* LegacyAccountWithKey.swift */,
 				2CE3D011267F73C00032A62E /* Transaction.swift */,
 			);
 			path = Ethereum;
@@ -752,7 +749,6 @@
 				2C901C4D268A033100D0926A /* GasService.swift in Sources */,
 				2C528A16267FA8EB00CA3ADD /* Defaults.swift in Sources */,
 				2CD0B3F526A0DAA900488D92 /* NSPasteboard.swift in Sources */,
-				2CE3D015267F73E80032A62E /* LegacyAccountWithKey.swift in Sources */,
 				2CE3D012267F73C00032A62E /* Transaction.swift in Sources */,
 				2C8A09EB2675964700993638 /* ApproveViewController.swift in Sources */,
 				2C03D1D5269B428C00EF10EA /* Notification.swift in Sources */,
