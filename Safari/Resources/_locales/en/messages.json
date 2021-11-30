@@ -1,0 +1,10 @@
+{
+    "extension_name": {
+        "message": "Tokenary",
+        "description": "The display name for the extension."
+    },
+    "extension_description": {
+        "message": "Crypto wallet",
+        "description": "Description of what the extension does."
+    }
+}

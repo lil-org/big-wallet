@@ -31,10 +31,11 @@ class ApproveTransactionViewController: NSViewController {
     private var transaction: Transaction!
     private var chain: EthereumChain!
     private var completion: ((Transaction?) -> Void)!
+    private var didCallCompletion = false
     private var didEnableSpeedConfiguration = false
-    private var peerMeta: WCPeerMeta?
+    private var peerMeta: PeerMeta?
     
-    static func with(transaction: Transaction, chain: EthereumChain, peerMeta: WCPeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
+    static func with(transaction: Transaction, chain: EthereumChain, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self)
         new.chain = chain
         new.transaction = transaction
@@ -52,13 +53,25 @@ class ApproveTransactionViewController: NSViewController {
         prepareTransaction()
         if let peer = peerMeta {
             peerNameLabel.stringValue = peer.name
-            if let urlString = peer.icons.first, let url = URL(string: urlString) {
+            if let urlString = peer.iconURLString, let url = URL(string: urlString) {
                 peerLogoImageView.kf.setImage(with: url) { [weak peerLogoImageView] result in
                     if case .success = result {
                         peerLogoImageView?.layer?.backgroundColor = NSColor.clear.cgColor
                     }
                 }
             }
+        }
+    }
+    
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        view.window?.delegate = self
+    }
+    
+    private func callCompletion(result: Transaction?) {
+        if !didCallCompletion {
+            didCallCompletion = true
+            completion(result)
         }
     }
     
@@ -109,11 +122,19 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     @IBAction func actionButtonTapped(_ sender: Any) {
-        completion(transaction)
+        callCompletion(result: transaction)
     }
     
     @IBAction func cancelButtonTapped(_ sender: NSButton) {
-        completion(nil)
+        callCompletion(result: nil)
+    }
+    
+}
+
+extension ApproveTransactionViewController: NSWindowDelegate {
+    
+    func windowWillClose(_ notification: Notification) {
+        callCompletion(result: nil)
     }
     
 }

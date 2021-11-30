@@ -1,0 +1,135 @@
+// Copyright © 2021 Encrypted Ink. All rights reserved.
+
+import Foundation
+
+struct SafariRequest {
+    
+    enum Method: String, Decodable, CaseIterable {
+        case signTransaction
+        case signPersonalMessage
+        case signMessage
+        case signTypedMessage
+        case ecRecover
+        case requestAccounts
+        case watchAsset
+        case addEthereumChain
+        case switchEthereumChain
+        case switchAccount
+    }
+    
+    private let json: [String: Any]
+    
+    let method: Method
+    let id: Int
+    let address: String
+    let host: String?
+    private let favicon: String?
+    
+    var iconURLString: String? {
+        if let host = host, let favicon = favicon {
+            if favicon.first == "/" {
+                return "https://" + host + favicon
+            } else if favicon.first == "." {
+                return "https://" + host + favicon.dropFirst()
+            }
+        }
+        return nil
+    }
+    
+    init?(query: String) {
+        guard let parametersString = query.removingPercentEncoding,
+              let data = parametersString.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
+        else { return nil }
+        
+        guard let name = json["name"] as? String,
+              let method = Method(rawValue: name),
+              let id = json["id"] as? Int,
+              let address = json["address"] as? String
+        else { return nil }
+        
+        self.json = json
+        self.method = method
+        self.id = id
+        self.address = address
+        self.host = json["host"] as? String
+        self.favicon = json["favicon"] as? String
+    }
+    
+    private var parameters: [String: Any]? {
+        return json["object"] as? [String: Any]
+    }
+    
+    var name: String {
+        return method.rawValue
+    }
+    
+    var message: Data? {
+        if let hexString = parameters?["data"] as? String,
+           let data = Data(hexString: hexString) {
+            return data
+        } else {
+            return nil
+        }
+    }
+    
+    var chain: EthereumChain? {
+        if let network = json["networkId"] as? String, let networkId = Int(network) {
+            return EthereumChain(rawValue: networkId)
+        } else {
+            return nil
+        }
+    }
+    
+    // TODO: support new transaction type
+    var transaction: Transaction? {
+        if let parameters = parameters, let to = parameters["to"] as? String {
+            let data = (parameters["data"] as? String) ?? "0x"
+            let value = (parameters["value"] as? String) ?? "0x"
+            let gas = parameters["gas"] as? String
+            let gasPrice = parameters["gasPrice"] as? String
+            // type: '0x0'
+            // maxFeePerGas: '0x2540be400',
+            // maxPriorityFeePerGas: '0x3b9aca00',
+            return Transaction(from: address, to: to, nonce: nil, gasPrice: gasPrice, gas: gas, value: value, data: data)
+        } else {
+            return nil
+        }
+    }
+    
+    var signatureAndMessage: (signature: Data, message: Data)? {
+        if let signatureHexString = parameters?["signature"] as? String,
+           let signatureData = Data(hexString: signatureHexString),
+           let messageHexString = parameters?["message"] as? String,
+           let messageData = Data(hexString: messageHexString) {
+            return (signatureData, messageData)
+        } else {
+            return nil
+        }
+    }
+    
+    var chainInfo: (chainId: String, name: String, rpcURLs: [String])? {
+        if let chainId = parameters?["chainId"] as? String,
+           let name = parameters?["chainName"] as? String,
+           let urls = parameters?["rpcUrls"] as? [String] {
+            return (chainId: chainId, name: name, rpcURLs: urls)
+        } else {
+            return nil
+        }
+    }
+    
+    var switchToChain: EthereumChain? {
+        if let chainId = (parameters?["chainId"] as? String)?.dropFirst(2),
+           let networkId = Int(chainId, radix: 16),
+           let chain = EthereumChain(rawValue: networkId) {
+            return chain
+        } else {
+            return nil
+        }
+    }
+
+    var raw: String? {
+        return parameters?["raw"] as? String
+    }
+    
+}

@@ -4,18 +4,6 @@ import Cocoa
 
 struct Window {
     
-    private static let browsersBundleIds = Set([
-        "com.apple.Safari",
-        "com.google.Chrome",
-        "org.torproject.torbrowser",
-        "com.operasoftware.Opera",
-        "com.microsoft.edgemac",
-        "com.brave.Browser",
-        "org.mozilla.firefox",
-        "com.vivaldi.Vivaldi",
-        "ru.yandex.desktop.yandex-browser"
-    ])
-    
     static func showNew() -> NSWindowController {
         closeAll()
         let windowController = new
@@ -33,9 +21,9 @@ struct Window {
         window?.makeKeyAndOrderFront(nil)
     }
     
-    static func closeAllAndActivateBrowser() {
+    static func closeAllAndActivateBrowser(force browser: Browser?) {
         closeAll()
-        activateBrowser()
+        activateBrowser(force: browser)
     }
     
     static func closeAll(updateStatusBarItem: Bool = true) {
@@ -45,10 +33,15 @@ struct Window {
         }
     }
     
-    static func activateBrowser() {
+    static func activateBrowser(force browser: Browser?) {
+        if let browser = browser {
+            activateBrowser(browser)
+            return
+        }
+        
         let browsers = NSWorkspace.shared.runningApplications.filter { app in
             if let bundleId = app.bundleIdentifier {
-                return browsersBundleIds.contains(bundleId)
+                return Browser.allBundleIds.contains(bundleId)
             } else {
                 return false
             }
@@ -65,6 +58,10 @@ struct Window {
                 return
             }
         }
+    }
+    
+    private static func activateBrowser(_ browser: Browser) {
+        NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == browser.rawValue })?.activate(options: .activateIgnoringOtherApps)
     }
     
     static var current: NSWindowController? {

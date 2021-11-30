@@ -9,7 +9,8 @@ class AccountsListViewController: NSViewController {
     private var cellModels = [CellModel]()
     
     private var chain = EthereumChain.ethereum
-    var onSelectedWallet: ((Int, InkWallet) -> Void)?
+    private var didCallCompletion = false
+    var onSelectedWallet: ((EthereumChain?, InkWallet?) -> Void)?
     var newWalletId: String?
     
     enum CellModel {
@@ -66,6 +67,14 @@ class AccountsListViewController: NSViewController {
     override func viewDidAppear() {
         super.viewDidAppear()
         blinkNewWalletCellIfNeeded()
+        view.window?.delegate = self
+    }
+    
+    private func callCompletion(wallet: InkWallet?) {
+        if !didCallCompletion {
+            didCallCompletion = true
+            onSelectedWallet?(chain, wallet)
+        }
     }
     
     private func setupAccountsMenu() {
@@ -76,8 +85,6 @@ class AccountsListViewController: NSViewController {
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: Strings.showAccountKey, action: #selector(didClickExportAccount(_:)), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: Strings.removeAccount, action: #selector(didClickRemoveAccount(_:)), keyEquivalent: ""))
-        menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: Strings.howToWalletConnect, action: #selector(showInstructionsAlert), keyEquivalent: ""))
         tableView.menu = menu
     }
     
@@ -271,10 +278,6 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-    @objc private func showInstructionsAlert() {
-        Alert.showWalletConnectInstructions()
-    }
-    
     private func removeAccountAtIndex(_ index: Int) {
         let wallet = wallets[index]
         try? walletsManager.delete(wallet: wallet)
@@ -304,8 +307,8 @@ extension AccountsListViewController: NSTableViewDelegate {
         switch model {
         case .wallet:
             let wallet = wallets[row]
-            if let onSelectedWallet = onSelectedWallet {
-                onSelectedWallet(chain.id, wallet)
+            if onSelectedWallet != nil {
+                callCompletion(wallet: wallet)
             } else {
                 Timer.scheduledTimer(withTimeInterval: 0.01, repeats: false) { [weak self] _ in
                     var point = NSEvent.mouseLocation
@@ -367,6 +370,14 @@ extension AccountsListViewController: NSMenuDelegate {
             tableView.deselectedRow = tableView.selectedRow
             tableView.deselectAll(nil)
         }
+    }
+    
+}
+
+extension AccountsListViewController: NSWindowDelegate {
+    
+    func windowWillClose(_ notification: Notification) {
+        callCompletion(wallet: nil)
     }
     
 }

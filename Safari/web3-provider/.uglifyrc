@@ -1,0 +1,5 @@
+{
+  "mangle": {
+    "reserved": ["TokenaryWeb3Provider"]
+  }
+}

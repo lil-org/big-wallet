@@ -22,3 +22,16 @@ xcuserdata
 Pods/
 
 Secrets.swift
+
+# Bundler
+.bundle
+.cache
+*.map
+
+# JS
+node_modules/
+jspm_packages/
+staging/
+
+# Log Files
+*.log

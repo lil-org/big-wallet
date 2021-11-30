@@ -19,9 +19,10 @@ class ApproveViewController: NSViewController {
     private var approveTitle: String!
     private var meta: String!
     private var completion: ((Bool) -> Void)!
-    private var peerMeta: WCPeerMeta?
+    private var didCallCompletion = false
+    private var peerMeta: PeerMeta?
     
-    static func with(subject: ApprovalSubject, meta: String, peerMeta: WCPeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
+    static func with(subject: ApprovalSubject, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
         let new = instantiate(ApproveViewController.self)
         new.completion = completion
         new.meta = meta
@@ -41,7 +42,7 @@ class ApproveViewController: NSViewController {
         updateDisplayedMeta()
         if let peer = peerMeta {
             peerNameLabel.stringValue = peer.name
-            if let urlString = peer.icons.first, let url = URL(string: urlString) {
+            if let urlString = peer.iconURLString, let url = URL(string: urlString) {
                 peerLogoImageView.kf.setImage(with: url) { [weak peerLogoImageView] result in
                     if case .success = result {
                         peerLogoImageView?.layer?.backgroundColor = NSColor.clear.cgColor
@@ -51,16 +52,36 @@ class ApproveViewController: NSViewController {
         }
     }
     
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        view.window?.delegate = self
+    }
+    
     private func updateDisplayedMeta() {
         metaTextView.string = meta
     }
+    
+    private func callCompletion(result: Bool) {
+        if !didCallCompletion {
+            didCallCompletion = true
+            completion(result)
+        }
+    }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
-        completion(true)
+        callCompletion(result: true)
     }
     
     @IBAction func cancelButtonTapped(_ sender: NSButton) {
-        completion(false)
+        callCompletion(result: false)
+    }
+    
+}
+
+extension ApproveViewController: NSWindowDelegate {
+    
+    func windowWillClose(_ notification: Notification) {
+        callCompletion(result: false)
     }
     
 }

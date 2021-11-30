@@ -14,12 +14,14 @@ struct Strings {
     static let somethingWentWrong = "Something went wrong."
     static let cancelled = "Cancelled"
     static let failedToSend = "Failed to send"
+    static let failedToSign = "Failed to sign"
+    static let failedToSwitchChain = "Failed to switch chain"
     static let encryptedInk = "Encrypted Ink"
     static let showEncryptedInk = "Show " + encryptedInk
     static let quit = "Quit"
     static let quitEncryptedInk = "Quit Encrypted Ink?"
     static let youWontBeAbleToSignRequests = "You won't be able to sign requests."
-    static let howToWalletConnect = "How to WalletConnect?"
+    static let enableSafariExtension = "Enable Safari extension…"
     static let dropUsALine = "Drop us a line…"
     static let viewOnGithub = "View on GitHub…"
     static let viewOnTwitter = "View on Twitter…"
@@ -47,5 +49,7 @@ struct Strings {
     static let privateKey = "Private key"
     static let secretWords = "Secret words"
     static let copy = "Copy"
+    static let canceled = "Canceled"
+    static let failedToVerify = "Failed to verify"
     
 }

@@ -27,6 +27,10 @@ enum EthereumChain: Int {
         return rawValue
     }
     
+    var hexStringId: String {
+        return "0x" + String(id, radix: 16, uppercase: false)
+    }
+    
     static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum, .avalanche, .xDai]
     static let allTestnets: [EthereumChain] = [.ethereumRopsten, .ethereumKovan, .ethereumRinkeby, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji]
     
@@ -78,23 +82,23 @@ enum EthereumChain: Int {
     
     var nodeURLString: String {
         switch self {
-        case .ethereum: return "https://eth-mainnet.alchemyapi.io/v2/" + Secrets.alchemy
-        case .arbitrum: return "https://arb-mainnet.g.alchemy.com/v2/" + Secrets.alchemy
-        case .optimism: return "https://mainnet.optimism.io"
-        case .polygon: return "https://polygon-mainnet.g.alchemy.com/v2/" + Secrets.alchemy
+        case .ethereum: return "https://mainnet.infura.io/v3/" + Secrets.infura
+        case .arbitrum: return "https://arbitrum-mainnet.infura.io/v3/" + Secrets.infura
+        case .optimism: return "https://optimism-mainnet.infura.io/v3/" + Secrets.infura
+        case .polygon: return "https://polygon-mainnet.infura.io/v3/" + Secrets.infura
         case .binance: return "https://bsc-dataseed.binance.org/"
         case .avalanche: return "https://api.avax.network/ext/bc/C/rpc"
         case .xDai: return "https://rpc.xdaichain.com/"
         case .arbitrumRinkeby: return "https://rinkeby.arbitrum.io/rpc"
         case .arbitrumKovan: return "https://kovan5.arbitrum.io/rpc"
         case .optimisticKovan: return "https://kovan.optimism.io"
-        case .polygonMumbai: return "https://polygon-mumbai.g.alchemy.com/v2/" + Secrets.alchemy
-        case .ethereumRopsten: return "https://eth-ropsten.alchemyapi.io/v2/" + Secrets.alchemy
-        case .ethereumKovan: return "https://eth-kovan.alchemyapi.io/v2/" + Secrets.alchemy
-        case .ethereumRinkeby: return "https://eth-rinkeby.alchemyapi.io/v2/" + Secrets.alchemy
-        case .ethereumGoerli: return "https://eth-goerli.alchemyapi.io/v2/" + Secrets.alchemy
+        case .ethereumRinkeby: return "https://rinkeby.infura.io/v3/" + Secrets.infura
+        case .ethereumRopsten: return "https://ropsten.infura.io/v3/" + Secrets.infura
+        case .ethereumKovan: return "https://kovan.infura.io/v3/" + Secrets.infura
+        case .ethereumGoerli: return "https://goerli.infura.io/v3/" + Secrets.infura
         case .binanceTestnet: return "https://data-seed-prebsc-1-s1.binance.org:8545/"
         case .avalancheFuji: return "https://api.avax-test.network/ext/bc/C/rpc"
+        case .polygonMumbai: return "https://polygon-mumbai.infura.io/v3/" + Secrets.infura
         }
     }
     

@@ -45,6 +45,10 @@ final class WalletsManager {
         return wallets.first(where: { $0.id == id })
     }
     
+    func getWallet(address: String) -> InkWallet? {
+        return wallets.first(where: { $0.ethereumAddress?.lowercased() == address.lowercased() })
+    }
+    
     func addWallet(input: String, inputPassword: String?) throws -> InkWallet {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         let name = defaultWalletName
