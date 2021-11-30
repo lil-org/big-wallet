@@ -338,9 +338,9 @@ class Agent: NSObject {
             let accountsList = instantiate(AccountsListViewController.self)
             
             accountsList.onSelectedWallet = { [weak self] chain, wallet in
-                if let chain = chain, let wallet = wallet {
+                if let chain = chain, let wallet = wallet, let ethereumAddress = wallet.ethereumAddress {
                     let response = ResponseToExtension(name: safariRequest.name,
-                                                       results: [wallet.ethereumAddress ?? "weird address"],
+                                                       results: [ethereumAddress],
                                                        chainId: chain.hexStringId,
                                                        rpcURL: chain.nodeURLString)
                     ExtensionBridge.respond(id: safariRequest.id, response: response)
@@ -406,39 +406,39 @@ class Agent: NSObject {
     // TODO: refactor in a way that there'd be only one sendTransaction for extension and for WalletConnect
     private func sendTransaction(_ transaction: Transaction, address: String, chain: EthereumChain, request: SafariRequest) {
         guard let wallet = walletsManager.getWallet(address: address) else {
-            return // TODO: respond with error
+            respondToSafariRequest(request, error: Strings.failedToSend)
+            return
         }
         
         guard let transactionHash = try? ethereum.send(transaction: transaction, wallet: wallet, chain: chain) else {
-            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, error: "Failed to send"))
-            return // TODO: respond with error
+            respondToSafariRequest(request, error: Strings.failedToSend)
+            return
         }
         ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: transactionHash))
     }
     
     private func signTypedData(address: String, raw: String, request: SafariRequest) {
-        guard let wallet = walletsManager.getWallet(address: address) else {
-            return // TODO: respond with error
+        guard let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.sign(typedData: raw, wallet: wallet) else {
+            respondToSafariRequest(request, error: Strings.failedToSign)
+            return
         }
-        let signed = try? ethereum.sign(typedData: raw, wallet: wallet)
-        ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: signed ?? "weird address"))
-        // TODO: there should be no weird address rersponses
+        ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: signed))
     }
     
     private func signMessage(address: String, data: Data, request: SafariRequest) {
-        guard let wallet = walletsManager.getWallet(address: address) else {
-            return // TODO: respond with error
+        guard let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.sign(data: data, wallet: wallet) else {
+            respondToSafariRequest(request, error: Strings.failedToSign)
+            return
         }
-        let signed = try? ethereum.sign(data: data, wallet: wallet)
-        ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: signed ?? "weird address"))
+        ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: signed))
     }
     
     private func signPersonalMessage(address: String, data: Data, request: SafariRequest) {
-        guard let wallet = walletsManager.getWallet(address: address) else {
-            return // TODO: respond with error
+        guard let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.signPersonalMessage(data: data, wallet: wallet) else {
+            respondToSafariRequest(request, error: Strings.failedToSign)
+            return
         }
-        let signed = try? ethereum.signPersonalMessage(data: data, wallet: wallet)
-        ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: signed ?? "weird address"))
+        ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: signed))
     }
     
 }
