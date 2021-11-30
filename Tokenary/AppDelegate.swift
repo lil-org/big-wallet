@@ -32,6 +32,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationDidFinishLaunching(_ aNotification: Notification) {
+        walletsManager.migrateFromLegacyIfNeeded()
+        
         agent.start()
         gasService.start()
         priceService.start()

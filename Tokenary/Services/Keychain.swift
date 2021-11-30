@@ -11,26 +11,35 @@ struct Keychain {
     private enum ItemKey {
         case password
         case wallet(id: String)
+        case legacyPassword
+        case raw(key: String)
         
         private static let commonPrefix = "io.tokenary.macos."
         private static let walletPrefix = "wallet."
         private static let fullWalletPrefix = commonPrefix + walletPrefix
         private static let fullWalletPrefixCount = fullWalletPrefix.count
+        private static let legacyWalletPrefix = "io.tokenary.accountstorage."
         
         var stringValue: String {
-            let key: String
             switch self {
             case .password:
-                key = "password"
+                return ItemKey.commonPrefix + "password"
             case let .wallet(id: id):
-                key = ItemKey.walletPrefix + id
+                return ItemKey.commonPrefix + ItemKey.walletPrefix + id
+            case .legacyPassword:
+                return "io.tokenary.local.passphrase"
+            case let .raw(key: key):
+                return key
             }
-            return ItemKey.commonPrefix + key
         }
         
         static func walletId(key: String) -> String? {
             guard key.hasPrefix(fullWalletPrefix) else { return nil }
             return String(key.dropFirst(fullWalletPrefixCount))
+        }
+        
+        static func isLegacyWallet(key: String) -> Bool {
+            return key.hasPrefix(legacyWalletPrefix)
         }
         
     }
@@ -74,7 +83,21 @@ struct Keychain {
         }
     }
     
-    // MARK: Private
+    // MARK: - Migration
+    
+    func getLegacyKeystores() -> [Data] {
+        return allStoredItemsKeys().filter { ItemKey.isLegacyWallet(key: $0) }.compactMap { get(key: .raw(key: $0)) }
+    }
+    
+    var legacyPassword: String? {
+        if let data = get(key: .legacyPassword), let password = String(data: data, encoding: .utf8) {
+            return password
+        } else {
+            return nil
+        }
+    }
+    
+    // MARK: - Private
     
     private func save(data: Data, key: ItemKey) {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
