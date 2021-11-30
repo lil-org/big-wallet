@@ -41,10 +41,6 @@
         "https://*.infura.io/",
         "https://*.infura.io/*",
         "https://*.infura.io/*/*",
-        "https://*.alchemyapi.io/",
-        "https://*.alchemyapi.io/*",
-        "https://*.alchemyapi.io/*/*",
-        "https://wallet.gridplus.io/*",
         "activeTab",
         "webRequest"
     ],
