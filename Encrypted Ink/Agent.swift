@@ -405,40 +405,36 @@ class Agent: NSObject {
     
     // TODO: refactor in a way that there'd be only one sendTransaction for extension and for WalletConnect
     private func sendTransaction(_ transaction: Transaction, address: String, chain: EthereumChain, request: SafariRequest) {
-        guard let wallet = walletsManager.getWallet(address: address) else {
+        if let wallet = walletsManager.getWallet(address: address),
+           let transactionHash = try? ethereum.send(transaction: transaction, wallet: wallet, chain: chain) {
+            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: transactionHash))
+        } else {
             respondToSafariRequest(request, error: Strings.failedToSend)
-            return
         }
-        
-        guard let transactionHash = try? ethereum.send(transaction: transaction, wallet: wallet, chain: chain) else {
-            respondToSafariRequest(request, error: Strings.failedToSend)
-            return
-        }
-        ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: transactionHash))
     }
     
     private func signTypedData(address: String, raw: String, request: SafariRequest) {
-        guard let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.sign(typedData: raw, wallet: wallet) else {
+        if let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.sign(typedData: raw, wallet: wallet) {
+            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: signed))
+        } else {
             respondToSafariRequest(request, error: Strings.failedToSign)
-            return
         }
-        ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: signed))
     }
     
     private func signMessage(address: String, data: Data, request: SafariRequest) {
-        guard let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.sign(data: data, wallet: wallet) else {
+        if let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.sign(data: data, wallet: wallet) {
+            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: signed))
+        } else {
             respondToSafariRequest(request, error: Strings.failedToSign)
-            return
         }
-        ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: signed))
     }
     
     private func signPersonalMessage(address: String, data: Data, request: SafariRequest) {
-        guard let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.signPersonalMessage(data: data, wallet: wallet) else {
+        if let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.signPersonalMessage(data: data, wallet: wallet) {
+            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: signed))
+        } else {
             respondToSafariRequest(request, error: Strings.failedToSign)
-            return
         }
-        ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: signed))
     }
     
 }
