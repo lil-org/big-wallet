@@ -22,10 +22,10 @@ class Alert: NSAlert {
     
     static func showSafariPrompt() {
         let alert = Alert()
-        alert.messageText = "Would you like to try brand new Tokenary for Safari?"
+        alert.messageText = "Tokenary now works great in Safari."
         alert.alertStyle = .informational
         alert.addButton(withTitle: "Enable Safari extension")
-        alert.addButton(withTitle: Strings.cancel)
+        alert.addButton(withTitle: Strings.ok)
         if alert.runModal() == .alertFirstButtonReturn {
             Agent.shared.enableSafariExtension()
         }
