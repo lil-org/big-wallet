@@ -306,10 +306,7 @@ class Agent: NSObject {
         }
     }
     
-    // TODO: should receive account address from content script here.
-    // content script should know it since it injets it
     private func processSafariRequest(_ safariRequest: SafariRequest) {
-        // TODO: pass favicon url
         let peerMeta = PeerMeta(title: safariRequest.host, iconURLString: safariRequest.iconURLString)
         switch safariRequest.method {
         case .switchEthereumChain:
@@ -326,11 +323,9 @@ class Agent: NSObject {
         case .signPersonalMessage:
             guard let data = safariRequest.message else { return }// TODO: respond with error
             let text = String(data: data, encoding: .utf8) ?? data.hexString
-            // TODO: display meta and peerMeta
             showApprove(subject: .signPersonalMessage, meta: text, peerMeta: peerMeta, browser: .safari) { [weak self] approved in
                 if approved {
                     self?.signPersonalMessage(address: safariRequest.address, data: data, request: safariRequest)
-                    // TODO: sign and respond
                 } else {
                     ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, error: "Failed to sign"))
                 }
@@ -351,31 +346,23 @@ class Agent: NSObject {
                 }
                 Window.closeAllAndActivateBrowser(force: .safari)
             }
-            
-            // TODO: pass cancel as well
             windowController.contentViewController = accountsList
         case .signMessage:
             guard let data = safariRequest.message else {
                 return // TODO: respond with error
             }
-            
-            // TODO: display meta and peerMeta
             showApprove(subject: .signMessage, meta: data.hexString, peerMeta: peerMeta, browser: .safari) { [weak self] approved in
                 if approved {
                     self?.signMessage(address: safariRequest.address, data: data, request: safariRequest)
-                    // TODO: sign and respond
                 } else {
                     ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, error: "Failed to sign"))
                 }
             }
         case .signTypedMessage:
             guard let raw = safariRequest.raw else { return } // TODO: respond with error
-            
-            // TODO: display meta and peerMeta
             showApprove(subject: .signTypedData, meta: raw, peerMeta: peerMeta, browser: .safari) { [weak self] approved in
                 if approved {
                     self?.signTypedData(address: safariRequest.address, raw: raw, request: safariRequest)
-                    // TODO: sign and respond
                 } else {
                     ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, error: "Failed to sign"))
                 }
@@ -387,11 +374,8 @@ class Agent: NSObject {
             showApprove(transaction: transaction, chain: chain, peerMeta: peerMeta, browser: .safari) { [weak self] transaction in
                 if let transaction = transaction {
                     self?.sendTransaction(transaction, address: safariRequest.address, chain: chain, request: safariRequest)
-                    // TODO: show some kind of spinner
-                    // TODO: actually send a transaction. What should be in a response?
                 } else {
                     ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, error: "Canceled"))
-                    // TODO: looks like uniswap expects different response format
                 }
             }
         case .ecRecover:
@@ -403,7 +387,6 @@ class Agent: NSObject {
             }
             Window.closeAllAndActivateBrowser(force: .safari)
         default:
-            // TODO: implement all cases
             Window.closeAllAndActivateBrowser(force: .safari)
         }
     }
@@ -427,6 +410,7 @@ class Agent: NSObject {
         }
         let signed = try? ethereum.sign(typedData: raw, wallet: wallet)
         ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: signed ?? "weird address"))
+        // TODO: there should be no weird address rersponses
     }
     
     private func signMessage(address: String, data: Data, request: SafariRequest) {
