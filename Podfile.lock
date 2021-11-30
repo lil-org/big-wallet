@@ -14,11 +14,11 @@ PODS:
   - Starscream (3.1.1)
   - SwiftProtobuf (1.18.0)
   - SwiftyJSON (4.3.0)
-  - TrustWalletCore (2.6.32):
-    - TrustWalletCore/Core (= 2.6.32)
-  - TrustWalletCore/Core (2.6.32):
+  - TrustWalletCore (2.6.34):
+    - TrustWalletCore/Core (= 2.6.34)
+  - TrustWalletCore/Core (2.6.34):
     - TrustWalletCore/Types
-  - TrustWalletCore/Types (2.6.32):
+  - TrustWalletCore/Types (2.6.34):
     - SwiftProtobuf
   - WalletConnect (0.1.0):
     - CryptoSwift
@@ -76,10 +76,10 @@ SPEC CHECKSUMS:
   Starscream: 4bb2f9942274833f7b4d296a55504dcfc7edb7b0
   SwiftProtobuf: c3c12645230d9b09c72267e0de89468c5543bd86
   SwiftyJSON: 6faa0040f8b59dead0ee07436cbf76b73c08fd08
-  TrustWalletCore: fdbb763defa4161dc3f2700aede8be6ff07d2ea0
+  TrustWalletCore: a92d85baa15932279cce925559e93695558cafdd
   WalletConnect: 1df75d4355b1cacfc27d7ef2416fae43862d0eb4
   Web3Swift.io: 18fd06aed9d56df9c704f9c6f87b06675bb05b53
 
-PODFILE CHECKSUM: 435285424c0821db925918dfd84843c031999350
+PODFILE CHECKSUM: 6df7f625cebcb1d4c614a9fd609332e24dd2b7f8
 
 COCOAPODS: 1.11.2

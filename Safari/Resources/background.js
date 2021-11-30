@@ -1,6 +1,6 @@
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.subject === "process-inpage-message") {
-        browser.runtime.sendNativeMessage("ink.encrypted.macos", request.message, function(response) {
+        browser.runtime.sendNativeMessage("mac.tokenary.io", request.message, function(response) {
             sendResponse(response)
         });
     }
@@ -13,7 +13,7 @@ browser.browserAction.onClicked.addListener(function(tab) {
     // TODO: pass current network id
     // TODO: pass favicon
     // TODO: pass host here as well
-    browser.runtime.sendNativeMessage("ink.encrypted.macos", request, function(response) {
+    browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
         browser.tabs.sendMessage(tab.id, response);
     });
 });

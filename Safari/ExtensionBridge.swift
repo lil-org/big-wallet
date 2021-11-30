@@ -1,10 +1,10 @@
-// Copyright © 2021 Encrypted Ink. All rights reserved.
+// Copyright © 2021 Tokenary. All rights reserved.
 
 import Foundation
 
 struct ExtensionBridge {
     
-    private static let defaults = UserDefaults(suiteName: "XWNXDSM6BU.ink.encrypted")
+    private static let defaults = UserDefaults(suiteName: "XWNXDSM6BU.io.tokenary")
     
     private static func key(id: Int) -> String {
         return String(id)

@@ -9,10 +9,10 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+ssh://git@github.com/zeriontech/Encrypted-Ink.git"
+        "url": "git+ssh://git@github.com/zeriontech/Tokenary.git"
     },
     "keywords": [],
-    "author": "Encrypted Ink <support@encrypted.ink>",
+    "author": "Tokenary <support@tokenary.io>",
     "license": "MIT",
     "dependencies": {
         "buffer": "^5.6.0",
