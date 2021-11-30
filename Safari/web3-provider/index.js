@@ -1,4 +1,4 @@
-// Copyright © 2021 Encrypted Ink. All rights reserved.
+// Copyright © 2021 Tokenary. All rights reserved.
 // Rewrite of index.js from trust-web3-provider.
 
 "use strict";

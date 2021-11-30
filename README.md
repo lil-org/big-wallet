@@ -1,3 +1,3 @@
-# Encrypted Ink
+# Tokenary
 
-Ethereum agent for MacOS.
+Crypto wallet with Safari extension.

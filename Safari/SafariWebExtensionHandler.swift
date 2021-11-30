@@ -1,4 +1,4 @@
-// Copyright © 2021 Encrypted Ink. All rights reserved.
+// Copyright © 2021 Tokenary. All rights reserved.
 
 import SafariServices
 
@@ -15,7 +15,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
               let id = (message as? [String: Any])?["id"] as? Int,
               let data = try? JSONSerialization.data(withJSONObject: message, options: []),
               let query = String(data: data, encoding: .utf8)?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "encryptedink://safari?request=\(query)")
+              let url = URL(string: "tokenary://safari?request=\(query)")
         else {
             return
         }

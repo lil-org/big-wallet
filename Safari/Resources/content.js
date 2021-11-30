@@ -14,7 +14,7 @@ function injectScript() {
         container.insertBefore(scriptTag, container.children[0]);
         container.removeChild(scriptTag);
     } catch (error) {
-        console.error('Encrypted Ink: Provider injection failed.', error);
+        console.error('Tokenary: Provider injection failed.', error);
     }
 }
 
