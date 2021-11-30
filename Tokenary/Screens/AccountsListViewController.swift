@@ -68,6 +68,13 @@ class AccountsListViewController: NSViewController {
         super.viewDidAppear()
         blinkNewWalletCellIfNeeded()
         view.window?.delegate = self
+        promptSafariForLegacyUsersIfNeeded()
+    }
+    
+    private func promptSafariForLegacyUsersIfNeeded() {
+        guard Defaults.shouldPromptSafariForLegacyUsers else { return }
+        Defaults.shouldPromptSafariForLegacyUsers = false
+        Alert.showSafariPrompt()
     }
     
     private func callCompletion(wallet: TokenaryWallet?) {

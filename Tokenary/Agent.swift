@@ -190,8 +190,8 @@ class Agent: NSObject {
         }
     }
     
-    @objc private func enableSafariExtension() {
-        SFSafariApplication.showPreferencesForExtension(withIdentifier: "mac.tokenary.io.Safari")
+    @objc func enableSafariExtension() {
+        SFSafariApplication.showPreferencesForExtension(withIdentifier: Identifiers.safariExtensionBundle)
     }
     
     @objc private func didSelectMailMenuItem() {

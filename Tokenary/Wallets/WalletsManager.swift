@@ -38,6 +38,7 @@ final class WalletsManager {
                                     coin: .ethereum,
                                     onlyToKeychain: true)
             }
+            Defaults.shouldPromptSafariForLegacyUsers = true
         }
         Defaults.didMigrateKeychainFromTokenaryV1 = true
     }

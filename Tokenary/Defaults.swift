@@ -15,6 +15,15 @@ struct Defaults {
         }
     }
     
+    static var shouldPromptSafariForLegacyUsers: Bool {
+        get {
+            return userDefaults.bool(forKey: "shouldPromptSafariForLegacyUsers")
+        }
+        set {
+            userDefaults.set(newValue, forKey: "shouldPromptSafariForLegacyUsers")
+        }
+    }
+    
     static var didMigrateKeychainFromTokenaryV1: Bool {
         get {
             return userDefaults.bool(forKey: "didMigrateKeychainFromTokenaryV1")
