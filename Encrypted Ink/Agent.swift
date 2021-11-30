@@ -317,24 +317,27 @@ class Agent: NSObject {
                                                    rpcURL: chain.nodeURLString)
                 ExtensionBridge.respond(id: safariRequest.id, response: response)
             } else {
-                ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, error: "Failed to switch chain"))
+                respondToSafariRequest(safariRequest, error: Strings.failedToSwitchChain)
             }
             Window.closeAllAndActivateBrowser(force: .safari)
         case .signPersonalMessage:
-            guard let data = safariRequest.message else { return }// TODO: respond with error
+            guard let data = safariRequest.message else {
+                respondToSafariRequest(safariRequest, error: Strings.somethingWentWrong)
+                return
+            }
             let text = String(data: data, encoding: .utf8) ?? data.hexString
             showApprove(subject: .signPersonalMessage, meta: text, peerMeta: peerMeta, browser: .safari) { [weak self] approved in
                 if approved {
                     self?.signPersonalMessage(address: safariRequest.address, data: data, request: safariRequest)
                 } else {
-                    ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, error: "Failed to sign"))
+                    self?.respondToSafariRequest(safariRequest, error: Strings.failedToSign)
                 }
             }
         case .requestAccounts, .switchAccount:
             let windowController = Window.showNew()
             let accountsList = instantiate(AccountsListViewController.self)
             
-            accountsList.onSelectedWallet = { chain, wallet in
+            accountsList.onSelectedWallet = { [weak self] chain, wallet in
                 if let chain = chain, let wallet = wallet {
                     let response = ResponseToExtension(name: safariRequest.name,
                                                        results: [wallet.ethereumAddress ?? "weird address"],
@@ -342,40 +345,45 @@ class Agent: NSObject {
                                                        rpcURL: chain.nodeURLString)
                     ExtensionBridge.respond(id: safariRequest.id, response: response)
                 } else {
-                    ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, error: "Canceled"))
+                    self?.respondToSafariRequest(safariRequest, error: Strings.canceled)
                 }
                 Window.closeAllAndActivateBrowser(force: .safari)
             }
             windowController.contentViewController = accountsList
         case .signMessage:
             guard let data = safariRequest.message else {
-                return // TODO: respond with error
+                respondToSafariRequest(safariRequest, error: Strings.somethingWentWrong)
+                return
             }
             showApprove(subject: .signMessage, meta: data.hexString, peerMeta: peerMeta, browser: .safari) { [weak self] approved in
                 if approved {
                     self?.signMessage(address: safariRequest.address, data: data, request: safariRequest)
                 } else {
-                    ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, error: "Failed to sign"))
+                    self?.respondToSafariRequest(safariRequest, error: Strings.failedToSign)
                 }
             }
         case .signTypedMessage:
-            guard let raw = safariRequest.raw else { return } // TODO: respond with error
+            guard let raw = safariRequest.raw else {
+                respondToSafariRequest(safariRequest, error: Strings.somethingWentWrong)
+                return
+            }
             showApprove(subject: .signTypedData, meta: raw, peerMeta: peerMeta, browser: .safari) { [weak self] approved in
                 if approved {
                     self?.signTypedData(address: safariRequest.address, raw: raw, request: safariRequest)
                 } else {
-                    ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, error: "Failed to sign"))
+                    self?.respondToSafariRequest(safariRequest, error: Strings.failedToSign)
                 }
             }
         case .signTransaction:
             guard let transaction = safariRequest.transaction, let chain = safariRequest.chain else {
-                return // TODO: respond with error
+                respondToSafariRequest(safariRequest, error: Strings.somethingWentWrong)
+                return
             }
             showApprove(transaction: transaction, chain: chain, peerMeta: peerMeta, browser: .safari) { [weak self] transaction in
                 if let transaction = transaction {
                     self?.sendTransaction(transaction, address: safariRequest.address, chain: chain, request: safariRequest)
                 } else {
-                    ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, error: "Canceled"))
+                    self?.respondToSafariRequest(safariRequest, error: Strings.canceled)
                 }
             }
         case .ecRecover:
@@ -383,12 +391,16 @@ class Agent: NSObject {
                let recovered = ethereum.recover(signature: signature, message: message) {
                 ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, result: recovered))
             } else {
-                ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, error: "Failed to verify"))
+                respondToSafariRequest(safariRequest, error: Strings.failedToVerify)
             }
             Window.closeAllAndActivateBrowser(force: .safari)
         default:
             Window.closeAllAndActivateBrowser(force: .safari)
         }
+    }
+    
+    private func respondToSafariRequest(_ safariRequest: SafariRequest, error: String) {
+        ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, error: error))
     }
     
     // TODO: refactor in a way that there'd be only one sendTransaction for extension and for WalletConnect
