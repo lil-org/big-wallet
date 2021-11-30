@@ -17,7 +17,6 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
               let query = String(data: data, encoding: .utf8)?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let url = URL(string: "encryptedink://safari?request=\(query)")
         else {
-            // TODO: response with error if failed to parse
             return
         }
         NSWorkspace.shared.open(url)
