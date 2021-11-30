@@ -15,6 +15,15 @@ struct Defaults {
         }
     }
     
+    static var didMigrateKeychainFromTokenaryV1: Bool {
+        get {
+            return userDefaults.bool(forKey: "didMigrateKeychainFromTokenaryV1")
+        }
+        set {
+            userDefaults.set(newValue, forKey: "didMigrateKeychainFromTokenaryV1")
+        }
+    }
+    
     static var reviewRequestsGoodMomentsCount: Int {
         get {
             return userDefaults.integer(forKey: "reviewRequestsGoodMomentsCount")

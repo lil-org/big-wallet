@@ -21,7 +21,7 @@ class Agent: NSObject {
     
     private override init() { super.init() }
     private var statusBarItem: NSStatusItem!
-    private var hasPassword = Keychain.shared.password != nil
+    private lazy var hasPassword = Keychain.shared.password != nil
     private var didEnterPasswordOnStart = false
     
     private var didStartInitialLAEvaluation = false

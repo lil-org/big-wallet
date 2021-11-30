@@ -25,6 +25,23 @@ final class WalletsManager {
         try? load()
     }
     
+    func migrateFromLegacyIfNeeded() {
+        guard !Defaults.didMigrateKeychainFromTokenaryV1 else { return }
+        let legacyKeystores = keychain.getLegacyKeystores()
+        if !legacyKeystores.isEmpty, let legacyPassword = keychain.legacyPassword {
+            keychain.save(password: legacyPassword)
+            for keystore in legacyKeystores {
+                _ = try? importJSON(keystore,
+                                    name: defaultWalletName,
+                                    password: legacyPassword,
+                                    newPassword: legacyPassword,
+                                    coin: .ethereum,
+                                    onlyToKeychain: true)
+            }
+        }
+        Defaults.didMigrateKeychainFromTokenaryV1 = true
+    }
+    
     func validateWalletInput(_ input: String) -> InputValidationResult {
         if Mnemonic.isValid(mnemonic: input) {
             return .valid
@@ -55,9 +72,9 @@ final class WalletsManager {
         if Mnemonic.isValid(mnemonic: input) {
             return try importMnemonic(input, name: name, encryptPassword: password, coin: coin)
         } else if let data = Data(hexString: input), PrivateKey.isValid(data: data, curve: coin.curve), let privateKey = PrivateKey(data: data) {
-            return try importPrivateKey(privateKey, name: name, password: password, coin: coin)
+            return try importPrivateKey(privateKey, name: name, password: password, coin: coin, onlyToKeychain: false)
         } else if input.maybeJSON, let inputPassword = inputPassword, let json = input.data(using: .utf8) {
-            return try importJSON(json, name: name, password: inputPassword, newPassword: password, coin: coin)
+            return try importJSON(json, name: name, password: inputPassword, newPassword: password, coin: coin, onlyToKeychain: false)
         } else {
             throw Error.invalidInput
         }
@@ -73,12 +90,12 @@ final class WalletsManager {
         return wallet
     }
 
-    private func importJSON(_ json: Data, name: String, password: String, newPassword: String, coin: CoinType) throws -> TokenaryWallet {
+    private func importJSON(_ json: Data, name: String, password: String, newPassword: String, coin: CoinType, onlyToKeychain: Bool) throws -> TokenaryWallet {
         guard let key = StoredKey.importJSON(json: json) else { throw KeyStore.Error.invalidKey }
         guard let data = key.decryptPrivateKey(password: Data(password.utf8)) else { throw KeyStore.Error.invalidPassword }
         if let mnemonic = checkMnemonic(data) { return try self.importMnemonic(mnemonic, name: name, encryptPassword: newPassword, coin: coin) }
         guard let privateKey = PrivateKey(data: data) else { throw KeyStore.Error.invalidKey }
-        return try self.importPrivateKey(privateKey, name: name, password: newPassword, coin: coin)
+        return try self.importPrivateKey(privateKey, name: name, password: newPassword, coin: coin, onlyToKeychain: onlyToKeychain)
     }
 
     private func checkMnemonic(_ data: Data) -> String? {
@@ -86,12 +103,14 @@ final class WalletsManager {
         return mnemonic
     }
 
-    private func importPrivateKey(_ privateKey: PrivateKey, name: String, password: String, coin: CoinType) throws -> TokenaryWallet {
+    private func importPrivateKey(_ privateKey: PrivateKey, name: String, password: String, coin: CoinType, onlyToKeychain: Bool) throws -> TokenaryWallet {
         guard let newKey = StoredKey.importPrivateKey(privateKey: privateKey.data, name: name, password: Data(password.utf8), coin: coin) else { throw KeyStore.Error.invalidKey }
         let id = makeNewWalletId()
         let wallet = TokenaryWallet(id: id, key: newKey)
         _ = try wallet.getAccount(password: password, coin: coin)
-        wallets.append(wallet)
+        if !onlyToKeychain {
+            wallets.append(wallet)
+        }
         try save(wallet: wallet)
         return wallet
     }
