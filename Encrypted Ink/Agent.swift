@@ -403,7 +403,6 @@ class Agent: NSObject {
         ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, error: error))
     }
     
-    // TODO: refactor in a way that there'd be only one sendTransaction for extension and for WalletConnect
     private func sendTransaction(_ transaction: Transaction, address: String, chain: EthereumChain, request: SafariRequest) {
         if let wallet = walletsManager.getWallet(address: address),
            let transactionHash = try? ethereum.send(transaction: transaction, wallet: wallet, chain: chain) {
