@@ -89,6 +89,8 @@ class ApproveTransactionViewController: NSViewController {
             infoTextViewBottomConstraint.constant = 30
         }
         
+        okButton.isEnabled = transaction.hasFee
+        
         enableSpeedConfigurationIfNeeded()
         let meta = transaction.description(chain: chain, ethPrice: priceService.currentPrice)
         if metaTextView.string != meta {
