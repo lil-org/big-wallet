@@ -819,18 +819,18 @@ DQ
                             </textField>
                             <scrollView autohidesScrollers="YES" horizontalLineScroll="40" horizontalPageScroll="0.0" verticalLineScroll="40" verticalPageScroll="10" hasHorizontalScroller="NO" usesPredominantAxisScrolling="NO" horizontalScrollElasticity="none" translatesAutoresizingMaskIntoConstraints="NO" id="7bs-Kr-ija">
                                 <rect key="frame" x="0.0" y="0.0" width="250" height="247"/>
-                                <clipView key="contentView" ambiguous="YES" id="RjU-hi-SHx">
+                                <clipView key="contentView" id="RjU-hi-SHx">
                                     <rect key="frame" x="1" y="1" width="248" height="245"/>
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <subviews>
-                                        <tableView verticalHuggingPriority="750" ambiguous="YES" allowsExpansionToolTips="YES" columnAutoresizingStyle="lastColumnOnly" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" typeSelect="NO" rowHeight="40" rowSizeStyle="automatic" viewBased="YES" id="glA-FK-Kdd" customClass="RightClickTableView" customModule="Tokenary" customModuleProvider="target">
+                                        <tableView verticalHuggingPriority="750" allowsExpansionToolTips="YES" columnAutoresizingStyle="none" tableStyle="plain" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" typeSelect="NO" rowHeight="40" rowSizeStyle="automatic" viewBased="YES" id="glA-FK-Kdd" customClass="RightClickTableView" customModule="Tokenary" customModuleProvider="target">
                                             <rect key="frame" x="0.0" y="0.0" width="248" height="245"/>
                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                             <color key="backgroundColor" name="controlBackgroundColor" catalog="System" colorSpace="catalog"/>
                                             <color key="gridColor" name="gridColor" catalog="System" colorSpace="catalog"/>
                                             <tableColumns>
-                                                <tableColumn width="193" minWidth="40" maxWidth="1000" id="Usc-6R-O3H">
-                                                    <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border">
+                                                <tableColumn width="248" minWidth="40" maxWidth="1000" id="Usc-6R-O3H">
+                                                    <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="center">
                                                         <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                         <color key="backgroundColor" name="headerColor" catalog="System" colorSpace="catalog"/>
                                                     </tableHeaderCell>
@@ -839,39 +839,50 @@ DQ
                                                         <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
                                                         <color key="backgroundColor" name="controlBackgroundColor" catalog="System" colorSpace="catalog"/>
                                                     </textFieldCell>
-                                                    <tableColumnResizingMask key="resizingMask" resizeWithTable="YES" userResizable="YES"/>
                                                     <prototypeCellViews>
                                                         <tableCellView identifier="AccountCellView" id="Lp1-Zy-70c" customClass="AccountCellView" customModule="Tokenary" customModuleProvider="target">
-                                                            <rect key="frame" x="10" y="0.0" width="205" height="40"/>
+                                                            <rect key="frame" x="0.0" y="0.0" width="248" height="40"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
-                                                                <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="pdB-jS-gKE">
-                                                                    <rect key="frame" x="51" y="5" width="30" height="30"/>
+                                                                <customView translatesAutoresizingMaskIntoConstraints="NO" id="NCN-NG-n35">
+                                                                    <rect key="frame" x="77" y="0.0" width="94" height="40"/>
+                                                                    <subviews>
+                                                                        <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="pdB-jS-gKE">
+                                                                            <rect key="frame" x="0.0" y="5" width="30" height="30"/>
+                                                                            <constraints>
+                                                                                <constraint firstAttribute="width" constant="30" id="Dmm-fG-F82"/>
+                                                                                <constraint firstAttribute="height" constant="30" id="MNb-Zm-mjg"/>
+                                                                            </constraints>
+                                                                            <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyDown" image="NSApplicationIcon" id="RY9-3f-d0k"/>
+                                                                            <userDefinedRuntimeAttributes>
+                                                                                <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
+                                                                                    <integer key="value" value="15"/>
+                                                                                </userDefinedRuntimeAttribute>
+                                                                            </userDefinedRuntimeAttributes>
+                                                                        </imageView>
+                                                                        <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="sef-hl-iPV">
+                                                                            <rect key="frame" x="34" y="8" width="62" height="25"/>
+                                                                            <textFieldCell key="cell" lineBreakMode="clipping" alignment="center" title="Label" id="2a6-9c-AzV">
+                                                                                <font key="font" metaFont="systemBold" size="21"/>
+                                                                                <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
+                                                                                <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                                                                            </textFieldCell>
+                                                                        </textField>
+                                                                    </subviews>
                                                                     <constraints>
-                                                                        <constraint firstAttribute="width" constant="30" id="Dmm-fG-F82"/>
-                                                                        <constraint firstAttribute="height" constant="30" id="MNb-Zm-mjg"/>
+                                                                        <constraint firstItem="sef-hl-iPV" firstAttribute="centerY" secondItem="NCN-NG-n35" secondAttribute="centerY" id="6et-F3-O5t"/>
+                                                                        <constraint firstItem="pdB-jS-gKE" firstAttribute="centerY" secondItem="NCN-NG-n35" secondAttribute="centerY" id="Nuj-zO-bLh"/>
+                                                                        <constraint firstItem="sef-hl-iPV" firstAttribute="leading" secondItem="pdB-jS-gKE" secondAttribute="trailing" constant="6" id="Y8Y-IA-9Ls"/>
+                                                                        <constraint firstItem="pdB-jS-gKE" firstAttribute="leading" secondItem="NCN-NG-n35" secondAttribute="leading" id="ey8-Sb-rLI"/>
+                                                                        <constraint firstAttribute="trailing" secondItem="sef-hl-iPV" secondAttribute="trailing" id="xR9-al-xQQ"/>
                                                                     </constraints>
-                                                                    <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyDown" image="NSApplicationIcon" id="RY9-3f-d0k"/>
-                                                                    <userDefinedRuntimeAttributes>
-                                                                        <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
-                                                                            <integer key="value" value="15"/>
-                                                                        </userDefinedRuntimeAttribute>
-                                                                    </userDefinedRuntimeAttributes>
-                                                                </imageView>
-                                                                <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="sef-hl-iPV">
-                                                                    <rect key="frame" x="85" y="8" width="62" height="25"/>
-                                                                    <textFieldCell key="cell" lineBreakMode="clipping" alignment="center" title="Label" id="2a6-9c-AzV">
-                                                                        <font key="font" metaFont="systemBold" size="21"/>
-                                                                        <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
-                                                                        <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
-                                                                    </textFieldCell>
-                                                                </textField>
+                                                                </customView>
                                                             </subviews>
                                                             <constraints>
-                                                                <constraint firstItem="sef-hl-iPV" firstAttribute="leading" secondItem="pdB-jS-gKE" secondAttribute="trailing" constant="6" id="dOe-pb-lgM"/>
-                                                                <constraint firstItem="sef-hl-iPV" firstAttribute="centerY" secondItem="Lp1-Zy-70c" secondAttribute="centerY" id="gLs-yM-ovd"/>
-                                                                <constraint firstItem="sef-hl-iPV" firstAttribute="centerX" secondItem="Lp1-Zy-70c" secondAttribute="centerX" constant="13" id="l4c-Hs-Xss"/>
-                                                                <constraint firstItem="pdB-jS-gKE" firstAttribute="centerY" secondItem="Lp1-Zy-70c" secondAttribute="centerY" id="wKS-vz-pVO"/>
+                                                                <constraint firstItem="NCN-NG-n35" firstAttribute="centerX" secondItem="Lp1-Zy-70c" secondAttribute="centerX" id="8fG-j2-tRf"/>
+                                                                <constraint firstItem="NCN-NG-n35" firstAttribute="width" relation="lessThanOrEqual" secondItem="Lp1-Zy-70c" secondAttribute="width" constant="-20" id="LSY-Kz-5MX"/>
+                                                                <constraint firstItem="NCN-NG-n35" firstAttribute="centerY" secondItem="Lp1-Zy-70c" secondAttribute="centerY" id="TdF-hm-H9i"/>
+                                                                <constraint firstItem="NCN-NG-n35" firstAttribute="height" secondItem="Lp1-Zy-70c" secondAttribute="height" id="Wbn-Cj-NEg"/>
                                                             </constraints>
                                                             <connections>
                                                                 <outlet property="addressImageView" destination="pdB-jS-gKE" id="Feb-Zz-q1a"/>
@@ -879,11 +890,11 @@ DQ
                                                             </connections>
                                                         </tableCellView>
                                                         <tableCellView identifier="AddAccountOptionCellView" id="1KM-PS-nEo" customClass="AddAccountOptionCellView" customModule="Tokenary" customModuleProvider="target">
-                                                            <rect key="frame" x="10" y="40" width="205" height="40"/>
+                                                            <rect key="frame" x="0.0" y="40" width="248" height="40"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
                                                                 <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="BpB-tc-JdP">
-                                                                    <rect key="frame" x="18" y="8" width="181" height="25"/>
+                                                                    <rect key="frame" x="18" y="8" width="224" height="25"/>
                                                                     <textFieldCell key="cell" lineBreakMode="clipping" alignment="left" title="Label" id="FAR-3U-VR0">
                                                                         <font key="font" metaFont="systemBold" size="21"/>
                                                                         <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
