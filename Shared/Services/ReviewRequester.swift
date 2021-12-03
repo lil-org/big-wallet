@@ -19,8 +19,10 @@ struct ReviewRequster {
     }
     
     private static func requestReview() {
-        SKStoreReviewController.requestReview()
-        Defaults.latestReviewRequestDate = Date()
+        #if os(macOS)
+            SKStoreReviewController.requestReview()
+            Defaults.latestReviewRequestDate = Date()
+        #endif
     }
     
 }

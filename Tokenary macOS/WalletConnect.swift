@@ -5,7 +5,7 @@ import WalletConnect
 
 class WalletConnect {
  
-    private let agent = Agent.shared
+    private lazy var agent = Agent.shared
     private let sessionStorage = SessionStorage.shared
     private let networkMonitor = NetworkMonitor.shared
     private let ethereum = Ethereum.shared
