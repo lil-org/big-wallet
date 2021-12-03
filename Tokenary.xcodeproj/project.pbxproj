@@ -108,6 +108,10 @@
 		2CF255B0275A492100AE54B9 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C208A9E26813408005BA500 /* Secrets.swift */; };
 		2CF255B1275A4A1800AE54B9 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
 		2CF255B2275A4A7200AE54B9 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC89470269A334A00879245 /* UserDefaults.swift */; };
+		2CF255B4275A744000AE54B9 /* PasswordViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF255B3275A744000AE54B9 /* PasswordViewController.swift */; };
+		2CF255B6275A746000AE54B9 /* AccountsListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF255B5275A746000AE54B9 /* AccountsListViewController.swift */; };
+		2CF255B8275A748300AE54B9 /* ApproveTransactionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF255B7275A748300AE54B9 /* ApproveTransactionViewController.swift */; };
+		2CF255BA275A749300AE54B9 /* ApproveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF255B9275A749300AE54B9 /* ApproveViewController.swift */; };
 		A623B7904B1ED3149343DCD6 /* Pods_Tokenary_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5597F081AA0DC028CDA696CE /* Pods_Tokenary_iOS.framework */; };
 		D7B47B44D0CC4E1F557FC0AA /* Pods_Tokenary.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 70BA61C085C7AA2F72DEE02A /* Pods_Tokenary.framework */; };
 /* End PBXBuildFile section */
@@ -248,6 +252,10 @@
 		2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordViewController.swift; sourceTree = "<group>"; };
 		2CE3D011267F73C00032A62E /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
 		2CEFEB15274D5DC900CE23BD /* inpage.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = inpage.js; sourceTree = "<group>"; };
+		2CF255B3275A744000AE54B9 /* PasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordViewController.swift; sourceTree = "<group>"; };
+		2CF255B5275A746000AE54B9 /* AccountsListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsListViewController.swift; sourceTree = "<group>"; };
+		2CF255B7275A748300AE54B9 /* ApproveTransactionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveTransactionViewController.swift; sourceTree = "<group>"; };
+		2CF255B9275A749300AE54B9 /* ApproveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveViewController.swift; sourceTree = "<group>"; };
 		5597F081AA0DC028CDA696CE /* Pods_Tokenary_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Tokenary_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		6149B8295F757798C8D71308 /* Pods-Tokenary iOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary iOS.release.xcconfig"; path = "Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS.release.xcconfig"; sourceTree = "<group>"; };
 		70BA61C085C7AA2F72DEE02A /* Pods_Tokenary.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Tokenary.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -403,6 +411,7 @@
 			children = (
 				2C5FF97126C84F7B00B32ACC /* AppDelegate.swift */,
 				2C5FF97326C84F7B00B32ACC /* SceneDelegate.swift */,
+				2CF255BB275A74A400AE54B9 /* Screens */,
 				2C5FF97526C84F7B00B32ACC /* ViewController.swift */,
 				2C5FF97726C84F7B00B32ACC /* Main.storyboard */,
 				2C5FF97A26C84F7C00B32ACC /* Assets.xcassets */,
@@ -568,6 +577,17 @@
 				2C208A9E26813408005BA500 /* Secrets.swift */,
 			);
 			path = "Supporting Files";
+			sourceTree = "<group>";
+		};
+		2CF255BB275A74A400AE54B9 /* Screens */ = {
+			isa = PBXGroup;
+			children = (
+				2CF255B3275A744000AE54B9 /* PasswordViewController.swift */,
+				2CF255B5275A746000AE54B9 /* AccountsListViewController.swift */,
+				2CF255B7275A748300AE54B9 /* ApproveTransactionViewController.swift */,
+				2CF255B9275A749300AE54B9 /* ApproveViewController.swift */,
+			);
+			path = Screens;
 			sourceTree = "<group>";
 		};
 		D25DB1FFBD51D3DEC9E5A886 /* Frameworks */ = {
@@ -990,12 +1010,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2CF255BA275A749300AE54B9 /* ApproveViewController.swift in Sources */,
 				2CF25599275A46E200AE54B9 /* PeerMeta.swift in Sources */,
 				2CF255A0275A47DD00AE54B9 /* Bundle.swift in Sources */,
 				2CF255AC275A48CF00AE54B9 /* EthereumNetwork.swift in Sources */,
 				2CF255A6275A48BB00AE54B9 /* GasService.swift in Sources */,
 				2CF255A5275A48BB00AE54B9 /* ReviewRequester.swift in Sources */,
 				2C5FF97626C84F7B00B32ACC /* ViewController.swift in Sources */,
+				2CF255B6275A746000AE54B9 /* AccountsListViewController.swift in Sources */,
 				2CF25597275A46D300AE54B9 /* Defaults.swift in Sources */,
 				2CF255A2275A47DD00AE54B9 /* String.swift in Sources */,
 				2CF2559D275A479800AE54B9 /* TokenaryWallet.swift in Sources */,
@@ -1007,12 +1029,14 @@
 				2CF25598275A46D600AE54B9 /* Strings.swift in Sources */,
 				2CF255AE275A48CF00AE54B9 /* Transaction.swift in Sources */,
 				2CF255A1275A47DD00AE54B9 /* Notification.swift in Sources */,
+				2CF255B4275A744000AE54B9 /* PasswordViewController.swift in Sources */,
 				2CF255AA275A48BB00AE54B9 /* SessionStorage.swift in Sources */,
 				2CF255AD275A48CF00AE54B9 /* EthereumChain.swift in Sources */,
 				2CF2559C275A477F00AE54B9 /* ApprovalSubject.swift in Sources */,
 				2CF255B1275A4A1800AE54B9 /* ResponseToExtension.swift in Sources */,
 				2CF2559B275A46E700AE54B9 /* AuthenticationReason.swift in Sources */,
 				2CF255A3275A47DD00AE54B9 /* UserDefaults.swift in Sources */,
+				2CF255B8275A748300AE54B9 /* ApproveTransactionViewController.swift in Sources */,
 				2C5FF97226C84F7B00B32ACC /* AppDelegate.swift in Sources */,
 				2CF255A8275A48BB00AE54B9 /* NetworkMonitor.swift in Sources */,
 				2C5FF97426C84F7B00B32ACC /* SceneDelegate.swift in Sources */,
