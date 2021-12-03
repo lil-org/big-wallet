@@ -5,6 +5,7 @@ import WalletConnect
 
 class WalletConnect {
  
+    private let agent = Agent.shared
     private let sessionStorage = SessionStorage.shared
     private let networkMonitor = NetworkMonitor.shared
     private let ethereum = Ethereum.shared
@@ -132,7 +133,7 @@ class WalletConnect {
         
         let peer = PeerMeta(wcPeerMeta: getPeerOfInteractor(interactor))
         let transaction = Transaction(from: wct.from, to: to, nonce: wct.nonce, gasPrice: wct.gasPrice, gas: wct.gas, value: wct.value, data: wct.data)
-        Agent.shared.showApprove(transaction: transaction, chain: chain, peerMeta: peer, browser: nil) { [weak self, weak interactor] transaction in
+        agent.showApprove(transaction: transaction, chain: chain, peerMeta: peer, browser: nil) { [weak self, weak interactor] transaction in
             if let transaction = transaction {
                 self?.sendTransaction(transaction, walletId: walletId, chainId: chainId, requestId: id, interactor: interactor)
             } else {
@@ -159,7 +160,7 @@ class WalletConnect {
         }
 
         let peer = PeerMeta(wcPeerMeta: getPeerOfInteractor(interactor))
-        Agent.shared.showApprove(subject: approvalSubject, meta: message ?? "", peerMeta: peer, browser: nil) { [weak self, weak interactor] approved in
+        agent.showApprove(subject: approvalSubject, meta: message ?? "", peerMeta: peer, browser: nil) { [weak self, weak interactor] approved in
             if approved {
                 self?.sign(id: id, payload: payload, walletId: walletId, interactor: interactor)
             } else {
