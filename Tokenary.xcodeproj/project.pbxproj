@@ -30,7 +30,6 @@
 		2C528A16267FA8EB00CA3ADD /* Defaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C528A15267FA8EB00CA3ADD /* Defaults.swift */; };
 		2C5FF97226C84F7B00B32ACC /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C5FF97126C84F7B00B32ACC /* AppDelegate.swift */; };
 		2C5FF97426C84F7B00B32ACC /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C5FF97326C84F7B00B32ACC /* SceneDelegate.swift */; };
-		2C5FF97626C84F7B00B32ACC /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C5FF97526C84F7B00B32ACC /* ViewController.swift */; };
 		2C5FF97926C84F7B00B32ACC /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C5FF97726C84F7B00B32ACC /* Main.storyboard */; };
 		2C5FF97B26C84F7C00B32ACC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C5FF97A26C84F7C00B32ACC /* Assets.xcassets */; };
 		2C5FF97E26C84F7C00B32ACC /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C5FF97C26C84F7C00B32ACC /* LaunchScreen.storyboard */; };
@@ -64,6 +63,7 @@
 		2C9F0B6826BDCB2E008FA3D6 /* EthereumChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */; };
 		2CAA412526C7CD93009F3535 /* ReviewRequester.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CAA412426C7CD93009F3535 /* ReviewRequester.swift */; };
 		2CC0CDBE2692027E0072922A /* PriceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC0CDBD2692027E0072922A /* PriceService.swift */; };
+		2CC6EF0D275E64810040CC62 /* UIViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC6EF0C275E64810040CC62 /* UIViewController.swift */; };
 		2CC8946F269A2E8C00879245 /* SessionStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8946E269A2E8C00879245 /* SessionStorage.swift */; };
 		2CC89471269A334A00879245 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC89470269A334A00879245 /* UserDefaults.swift */; };
 		2CCEB83027594E2A00768473 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CCEB82F27594E2A00768473 /* SafariWebExtensionHandler.swift */; };
@@ -197,7 +197,6 @@
 		2C5FF96F26C84F7B00B32ACC /* Tokenary iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Tokenary iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C5FF97126C84F7B00B32ACC /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		2C5FF97326C84F7B00B32ACC /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
-		2C5FF97526C84F7B00B32ACC /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		2C5FF97826C84F7B00B32ACC /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		2C5FF97A26C84F7C00B32ACC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2C5FF97D26C84F7C00B32ACC /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -232,6 +231,7 @@
 		2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumChain.swift; sourceTree = "<group>"; };
 		2CAA412426C7CD93009F3535 /* ReviewRequester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewRequester.swift; sourceTree = "<group>"; };
 		2CC0CDBD2692027E0072922A /* PriceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceService.swift; sourceTree = "<group>"; };
+		2CC6EF0C275E64810040CC62 /* UIViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIViewController.swift; sourceTree = "<group>"; };
 		2CC8946E269A2E8C00879245 /* SessionStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStorage.swift; sourceTree = "<group>"; };
 		2CC89470269A334A00879245 /* UserDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaults.swift; sourceTree = "<group>"; };
 		2CCEB82D27594E2A00768473 /* Safari iOS.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Safari iOS.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -411,8 +411,8 @@
 			children = (
 				2C5FF97126C84F7B00B32ACC /* AppDelegate.swift */,
 				2C5FF97326C84F7B00B32ACC /* SceneDelegate.swift */,
+				2CC6EF0E275E64840040CC62 /* Extensions */,
 				2CF255BB275A74A400AE54B9 /* Screens */,
-				2C5FF97526C84F7B00B32ACC /* ViewController.swift */,
 				2C5FF97726C84F7B00B32ACC /* Main.storyboard */,
 				2C5FF97A26C84F7C00B32ACC /* Assets.xcassets */,
 				2C5FF97C26C84F7C00B32ACC /* LaunchScreen.storyboard */,
@@ -475,6 +475,14 @@
 				2C78F8272683BDCC00C10670 /* Alert.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		2CC6EF0E275E64840040CC62 /* Extensions */ = {
+			isa = PBXGroup;
+			children = (
+				2CC6EF0C275E64810040CC62 /* UIViewController.swift */,
+			);
+			path = Extensions;
 			sourceTree = "<group>";
 		};
 		2CCEB7A127592A1F00768473 /* Shared */ = {
@@ -1016,7 +1024,6 @@
 				2CF255AC275A48CF00AE54B9 /* EthereumNetwork.swift in Sources */,
 				2CF255A6275A48BB00AE54B9 /* GasService.swift in Sources */,
 				2CF255A5275A48BB00AE54B9 /* ReviewRequester.swift in Sources */,
-				2C5FF97626C84F7B00B32ACC /* ViewController.swift in Sources */,
 				2CF255B6275A746000AE54B9 /* AccountsListViewController.swift in Sources */,
 				2CF25597275A46D300AE54B9 /* Defaults.swift in Sources */,
 				2CF255A2275A47DD00AE54B9 /* String.swift in Sources */,
@@ -1024,6 +1031,7 @@
 				2CF255AB275A48CF00AE54B9 /* Ethereum.swift in Sources */,
 				2CF2559A275A46E400AE54B9 /* SafariRequest.swift in Sources */,
 				2CF255B0275A492100AE54B9 /* Secrets.swift in Sources */,
+				2CC6EF0D275E64810040CC62 /* UIViewController.swift in Sources */,
 				2CF255A9275A48BB00AE54B9 /* Keychain.swift in Sources */,
 				2CF255A7275A48BB00AE54B9 /* PriceService.swift in Sources */,
 				2CF25598275A46D600AE54B9 /* Strings.swift in Sources */,
