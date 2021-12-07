@@ -92,7 +92,7 @@ class PasswordViewController: NSViewController {
 extension PasswordViewController: NSTextFieldDelegate {
     
     func controlTextDidChange(_ obj: Notification) {
-        okButton.isEnabled = passwordTextField.stringValue.count >= 4
+        okButton.isEnabled = passwordTextField.stringValue.isOkAsPassword
     }
     
 }

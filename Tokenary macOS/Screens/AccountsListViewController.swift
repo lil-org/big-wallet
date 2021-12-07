@@ -24,9 +24,9 @@ class AccountsListViewController: NSViewController {
         var title: String {
             switch self {
             case .createNew:
-                return "🌱  Create New"
+                return Strings.createNew
             case .importExisting:
-                return "💼  Import Existing"
+                return Strings.importExisting
             }
         }
     }
@@ -97,7 +97,7 @@ class AccountsListViewController: NSViewController {
     
 	private func reloadHeader() {
         let canSelectAccount = onSelectedWallet != nil && !wallets.isEmpty
-        titleLabel.stringValue = canSelectAccount ? "Select\nAccount" : "Accounts"
+        titleLabel.stringValue = canSelectAccount ? Strings.selectAccountTwoLines : Strings.accounts
         addButton.isHidden = wallets.isEmpty
         chainButtonHeightConstraint.constant = canSelectAccount ? 40 : 15
         chainButtonContainer.isHidden = !canSelectAccount

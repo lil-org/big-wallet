@@ -8,4 +8,13 @@ extension String {
         return hasPrefix("{") && hasSuffix("}") && count > 3
     }
     
+    var isOkAsPassword: Bool {
+        return count >= 4
+    }
+    
+    var withFirstLetterCapitalized: String {
+        guard !isEmpty else { return self }
+        return prefix(1).uppercased() + dropFirst()
+    }
+    
 }

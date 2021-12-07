@@ -10,4 +10,8 @@ extension UIViewController {
         return navigationController
     }
     
+    @objc func dismissAnimated() {
+        dismiss(animated: true)
+    }
+    
 }

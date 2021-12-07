@@ -51,5 +51,11 @@ struct Strings {
     static let copy = "Copy"
     static let canceled = "Canceled"
     static let failedToVerify = "Failed to verify"
+    static let accounts = "Accounts"
+    static let selectAccountTwoLines = "Select\nAccount"
+    static let importAccount = "Import Account"
+    static let addAccount = "Add Account"
+    static let createNew = "🌱  Create New"
+    static let importExisting = "💼  Import Existing"
     
 }
