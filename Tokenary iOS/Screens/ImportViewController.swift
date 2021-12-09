@@ -26,7 +26,9 @@ class ImportViewController: UIViewController {
     }
     
     @IBAction func pasteButtonTapped(_ sender: Any) {
-        
+        if let text = UIPasteboard.general.string {
+            textView.text = text
+        }
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
