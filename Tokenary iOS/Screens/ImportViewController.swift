@@ -12,7 +12,6 @@ class ImportViewController: UIViewController {
         super.viewDidLoad()
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
-        textView.becomeFirstResponder()
         navigationItem.title = Strings.importAccount
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(dismissAnimated))
         
@@ -22,6 +21,7 @@ class ImportViewController: UIViewController {
         super.viewWillAppear(animated)
         DispatchQueue.main.async { [weak self] in
             self?.navigationController?.navigationBar.sizeToFit()
+            self?.textView.becomeFirstResponder()
         }
     }
     
