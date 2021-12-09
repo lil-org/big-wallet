@@ -14,4 +14,11 @@ extension UIViewController {
         dismiss(animated: true)
     }
     
+    func showMessageAlert(text: String) {
+        let alert = UIAlertController(title: text, message: nil, preferredStyle: .alert)
+        let okAction = UIAlertAction.init(title: Strings.ok, style: .default)
+        alert.addAction(okAction)
+        present(alert, animated: true)
+    }
+    
 }

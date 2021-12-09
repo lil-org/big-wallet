@@ -4,6 +4,14 @@ import UIKit
 
 class PasswordViewController: UIViewController {
     
+    enum Mode {
+        case create, repeatAfterCreate, enter
+    }
+    
+    private let keychain = Keychain.shared
+    private var mode = Mode.create
+    var passwordToRepeat: String?
+    
     @IBOutlet weak var passwordTextField: UITextField! {
         didSet {
             passwordTextField.delegate = self
@@ -15,10 +23,34 @@ class PasswordViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        navigationItem.title = "Enter password"
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
+        navigationItem.backButtonDisplayMode = .minimal
+        
+        if passwordToRepeat != nil {
+            switchToMode(.repeatAfterCreate)
+        } else if keychain.password != nil {
+            switchToMode(.enter)
+        } else {
+            switchToMode(.create)
+        }
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
         passwordTextField.becomeFirstResponder()
+    }
+    
+    func switchToMode(_ mode: Mode) {
+        self.mode = mode
+        switch mode {
+        case .create:
+            navigationItem.title = Strings.createPassword
+        case .repeatAfterCreate:
+            navigationItem.title = Strings.repeatPassword
+        case .enter:
+            navigationItem.title = Strings.enterPassword
+        }
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
@@ -33,7 +65,25 @@ class PasswordViewController: UIViewController {
     }
     
     private func proceedIfPossible() {
-        showAccountsList()
+        switch mode {
+        case .create:
+            let passwordViewController = instantiate(PasswordViewController.self, from: .main)
+            passwordViewController.passwordToRepeat = passwordTextField.text
+            navigationController?.pushViewController(passwordViewController, animated: true)
+        case .repeatAfterCreate:
+            if let password = passwordTextField.text, !password.isEmpty, password == passwordToRepeat {
+                keychain.save(password: password)
+                showAccountsList()
+            } else {
+                showMessageAlert(text: Strings.passwordDoesNotMatch)
+            }
+        case .enter:
+            if passwordTextField.text == keychain.password {
+                showAccountsList()
+            } else {
+                showMessageAlert(text: Strings.passwordDoesNotMatch)
+            }
+        }
     }
     
     private func showAccountsList() {
@@ -54,7 +104,9 @@ extension PasswordViewController: UITextFieldDelegate {
     }
     
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        proceedIfPossible()
+        if passwordTextField.text?.isOkAsPassword == true {
+            proceedIfPossible()
+        }
         return true
     }
     
