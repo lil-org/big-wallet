@@ -4,6 +4,19 @@ import UIKit
 
 class AccountsListViewController: UIViewController {
     
+    private let walletsManager = WalletsManager.shared
+    
+    private var wallets: [TokenaryWallet] {
+        return walletsManager.wallets
+    }
+    
+    @IBOutlet weak var tableView: UITableView! {
+        didSet {
+            tableView.delegate = self
+            tableView.dataSource = self
+        }
+    }
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         navigationItem.title = Strings.accounts
@@ -39,12 +52,58 @@ class AccountsListViewController: UIViewController {
     }
     
     private func createNewAccountAndShowSecretWords() {
-        // TODO: implement
+        guard let wallet = try? walletsManager.createWallet() else { return }
+        tableView.reloadData()
+        showKey(wallet: wallet, mnemonic: true)
+    }
+    
+    private func showKey(wallet: TokenaryWallet, mnemonic: Bool) {
+        let secret: String
+        if mnemonic, let mnemonicString = try? walletsManager.exportMnemonic(wallet: wallet) {
+            secret = mnemonicString
+        } else if let data = try? walletsManager.exportPrivateKey(wallet: wallet) {
+            secret = data.hexString
+        } else {
+            return
+        }
+        
+        let alert = UIAlertController(title: mnemonic ? Strings.secretWords : Strings.privateKey, message: secret, preferredStyle: .alert)
+        let okAction = UIAlertAction(title: Strings.ok, style: .default)
+        let cancelAction = UIAlertAction(title: Strings.copy, style: .default) { _ in
+            UIPasteboard.general.string = secret
+        }
+        alert.addAction(cancelAction)
+        alert.addAction(okAction)
+        present(alert, animated: true)
     }
     
     private func importExistingAccount() {
         let importAccountViewController = instantiate(ImportViewController.self, from: .main)
         present(importAccountViewController.inNavigationController, animated: true)
+    }
+    
+}
+
+
+extension AccountsListViewController: UITableViewDelegate {
+    
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+    }
+    
+}
+
+extension AccountsListViewController: UITableViewDataSource {
+    
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return walletsManager.wallets.count
+    }
+    
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = UITableViewCell()
+        let wallet = wallets[indexPath.row]
+        cell.textLabel?.text = wallet.ethereumAddress
+        return cell
     }
     
 }
