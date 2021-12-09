@@ -103,8 +103,17 @@ extension AccountsListViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCellOfType(AccountTableViewCell.self, for: indexPath)
         let wallet = wallets[indexPath.row]
-        cell.setup(address: wallet.ethereumAddress ?? "")
+        cell.setup(address: wallet.ethereumAddress ?? "", delegate: self)
         return cell
+    }
+    
+}
+
+extension AccountsListViewController: AccountTableViewCellDelegate {
+    
+    func didTapMoreButton(accountCell: AccountTableViewCell) {
+        // TODO: implement
+        showMessageAlert(text: "Hello fren")
     }
     
 }

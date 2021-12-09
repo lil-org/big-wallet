@@ -65,6 +65,7 @@
 		2C96D38F2762317300687301 /* AccountTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D38D2762317300687301 /* AccountTableViewCell.swift */; };
 		2C96D3902762317300687301 /* AccountTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C96D38E2762317300687301 /* AccountTableViewCell.xib */; };
 		2C96D392276232A300687301 /* UITableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D391276232A300687301 /* UITableView.swift */; };
+		2C96D3962762380400687301 /* ButtonWithExtendedArea.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D3952762380400687301 /* ButtonWithExtendedArea.swift */; };
 		2C9F0B6526BDC9AF008FA3D6 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */; };
 		2C9F0B6826BDCB2E008FA3D6 /* EthereumChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */; };
 		2CAA412526C7CD93009F3535 /* ReviewRequester.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CAA412426C7CD93009F3535 /* ReviewRequester.swift */; };
@@ -239,6 +240,7 @@
 		2C96D38D2762317300687301 /* AccountTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountTableViewCell.swift; sourceTree = "<group>"; };
 		2C96D38E2762317300687301 /* AccountTableViewCell.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = AccountTableViewCell.xib; sourceTree = "<group>"; };
 		2C96D391276232A300687301 /* UITableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITableView.swift; sourceTree = "<group>"; };
+		2C96D3952762380400687301 /* ButtonWithExtendedArea.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonWithExtendedArea.swift; sourceTree = "<group>"; };
 		2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumNetwork.swift; sourceTree = "<group>"; };
 		2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumChain.swift; sourceTree = "<group>"; };
 		2CAA412426C7CD93009F3535 /* ReviewRequester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewRequester.swift; sourceTree = "<group>"; };
@@ -423,6 +425,7 @@
 			children = (
 				2C5FF97126C84F7B00B32ACC /* AppDelegate.swift */,
 				2C5FF97326C84F7B00B32ACC /* SceneDelegate.swift */,
+				2C96D394276237F600687301 /* Library */,
 				2CC6EF0E275E64840040CC62 /* Extensions */,
 				2CF255BB275A74A400AE54B9 /* Screens */,
 				2C5FF97726C84F7B00B32ACC /* Main.storyboard */,
@@ -506,6 +509,14 @@
 				2C96D38E2762317300687301 /* AccountTableViewCell.xib */,
 			);
 			path = Accounts;
+			sourceTree = "<group>";
+		};
+		2C96D394276237F600687301 /* Library */ = {
+			isa = PBXGroup;
+			children = (
+				2C96D3952762380400687301 /* ButtonWithExtendedArea.swift */,
+			);
+			path = Library;
 			sourceTree = "<group>";
 		};
 		2CC6EF0E275E64840040CC62 /* Extensions */ = {
@@ -1054,6 +1065,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2CF255BA275A749300AE54B9 /* ApproveViewController.swift in Sources */,
+				2C96D3962762380400687301 /* ButtonWithExtendedArea.swift in Sources */,
 				2CF25599275A46E200AE54B9 /* PeerMeta.swift in Sources */,
 				2CF255A0275A47DD00AE54B9 /* Bundle.swift in Sources */,
 				2CF255AC275A48CF00AE54B9 /* EthereumNetwork.swift in Sources */,
