@@ -14,7 +14,7 @@ class AccountsListViewController: UIViewController {
     
     @objc private func addAccount() {
         let actionSheet = UIAlertController(title: Strings.addAccount, message: nil, preferredStyle: .actionSheet)
-        let newAccountAction = UIAlertAction(title: Strings.createNew, style: .default) { [weak self] _ in
+        let newAccountAction = UIAlertAction(title: "🌱 " + Strings.createNew, style: .default) { [weak self] _ in
             self?.createNewAccount()
         }
         let importAccountAction = UIAlertAction(title: Strings.importExisting, style: .default) { [weak self] _ in
