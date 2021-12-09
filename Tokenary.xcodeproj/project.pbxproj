@@ -62,6 +62,9 @@
 		2C901C4A2689F01700D0926A /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C492689F01700D0926A /* Strings.swift */; };
 		2C901C4D268A033100D0926A /* GasService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C4C268A033100D0926A /* GasService.swift */; };
 		2C917429267D2A6E00049075 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C917428267D2A6E00049075 /* Keychain.swift */; };
+		2C96D38F2762317300687301 /* AccountTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D38D2762317300687301 /* AccountTableViewCell.swift */; };
+		2C96D3902762317300687301 /* AccountTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C96D38E2762317300687301 /* AccountTableViewCell.xib */; };
+		2C96D392276232A300687301 /* UITableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D391276232A300687301 /* UITableView.swift */; };
 		2C9F0B6526BDC9AF008FA3D6 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */; };
 		2C9F0B6826BDCB2E008FA3D6 /* EthereumChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */; };
 		2CAA412526C7CD93009F3535 /* ReviewRequester.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CAA412426C7CD93009F3535 /* ReviewRequester.swift */; };
@@ -233,6 +236,9 @@
 		2C901C492689F01700D0926A /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		2C901C4C268A033100D0926A /* GasService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GasService.swift; sourceTree = "<group>"; };
 		2C917428267D2A6E00049075 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
+		2C96D38D2762317300687301 /* AccountTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountTableViewCell.swift; sourceTree = "<group>"; };
+		2C96D38E2762317300687301 /* AccountTableViewCell.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = AccountTableViewCell.xib; sourceTree = "<group>"; };
+		2C96D391276232A300687301 /* UITableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITableView.swift; sourceTree = "<group>"; };
 		2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumNetwork.swift; sourceTree = "<group>"; };
 		2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumChain.swift; sourceTree = "<group>"; };
 		2CAA412426C7CD93009F3535 /* ReviewRequester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewRequester.swift; sourceTree = "<group>"; };
@@ -492,11 +498,22 @@
 			path = Content;
 			sourceTree = "<group>";
 		};
+		2C96D38C2762314A00687301 /* Accounts */ = {
+			isa = PBXGroup;
+			children = (
+				2CF255B5275A746000AE54B9 /* AccountsListViewController.swift */,
+				2C96D38D2762317300687301 /* AccountTableViewCell.swift */,
+				2C96D38E2762317300687301 /* AccountTableViewCell.xib */,
+			);
+			path = Accounts;
+			sourceTree = "<group>";
+		};
 		2CC6EF0E275E64840040CC62 /* Extensions */ = {
 			isa = PBXGroup;
 			children = (
 				2CC6EF0C275E64810040CC62 /* UIViewController.swift */,
 				2C8E88A3275FB7B9003EB8DB /* UIApplication.swift */,
+				2C96D391276232A300687301 /* UITableView.swift */,
 			);
 			path = Extensions;
 			sourceTree = "<group>";
@@ -606,8 +623,8 @@
 		2CF255BB275A74A400AE54B9 /* Screens */ = {
 			isa = PBXGroup;
 			children = (
+				2C96D38C2762314A00687301 /* Accounts */,
 				2CF255B3275A744000AE54B9 /* PasswordViewController.swift */,
-				2CF255B5275A746000AE54B9 /* AccountsListViewController.swift */,
 				2C8E88A1275FA596003EB8DB /* ImportViewController.swift */,
 				2CF255B7275A748300AE54B9 /* ApproveTransactionViewController.swift */,
 				2CF255B9275A749300AE54B9 /* ApproveViewController.swift */,
@@ -822,6 +839,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2C5FF97E26C84F7C00B32ACC /* LaunchScreen.storyboard in Resources */,
+				2C96D3902762317300687301 /* AccountTableViewCell.xib in Resources */,
 				2C5FF97B26C84F7C00B32ACC /* Assets.xcassets in Resources */,
 				2C5FF97926C84F7B00B32ACC /* Main.storyboard in Resources */,
 			);
@@ -1040,6 +1058,7 @@
 				2CF255A0275A47DD00AE54B9 /* Bundle.swift in Sources */,
 				2CF255AC275A48CF00AE54B9 /* EthereumNetwork.swift in Sources */,
 				2CF255A6275A48BB00AE54B9 /* GasService.swift in Sources */,
+				2C96D392276232A300687301 /* UITableView.swift in Sources */,
 				2CF255A5275A48BB00AE54B9 /* ReviewRequester.swift in Sources */,
 				2CF255B6275A746000AE54B9 /* AccountsListViewController.swift in Sources */,
 				2CF25597275A46D300AE54B9 /* Defaults.swift in Sources */,
@@ -1053,6 +1072,7 @@
 				2CF255A7275A48BB00AE54B9 /* PriceService.swift in Sources */,
 				2CF25598275A46D600AE54B9 /* Strings.swift in Sources */,
 				2CF255AE275A48CF00AE54B9 /* Transaction.swift in Sources */,
+				2C96D38F2762317300687301 /* AccountTableViewCell.swift in Sources */,
 				2CF255A1275A47DD00AE54B9 /* Notification.swift in Sources */,
 				2CF255B4275A744000AE54B9 /* PasswordViewController.swift in Sources */,
 				2C8E889F275F9967003EB8DB /* Storyboard.swift in Sources */,

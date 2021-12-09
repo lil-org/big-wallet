@@ -14,6 +14,7 @@ class AccountsListViewController: UIViewController {
         didSet {
             tableView.delegate = self
             tableView.dataSource = self
+            tableView.registerReusableCell(type: AccountTableViewCell.self)
         }
     }
     
@@ -100,9 +101,9 @@ extension AccountsListViewController: UITableViewDataSource {
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = UITableViewCell()
+        let cell = tableView.dequeueReusableCellOfType(AccountTableViewCell.self, for: indexPath)
         let wallet = wallets[indexPath.row]
-        cell.textLabel?.text = wallet.ethereumAddress
+        cell.setup(address: wallet.ethereumAddress ?? "")
         return cell
     }
     
