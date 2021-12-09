@@ -23,7 +23,28 @@ class AccountsListViewController: UIViewController {
         navigationItem.title = Strings.accounts
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
-        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addAccount))
+        let addItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addAccount))
+        let preferencesItem = UIBarButtonItem(image: UIImage(systemName: "gearshape"), style: UIBarButtonItem.Style.plain, target: self, action: #selector(preferencesButtonTapped))
+        navigationItem.rightBarButtonItems = [addItem, preferencesItem]
+    }
+    
+    @objc private func preferencesButtonTapped() {
+        let actionSheet = UIAlertController(title: Strings.tokenary, message: nil, preferredStyle: .actionSheet)
+        let twitterAction = UIAlertAction(title: Strings.viewOnTwitter, style: .default) { _ in
+            UIApplication.shared.open(URL.twitter)
+        }
+        let githubAction = UIAlertAction(title: Strings.viewOnGithub, style: .default) { _ in
+            UIApplication.shared.open(URL.github)
+        }
+        let emailAction = UIAlertAction(title: Strings.dropUsALine, style: .default) { _ in
+            UIApplication.shared.open(URL.email)
+        }
+        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
+        actionSheet.addAction(twitterAction)
+        actionSheet.addAction(githubAction)
+        actionSheet.addAction(emailAction)
+        actionSheet.addAction(cancelAction)
+        present(actionSheet, animated: true)
     }
     
     @objc private func addAccount() {

@@ -135,10 +135,10 @@ class Agent: NSObject {
         let menu = NSMenu(title: Strings.tokenary)
         
         let showItem = NSMenuItem(title: Strings.showTokenary, action: #selector(didSelectShowMenuItem), keyEquivalent: "")
-        let safariItem = NSMenuItem(title: Strings.enableSafariExtension, action: #selector(enableSafariExtension), keyEquivalent: "")
-        let mailItem = NSMenuItem(title: Strings.dropUsALine, action: #selector(didSelectMailMenuItem), keyEquivalent: "")
-        let githubItem = NSMenuItem(title: Strings.viewOnGithub, action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
-        let twitterItem = NSMenuItem(title: Strings.viewOnTwitter, action: #selector(didSelectTwitterMenuItem), keyEquivalent: "")
+        let safariItem = NSMenuItem(title: Strings.enableSafariExtension.withEllipsis, action: #selector(enableSafariExtension), keyEquivalent: "")
+        let mailItem = NSMenuItem(title: Strings.dropUsALine.withEllipsis, action: #selector(didSelectMailMenuItem), keyEquivalent: "")
+        let githubItem = NSMenuItem(title: Strings.viewOnGithub.withEllipsis, action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
+        let twitterItem = NSMenuItem(title: Strings.viewOnTwitter.withEllipsis, action: #selector(didSelectTwitterMenuItem), keyEquivalent: "")
         let quitItem = NSMenuItem(title: Strings.quit, action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
         showItem.attributedTitle = NSAttributedString(string: "👀 " + Strings.showTokenary, attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
         
@@ -179,15 +179,11 @@ class Agent: NSObject {
     }
     
     @objc private func didSelectTwitterMenuItem() {
-        if let url = URL(string: "https://tokenary.io/twitter") {
-            NSWorkspace.shared.open(url)
-        }
+        NSWorkspace.shared.open(URL.twitter)
     }
     
     @objc private func didSelectGitHubMenuItem() {
-        if let url = URL(string: "https://tokenary.io/github") {
-            NSWorkspace.shared.open(url)
-        }
+        NSWorkspace.shared.open(URL.github)
     }
     
     @objc func enableSafariExtension() {
@@ -195,9 +191,7 @@ class Agent: NSObject {
     }
     
     @objc private func didSelectMailMenuItem() {
-        if let url = URL(string: "mailto:support@tokenary.io") {
-            NSWorkspace.shared.open(url)
-        }
+        NSWorkspace.shared.open(URL.email)
     }
     
     @objc private func didSelectShowMenuItem() {
