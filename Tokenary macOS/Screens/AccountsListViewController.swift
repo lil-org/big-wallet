@@ -210,9 +210,7 @@ class AccountsListViewController: NSViewController {
     @objc private func didClickViewOnEtherscan(_ sender: AnyObject) {
         let row = tableView.deselectedRow
         guard row >= 0, let address = wallets[row].ethereumAddress else { return }
-        if let url = URL(string: "https://etherscan.io/address/\(address)") {
-            NSWorkspace.shared.open(url)
-        }
+        NSWorkspace.shared.open(URL.etherscan(address: address))
     }
     
     @objc private func didClickCopyAddress(_ sender: AnyObject) {

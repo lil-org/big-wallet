@@ -104,6 +104,44 @@ class AccountsListViewController: UIViewController {
         present(importAccountViewController.inNavigationController, animated: true)
     }
     
+    private func showActionsForWallet(_ wallet: TokenaryWallet) {
+        let address = wallet.ethereumAddress ?? ""
+        let actionSheet = UIAlertController(title: address, message: nil, preferredStyle: .actionSheet)
+        
+        let copyAddressAction = UIAlertAction(title: Strings.copyAddress, style: .default) { _ in
+            UIPasteboard.general.string = address
+        }
+        
+        let etherscanAction = UIAlertAction(title: Strings.viewOnEtherscan, style: .default) { _ in
+            UIApplication.shared.open(URL.etherscan(address: address))
+        }
+        
+        let showKeyAction = UIAlertAction(title: Strings.showAccountKey, style: .default) { [weak self] _ in
+            self?.didTapExportAccount(wallet)
+        }
+        
+        let removeAction = UIAlertAction(title: Strings.removeAccount, style: .destructive) { [weak self] _ in
+            self?.didTapRemoveAccount(wallet)
+        }
+        
+        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
+        
+        actionSheet.addAction(copyAddressAction)
+        actionSheet.addAction(etherscanAction)
+        actionSheet.addAction(showKeyAction)
+        actionSheet.addAction(removeAction)
+        actionSheet.addAction(cancelAction)
+        present(actionSheet, animated: true)
+    }
+    
+    private func didTapRemoveAccount(_ wallet: TokenaryWallet) {
+        // TODO: implement
+    }
+    
+    private func didTapExportAccount(_ wallet: TokenaryWallet) {
+        // TODO: implement
+    }
+    
 }
 
 
@@ -111,6 +149,7 @@ extension AccountsListViewController: UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        showActionsForWallet(wallets[indexPath.row])
     }
     
 }
@@ -133,8 +172,8 @@ extension AccountsListViewController: UITableViewDataSource {
 extension AccountsListViewController: AccountTableViewCellDelegate {
     
     func didTapMoreButton(accountCell: AccountTableViewCell) {
-        // TODO: implement
-        showMessageAlert(text: "Hello fren")
+        guard let index = tableView.indexPath(for: accountCell)?.row else { return }
+        showActionsForWallet(wallets[index])
     }
     
 }
