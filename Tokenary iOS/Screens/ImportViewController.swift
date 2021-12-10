@@ -21,8 +21,12 @@ class ImportViewController: UIViewController {
         super.viewWillAppear(animated)
         DispatchQueue.main.async { [weak self] in
             self?.navigationController?.navigationBar.sizeToFit()
-            self?.textView.becomeFirstResponder()
         }
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        textView.becomeFirstResponder()
     }
     
     @IBAction func pasteButtonTapped(_ sender: Any) {
