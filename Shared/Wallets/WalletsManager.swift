@@ -25,6 +25,7 @@ final class WalletsManager {
         try? load()
     }
     
+    #if os(macOS)
     func migrateFromLegacyIfNeeded() {
         guard !Defaults.didMigrateKeychainFromTokenaryV1 else { return }
         let legacyKeystores = keychain.getLegacyKeystores()
@@ -42,6 +43,7 @@ final class WalletsManager {
         }
         Defaults.didMigrateKeychainFromTokenaryV1 = true
     }
+    #endif
     
     func validateWalletInput(_ input: String) -> InputValidationResult {
         if Mnemonic.isValid(mnemonic: input) {
