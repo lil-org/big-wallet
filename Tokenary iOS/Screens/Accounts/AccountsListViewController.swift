@@ -5,6 +5,7 @@ import UIKit
 class AccountsListViewController: UIViewController {
     
     private let walletsManager = WalletsManager.shared
+    private let keychain = Keychain.shared
     
     private var wallets: [TokenaryWallet] {
         return walletsManager.wallets
@@ -140,7 +141,35 @@ class AccountsListViewController: UIViewController {
     }
     
     private func didTapRemoveAccount(_ wallet: TokenaryWallet) {
-        // TODO: implement
+        askBeforeRemoving(wallet: wallet)
+    }
+    
+    private func askBeforeRemoving(wallet: TokenaryWallet) {
+        let alert = UIAlertController(title: Strings.removedAccountsCantBeRecovered, message: nil, preferredStyle: .alert)
+        let removeAction = UIAlertAction(title: Strings.removeAnyway, style: .destructive) { [weak self] _ in
+            LocalAuthentication.attempt(reason: Strings.removeAccount) { success in
+                if success {
+                    self?.removeWallet(wallet)
+                } else {
+                    self?.showPasswordAlert(title: Strings.enterPassword, message: Strings.toRemoveAccount) { password in
+                        if password == self?.keychain.password {
+                            self?.removeWallet(wallet)
+                        } else {
+                            self?.showMessageAlert(text: Strings.passwordDoesNotMatch)
+                        }
+                    }
+                }
+            }
+        }
+        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
+        alert.addAction(cancelAction)
+        alert.addAction(removeAction)
+        present(alert, animated: true)
+    }
+    
+    private func removeWallet(_ wallet: TokenaryWallet) {
+        try? walletsManager.delete(wallet: wallet)
+        tableView.reloadData()
     }
     
     private func didTapExportAccount(_ wallet: TokenaryWallet) {

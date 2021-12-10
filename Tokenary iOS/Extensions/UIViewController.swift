@@ -21,8 +21,8 @@ extension UIViewController {
         present(alert, animated: true)
     }
     
-    func showPasswordAlert(title: String, completion: @escaping ((String) -> Void)) {
-        let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
+    func showPasswordAlert(title: String, message: String?, completion: @escaping ((String) -> Void)) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addTextField { textField in
             textField.isSecureTextEntry = true
             textField.textContentType = .oneTimeCode

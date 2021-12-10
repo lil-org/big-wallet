@@ -58,7 +58,7 @@ class ImportViewController: UIViewController {
     }
     
     private func askPassword() {
-        showPasswordAlert(title: Strings.enterKeystorePassword) { [weak self] password in
+        showPasswordAlert(title: Strings.enterKeystorePassword, message: nil) { [weak self] password in
             self?.importWith(input: self?.textView.text ?? "", password: password)
         }
     }
