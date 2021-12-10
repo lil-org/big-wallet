@@ -138,13 +138,13 @@
         <!--Import View Controller-->
         <scene sceneID="9bY-hK-sVB">
             <objects>
-                <viewController storyboardIdentifier="ImportViewController" id="ffW-KB-fbn" customClass="ImportViewController" customModule="Tokenary_iOS" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="ImportViewController" automaticallyAdjustsScrollViewInsets="NO" id="ffW-KB-fbn" customClass="ImportViewController" customModule="Tokenary_iOS" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" id="RB2-xW-81M">
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" spacing="12" translatesAutoresizingMaskIntoConstraints="NO" id="hGb-SQ-Z1D">
-                                <rect key="frame" x="20" y="284" width="374" height="52"/>
+                                <rect key="frame" x="20" y="191.5" width="374" height="52"/>
                                 <subviews>
                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="p0E-uf-Bib">
                                         <rect key="frame" x="0.0" y="0.0" width="181" height="52"/>
@@ -171,30 +171,41 @@
                                 </constraints>
                             </stackView>
                             <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" showsHorizontalScrollIndicator="NO" textAlignment="natural" translatesAutoresizingMaskIntoConstraints="NO" id="khR-hR-wwo">
-                                <rect key="frame" x="16" y="64" width="382" height="200"/>
+                                <rect key="frame" x="16" y="62" width="382" height="105.5"/>
                                 <color key="backgroundColor" systemColor="systemBackgroundColor"/>
-                                <constraints>
-                                    <constraint firstAttribute="height" constant="200" id="dq6-Se-JZT"/>
-                                </constraints>
                                 <color key="textColor" systemColor="labelColor"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="14"/>
-                                <textInputTraits key="textInputTraits" autocapitalizationType="sentences"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="21"/>
+                                <textInputTraits key="textInputTraits" autocorrectionType="no" spellCheckingType="no" smartDashesType="no" smartInsertDeleteType="no" smartQuotesType="no"/>
                             </textView>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" lineBreakMode="tailTruncation" numberOfLines="0" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="TgP-Lu-uIY">
+                                <rect key="frame" x="31" y="72" width="359" height="75.5"/>
+                                <string key="text">Label
+Label
+Label</string>
+                                <fontDescription key="fontDescription" type="system" pointSize="21"/>
+                                <color key="textColor" systemColor="secondaryLabelColor"/>
+                                <nil key="highlightedColor"/>
+                            </label>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="AQX-CT-Fb0"/>
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                         <constraints>
                             <constraint firstItem="khR-hR-wwo" firstAttribute="centerX" secondItem="AQX-CT-Fb0" secondAttribute="centerX" id="470-MT-Wgc"/>
                             <constraint firstItem="hGb-SQ-Z1D" firstAttribute="leading" secondItem="AQX-CT-Fb0" secondAttribute="leading" constant="20" id="JDA-AU-jqm"/>
-                            <constraint firstItem="hGb-SQ-Z1D" firstAttribute="top" secondItem="khR-hR-wwo" secondAttribute="bottom" constant="20" id="YG2-3c-J3W"/>
-                            <constraint firstItem="khR-hR-wwo" firstAttribute="top" secondItem="AQX-CT-Fb0" secondAttribute="top" constant="20" id="Z2J-83-r0L"/>
+                            <constraint firstItem="TgP-Lu-uIY" firstAttribute="trailing" secondItem="khR-hR-wwo" secondAttribute="trailing" constant="-8" id="TNe-1i-jLf"/>
+                            <constraint firstItem="hGb-SQ-Z1D" firstAttribute="top" secondItem="khR-hR-wwo" secondAttribute="bottom" constant="24" id="YG2-3c-J3W"/>
+                            <constraint firstItem="khR-hR-wwo" firstAttribute="top" secondItem="AQX-CT-Fb0" secondAttribute="top" constant="18" id="Z2J-83-r0L"/>
+                            <constraint firstItem="TgP-Lu-uIY" firstAttribute="bottom" secondItem="khR-hR-wwo" secondAttribute="bottom" constant="-20" id="fyT-Wb-EBj"/>
                             <constraint firstItem="khR-hR-wwo" firstAttribute="width" secondItem="RB2-xW-81M" secondAttribute="width" constant="-32" id="pL5-Cv-21U"/>
+                            <constraint firstItem="TgP-Lu-uIY" firstAttribute="top" secondItem="khR-hR-wwo" secondAttribute="top" constant="10" id="vgt-Nt-nbI"/>
+                            <constraint firstItem="TgP-Lu-uIY" firstAttribute="leading" secondItem="khR-hR-wwo" secondAttribute="leading" constant="15" id="wWT-t0-CCt"/>
                             <constraint firstItem="AQX-CT-Fb0" firstAttribute="trailing" secondItem="hGb-SQ-Z1D" secondAttribute="trailing" constant="20" id="x3V-Of-6Xt"/>
                         </constraints>
                     </view>
                     <connections>
                         <outlet property="okButton" destination="xz1-Bh-MUU" id="laV-wl-1zV"/>
                         <outlet property="pasteButton" destination="p0E-uf-Bib" id="QOL-L0-NWT"/>
+                        <outlet property="placeholderLabel" destination="TgP-Lu-uIY" id="mK3-Mm-m3d"/>
                         <outlet property="textView" destination="khR-hR-wwo" id="d0e-aR-ENx"/>
                     </connections>
                 </viewController>
@@ -225,6 +236,9 @@
         <image name="LaunchLogo" width="100" height="100"/>
         <systemColor name="labelColor">
             <color white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+        </systemColor>
+        <systemColor name="secondaryLabelColor">
+            <color red="0.23529411764705882" green="0.23529411764705882" blue="0.2627450980392157" alpha="0.59999999999999998" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
         <systemColor name="systemBackgroundColor">
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>

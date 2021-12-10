@@ -7,13 +7,19 @@ class ImportViewController: UIViewController {
     var completion: ((Bool) -> Void)?
     private let walletsManager = WalletsManager.shared
     
+    @IBOutlet weak var placeholderLabel: UILabel! {
+        didSet {
+            placeholderLabel.text = Strings.importAccountTextFieldPlaceholder
+        }
+    }
     @IBOutlet weak var pasteButton: UIButton!
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var textView: UITextView! {
         didSet {
             textView.delegate = self
+            textView.textContainerInset = UIEdgeInsets(top: 10, left: 8, bottom: 10, right: 8)
             textView.layer.cornerRadius = 5
-            textView.layer.borderWidth = 1
+            textView.layer.borderWidth = CGFloat.pixel
             textView.layer.borderColor = UIColor.separator.cgColor
         }
     }
@@ -73,6 +79,7 @@ class ImportViewController: UIViewController {
     }
     
     private func validateInput(proceedIfValid: Bool) {
+        placeholderLabel.isHidden = !textView.text.isEmpty
         inputValidationResult = walletsManager.validateWalletInput(textView.text)
         let isValid = inputValidationResult != .invalid
         okButton.isEnabled = isValid
