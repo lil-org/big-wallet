@@ -39,6 +39,8 @@ class PasswordViewController: UIViewController {
         if mode == .enter {
             navigationController?.setNavigationBarHidden(true, animated: false)
             askForLocalAuthentication()
+        } else {
+            initialOverlayView.isHidden = true
         }
     }
     
