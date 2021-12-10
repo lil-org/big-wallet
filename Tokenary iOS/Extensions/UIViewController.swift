@@ -21,4 +21,20 @@ extension UIViewController {
         present(alert, animated: true)
     }
     
+    func showPasswordAlert(title: String, completion: @escaping ((String) -> Void)) {
+        let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
+        alert.addTextField { textField in
+            textField.isSecureTextEntry = true
+            textField.textContentType = .oneTimeCode
+        }
+        let okAction = UIAlertAction(title: Strings.ok, style: .default) { [weak alert] _ in
+            completion(alert?.textFields?.first?.text ?? "")
+        }
+        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
+        alert.addAction(okAction)
+        alert.addAction(cancelAction)
+        present(alert, animated: true)
+        alert.textFields?.first?.becomeFirstResponder()
+    }
+    
 }

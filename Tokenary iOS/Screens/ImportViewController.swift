@@ -51,26 +51,16 @@ class ImportViewController: UIViewController {
     
     private func attemptImportWithCurrentInput() {
         if inputValidationResult == .requiresPassword {
-            showPasswordAlert()
+            askPassword()
         } else {
             importWith(input: textView.text, password: nil)
         }
     }
     
-    private func showPasswordAlert() {
-        let alert = UIAlertController(title: Strings.enterKeystorePassword, message: nil, preferredStyle: .alert)
-        alert.addTextField { textField in
-            textField.isSecureTextEntry = true
-            textField.textContentType = .oneTimeCode
+    private func askPassword() {
+        showPasswordAlert(title: Strings.enterKeystorePassword) { [weak self] password in
+            self?.importWith(input: self?.textView.text ?? "", password: password)
         }
-        let okAction = UIAlertAction(title: Strings.ok, style: .default) { [weak self] _ in
-            self?.importWith(input: self?.textView.text ?? "", password: alert.textFields?.first?.text ?? "")
-        }
-        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
-        alert.addAction(okAction)
-        alert.addAction(cancelAction)
-        present(alert, animated: true)
-        alert.textFields?.first?.becomeFirstResponder()
     }
     
     private func importWith(input: String, password: String?) {
