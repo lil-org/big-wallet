@@ -1,7 +1,6 @@
 // Copyright © 2021 Tokenary. All rights reserved.
 
 import UIKit
-import LocalAuthentication
 
 class PasswordViewController: UIViewController {
     
@@ -63,24 +62,12 @@ class PasswordViewController: UIViewController {
     }
     
     private func askForLocalAuthentication() {
-        let context = LAContext()
-        var error: NSError?
-        let policy = LAPolicy.deviceOwnerAuthenticationWithBiometrics
-        let canDoLocalAuthentication = context.canEvaluatePolicy(policy, error: &error)
-        
-        if canDoLocalAuthentication {
-            context.localizedCancelTitle = Strings.cancel
-            context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: Strings.enterTokenary) { [weak self] success, _ in
-                DispatchQueue.main.async {
-                    if success {
-                        self?.showAccountsList()
-                    } else {
-                        self?.didFailLocalAuthentication()
-                    }
-                }
+        LocalAuthentication.attempt(reason: Strings.enterTokenary) { [weak self] success in
+            if success {
+                self?.showAccountsList()
+            } else {
+                self?.didFailLocalAuthentication()
             }
-        } else {
-            didFailLocalAuthentication()
         }
     }
     
