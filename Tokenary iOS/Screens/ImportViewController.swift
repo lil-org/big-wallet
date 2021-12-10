@@ -12,6 +12,9 @@ class ImportViewController: UIViewController {
     @IBOutlet weak var textView: UITextView! {
         didSet {
             textView.delegate = self
+            textView.layer.cornerRadius = 5
+            textView.layer.borderWidth = 1
+            textView.layer.borderColor = UIColor.separator.cgColor
         }
     }
     
@@ -30,12 +33,8 @@ class ImportViewController: UIViewController {
         super.viewWillAppear(animated)
         DispatchQueue.main.async { [weak self] in
             self?.navigationController?.navigationBar.sizeToFit()
+            self?.textView.becomeFirstResponder()
         }
-    }
-    
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        textView.becomeFirstResponder()
     }
     
     @IBAction func pasteButtonTapped(_ sender: Any) {

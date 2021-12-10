@@ -138,21 +138,11 @@
         <!--Import View Controller-->
         <scene sceneID="9bY-hK-sVB">
             <objects>
-                <viewController storyboardIdentifier="ImportViewController" automaticallyAdjustsScrollViewInsets="NO" id="ffW-KB-fbn" customClass="ImportViewController" customModule="Tokenary_iOS" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="ImportViewController" id="ffW-KB-fbn" customClass="ImportViewController" customModule="Tokenary_iOS" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" id="RB2-xW-81M">
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" textAlignment="natural" translatesAutoresizingMaskIntoConstraints="NO" id="khR-hR-wwo">
-                                <rect key="frame" x="16" y="64" width="382" height="200"/>
-                                <color key="backgroundColor" systemColor="systemBackgroundColor"/>
-                                <constraints>
-                                    <constraint firstAttribute="height" constant="200" id="dq6-Se-JZT"/>
-                                </constraints>
-                                <color key="textColor" systemColor="labelColor"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="14"/>
-                                <textInputTraits key="textInputTraits" autocapitalizationType="sentences"/>
-                            </textView>
                             <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" spacing="12" translatesAutoresizingMaskIntoConstraints="NO" id="hGb-SQ-Z1D">
                                 <rect key="frame" x="20" y="284" width="374" height="52"/>
                                 <subviews>
@@ -180,6 +170,16 @@
                                     <constraint firstItem="xz1-Bh-MUU" firstAttribute="height" secondItem="p0E-uf-Bib" secondAttribute="height" id="41I-bN-ub8"/>
                                 </constraints>
                             </stackView>
+                            <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" showsHorizontalScrollIndicator="NO" textAlignment="natural" translatesAutoresizingMaskIntoConstraints="NO" id="khR-hR-wwo">
+                                <rect key="frame" x="16" y="64" width="382" height="200"/>
+                                <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="200" id="dq6-Se-JZT"/>
+                                </constraints>
+                                <color key="textColor" systemColor="labelColor"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="14"/>
+                                <textInputTraits key="textInputTraits" autocapitalizationType="sentences"/>
+                            </textView>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="AQX-CT-Fb0"/>
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
