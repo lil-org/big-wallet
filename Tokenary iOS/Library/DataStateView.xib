@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="19455" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+    <device id="retina6_1" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="19454"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="System colors in document resources" minToolsVersion="11.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <objects>
+        <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner"/>
+        <placeholder placeholderIdentifier="IBFirstResponder" id="-2" customClass="UIResponder"/>
+        <view contentMode="scaleToFill" id="lqS-Qo-2hd" customClass="DataStateView" customModule="Tokenary_iOS" customModuleProvider="target">
+            <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
+            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+            <subviews>
+                <activityIndicatorView hidden="YES" opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="750" verticalHuggingPriority="750" animating="YES" style="medium" translatesAutoresizingMaskIntoConstraints="NO" id="0rZ-Sk-fve">
+                    <rect key="frame" x="197" y="388" width="20" height="20"/>
+                </activityIndicatorView>
+                <label hidden="YES" opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="LOADING" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="ImM-Ma-L3J">
+                    <rect key="frame" x="180.5" y="416" width="53.5" height="14.5"/>
+                    <fontDescription key="fontDescription" type="system" pointSize="12"/>
+                    <color key="textColor" systemColor="secondaryLabelColor"/>
+                    <nil key="highlightedColor"/>
+                </label>
+                <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="wind" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="OeR-Db-lcJ">
+                    <rect key="frame" x="118.5" y="271" width="177" height="174.5"/>
+                    <color key="tintColor" systemColor="tertiaryLabelColor"/>
+                    <constraints>
+                        <constraint firstAttribute="width" secondItem="OeR-Db-lcJ" secondAttribute="height" multiplier="1:1" id="g5A-B4-JDZ"/>
+                        <constraint firstAttribute="width" relation="lessThanOrEqual" constant="200" id="qey-Ch-daS"/>
+                    </constraints>
+                    <preferredSymbolConfiguration key="preferredSymbolConfiguration" scale="default" weight="thin"/>
+                </imageView>
+                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Failed to load" textAlignment="center" lineBreakMode="tailTruncation" numberOfLines="2" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Iym-80-uYR">
+                    <rect key="frame" x="20" y="454.5" width="374" height="20.5"/>
+                    <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                    <color key="textColor" systemColor="secondaryLabelColor"/>
+                    <nil key="highlightedColor"/>
+                </label>
+                <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="5ZO-df-Isv">
+                    <rect key="frame" x="137" y="527" width="140" height="52"/>
+                    <constraints>
+                        <constraint firstAttribute="height" constant="52" id="5fo-UF-Qwu"/>
+                        <constraint firstAttribute="width" relation="greaterThanOrEqual" constant="140" id="JBF-DF-ChM"/>
+                    </constraints>
+                    <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="15"/>
+                    <state key="normal" title="Retry"/>
+                    <buttonConfiguration key="configuration" style="filled" title="Retry">
+                        <fontDescription key="titleFontDescription" type="system" weight="semibold" pointSize="15"/>
+                    </buttonConfiguration>
+                    <connections>
+                        <action selector="didTapButton:" destination="lqS-Qo-2hd" eventType="touchUpInside" id="wYk-pp-YyB"/>
+                    </connections>
+                </button>
+            </subviews>
+            <viewLayoutGuide key="safeArea" id="lUb-JT-l59"/>
+            <color key="backgroundColor" systemColor="systemGroupedBackgroundColor"/>
+            <constraints>
+                <constraint firstItem="OeR-Db-lcJ" firstAttribute="top" relation="greaterThanOrEqual" secondItem="lqS-Qo-2hd" secondAttribute="top" constant="150" id="0ao-To-70w"/>
+                <constraint firstItem="OeR-Db-lcJ" firstAttribute="centerX" secondItem="lqS-Qo-2hd" secondAttribute="centerX" id="11T-RK-uzC"/>
+                <constraint firstItem="Iym-80-uYR" firstAttribute="top" secondItem="OeR-Db-lcJ" secondAttribute="bottom" constant="8" id="3dj-vb-QgB"/>
+                <constraint firstItem="0rZ-Sk-fve" firstAttribute="centerX" secondItem="lqS-Qo-2hd" secondAttribute="centerX" id="3yi-dM-5bk"/>
+                <constraint firstItem="0rZ-Sk-fve" firstAttribute="top" secondItem="OeR-Db-lcJ" secondAttribute="bottom" constant="-58.5" id="8Pu-Nt-RW8"/>
+                <constraint firstItem="ImM-Ma-L3J" firstAttribute="centerX" secondItem="0rZ-Sk-fve" secondAttribute="centerX" id="ENE-tI-BjB"/>
+                <constraint firstItem="Iym-80-uYR" firstAttribute="width" secondItem="lqS-Qo-2hd" secondAttribute="width" constant="-40" id="KtH-zG-zmO"/>
+                <constraint firstItem="ImM-Ma-L3J" firstAttribute="top" secondItem="0rZ-Sk-fve" secondAttribute="bottom" constant="8" id="OTT-Nq-oAt"/>
+                <constraint firstItem="5ZO-df-Isv" firstAttribute="centerX" secondItem="lqS-Qo-2hd" secondAttribute="centerX" id="X1o-2s-b8d"/>
+                <constraint firstItem="OeR-Db-lcJ" firstAttribute="width" secondItem="lqS-Qo-2hd" secondAttribute="width" multiplier="3:7" priority="750" id="YTt-wi-2MM"/>
+                <constraint firstItem="Iym-80-uYR" firstAttribute="centerX" secondItem="lqS-Qo-2hd" secondAttribute="centerX" id="e6D-zs-nVx"/>
+                <constraint firstItem="5ZO-df-Isv" firstAttribute="top" secondItem="Iym-80-uYR" secondAttribute="bottom" constant="52" id="i2r-xi-nPw"/>
+                <constraint firstItem="0rZ-Sk-fve" firstAttribute="centerY" secondItem="lqS-Qo-2hd" secondAttribute="centerY" constant="-50" id="yXH-dL-f1g"/>
+            </constraints>
+            <freeformSimulatedSizeMetrics key="simulatedDestinationMetrics"/>
+            <connections>
+                <outlet property="activityIndicator" destination="0rZ-Sk-fve" id="vxk-57-49J"/>
+                <outlet property="activityIndicatorDescriptionLabel" destination="ImM-Ma-L3J" id="JXP-oJ-MHf"/>
+                <outlet property="button" destination="5ZO-df-Isv" id="ktY-5G-IeA"/>
+                <outlet property="centerYConstraint" destination="yXH-dL-f1g" id="CPn-cG-i1P"/>
+                <outlet property="descriptionLabel" destination="Iym-80-uYR" id="pef-lb-qeN"/>
+                <outlet property="imageView" destination="OeR-Db-lcJ" id="hu0-Fa-45B"/>
+            </connections>
+            <point key="canvasLocation" x="139" y="-492"/>
+        </view>
+    </objects>
+    <resources>
+        <image name="wind" catalog="system" width="128" height="103"/>
+        <systemColor name="secondaryLabelColor">
+            <color red="0.23529411764705882" green="0.23529411764705882" blue="0.2627450980392157" alpha="0.59999999999999998" colorSpace="custom" customColorSpace="sRGB"/>
+        </systemColor>
+        <systemColor name="systemGroupedBackgroundColor">
+            <color red="0.94901960784313721" green="0.94901960784313721" blue="0.96862745098039216" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </systemColor>
+        <systemColor name="tertiaryLabelColor">
+            <color red="0.23529411764705882" green="0.23529411764705882" blue="0.2627450980392157" alpha="0.29999999999999999" colorSpace="custom" customColorSpace="sRGB"/>
+        </systemColor>
+    </resources>
+</document>

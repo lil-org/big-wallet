@@ -63,5 +63,11 @@ struct Strings {
     static let secretWordsGiveFullAccess = "Secret words give full access to your funds."
     static let privateKeyGivesFullAccess = "Private key gives full access to your funds."
     static let toShowAccountKey = "To show account key"
+    static let loading = "Loading"
+    static let failedToLoad = "Failed to load"
+    static let tryAgain = "Try again"
+    static let noData = "There is no data yet"
+    static let refresh = "Refresh"
+    static let tokenaryIsEmpty = "Tokenary is empty"
     
 }

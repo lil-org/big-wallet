@@ -2,7 +2,7 @@
 
 import UIKit
 
-class AccountsListViewController: UIViewController {
+class AccountsListViewController: UIViewController, DataStateContainer {
     
     private let walletsManager = WalletsManager.shared
     private let keychain = Keychain.shared
@@ -25,8 +25,27 @@ class AccountsListViewController: UIViewController {
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
         let addItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addAccount))
-        let preferencesItem = UIBarButtonItem(image: UIImage(systemName: "gearshape"), style: UIBarButtonItem.Style.plain, target: self, action: #selector(preferencesButtonTapped))
+        let preferencesItem = UIBarButtonItem(image: Images.preferences, style: UIBarButtonItem.Style.plain, target: self, action: #selector(preferencesButtonTapped))
         navigationItem.rightBarButtonItems = [addItem, preferencesItem]
+        configureDataState(.noData, description: Strings.tokenaryIsEmpty, buttonTitle: Strings.addAccount) { [weak self] in
+            self?.addAccount()
+        }
+        dataStateShouldMoveWithKeyboard(false)
+        updateDataState()
+    }
+    
+    private func updateDataState() {
+        let isEmpty = wallets.isEmpty
+        dataState = isEmpty ? .noData : .hasData
+        let canScroll = !isEmpty
+        if tableView.isScrollEnabled != canScroll {
+            tableView.isScrollEnabled = canScroll
+        }
+    }
+    
+    private func reloadData() {
+        updateDataState()
+        tableView.reloadData()
     }
     
     @objc private func preferencesButtonTapped() {
@@ -76,7 +95,7 @@ class AccountsListViewController: UIViewController {
     
     private func createNewAccountAndShowSecretWords() {
         guard let wallet = try? walletsManager.createWallet() else { return }
-        tableView.reloadData()
+        reloadData()
         showKey(wallet: wallet, mnemonic: true)
     }
     
@@ -104,7 +123,7 @@ class AccountsListViewController: UIViewController {
         let importAccountViewController = instantiate(ImportViewController.self, from: .main)
         importAccountViewController.completion = { [weak self] success in
             if success {
-                self?.tableView.reloadData()
+                self?.reloadData()
             }
         }
         present(importAccountViewController.inNavigationController, animated: true)
@@ -169,7 +188,7 @@ class AccountsListViewController: UIViewController {
     
     private func removeWallet(_ wallet: TokenaryWallet) {
         try? walletsManager.delete(wallet: wallet)
-        tableView.reloadData()
+        reloadData()
     }
     
     private func didTapExportAccount(_ wallet: TokenaryWallet) {
