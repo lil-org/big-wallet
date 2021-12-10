@@ -101,6 +101,11 @@ class AccountsListViewController: UIViewController {
     
     private func importExistingAccount() {
         let importAccountViewController = instantiate(ImportViewController.self, from: .main)
+        importAccountViewController.completion = { [weak self] success in
+            if success {
+                self?.tableView.reloadData()
+            }
+        }
         present(importAccountViewController.inNavigationController, animated: true)
     }
     
