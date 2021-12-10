@@ -173,7 +173,28 @@ class AccountsListViewController: UIViewController {
     }
     
     private func didTapExportAccount(_ wallet: TokenaryWallet) {
-        // TODO: implement
+        let isMnemonic = wallet.isMnemonic
+        let title = isMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
+        let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
+        let okAction = UIAlertAction(title: Strings.iUnderstandTheRisks, style: .default) { [weak self] _ in
+            LocalAuthentication.attempt(reason: Strings.removeAccount) { success in
+                if success {
+                    self?.showKey(wallet: wallet, mnemonic: isMnemonic)
+                } else {
+                    self?.showPasswordAlert(title: Strings.enterPassword, message: Strings.toShowAccountKey) { password in
+                        if password == self?.keychain.password {
+                            self?.showKey(wallet: wallet, mnemonic: isMnemonic)
+                        } else {
+                            self?.showMessageAlert(text: Strings.passwordDoesNotMatch)
+                        }
+                    }
+                }
+            }
+        }
+        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
+        alert.addAction(cancelAction)
+        alert.addAction(okAction)
+        present(alert, animated: true)
     }
     
 }

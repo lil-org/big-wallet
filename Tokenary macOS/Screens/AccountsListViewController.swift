@@ -243,7 +243,7 @@ class AccountsListViewController: NSViewController {
         let isMnemonic = wallets[row].isMnemonic
         let alert = Alert()
         
-        alert.messageText = "\(isMnemonic ? "Secret words give" : "Private key gives") full access to your funds."
+        alert.messageText = isMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
         alert.alertStyle = .critical
         alert.addButton(withTitle: Strings.iUnderstandTheRisks)
         alert.addButton(withTitle: Strings.cancel)
