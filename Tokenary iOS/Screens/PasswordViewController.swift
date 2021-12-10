@@ -1,6 +1,7 @@
 // Copyright © 2021 Tokenary. All rights reserved.
 
 import UIKit
+import LocalAuthentication
 
 class PasswordViewController: UIViewController {
     
@@ -27,7 +28,6 @@ class PasswordViewController: UIViewController {
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
         navigationItem.backButtonDisplayMode = .minimal
-        navigationController?.setNavigationBarHidden(true, animated: false)
         
         if passwordToRepeat != nil {
             switchToMode(.repeatAfterCreate)
@@ -36,9 +36,21 @@ class PasswordViewController: UIViewController {
         } else {
             switchToMode(.create)
         }
+        
+        if mode == .enter {
+            navigationController?.setNavigationBarHidden(true, animated: false)
+            askForLocalAuthentication()
+        }
     }
     
-    func switchToMode(_ mode: Mode) {
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        if mode != .enter {
+            passwordTextField.becomeFirstResponder()
+        }
+    }
+    
+    private func switchToMode(_ mode: Mode) {
         self.mode = mode
         switch mode {
         case .create:
@@ -48,6 +60,34 @@ class PasswordViewController: UIViewController {
         case .enter:
             navigationItem.title = Strings.enterPassword
         }
+    }
+    
+    private func askForLocalAuthentication() {
+        let context = LAContext()
+        var error: NSError?
+        let policy = LAPolicy.deviceOwnerAuthenticationWithBiometrics
+        let canDoLocalAuthentication = context.canEvaluatePolicy(policy, error: &error)
+        
+        if canDoLocalAuthentication {
+            context.localizedCancelTitle = Strings.cancel
+            context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: Strings.enterTokenary) { [weak self] success, _ in
+                DispatchQueue.main.async {
+                    if success {
+                        self?.showAccountsList()
+                    } else {
+                        self?.didFailLocalAuthentication()
+                    }
+                }
+            }
+        } else {
+            didFailLocalAuthentication()
+        }
+    }
+    
+    private func didFailLocalAuthentication() {
+        navigationController?.setNavigationBarHidden(false, animated: false)
+        initialOverlayView.isHidden = true
+        passwordTextField.becomeFirstResponder()
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
