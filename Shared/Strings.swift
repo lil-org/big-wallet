@@ -69,5 +69,6 @@ struct Strings {
     static let noData = "There is no data yet"
     static let refresh = "Refresh"
     static let tokenaryIsEmpty = "Tokenary is empty"
+    static let pleaseTypeAtLeast = "Please type at least 4 characters"
     
 }

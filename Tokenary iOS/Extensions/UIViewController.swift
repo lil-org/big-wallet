@@ -37,4 +37,15 @@ extension UIViewController {
         alert.textFields?.first?.becomeFirstResponder()
     }
     
+    func endEditingOnTap() -> UITapGestureRecognizer {
+        let tapGestureRecognizer = UITapGestureRecognizer(target: self, action: #selector(endEditing))
+        tapGestureRecognizer.cancelsTouchesInView = false
+        view.addGestureRecognizer(tapGestureRecognizer)
+        return tapGestureRecognizer
+    }
+    
+    @objc func endEditing() {
+        view.endEditing(true)
+    }
+    
 }

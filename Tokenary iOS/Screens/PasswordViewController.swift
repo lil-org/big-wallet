@@ -83,19 +83,18 @@ class PasswordViewController: UIViewController {
         proceedIfPossible()
     }
     
-    @objc private func textFieldChanged() {
-        let isEnabled = passwordTextField.text?.isOkAsPassword == true
-        if okButton.isEnabled != isEnabled {
-            okButton.isEnabled = isEnabled
-        }
-    }
+    @objc private func textFieldChanged() {}
     
     private func proceedIfPossible() {
         switch mode {
         case .create:
-            let passwordViewController = instantiate(PasswordViewController.self, from: .main)
-            passwordViewController.passwordToRepeat = passwordTextField.text
-            navigationController?.pushViewController(passwordViewController, animated: true)
+            if passwordTextField.text?.isOkAsPassword == true {
+                let passwordViewController = instantiate(PasswordViewController.self, from: .main)
+                passwordViewController.passwordToRepeat = passwordTextField.text
+                navigationController?.pushViewController(passwordViewController, animated: true)
+            } else {
+                showMessageAlert(text: Strings.pleaseTypeAtLeast)
+            }
         case .repeatAfterCreate:
             if let password = passwordTextField.text, !password.isEmpty, password == passwordToRepeat {
                 keychain.save(password: password)
@@ -130,9 +129,7 @@ extension PasswordViewController: UITextFieldDelegate {
     }
     
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        if passwordTextField.text?.isOkAsPassword == true {
-            proceedIfPossible()
-        }
+        proceedIfPossible()
         return true
     }
     

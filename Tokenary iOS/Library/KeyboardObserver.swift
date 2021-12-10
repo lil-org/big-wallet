@@ -30,7 +30,9 @@ extension KeyboardObserver {
             duration = 0
         }
         
-        keyboardWill(show: willShow, height: height, animtaionOptions: animtaionOptions, duration: duration)
+        DispatchQueue.main.async { [weak self] in
+            self?.keyboardWill(show: willShow, height: height, animtaionOptions: animtaionOptions, duration: duration)
+        }
     }
     
 }

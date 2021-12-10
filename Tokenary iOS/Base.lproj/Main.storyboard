@@ -16,8 +16,8 @@
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <button opaque="NO" contentMode="scaleToFill" enabled="NO" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Ejn-8j-X0R">
-                                <rect key="frame" x="20" y="118" width="374" height="52"/>
+                            <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Ejn-8j-X0R">
+                                <rect key="frame" x="20" y="140" width="374" height="52"/>
                                 <constraints>
                                     <constraint firstAttribute="height" constant="52" id="oXJ-UU-xY9"/>
                                 </constraints>
@@ -28,8 +28,11 @@
                                 </connections>
                             </button>
                             <textField opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" borderStyle="roundedRect" placeholder="Password" textAlignment="center" minimumFontSize="17" translatesAutoresizingMaskIntoConstraints="NO" id="J71-Q3-V0j">
-                                <rect key="frame" x="16" y="64" width="382" height="34"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="14"/>
+                                <rect key="frame" x="16" y="64" width="382" height="52"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="52" id="cMF-A5-cKP"/>
+                                </constraints>
+                                <fontDescription key="fontDescription" type="system" pointSize="21"/>
                                 <textInputTraits key="textInputTraits" autocorrectionType="no" spellCheckingType="no" secureTextEntry="YES" smartDashesType="no" smartInsertDeleteType="no" smartQuotesType="no" textContentType="one-time-code"/>
                             </textField>
                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="0fB-uz-Rbq">
@@ -79,10 +82,10 @@
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                         <constraints>
                             <constraint firstAttribute="bottomMargin" secondItem="0fB-uz-Rbq" secondAttribute="bottom" id="4Tv-ku-wGe"/>
-                            <constraint firstItem="Ejn-8j-X0R" firstAttribute="top" secondItem="J71-Q3-V0j" secondAttribute="bottom" constant="20" id="75c-Wf-RSG"/>
                             <constraint firstItem="J71-Q3-V0j" firstAttribute="centerX" secondItem="6Tk-OE-BBY" secondAttribute="centerX" id="EqP-pZ-eNR"/>
                             <constraint firstItem="0fB-uz-Rbq" firstAttribute="leading" secondItem="6Tk-OE-BBY" secondAttribute="leading" id="HyZ-bu-z2K"/>
                             <constraint firstItem="J71-Q3-V0j" firstAttribute="width" secondItem="8bC-Xf-vdC" secondAttribute="width" constant="-32" id="Lsp-hr-cV0"/>
+                            <constraint firstItem="Ejn-8j-X0R" firstAttribute="top" secondItem="J71-Q3-V0j" secondAttribute="bottom" constant="24" id="O7V-PU-Cmf"/>
                             <constraint firstItem="J71-Q3-V0j" firstAttribute="top" secondItem="6Tk-OE-BBY" secondAttribute="top" constant="20" id="OnR-KV-3tX"/>
                             <constraint firstItem="6Tk-OE-BBY" firstAttribute="trailing" secondItem="0fB-uz-Rbq" secondAttribute="trailing" id="Y8V-9u-IBX"/>
                             <constraint firstItem="6Tk-OE-BBY" firstAttribute="trailing" secondItem="Ejn-8j-X0R" secondAttribute="trailing" constant="20" id="edF-Hl-BU8"/>
