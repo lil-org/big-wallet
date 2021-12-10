@@ -24,6 +24,7 @@ class ImportViewController: UIViewController {
         }
     }
     
+    private var isWaiting = false
     private var inputValidationResult = WalletsManager.InputValidationResult.invalid
     
     override func viewDidLoad() {
@@ -33,6 +34,11 @@ class ImportViewController: UIViewController {
         navigationItem.title = Strings.importAccount
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(dismissAnimated))
         
+        okButton.configurationUpdateHandler = { [weak self] button in
+            let isWaiting = self?.isWaiting == true
+            button.configuration?.title = isWaiting ? "" : Strings.ok
+            button.configuration?.showsActivityIndicator = isWaiting
+        }
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -64,7 +70,10 @@ class ImportViewController: UIViewController {
     
     private func askPassword() {
         showPasswordAlert(title: Strings.enterKeystorePassword, message: nil) { [weak self] password in
-            self?.importWith(input: self?.textView.text ?? "", password: password)
+            self?.setWaiting(true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(200)) {
+                self?.importWith(input: self?.textView.text ?? "", password: password)
+            }
         }
     }
     
@@ -74,8 +83,18 @@ class ImportViewController: UIViewController {
             completion?(true)
             dismissAnimated()
         } catch {
+            setWaiting(false)
             showMessageAlert(text: Strings.failedToImportAccount)
         }
+    }
+    
+    private func setWaiting(_ waiting: Bool) {
+        guard waiting != self.isWaiting else { return }
+        self.isWaiting = waiting
+        view.isUserInteractionEnabled = !waiting
+        isModalInPresentation = waiting
+        navigationItem.leftBarButtonItem?.isEnabled = !waiting
+        okButton.setNeedsUpdateConfiguration()
     }
     
     private func validateInput(proceedIfValid: Bool) {
