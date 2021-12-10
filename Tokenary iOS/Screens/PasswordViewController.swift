@@ -19,6 +19,7 @@ class PasswordViewController: UIViewController {
         }
     }
     
+    @IBOutlet weak var initialOverlayView: UIView!
     @IBOutlet weak var okButton: UIButton!
     
     override func viewDidLoad() {
@@ -26,6 +27,7 @@ class PasswordViewController: UIViewController {
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
         navigationItem.backButtonDisplayMode = .minimal
+        navigationController?.setNavigationBarHidden(true, animated: false)
         
         if passwordToRepeat != nil {
             switchToMode(.repeatAfterCreate)
@@ -34,11 +36,6 @@ class PasswordViewController: UIViewController {
         } else {
             switchToMode(.create)
         }
-    }
-    
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        passwordTextField.becomeFirstResponder()
     }
     
     func switchToMode(_ mode: Mode) {
