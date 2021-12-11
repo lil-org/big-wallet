@@ -1,5 +1,7 @@
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.subject === "process-inpage-message") {
+    if (request.subject === "closeTab") {
+        browser.tabs.remove(sender.tab.id);
+    } else if (request.subject === "process-inpage-message") {
         browser.runtime.sendNativeMessage("mac.tokenary.io", request.message, function(response) {
             sendResponse(response)
         });

@@ -1,3 +1,7 @@
+if (window.location.href == "https://tokenary.io/blank/") {
+    browser.runtime.sendMessage({ subject: "closeTab" });
+}
+
 if (document.readyState === "complete") {
     window.location.reload();
 }
