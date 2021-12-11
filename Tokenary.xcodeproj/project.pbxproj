@@ -80,15 +80,9 @@
 		2CC6EF0D275E64810040CC62 /* UIViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC6EF0C275E64810040CC62 /* UIViewController.swift */; };
 		2CC8946F269A2E8C00879245 /* SessionStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8946E269A2E8C00879245 /* SessionStorage.swift */; };
 		2CC89471269A334A00879245 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC89470269A334A00879245 /* UserDefaults.swift */; };
-		2CCEB83027594E2A00768473 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CCEB82F27594E2A00768473 /* SafariWebExtensionHandler.swift */; };
 		2CCEB83327594E2A00768473 /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 2CCEB83227594E2A00768473 /* _locales */; };
 		2CCEB83527594E2A00768473 /* images in Resources */ = {isa = PBXBuildFile; fileRef = 2CCEB83427594E2A00768473 /* images */; };
 		2CCEB83727594E2A00768473 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 2CCEB83627594E2A00768473 /* manifest.json */; };
-		2CCEB83927594E2A00768473 /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CCEB83827594E2A00768473 /* background.js */; };
-		2CCEB83B27594E2A00768473 /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CCEB83A27594E2A00768473 /* content.js */; };
-		2CCEB83D27594E2A00768473 /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = 2CCEB83C27594E2A00768473 /* popup.html */; };
-		2CCEB83F27594E2A00768473 /* popup.css in Resources */ = {isa = PBXBuildFile; fileRef = 2CCEB83E27594E2A00768473 /* popup.css */; };
-		2CCEB84127594E2A00768473 /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CCEB84027594E2A00768473 /* popup.js */; };
 		2CCEB84527594E2A00768473 /* Safari iOS.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2CCEB82D27594E2A00768473 /* Safari iOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2CD0669126B5537B00728C20 /* TokenaryWallet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668B26B2142000728C20 /* TokenaryWallet.swift */; };
 		2CD0669226B5537B00728C20 /* WalletsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668926B213E500728C20 /* WalletsManager.swift */; };
@@ -97,6 +91,16 @@
 		2CDAB3722675B3F0009F8B97 /* PasswordViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */; };
 		2CE059372763D60A0042D844 /* KeyboardObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE059362763D60A0042D844 /* KeyboardObserver.swift */; };
 		2CE059392763F3FF0042D844 /* CGFloat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE059382763F3FF0042D844 /* CGFloat.swift */; };
+		2CE0593F27640E300042D844 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */; };
+		2CE0594027640E8E0042D844 /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAA273979C1009AD39B /* background.js */; };
+		2CE0594127640E8E0042D844 /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAC273979C1009AD39B /* content.js */; };
+		2CE0594227640E8E0042D844 /* inpage.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CEFEB15274D5DC900CE23BD /* inpage.js */; };
+		2CE0594327640EAB0042D844 /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
+		2CE0594427640EB40042D844 /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
+		2CE0594527640EF10042D844 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
+		2CE0594627640F470042D844 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC89470269A334A00879245 /* UserDefaults.swift */; };
+		2CE059492764D69D0042D844 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */; };
+		2CE0594A2764D69D0042D844 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */; };
 		2CE3D012267F73C00032A62E /* Transaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D011267F73C00032A62E /* Transaction.swift */; };
 		2CEFEB16274D5DCA00CE23BD /* inpage.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CEFEB15274D5DC900CE23BD /* inpage.js */; };
 		2CF25597275A46D300AE54B9 /* Defaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C528A15267FA8EB00CA3ADD /* Defaults.swift */; };
@@ -264,15 +268,9 @@
 		2CC8946E269A2E8C00879245 /* SessionStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStorage.swift; sourceTree = "<group>"; };
 		2CC89470269A334A00879245 /* UserDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaults.swift; sourceTree = "<group>"; };
 		2CCEB82D27594E2A00768473 /* Safari iOS.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Safari iOS.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
-		2CCEB82F27594E2A00768473 /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
 		2CCEB83227594E2A00768473 /* _locales */ = {isa = PBXFileReference; lastKnownFileType = folder; path = _locales; sourceTree = "<group>"; };
 		2CCEB83427594E2A00768473 /* images */ = {isa = PBXFileReference; lastKnownFileType = folder; path = images; sourceTree = "<group>"; };
 		2CCEB83627594E2A00768473 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
-		2CCEB83827594E2A00768473 /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = background.js; sourceTree = "<group>"; };
-		2CCEB83A27594E2A00768473 /* content.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = content.js; sourceTree = "<group>"; };
-		2CCEB83C27594E2A00768473 /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = popup.html; sourceTree = "<group>"; };
-		2CCEB83E27594E2A00768473 /* popup.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = popup.css; sourceTree = "<group>"; };
-		2CCEB84027594E2A00768473 /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = popup.js; sourceTree = "<group>"; };
 		2CCEB84227594E2A00768473 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2CD0668926B213E500728C20 /* WalletsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsManager.swift; sourceTree = "<group>"; };
 		2CD0668B26B2142000728C20 /* TokenaryWallet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenaryWallet.swift; sourceTree = "<group>"; };
@@ -281,6 +279,7 @@
 		2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordViewController.swift; sourceTree = "<group>"; };
 		2CE059362763D60A0042D844 /* KeyboardObserver.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KeyboardObserver.swift; sourceTree = "<group>"; };
 		2CE059382763F3FF0042D844 /* CGFloat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CGFloat.swift; sourceTree = "<group>"; };
+		2CE059482764169E0042D844 /* Tokenary iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Tokenary iOS.entitlements"; sourceTree = "<group>"; };
 		2CE3D011267F73C00032A62E /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
 		2CEFEB15274D5DC900CE23BD /* inpage.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = inpage.js; sourceTree = "<group>"; };
 		2CF255B3275A744000AE54B9 /* PasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordViewController.swift; sourceTree = "<group>"; };
@@ -346,8 +345,6 @@
 			isa = PBXGroup;
 			children = (
 				2C56E8F8274D604200FBC0FB /* web3-provider */,
-				2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */,
-				2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */,
 				2C09CBA3273979C1009AD39B /* Resources */,
 			);
 			path = "Safari macOS";
@@ -440,6 +437,7 @@
 		2C5FF97026C84F7B00B32ACC /* Tokenary iOS */ = {
 			isa = PBXGroup;
 			children = (
+				2CE059482764169E0042D844 /* Tokenary iOS.entitlements */,
 				2C5FF97126C84F7B00B32ACC /* AppDelegate.swift */,
 				2C5FF97326C84F7B00B32ACC /* SceneDelegate.swift */,
 				2C96D394276237F600687301 /* Library */,
@@ -571,6 +569,8 @@
 		2CCEB7A227592A3800768473 /* Safari Shared */ = {
 			isa = PBXGroup;
 			children = (
+				2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */,
+				2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */,
 				2C773F61274523DC007B04E7 /* ResponseToExtension.swift */,
 				2C09CBB5273979C1009AD39B /* Safari.entitlements */,
 				2C09CBB4273979C1009AD39B /* Info.plist */,
@@ -581,7 +581,6 @@
 		2CCEB82E27594E2A00768473 /* Safari iOS */ = {
 			isa = PBXGroup;
 			children = (
-				2CCEB82F27594E2A00768473 /* SafariWebExtensionHandler.swift */,
 				2CCEB84227594E2A00768473 /* Info.plist */,
 				2CCEB83127594E2A00768473 /* Resources */,
 			);
@@ -594,11 +593,6 @@
 				2CCEB83227594E2A00768473 /* _locales */,
 				2CCEB83427594E2A00768473 /* images */,
 				2CCEB83627594E2A00768473 /* manifest.json */,
-				2CCEB83827594E2A00768473 /* background.js */,
-				2CCEB83A27594E2A00768473 /* content.js */,
-				2CCEB83C27594E2A00768473 /* popup.html */,
-				2CCEB83E27594E2A00768473 /* popup.css */,
-				2CCEB84027594E2A00768473 /* popup.js */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -893,14 +887,12 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2CCEB83927594E2A00768473 /* background.js in Resources */,
-				2CCEB83F27594E2A00768473 /* popup.css in Resources */,
-				2CCEB83D27594E2A00768473 /* popup.html in Resources */,
+				2CE0594027640E8E0042D844 /* background.js in Resources */,
 				2CCEB83527594E2A00768473 /* images in Resources */,
+				2CE0594227640E8E0042D844 /* inpage.js in Resources */,
 				2CCEB83727594E2A00768473 /* manifest.json in Resources */,
 				2CCEB83327594E2A00768473 /* _locales in Resources */,
-				2CCEB83B27594E2A00768473 /* content.js in Resources */,
-				2CCEB84127594E2A00768473 /* popup.js in Resources */,
+				2CE0594127640E8E0042D844 /* content.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1046,6 +1038,7 @@
 				2C9F0B6526BDC9AF008FA3D6 /* EthereumNetwork.swift in Sources */,
 				2C773F62274523DC007B04E7 /* ResponseToExtension.swift in Sources */,
 				2C208A9F26813408005BA500 /* Secrets.swift in Sources */,
+				2CE0594A2764D69D0042D844 /* SafariWebExtensionHandler.swift in Sources */,
 				2CC8946F269A2E8C00879245 /* SessionStorage.swift in Sources */,
 				0DC850E726B73A5900809E82 /* AuthenticationReason.swift in Sources */,
 				2CAA412526C7CD93009F3535 /* ReviewRequester.swift in Sources */,
@@ -1106,6 +1099,7 @@
 				2CF255A2275A47DD00AE54B9 /* String.swift in Sources */,
 				2CF2559D275A479800AE54B9 /* TokenaryWallet.swift in Sources */,
 				2CF255AB275A48CF00AE54B9 /* Ethereum.swift in Sources */,
+				2CE059492764D69D0042D844 /* SafariWebExtensionHandler.swift in Sources */,
 				2CF2559A275A46E400AE54B9 /* SafariRequest.swift in Sources */,
 				2CF255B0275A492100AE54B9 /* Secrets.swift in Sources */,
 				2CC6EF0D275E64810040CC62 /* UIViewController.swift in Sources */,
@@ -1124,6 +1118,7 @@
 				2C96D39827623EC600687301 /* URL.swift in Sources */,
 				2CF255AD275A48CF00AE54B9 /* EthereumChain.swift in Sources */,
 				2CF2559C275A477F00AE54B9 /* ApprovalSubject.swift in Sources */,
+				2CE0594427640EB40042D844 /* ExtensionBridge.swift in Sources */,
 				2CF255B1275A4A1800AE54B9 /* ResponseToExtension.swift in Sources */,
 				2CF2559B275A46E700AE54B9 /* AuthenticationReason.swift in Sources */,
 				2C96D3A92763D13400687301 /* DataStateView.swift in Sources */,
@@ -1150,7 +1145,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2CCEB83027594E2A00768473 /* SafariWebExtensionHandler.swift in Sources */,
+				2CE0594627640F470042D844 /* UserDefaults.swift in Sources */,
+				2CE0594327640EAB0042D844 /* ExtensionBridge.swift in Sources */,
+				2CE0593F27640E300042D844 /* SafariWebExtensionHandler.swift in Sources */,
+				2CE0594527640EF10042D844 /* ResponseToExtension.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1443,6 +1441,7 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = "$(inherited)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Tokenary iOS/Tokenary iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 36;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
@@ -1468,6 +1467,7 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = "$(inherited)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Tokenary iOS/Tokenary iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 36;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
