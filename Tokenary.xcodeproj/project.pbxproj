@@ -361,9 +361,7 @@
 				2C09CBA4273979C1009AD39B /* _locales */,
 				2C09CBA6273979C1009AD39B /* images */,
 				2C09CBA8273979C1009AD39B /* manifest.json */,
-				2C09CBAC273979C1009AD39B /* content.js */,
 				2CFDDF4B2765416F00F89019 /* macos-specific-content.js */,
-				2C09CBAA273979C1009AD39B /* background.js */,
 				2CEFEB15274D5DC900CE23BD /* inpage.js */,
 			);
 			path = Resources;
@@ -545,6 +543,15 @@
 			path = Library;
 			sourceTree = "<group>";
 		};
+		2CB3844027654A0D00A189B9 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				2C09CBAA273979C1009AD39B /* background.js */,
+				2C09CBAC273979C1009AD39B /* content.js */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		2CC6EF0E275E64840040CC62 /* Extensions */ = {
 			isa = PBXGroup;
 			children = (
@@ -575,6 +582,7 @@
 		2CCEB7A227592A3800768473 /* Safari Shared */ = {
 			isa = PBXGroup;
 			children = (
+				2CB3844027654A0D00A189B9 /* Resources */,
 				2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */,
 				2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */,
 				2C773F61274523DC007B04E7 /* ResponseToExtension.swift */,
