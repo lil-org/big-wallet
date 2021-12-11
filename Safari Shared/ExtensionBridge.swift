@@ -4,7 +4,7 @@ import Foundation
 
 struct ExtensionBridge {
     
-    private static let defaults = UserDefaults(suiteName: "XWNXDSM6BU.io.tokenary")
+    private static let defaults = UserDefaults(suiteName: "group.io.tokenary")
     
     private static func key(id: Int) -> String {
         return String(id)
