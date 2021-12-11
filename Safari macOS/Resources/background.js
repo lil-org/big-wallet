@@ -11,7 +11,8 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 browser.browserAction.onClicked.addListener(function(tab) {
     const id = new Date().getTime() + Math.floor(Math.random() * 1000);
-    const request = {id: id, name: "switchAccount", object: {}, address: ""};
+    const request = {id: id, name: "switchAccount", object: {}, address: "", proxy: true};
+    browser.tabs.sendMessage(tab.id, request);
     // TODO: pass current network id
     // TODO: pass favicon
     // TODO: pass host here as well

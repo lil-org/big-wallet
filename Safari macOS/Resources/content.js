@@ -111,9 +111,13 @@ function processInpageMessage(message) {
 
 // Receive from background
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    const id = new Date().getTime() + Math.floor(Math.random() * 1000);
-    window.postMessage({direction: "from-content-script", response: request, id: id}, "*");
-    storeAccountIfNeeded(request);
+    if ("proxy" in request) {
+        window.location.href = "tokenary://" + JSON.stringify(request); // TODO: don't do this on macOS
+    } else {
+        const id = new Date().getTime() + Math.floor(Math.random() * 1000);
+        window.postMessage({direction: "from-content-script", response: request, id: id}, "*");
+        storeAccountIfNeeded(request);
+    }
 });
 
 // Receive from inpage
