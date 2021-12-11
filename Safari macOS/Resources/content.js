@@ -1,4 +1,4 @@
-if (window.location.href == "https://tokenary.io/blank/") { // TODO: check for prefix actually
+if (window.location.href.startsWith("https://tokenary.io/blank")) {
     browser.runtime.sendMessage({ subject: "closeTab" });
 }
 
