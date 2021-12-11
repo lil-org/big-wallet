@@ -12,8 +12,6 @@
 		2C03D1D2269B407900EF10EA /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03D1D1269B407900EF10EA /* NetworkMonitor.swift */; };
 		2C03D1D5269B428C00EF10EA /* Notification.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03D1D4269B428C00EF10EA /* Notification.swift */; };
 		2C09CBA2273979C1009AD39B /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */; };
-		2C09CBA5273979C1009AD39B /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBA4273979C1009AD39B /* _locales */; };
-		2C09CBA7273979C1009AD39B /* images in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBA6273979C1009AD39B /* images */; };
 		2C09CBA9273979C1009AD39B /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBA8273979C1009AD39B /* manifest.json */; };
 		2C09CBAB273979C1009AD39B /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAA273979C1009AD39B /* background.js */; };
 		2C09CBAD273979C1009AD39B /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAC273979C1009AD39B /* content.js */; };
@@ -76,12 +74,14 @@
 		2C9F0B6526BDC9AF008FA3D6 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */; };
 		2C9F0B6826BDCB2E008FA3D6 /* EthereumChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */; };
 		2CAA412526C7CD93009F3535 /* ReviewRequester.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CAA412426C7CD93009F3535 /* ReviewRequester.swift */; };
+		2CB3845A27654EA900A189B9 /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 2CB3845827654E9700A189B9 /* _locales */; };
+		2CB3845B27654EA900A189B9 /* images in Resources */ = {isa = PBXBuildFile; fileRef = 2CB3845927654E9700A189B9 /* images */; };
+		2CB3845C27654EB300A189B9 /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 2CB3845827654E9700A189B9 /* _locales */; };
+		2CB3845D27654EB300A189B9 /* images in Resources */ = {isa = PBXBuildFile; fileRef = 2CB3845927654E9700A189B9 /* images */; };
 		2CC0CDBE2692027E0072922A /* PriceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC0CDBD2692027E0072922A /* PriceService.swift */; };
 		2CC6EF0D275E64810040CC62 /* UIViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC6EF0C275E64810040CC62 /* UIViewController.swift */; };
 		2CC8946F269A2E8C00879245 /* SessionStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8946E269A2E8C00879245 /* SessionStorage.swift */; };
 		2CC89471269A334A00879245 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC89470269A334A00879245 /* UserDefaults.swift */; };
-		2CCEB83327594E2A00768473 /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 2CCEB83227594E2A00768473 /* _locales */; };
-		2CCEB83527594E2A00768473 /* images in Resources */ = {isa = PBXBuildFile; fileRef = 2CCEB83427594E2A00768473 /* images */; };
 		2CCEB83727594E2A00768473 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 2CCEB83627594E2A00768473 /* manifest.json */; };
 		2CCEB84527594E2A00768473 /* Safari iOS.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2CCEB82D27594E2A00768473 /* Safari iOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2CD0669126B5537B00728C20 /* TokenaryWallet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668B26B2142000728C20 /* TokenaryWallet.swift */; };
@@ -189,8 +189,6 @@
 		2C03D1D4269B428C00EF10EA /* Notification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notification.swift; sourceTree = "<group>"; };
 		2C09CB9F273979C1009AD39B /* Safari macOS.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Safari macOS.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
-		2C09CBA4273979C1009AD39B /* _locales */ = {isa = PBXFileReference; lastKnownFileType = folder; path = _locales; sourceTree = "<group>"; };
-		2C09CBA6273979C1009AD39B /* images */ = {isa = PBXFileReference; lastKnownFileType = folder; path = images; sourceTree = "<group>"; };
 		2C09CBA8273979C1009AD39B /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
 		2C09CBAA273979C1009AD39B /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = background.js; sourceTree = "<group>"; };
 		2C09CBAC273979C1009AD39B /* content.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = content.js; sourceTree = "<group>"; };
@@ -265,13 +263,13 @@
 		2CB3844627654BF600A189B9 /* utils.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = utils.js; path = "web3-provider/utils.js"; sourceTree = "<group>"; };
 		2CB3844727654BF600A189B9 /* index.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = index.js; path = "web3-provider/index.js"; sourceTree = "<group>"; };
 		2CB3844827654BF600A189B9 /* rpc.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = rpc.js; path = "web3-provider/rpc.js"; sourceTree = "<group>"; };
+		2CB3845827654E9700A189B9 /* _locales */ = {isa = PBXFileReference; lastKnownFileType = folder; path = _locales; sourceTree = "<group>"; };
+		2CB3845927654E9700A189B9 /* images */ = {isa = PBXFileReference; lastKnownFileType = folder; path = images; sourceTree = "<group>"; };
 		2CC0CDBD2692027E0072922A /* PriceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceService.swift; sourceTree = "<group>"; };
 		2CC6EF0C275E64810040CC62 /* UIViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIViewController.swift; sourceTree = "<group>"; };
 		2CC8946E269A2E8C00879245 /* SessionStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStorage.swift; sourceTree = "<group>"; };
 		2CC89470269A334A00879245 /* UserDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaults.swift; sourceTree = "<group>"; };
 		2CCEB82D27594E2A00768473 /* Safari iOS.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Safari iOS.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
-		2CCEB83227594E2A00768473 /* _locales */ = {isa = PBXFileReference; lastKnownFileType = folder; path = _locales; sourceTree = "<group>"; };
-		2CCEB83427594E2A00768473 /* images */ = {isa = PBXFileReference; lastKnownFileType = folder; path = images; sourceTree = "<group>"; };
 		2CCEB83627594E2A00768473 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
 		2CCEB84227594E2A00768473 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2CD0668926B213E500728C20 /* WalletsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsManager.swift; sourceTree = "<group>"; };
@@ -357,8 +355,6 @@
 		2C09CBA3273979C1009AD39B /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				2C09CBA4273979C1009AD39B /* _locales */,
-				2C09CBA6273979C1009AD39B /* images */,
 				2C09CBA8273979C1009AD39B /* manifest.json */,
 				2CFDDF4B2765416F00F89019 /* macos-specific-content.js */,
 			);
@@ -531,6 +527,8 @@
 		2CB3844027654A0D00A189B9 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				2CB3845827654E9700A189B9 /* _locales */,
+				2CB3845927654E9700A189B9 /* images */,
 				2CEFEB15274D5DC900CE23BD /* inpage.js */,
 				2C09CBAA273979C1009AD39B /* background.js */,
 				2C09CBAC273979C1009AD39B /* content.js */,
@@ -605,8 +603,6 @@
 		2CCEB83127594E2A00768473 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				2CCEB83227594E2A00768473 /* _locales */,
-				2CCEB83427594E2A00768473 /* images */,
 				2CCEB83627594E2A00768473 /* manifest.json */,
 				2CFDDF4D2765417D00F89019 /* ios-specific-content.js */,
 			);
@@ -862,11 +858,11 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2CB3845C27654EB300A189B9 /* _locales in Resources */,
+				2CB3845D27654EB300A189B9 /* images in Resources */,
 				2CEFEB16274D5DCA00CE23BD /* inpage.js in Resources */,
 				2C09CBAB273979C1009AD39B /* background.js in Resources */,
-				2C09CBA7273979C1009AD39B /* images in Resources */,
 				2C09CBA9273979C1009AD39B /* manifest.json in Resources */,
-				2C09CBA5273979C1009AD39B /* _locales in Resources */,
 				2C09CBAD273979C1009AD39B /* content.js in Resources */,
 				2CFDDF4C2765416F00F89019 /* macos-specific-content.js in Resources */,
 			);
@@ -905,11 +901,11 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2CB3845A27654EA900A189B9 /* _locales in Resources */,
+				2CB3845B27654EA900A189B9 /* images in Resources */,
 				2CE0594027640E8E0042D844 /* background.js in Resources */,
-				2CCEB83527594E2A00768473 /* images in Resources */,
 				2CE0594227640E8E0042D844 /* inpage.js in Resources */,
 				2CCEB83727594E2A00768473 /* manifest.json in Resources */,
-				2CCEB83327594E2A00768473 /* _locales in Resources */,
 				2CE0594127640E8E0042D844 /* content.js in Resources */,
 				2CFDDF4E2765417E00F89019 /* ios-specific-content.js in Resources */,
 			);
