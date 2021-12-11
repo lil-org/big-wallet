@@ -210,12 +210,6 @@
 		2C3B7F012756A08600931264 /* Identifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Identifiers.swift; sourceTree = "<group>"; };
 		2C4E26BD27564EB000265DCC /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = SOURCE_ROOT; };
 		2C528A15267FA8EB00CA3ADD /* Defaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Defaults.swift; sourceTree = "<group>"; };
-		2C56E8F9274D606100FBC0FB /* rpc.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = rpc.js; path = "web3-provider/rpc.js"; sourceTree = "<group>"; };
-		2C56E8FA274D606100FBC0FB /* utils.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = utils.js; path = "web3-provider/utils.js"; sourceTree = "<group>"; };
-		2C56E8FB274D606100FBC0FB /* index.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = index.js; path = "web3-provider/index.js"; sourceTree = "<group>"; };
-		2C56E8FC274D606100FBC0FB /* id_mapping.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = id_mapping.js; path = "web3-provider/id_mapping.js"; sourceTree = "<group>"; };
-		2C56E8FD274D606100FBC0FB /* error.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = error.js; path = "web3-provider/error.js"; sourceTree = "<group>"; };
-		2C56E8FE274D606100FBC0FB /* package.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = package.json; path = "web3-provider/package.json"; sourceTree = "<group>"; };
 		2C5FF96F26C84F7B00B32ACC /* Tokenary iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Tokenary iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C5FF97126C84F7B00B32ACC /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		2C5FF97326C84F7B00B32ACC /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -265,6 +259,12 @@
 		2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumNetwork.swift; sourceTree = "<group>"; };
 		2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumChain.swift; sourceTree = "<group>"; };
 		2CAA412426C7CD93009F3535 /* ReviewRequester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewRequester.swift; sourceTree = "<group>"; };
+		2CB3844327654BF600A189B9 /* error.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = error.js; path = "web3-provider/error.js"; sourceTree = "<group>"; };
+		2CB3844427654BF600A189B9 /* package.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = package.json; path = "web3-provider/package.json"; sourceTree = "<group>"; };
+		2CB3844527654BF600A189B9 /* id_mapping.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = id_mapping.js; path = "web3-provider/id_mapping.js"; sourceTree = "<group>"; };
+		2CB3844627654BF600A189B9 /* utils.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = utils.js; path = "web3-provider/utils.js"; sourceTree = "<group>"; };
+		2CB3844727654BF600A189B9 /* index.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = index.js; path = "web3-provider/index.js"; sourceTree = "<group>"; };
+		2CB3844827654BF600A189B9 /* rpc.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = rpc.js; path = "web3-provider/rpc.js"; sourceTree = "<group>"; };
 		2CC0CDBD2692027E0072922A /* PriceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceService.swift; sourceTree = "<group>"; };
 		2CC6EF0C275E64810040CC62 /* UIViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIViewController.swift; sourceTree = "<group>"; };
 		2CC8946E269A2E8C00879245 /* SessionStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStorage.swift; sourceTree = "<group>"; };
@@ -349,7 +349,6 @@
 		2C09CBA0273979C1009AD39B /* Safari macOS */ = {
 			isa = PBXGroup;
 			children = (
-				2C56E8F8274D604200FBC0FB /* web3-provider */,
 				2C09CBA3273979C1009AD39B /* Resources */,
 			);
 			path = "Safari macOS";
@@ -362,7 +361,6 @@
 				2C09CBA6273979C1009AD39B /* images */,
 				2C09CBA8273979C1009AD39B /* manifest.json */,
 				2CFDDF4B2765416F00F89019 /* macos-specific-content.js */,
-				2CEFEB15274D5DC900CE23BD /* inpage.js */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -423,19 +421,6 @@
 				2C4E26BD27564EB000265DCC /* README.md */,
 			);
 			path = "Supporting Files";
-			sourceTree = "<group>";
-		};
-		2C56E8F8274D604200FBC0FB /* web3-provider */ = {
-			isa = PBXGroup;
-			children = (
-				2C56E8FB274D606100FBC0FB /* index.js */,
-				2C56E8FD274D606100FBC0FB /* error.js */,
-				2C56E8FC274D606100FBC0FB /* id_mapping.js */,
-				2C56E8FE274D606100FBC0FB /* package.json */,
-				2C56E8F9274D606100FBC0FB /* rpc.js */,
-				2C56E8FA274D606100FBC0FB /* utils.js */,
-			);
-			name = "web3-provider";
 			sourceTree = "<group>";
 		};
 		2C5FF97026C84F7B00B32ACC /* Tokenary iOS */ = {
@@ -546,10 +531,24 @@
 		2CB3844027654A0D00A189B9 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				2CEFEB15274D5DC900CE23BD /* inpage.js */,
 				2C09CBAA273979C1009AD39B /* background.js */,
 				2C09CBAC273979C1009AD39B /* content.js */,
 			);
 			path = Resources;
+			sourceTree = "<group>";
+		};
+		2CB3844227654BD500A189B9 /* web3-provider */ = {
+			isa = PBXGroup;
+			children = (
+				2CB3844327654BF600A189B9 /* error.js */,
+				2CB3844527654BF600A189B9 /* id_mapping.js */,
+				2CB3844727654BF600A189B9 /* index.js */,
+				2CB3844427654BF600A189B9 /* package.json */,
+				2CB3844827654BF600A189B9 /* rpc.js */,
+				2CB3844627654BF600A189B9 /* utils.js */,
+			);
+			name = "web3-provider";
 			sourceTree = "<group>";
 		};
 		2CC6EF0E275E64840040CC62 /* Extensions */ = {
@@ -582,6 +581,7 @@
 		2CCEB7A227592A3800768473 /* Safari Shared */ = {
 			isa = PBXGroup;
 			children = (
+				2CB3844227654BD500A189B9 /* web3-provider */,
 				2CB3844027654A0D00A189B9 /* Resources */,
 				2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */,
 				2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */,
@@ -795,6 +795,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2CCEB84927594E2A00768473 /* Build configuration list for PBXNativeTarget "Safari iOS" */;
 			buildPhases = (
+				2CB3844927654C8D00A189B9 /* ShellScript */,
 				2CCEB82927594E2A00768473 /* Sources */,
 				2CCEB82A27594E2A00768473 /* Frameworks */,
 				2CCEB82B27594E2A00768473 /* Resources */,
@@ -950,7 +951,25 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "FILE=/usr/lib/bin/yarn\nif [ -f \"$FILE\" ]; then\n    export PATH=/usr/lib/bin:$PATH\nelse\n    export PATH=/opt/homebrew/bin:$PATH\nfi\n\ncd \"$PROJECT_DIR\"/Safari\\ MacOS/web3-provider\nyarn run build\n";
+			shellScript = "FILE=/usr/lib/bin/yarn\nif [ -f \"$FILE\" ]; then\n    export PATH=/usr/lib/bin:$PATH\nelse\n    export PATH=/opt/homebrew/bin:$PATH\nfi\n\ncd \"$PROJECT_DIR\"/Safari\\ Shared/web3-provider\nyarn run build\n";
+		};
+		2CB3844927654C8D00A189B9 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "FILE=/usr/lib/bin/yarn\nif [ -f \"$FILE\" ]; then\n    export PATH=/usr/lib/bin:$PATH\nelse\n    export PATH=/opt/homebrew/bin:$PATH\nfi\n\ncd \"$PROJECT_DIR\"/Safari\\ Shared/web3-provider\nyarn run build\n";
 		};
 		303BE185B5D6C331A0A9F12E /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
