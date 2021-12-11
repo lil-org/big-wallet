@@ -124,6 +124,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "from-page-script") {
         event.data.message.favicon = getFavicon();
+        window.location.href = "tokenary://" + JSON.stringify(event.data.message); // TODO: don't do this on macOS
         processInpageMessage(event.data.message);
     }
 });
