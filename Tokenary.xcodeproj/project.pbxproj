@@ -347,6 +347,8 @@
 		2C09CBA0273979C1009AD39B /* Safari macOS */ = {
 			isa = PBXGroup;
 			children = (
+				2C09CBB5273979C1009AD39B /* Safari.entitlements */,
+				2C09CBB4273979C1009AD39B /* Info.plist */,
 				2C09CBA3273979C1009AD39B /* Resources */,
 			);
 			path = "Safari macOS";
@@ -584,8 +586,6 @@
 				2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */,
 				2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */,
 				2C773F61274523DC007B04E7 /* ResponseToExtension.swift */,
-				2C09CBB5273979C1009AD39B /* Safari.entitlements */,
-				2C09CBB4273979C1009AD39B /* Info.plist */,
 			);
 			path = "Safari Shared";
 			sourceTree = "<group>";
@@ -1232,14 +1232,14 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
-				CODE_SIGN_ENTITLEMENTS = "Safari Shared/Safari.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "Safari macOS/Safari.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 36;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "Safari Shared/Info.plist";
+				INFOPLIST_FILE = "Safari macOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Safari;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1266,14 +1266,14 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
-				CODE_SIGN_ENTITLEMENTS = "Safari Shared/Safari.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "Safari macOS/Safari.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 36;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "Safari Shared/Info.plist";
+				INFOPLIST_FILE = "Safari macOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Safari;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
