@@ -112,7 +112,7 @@ function processInpageMessage(message) {
 // Receive from background
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if ("proxy" in request) {
-        window.location.href = "tokenary://" + JSON.stringify(request); // TODO: don't do this on macOS
+        platformSpecificProcessMessage(request);
     } else {
         const id = new Date().getTime() + Math.floor(Math.random() * 1000);
         window.postMessage({direction: "from-content-script", response: request, id: id}, "*");
@@ -124,7 +124,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "from-page-script") {
         event.data.message.favicon = getFavicon();
-        window.location.href = "tokenary://" + JSON.stringify(event.data.message); // TODO: don't do this on macOS
+        platformSpecificProcessMessage(event.data.message);
         processInpageMessage(event.data.message);
     }
 });

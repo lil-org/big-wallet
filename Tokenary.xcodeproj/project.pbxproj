@@ -132,6 +132,8 @@
 		2CF255B6275A746000AE54B9 /* AccountsListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF255B5275A746000AE54B9 /* AccountsListViewController.swift */; };
 		2CF255B8275A748300AE54B9 /* ApproveTransactionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF255B7275A748300AE54B9 /* ApproveTransactionViewController.swift */; };
 		2CF255BA275A749300AE54B9 /* ApproveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF255B9275A749300AE54B9 /* ApproveViewController.swift */; };
+		2CFDDF4C2765416F00F89019 /* macos-specific-content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CFDDF4B2765416F00F89019 /* macos-specific-content.js */; };
+		2CFDDF4E2765417E00F89019 /* ios-specific-content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CFDDF4D2765417D00F89019 /* ios-specific-content.js */; };
 		A623B7904B1ED3149343DCD6 /* Pods_Tokenary_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5597F081AA0DC028CDA696CE /* Pods_Tokenary_iOS.framework */; };
 		D7B47B44D0CC4E1F557FC0AA /* Pods_Tokenary.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 70BA61C085C7AA2F72DEE02A /* Pods_Tokenary.framework */; };
 /* End PBXBuildFile section */
@@ -287,6 +289,8 @@
 		2CF255B5275A746000AE54B9 /* AccountsListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsListViewController.swift; sourceTree = "<group>"; };
 		2CF255B7275A748300AE54B9 /* ApproveTransactionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveTransactionViewController.swift; sourceTree = "<group>"; };
 		2CF255B9275A749300AE54B9 /* ApproveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveViewController.swift; sourceTree = "<group>"; };
+		2CFDDF4B2765416F00F89019 /* macos-specific-content.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = "macos-specific-content.js"; sourceTree = "<group>"; };
+		2CFDDF4D2765417D00F89019 /* ios-specific-content.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = "ios-specific-content.js"; sourceTree = "<group>"; };
 		5597F081AA0DC028CDA696CE /* Pods_Tokenary_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Tokenary_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		6149B8295F757798C8D71308 /* Pods-Tokenary iOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary iOS.release.xcconfig"; path = "Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS.release.xcconfig"; sourceTree = "<group>"; };
 		70BA61C085C7AA2F72DEE02A /* Pods_Tokenary.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Tokenary.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -358,6 +362,7 @@
 				2C09CBA6273979C1009AD39B /* images */,
 				2C09CBA8273979C1009AD39B /* manifest.json */,
 				2C09CBAC273979C1009AD39B /* content.js */,
+				2CFDDF4B2765416F00F89019 /* macos-specific-content.js */,
 				2C09CBAA273979C1009AD39B /* background.js */,
 				2CEFEB15274D5DC900CE23BD /* inpage.js */,
 			);
@@ -595,6 +600,7 @@
 				2CCEB83227594E2A00768473 /* _locales */,
 				2CCEB83427594E2A00768473 /* images */,
 				2CCEB83627594E2A00768473 /* manifest.json */,
+				2CFDDF4D2765417D00F89019 /* ios-specific-content.js */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -853,6 +859,7 @@
 				2C09CBA9273979C1009AD39B /* manifest.json in Resources */,
 				2C09CBA5273979C1009AD39B /* _locales in Resources */,
 				2C09CBAD273979C1009AD39B /* content.js in Resources */,
+				2CFDDF4C2765416F00F89019 /* macos-specific-content.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -895,6 +902,7 @@
 				2CCEB83727594E2A00768473 /* manifest.json in Resources */,
 				2CCEB83327594E2A00768473 /* _locales in Resources */,
 				2CE0594127640E8E0042D844 /* content.js in Resources */,
+				2CFDDF4E2765417E00F89019 /* ios-specific-content.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
