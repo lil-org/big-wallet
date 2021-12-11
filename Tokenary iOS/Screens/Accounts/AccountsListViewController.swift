@@ -218,7 +218,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
 }
 
-
 extension AccountsListViewController: UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
