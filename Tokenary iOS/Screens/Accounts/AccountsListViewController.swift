@@ -32,6 +32,30 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
         dataStateShouldMoveWithKeyboard(false)
         updateDataState()
+        NotificationCenter.default.addObserver(self, selector: #selector(processInput), name: UIApplication.didBecomeActiveNotification, object: nil)
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        processInput()
+    }
+    
+    @objc private func processInput() {
+        let prefix = "tokenary://"
+        guard let url = launchURL?.absoluteString, url.hasPrefix(prefix),
+              let request = SafariRequest(query: String(url.dropFirst(prefix.count))) else { return }
+        launchURL = nil
+        showMessageAlert(text: request.name) {
+            let chain = EthereumChain.ethereum
+            let response = ResponseToExtension(name: request.name,
+                                               results: ["0xE26067c76fdbe877F48b0a8400cf5Db8B47aF0fE"],
+                                               chainId: chain.hexStringId,
+                                               rpcURL: chain.nodeURLString)
+            ExtensionBridge.respond(id: request.id, response: response)
+            if let redirectURL = URL(string: "https://tokenary.io/blank/\(request.id)") {
+                UIApplication.shared.open(redirectURL)
+            }
+        }
     }
     
     private func updateDataState() {
