@@ -19,7 +19,9 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         else {
             return
         }
+        #if os(macOS)
         NSWorkspace.shared.open(url)
+        #endif
         self.context = context
         poll(id: id)
     }

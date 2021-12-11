@@ -14,9 +14,11 @@ extension UIViewController {
         dismiss(animated: true)
     }
     
-    func showMessageAlert(text: String) {
+    func showMessageAlert(text: String, completion: (() -> Void)? = nil) {
         let alert = UIAlertController(title: text, message: nil, preferredStyle: .alert)
-        let okAction = UIAlertAction.init(title: Strings.ok, style: .default)
+        let okAction = UIAlertAction(title: Strings.ok, style: .default) { _ in
+            completion?()
+        }
         alert.addAction(okAction)
         present(alert, animated: true)
     }

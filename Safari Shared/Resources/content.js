@@ -1,3 +1,7 @@
+if (window.location.href.startsWith("https://tokenary.io/blank")) {
+    browser.runtime.sendMessage({ subject: "closeTab" });
+}
+
 if (document.readyState === "complete") {
     window.location.reload();
 }
@@ -107,15 +111,20 @@ function processInpageMessage(message) {
 
 // Receive from background
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    const id = new Date().getTime() + Math.floor(Math.random() * 1000);
-    window.postMessage({direction: "from-content-script", response: request, id: id}, "*");
-    storeAccountIfNeeded(request);
+    if ("proxy" in request) {
+        platformSpecificProcessMessage(request);
+    } else {
+        const id = new Date().getTime() + Math.floor(Math.random() * 1000);
+        window.postMessage({direction: "from-content-script", response: request, id: id}, "*");
+        storeAccountIfNeeded(request);
+    }
 });
 
 // Receive from inpage
 window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "from-page-script") {
         event.data.message.favicon = getFavicon();
+        platformSpecificProcessMessage(event.data.message);
         processInpageMessage(event.data.message);
     }
 });
