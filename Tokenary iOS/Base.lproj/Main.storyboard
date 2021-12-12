@@ -238,6 +238,60 @@ Label</string>
             </objects>
             <point key="canvasLocation" x="2320" y="124"/>
         </scene>
+        <!--Approve View Controller-->
+        <scene sceneID="RWl-cv-71R">
+            <objects>
+                <viewController storyboardIdentifier="ApproveViewController" id="bCJ-7J-W3b" customClass="ApproveViewController" customModule="Tokenary_iOS" customModuleProvider="target" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="mif-5d-Da0">
+                        <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" spacing="12" translatesAutoresizingMaskIntoConstraints="NO" id="r7X-oe-bLm">
+                                <rect key="frame" x="20" y="790" width="374" height="52"/>
+                                <subviews>
+                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="v8H-iO-Xlx">
+                                        <rect key="frame" x="0.0" y="0.0" width="181" height="52"/>
+                                        <state key="normal" title="Button"/>
+                                        <buttonConfiguration key="configuration" style="gray" title="Cancel"/>
+                                        <connections>
+                                            <action selector="cancelButtonTapped:" destination="bCJ-7J-W3b" eventType="touchUpInside" id="Bde-sm-pr6"/>
+                                            <action selector="pasteButtonTapped:" destination="ffW-KB-fbn" eventType="touchUpInside" id="83H-iB-JYq"/>
+                                        </connections>
+                                    </button>
+                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="I4B-ul-Hdj">
+                                        <rect key="frame" x="193" y="0.0" width="181" height="52"/>
+                                        <constraints>
+                                            <constraint firstAttribute="height" constant="52" id="m51-jE-4yt"/>
+                                        </constraints>
+                                        <state key="normal" title="Button"/>
+                                        <buttonConfiguration key="configuration" style="filled" title="OK"/>
+                                        <connections>
+                                            <action selector="okButtonTapped:" destination="ffW-KB-fbn" eventType="touchUpInside" id="wOG-xH-Klu"/>
+                                            <action selector="okButtonTapped:" destination="bCJ-7J-W3b" eventType="touchUpInside" id="yPn-Ty-tDM"/>
+                                        </connections>
+                                    </button>
+                                </subviews>
+                                <constraints>
+                                    <constraint firstItem="I4B-ul-Hdj" firstAttribute="height" secondItem="v8H-iO-Xlx" secondAttribute="height" id="xud-p7-OPT"/>
+                                </constraints>
+                            </stackView>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="iMU-ib-JoS"/>
+                        <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                        <constraints>
+                            <constraint firstItem="iMU-ib-JoS" firstAttribute="trailing" secondItem="r7X-oe-bLm" secondAttribute="trailing" constant="20" id="RAM-WS-7U4"/>
+                            <constraint firstItem="r7X-oe-bLm" firstAttribute="leading" secondItem="iMU-ib-JoS" secondAttribute="leading" constant="20" id="c1q-DA-Xea"/>
+                            <constraint firstItem="iMU-ib-JoS" firstAttribute="bottom" secondItem="r7X-oe-bLm" secondAttribute="bottom" constant="20" id="eXq-ja-dN2"/>
+                        </constraints>
+                    </view>
+                    <connections>
+                        <outlet property="okButton" destination="I4B-ul-Hdj" id="5d0-w3-VFH"/>
+                    </connections>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="iyz-Pa-Zfg" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="3067" y="124"/>
+        </scene>
         <!--Navigation Controller-->
         <scene sceneID="3Va-jz-tEl">
             <objects>

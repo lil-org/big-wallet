@@ -6,6 +6,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     private let walletsManager = WalletsManager.shared
     private let keychain = Keychain.shared
+    private let ethereum = Ethereum.shared
     
     private var chain = EthereumChain.ethereum
     var onSelectedWallet: ((EthereumChain?, TokenaryWallet?) -> Void)?
@@ -66,6 +67,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
               let request = SafariRequest(query: String(url.dropFirst(prefix.count))) else { return }
         launchURL = nil
         
+        let peerMeta = PeerMeta(title: request.host, iconURLString: request.iconURLString)
         switch request.method {
         case .switchAccount, .requestAccounts:
             let selectAccountViewController = instantiate(AccountsListViewController.self, from: .main)
@@ -80,7 +82,20 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                                                    rpcURL: chain.nodeURLString)
                 self?.respondTo(request: request, response: response)
             }
-            present(selectAccountViewController.inNavigationController, animated: true)
+            presentForSafariRequest(selectAccountViewController.inNavigationController)
+        case .signPersonalMessage:
+            guard let data = request.message else {
+                respondTo(request: request, error: Strings.somethingWentWrong)
+                return
+            }
+            let text = String(data: data, encoding: .utf8) ?? data.hexString
+            showApprove(subject: .signPersonalMessage, meta: text, peerMeta: peerMeta) { [weak self] approved in
+                if approved {
+                    self?.signPersonalMessage(address: request.address, data: data, request: request)
+                } else {
+                    self?.respondTo(request: request, error: Strings.failedToSign)
+                }
+            }
         default:
             showMessageAlert(text: request.name) { [weak self] in
                 let chain = EthereumChain.ethereum
@@ -91,6 +106,16 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                 self?.respondTo(request: request, response: response)
             }
         }
+    }
+    
+    func showApprove(subject: ApprovalSubject, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) {
+        let approveViewController = ApproveViewController.with(subject: subject, meta: meta, peerMeta: peerMeta, completion: completion)
+        presentForSafariRequest(approveViewController.inNavigationController)
+    }
+    
+    private func presentForSafariRequest(_ viewController: UIViewController) {
+        // TODO: present above all
+        present(viewController, animated: true)
     }
     
     private func respondTo(request: SafariRequest, response: ResponseToExtension) {
@@ -327,6 +352,15 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         alert.addAction(cancelAction)
         alert.addAction(okAction)
         present(alert, animated: true)
+    }
+    
+    private func signPersonalMessage(address: String, data: Data, request: SafariRequest) {
+        if let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.signPersonalMessage(data: data, wallet: wallet) {
+            let response = ResponseToExtension(name: request.name, result: signed)
+            respondTo(request: request, response: response)
+        } else {
+            respondTo(request: request, error: Strings.failedToSign)
+        }
     }
     
 }
