@@ -126,7 +126,7 @@
                                                 <constraint firstAttribute="height" constant="52" id="Trz-gO-sBc"/>
                                             </constraints>
                                             <state key="normal" title="Button"/>
-                                            <buttonConfiguration key="configuration" style="tinted" image="chevron.down" catalog="system" imagePlacement="trailing" title="Ethereum" imagePadding="4"/>
+                                            <buttonConfiguration key="configuration" style="gray" image="chevron.down" catalog="system" imagePlacement="trailing" title="Ethereum" imagePadding="4"/>
                                             <connections>
                                                 <action selector="chainButtonTapped:" destination="onX-Y1-KVr" eventType="touchUpInside" id="vEp-lO-cld"/>
                                                 <action selector="pasteButtonTapped:" destination="ffW-KB-fbn" eventType="touchUpInside" id="CIq-jN-XXP"/>
