@@ -16,6 +16,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         return walletsManager.wallets
     }
     
+    @IBOutlet weak var chainSelectionHeader: UIView!
     @IBOutlet weak var tableView: UITableView! {
         didSet {
             tableView.delegate = self
@@ -44,15 +45,16 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         updateDataState()
         NotificationCenter.default.addObserver(self, selector: #selector(processInput), name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: Notification.Name.walletsChanged, object: nil)
+        if !forWalletSelection {
+            hideChainSelectionHeader()
+        }
     }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         processInput()
-        if forWalletSelection {
-            DispatchQueue.main.async { [weak self] in
-                self?.navigationController?.navigationBar.sizeToFit()
-            }
+        DispatchQueue.main.async { [weak self] in
+            self?.navigationController?.navigationBar.sizeToFit()
         }
     }
     
@@ -97,6 +99,11 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private func respondTo(request: SafariRequest, error: String) {
         let response = ResponseToExtension(name: request.name, error: error)
         respondTo(request: request, response: response)
+    }
+    
+    private func hideChainSelectionHeader() {
+        chainSelectionHeader.isHidden = true
+        chainSelectionHeader.frame = CGRect(origin: CGPoint.zero, size: CGSize.zero)
     }
     
     @objc private func cancelButtonTapped() {
