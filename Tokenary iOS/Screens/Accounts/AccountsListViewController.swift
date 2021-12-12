@@ -7,6 +7,11 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private let walletsManager = WalletsManager.shared
     private let keychain = Keychain.shared
     
+    var onSelectedWallet: ((EthereumChain?, TokenaryWallet?) -> Void)?
+    var forWalletSelection: Bool {
+        return onSelectedWallet != nil
+    }
+    
     private var wallets: [TokenaryWallet] {
         return walletsManager.wallets
     }
@@ -21,23 +26,34 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        navigationItem.title = Strings.accounts
+        navigationItem.title = forWalletSelection ? Strings.selectAccount : Strings.accounts
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
+        isModalInPresentation = true
         let addItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addAccount))
         let preferencesItem = UIBarButtonItem(image: Images.preferences, style: UIBarButtonItem.Style.plain, target: self, action: #selector(preferencesButtonTapped))
-        navigationItem.rightBarButtonItems = [addItem, preferencesItem]
+        let cancelItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancelButtonTapped))
+        navigationItem.rightBarButtonItems = forWalletSelection ? [addItem] : [addItem, preferencesItem]
+        if forWalletSelection {
+            navigationItem.leftBarButtonItem = cancelItem
+        }
         configureDataState(.noData, description: Strings.tokenaryIsEmpty, buttonTitle: Strings.addAccount) { [weak self] in
             self?.addAccount()
         }
         dataStateShouldMoveWithKeyboard(false)
         updateDataState()
         NotificationCenter.default.addObserver(self, selector: #selector(processInput), name: UIApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: Notification.Name.walletsChanged, object: nil)
     }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         processInput()
+        if forWalletSelection {
+            DispatchQueue.main.async { [weak self] in
+                self?.navigationController?.navigationBar.sizeToFit()
+            }
+        }
     }
     
     @objc private func processInput() {
@@ -45,17 +61,53 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         guard let url = launchURL?.absoluteString, url.hasPrefix(prefix),
               let request = SafariRequest(query: String(url.dropFirst(prefix.count))) else { return }
         launchURL = nil
-        showMessageAlert(text: request.name) {
-            let chain = EthereumChain.ethereum
-            let response = ResponseToExtension(name: request.name,
-                                               results: ["0xE26067c76fdbe877F48b0a8400cf5Db8B47aF0fE"],
-                                               chainId: chain.hexStringId,
-                                               rpcURL: chain.nodeURLString)
-            ExtensionBridge.respond(id: request.id, response: response)
-            if let redirectURL = URL(string: "https://tokenary.io/blank/\(request.id)") {
-                UIApplication.shared.open(redirectURL)
+        
+        switch request.method {
+        case .switchAccount, .requestAccounts:
+            let selectAccountViewController = instantiate(AccountsListViewController.self, from: .main)
+            selectAccountViewController.onSelectedWallet = { [weak self] (chain, wallet) in
+                guard let chain = chain, let address = wallet?.ethereumAddress else {
+                    self?.respondTo(request: request, error: Strings.canceled)
+                    return
+                }
+                let response = ResponseToExtension(name: request.name,
+                                                   results: [address],
+                                                   chainId: chain.hexStringId,
+                                                   rpcURL: chain.nodeURLString)
+                self?.respondTo(request: request, response: response)
+            }
+            present(selectAccountViewController.inNavigationController, animated: true)
+        default:
+            showMessageAlert(text: request.name) { [weak self] in
+                let chain = EthereumChain.ethereum
+                let response = ResponseToExtension(name: request.name,
+                                                   results: ["0xE26067c76fdbe877F48b0a8400cf5Db8B47aF0fE"],
+                                                   chainId: chain.hexStringId,
+                                                   rpcURL: chain.nodeURLString)
+                self?.respondTo(request: request, response: response)
             }
         }
+    }
+    
+    private func respondTo(request: SafariRequest, response: ResponseToExtension) {
+        ExtensionBridge.respond(id: request.id, response: response)
+        if let redirectURL = URL(string: "https://tokenary.io/blank/\(request.id)") {
+            UIApplication.shared.open(redirectURL)
+        }
+    }
+    
+    private func respondTo(request: SafariRequest, error: String) {
+        let response = ResponseToExtension(name: request.name, error: error)
+        respondTo(request: request, response: response)
+    }
+    
+    @objc private func cancelButtonTapped() {
+        onSelectedWallet?(nil, nil)
+        dismissAnimated()
+    }
+    
+    @objc private func walletsChanged() {
+        reloadData()
     }
     
     private func updateDataState() {
@@ -145,11 +197,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     private func importExistingAccount() {
         let importAccountViewController = instantiate(ImportViewController.self, from: .main)
-        importAccountViewController.completion = { [weak self] success in
-            if success {
-                self?.reloadData()
-            }
-        }
         present(importAccountViewController.inNavigationController, animated: true)
     }
     
@@ -256,7 +303,13 @@ extension AccountsListViewController: UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        showActionsForWallet(wallets[indexPath.row])
+        let wallet = wallets[indexPath.row]
+        if forWalletSelection {
+            onSelectedWallet?(EthereumChain.ethereum, wallet) // TODO: use picked chain
+            dismissAnimated()
+        } else {
+            showActionsForWallet(wallet)
+        }
     }
     
 }

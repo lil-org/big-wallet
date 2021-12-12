@@ -137,7 +137,7 @@ class WalletConnect {
             if let transaction = transaction {
                 self?.sendTransaction(transaction, walletId: walletId, chainId: chainId, requestId: id, interactor: interactor)
             } else {
-                self?.rejectRequest(id: id, interactor: interactor, message: Strings.cancelled)
+                self?.rejectRequest(id: id, interactor: interactor, message: Strings.canceled)
             }
         }
     }
@@ -164,7 +164,7 @@ class WalletConnect {
             if approved {
                 self?.sign(id: id, payload: payload, walletId: walletId, interactor: interactor)
             } else {
-                self?.rejectRequest(id: id, interactor: interactor, message: Strings.cancelled)
+                self?.rejectRequest(id: id, interactor: interactor, message: Strings.canceled)
             }
         }
     }
