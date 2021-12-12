@@ -7,6 +7,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private let walletsManager = WalletsManager.shared
     private let keychain = Keychain.shared
     
+    private var chain = EthereumChain.ethereum
     var onSelectedWallet: ((EthereumChain?, TokenaryWallet?) -> Void)?
     var forWalletSelection: Bool {
         return onSelectedWallet != nil
@@ -16,6 +17,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         return walletsManager.wallets
     }
     
+    @IBOutlet weak var chainButton: UIButton!
     @IBOutlet weak var chainSelectionHeader: UIView!
     @IBOutlet weak var tableView: UITableView! {
         didSet {
@@ -104,6 +106,41 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private func hideChainSelectionHeader() {
         chainSelectionHeader.isHidden = true
         chainSelectionHeader.frame = CGRect(origin: CGPoint.zero, size: CGSize.zero)
+    }
+    
+    @IBAction func chainButtonTapped(_ sender: Any) {
+        let actionSheet = UIAlertController(title: Strings.selectNetwork, message: nil, preferredStyle: .actionSheet)
+        for chain in EthereumChain.allMainnets {
+            let action = UIAlertAction(title: chain.name, style: .default) { [weak self] _ in
+                self?.didSelectChain(chain)
+            }
+            actionSheet.addAction(action)
+        }
+        let testnetsAction = UIAlertAction(title: Strings.testnets.withEllipsis, style: .default) { [weak self] _ in
+            self?.showTestnets()
+        }
+        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
+        actionSheet.addAction(testnetsAction)
+        actionSheet.addAction(cancelAction)
+        present(actionSheet, animated: true)
+    }
+    
+    private func showTestnets() {
+        let actionSheet = UIAlertController(title: Strings.selectTestnet, message: nil, preferredStyle: .actionSheet)
+        for chain in EthereumChain.allTestnets {
+            let action = UIAlertAction(title: chain.name, style: .default) { [weak self] _ in
+                self?.didSelectChain(chain)
+            }
+            actionSheet.addAction(action)
+        }
+        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
+        actionSheet.addAction(cancelAction)
+        present(actionSheet, animated: true)
+    }
+    
+    private func didSelectChain(_ chain: EthereumChain) {
+        chainButton.configuration?.title = chain.name
+        self.chain = chain
     }
     
     @objc private func cancelButtonTapped() {
@@ -310,7 +347,7 @@ extension AccountsListViewController: UITableViewDelegate {
         tableView.deselectRow(at: indexPath, animated: true)
         let wallet = wallets[indexPath.row]
         if forWalletSelection {
-            onSelectedWallet?(EthereumChain.ethereum, wallet) // TODO: use picked chain
+            onSelectedWallet?(chain, wallet)
             dismissAnimated()
         } else {
             showActionsForWallet(wallet)

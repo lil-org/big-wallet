@@ -117,9 +117,27 @@
                                 <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                                 <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                                 <view key="tableHeaderView" contentMode="scaleToFill" id="84W-jE-O9Q">
-                                    <rect key="frame" x="0.0" y="0.0" width="414" height="96"/>
+                                    <rect key="frame" x="0.0" y="0.0" width="414" height="72"/>
                                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
-                                    <color key="backgroundColor" systemColor="systemRedColor"/>
+                                    <subviews>
+                                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Dsw-8H-wZs">
+                                            <rect key="frame" x="20" y="4" width="374" height="52"/>
+                                            <constraints>
+                                                <constraint firstAttribute="height" constant="52" id="Trz-gO-sBc"/>
+                                            </constraints>
+                                            <state key="normal" title="Button"/>
+                                            <buttonConfiguration key="configuration" style="tinted" image="chevron.down" catalog="system" imagePlacement="trailing" title="Ethereum" imagePadding="4"/>
+                                            <connections>
+                                                <action selector="chainButtonTapped:" destination="onX-Y1-KVr" eventType="touchUpInside" id="vEp-lO-cld"/>
+                                                <action selector="pasteButtonTapped:" destination="ffW-KB-fbn" eventType="touchUpInside" id="CIq-jN-XXP"/>
+                                            </connections>
+                                        </button>
+                                    </subviews>
+                                    <constraints>
+                                        <constraint firstItem="Dsw-8H-wZs" firstAttribute="top" secondItem="84W-jE-O9Q" secondAttribute="top" constant="4" id="Nu7-lm-hRY"/>
+                                        <constraint firstItem="Dsw-8H-wZs" firstAttribute="leading" secondItem="84W-jE-O9Q" secondAttribute="leading" constant="20" id="VRt-JZ-js5"/>
+                                        <constraint firstAttribute="trailing" secondItem="Dsw-8H-wZs" secondAttribute="trailing" constant="20" id="kFn-as-qPr"/>
+                                    </constraints>
                                 </view>
                             </tableView>
                         </subviews>
@@ -133,6 +151,7 @@
                         </constraints>
                     </view>
                     <connections>
+                        <outlet property="chainButton" destination="Dsw-8H-wZs" id="0bd-pt-X6O"/>
                         <outlet property="chainSelectionHeader" destination="84W-jE-O9Q" id="lqS-V8-gUs"/>
                         <outlet property="tableView" destination="0xi-7N-lca" id="vc7-HM-CEH"/>
                     </connections>
@@ -240,6 +259,7 @@ Label</string>
     </scenes>
     <resources>
         <image name="LaunchLogo" width="100" height="100"/>
+        <image name="chevron.down" catalog="system" width="128" height="72"/>
         <systemColor name="labelColor">
             <color white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>
@@ -248,9 +268,6 @@ Label</string>
         </systemColor>
         <systemColor name="systemBackgroundColor">
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-        </systemColor>
-        <systemColor name="systemRedColor">
-            <color red="1" green="0.23137254901960785" blue="0.18823529411764706" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
     </resources>
 </document>

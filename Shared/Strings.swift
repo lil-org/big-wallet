@@ -54,6 +54,8 @@ struct Strings {
     static let accounts = "Accounts"
     static let selectAccountTwoLines = "Select\nAccount"
     static let selectAccount = "Select Account"
+    static let selectNetwork = "Select Network"
+    static let selectTestnet = "Select Testnet"
     static let importAccount = "Import Account"
     static let addAccount = "Add Account"
     static let createNew = "Create New"
