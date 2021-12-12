@@ -91,9 +91,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     private func respondTo(request: SafariRequest, response: ResponseToExtension) {
         ExtensionBridge.respond(id: request.id, response: response)
-        if let redirectURL = URL(string: "https://tokenary.io/blank/\(request.id)") {
-            UIApplication.shared.open(redirectURL)
-        }
+        UIApplication.shared.open(URL.blankRedirect(id: request.id))
     }
     
     private func respondTo(request: SafariRequest, error: String) {
