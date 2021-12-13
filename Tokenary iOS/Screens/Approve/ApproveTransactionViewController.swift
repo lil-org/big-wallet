@@ -63,9 +63,15 @@ class ApproveTransactionViewController: UIViewController {
     private func updateInterface() {
         cellModels = [
             .textWithImage(text: peerMeta?.name ?? Strings.unknownWebsite, imageURL: peerMeta?.iconURLString, image: nil),
-            .textWithImage(text: address.trimmedAddress, imageURL: nil, image: Blockies(seed: address.lowercased()).createImage()),
-            .text(transaction.description(chain: chain, ethPrice: priceService.currentPrice))
+            .textWithImage(text: address.trimmedAddress, imageURL: nil, image: Blockies(seed: address.lowercased()).createImage())
         ]
+        
+        if let value = transaction.valueWithSymbol(chain: chain, ethPrice: priceService.currentPrice, withLabel: true) {
+            cellModels.append(.text(value))
+        }
+        cellModels.append(.text(transaction.feeWithSymbol(chain: chain, ethPrice: priceService.currentPrice)))
+        // TODO: display tx data somehow
+        
         tableView.reloadData()
         okButton.isEnabled = transaction.hasFee
         

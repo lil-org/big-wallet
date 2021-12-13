@@ -32,6 +32,17 @@ struct Transaction {
     }
     
     func description(chain: EthereumChain, ethPrice: Double?) -> String {
+        var result = [String]()
+        if let value = valueWithSymbol(chain: chain, ethPrice: ethPrice, withLabel: false) {
+            result.append(value)
+        }
+        result.append(feeWithSymbol(chain: chain, ethPrice: ethPrice))
+        result.append("Data: " + data)
+        
+        return result.joined(separator: "\n\n")
+    }
+    
+    func feeWithSymbol(chain: EthereumChain, ethPrice: Double?) -> String {
         let fee: String
         if let gasPrice = gasPrice,
            let gas = gas,
@@ -43,18 +54,19 @@ struct Transaction {
         } else {
             fee = "Calculating…"
         }
-        var result = [String]()
+        return "Fee: " + fee
+    }
+    
+    func valueWithSymbol(chain: EthereumChain, ethPrice: Double?, withLabel: Bool) -> String? {
         if let decimal = try? weiAmount.value().toNormalizedDecimal(power: 18) {
             let decimalNumber = NSDecimalNumber(decimal: decimal)
             let costString = chain.hasUSDPrice ? cost(value: decimalNumber, price: ethPrice) : ""
             if let value = ethString(decimalNumber: decimalNumber) {
-                result.append("\(value) \(chain.symbol)" + costString)
+                let valueString = "\(value) \(chain.symbol)" + costString
+                return withLabel ? "Value: " + valueString : valueString
             }
         }
-        result.append("Fee: " + fee)
-        result.append("Data: " + data)
-        
-        return result.joined(separator: "\n\n")
+        return nil
     }
     
     private func cost(value: NSDecimalNumber, price: Double?) -> String {
