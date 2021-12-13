@@ -441,9 +441,9 @@
 				2C40709227667A8600AB3D55 /* ImageWithLabelTableViewCell.swift */,
 				2C40709327667A8600AB3D55 /* ImageWithLabelTableViewCell.xib */,
 				2C40708E27667A6600AB3D55 /* MultilineLabelTableViewCell.swift */,
+				2C40708F27667A6600AB3D55 /* MultilineLabelTableViewCell.xib */,
 				2CC8C5A02767D3B30083FB1B /* GasPriceSliderTableViewCell.swift */,
 				2CC8C5A12767D3B30083FB1B /* GasPriceSliderTableViewCell.xib */,
-				2C40708F27667A6600AB3D55 /* MultilineLabelTableViewCell.xib */,
 			);
 			path = Approve;
 			sourceTree = "<group>";

@@ -141,6 +141,7 @@ extension ApproveTransactionViewController: UITableViewDataSource {
             return cell
         case .gasPriceSlider:
             let cell = tableView.dequeueReusableCellOfType(GasPriceSliderTableViewCell.self, for: indexPath)
+            cell.setup(value: nil, isEnabled: false, delegate: self)
             return cell
         }
         
@@ -152,6 +153,14 @@ extension ApproveTransactionViewController: UITableViewDataSource {
     
     func numberOfSections(in tableView: UITableView) -> Int {
         return sectionModels.count
+    }
+    
+}
+
+extension ApproveTransactionViewController: GasPriceSliderDelegate {
+    
+    func sliderValueChanged(value: Double) {
+        // TODO: update accorging to new value
     }
     
 }

@@ -28,7 +28,7 @@
                         <nil key="textColor"/>
                         <nil key="highlightedColor"/>
                     </label>
-                    <slider opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" value="0.5" minValue="0.0" maxValue="1" translatesAutoresizingMaskIntoConstraints="NO" id="qd0-pb-veR">
+                    <slider opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" value="0.33000000000000002" minValue="0.0" maxValue="1" translatesAutoresizingMaskIntoConstraints="NO" id="qd0-pb-veR">
                         <rect key="frame" x="49" y="16" width="228" height="34"/>
                         <constraints>
                             <constraint firstAttribute="height" constant="33" id="p8e-ar-5IX"/>
@@ -51,7 +51,9 @@
             </tableViewCellContentView>
             <viewLayoutGuide key="safeArea" id="njF-e1-oar"/>
             <connections>
+                <outlet property="fastSpeedLabel" destination="Icb-yb-97Y" id="Td0-vW-AYd"/>
                 <outlet property="slider" destination="qd0-pb-veR" id="JCq-Fs-VPp"/>
+                <outlet property="slowSpeedLabel" destination="ISk-hp-Adc" id="kcW-Fl-ttL"/>
             </connections>
             <point key="canvasLocation" x="140.57971014492756" y="143.63839285714286"/>
         </tableViewCell>
