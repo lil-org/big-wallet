@@ -126,6 +126,21 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                     self?.respondTo(request: request, error: Strings.failedToSign)
                 }
             }
+        case .signTransaction:
+            guard let transaction = request.transaction,
+                  let chain = request.chain,
+                  let wallet = walletsManager.getWallet(address: request.address),
+                  let address = wallet.ethereumAddress else {
+                      respondTo(request: request, error: Strings.somethingWentWrong)
+                      return
+                  }
+            showApprove(transaction: transaction, chain: chain, address: address, peerMeta: peerMeta) { [weak self] transaction in
+                if let transaction = transaction {
+                    self?.sendTransaction(wallet: wallet, transaction: transaction, chain: chain, request: request)
+                } else {
+                    self?.respondTo(request: request, error: Strings.canceled)
+                }
+            }
         default:
             showMessageAlert(text: request.name) { [weak self] in
                 let chain = EthereumChain.ethereum
@@ -136,6 +151,15 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                 self?.respondTo(request: request, response: response)
             }
         }
+    }
+    
+    func showApprove(transaction: Transaction, chain: EthereumChain, address: String, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) {
+        let approveTransactionViewController = ApproveTransactionViewController.with(transaction: transaction,
+                                                                                     chain: chain,
+                                                                                     address: address,
+                                                                                     peerMeta: peerMeta,
+                                                                                     completion: completion)
+        presentForSafariRequest(approveTransactionViewController.inNavigationController)
     }
     
     func showApprove(subject: ApprovalSubject, address: String, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) {
@@ -408,6 +432,15 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             respondTo(request: request, response: response)
         } else {
             respondTo(request: request, error: Strings.failedToSign)
+        }
+    }
+    
+    private func sendTransaction(wallet: TokenaryWallet, transaction: Transaction, chain: EthereumChain, request: SafariRequest) {
+        if let transactionHash = try? ethereum.send(transaction: transaction, wallet: wallet, chain: chain) {
+            let response = ResponseToExtension(name: request.name, result: transactionHash)
+            respondTo(request: request, response: response)
+        } else {
+            respondTo(request: request, error: Strings.failedToSend)
         }
     }
     
