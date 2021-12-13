@@ -80,7 +80,7 @@ extension ApproveViewController: UITableViewDataSource {
         switch cellModels[indexPath.row] {
         case let .text(text):
             let cell = tableView.dequeueReusableCellOfType(MultilineLabelTableViewCell.self, for: indexPath)
-            cell.setup(text: text)
+            cell.setup(text: text, largeFont: false)
             return cell
         case let .textWithImage(text: text, imageURL: imageURL, image: image):
             let cell = tableView.dequeueReusableCellOfType(ImageWithLabelTableViewCell.self, for: indexPath)

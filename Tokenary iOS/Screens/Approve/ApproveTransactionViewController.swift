@@ -6,7 +6,7 @@ import BlockiesSwift
 class ApproveTransactionViewController: UIViewController {
     
     private enum CellModel {
-        case text(String), textWithImage(text: String, imageURL: String?, image: UIImage?)
+        case text(text: String, largeFont: Bool), textWithImage(text: String, imageURL: String?, image: UIImage?)
     }
     
     @IBOutlet weak var tableView: UITableView! {
@@ -67,9 +67,9 @@ class ApproveTransactionViewController: UIViewController {
         ]
         
         if let value = transaction.valueWithSymbol(chain: chain, ethPrice: priceService.currentPrice, withLabel: true) {
-            cellModels.append(.text(value))
+            cellModels.append(.text(text: value, largeFont: true))
         }
-        cellModels.append(.text(transaction.feeWithSymbol(chain: chain, ethPrice: priceService.currentPrice)))
+        cellModels.append(.text(text: transaction.feeWithSymbol(chain: chain, ethPrice: priceService.currentPrice), largeFont: true))
         // TODO: display tx data somehow
         
         tableView.reloadData()
@@ -112,9 +112,9 @@ extension ApproveTransactionViewController: UITableViewDataSource {
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         switch cellModels[indexPath.row] {
-        case let .text(text):
+        case let .text(text, largeFont):
             let cell = tableView.dequeueReusableCellOfType(MultilineLabelTableViewCell.self, for: indexPath)
-            cell.setup(text: text)
+            cell.setup(text: text, largeFont: largeFont)
             return cell
         case let .textWithImage(text: text, imageURL: imageURL, image: image):
             let cell = tableView.dequeueReusableCellOfType(ImageWithLabelTableViewCell.self, for: indexPath)
