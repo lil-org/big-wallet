@@ -358,17 +358,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private func askBeforeRemoving(wallet: TokenaryWallet) {
         let alert = UIAlertController(title: Strings.removedAccountsCantBeRecovered, message: nil, preferredStyle: .alert)
         let removeAction = UIAlertAction(title: Strings.removeAnyway, style: .destructive) { [weak self] _ in
-            LocalAuthentication.attempt(reason: Strings.removeAccount) { success in
+            LocalAuthentication.attempt(reason: Strings.removeAccount, presentPasswordAlertFrom: self, passwordReason: Strings.toRemoveAccount) { success in
                 if success {
                     self?.removeWallet(wallet)
-                } else {
-                    self?.showPasswordAlert(title: Strings.enterPassword, message: Strings.toRemoveAccount) { password in
-                        if password == self?.keychain.password {
-                            self?.removeWallet(wallet)
-                        } else {
-                            self?.showMessageAlert(text: Strings.passwordDoesNotMatch)
-                        }
-                    }
                 }
             }
         }
@@ -388,17 +380,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let title = isMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
         let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
         let okAction = UIAlertAction(title: Strings.iUnderstandTheRisks, style: .default) { [weak self] _ in
-            LocalAuthentication.attempt(reason: Strings.removeAccount) { success in
+            LocalAuthentication.attempt(reason: Strings.removeAccount, presentPasswordAlertFrom: self, passwordReason: Strings.toShowAccountKey) { success in
                 if success {
                     self?.showKey(wallet: wallet, mnemonic: isMnemonic)
-                } else {
-                    self?.showPasswordAlert(title: Strings.enterPassword, message: Strings.toShowAccountKey) { password in
-                        if password == self?.keychain.password {
-                            self?.showKey(wallet: wallet, mnemonic: isMnemonic)
-                        } else {
-                            self?.showMessageAlert(text: Strings.passwordDoesNotMatch)
-                        }
-                    }
                 }
             }
         }

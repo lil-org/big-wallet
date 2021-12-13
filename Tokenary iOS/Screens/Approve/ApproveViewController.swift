@@ -58,9 +58,12 @@ class ApproveViewController: UIViewController {
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
-        // TODO: ask face id
-        completion(true)
-        dismissAnimated()
+        LocalAuthentication.attempt(reason: approveTitle, presentPasswordAlertFrom: self, passwordReason: approveTitle) { [weak self] success in
+            if success {
+                self?.completion(true)
+                self?.dismissAnimated()
+            }
+        }
     }
     
     @IBAction func cancelButtonTapped(_ sender: Any) {
