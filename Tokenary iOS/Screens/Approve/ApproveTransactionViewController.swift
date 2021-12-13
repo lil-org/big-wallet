@@ -117,7 +117,7 @@ extension ApproveTransactionViewController: UITableViewDelegate {
         if section == sectionModels.count - 1 {
             return 18
         } else {
-            return 16
+            return .leastNormalMagnitude
         }
     }
     
