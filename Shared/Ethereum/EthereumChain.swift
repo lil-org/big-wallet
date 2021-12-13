@@ -71,6 +71,10 @@ enum EthereumChain: Int {
         }
     }
     
+    var symbolIsETH: Bool {
+        return symbol == "ETH"
+    }
+    
     var hasUSDPrice: Bool {
         switch self {
         case .ethereum, .optimism:

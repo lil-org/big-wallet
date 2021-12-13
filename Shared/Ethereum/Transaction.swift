@@ -54,6 +54,16 @@ struct Transaction {
         return "Data: " + data
     }
     
+    func gasPriceWithLabel(chain: EthereumChain) -> String {
+        let gwei: String
+        if let gasPriceGwei = gasPriceGwei {
+            gwei = String(gasPriceGwei) + (chain.symbolIsETH ? " Gwei" : "")
+        } else {
+            gwei = Strings.calculating
+        }
+        return "Gas price: " + gwei
+    }
+    
     func feeWithSymbol(chain: EthereumChain, ethPrice: Double?) -> String {
         let fee: String
         if let gasPrice = gasPrice,
@@ -64,7 +74,7 @@ struct Transaction {
             let costString = chain.hasUSDPrice ? cost(value: c, price: ethPrice) : ""
             fee = c.stringValue.prefix(7) + " \(chain.symbol)" + costString
         } else {
-            fee = "Calculating…"
+            fee = Strings.calculating
         }
         return "Fee: " + fee
     }

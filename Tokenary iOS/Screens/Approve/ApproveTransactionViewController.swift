@@ -8,6 +8,7 @@ class ApproveTransactionViewController: UIViewController {
     private enum CellModel {
         case text(text: String, oneLine: Bool)
         case textWithImage(text: String, imageURL: String?, image: UIImage?)
+        case gasPriceSlider
     }
     
     @IBOutlet weak var tableView: UITableView! {
@@ -16,6 +17,7 @@ class ApproveTransactionViewController: UIViewController {
             tableView.dataSource = self
             tableView.registerReusableCell(type: MultilineLabelTableViewCell.self)
             tableView.registerReusableCell(type: ImageWithLabelTableViewCell.self)
+            tableView.registerReusableCell(type: GasPriceSliderTableViewCell.self)
             tableView.contentInset.bottom = 20
         }
     }
@@ -71,10 +73,12 @@ class ApproveTransactionViewController: UIViewController {
             cellModels.append(.text(text: value, oneLine: false))
         }
         cellModels.append(.text(text: transaction.feeWithSymbol(chain: chain, ethPrice: priceService.currentPrice), oneLine: false))
+        cellModels.append(.text(text: transaction.gasPriceWithLabel(chain: chain), oneLine: false))
         if let data = transaction.nonEmptyDataWithLabel {
             cellModels.append(.text(text: data, oneLine: true))
         }
         
+        cellModels.append(.gasPriceSlider)
         tableView.reloadData()
         okButton.isEnabled = transaction.hasFee
         
@@ -122,6 +126,9 @@ extension ApproveTransactionViewController: UITableViewDataSource {
         case let .textWithImage(text: text, imageURL: imageURL, image: image):
             let cell = tableView.dequeueReusableCellOfType(ImageWithLabelTableViewCell.self, for: indexPath)
             cell.setup(text: text, imageURL: imageURL, image: image)
+            return cell
+        case .gasPriceSlider:
+            let cell = tableView.dequeueReusableCellOfType(GasPriceSliderTableViewCell.self, for: indexPath)
             return cell
         }
         
