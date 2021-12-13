@@ -84,14 +84,16 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             }
             presentForSafariRequest(selectAccountViewController.inNavigationController)
         case .signPersonalMessage:
-            guard let data = request.message else {
+            guard let data = request.message,
+                  let wallet = walletsManager.getWallet(address: request.address),
+                  let address = wallet.ethereumAddress else {
                 respondTo(request: request, error: Strings.somethingWentWrong)
                 return
             }
             let text = String(data: data, encoding: .utf8) ?? data.hexString
-            showApprove(subject: .signPersonalMessage, meta: text, peerMeta: peerMeta) { [weak self] approved in
+            showApprove(subject: .signPersonalMessage, address: address, meta: text, peerMeta: peerMeta) { [weak self] approved in
                 if approved {
-                    self?.signPersonalMessage(address: request.address, data: data, request: request)
+                    self?.signPersonalMessage(wallet: wallet, data: data, request: request)
                 } else {
                     self?.respondTo(request: request, error: Strings.failedToSign)
                 }
@@ -108,8 +110,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
     }
     
-    func showApprove(subject: ApprovalSubject, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) {
-        let approveViewController = ApproveViewController.with(subject: subject, meta: meta, peerMeta: peerMeta, completion: completion)
+    func showApprove(subject: ApprovalSubject, address: String, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) {
+        let approveViewController = ApproveViewController.with(subject: subject, address: address, meta: meta, peerMeta: peerMeta, completion: completion)
         presentForSafariRequest(approveViewController.inNavigationController)
     }
     
@@ -354,8 +356,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(alert, animated: true)
     }
     
-    private func signPersonalMessage(address: String, data: Data, request: SafariRequest) {
-        if let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.signPersonalMessage(data: data, wallet: wallet) {
+    private func signPersonalMessage(wallet: TokenaryWallet, data: Data, request: SafariRequest) {
+        if let signed = try? ethereum.signPersonalMessage(data: data, wallet: wallet) {
             let response = ResponseToExtension(name: request.name, result: signed)
             respondTo(request: request, response: response)
         } else {

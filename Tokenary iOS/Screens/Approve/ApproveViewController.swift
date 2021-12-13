@@ -1,6 +1,7 @@
 // Copyright © 2021 Tokenary. All rights reserved.
 
 import UIKit
+import BlockiesSwift
 
 class ApproveViewController: UIViewController {
     
@@ -21,15 +22,17 @@ class ApproveViewController: UIViewController {
     private var cellModels = [CellModel]()
     
     private var approveTitle: String!
+    private var address: String!
     private var meta: String!
     private var completion: ((Bool) -> Void)!
     private var peerMeta: PeerMeta?
     
     @IBOutlet weak var okButton: UIButton!
     
-    static func with(subject: ApprovalSubject, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
+    static func with(subject: ApprovalSubject, address: String, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
         let new = instantiate(ApproveViewController.self, from: .main)
         new.completion = completion
+        new.address = address
         new.meta = meta
         new.approveTitle = subject.title
         new.peerMeta = peerMeta
@@ -43,6 +46,7 @@ class ApproveViewController: UIViewController {
         navigationItem.largeTitleDisplayMode = .always
         isModalInPresentation = true
         cellModels = [.textWithImage(text: peerMeta?.name ?? Strings.unknownWebsite, imageURL: peerMeta?.iconURLString, image: nil),
+                      .textWithImage(text: address.trimmedAddress, imageURL: nil, image: Blockies(seed: address.lowercased()).createImage()),
                       .text(meta)]
     }
     

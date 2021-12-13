@@ -12,6 +12,7 @@ class ImageWithLabelTableViewCell: UITableViewCell {
         titleLabel.text = text
         if let image = image {
             iconImageView.image = image
+            iconImageView.layer.cornerRadius = 15
         } else if let urlString = imageURL, let url = URL(string: urlString) {
             iconImageView.kf.setImage(with: url)
         }
@@ -21,6 +22,7 @@ class ImageWithLabelTableViewCell: UITableViewCell {
         super.prepareForReuse()
         iconImageView.kf.cancelDownloadTask()
         iconImageView.image = Images.circleFill
+        iconImageView.layer.cornerRadius = 0
     }
     
 }
