@@ -116,6 +116,29 @@
                             <tableView clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" dataMode="prototypes" style="grouped" separatorStyle="default" rowHeight="-1" estimatedRowHeight="-1" sectionHeaderHeight="18" estimatedSectionHeaderHeight="-1" sectionFooterHeight="18" estimatedSectionFooterHeight="-1" translatesAutoresizingMaskIntoConstraints="NO" id="0xi-7N-lca">
                                 <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                                 <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                                <view key="tableHeaderView" contentMode="scaleToFill" id="84W-jE-O9Q">
+                                    <rect key="frame" x="0.0" y="0.0" width="414" height="72"/>
+                                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                    <subviews>
+                                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Dsw-8H-wZs">
+                                            <rect key="frame" x="20" y="4" width="374" height="52"/>
+                                            <constraints>
+                                                <constraint firstAttribute="height" constant="52" id="Trz-gO-sBc"/>
+                                            </constraints>
+                                            <state key="normal" title="Button"/>
+                                            <buttonConfiguration key="configuration" style="gray" image="chevron.down" catalog="system" imagePlacement="trailing" title="Ethereum" imagePadding="4"/>
+                                            <connections>
+                                                <action selector="chainButtonTapped:" destination="onX-Y1-KVr" eventType="touchUpInside" id="vEp-lO-cld"/>
+                                                <action selector="pasteButtonTapped:" destination="ffW-KB-fbn" eventType="touchUpInside" id="CIq-jN-XXP"/>
+                                            </connections>
+                                        </button>
+                                    </subviews>
+                                    <constraints>
+                                        <constraint firstItem="Dsw-8H-wZs" firstAttribute="top" secondItem="84W-jE-O9Q" secondAttribute="top" constant="4" id="Nu7-lm-hRY"/>
+                                        <constraint firstItem="Dsw-8H-wZs" firstAttribute="leading" secondItem="84W-jE-O9Q" secondAttribute="leading" constant="20" id="VRt-JZ-js5"/>
+                                        <constraint firstAttribute="trailing" secondItem="Dsw-8H-wZs" secondAttribute="trailing" constant="20" id="kFn-as-qPr"/>
+                                    </constraints>
+                                </view>
                             </tableView>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="ydA-69-gGk"/>
@@ -128,12 +151,14 @@
                         </constraints>
                     </view>
                     <connections>
+                        <outlet property="chainButton" destination="Dsw-8H-wZs" id="0bd-pt-X6O"/>
+                        <outlet property="chainSelectionHeader" destination="84W-jE-O9Q" id="lqS-V8-gUs"/>
                         <outlet property="tableView" destination="0xi-7N-lca" id="vc7-HM-CEH"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="LIM-xG-p0t" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="1601" y="124"/>
+            <point key="canvasLocation" x="1600.0000000000002" y="123.88392857142857"/>
         </scene>
         <!--Import View Controller-->
         <scene sceneID="9bY-hK-sVB">
@@ -213,6 +238,72 @@ Label</string>
             </objects>
             <point key="canvasLocation" x="2320" y="124"/>
         </scene>
+        <!--Approve View Controller-->
+        <scene sceneID="RWl-cv-71R">
+            <objects>
+                <viewController storyboardIdentifier="ApproveViewController" id="bCJ-7J-W3b" customClass="ApproveViewController" customModule="Tokenary_iOS" customModuleProvider="target" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="mif-5d-Da0">
+                        <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <tableView clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" dataMode="prototypes" style="grouped" separatorStyle="default" allowsSelection="NO" rowHeight="-1" estimatedRowHeight="-1" sectionHeaderHeight="18" estimatedSectionHeaderHeight="-1" sectionFooterHeight="18" estimatedSectionFooterHeight="-1" translatesAutoresizingMaskIntoConstraints="NO" id="fJC-Mc-BzB">
+                                <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
+                                <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                                <view key="tableFooterView" contentMode="scaleToFill" id="6ji-BK-hOm">
+                                    <rect key="frame" x="0.0" y="0.0" width="414" height="52"/>
+                                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                    <subviews>
+                                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="I4B-ul-Hdj">
+                                            <rect key="frame" x="213" y="0.0" width="181" height="52"/>
+                                            <constraints>
+                                                <constraint firstAttribute="height" constant="52" id="m51-jE-4yt"/>
+                                            </constraints>
+                                            <state key="normal" title="Button"/>
+                                            <buttonConfiguration key="configuration" style="filled" title="OK"/>
+                                            <connections>
+                                                <action selector="okButtonTapped:" destination="bCJ-7J-W3b" eventType="touchUpInside" id="yPn-Ty-tDM"/>
+                                            </connections>
+                                        </button>
+                                        <button contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="v8H-iO-Xlx">
+                                            <rect key="frame" x="20" y="0.0" width="181" height="52"/>
+                                            <state key="normal" title="Button"/>
+                                            <buttonConfiguration key="configuration" style="gray" title="Cancel"/>
+                                            <connections>
+                                                <action selector="cancelButtonTapped:" destination="bCJ-7J-W3b" eventType="touchUpInside" id="Bde-sm-pr6"/>
+                                            </connections>
+                                        </button>
+                                    </subviews>
+                                    <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                                    <constraints>
+                                        <constraint firstItem="I4B-ul-Hdj" firstAttribute="leading" secondItem="v8H-iO-Xlx" secondAttribute="trailing" constant="12" id="7i0-jf-vAH"/>
+                                        <constraint firstItem="v8H-iO-Xlx" firstAttribute="leading" secondItem="6ji-BK-hOm" secondAttribute="leading" constant="20" id="Y9u-c2-eKE"/>
+                                        <constraint firstAttribute="trailing" secondItem="I4B-ul-Hdj" secondAttribute="trailing" constant="20" id="YvM-eG-oX3"/>
+                                        <constraint firstItem="I4B-ul-Hdj" firstAttribute="width" secondItem="v8H-iO-Xlx" secondAttribute="width" id="YzB-WX-nRt"/>
+                                        <constraint firstItem="v8H-iO-Xlx" firstAttribute="top" secondItem="6ji-BK-hOm" secondAttribute="top" id="c0x-qs-vYd"/>
+                                        <constraint firstItem="v8H-iO-Xlx" firstAttribute="height" secondItem="I4B-ul-Hdj" secondAttribute="height" id="cYv-3X-mKp"/>
+                                        <constraint firstItem="v8H-iO-Xlx" firstAttribute="top" secondItem="I4B-ul-Hdj" secondAttribute="top" id="fnP-lE-N3z"/>
+                                    </constraints>
+                                </view>
+                            </tableView>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="iMU-ib-JoS"/>
+                        <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                        <constraints>
+                            <constraint firstAttribute="bottom" secondItem="fJC-Mc-BzB" secondAttribute="bottom" id="Bgp-8p-M46"/>
+                            <constraint firstAttribute="trailing" secondItem="fJC-Mc-BzB" secondAttribute="trailing" id="VKC-SU-ExA"/>
+                            <constraint firstItem="fJC-Mc-BzB" firstAttribute="top" secondItem="mif-5d-Da0" secondAttribute="top" id="VYj-Hb-vSn"/>
+                            <constraint firstItem="fJC-Mc-BzB" firstAttribute="leading" secondItem="mif-5d-Da0" secondAttribute="leading" id="vCM-yE-Yh1"/>
+                        </constraints>
+                    </view>
+                    <connections>
+                        <outlet property="okButton" destination="I4B-ul-Hdj" id="5d0-w3-VFH"/>
+                        <outlet property="tableView" destination="fJC-Mc-BzB" id="Zf6-wd-F2t"/>
+                    </connections>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="iyz-Pa-Zfg" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="3066.666666666667" y="123.88392857142857"/>
+        </scene>
         <!--Navigation Controller-->
         <scene sceneID="3Va-jz-tEl">
             <objects>
@@ -231,9 +322,76 @@ Label</string>
             </objects>
             <point key="canvasLocation" x="137.68115942028987" y="123.88392857142857"/>
         </scene>
+        <!--Approve Transaction View Controller-->
+        <scene sceneID="xZY-AW-CuA">
+            <objects>
+                <viewController storyboardIdentifier="ApproveTransactionViewController" id="rpE-yl-N9f" customClass="ApproveTransactionViewController" customModule="Tokenary_iOS" customModuleProvider="target" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="df0-YO-SS0">
+                        <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <tableView clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" dataMode="prototypes" style="grouped" separatorStyle="default" allowsSelection="NO" rowHeight="-1" estimatedRowHeight="-1" sectionHeaderHeight="18" estimatedSectionHeaderHeight="-1" sectionFooterHeight="18" estimatedSectionFooterHeight="-1" translatesAutoresizingMaskIntoConstraints="NO" id="F62-4S-kIF">
+                                <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
+                                <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                                <view key="tableFooterView" contentMode="scaleToFill" id="Frs-ZH-lyb">
+                                    <rect key="frame" x="0.0" y="0.0" width="414" height="52"/>
+                                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                    <subviews>
+                                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="O6a-rK-q8r">
+                                            <rect key="frame" x="213" y="0.0" width="181" height="52"/>
+                                            <constraints>
+                                                <constraint firstAttribute="height" constant="52" id="2eS-Qg-jxM"/>
+                                            </constraints>
+                                            <state key="normal" title="Button"/>
+                                            <buttonConfiguration key="configuration" style="filled" title="OK"/>
+                                            <connections>
+                                                <action selector="okButtonTapped:" destination="rpE-yl-N9f" eventType="touchUpInside" id="XjQ-k7-emb"/>
+                                            </connections>
+                                        </button>
+                                        <button contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="t6r-FC-Exh">
+                                            <rect key="frame" x="20" y="0.0" width="181" height="52"/>
+                                            <state key="normal" title="Button"/>
+                                            <buttonConfiguration key="configuration" style="gray" title="Cancel"/>
+                                            <connections>
+                                                <action selector="cancelButtonTapped:" destination="rpE-yl-N9f" eventType="touchUpInside" id="zID-h0-a0T"/>
+                                            </connections>
+                                        </button>
+                                    </subviews>
+                                    <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                                    <constraints>
+                                        <constraint firstAttribute="trailing" secondItem="O6a-rK-q8r" secondAttribute="trailing" constant="20" id="2hf-lI-c49"/>
+                                        <constraint firstItem="O6a-rK-q8r" firstAttribute="leading" secondItem="t6r-FC-Exh" secondAttribute="trailing" constant="12" id="HcX-ng-mae"/>
+                                        <constraint firstItem="O6a-rK-q8r" firstAttribute="width" secondItem="t6r-FC-Exh" secondAttribute="width" id="SX4-Q7-QPI"/>
+                                        <constraint firstItem="t6r-FC-Exh" firstAttribute="top" secondItem="Frs-ZH-lyb" secondAttribute="top" id="Xgj-W0-7h5"/>
+                                        <constraint firstItem="t6r-FC-Exh" firstAttribute="top" secondItem="O6a-rK-q8r" secondAttribute="top" id="pid-Oc-Plx"/>
+                                        <constraint firstItem="t6r-FC-Exh" firstAttribute="height" secondItem="O6a-rK-q8r" secondAttribute="height" id="sBs-8H-MtS"/>
+                                        <constraint firstItem="t6r-FC-Exh" firstAttribute="leading" secondItem="Frs-ZH-lyb" secondAttribute="leading" constant="20" id="t8o-PU-4fm"/>
+                                    </constraints>
+                                </view>
+                            </tableView>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="TCv-ss-qEm"/>
+                        <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                        <constraints>
+                            <constraint firstItem="F62-4S-kIF" firstAttribute="top" secondItem="df0-YO-SS0" secondAttribute="top" id="5oY-0j-9yx"/>
+                            <constraint firstAttribute="bottom" secondItem="F62-4S-kIF" secondAttribute="bottom" id="Sx3-QU-sU0"/>
+                            <constraint firstItem="F62-4S-kIF" firstAttribute="leading" secondItem="df0-YO-SS0" secondAttribute="leading" id="sB9-hI-ZmI"/>
+                            <constraint firstAttribute="trailing" secondItem="F62-4S-kIF" secondAttribute="trailing" id="zMA-Hk-snq"/>
+                        </constraints>
+                    </view>
+                    <connections>
+                        <outlet property="okButton" destination="O6a-rK-q8r" id="dHU-TP-mF7"/>
+                        <outlet property="tableView" destination="F62-4S-kIF" id="hHg-UW-xfB"/>
+                    </connections>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="s4O-HF-WSZ" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="3748" y="124"/>
+        </scene>
     </scenes>
     <resources>
         <image name="LaunchLogo" width="100" height="100"/>
+        <image name="chevron.down" catalog="system" width="128" height="72"/>
         <systemColor name="labelColor">
             <color white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>

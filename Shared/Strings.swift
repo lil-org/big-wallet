@@ -12,7 +12,6 @@ struct Strings {
     static let ok = "OK"
     static let connecting = "Connecting"
     static let somethingWentWrong = "Something went wrong"
-    static let cancelled = "Cancelled"
     static let failedToSend = "Failed to send"
     static let failedToSign = "Failed to sign"
     static let failedToSwitchChain = "Failed to switch chain"
@@ -54,6 +53,9 @@ struct Strings {
     static let failedToVerify = "Failed to verify"
     static let accounts = "Accounts"
     static let selectAccountTwoLines = "Select\nAccount"
+    static let selectAccount = "Select Account"
+    static let selectNetwork = "Select Network"
+    static let selectTestnet = "Select Testnet"
     static let importAccount = "Import Account"
     static let addAccount = "Add Account"
     static let createNew = "Create New"
@@ -70,5 +72,7 @@ struct Strings {
     static let refresh = "Refresh"
     static let tokenaryIsEmpty = "Tokenary is empty"
     static let pleaseTypeAtLeast = "Please type at least 4 characters"
+    static let unknownWebsite = "Unknown website ⚠️"
+    static let calculating = "Calculating…"
     
 }

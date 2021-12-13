@@ -32,6 +32,39 @@ struct Transaction {
     }
     
     func description(chain: EthereumChain, ethPrice: Double?) -> String {
+        var result = [String]()
+        if let value = valueWithSymbol(chain: chain, ethPrice: ethPrice, withLabel: false) {
+            result.append(value)
+        }
+        result.append(feeWithSymbol(chain: chain, ethPrice: ethPrice))
+        result.append(dataWithLabel)
+        
+        return result.joined(separator: "\n\n")
+    }
+    
+    var nonEmptyDataWithLabel: String? {
+        if data.count > 2 {
+            return dataWithLabel
+        } else {
+            return nil
+        }
+    }
+    
+    var dataWithLabel: String {
+        return "Data: " + data
+    }
+    
+    func gasPriceWithLabel(chain: EthereumChain) -> String {
+        let gwei: String
+        if let gasPriceGwei = gasPriceGwei {
+            gwei = String(gasPriceGwei) + (chain.symbolIsETH ? " Gwei" : "")
+        } else {
+            gwei = Strings.calculating
+        }
+        return "Gas price: " + gwei
+    }
+    
+    func feeWithSymbol(chain: EthereumChain, ethPrice: Double?) -> String {
         let fee: String
         if let gasPrice = gasPrice,
            let gas = gas,
@@ -41,20 +74,21 @@ struct Transaction {
             let costString = chain.hasUSDPrice ? cost(value: c, price: ethPrice) : ""
             fee = c.stringValue.prefix(7) + " \(chain.symbol)" + costString
         } else {
-            fee = "Calculating…"
+            fee = Strings.calculating
         }
-        var result = [String]()
+        return "Fee: " + fee
+    }
+    
+    func valueWithSymbol(chain: EthereumChain, ethPrice: Double?, withLabel: Bool) -> String? {
         if let decimal = try? weiAmount.value().toNormalizedDecimal(power: 18) {
             let decimalNumber = NSDecimalNumber(decimal: decimal)
             let costString = chain.hasUSDPrice ? cost(value: decimalNumber, price: ethPrice) : ""
             if let value = ethString(decimalNumber: decimalNumber) {
-                result.append("\(value) \(chain.symbol)" + costString)
+                let valueString = "\(value) \(chain.symbol)" + costString
+                return withLabel ? "Value: " + valueString : valueString
             }
         }
-        result.append("Fee: " + fee)
-        result.append("Data: " + data)
-        
-        return result.joined(separator: "\n\n")
+        return nil
     }
     
     private func cost(value: NSDecimalNumber, price: Double?) -> String {

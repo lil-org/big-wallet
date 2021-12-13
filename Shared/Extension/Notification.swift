@@ -4,4 +4,5 @@ import Foundation
 
 extension Notification.Name {
     static let connectionAppeared = Notification.Name("connectionAppeared")
+    static let walletsChanged = Notification.Name("walletsChanged")
 }

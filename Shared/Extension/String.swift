@@ -21,4 +21,10 @@ extension String {
         return self + "…"
     }
     
+    var trimmedAddress: String {
+        guard !isEmpty else { return self }
+        let without0x = dropFirst(2)
+        return without0x.prefix(4) + "..." + without0x.suffix(4)
+    }
+    
 }

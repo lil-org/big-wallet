@@ -18,8 +18,7 @@ class AccountTableViewCell: UITableViewCell {
     func setup(address: String, delegate: AccountTableViewCellDelegate) {
         cellDelegate = delegate
         avatarImageView.image = Blockies(seed: address.lowercased()).createImage()
-        let without0x = address.dropFirst(2)
-        titleLabel.text = without0x.prefix(4) + "..." + without0x.suffix(4)
+        titleLabel.text = address.trimmedAddress
     }
     
     @IBAction func moreButtonTapped(_ sender: Any) {

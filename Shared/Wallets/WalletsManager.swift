@@ -155,6 +155,7 @@ final class WalletsManager {
         defer { privateKey.resetBytes(in: 0..<privateKey.count) }
         wallets.remove(at: index)
         try keychain.removeWallet(id: wallet.id)
+        postWalletsChangedNotification()
     }
 
     func destroy() throws {
@@ -195,6 +196,11 @@ final class WalletsManager {
     private func save(wallet: TokenaryWallet) throws {
         guard let data = wallet.key.exportJSON() else { throw KeyStore.Error.invalidPassword }
         try keychain.saveWallet(id: wallet.id, data: data)
+        postWalletsChangedNotification()
+    }
+    
+    private func postWalletsChangedNotification() {
+        NotificationCenter.default.post(name: Notification.Name.walletsChanged, object: nil)
     }
     
     private var defaultWalletName = ""
