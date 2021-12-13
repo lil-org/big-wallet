@@ -115,9 +115,12 @@ class ApproveTransactionViewController: UIViewController {
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
-        // TODO: ask face id
-        completion(transaction)
-        dismissAnimated()
+        LocalAuthentication.attempt(reason: Strings.sendTransaction, presentPasswordAlertFrom: self, passwordReason: Strings.sendTransaction) { [weak self] success in
+            if success, let transaction = self?.transaction {
+                self?.completion(transaction)
+                self?.dismissAnimated()
+            }
+        }
     }
     
     @IBAction func cancelButtonTapped(_ sender: Any) {
