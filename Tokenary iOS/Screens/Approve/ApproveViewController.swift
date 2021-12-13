@@ -15,7 +15,7 @@ class ApproveViewController: UIViewController {
             tableView.dataSource = self
             tableView.registerReusableCell(type: MultilineLabelTableViewCell.self)
             tableView.registerReusableCell(type: ImageWithLabelTableViewCell.self)
-            tableView.contentInset.bottom = 56
+            tableView.contentInset.bottom = 20
         }
     }
     

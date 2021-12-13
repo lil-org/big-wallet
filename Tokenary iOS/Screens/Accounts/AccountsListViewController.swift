@@ -83,6 +83,34 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                 self?.respondTo(request: request, response: response)
             }
             presentForSafariRequest(selectAccountViewController.inNavigationController)
+        case .signTypedMessage:
+            guard let raw = request.raw,
+                  let wallet = walletsManager.getWallet(address: request.address),
+                  let address = wallet.ethereumAddress else {
+                respondTo(request: request, error: Strings.somethingWentWrong)
+                return
+            }
+            showApprove(subject: .signTypedData, address: address, meta: raw, peerMeta: peerMeta) { [weak self] approved in
+                if approved {
+                    self?.signTypedData(wallet: wallet, raw: raw, request: request)
+                } else {
+                    self?.respondTo(request: request, error: Strings.failedToSign)
+                }
+            }
+        case .signMessage:
+            guard let data = request.message,
+                  let wallet = walletsManager.getWallet(address: request.address),
+                  let address = wallet.ethereumAddress else {
+                respondTo(request: request, error: Strings.somethingWentWrong)
+                return
+            }
+            showApprove(subject: .signMessage, address: address, meta: data.hexString, peerMeta: peerMeta) { [weak self] approved in
+                if approved {
+                    self?.signMessage(wallet: wallet, data: data, request: request)
+                } else {
+                    self?.respondTo(request: request, error: Strings.failedToSign)
+                }
+            }
         case .signPersonalMessage:
             guard let data = request.message,
                   let wallet = walletsManager.getWallet(address: request.address),
@@ -358,6 +386,24 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     private func signPersonalMessage(wallet: TokenaryWallet, data: Data, request: SafariRequest) {
         if let signed = try? ethereum.signPersonalMessage(data: data, wallet: wallet) {
+            let response = ResponseToExtension(name: request.name, result: signed)
+            respondTo(request: request, response: response)
+        } else {
+            respondTo(request: request, error: Strings.failedToSign)
+        }
+    }
+    
+    private func signTypedData(wallet: TokenaryWallet, raw: String, request: SafariRequest) {
+        if let signed = try? ethereum.sign(typedData: raw, wallet: wallet) {
+            let response = ResponseToExtension(name: request.name, result: signed)
+            respondTo(request: request, response: response)
+        } else {
+            respondTo(request: request, error: Strings.failedToSign)
+        }
+    }
+    
+    private func signMessage(wallet: TokenaryWallet, data: Data, request: SafariRequest) {
+        if let signed = try? ethereum.sign(data: data, wallet: wallet) {
             let response = ResponseToExtension(name: request.name, result: signed)
             respondTo(request: request, response: response)
         } else {
