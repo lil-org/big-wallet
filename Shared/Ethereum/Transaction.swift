@@ -37,9 +37,21 @@ struct Transaction {
             result.append(value)
         }
         result.append(feeWithSymbol(chain: chain, ethPrice: ethPrice))
-        result.append("Data: " + data)
+        result.append(dataWithLabel)
         
         return result.joined(separator: "\n\n")
+    }
+    
+    var nonEmptyDataWithLabel: String? {
+        if data.count > 2 {
+            return dataWithLabel
+        } else {
+            return nil
+        }
+    }
+    
+    var dataWithLabel: String {
+        return "Data: " + data
     }
     
     func feeWithSymbol(chain: EthereumChain, ethPrice: Double?) -> String {

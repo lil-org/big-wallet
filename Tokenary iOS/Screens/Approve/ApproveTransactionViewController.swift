@@ -6,7 +6,8 @@ import BlockiesSwift
 class ApproveTransactionViewController: UIViewController {
     
     private enum CellModel {
-        case text(text: String, largeFont: Bool), textWithImage(text: String, imageURL: String?, image: UIImage?)
+        case text(text: String, oneLine: Bool)
+        case textWithImage(text: String, imageURL: String?, image: UIImage?)
     }
     
     @IBOutlet weak var tableView: UITableView! {
@@ -67,10 +68,12 @@ class ApproveTransactionViewController: UIViewController {
         ]
         
         if let value = transaction.valueWithSymbol(chain: chain, ethPrice: priceService.currentPrice, withLabel: true) {
-            cellModels.append(.text(text: value, largeFont: true))
+            cellModels.append(.text(text: value, oneLine: false))
         }
-        cellModels.append(.text(text: transaction.feeWithSymbol(chain: chain, ethPrice: priceService.currentPrice), largeFont: true))
-        // TODO: display tx data somehow
+        cellModels.append(.text(text: transaction.feeWithSymbol(chain: chain, ethPrice: priceService.currentPrice), oneLine: false))
+        if let data = transaction.nonEmptyDataWithLabel {
+            cellModels.append(.text(text: data, oneLine: true))
+        }
         
         tableView.reloadData()
         okButton.isEnabled = transaction.hasFee
@@ -112,9 +115,9 @@ extension ApproveTransactionViewController: UITableViewDataSource {
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         switch cellModels[indexPath.row] {
-        case let .text(text, largeFont):
+        case let .text(text, oneLine):
             let cell = tableView.dequeueReusableCellOfType(MultilineLabelTableViewCell.self, for: indexPath)
-            cell.setup(text: text, largeFont: largeFont)
+            cell.setup(text: text, largeFont: true, oneLine: oneLine)
             return cell
         case let .textWithImage(text: text, imageURL: imageURL, image: image):
             let cell = tableView.dequeueReusableCellOfType(ImageWithLabelTableViewCell.self, for: indexPath)
