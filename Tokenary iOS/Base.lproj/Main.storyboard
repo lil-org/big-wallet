@@ -249,63 +249,49 @@ Label</string>
                             <tableView clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" dataMode="prototypes" style="grouped" separatorStyle="default" allowsSelection="NO" rowHeight="-1" estimatedRowHeight="-1" sectionHeaderHeight="18" estimatedSectionHeaderHeight="-1" sectionFooterHeight="18" estimatedSectionFooterHeight="-1" translatesAutoresizingMaskIntoConstraints="NO" id="fJC-Mc-BzB">
                                 <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                                 <color key="backgroundColor" systemColor="systemBackgroundColor"/>
-                            </tableView>
-                            <visualEffectView opaque="NO" clipsSubviews="YES" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="djc-ix-sRJ">
-                                <rect key="frame" x="20" y="798" width="181" height="52"/>
-                                <view key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" insetsLayoutMarginsFromSafeArea="NO" id="NvT-s1-7zH">
-                                    <rect key="frame" x="0.0" y="0.0" width="181" height="52"/>
-                                    <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                                <view key="tableFooterView" contentMode="scaleToFill" id="6ji-BK-hOm">
+                                    <rect key="frame" x="0.0" y="0.0" width="414" height="52"/>
+                                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                    <subviews>
+                                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="I4B-ul-Hdj">
+                                            <rect key="frame" x="213" y="0.0" width="181" height="52"/>
+                                            <constraints>
+                                                <constraint firstAttribute="height" constant="52" id="m51-jE-4yt"/>
+                                            </constraints>
+                                            <state key="normal" title="Button"/>
+                                            <buttonConfiguration key="configuration" style="filled" title="OK"/>
+                                            <connections>
+                                                <action selector="okButtonTapped:" destination="bCJ-7J-W3b" eventType="touchUpInside" id="yPn-Ty-tDM"/>
+                                            </connections>
+                                        </button>
+                                        <button contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="v8H-iO-Xlx">
+                                            <rect key="frame" x="20" y="0.0" width="181" height="52"/>
+                                            <state key="normal" title="Button"/>
+                                            <buttonConfiguration key="configuration" style="gray" title="Cancel"/>
+                                            <connections>
+                                                <action selector="cancelButtonTapped:" destination="bCJ-7J-W3b" eventType="touchUpInside" id="Bde-sm-pr6"/>
+                                            </connections>
+                                        </button>
+                                    </subviews>
+                                    <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                                    <constraints>
+                                        <constraint firstItem="I4B-ul-Hdj" firstAttribute="leading" secondItem="v8H-iO-Xlx" secondAttribute="trailing" constant="12" id="7i0-jf-vAH"/>
+                                        <constraint firstItem="v8H-iO-Xlx" firstAttribute="leading" secondItem="6ji-BK-hOm" secondAttribute="leading" constant="20" id="Y9u-c2-eKE"/>
+                                        <constraint firstAttribute="trailing" secondItem="I4B-ul-Hdj" secondAttribute="trailing" constant="20" id="YvM-eG-oX3"/>
+                                        <constraint firstItem="I4B-ul-Hdj" firstAttribute="width" secondItem="v8H-iO-Xlx" secondAttribute="width" id="YzB-WX-nRt"/>
+                                        <constraint firstItem="v8H-iO-Xlx" firstAttribute="top" secondItem="6ji-BK-hOm" secondAttribute="top" id="c0x-qs-vYd"/>
+                                        <constraint firstItem="v8H-iO-Xlx" firstAttribute="height" secondItem="I4B-ul-Hdj" secondAttribute="height" id="cYv-3X-mKp"/>
+                                        <constraint firstItem="v8H-iO-Xlx" firstAttribute="top" secondItem="I4B-ul-Hdj" secondAttribute="top" id="fnP-lE-N3z"/>
+                                    </constraints>
                                 </view>
-                                <blurEffect style="regular"/>
-                                <userDefinedRuntimeAttributes>
-                                    <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
-                                        <integer key="value" value="6"/>
-                                    </userDefinedRuntimeAttribute>
-                                </userDefinedRuntimeAttributes>
-                            </visualEffectView>
-                            <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" spacing="12" translatesAutoresizingMaskIntoConstraints="NO" id="r7X-oe-bLm">
-                                <rect key="frame" x="20" y="798" width="374" height="52"/>
-                                <subviews>
-                                    <button contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="v8H-iO-Xlx">
-                                        <rect key="frame" x="0.0" y="0.0" width="181" height="52"/>
-                                        <state key="normal" title="Button"/>
-                                        <buttonConfiguration key="configuration" style="gray" title="Cancel"/>
-                                        <connections>
-                                            <action selector="cancelButtonTapped:" destination="bCJ-7J-W3b" eventType="touchUpInside" id="Bde-sm-pr6"/>
-                                            <action selector="pasteButtonTapped:" destination="ffW-KB-fbn" eventType="touchUpInside" id="83H-iB-JYq"/>
-                                        </connections>
-                                    </button>
-                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="I4B-ul-Hdj">
-                                        <rect key="frame" x="193" y="0.0" width="181" height="52"/>
-                                        <constraints>
-                                            <constraint firstAttribute="height" constant="52" id="m51-jE-4yt"/>
-                                        </constraints>
-                                        <state key="normal" title="Button"/>
-                                        <buttonConfiguration key="configuration" style="filled" title="OK"/>
-                                        <connections>
-                                            <action selector="okButtonTapped:" destination="ffW-KB-fbn" eventType="touchUpInside" id="wOG-xH-Klu"/>
-                                            <action selector="okButtonTapped:" destination="bCJ-7J-W3b" eventType="touchUpInside" id="yPn-Ty-tDM"/>
-                                        </connections>
-                                    </button>
-                                </subviews>
-                                <constraints>
-                                    <constraint firstItem="I4B-ul-Hdj" firstAttribute="height" secondItem="v8H-iO-Xlx" secondAttribute="height" id="xud-p7-OPT"/>
-                                </constraints>
-                            </stackView>
+                            </tableView>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="iMU-ib-JoS"/>
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                         <constraints>
-                            <constraint firstItem="djc-ix-sRJ" firstAttribute="centerY" secondItem="v8H-iO-Xlx" secondAttribute="centerY" id="8Fg-R2-XOb"/>
                             <constraint firstAttribute="bottom" secondItem="fJC-Mc-BzB" secondAttribute="bottom" id="Bgp-8p-M46"/>
-                            <constraint firstItem="djc-ix-sRJ" firstAttribute="centerX" secondItem="v8H-iO-Xlx" secondAttribute="centerX" id="Hjr-ae-E5S"/>
-                            <constraint firstItem="iMU-ib-JoS" firstAttribute="trailing" secondItem="r7X-oe-bLm" secondAttribute="trailing" constant="20" id="RAM-WS-7U4"/>
                             <constraint firstAttribute="trailing" secondItem="fJC-Mc-BzB" secondAttribute="trailing" id="VKC-SU-ExA"/>
                             <constraint firstItem="fJC-Mc-BzB" firstAttribute="top" secondItem="mif-5d-Da0" secondAttribute="top" id="VYj-Hb-vSn"/>
-                            <constraint firstItem="r7X-oe-bLm" firstAttribute="leading" secondItem="iMU-ib-JoS" secondAttribute="leading" constant="20" id="c1q-DA-Xea"/>
-                            <constraint firstItem="iMU-ib-JoS" firstAttribute="bottom" secondItem="r7X-oe-bLm" secondAttribute="bottom" constant="12" id="eXq-ja-dN2"/>
-                            <constraint firstItem="djc-ix-sRJ" firstAttribute="width" secondItem="v8H-iO-Xlx" secondAttribute="width" id="qG4-0r-fv0"/>
-                            <constraint firstItem="djc-ix-sRJ" firstAttribute="height" secondItem="v8H-iO-Xlx" secondAttribute="height" id="qTZ-IF-ssk"/>
                             <constraint firstItem="fJC-Mc-BzB" firstAttribute="leading" secondItem="mif-5d-Da0" secondAttribute="leading" id="vCM-yE-Yh1"/>
                         </constraints>
                     </view>
