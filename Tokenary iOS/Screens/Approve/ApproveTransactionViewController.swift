@@ -27,6 +27,7 @@ class ApproveTransactionViewController: UIViewController {
     private let priceService = PriceService.shared
     private var currentGasInfo: GasService.Info?
     private var sectionModels = [[CellModel]]()
+    private var didEnableSpeedConfiguration = false
     
     private var address: String!
     private var transaction: Transaction!
@@ -48,22 +49,32 @@ class ApproveTransactionViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        priceService.update()
         navigationItem.title = Strings.sendTransaction
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
         isModalInPresentation = true
-        updateInterface()
+        
+        if chain == .ethereum {
+            sectionModels = [[], [.gasPriceSlider]]
+        } else {
+            sectionModels = [[]]
+        }
+        
+        updateDisplayedTransactionInfo(initially: true)
         prepareTransaction()
+        enableSpeedConfigurationIfNeeded()
     }
     
     private func prepareTransaction() {
         ethereum.prepareTransaction(transaction, chain: chain) { [weak self] updated in
             self?.transaction = updated
-            self?.updateInterface()
+            self?.updateDisplayedTransactionInfo(initially: false)
+            self?.enableSpeedConfigurationIfNeeded()
         }
     }
     
-    private func updateInterface() {
+    private func updateDisplayedTransactionInfo(initially: Bool) {
         var cellModels: [CellModel] = [
             .textWithImage(text: peerMeta?.name ?? Strings.unknownWebsite, imageURL: peerMeta?.iconURLString, image: nil),
             .textWithImage(text: address.trimmedAddress, imageURL: nil, image: Blockies(seed: address.lowercased()).createImage())
@@ -78,17 +89,22 @@ class ApproveTransactionViewController: UIViewController {
             cellModels.append(.text(text: data, oneLine: true))
         }
         
-        sectionModels = [cellModels, [.gasPriceSlider]]
-        tableView.reloadData()
-        okButton.isEnabled = transaction.hasFee
-        
-        if chain != .ethereum {
-            // TODO: hide fee configuration
+        sectionModels[0] = cellModels
+        if !initially, tableView.numberOfSections > 0 {
+            tableView.reloadSections(IndexSet([0]), with: .none)
         }
-
-//        if didEnableSpeedConfiguration, let gwei = transaction.gasPriceGwei {
-//            gweiLabel.stringValue = "\(gwei) Gwei"
-//        }
+        okButton.isEnabled = transaction.hasFee
+    }
+    
+    private func enableSpeedConfigurationIfNeeded() {
+        guard !didEnableSpeedConfiguration else { return }
+        let newGasInfo = gasService.currentInfo
+        guard transaction.hasFee, let gasInfo = newGasInfo else { return }
+        didEnableSpeedConfiguration = true
+        currentGasInfo = gasInfo
+        if let cell = tableView.cellForRow(at: IndexPath(row: 0, section: 1)) as? GasPriceSliderTableViewCell {
+            cell.update(value: transaction.currentGasInRelationTo(info: gasInfo), isEnabled: true)
+        }
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -141,7 +157,11 @@ extension ApproveTransactionViewController: UITableViewDataSource {
             return cell
         case .gasPriceSlider:
             let cell = tableView.dequeueReusableCellOfType(GasPriceSliderTableViewCell.self, for: indexPath)
-            cell.setup(value: nil, isEnabled: false, delegate: self)
+            var value: Double?
+            if didEnableSpeedConfiguration, let gasInfo = currentGasInfo {
+                value = transaction.currentGasInRelationTo(info: gasInfo)
+            }
+            cell.setup(value: value, isEnabled: didEnableSpeedConfiguration, delegate: self)
             return cell
         }
         
@@ -160,7 +180,9 @@ extension ApproveTransactionViewController: UITableViewDataSource {
 extension ApproveTransactionViewController: GasPriceSliderDelegate {
     
     func sliderValueChanged(value: Double) {
-        // TODO: update accorging to new value
+        guard let gasInfo = currentGasInfo else { return }
+        transaction.setGasPrice(value: value, inRelationTo: gasInfo)
+        updateDisplayedTransactionInfo(initially: false)
     }
     
 }
