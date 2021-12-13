@@ -19,6 +19,10 @@ class ApproveTransactionViewController: UIViewController {
         }
     }
     
+    private let gasService = GasService.shared
+    private let ethereum = Ethereum.shared
+    private let priceService = PriceService.shared
+    private var currentGasInfo: GasService.Info?
     private var cellModels = [CellModel]()
     
     private var address: String!
@@ -45,10 +49,33 @@ class ApproveTransactionViewController: UIViewController {
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
         isModalInPresentation = true
+        updateInterface()
+        prepareTransaction()
+    }
+    
+    private func prepareTransaction() {
+        ethereum.prepareTransaction(transaction, chain: chain) { [weak self] updated in
+            self?.transaction = updated
+            self?.updateInterface()
+        }
+    }
+    
+    private func updateInterface() {
         cellModels = [
             .textWithImage(text: peerMeta?.name ?? Strings.unknownWebsite, imageURL: peerMeta?.iconURLString, image: nil),
-            .textWithImage(text: address.trimmedAddress, imageURL: nil, image: Blockies(seed: address.lowercased()).createImage())
+            .textWithImage(text: address.trimmedAddress, imageURL: nil, image: Blockies(seed: address.lowercased()).createImage()),
+            .text(transaction.description(chain: chain, ethPrice: priceService.currentPrice))
         ]
+        tableView.reloadData()
+        okButton.isEnabled = transaction.hasFee
+        
+        if chain != .ethereum {
+            // TODO: hide fee configuration
+        }
+
+//        if didEnableSpeedConfiguration, let gwei = transaction.gasPriceGwei {
+//            gweiLabel.stringValue = "\(gwei) Gwei"
+//        }
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -60,7 +87,7 @@ class ApproveTransactionViewController: UIViewController {
     
     @IBAction func okButtonTapped(_ sender: Any) {
         // TODO: ask face id
-        completion(nil) // TODO: respond with transaction
+        completion(transaction)
         dismissAnimated()
     }
     
