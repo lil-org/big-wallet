@@ -246,10 +246,27 @@ Label</string>
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
+                            <tableView clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" dataMode="prototypes" style="grouped" separatorStyle="default" allowsSelection="NO" rowHeight="-1" estimatedRowHeight="-1" sectionHeaderHeight="18" estimatedSectionHeaderHeight="-1" sectionFooterHeight="18" estimatedSectionFooterHeight="-1" translatesAutoresizingMaskIntoConstraints="NO" id="fJC-Mc-BzB">
+                                <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
+                                <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                            </tableView>
+                            <visualEffectView opaque="NO" clipsSubviews="YES" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="djc-ix-sRJ">
+                                <rect key="frame" x="20" y="798" width="181" height="52"/>
+                                <view key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" insetsLayoutMarginsFromSafeArea="NO" id="NvT-s1-7zH">
+                                    <rect key="frame" x="0.0" y="0.0" width="181" height="52"/>
+                                    <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                                </view>
+                                <blurEffect style="regular"/>
+                                <userDefinedRuntimeAttributes>
+                                    <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
+                                        <integer key="value" value="6"/>
+                                    </userDefinedRuntimeAttribute>
+                                </userDefinedRuntimeAttributes>
+                            </visualEffectView>
                             <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" spacing="12" translatesAutoresizingMaskIntoConstraints="NO" id="r7X-oe-bLm">
-                                <rect key="frame" x="20" y="790" width="374" height="52"/>
+                                <rect key="frame" x="20" y="798" width="374" height="52"/>
                                 <subviews>
-                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="v8H-iO-Xlx">
+                                    <button contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="v8H-iO-Xlx">
                                         <rect key="frame" x="0.0" y="0.0" width="181" height="52"/>
                                         <state key="normal" title="Button"/>
                                         <buttonConfiguration key="configuration" style="gray" title="Cancel"/>
@@ -279,18 +296,27 @@ Label</string>
                         <viewLayoutGuide key="safeArea" id="iMU-ib-JoS"/>
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                         <constraints>
+                            <constraint firstItem="djc-ix-sRJ" firstAttribute="centerY" secondItem="v8H-iO-Xlx" secondAttribute="centerY" id="8Fg-R2-XOb"/>
+                            <constraint firstAttribute="bottom" secondItem="fJC-Mc-BzB" secondAttribute="bottom" id="Bgp-8p-M46"/>
+                            <constraint firstItem="djc-ix-sRJ" firstAttribute="centerX" secondItem="v8H-iO-Xlx" secondAttribute="centerX" id="Hjr-ae-E5S"/>
                             <constraint firstItem="iMU-ib-JoS" firstAttribute="trailing" secondItem="r7X-oe-bLm" secondAttribute="trailing" constant="20" id="RAM-WS-7U4"/>
+                            <constraint firstAttribute="trailing" secondItem="fJC-Mc-BzB" secondAttribute="trailing" id="VKC-SU-ExA"/>
+                            <constraint firstItem="fJC-Mc-BzB" firstAttribute="top" secondItem="mif-5d-Da0" secondAttribute="top" id="VYj-Hb-vSn"/>
                             <constraint firstItem="r7X-oe-bLm" firstAttribute="leading" secondItem="iMU-ib-JoS" secondAttribute="leading" constant="20" id="c1q-DA-Xea"/>
-                            <constraint firstItem="iMU-ib-JoS" firstAttribute="bottom" secondItem="r7X-oe-bLm" secondAttribute="bottom" constant="20" id="eXq-ja-dN2"/>
+                            <constraint firstItem="iMU-ib-JoS" firstAttribute="bottom" secondItem="r7X-oe-bLm" secondAttribute="bottom" constant="12" id="eXq-ja-dN2"/>
+                            <constraint firstItem="djc-ix-sRJ" firstAttribute="width" secondItem="v8H-iO-Xlx" secondAttribute="width" id="qG4-0r-fv0"/>
+                            <constraint firstItem="djc-ix-sRJ" firstAttribute="height" secondItem="v8H-iO-Xlx" secondAttribute="height" id="qTZ-IF-ssk"/>
+                            <constraint firstItem="fJC-Mc-BzB" firstAttribute="leading" secondItem="mif-5d-Da0" secondAttribute="leading" id="vCM-yE-Yh1"/>
                         </constraints>
                     </view>
                     <connections>
                         <outlet property="okButton" destination="I4B-ul-Hdj" id="5d0-w3-VFH"/>
+                        <outlet property="tableView" destination="fJC-Mc-BzB" id="Zf6-wd-F2t"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="iyz-Pa-Zfg" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="3067" y="124"/>
+            <point key="canvasLocation" x="3066.666666666667" y="123.88392857142857"/>
         </scene>
         <!--Navigation Controller-->
         <scene sceneID="3Va-jz-tEl">

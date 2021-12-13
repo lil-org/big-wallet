@@ -25,6 +25,10 @@
 		2C1995562674D0F300A8E370 /* Ethereum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995552674D0F300A8E370 /* Ethereum.swift */; };
 		2C208A9F26813408005BA500 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C208A9E26813408005BA500 /* Secrets.swift */; };
 		2C3B7F022756A08600931264 /* Identifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3B7F012756A08600931264 /* Identifiers.swift */; };
+		2C40709027667A6600AB3D55 /* MultilineLabelTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C40708E27667A6600AB3D55 /* MultilineLabelTableViewCell.swift */; };
+		2C40709127667A6600AB3D55 /* MultilineLabelTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C40708F27667A6600AB3D55 /* MultilineLabelTableViewCell.xib */; };
+		2C40709427667A8600AB3D55 /* ImageWithLabelTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C40709227667A8600AB3D55 /* ImageWithLabelTableViewCell.swift */; };
+		2C40709527667A8600AB3D55 /* ImageWithLabelTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C40709327667A8600AB3D55 /* ImageWithLabelTableViewCell.xib */; };
 		2C528A16267FA8EB00CA3ADD /* Defaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C528A15267FA8EB00CA3ADD /* Defaults.swift */; };
 		2C5FF97226C84F7B00B32ACC /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C5FF97126C84F7B00B32ACC /* AppDelegate.swift */; };
 		2C5FF97426C84F7B00B32ACC /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C5FF97326C84F7B00B32ACC /* SceneDelegate.swift */; };
@@ -206,6 +210,10 @@
 		2C1995552674D0F300A8E370 /* Ethereum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ethereum.swift; sourceTree = "<group>"; };
 		2C208A9E26813408005BA500 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		2C3B7F012756A08600931264 /* Identifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Identifiers.swift; sourceTree = "<group>"; };
+		2C40708E27667A6600AB3D55 /* MultilineLabelTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultilineLabelTableViewCell.swift; sourceTree = "<group>"; };
+		2C40708F27667A6600AB3D55 /* MultilineLabelTableViewCell.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = MultilineLabelTableViewCell.xib; sourceTree = "<group>"; };
+		2C40709227667A8600AB3D55 /* ImageWithLabelTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageWithLabelTableViewCell.swift; sourceTree = "<group>"; };
+		2C40709327667A8600AB3D55 /* ImageWithLabelTableViewCell.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = ImageWithLabelTableViewCell.xib; sourceTree = "<group>"; };
 		2C4E26BD27564EB000265DCC /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = SOURCE_ROOT; };
 		2C528A15267FA8EB00CA3ADD /* Defaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Defaults.swift; sourceTree = "<group>"; };
 		2C5FF96F26C84F7B00B32ACC /* Tokenary iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Tokenary iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -419,6 +427,19 @@
 				2C4E26BD27564EB000265DCC /* README.md */,
 			);
 			path = "Supporting Files";
+			sourceTree = "<group>";
+		};
+		2C40708D276654C100AB3D55 /* Approve */ = {
+			isa = PBXGroup;
+			children = (
+				2CF255B7275A748300AE54B9 /* ApproveTransactionViewController.swift */,
+				2CF255B9275A749300AE54B9 /* ApproveViewController.swift */,
+				2C40709227667A8600AB3D55 /* ImageWithLabelTableViewCell.swift */,
+				2C40709327667A8600AB3D55 /* ImageWithLabelTableViewCell.xib */,
+				2C40708E27667A6600AB3D55 /* MultilineLabelTableViewCell.swift */,
+				2C40708F27667A6600AB3D55 /* MultilineLabelTableViewCell.xib */,
+			);
+			path = Approve;
 			sourceTree = "<group>";
 		};
 		2C5FF97026C84F7B00B32ACC /* Tokenary iOS */ = {
@@ -666,10 +687,9 @@
 			isa = PBXGroup;
 			children = (
 				2C96D38C2762314A00687301 /* Accounts */,
+				2C40708D276654C100AB3D55 /* Approve */,
 				2CF255B3275A744000AE54B9 /* PasswordViewController.swift */,
 				2C8E88A1275FA596003EB8DB /* ImportViewController.swift */,
-				2CF255B7275A748300AE54B9 /* ApproveTransactionViewController.swift */,
-				2CF255B9275A749300AE54B9 /* ApproveViewController.swift */,
 			);
 			path = Screens;
 			sourceTree = "<group>";
@@ -884,6 +904,8 @@
 			files = (
 				2C96D3AA2763D13400687301 /* DataStateView.xib in Resources */,
 				2C5FF97E26C84F7C00B32ACC /* LaunchScreen.storyboard in Resources */,
+				2C40709527667A8600AB3D55 /* ImageWithLabelTableViewCell.xib in Resources */,
+				2C40709127667A6600AB3D55 /* MultilineLabelTableViewCell.xib in Resources */,
 				2C96D3902762317300687301 /* AccountTableViewCell.xib in Resources */,
 				2C5FF97B26C84F7C00B32ACC /* Assets.xcassets in Resources */,
 				2C5FF97926C84F7B00B32ACC /* Main.storyboard in Resources */,
@@ -1123,6 +1145,7 @@
 				2CE059372763D60A0042D844 /* KeyboardObserver.swift in Sources */,
 				2CF255A0275A47DD00AE54B9 /* Bundle.swift in Sources */,
 				2CF255AC275A48CF00AE54B9 /* EthereumNetwork.swift in Sources */,
+				2C40709027667A6600AB3D55 /* MultilineLabelTableViewCell.swift in Sources */,
 				2CF255A6275A48BB00AE54B9 /* GasService.swift in Sources */,
 				2C96D392276232A300687301 /* UITableView.swift in Sources */,
 				2CF255A5275A48BB00AE54B9 /* ReviewRequester.swift in Sources */,
@@ -1158,6 +1181,7 @@
 				2CF255A3275A47DD00AE54B9 /* UserDefaults.swift in Sources */,
 				2CF255B8275A748300AE54B9 /* ApproveTransactionViewController.swift in Sources */,
 				2C8E88A4275FB7B9003EB8DB /* UIApplication.swift in Sources */,
+				2C40709427667A8600AB3D55 /* ImageWithLabelTableViewCell.swift in Sources */,
 				2C5FF97226C84F7B00B32ACC /* AppDelegate.swift in Sources */,
 				2CF255A8275A48BB00AE54B9 /* NetworkMonitor.swift in Sources */,
 				2C8E88A2275FA596003EB8DB /* ImportViewController.swift in Sources */,

@@ -7,6 +7,7 @@ struct Images {
     static var noData: UIImage { systemName("wind") }
     static var failedToLoad: UIImage { systemName("xmark.octagon") }
     static var preferences: UIImage { systemName("gearshape") }
+    static var circleFill: UIImage { systemName("circle.fill") }
  
     private static func named(_ name: String) -> UIImage {
         return UIImage(named: name)!

@@ -9,7 +9,7 @@ struct PeerMeta {
     let iconURLString: String?
     
     var name: String {
-        return title ?? "Unknown"
+        return title ?? Strings.unknownWebsite
     }
  
     init(wcPeerMeta: WCPeerMeta?) {
