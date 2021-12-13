@@ -26,7 +26,7 @@ class ApproveTransactionViewController: UIViewController {
     private let ethereum = Ethereum.shared
     private let priceService = PriceService.shared
     private var currentGasInfo: GasService.Info?
-    private var cellModels = [CellModel]()
+    private var sectionModels = [[CellModel]]()
     
     private var address: String!
     private var transaction: Transaction!
@@ -64,7 +64,7 @@ class ApproveTransactionViewController: UIViewController {
     }
     
     private func updateInterface() {
-        cellModels = [
+        var cellModels: [CellModel] = [
             .textWithImage(text: peerMeta?.name ?? Strings.unknownWebsite, imageURL: peerMeta?.iconURLString, image: nil),
             .textWithImage(text: address.trimmedAddress, imageURL: nil, image: Blockies(seed: address.lowercased()).createImage())
         ]
@@ -78,7 +78,7 @@ class ApproveTransactionViewController: UIViewController {
             cellModels.append(.text(text: data, oneLine: true))
         }
         
-        cellModels.append(.gasPriceSlider)
+        sectionModels = [cellModels, [.gasPriceSlider]]
         tableView.reloadData()
         okButton.isEnabled = transaction.hasFee
         
@@ -113,12 +113,24 @@ class ApproveTransactionViewController: UIViewController {
 
 extension ApproveTransactionViewController: UITableViewDelegate {
     
+    func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
+        if section == sectionModels.count - 1 {
+            return 18
+        } else {
+            return 16
+        }
+    }
+    
+    func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
+        return .leastNormalMagnitude
+    }
+    
 }
 
 extension ApproveTransactionViewController: UITableViewDataSource {
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        switch cellModels[indexPath.row] {
+        switch sectionModels[indexPath.section][indexPath.row] {
         case let .text(text, oneLine):
             let cell = tableView.dequeueReusableCellOfType(MultilineLabelTableViewCell.self, for: indexPath)
             cell.setup(text: text, largeFont: true, oneLine: oneLine)
@@ -135,7 +147,11 @@ extension ApproveTransactionViewController: UITableViewDataSource {
     }
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        cellModels.count
+        sectionModels[section].count
+    }
+    
+    func numberOfSections(in tableView: UITableView) -> Int {
+        return sectionModels.count
     }
     
 }
