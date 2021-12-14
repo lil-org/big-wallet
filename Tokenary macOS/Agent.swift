@@ -301,6 +301,11 @@ class Agent: NSObject {
     }
     
     private func processSafariRequest(_ safariRequest: SafariRequest) {
+        guard ExtensionBridge.hasRequest(id: safariRequest.id) else {
+            respondToSafariRequest(safariRequest, error: Strings.somethingWentWrong)
+            return
+        }
+                
         let peerMeta = PeerMeta(title: safariRequest.host, iconURLString: safariRequest.iconURLString)
         switch safariRequest.method {
         case .switchEthereumChain:
