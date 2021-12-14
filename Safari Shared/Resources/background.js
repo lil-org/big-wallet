@@ -16,9 +16,7 @@ function handleUpdated(tabId, changeInfo, tabInfo) {
 browser.tabs.onUpdated.addListener(handleUpdated);
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.subject === "closeTab") {
-        browser.tabs.remove(sender.tab.id);
-    } else if (request.subject === "process-inpage-message") {
+    if (request.subject === "process-inpage-message") {
         pendingTabIds[request.message.id] = sender.tab.id;
         browser.runtime.sendNativeMessage("mac.tokenary.io", request.message, function(response) {
             sendResponse(response)

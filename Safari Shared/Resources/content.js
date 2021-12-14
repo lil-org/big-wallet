@@ -1,5 +1,5 @@
 if (window.location.href.startsWith("https://tokenary.io/blank")) {
-    browser.runtime.sendMessage({ subject: "closeTab" });
+    browser.runtime.sendMessage({ subject: "wakeUp" });
 }
 
 if (document.readyState === "complete") {
