@@ -30,7 +30,6 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 browser.browserAction.onClicked.addListener(function(tab) {
     const id = new Date().getTime() + Math.floor(Math.random() * 1000);
     const request = {id: id, name: "switchAccount", object: {}, address: "", proxy: true};
-    browser.tabs.sendMessage(tab.id, request);
     pendingTabIds[request.id] = tab.id;
     // TODO: pass current network id
     // TODO: pass favicon
@@ -38,4 +37,5 @@ browser.browserAction.onClicked.addListener(function(tab) {
     browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
         browser.tabs.sendMessage(tab.id, response);
     });
+    browser.tabs.sendMessage(tab.id, request); // In order to open iOS app
 });

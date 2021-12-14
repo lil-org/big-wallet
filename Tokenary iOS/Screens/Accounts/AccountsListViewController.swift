@@ -67,6 +67,11 @@ class AccountsListViewController: UIViewController, DataStateContainer {
               let request = SafariRequest(query: String(url.dropFirst(prefix.count))) else { return }
         launchURL = nil
         
+        guard ExtensionBridge.hasRequest(id: request.id) else {
+            respondTo(request: request, error: Strings.somethingWentWrong)
+            return
+        }
+        
         let peerMeta = PeerMeta(title: request.host, iconURLString: request.iconURLString)
         switch request.method {
         case .switchAccount, .requestAccounts:

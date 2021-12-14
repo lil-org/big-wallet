@@ -10,6 +10,28 @@ struct ExtensionBridge {
         return String(id)
     }
     
+    private static var initiatedRequests: Set<Int> {
+        get {
+            Set(defaults?.array(forKey: "initiatedRequests") as? [Int] ?? [])
+        }
+        set {
+            defaults?.set(Array(newValue), forKey: "initiatedRequests")
+        }
+    }
+    
+    static func makeRequest(id: Int) {
+        initiatedRequests.insert(id)
+    }
+    
+    static func hasRequest(id: Int) -> Bool {
+        if initiatedRequests.contains(id) {
+            initiatedRequests.remove(id)
+            return true
+        } else {
+            return false
+        }
+    }
+    
     static func respond(id: Int, response: ResponseToExtension) {
         defaults?.setCodable(response, forKey: key(id: id))
     }

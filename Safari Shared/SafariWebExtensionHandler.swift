@@ -19,6 +19,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         else {
             return
         }
+        ExtensionBridge.makeRequest(id: id)
         #if os(macOS)
         NSWorkspace.shared.open(url)
         #endif
