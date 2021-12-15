@@ -310,7 +310,8 @@ class Agent: NSObject {
         switch safariRequest.method {
         case .switchEthereumChain:
             if let chain = safariRequest.switchToChain {
-                let response = ResponseToExtension(name: safariRequest.name,
+                let response = ResponseToExtension(id: safariRequest.id,
+                                                   name: safariRequest.name,
                                                    results: [safariRequest.address],
                                                    chainId: chain.hexStringId,
                                                    rpcURL: chain.nodeURLString)
@@ -338,7 +339,8 @@ class Agent: NSObject {
             
             accountsList.onSelectedWallet = { [weak self] chain, wallet in
                 if let chain = chain, let wallet = wallet, let ethereumAddress = wallet.ethereumAddress {
-                    let response = ResponseToExtension(name: safariRequest.name,
+                    let response = ResponseToExtension(id: safariRequest.id,
+                                                       name: safariRequest.name,
                                                        results: [ethereumAddress],
                                                        chainId: chain.hexStringId,
                                                        rpcURL: chain.nodeURLString)
@@ -388,7 +390,7 @@ class Agent: NSObject {
         case .ecRecover:
             if let (signature, message) = safariRequest.signatureAndMessage,
                let recovered = ethereum.recover(signature: signature, message: message) {
-                ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, result: recovered))
+                ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(id: safariRequest.id, name: safariRequest.name, result: recovered))
             } else {
                 respondToSafariRequest(safariRequest, error: Strings.failedToVerify)
             }
@@ -399,13 +401,13 @@ class Agent: NSObject {
     }
     
     private func respondToSafariRequest(_ safariRequest: SafariRequest, error: String) {
-        ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(name: safariRequest.name, error: error))
+        ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(id: safariRequest.id, name: safariRequest.name, error: error))
     }
     
     private func sendTransaction(_ transaction: Transaction, address: String, chain: EthereumChain, request: SafariRequest) {
         if let wallet = walletsManager.getWallet(address: address),
            let transactionHash = try? ethereum.send(transaction: transaction, wallet: wallet, chain: chain) {
-            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: transactionHash))
+            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(id: request.id, name: request.name, result: transactionHash))
         } else {
             respondToSafariRequest(request, error: Strings.failedToSend)
         }
@@ -413,7 +415,7 @@ class Agent: NSObject {
     
     private func signTypedData(address: String, raw: String, request: SafariRequest) {
         if let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.sign(typedData: raw, wallet: wallet) {
-            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: signed))
+            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(id: request.id, name: request.name, result: signed))
         } else {
             respondToSafariRequest(request, error: Strings.failedToSign)
         }
@@ -421,7 +423,7 @@ class Agent: NSObject {
     
     private func signMessage(address: String, data: Data, request: SafariRequest) {
         if let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.sign(data: data, wallet: wallet) {
-            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: signed))
+            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(id: request.id, name: request.name, result: signed))
         } else {
             respondToSafariRequest(request, error: Strings.failedToSign)
         }
@@ -429,7 +431,7 @@ class Agent: NSObject {
     
     private func signPersonalMessage(address: String, data: Data, request: SafariRequest) {
         if let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.signPersonalMessage(data: data, wallet: wallet) {
-            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(name: request.name, result: signed))
+            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(id: request.id, name: request.name, result: signed))
         } else {
             respondToSafariRequest(request, error: Strings.failedToSign)
         }
