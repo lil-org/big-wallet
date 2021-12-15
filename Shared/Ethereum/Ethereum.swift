@@ -150,24 +150,44 @@ struct Ethereum {
     private func getGas(chain: EthereumChain, from: String, to: String, gasPrice: String, weiAmount: EthNumber, data: String, completion: @escaping (String?) -> Void) {
         let network = EthereumNetwork.forChain(chain)
         queue.async {
-            let gas = try? EthGasEstimate(
-                network: network,
-                senderAddress: EthAddress(hex: from),
-                recipientAddress: EthAddress(hex: to),
-                gasEstimate: EthGasEstimate(
+            if (try? weiAmount.value().hexString == "0x") == true {
+                let gas = try? EthGasEstimate(
                     network: network,
                     senderAddress: EthAddress(hex: from),
                     recipientAddress: EthAddress(hex: to),
+                    gasEstimate: EthGasEstimate(
+                        network: network,
+                        senderAddress: EthAddress(hex: from),
+                        recipientAddress: EthAddress(hex: to),
+                        gasPrice: EthNumber(hex: gasPrice),
+                        contractCall: BytesFromHexString(hex: data)
+                    ),
+                    gasPrice: EthNumber(hex: gasPrice),
+                    contractCall: BytesFromHexString(hex: data)
+                ).value().toHexString()
+                DispatchQueue.main.async {
+                    completion(gas)
+                }
+            } else {
+                let gas = try? EthGasEstimate(
+                    network: network,
+                    senderAddress: EthAddress(hex: from),
+                    recipientAddress: EthAddress(hex: to),
+                    gasEstimate: EthGasEstimate(
+                        network: network,
+                        senderAddress: EthAddress(hex: from),
+                        recipientAddress: EthAddress(hex: to),
+                        gasPrice: EthNumber(hex: gasPrice),
+                        weiAmount: weiAmount,
+                        contractCall: BytesFromHexString(hex: data)
+                    ),
                     gasPrice: EthNumber(hex: gasPrice),
                     weiAmount: weiAmount,
                     contractCall: BytesFromHexString(hex: data)
-                ),
-                gasPrice: EthNumber(hex: gasPrice),
-                weiAmount: weiAmount,
-                contractCall: BytesFromHexString(hex: data)
-            ).value().toHexString()
-            DispatchQueue.main.async {
-                completion(gas)
+                ).value().toHexString()
+                DispatchQueue.main.async {
+                    completion(gas)
+                }
             }
         }
     }

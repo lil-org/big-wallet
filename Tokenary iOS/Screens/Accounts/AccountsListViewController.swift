@@ -67,6 +67,11 @@ class AccountsListViewController: UIViewController, DataStateContainer {
               let request = SafariRequest(query: String(url.dropFirst(prefix.count))) else { return }
         launchURL = nil
         
+        guard ExtensionBridge.hasRequest(id: request.id) else {
+            respondTo(request: request, error: Strings.somethingWentWrong)
+            return
+        }
+        
         let peerMeta = PeerMeta(title: request.host, iconURLString: request.iconURLString)
         switch request.method {
         case .switchAccount, .requestAccounts:
@@ -76,7 +81,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                     self?.respondTo(request: request, error: Strings.canceled)
                     return
                 }
-                let response = ResponseToExtension(name: request.name,
+                let response = ResponseToExtension(id: request.id,
+                                                   name: request.name,
                                                    results: [address],
                                                    chainId: chain.hexStringId,
                                                    rpcURL: chain.nodeURLString)
@@ -144,7 +150,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         default:
             showMessageAlert(text: request.name) { [weak self] in
                 let chain = EthereumChain.ethereum
-                let response = ResponseToExtension(name: request.name,
+                let response = ResponseToExtension(id: request.id,
+                                                   name: request.name,
                                                    results: ["0xE26067c76fdbe877F48b0a8400cf5Db8B47aF0fE"],
                                                    chainId: chain.hexStringId,
                                                    rpcURL: chain.nodeURLString)
@@ -178,7 +185,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func respondTo(request: SafariRequest, error: String) {
-        let response = ResponseToExtension(name: request.name, error: error)
+        let response = ResponseToExtension(id: request.id, name: request.name, error: error)
         respondTo(request: request, response: response)
     }
     
@@ -394,7 +401,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     private func signPersonalMessage(wallet: TokenaryWallet, data: Data, request: SafariRequest) {
         if let signed = try? ethereum.signPersonalMessage(data: data, wallet: wallet) {
-            let response = ResponseToExtension(name: request.name, result: signed)
+            let response = ResponseToExtension(id: request.id, name: request.name, result: signed)
             respondTo(request: request, response: response)
         } else {
             respondTo(request: request, error: Strings.failedToSign)
@@ -403,7 +410,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     private func signTypedData(wallet: TokenaryWallet, raw: String, request: SafariRequest) {
         if let signed = try? ethereum.sign(typedData: raw, wallet: wallet) {
-            let response = ResponseToExtension(name: request.name, result: signed)
+            let response = ResponseToExtension(id: request.id, name: request.name, result: signed)
             respondTo(request: request, response: response)
         } else {
             respondTo(request: request, error: Strings.failedToSign)
@@ -412,7 +419,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     private func signMessage(wallet: TokenaryWallet, data: Data, request: SafariRequest) {
         if let signed = try? ethereum.sign(data: data, wallet: wallet) {
-            let response = ResponseToExtension(name: request.name, result: signed)
+            let response = ResponseToExtension(id: request.id, name: request.name, result: signed)
             respondTo(request: request, response: response)
         } else {
             respondTo(request: request, error: Strings.failedToSign)
@@ -421,7 +428,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     private func sendTransaction(wallet: TokenaryWallet, transaction: Transaction, chain: EthereumChain, request: SafariRequest) {
         if let transactionHash = try? ethereum.send(transaction: transaction, wallet: wallet, chain: chain) {
-            let response = ResponseToExtension(name: request.name, result: transactionHash)
+            let response = ResponseToExtension(id: request.id, name: request.name, result: transactionHash)
             respondTo(request: request, response: response)
         } else {
             respondTo(request: request, error: Strings.failedToSend)

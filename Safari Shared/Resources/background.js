@@ -8,6 +8,15 @@ function handleUpdated(tabId, changeInfo, tabInfo) {
             const pendingTabId = pendingTabIds[id];
             browser.tabs.update(pendingTabId, { active: true });
             delete pendingTabIds[id];
+        } else {
+            const request = {id: parseInt(id), subject: "getResponse"};
+            browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
+                browser.tabs.query({}, function(tabs) {
+                    tabs.forEach(tab => {
+                        browser.tabs.sendMessage(tab.id, response);
+                    });
+                });
+            });
         }
         browser.tabs.remove(tabId);
     }
@@ -16,13 +25,14 @@ function handleUpdated(tabId, changeInfo, tabInfo) {
 browser.tabs.onUpdated.addListener(handleUpdated);
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.subject === "closeTab") {
-        browser.tabs.remove(sender.tab.id);
-    } else if (request.subject === "process-inpage-message") {
-        pendingTabIds[request.message.id] = sender.tab.id;
+    if (request.subject === "process-inpage-message") {
+        didMakeRequest(request.message.id, sender.tab.id);
         browser.runtime.sendNativeMessage("mac.tokenary.io", request.message, function(response) {
-            sendResponse(response)
+            sendResponse(response);
+            didCompleteRequest(request.message.id);
         });
+    } else if (request.subject === "activateTab") {
+        browser.tabs.update(sender.tab.id, { active: true });
     }
     return true;
 });
@@ -30,12 +40,13 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 browser.browserAction.onClicked.addListener(function(tab) {
     const id = new Date().getTime() + Math.floor(Math.random() * 1000);
     const request = {id: id, name: "switchAccount", object: {}, address: "", proxy: true};
-    browser.tabs.sendMessage(tab.id, request);
-    pendingTabIds[request.id] = tab.id;
+    didMakeRequest(request.id, tab.id);
     // TODO: pass current network id
     // TODO: pass favicon
     // TODO: pass host here as well
     browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
         browser.tabs.sendMessage(tab.id, response);
+        didCompleteRequest(request.id);
     });
+    browser.tabs.sendMessage(tab.id, request);
 });
