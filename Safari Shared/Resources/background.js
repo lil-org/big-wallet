@@ -8,6 +8,15 @@ function handleUpdated(tabId, changeInfo, tabInfo) {
             const pendingTabId = pendingTabIds[id];
             browser.tabs.update(pendingTabId, { active: true });
             delete pendingTabIds[id];
+        } else {
+            const request = {id: parseInt(id), subject: "getResponse"};
+            browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
+                browser.tabs.query({}, function(tabs) {
+                    tabs.forEach(tab => {
+                        browser.tabs.sendMessage(tab.id, response);
+                    });
+                });
+            });
         }
         browser.tabs.remove(tabId);
     }
@@ -21,6 +30,8 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         browser.runtime.sendNativeMessage("mac.tokenary.io", request.message, function(response) {
             sendResponse(response)
         });
+    } else if (request.subject === "activateTab") {
+        browser.tabs.update(sender.tab.id, { active: true });
     }
     return true;
 });
@@ -35,5 +46,5 @@ browser.browserAction.onClicked.addListener(function(tab) {
     browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
         browser.tabs.sendMessage(tab.id, response);
     });
-    browser.tabs.sendMessage(tab.id, request); // In order to open iOS app
+    browser.tabs.sendMessage(tab.id, request);
 });

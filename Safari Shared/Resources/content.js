@@ -1,3 +1,5 @@
+const pendingRequestsIds = new Set();
+
 if (window.location.href.startsWith("https://tokenary.io/blank")) {
     browser.runtime.sendMessage({ subject: "wakeUp" });
 }
@@ -103,7 +105,9 @@ function storeAccountIfNeeded(request) {
 }
 
 function processInpageMessage(message) {
+    pendingRequestsIds.add(message.id);
     browser.runtime.sendMessage({ subject: "process-inpage-message", message: message }).then((response) => {
+        pendingRequestsIds.delete(message.id);
         window.postMessage({direction: "from-content-script", response: response, id: message.id}, "*");
         storeAccountIfNeeded(response);
     });
@@ -112,11 +116,15 @@ function processInpageMessage(message) {
 // Receive from background
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if ("proxy" in request) {
-        platformSpecificProcessMessage(request);
+        pendingRequestsIds.add(request.id);
+        platformSpecificProcessMessage(request); // iOS opens app here
     } else {
-        const id = new Date().getTime() + Math.floor(Math.random() * 1000);
-        window.postMessage({direction: "from-content-script", response: request, id: id}, "*");
-        storeAccountIfNeeded(request);
+        if (pendingRequestsIds.has(request.id)) {
+            pendingRequestsIds.delete(request.id);
+            window.postMessage({direction: "from-content-script", response: request, id: request.id}, "*");
+            storeAccountIfNeeded(request);
+            browser.runtime.sendMessage({ subject: "activateTab" });
+        }
     }
 });
 
