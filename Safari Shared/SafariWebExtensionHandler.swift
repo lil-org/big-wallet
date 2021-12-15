@@ -12,19 +12,25 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     func beginRequest(with context: NSExtensionContext) {
         guard let item = context.inputItems[0] as? NSExtensionItem,
               let message = item.userInfo?[SFExtensionMessageKey],
-              let id = (message as? [String: Any])?["id"] as? Int,
-              let data = try? JSONSerialization.data(withJSONObject: message, options: []),
-              let query = String(data: data, encoding: .utf8)?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "tokenary://safari?request=\(query)")
-        else {
-            return
+              let id = (message as? [String: Any])?["id"] as? Int else { return }
+        
+        if (message as? [String: Any])?["subject"] as? String == "getResponse" {
+            #if !os(macOS)
+            if let response = ExtensionBridge.getResponse(id: id) {
+                self.context = context
+                respond(with: response)
+            }
+            #endif
+        } else if let data = try? JSONSerialization.data(withJSONObject: message, options: []),
+                  let query = String(data: data, encoding: .utf8)?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                  let url = URL(string: "tokenary://safari?request=\(query)") {
+            self.context = context
+            ExtensionBridge.makeRequest(id: id)
+            #if os(macOS)
+            NSWorkspace.shared.open(url)
+            #endif
+            poll(id: id)
         }
-        ExtensionBridge.makeRequest(id: id)
-        #if os(macOS)
-        NSWorkspace.shared.open(url)
-        #endif
-        self.context = context
-        poll(id: id)
     }
     
     private func poll(id: Int) {
