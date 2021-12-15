@@ -19,6 +19,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             if let response = ExtensionBridge.getResponse(id: id) {
                 self.context = context
                 respond(with: response)
+                ExtensionBridge.removeResponse(id: id)
             }
             #endif
         } else if let data = try? JSONSerialization.data(withJSONObject: message, options: []),
@@ -36,6 +37,9 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     private func poll(id: Int) {
         if let response = ExtensionBridge.getResponse(id: id) {
             respond(with: response)
+            #if os(macOS)
+            ExtensionBridge.removeResponse(id: id)
+            #endif
         } else {
             queue.asyncAfter(deadline: .now() + .milliseconds(500)) { [weak self] in
                 self?.poll(id: id)
