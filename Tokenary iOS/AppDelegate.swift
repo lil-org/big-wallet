@@ -10,9 +10,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     private let priceService = PriceService.shared
     
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        walletsManager.start()
         priceService.start()
         gasService.start()
+        walletsManager.start()
         return true
     }
 

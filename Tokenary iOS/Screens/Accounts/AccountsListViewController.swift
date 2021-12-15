@@ -30,6 +30,11 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        if walletsManager.wallets.isEmpty {
+            walletsManager.start()
+        }
+        
         navigationItem.title = forWalletSelection ? Strings.selectAccount : Strings.accounts
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
