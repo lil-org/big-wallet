@@ -180,8 +180,14 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func presentForSafariRequest(_ viewController: UIViewController) {
-        // TODO: present above all
-        present(viewController, animated: true)
+        var presentFrom: UIViewController = self
+        while let presented = presentFrom.presentedViewController, !(presented is UIAlertController) {
+            presentFrom = presented
+        }
+        if let alert = presentFrom.presentedViewController as? UIAlertController {
+            alert.dismiss(animated: false)
+        }
+        presentFrom.present(viewController, animated: true)
     }
     
     private func respondTo(request: SafariRequest, response: ResponseToExtension) {
