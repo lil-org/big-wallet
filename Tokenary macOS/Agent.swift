@@ -308,18 +308,6 @@ class Agent: NSObject {
                 
         let peerMeta = PeerMeta(title: safariRequest.host, iconURLString: safariRequest.iconURLString)
         switch safariRequest.method {
-        case .switchEthereumChain:
-            if let chain = safariRequest.switchToChain {
-                let response = ResponseToExtension(id: safariRequest.id,
-                                                   name: safariRequest.name,
-                                                   results: [safariRequest.address],
-                                                   chainId: chain.hexStringId,
-                                                   rpcURL: chain.nodeURLString)
-                ExtensionBridge.respond(id: safariRequest.id, response: response)
-            } else {
-                respondToSafariRequest(safariRequest, error: Strings.failedToSwitchChain)
-            }
-            Window.closeAllAndActivateBrowser(force: .safari)
         case .signPersonalMessage:
             guard let data = safariRequest.message else {
                 respondToSafariRequest(safariRequest, error: Strings.somethingWentWrong)

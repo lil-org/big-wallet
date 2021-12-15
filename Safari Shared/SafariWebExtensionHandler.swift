@@ -27,13 +27,28 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             ExtensionBridge.removeResponse(id: id)
         } else if let data = try? JSONSerialization.data(withJSONObject: message, options: []),
                   let query = String(data: data, encoding: .utf8)?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                  let request = SafariRequest(query: query),
                   let url = URL(string: "tokenary://safari?request=\(query)") {
             self.context = context
-            ExtensionBridge.makeRequest(id: id)
-            #if os(macOS)
-            NSWorkspace.shared.open(url)
-            #endif
-            poll(id: id)
+            if request.method == .switchEthereumChain {
+                if let chain = request.switchToChain {
+                    let response = ResponseToExtension(id: request.id,
+                                                       name: request.name,
+                                                       results: [request.address],
+                                                       chainId: chain.hexStringId,
+                                                       rpcURL: chain.nodeURLString)
+                    respond(with: response)
+                } else {
+                    let response = ResponseToExtension(id: request.id, name: request.name, error: "Failed to switch chain")
+                    respond(with: response)
+                }
+            } else {
+                ExtensionBridge.makeRequest(id: id)
+                #if os(macOS)
+                NSWorkspace.shared.open(url)
+                #endif
+                poll(id: id)
+            }
         }
     }
     

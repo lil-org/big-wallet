@@ -41,7 +41,7 @@
 		2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6706A4267A6BFE006AAEF2 /* Bundle.swift */; };
 		2C6B964C26B9D92500D2C819 /* NSColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6B964B26B9D92500D2C819 /* NSColor.swift */; };
 		2C6B964F26B9D98C00D2C819 /* Colors.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C6B964E26B9D98C00D2C819 /* Colors.xcassets */; };
-		2C773F5C2742D483007B04E7 /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5B2742D483007B04E7 /* SafariRequest.swift */; };
+		2C773F5C2742D483007B04E7 /* SafariRequest+Helpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5B2742D483007B04E7 /* SafariRequest+Helpers.swift */; };
 		2C773F5E27450B97007B04E7 /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
 		2C773F5F27450FBD007B04E7 /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
 		2C773F62274523DC007B04E7 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
@@ -90,6 +90,14 @@
 		2CC8C5A32767D3B30083FB1B /* GasPriceSliderTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2CC8C5A12767D3B30083FB1B /* GasPriceSliderTableViewCell.xib */; };
 		2CC8C5A5276A52670083FB1B /* ios-specific-background.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CC8C5A4276A52670083FB1B /* ios-specific-background.js */; };
 		2CC8C5A7276A54DA0083FB1B /* macos-specific-background.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CC8C5A6276A54DA0083FB1B /* macos-specific-background.js */; };
+		2CC8C5AA276A7E4F0083FB1B /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C208A9E26813408005BA500 /* Secrets.swift */; };
+		2CC8C5AB276A7E500083FB1B /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C208A9E26813408005BA500 /* Secrets.swift */; };
+		2CC8C5AC276A7EF70083FB1B /* EthereumChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */; };
+		2CC8C5AD276A7EF80083FB1B /* EthereumChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */; };
+		2CC8C5AF276A7F310083FB1B /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8C5AE276A7F310083FB1B /* SafariRequest.swift */; };
+		2CC8C5B0276A7F310083FB1B /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8C5AE276A7F310083FB1B /* SafariRequest.swift */; };
+		2CC8C5B1276A7F310083FB1B /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8C5AE276A7F310083FB1B /* SafariRequest.swift */; };
+		2CC8C5B2276A7F310083FB1B /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8C5AE276A7F310083FB1B /* SafariRequest.swift */; };
 		2CCEB83727594E2A00768473 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 2CCEB83627594E2A00768473 /* manifest.json */; };
 		2CCEB84527594E2A00768473 /* Safari iOS.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2CCEB82D27594E2A00768473 /* Safari iOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2CD0669126B5537B00728C20 /* TokenaryWallet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668B26B2142000728C20 /* TokenaryWallet.swift */; };
@@ -114,7 +122,7 @@
 		2CF25597275A46D300AE54B9 /* Defaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C528A15267FA8EB00CA3ADD /* Defaults.swift */; };
 		2CF25598275A46D600AE54B9 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C492689F01700D0926A /* Strings.swift */; };
 		2CF25599275A46E200AE54B9 /* PeerMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0EE4012753874D00AC2AFA /* PeerMeta.swift */; };
-		2CF2559A275A46E400AE54B9 /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5B2742D483007B04E7 /* SafariRequest.swift */; };
+		2CF2559A275A46E400AE54B9 /* SafariRequest+Helpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5B2742D483007B04E7 /* SafariRequest+Helpers.swift */; };
 		2CF2559B275A46E700AE54B9 /* AuthenticationReason.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC850E626B73A5900809E82 /* AuthenticationReason.swift */; };
 		2CF2559C275A477F00AE54B9 /* ApprovalSubject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D059AD126C2796200EE3023 /* ApprovalSubject.swift */; };
 		2CF2559D275A479800AE54B9 /* TokenaryWallet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668B26B2142000728C20 /* TokenaryWallet.swift */; };
@@ -235,7 +243,7 @@
 		2C6706A4267A6BFE006AAEF2 /* Bundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bundle.swift; sourceTree = "<group>"; };
 		2C6B964B26B9D92500D2C819 /* NSColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSColor.swift; sourceTree = "<group>"; };
 		2C6B964E26B9D98C00D2C819 /* Colors.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Colors.xcassets; sourceTree = "<group>"; };
-		2C773F5B2742D483007B04E7 /* SafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariRequest.swift; sourceTree = "<group>"; };
+		2C773F5B2742D483007B04E7 /* SafariRequest+Helpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SafariRequest+Helpers.swift"; sourceTree = "<group>"; };
 		2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionBridge.swift; sourceTree = "<group>"; };
 		2C773F61274523DC007B04E7 /* ResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseToExtension.swift; sourceTree = "<group>"; };
 		2C78F8272683BDCC00C10670 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alert.swift; sourceTree = "<group>"; };
@@ -285,6 +293,7 @@
 		2CC8C5A12767D3B30083FB1B /* GasPriceSliderTableViewCell.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = GasPriceSliderTableViewCell.xib; sourceTree = "<group>"; };
 		2CC8C5A4276A52670083FB1B /* ios-specific-background.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = "ios-specific-background.js"; sourceTree = "<group>"; };
 		2CC8C5A6276A54DA0083FB1B /* macos-specific-background.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = "macos-specific-background.js"; sourceTree = "<group>"; };
+		2CC8C5AE276A7F310083FB1B /* SafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariRequest.swift; sourceTree = "<group>"; };
 		2CCEB82D27594E2A00768473 /* Safari iOS.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Safari iOS.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CCEB83627594E2A00768473 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
 		2CCEB84227594E2A00768473 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -617,6 +626,7 @@
 				2CB3844027654A0D00A189B9 /* Resources */,
 				2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */,
 				2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */,
+				2CC8C5AE276A7F310083FB1B /* SafariRequest.swift */,
 				2C773F61274523DC007B04E7 /* ResponseToExtension.swift */,
 			);
 			path = "Safari Shared";
@@ -656,7 +666,7 @@
 			children = (
 				2C0EE4012753874D00AC2AFA /* PeerMeta.swift */,
 				0D059AD126C2796200EE3023 /* ApprovalSubject.swift */,
-				2C773F5B2742D483007B04E7 /* SafariRequest.swift */,
+				2C773F5B2742D483007B04E7 /* SafariRequest+Helpers.swift */,
 				0DC850E626B73A5900809E82 /* AuthenticationReason.swift */,
 			);
 			path = Models;
@@ -1108,7 +1118,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				2CF255B2275A4A7200AE54B9 /* UserDefaults.swift in Sources */,
+				2CC8C5AB276A7E500083FB1B /* Secrets.swift in Sources */,
 				2C773F5E27450B97007B04E7 /* ExtensionBridge.swift in Sources */,
+				2CC8C5AC276A7EF70083FB1B /* EthereumChain.swift in Sources */,
+				2CC8C5B1276A7F310083FB1B /* SafariRequest.swift in Sources */,
 				2C09CBA2273979C1009AD39B /* SafariWebExtensionHandler.swift in Sources */,
 				2C773F63274523DC007B04E7 /* ResponseToExtension.swift in Sources */,
 			);
@@ -1139,7 +1152,7 @@
 				2C8A09E326757FC000993638 /* AccountCellView.swift in Sources */,
 				2C6B964C26B9D92500D2C819 /* NSColor.swift in Sources */,
 				2C603D0226B6E13F00956955 /* String.swift in Sources */,
-				2C773F5C2742D483007B04E7 /* SafariRequest.swift in Sources */,
+				2C773F5C2742D483007B04E7 /* SafariRequest+Helpers.swift in Sources */,
 				2C134BA627553EC500DAFBDB /* Browser.swift in Sources */,
 				2CC89471269A334A00879245 /* UserDefaults.swift in Sources */,
 				2C78F8282683BDCC00C10670 /* Alert.swift in Sources */,
@@ -1163,6 +1176,7 @@
 				2C8A09EB2675964700993638 /* ApproveViewController.swift in Sources */,
 				2C03D1D5269B428C00EF10EA /* Notification.swift in Sources */,
 				2C1995562674D0F300A8E370 /* Ethereum.swift in Sources */,
+				2CC8C5AF276A7F310083FB1B /* SafariRequest.swift in Sources */,
 				2C8A09DF267579EA00993638 /* AccountsListViewController.swift in Sources */,
 				2C917429267D2A6E00049075 /* Keychain.swift in Sources */,
 			);
@@ -1189,7 +1203,7 @@
 				2CF2559D275A479800AE54B9 /* TokenaryWallet.swift in Sources */,
 				2CF255AB275A48CF00AE54B9 /* Ethereum.swift in Sources */,
 				2CE059492764D69D0042D844 /* SafariWebExtensionHandler.swift in Sources */,
-				2CF2559A275A46E400AE54B9 /* SafariRequest.swift in Sources */,
+				2CF2559A275A46E400AE54B9 /* SafariRequest+Helpers.swift in Sources */,
 				2CF255B0275A492100AE54B9 /* Secrets.swift in Sources */,
 				2CC8C5A22767D3B30083FB1B /* GasPriceSliderTableViewCell.swift in Sources */,
 				2CC6EF0D275E64810040CC62 /* UIViewController.swift in Sources */,
@@ -1199,6 +1213,7 @@
 				2CF255AE275A48CF00AE54B9 /* Transaction.swift in Sources */,
 				2C96D38F2762317300687301 /* AccountTableViewCell.swift in Sources */,
 				2CF255A1275A47DD00AE54B9 /* Notification.swift in Sources */,
+				2CC8C5B0276A7F310083FB1B /* SafariRequest.swift in Sources */,
 				2CE059392763F3FF0042D844 /* CGFloat.swift in Sources */,
 				2CF255B4275A744000AE54B9 /* PasswordViewController.swift in Sources */,
 				2C8E889F275F9967003EB8DB /* Storyboard.swift in Sources */,
@@ -1237,7 +1252,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				2CE0594627640F470042D844 /* UserDefaults.swift in Sources */,
+				2CC8C5AA276A7E4F0083FB1B /* Secrets.swift in Sources */,
 				2CE0594327640EAB0042D844 /* ExtensionBridge.swift in Sources */,
+				2CC8C5AD276A7EF80083FB1B /* EthereumChain.swift in Sources */,
+				2CC8C5B2276A7F310083FB1B /* SafariRequest.swift in Sources */,
 				2CE0593F27640E300042D844 /* SafariWebExtensionHandler.swift in Sources */,
 				2CE0594527640EF10042D844 /* ResponseToExtension.swift in Sources */,
 			);
