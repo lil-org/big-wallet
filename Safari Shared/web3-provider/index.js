@@ -185,8 +185,6 @@ class TokenaryWeb3Provider extends EventEmitter {
                     return this.eth_sendTransaction(payload);
                 case "eth_requestAccounts":
                     return this.eth_requestAccounts(payload);
-                case "wallet_watchAsset":
-                    return this.wallet_watchAsset(payload);
                 case "wallet_addEthereumChain":
                     return this.wallet_addEthereumChain(payload);
                 case "wallet_switchEthereumChain":
@@ -388,7 +386,7 @@ window.addEventListener("message", function(event) {
         if ("result" in response) {
             window.ethereum.sendResponse(event.data.id, response.result);
         } else if ("results" in response) {
-            if (response.name == "switchEthereumChain") {
+            if (response.name == "switchEthereumChain" || response.name == "addEthereumChain") {
                 // Calling it before sending response matters for some dapps
                 window.ethereum.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
             }

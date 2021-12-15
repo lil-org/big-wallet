@@ -152,16 +152,16 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                     self?.respondTo(request: request, error: Strings.canceled)
                 }
             }
-        default:
-            showMessageAlert(text: request.name) { [weak self] in
-                let chain = EthereumChain.ethereum
-                let response = ResponseToExtension(id: request.id,
-                                                   name: request.name,
-                                                   results: ["0xE26067c76fdbe877F48b0a8400cf5Db8B47aF0fE"],
-                                                   chainId: chain.hexStringId,
-                                                   rpcURL: chain.nodeURLString)
-                self?.respondTo(request: request, response: response)
+        case .ecRecover:
+            if let (signature, message) = request.signatureAndMessage,
+               let recovered = ethereum.recover(signature: signature, message: message) {
+                let response = ResponseToExtension(id: request.id, name: request.name, result: recovered)
+                respondTo(request: request, response: response)
+            } else {
+                respondTo(request: request, error: Strings.failedToVerify)
             }
+        case .addEthereumChain, .switchEthereumChain, .watchAsset:
+            respondTo(request: request, error: Strings.somethingWentWrong)
         }
     }
     

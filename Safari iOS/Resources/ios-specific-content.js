@@ -1,3 +1,5 @@
 function platformSpecificProcessMessage(message) {
-    window.location.href = "tokenary://" + JSON.stringify(message);
+    if (message.name != "switchEthereumChain" && message.name != "addEthereumChain") {
+        window.location.href = "tokenary://" + JSON.stringify(message);
+    }
 }
