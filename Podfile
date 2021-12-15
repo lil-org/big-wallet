@@ -2,7 +2,7 @@ inhibit_all_warnings!
 use_frameworks!
 
 def shared_pods
-  pod 'Web3Swift.io', :git => 'https://github.com/zeriontech/Web3Swift.git', :branch => 'develop'
+  pod 'Web3Swift.io', :git => 'https://github.com/grachyov/Web3Swift.git', :branch => 'develop'
   pod 'BlockiesSwift'
   pod 'Kingfisher'
   pod 'WalletConnect', git: 'https://github.com/grachyov/wallet-connect-swift', branch: 'master'

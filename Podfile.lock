@@ -37,7 +37,7 @@ DEPENDENCIES:
   - Kingfisher
   - TrustWalletCore
   - WalletConnect (from `https://github.com/grachyov/wallet-connect-swift`, branch `master`)
-  - Web3Swift.io (from `https://github.com/zeriontech/Web3Swift.git`, branch `develop`)
+  - Web3Swift.io (from `https://github.com/grachyov/Web3Swift.git`, branch `develop`)
 
 SPEC REPOS:
   trunk:
@@ -58,15 +58,15 @@ EXTERNAL SOURCES:
     :git: https://github.com/grachyov/wallet-connect-swift
   Web3Swift.io:
     :branch: develop
-    :git: https://github.com/zeriontech/Web3Swift.git
+    :git: https://github.com/grachyov/Web3Swift.git
 
 CHECKOUT OPTIONS:
   WalletConnect:
     :commit: 30040bab47c26002648eec96ed6c19403cc38d71
     :git: https://github.com/grachyov/wallet-connect-swift
   Web3Swift.io:
-    :commit: 4e04054ac06a9875137ebbfac5a4b8c9f94d49f6
-    :git: https://github.com/zeriontech/Web3Swift.git
+    :commit: 951e6217f7899b5614b1530c3fbd2a46ee315b3c
+    :git: https://github.com/grachyov/Web3Swift.git
 
 SPEC CHECKSUMS:
   BigInt: f668a80089607f521586bbe29513d708491ef2f7
@@ -82,6 +82,6 @@ SPEC CHECKSUMS:
   WalletConnect: 1df75d4355b1cacfc27d7ef2416fae43862d0eb4
   Web3Swift.io: 18fd06aed9d56df9c704f9c6f87b06675bb05b53
 
-PODFILE CHECKSUM: 08d05550e3a7a13bdf9c86a9dafd66a5e1780c0d
+PODFILE CHECKSUM: 40f9fe09384ac09b3aaaacdc543d4bfe33b67259
 
 COCOAPODS: 1.11.2
