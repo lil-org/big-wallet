@@ -383,7 +383,7 @@ class Agent: NSObject {
                 respondToSafariRequest(safariRequest, error: Strings.failedToVerify)
             }
             Window.closeAllAndActivateBrowser(force: .safari)
-        default:
+        case .switchEthereumChain, .addEthereumChain, .watchAsset:
             Window.closeAllAndActivateBrowser(force: .safari)
         }
     }
