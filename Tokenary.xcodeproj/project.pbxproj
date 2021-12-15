@@ -98,6 +98,7 @@
 		2CC8C5B0276A7F310083FB1B /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8C5AE276A7F310083FB1B /* SafariRequest.swift */; };
 		2CC8C5B1276A7F310083FB1B /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8C5AE276A7F310083FB1B /* SafariRequest.swift */; };
 		2CC8C5B2276A7F310083FB1B /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8C5AE276A7F310083FB1B /* SafariRequest.swift */; };
+		2CC8C5B4276A96760083FB1B /* Haptic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8C5B3276A96760083FB1B /* Haptic.swift */; };
 		2CCEB83727594E2A00768473 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 2CCEB83627594E2A00768473 /* manifest.json */; };
 		2CCEB84527594E2A00768473 /* Safari iOS.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2CCEB82D27594E2A00768473 /* Safari iOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2CD0669126B5537B00728C20 /* TokenaryWallet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668B26B2142000728C20 /* TokenaryWallet.swift */; };
@@ -294,6 +295,7 @@
 		2CC8C5A4276A52670083FB1B /* ios-specific-background.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = "ios-specific-background.js"; sourceTree = "<group>"; };
 		2CC8C5A6276A54DA0083FB1B /* macos-specific-background.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = "macos-specific-background.js"; sourceTree = "<group>"; };
 		2CC8C5AE276A7F310083FB1B /* SafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariRequest.swift; sourceTree = "<group>"; };
+		2CC8C5B3276A96760083FB1B /* Haptic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Haptic.swift; sourceTree = "<group>"; };
 		2CCEB82D27594E2A00768473 /* Safari iOS.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Safari iOS.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CCEB83627594E2A00768473 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
 		2CCEB84227594E2A00768473 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -559,6 +561,7 @@
 			isa = PBXGroup;
 			children = (
 				2C96D3A72763D13400687301 /* DataStateView.swift */,
+				2CC8C5B3276A96760083FB1B /* Haptic.swift */,
 				2CE059362763D60A0042D844 /* KeyboardObserver.swift */,
 				2C96D3A82763D13400687301 /* DataStateView.xib */,
 				2C96D3952762380400687301 /* ButtonWithExtendedArea.swift */,
@@ -1201,6 +1204,7 @@
 				2CF25597275A46D300AE54B9 /* Defaults.swift in Sources */,
 				2CF255A2275A47DD00AE54B9 /* String.swift in Sources */,
 				2CF2559D275A479800AE54B9 /* TokenaryWallet.swift in Sources */,
+				2CC8C5B4276A96760083FB1B /* Haptic.swift in Sources */,
 				2CF255AB275A48CF00AE54B9 /* Ethereum.swift in Sources */,
 				2CE059492764D69D0042D844 /* SafariWebExtensionHandler.swift in Sources */,
 				2CF2559A275A46E400AE54B9 /* SafariRequest+Helpers.swift in Sources */,
