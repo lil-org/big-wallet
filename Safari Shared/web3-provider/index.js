@@ -388,7 +388,7 @@ window.addEventListener("message", function(event) {
         if ("result" in response) {
             window.ethereum.sendResponse(event.data.id, response.result);
         } else if ("results" in response) {
-            if (response.name == "switchEthereumChain") {
+            if (response.name == "switchEthereumChain" || response.name == "addEthereumChain") {
                 // Calling it before sending response matters for some dapps
                 window.ethereum.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
             }

@@ -30,7 +30,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                   let request = SafariRequest(query: query),
                   let url = URL(string: "tokenary://safari?request=\(query)") {
             self.context = context
-            if request.method == .switchEthereumChain {
+            if request.method == .switchEthereumChain || request.method == .addEthereumChain {
                 if let chain = request.switchToChain {
                     let response = ResponseToExtension(id: request.id,
                                                        name: request.name,
