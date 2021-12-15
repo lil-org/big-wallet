@@ -264,7 +264,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     @objc private func preferencesButtonTapped() {
-        let actionSheet = UIAlertController(title: "❤️ " + Strings.tokenary + " ❤️", message: nil, preferredStyle: .actionSheet)
+        let actionSheet = UIAlertController(title: "❤️ " + Strings.tokenary + " ❤️", message: "Show love 4269.eth", preferredStyle: .actionSheet)
         let twitterAction = UIAlertAction(title: Strings.viewOnTwitter, style: .default) { _ in
             UIApplication.shared.open(URL.twitter)
         }
