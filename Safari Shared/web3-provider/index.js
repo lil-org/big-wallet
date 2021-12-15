@@ -185,8 +185,6 @@ class TokenaryWeb3Provider extends EventEmitter {
                     return this.eth_sendTransaction(payload);
                 case "eth_requestAccounts":
                     return this.eth_requestAccounts(payload);
-                case "wallet_watchAsset":
-                    return this.wallet_watchAsset(payload);
                 case "wallet_addEthereumChain":
                     return this.wallet_addEthereumChain(payload);
                 case "wallet_switchEthereumChain":
