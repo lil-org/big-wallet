@@ -14,7 +14,8 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
               let message = item.userInfo?[SFExtensionMessageKey],
               let id = (message as? [String: Any])?["id"] as? Int else { return }
         
-        if (message as? [String: Any])?["subject"] as? String == "getResponse" {
+        let subject = (message as? [String: Any])?["subject"] as? String
+        if subject == "getResponse" {
             #if !os(macOS)
             if let response = ExtensionBridge.getResponse(id: id) {
                 self.context = context
@@ -22,6 +23,8 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 ExtensionBridge.removeResponse(id: id)
             }
             #endif
+        } else if subject == "didCompleteRequest" {
+            ExtensionBridge.removeResponse(id: id)
         } else if let data = try? JSONSerialization.data(withJSONObject: message, options: []),
                   let query = String(data: data, encoding: .utf8)?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                   let url = URL(string: "tokenary://safari?request=\(query)") {

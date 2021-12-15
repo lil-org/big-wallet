@@ -28,7 +28,8 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.subject === "process-inpage-message") {
         didMakeRequest(request.message.id, sender.tab.id);
         browser.runtime.sendNativeMessage("mac.tokenary.io", request.message, function(response) {
-            sendResponse(response)
+            sendResponse(response);
+            didCompleteRequest(request.message.id);
         });
     } else if (request.subject === "activateTab") {
         browser.tabs.update(sender.tab.id, { active: true });
@@ -45,6 +46,7 @@ browser.browserAction.onClicked.addListener(function(tab) {
     // TODO: pass host here as well
     browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
         browser.tabs.sendMessage(tab.id, response);
+        didCompleteRequest(request.id);
     });
     browser.tabs.sendMessage(tab.id, request);
 });
