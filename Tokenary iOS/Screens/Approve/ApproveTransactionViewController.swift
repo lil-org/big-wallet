@@ -118,14 +118,12 @@ class ApproveTransactionViewController: UIViewController {
         LocalAuthentication.attempt(reason: Strings.sendTransaction, presentPasswordAlertFrom: self, passwordReason: Strings.sendTransaction) { [weak self] success in
             if success, let transaction = self?.transaction {
                 self?.completion(transaction)
-                self?.dismissAnimated()
             }
         }
     }
     
     @IBAction func cancelButtonTapped(_ sender: Any) {
         completion(nil)
-        dismissAnimated()
     }
     
 }

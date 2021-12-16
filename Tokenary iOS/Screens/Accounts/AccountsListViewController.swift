@@ -18,6 +18,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         return walletsManager.wallets
     }
     
+    private var toDismissAfterResponse = [Int: UIViewController]()
     private var preferencesItem: UIBarButtonItem?
     private var addAccountItem: UIBarButtonItem?
     
@@ -98,7 +99,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                                                    rpcURL: chain.nodeURLString)
                 self?.respondTo(request: request, response: response)
             }
-            presentForSafariRequest(selectAccountViewController.inNavigationController)
+            presentForSafariRequest(selectAccountViewController.inNavigationController, id: request.id)
         case .signTypedMessage:
             guard let raw = request.raw,
                   let wallet = walletsManager.getWallet(address: request.address),
@@ -106,7 +107,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                 respondTo(request: request, error: Strings.somethingWentWrong)
                 return
             }
-            showApprove(subject: .signTypedData, address: address, meta: raw, peerMeta: peerMeta) { [weak self] approved in
+            showApprove(id: request.id, subject: .signTypedData, address: address, meta: raw, peerMeta: peerMeta) { [weak self] approved in
                 if approved {
                     self?.signTypedData(wallet: wallet, raw: raw, request: request)
                 } else {
@@ -120,7 +121,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                 respondTo(request: request, error: Strings.somethingWentWrong)
                 return
             }
-            showApprove(subject: .signMessage, address: address, meta: data.hexString, peerMeta: peerMeta) { [weak self] approved in
+            showApprove(id: request.id, subject: .signMessage, address: address, meta: data.hexString, peerMeta: peerMeta) { [weak self] approved in
                 if approved {
                     self?.signMessage(wallet: wallet, data: data, request: request)
                 } else {
@@ -135,7 +136,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                 return
             }
             let text = String(data: data, encoding: .utf8) ?? data.hexString
-            showApprove(subject: .signPersonalMessage, address: address, meta: text, peerMeta: peerMeta) { [weak self] approved in
+            showApprove(id: request.id, subject: .signPersonalMessage, address: address, meta: text, peerMeta: peerMeta) { [weak self] approved in
                 if approved {
                     self?.signPersonalMessage(wallet: wallet, data: data, request: request)
                 } else {
@@ -150,7 +151,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                       respondTo(request: request, error: Strings.somethingWentWrong)
                       return
                   }
-            showApprove(transaction: transaction, chain: chain, address: address, peerMeta: peerMeta) { [weak self] transaction in
+            showApprove(id: request.id, transaction: transaction, chain: chain, address: address, peerMeta: peerMeta) { [weak self] transaction in
                 if let transaction = transaction {
                     self?.sendTransaction(wallet: wallet, transaction: transaction, chain: chain, request: request)
                 } else {
@@ -170,21 +171,21 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
     }
     
-    func showApprove(transaction: Transaction, chain: EthereumChain, address: String, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) {
+    func showApprove(id: Int, transaction: Transaction, chain: EthereumChain, address: String, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) {
         let approveTransactionViewController = ApproveTransactionViewController.with(transaction: transaction,
                                                                                      chain: chain,
                                                                                      address: address,
                                                                                      peerMeta: peerMeta,
                                                                                      completion: completion)
-        presentForSafariRequest(approveTransactionViewController.inNavigationController)
+        presentForSafariRequest(approveTransactionViewController.inNavigationController, id: id)
     }
     
-    func showApprove(subject: ApprovalSubject, address: String, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) {
+    func showApprove(id: Int, subject: ApprovalSubject, address: String, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) {
         let approveViewController = ApproveViewController.with(subject: subject, address: address, meta: meta, peerMeta: peerMeta, completion: completion)
-        presentForSafariRequest(approveViewController.inNavigationController)
+        presentForSafariRequest(approveViewController.inNavigationController, id: id)
     }
     
-    private func presentForSafariRequest(_ viewController: UIViewController) {
+    private func presentForSafariRequest(_ viewController: UIViewController, id: Int) {
         var presentFrom: UIViewController = self
         while let presented = presentFrom.presentedViewController, !(presented is UIAlertController) {
             presentFrom = presented
@@ -193,11 +194,15 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             alert.dismiss(animated: false)
         }
         presentFrom.present(viewController, animated: true)
+        toDismissAfterResponse[id] = viewController
     }
     
     private func respondTo(request: SafariRequest, response: ResponseToExtension) {
         ExtensionBridge.respond(id: request.id, response: response)
-        UIApplication.shared.open(URL.blankRedirect(id: request.id))
+        UIApplication.shared.open(URL.blankRedirect(id: request.id)) { [weak self] _ in
+            self?.toDismissAfterResponse[request.id]?.dismiss(animated: false)
+            self?.toDismissAfterResponse.removeValue(forKey: request.id)
+        }
     }
     
     private func respondTo(request: SafariRequest, error: String) {
@@ -249,7 +254,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     @objc private func cancelButtonTapped() {
         onSelectedWallet?(nil, nil)
-        dismissAnimated()
     }
     
     @objc private func walletsChanged() {
@@ -486,7 +490,6 @@ extension AccountsListViewController: UITableViewDelegate {
         let wallet = wallets[indexPath.row]
         if forWalletSelection {
             onSelectedWallet?(chain, wallet)
-            dismissAnimated()
         } else {
             showActionsForWallet(wallet, cell: tableView.cellForRow(at: indexPath))
         }
