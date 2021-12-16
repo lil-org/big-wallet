@@ -212,6 +212,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     @IBAction func chainButtonTapped(_ sender: Any) {
         let actionSheet = UIAlertController(title: Strings.selectNetwork, message: nil, preferredStyle: .actionSheet)
+        actionSheet.popoverPresentationController?.sourceView = chainButton
         for chain in EthereumChain.allMainnets {
             let action = UIAlertAction(title: chain.name, style: .default) { [weak self] _ in
                 self?.didSelectChain(chain)
@@ -229,6 +230,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     private func showTestnets() {
         let actionSheet = UIAlertController(title: Strings.selectTestnet, message: nil, preferredStyle: .actionSheet)
+        actionSheet.popoverPresentationController?.sourceView = chainButton
         for chain in EthereumChain.allTestnets {
             let action = UIAlertAction(title: chain.name, style: .default) { [weak self] _ in
                 self?.didSelectChain(chain)
@@ -270,6 +272,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     @objc private func preferencesButtonTapped() {
         let actionSheet = UIAlertController(title: "❤️ " + Strings.tokenary + " ❤️", message: "Show love 4269.eth", preferredStyle: .actionSheet)
+        actionSheet.popoverPresentationController?.barButtonItem = preferencesItem
         let twitterAction = UIAlertAction(title: Strings.viewOnTwitter, style: .default) { _ in
             UIApplication.shared.open(URL.twitter)
         }
@@ -300,6 +303,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     @objc private func addAccount() {
         let actionSheet = UIAlertController(title: Strings.addAccount, message: nil, preferredStyle: .actionSheet)
+        actionSheet.popoverPresentationController?.barButtonItem = addAccountItem
         let newAccountAction = UIAlertAction(title: "🌱 " + Strings.createNew, style: .default) { [weak self] _ in
             self?.createNewAccount()
         }
@@ -355,9 +359,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(importAccountViewController.inNavigationController, animated: true)
     }
     
-    private func showActionsForWallet(_ wallet: TokenaryWallet) {
+    private func showActionsForWallet(_ wallet: TokenaryWallet, cell: UITableViewCell?) {
         let address = wallet.ethereumAddress ?? ""
         let actionSheet = UIAlertController(title: address, message: nil, preferredStyle: .actionSheet)
+        actionSheet.popoverPresentationController?.sourceView = cell
         
         let copyAddressAction = UIAlertAction(title: Strings.copyAddress, style: .default) { _ in
             UIPasteboard.general.string = address
@@ -483,7 +488,7 @@ extension AccountsListViewController: UITableViewDelegate {
             onSelectedWallet?(chain, wallet)
             dismissAnimated()
         } else {
-            showActionsForWallet(wallet)
+            showActionsForWallet(wallet, cell: tableView.cellForRow(at: indexPath))
         }
     }
     
@@ -508,7 +513,7 @@ extension AccountsListViewController: AccountTableViewCellDelegate {
     
     func didTapMoreButton(accountCell: AccountTableViewCell) {
         guard let index = tableView.indexPath(for: accountCell)?.row else { return }
-        showActionsForWallet(wallets[index])
+        showActionsForWallet(wallets[index], cell: accountCell)
     }
     
 }
