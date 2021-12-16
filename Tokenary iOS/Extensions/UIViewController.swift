@@ -23,7 +23,7 @@ extension UIViewController {
         present(alert, animated: true)
     }
     
-    func showPasswordAlert(title: String, message: String?, completion: @escaping ((String) -> Void)) {
+    func showPasswordAlert(title: String, message: String?, completion: @escaping ((String?) -> Void)) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addTextField { textField in
             textField.isSecureTextEntry = true
@@ -32,7 +32,9 @@ extension UIViewController {
         let okAction = UIAlertAction(title: Strings.ok, style: .default) { [weak alert] _ in
             completion(alert?.textFields?.first?.text ?? "")
         }
-        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
+        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel) { _ in
+            completion(nil)
+        }
         alert.addAction(okAction)
         alert.addAction(cancelAction)
         present(alert, animated: true)

@@ -13,12 +13,16 @@ struct LocalAuthentication {
         
         func tryWithPassword() {
             from?.showPasswordAlert(title: Strings.enterPassword, message: passwordReason) { [weak from] password in
-                if password == Keychain.shared.password {
-                    completion(true)
-                } else {
-                    from?.showMessageAlert(text: Strings.passwordDoesNotMatch) {
-                        completion(false)
+                if let password = password {
+                    if password == Keychain.shared.password {
+                        completion(true)
+                    } else {
+                        from?.showMessageAlert(text: Strings.passwordDoesNotMatch) {
+                            completion(false)
+                        }
                     }
+                } else {
+                    completion(false)
                 }
             }
         }
