@@ -380,6 +380,7 @@ Label</string>
                         </constraints>
                     </view>
                     <connections>
+                        <outlet property="cancelButton" destination="t6r-FC-Exh" id="s72-Sf-UCT"/>
                         <outlet property="okButton" destination="O6a-rK-q8r" id="dHU-TP-mF7"/>
                         <outlet property="tableView" destination="F62-4S-kIF" id="hHg-UW-xfB"/>
                     </connections>
