@@ -18,6 +18,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         return walletsManager.wallets
     }
     
+    private var preferencesItem: UIBarButtonItem?
+    private var addAccountItem: UIBarButtonItem?
+    
     @IBOutlet weak var chainButton: UIButton!
     @IBOutlet weak var chainSelectionHeader: UIView!
     @IBOutlet weak var tableView: UITableView! {
@@ -42,6 +45,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let addItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addAccount))
         let preferencesItem = UIBarButtonItem(image: Images.preferences, style: UIBarButtonItem.Style.plain, target: self, action: #selector(preferencesButtonTapped))
         let cancelItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancelButtonTapped))
+        self.addAccountItem = addItem
+        self.preferencesItem = preferencesItem
         navigationItem.rightBarButtonItems = forWalletSelection ? [addItem] : [addItem, preferencesItem]
         if forWalletSelection {
             navigationItem.leftBarButtonItem = cancelItem
@@ -271,13 +276,24 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let githubAction = UIAlertAction(title: Strings.viewOnGithub, style: .default) { _ in
             UIApplication.shared.open(URL.github)
         }
-        let emailAction = UIAlertAction(title: Strings.dropUsALine, style: .default) { _ in
+        let emailAction = UIAlertAction(title: Strings.dropUsALine.withEllipsis, style: .default) { _ in
             UIApplication.shared.open(URL.email)
+        }
+        let shareInvite = UIAlertAction(title: Strings.shareInvite.withEllipsis, style: .default) { [weak self] _ in
+            let shareViewController = UIActivityViewController(activityItems: [URL.appStore], applicationActivities: nil)
+            shareViewController.popoverPresentationController?.barButtonItem = self?.preferencesItem
+            shareViewController.excludedActivityTypes = [.addToReadingList, .airDrop, .assignToContact, .openInIBooks, .postToFlickr, .postToVimeo, .markupAsPDF]
+            self?.present(shareViewController, animated: true)
+        }
+        let howToEnableSafariExtension = UIAlertAction(title: Strings.howToEnableSafariExtension, style: .default) { _ in
+            UIApplication.shared.open(URL.iosSafariGuide)
         }
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
         actionSheet.addAction(twitterAction)
         actionSheet.addAction(githubAction)
         actionSheet.addAction(emailAction)
+        actionSheet.addAction(shareInvite)
+        actionSheet.addAction(howToEnableSafariExtension)
         actionSheet.addAction(cancelAction)
         present(actionSheet, animated: true)
     }
