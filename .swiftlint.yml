@@ -29,5 +29,4 @@ excluded:
   - Pods
 
 shorthand_operator: warning
-empty_count: warning
 dynamic_inline: warning

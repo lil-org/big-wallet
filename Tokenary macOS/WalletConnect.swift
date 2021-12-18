@@ -90,7 +90,7 @@ class WalletConnect {
         
         interactor.onError = { _ in }
 
-        interactor.onSessionRequest = { [weak self, weak interactor] (id, peerParam) in
+        interactor.onSessionRequest = { [weak self, weak interactor] (_, peerParam) in
             guard let interactor = interactor else { return }
             self?.peers[interactor.clientId] = peerParam.peerMeta
             self?.sessionStorage.add(interactor: interactor, chainId: chainId, walletId: walletId, sessionDetails: peerParam)
@@ -108,7 +108,7 @@ class WalletConnect {
             self?.sessionStorage.didInteractWith(clientId: interactor?.clientId)
         }
 
-        interactor.eth.onTransaction = { [weak self, weak interactor] (id, event, transaction) in
+        interactor.eth.onTransaction = { [weak self, weak interactor] (id, _, transaction) in
             self?.approveTransaction(id: id, wct: transaction, walletId: walletId, chainId: chainId, interactor: interactor)
             self?.sessionStorage.didInteractWith(clientId: interactor?.clientId)
         }
