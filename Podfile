@@ -15,6 +15,6 @@ target 'Tokenary' do
 end
 
 target 'Tokenary iOS' do
-  platform :ios, '14.0'
+  platform :ios, '15.0'
   shared_pods
 end
