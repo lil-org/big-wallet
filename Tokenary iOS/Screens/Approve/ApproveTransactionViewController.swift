@@ -116,7 +116,7 @@ class ApproveTransactionViewController: UIViewController {
     }
     
     private func didApproveTransaction() {
-        cancelButton.isEnabled = false
+        
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
