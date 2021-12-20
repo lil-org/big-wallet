@@ -150,7 +150,9 @@ struct Ethereum {
     private func getGas(chain: EthereumChain, from: String, to: String, gasPrice: String, weiAmount: EthNumber, data: String, completion: @escaping (String?) -> Void) {
         let network = EthereumNetwork.forChain(chain)
         queue.async {
-            if (try? weiAmount.value().hexString == "0x") == true {
+            let value = (try? weiAmount.value().hexString) ?? ""
+            let isZeroValue = value == "" || value == "0x"
+            if isZeroValue {
                 let gas = try? EthGasEstimate(
                     network: network,
                     senderAddress: EthAddress(hex: from),
