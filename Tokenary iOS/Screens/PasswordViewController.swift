@@ -22,6 +22,8 @@ class PasswordViewController: UIViewController {
     @IBOutlet weak var initialOverlayView: UIView!
     @IBOutlet weak var okButton: UIButton!
     
+    private var viewDidAppear = false
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         navigationController?.navigationBar.prefersLargeTitles = true
@@ -38,7 +40,6 @@ class PasswordViewController: UIViewController {
         
         if mode == .enter {
             navigationController?.setNavigationBarHidden(true, animated: false)
-            askForLocalAuthentication()
         } else {
             initialOverlayView.isHidden = true
         }
@@ -48,6 +49,18 @@ class PasswordViewController: UIViewController {
         super.viewWillAppear(animated)
         if mode != .enter {
             passwordTextField.becomeFirstResponder()
+        }
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if !viewDidAppear {
+            viewDidAppear = true
+            if mode == .enter {
+                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(100)) { [weak self] in
+                    self?.askForLocalAuthentication()
+                }
+            }
         }
     }
     
