@@ -42,7 +42,6 @@
         "https://*.infura.io/*",
         "https://*.infura.io/*/*",
         "activeTab",
-        "webRequest",
         "tokenary://*"
     ],
     

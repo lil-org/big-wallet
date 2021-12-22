@@ -41,8 +41,7 @@
         "https://*.infura.io/",
         "https://*.infura.io/*",
         "https://*.infura.io/*/*",
-        "activeTab",
-        "webRequest"
+        "activeTab"
     ],
     
     "web_accessible_resources": [ "inpage.js" ]
