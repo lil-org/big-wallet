@@ -41,6 +41,8 @@
         "https://*.infura.io/",
         "https://*.infura.io/*",
         "https://*.infura.io/*/*",
+        "https://tokenary.io/*",
+        "https://tokenary.io/*/*",
         "activeTab",
         "tokenary://*"
     ],
