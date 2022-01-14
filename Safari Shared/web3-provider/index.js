@@ -68,7 +68,7 @@ class TokenaryWeb3Provider extends EventEmitter {
     setConfig(config) {
         this.chainId = config.chainId;
         this.rpc = new RPCServer(config.rpcUrl);
-        this.setAddress("");
+        this.setAddress(config.address);
     }
     
     request(payload) {
@@ -373,7 +373,7 @@ class TokenaryWeb3Provider extends EventEmitter {
 window.tokenary = {Provider: TokenaryWeb3Provider, postMessage: null};
 
 (function() {
-    var config = {chainId: "0x1", rpcUrl: "https://mainnet.infura.io/v3/3f99b6096fda424bbb26e17866dcddfc"};
+    var config = {address: "", chainId: "0x1", rpcUrl: "https://mainnet.infura.io/v3/3f99b6096fda424bbb26e17866dcddfc"};
     window.ethereum = new tokenary.Provider(config);
     
     const handler = {
