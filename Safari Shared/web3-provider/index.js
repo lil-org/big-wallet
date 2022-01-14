@@ -86,6 +86,10 @@ class TokenaryWeb3Provider extends EventEmitter {
         return true;
     }
     
+    isUnlocked() {
+        return Promise.resolve(true);
+    }
+    
     /**
      * @deprecated Use request({method: "eth_requestAccounts"}) instead.
      */
