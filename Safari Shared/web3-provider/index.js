@@ -39,6 +39,7 @@ class TokenaryWeb3Provider extends EventEmitter {
     setAddress(address) {
         const lowerAddress = (address || "").toLowerCase();
         this.address = lowerAddress;
+        this.selectedAddress = lowerAddress;
         this.ready = !!address;
     }
     
