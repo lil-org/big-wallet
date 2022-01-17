@@ -89,11 +89,14 @@ function getLatestConfiguration() {
     const storageItem = browser.storage.local.get(window.location.host);
     storageItem.then((storage) => {
         const latest = storage[window.location.host];
+        var response = {results: [], chainId: "", name: "didLoadLatestConfiguration", rpcURL: ""};
         if (typeof latest !== "undefined" && "results" in latest && latest.results.length > 0 && latest.rpcURL.length > 0) {
-            const response = {results: latest.results, chainId: latest.chainId, name: "switchAccount", rpcURL: latest.rpcURL, repeatOnSubscription: true};
-            const id = new Date().getTime() + Math.floor(Math.random() * 1000);
-            window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
+            response.results = latest.results;
+            response.chainId = latest.chainId;
+            response.rpcURL = latest.rpcURL;
         }
+        const id = new Date().getTime() + Math.floor(Math.random() * 1000);
+        window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
     });
 }
 
