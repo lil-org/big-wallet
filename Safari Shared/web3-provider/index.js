@@ -97,24 +97,18 @@ class TokenaryWeb3Provider extends EventEmitter {
      * @deprecated Use request() method instead.
      */
     send(payload) {
-        let response = { jsonrpc: "2.0", id: payload.id };
-        switch (payload.method) {
-            case "eth_accounts":
-                response.result = this.eth_accounts();
-                break;
-            case "eth_coinbase":
-                response.result = this.eth_coinbase();
-                break;
-            case "net_version":
-                response.result = this.net_version();
-                break;
-            case "eth_chainId":
-                response.result = this.eth_chainId();
-                break;
-            default:
-                throw new ProviderRpcError(4200, `Tokenary does not support calling ${payload.method} synchronously without a callback. Please provide a callback parameter to call ${payload.method} asynchronously.`);
+        var that = this;
+        if (!(this instanceof TokenaryWeb3Provider)) {
+            that = window.ethereum;
         }
-        return response;
+        var requestPayload = {};
+        if (typeof payload.method !== "undefined") {
+            requestPayload.method = payload.method;
+        } else {
+            requestPayload.method = payload;
+        }
+
+        return that._request(requestPayload, false);
     }
     
     /**
