@@ -82,10 +82,10 @@ function blockedDomainCheck() {
 
 if (shouldInjectProvider()) {
     injectScript();
-    getLatestAccount();
+    getLatestConfiguration();
 }
 
-function getLatestAccount() {
+function getLatestConfiguration() {
     const storageItem = browser.storage.local.get(window.location.host);
     storageItem.then((storage) => {
         const latest = storage[window.location.host];
@@ -97,7 +97,7 @@ function getLatestAccount() {
     });
 }
 
-function storeAccountIfNeeded(request) {
+function storeConfigurationIfNeeded(request) {
     if (window.location.host.length > 0 && (request.name == "requestAccounts" || request.name == "switchAccount" || request.name == "switchEthereumChain" || request.name == "addEthereumChain")) {
         const latest = {results: request.results, chainId: request.chainId, rpcURL: request.rpcURL};
         browser.storage.local.set( {[window.location.host]: latest});
@@ -109,7 +109,7 @@ function processInpageMessage(message) {
     browser.runtime.sendMessage({ subject: "process-inpage-message", message: message }).then((response) => {
         pendingRequestsIds.delete(message.id);
         window.postMessage({direction: "from-content-script", response: response, id: message.id}, "*");
-        storeAccountIfNeeded(response);
+        storeConfigurationIfNeeded(response);
     });
 }
 
@@ -122,7 +122,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (pendingRequestsIds.has(request.id)) {
             pendingRequestsIds.delete(request.id);
             window.postMessage({direction: "from-content-script", response: request, id: request.id}, "*");
-            storeAccountIfNeeded(request);
+            storeConfigurationIfNeeded(request);
             browser.runtime.sendMessage({ subject: "activateTab" });
         }
     }
