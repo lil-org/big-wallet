@@ -20,6 +20,8 @@ class TokenaryWeb3Provider extends EventEmitter {
         this.isMetaMask = true;
         this.isTokenary = true;
         this.emitConnect(config.chainId);
+        this.didGetLatestConfiguration = false;
+        this.pendingPayloads = [];
         
         const originalOn = this.on;
         this.on = (...args) => {
@@ -50,8 +52,10 @@ class TokenaryWeb3Provider extends EventEmitter {
         
         if (window.ethereum.chainId != chainId) {
             window.ethereum.chainId = chainId;
-            window.ethereum.emit("chainChanged", chainId);
-            window.ethereum.emit("networkChanged", window.ethereum.net_version());
+            if (eventName != "didLoadLatestConfiguration") {
+                window.ethereum.emit("chainChanged", chainId);
+                window.ethereum.emit("networkChanged", window.ethereum.net_version());
+            }
         }
     }
     
@@ -186,6 +190,11 @@ class TokenaryWeb3Provider extends EventEmitter {
     }
     
     _processPayload(payload) {
+        if (!this.didGetLatestConfiguration) {
+            this.pendingPayloads.push(payload);
+            return;
+        }
+        
         switch (payload.method) {
             case "eth_accounts":
                 return this.sendResponse(payload.id, this.eth_accounts());
@@ -395,6 +404,20 @@ window.tokenary = {Provider: TokenaryWeb3Provider, postMessage: null};
 window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "from-content-script") {
         const response = event.data.response;
+        
+        if (response.name == "didLoadLatestConfiguration") {
+            window.ethereum.didGetLatestConfiguration = true;
+            if (response.chainId) {
+                window.ethereum.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
+            }
+            
+            for(let payload of window.ethereum.pendingPayloads) {
+                window.ethereum._processPayload(payload);
+            }
+            
+            window.ethereum.pendingPayloads = [];
+            return;
+        }
         
         if ("result" in response) {
             window.ethereum.sendResponse(event.data.id, response.result);
