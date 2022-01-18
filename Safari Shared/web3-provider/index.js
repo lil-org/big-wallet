@@ -20,17 +20,13 @@ class TokenaryWeb3Provider extends EventEmitter {
         this.isMetaMask = true;
         this.isTokenary = true;
         this.emitConnect(config.chainId);
+        this.didGetLatestConfiguration = false;
+        this.pendingPayloads = [];
         
         const originalOn = this.on;
         this.on = (...args) => {
-            if (args[0] == "accountsChanged") {
-                const response = window.ethereum.responseToRepeat;
-                if (response != null) {
-                    if (response.results[0].toLowerCase() == window.ethereum.address) {
-                        window.ethereum.updateAccountWithDelay(response.name, response.results, response.chainId, response.rpcURL);
-                    }
-                    window.ethereum.responseToRepeat = null;
-                }
+            if (args[0] == "connect") {
+                setTimeout( function() { window.ethereum.emitConnect(config.chainId); }, 1);
             }
             return originalOn.apply(this, args);
         };
@@ -39,11 +35,8 @@ class TokenaryWeb3Provider extends EventEmitter {
     setAddress(address) {
         const lowerAddress = (address || "").toLowerCase();
         this.address = lowerAddress;
+        this.selectedAddress = lowerAddress;
         this.ready = !!address;
-    }
-    
-    updateAccountWithDelay(eventName, addresses, chainId, rpcUrl) {
-        setTimeout( function() { window.ethereum.updateAccount(eventName, addresses, chainId, rpcUrl); }, 1);
     }
     
     updateAccount(eventName, addresses, chainId, rpcUrl) {
@@ -59,15 +52,17 @@ class TokenaryWeb3Provider extends EventEmitter {
         
         if (window.ethereum.chainId != chainId) {
             window.ethereum.chainId = chainId;
-            window.ethereum.emit("chainChanged", chainId);
-            window.ethereum.emit("networkChanged", window.ethereum.net_version());
+            if (eventName != "didLoadLatestConfiguration") {
+                window.ethereum.emit("chainChanged", chainId);
+                window.ethereum.emit("networkChanged", window.ethereum.net_version());
+            }
         }
     }
     
     setConfig(config) {
         this.chainId = config.chainId;
         this.rpc = new RPCServer(config.rpcUrl);
-        this.setAddress("");
+        this.setAddress(config.address);
     }
     
     request(payload) {
@@ -86,6 +81,10 @@ class TokenaryWeb3Provider extends EventEmitter {
         return true;
     }
     
+    isUnlocked() {
+        return Promise.resolve(true);
+    }
+    
     /**
      * @deprecated Use request({method: "eth_requestAccounts"}) instead.
      */
@@ -102,24 +101,18 @@ class TokenaryWeb3Provider extends EventEmitter {
      * @deprecated Use request() method instead.
      */
     send(payload) {
-        let response = { jsonrpc: "2.0", id: payload.id };
-        switch (payload.method) {
-            case "eth_accounts":
-                response.result = this.eth_accounts();
-                break;
-            case "eth_coinbase":
-                response.result = this.eth_coinbase();
-                break;
-            case "net_version":
-                response.result = this.net_version();
-                break;
-            case "eth_chainId":
-                response.result = this.eth_chainId();
-                break;
-            default:
-                throw new ProviderRpcError(4200, `Tokenary does not support calling ${payload.method} synchronously without a callback. Please provide a callback parameter to call ${payload.method} asynchronously.`);
+        var that = this;
+        if (!(this instanceof TokenaryWeb3Provider)) {
+            that = window.ethereum;
         }
-        return response;
+        var requestPayload = {};
+        if (typeof payload.method !== "undefined") {
+            requestPayload.method = payload.method;
+        } else {
+            requestPayload.method = payload;
+        }
+
+        return that._request(requestPayload, false);
     }
     
     /**
@@ -163,32 +156,20 @@ class TokenaryWeb3Provider extends EventEmitter {
             this.wrapResults.set(payload.id, wrapResult);
             switch (payload.method) {
                 case "eth_accounts":
-                    return this.sendResponse(payload.id, this.eth_accounts());
                 case "eth_coinbase":
-                    return this.sendResponse(payload.id, this.eth_coinbase());
                 case "net_version":
-                    return this.sendResponse(payload.id, this.net_version());
                 case "eth_chainId":
-                    return this.sendResponse(payload.id, this.eth_chainId());
                 case "eth_sign":
-                    return this.eth_sign(payload);
                 case "personal_sign":
-                    return this.personal_sign(payload);
                 case "personal_ecRecover":
-                    return this.personal_ecRecover(payload);
                 case "eth_signTypedData_v3":
-                    return this.eth_signTypedData(payload, false);
                 case "eth_signTypedData":
                 case "eth_signTypedData_v4":
-                    return this.eth_signTypedData(payload, true);
                 case "eth_sendTransaction":
-                    return this.eth_sendTransaction(payload);
                 case "eth_requestAccounts":
-                    return this.eth_requestAccounts(payload);
                 case "wallet_addEthereumChain":
-                    return this.wallet_addEthereumChain(payload);
                 case "wallet_switchEthereumChain":
-                    return this.wallet_switchEthereumChain(payload);
+                    return this._processPayload(payload);
                 case "eth_newFilter":
                 case "eth_newBlockFilter":
                 case "eth_newPendingTransactionFilter":
@@ -206,6 +187,47 @@ class TokenaryWeb3Provider extends EventEmitter {
                     .catch(reject);
             }
         });
+    }
+    
+    _processPayload(payload) {
+        if (!this.didGetLatestConfiguration) {
+            this.pendingPayloads.push(payload);
+            return;
+        }
+        
+        switch (payload.method) {
+            case "eth_accounts":
+                return this.sendResponse(payload.id, this.eth_accounts());
+            case "eth_coinbase":
+                return this.sendResponse(payload.id, this.eth_coinbase());
+            case "net_version":
+                return this.sendResponse(payload.id, this.net_version());
+            case "eth_chainId":
+                return this.sendResponse(payload.id, this.eth_chainId());
+            case "eth_sign":
+                return this.eth_sign(payload);
+            case "personal_sign":
+                return this.personal_sign(payload);
+            case "personal_ecRecover":
+                return this.personal_ecRecover(payload);
+            case "eth_signTypedData_v3":
+                return this.eth_signTypedData(payload, false);
+            case "eth_signTypedData":
+            case "eth_signTypedData_v4":
+                return this.eth_signTypedData(payload, true);
+            case "eth_sendTransaction":
+                return this.eth_sendTransaction(payload);
+            case "eth_requestAccounts":
+                if (!this.address) {
+                    return this.eth_requestAccounts(payload);
+                } else {
+                    return this.sendResponse(payload.id, this.eth_accounts());
+                }
+            case "wallet_addEthereumChain":
+                return this.wallet_addEthereumChain(payload);
+            case "wallet_switchEthereumChain":
+                return this.wallet_switchEthereumChain(payload);
+        }
     }
     
     emitConnect(chainId) {
@@ -364,7 +386,7 @@ class TokenaryWeb3Provider extends EventEmitter {
 window.tokenary = {Provider: TokenaryWeb3Provider, postMessage: null};
 
 (function() {
-    var config = {chainId: "0x1", rpcUrl: "https://mainnet.infura.io/v3/3f99b6096fda424bbb26e17866dcddfc"};
+    var config = {address: "", chainId: "0x1", rpcUrl: "https://mainnet.infura.io/v3/3f99b6096fda424bbb26e17866dcddfc"};
     window.ethereum = new tokenary.Provider(config);
     
     const handler = {
@@ -383,6 +405,20 @@ window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "from-content-script") {
         const response = event.data.response;
         
+        if (response.name == "didLoadLatestConfiguration") {
+            window.ethereum.didGetLatestConfiguration = true;
+            if (response.chainId) {
+                window.ethereum.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
+            }
+            
+            for(let payload of window.ethereum.pendingPayloads) {
+                window.ethereum._processPayload(payload);
+            }
+            
+            window.ethereum.pendingPayloads = [];
+            return;
+        }
+        
         if ("result" in response) {
             window.ethereum.sendResponse(event.data.id, response.result);
         } else if ("results" in response) {
@@ -396,9 +432,6 @@ window.addEventListener("message", function(event) {
             if (response.name == "requestAccounts" || response.name == "switchAccount") {
                 // Calling it after sending response matters for some dapps
                 window.ethereum.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
-            }
-            if ("repeatOnSubscription" in response) {
-                window.ethereum.responseToRepeat = response;
             }
         } else if ("error" in response) {
             window.ethereum.sendError(event.data.id, response.error);
