@@ -152,36 +152,20 @@ class TokenaryWeb3Provider extends EventEmitter {
             this.wrapResults.set(payload.id, wrapResult);
             switch (payload.method) {
                 case "eth_accounts":
-                    return this.sendResponse(payload.id, this.eth_accounts());
                 case "eth_coinbase":
-                    return this.sendResponse(payload.id, this.eth_coinbase());
                 case "net_version":
-                    return this.sendResponse(payload.id, this.net_version());
                 case "eth_chainId":
-                    return this.sendResponse(payload.id, this.eth_chainId());
                 case "eth_sign":
-                    return this.eth_sign(payload);
                 case "personal_sign":
-                    return this.personal_sign(payload);
                 case "personal_ecRecover":
-                    return this.personal_ecRecover(payload);
                 case "eth_signTypedData_v3":
-                    return this.eth_signTypedData(payload, false);
                 case "eth_signTypedData":
                 case "eth_signTypedData_v4":
-                    return this.eth_signTypedData(payload, true);
                 case "eth_sendTransaction":
-                    return this.eth_sendTransaction(payload);
                 case "eth_requestAccounts":
-                    if (!this.address) {
-                        return this.eth_requestAccounts(payload);
-                    } else {
-                        return this.sendResponse(payload.id, this.eth_accounts());
-                    }
                 case "wallet_addEthereumChain":
-                    return this.wallet_addEthereumChain(payload);
                 case "wallet_switchEthereumChain":
-                    return this.wallet_switchEthereumChain(payload);
+                    return this._processPayload(payload);
                 case "eth_newFilter":
                 case "eth_newBlockFilter":
                 case "eth_newPendingTransactionFilter":
@@ -199,6 +183,42 @@ class TokenaryWeb3Provider extends EventEmitter {
                     .catch(reject);
             }
         });
+    }
+    
+    _processPayload(payload) {
+        switch (payload.method) {
+            case "eth_accounts":
+                return this.sendResponse(payload.id, this.eth_accounts());
+            case "eth_coinbase":
+                return this.sendResponse(payload.id, this.eth_coinbase());
+            case "net_version":
+                return this.sendResponse(payload.id, this.net_version());
+            case "eth_chainId":
+                return this.sendResponse(payload.id, this.eth_chainId());
+            case "eth_sign":
+                return this.eth_sign(payload);
+            case "personal_sign":
+                return this.personal_sign(payload);
+            case "personal_ecRecover":
+                return this.personal_ecRecover(payload);
+            case "eth_signTypedData_v3":
+                return this.eth_signTypedData(payload, false);
+            case "eth_signTypedData":
+            case "eth_signTypedData_v4":
+                return this.eth_signTypedData(payload, true);
+            case "eth_sendTransaction":
+                return this.eth_sendTransaction(payload);
+            case "eth_requestAccounts":
+                if (!this.address) {
+                    return this.eth_requestAccounts(payload);
+                } else {
+                    return this.sendResponse(payload.id, this.eth_accounts());
+                }
+            case "wallet_addEthereumChain":
+                return this.wallet_addEthereumChain(payload);
+            case "wallet_switchEthereumChain":
+                return this.wallet_switchEthereumChain(payload);
+        }
     }
     
     emitConnect(chainId) {
