@@ -15,11 +15,11 @@ struct Strings {
     static let failedToSend = "Failed to send"
     static let failedToSign = "Failed to sign"
     static let failedToSwitchChain = "Failed to switch chain"
-    static let tokenary = "Tokenary"
+    static let tokenary = "Balance"
     static let showTokenary = "Show " + tokenary
     static let enterTokenary = "Enter " + tokenary
     static let quit = "Quit"
-    static let quitTokenary = "Quit Tokenary?"
+    static let quitTokenary = "Quit Balance?"
     static let youWontBeAbleToSignRequests = "You won't be able to sign requests."
     static let enableSafariExtension = "Enable Safari extension"
     static let dropUsALine = "Drop us a line"
