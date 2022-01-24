@@ -4,10 +4,10 @@ import Foundation
 
 extension URL {
     
-    static let twitter = URL(string: "https://tokenary.io/twitter")!
-    static let github = URL(string: "https://tokenary.io/github")!
+    static let twitter = URL(string: "https://twitter.com/Balance_io")!
+    static let github = URL(string: "https://github.com/balance-io")!
     static let email = URL(string: "mailto:support@tokenary.io")!
-    static let iosSafariGuide = URL(string: "https://tokenary.io/guide-ios")!
+    static let iosSafariGuide = URL(string: "https://support.apple.com/en-gb/guide/iphone/iphab0432bf6/ios#iphb7bf168dc")!
     static let appStore = URL(string: "https://tokenary.io/get")!
     
     static func etherscan(address: String) -> URL {

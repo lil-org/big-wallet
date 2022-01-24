@@ -26,7 +26,7 @@ class WalletConnect {
     }
     
     func connect(session: WCSession, chainId: Int, walletId: String, uuid: UUID = UUID(), completion: @escaping ((Bool) -> Void)) {
-        let clientMeta = WCPeerMeta(name: Strings.tokenary, url: "https://tokenary.io", description: Strings.walletConnectClientDescription, icons: ["https://tokenary.io/icon.png"])
+        let clientMeta = WCPeerMeta(name: Strings.tokenary, url: "https://balance.io", description: Strings.walletConnectClientDescription, icons: ["https://balance.io/icon.png"])
         let interactor = WCInteractor(session: session, meta: clientMeta, uuid: uuid)
         configure(interactor: interactor, chainId: chainId, walletId: walletId)
 

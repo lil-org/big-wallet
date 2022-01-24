@@ -1,6 +1,6 @@
 const pendingRequestsIds = new Set();
 
-if (window.location.href.startsWith("https://tokenary.io/blank")) {
+if (window.location.href.startsWith("https://balance.io/blank")) {
     browser.runtime.sendMessage({ subject: "wakeUp" });
 }
 
@@ -89,21 +89,21 @@ function getLatestConfiguration() {
     const storageItem = browser.storage.local.get(window.location.host);
     storageItem.then((storage) => {
         const latest = storage[window.location.host];
-        var response = {results: [], chainId: "", name: "didLoadLatestConfiguration", rpcURL: ""};
+        var response = { results: [], chainId: "", name: "didLoadLatestConfiguration", rpcURL: "" };
         if (typeof latest !== "undefined" && "results" in latest && latest.results.length > 0 && latest.rpcURL.length > 0) {
             response.results = latest.results;
             response.chainId = latest.chainId;
             response.rpcURL = latest.rpcURL;
         }
         const id = new Date().getTime() + Math.floor(Math.random() * 1000);
-        window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
+        window.postMessage({ direction: "from-content-script", response: response, id: id }, "*");
     });
 }
 
 function storeConfigurationIfNeeded(request) {
     if (window.location.host.length > 0 && (request.name == "requestAccounts" || request.name == "switchAccount" || request.name == "switchEthereumChain" || request.name == "addEthereumChain")) {
-        const latest = {results: request.results, chainId: request.chainId, rpcURL: request.rpcURL};
-        browser.storage.local.set( {[window.location.host]: latest});
+        const latest = { results: request.results, chainId: request.chainId, rpcURL: request.rpcURL };
+        browser.storage.local.set({ [window.location.host]: latest });
     }
 }
 
@@ -111,7 +111,7 @@ function processInpageMessage(message) {
     pendingRequestsIds.add(message.id);
     browser.runtime.sendMessage({ subject: "process-inpage-message", message: message }).then((response) => {
         pendingRequestsIds.delete(message.id);
-        window.postMessage({direction: "from-content-script", response: response, id: message.id}, "*");
+        window.postMessage({ direction: "from-content-script", response: response, id: message.id }, "*");
         storeConfigurationIfNeeded(response);
     });
 }
@@ -124,7 +124,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else {
         if (pendingRequestsIds.has(request.id)) {
             pendingRequestsIds.delete(request.id);
-            window.postMessage({direction: "from-content-script", response: request, id: request.id}, "*");
+            window.postMessage({ direction: "from-content-script", response: request, id: request.id }, "*");
             storeConfigurationIfNeeded(request);
             browser.runtime.sendMessage({ subject: "activateTab" });
         }
@@ -132,7 +132,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 // Receive from inpage
-window.addEventListener("message", function(event) {
+window.addEventListener("message", function (event) {
     if (event.source == window && event.data && event.data.direction == "from-page-script") {
         event.data.message.favicon = getFavicon();
         processInpageMessage(event.data.message);
@@ -140,7 +140,7 @@ window.addEventListener("message", function(event) {
     }
 });
 
-var getFavicon = function() {
+var getFavicon = function () {
     var nodeList = document.getElementsByTagName("link");
     for (var i = 0; i < nodeList.length; i++) {
         if ((nodeList[i].getAttribute("rel") == "icon") || (nodeList[i].getAttribute("rel") == "shortcut icon")) {

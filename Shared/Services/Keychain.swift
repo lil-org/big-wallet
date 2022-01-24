@@ -14,11 +14,11 @@ struct Keychain {
         case legacyPassword
         case raw(key: String)
         
-        private static let commonPrefix = "io.tokenary.macos."
+        private static let commonPrefix = "io.balance."
         private static let walletPrefix = "wallet."
         private static let fullWalletPrefix = commonPrefix + walletPrefix
         private static let fullWalletPrefixCount = fullWalletPrefix.count
-        private static let legacyWalletPrefix = "io.tokenary.accountstorage."
+        private static let legacyWalletPrefix = "io.balance.accountstorage."
         
         var stringValue: String {
             switch self {
@@ -27,7 +27,7 @@ struct Keychain {
             case let .wallet(id: id):
                 return ItemKey.commonPrefix + ItemKey.walletPrefix + id
             case .legacyPassword:
-                return "io.tokenary.local.passphrase"
+                return "io.balance.local.passphrase"
             case let .raw(key: key):
                 return key
             }

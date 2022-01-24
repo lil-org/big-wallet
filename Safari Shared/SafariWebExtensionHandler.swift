@@ -28,7 +28,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         } else if let data = try? JSONSerialization.data(withJSONObject: message, options: []),
                   let query = String(data: data, encoding: .utf8)?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                   let request = SafariRequest(query: query),
-                  let url = URL(string: "tokenary://safari?request=\(query)") {
+                  let url = URL(string: "balance://safari?request=\(query)") {
             self.context = context
             if request.method == .switchEthereumChain || request.method == .addEthereumChain {
                 if let chain = request.switchToChain {

@@ -4,6 +4,6 @@ import Foundation
 
 struct Identifiers {
     
-    static let safariExtensionBundle = "mac.tokenary.io.Safari"
+    static let safariExtensionBundle = "io.balance.Safari-Extension"
     
 }

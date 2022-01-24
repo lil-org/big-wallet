@@ -1,7 +1,7 @@
 var pendingTabIds = {};
 
 function handleUpdated(tabId, changeInfo, tabInfo) {
-    const prefix = "https://tokenary.io/blank/";
+    const prefix = "https://balance.io/blank/";
     if (tabInfo.url.startsWith(prefix)) {
         const id = tabInfo.url.replace(prefix, "");
         if (id in pendingTabIds) {
@@ -9,9 +9,9 @@ function handleUpdated(tabId, changeInfo, tabInfo) {
             browser.tabs.update(pendingTabId, { active: true });
             delete pendingTabIds[id];
         } else {
-            const request = {id: parseInt(id), subject: "getResponse"};
-            browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
-                browser.tabs.query({}, function(tabs) {
+            const request = { id: parseInt(id), subject: "getResponse" };
+            browser.runtime.sendNativeMessage("io.balance", request, function (response) {
+                browser.tabs.query({}, function (tabs) {
                     tabs.forEach(tab => {
                         browser.tabs.sendMessage(tab.id, response);
                     });
@@ -27,7 +27,7 @@ browser.tabs.onUpdated.addListener(handleUpdated);
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.subject === "process-inpage-message") {
         didMakeRequest(request.message.id, sender.tab.id);
-        browser.runtime.sendNativeMessage("mac.tokenary.io", request.message, function(response) {
+        browser.runtime.sendNativeMessage("io.balance", request.message, function (response) {
             sendResponse(response);
             didCompleteRequest(request.message.id);
         });
@@ -37,14 +37,14 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
 });
 
-browser.browserAction.onClicked.addListener(function(tab) {
+browser.browserAction.onClicked.addListener(function (tab) {
     const id = new Date().getTime() + Math.floor(Math.random() * 1000);
-    const request = {id: id, name: "switchAccount", object: {}, address: "", proxy: true};
+    const request = { id: id, name: "switchAccount", object: {}, address: "", proxy: true };
     didMakeRequest(request.id, tab.id);
     // TODO: pass current network id
     // TODO: pass favicon
     // TODO: pass host here as well
-    browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
+    browser.runtime.sendNativeMessage("io.balance", request, function (response) {
         browser.tabs.sendMessage(tab.id, response);
         didCompleteRequest(request.id);
     });

@@ -3,6 +3,6 @@ function didMakeRequest(requestId, tabId) {
 }
 
 function didCompleteRequest(id) {
-    const request = {id: id, subject: "didCompleteRequest"};
-    browser.runtime.sendNativeMessage("mac.tokenary.io", request);
+    const request = { id: id, subject: "didCompleteRequest" };
+    browser.runtime.sendNativeMessage("io.balance", request);
 }

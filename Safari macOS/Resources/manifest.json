@@ -1,11 +1,11 @@
 {
     "manifest_version": 2,
     "default_locale": "en",
-    
+
     "name": "__MSG_extension_name__",
     "description": "__MSG_extension_description__",
     "version": "2.0.2",
-    
+
     "icons": {
         "48": "images/icon-48.png",
         "96": "images/icon-96.png",
@@ -13,19 +13,21 @@
         "256": "images/icon-256.png",
         "512": "images/icon-512.png"
     },
-    
+
     "background": {
-        "scripts": [ "background.js", "macos-specific-background.js" ],
+        "scripts": ["background.js", "macos-specific-background.js"],
         "persistent": true
     },
-    
-    "content_scripts": [{
-        "matches": [ "file://*/*", "http://*/*", "https://*/*" ],
-        "run_at": "document_start",
-        "all_frames": true,
-        "js": [ "content.js", "macos-specific-content.js" ]
-    }],
-    
+
+    "content_scripts": [
+        {
+            "matches": ["file://*/*", "http://*/*", "https://*/*"],
+            "run_at": "document_start",
+            "all_frames": true,
+            "js": ["content.js", "macos-specific-content.js"]
+        }
+    ],
+
     "browser_action": {
         "default_icon": {
             "16": "images/toolbar-icon-16.png",
@@ -34,17 +36,17 @@
             "38": "images/toolbar-icon-38.png"
         }
     },
-    
+
     "permissions": [
         "nativeMessaging",
         "storage",
         "https://*.infura.io/",
         "https://*.infura.io/*",
         "https://*.infura.io/*/*",
-        "https://tokenary.io/*",
-        "https://tokenary.io/*/*",
+        "https://balance.io/*",
+        "https://balance.io/*/*",
         "activeTab"
     ],
-    
-    "web_accessible_resources": [ "inpage.js" ]
+
+    "web_accessible_resources": ["inpage.js"]
 }

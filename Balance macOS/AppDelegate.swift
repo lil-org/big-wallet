@@ -61,14 +61,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func processInput(url: String?) {
         guard let url = url else { return }
         
-        for scheme in ["https://tokenary.io/wc?uri=", "tokenary://wc?uri="] {
+        for scheme in ["https://balance.io/wc?uri=", "balance://wc?uri="] {
             if url.hasPrefix(scheme), let link = url.dropFirst(scheme.count).removingPercentEncoding, let session = walletConnect.sessionWithLink(link) {
                 processExternalRequest(.wcSession(session))
                 return
             }
         }
         
-        let safariPrefix = "tokenary://safari?request="
+        let safariPrefix = "balance://safari?request="
         if url.hasPrefix(safariPrefix), let request = SafariRequest(query: String(url.dropFirst(safariPrefix.count))) {
             processExternalRequest(.safari(request))
         }
