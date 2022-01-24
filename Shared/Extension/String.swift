@@ -23,8 +23,12 @@ extension String {
     
     var trimmedAddress: String {
         guard !isEmpty else { return self }
-        let without0x = dropFirst(2)
-        return without0x.prefix(4) + "..." + without0x.suffix(4)
+        return "\(prefix(6))...\(suffix(4))"
+    }
+    
+    var multilineAddress: String {
+        guard !isEmpty else { return self }
+        return "\(prefix(21))\n\(suffix(21))"
     }
     
 }

@@ -46,7 +46,7 @@ class ApproveViewController: UIViewController {
         navigationItem.largeTitleDisplayMode = .always
         isModalInPresentation = true
         cellModels = [.textWithImage(text: peerMeta?.name ?? Strings.unknownWebsite, imageURL: peerMeta?.iconURLString, image: nil),
-                      .textWithImage(text: address.trimmedAddress, imageURL: nil, image: Blockies(seed: address.lowercased()).createImage()),
+                      .textWithImage(text: address.multilineAddress, imageURL: nil, image: Blockies(seed: address.lowercased()).createImage()),
                       .text(meta)]
     }
     
