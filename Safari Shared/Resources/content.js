@@ -4,10 +4,6 @@ if (window.location.href.startsWith("https://tokenary.io/blank")) {
     browser.runtime.sendMessage({ subject: "wakeUp" });
 }
 
-if (document.readyState != "loading") {
-    window.location.reload();
-}
-
 function injectScript() {
     try {
         const container = document.head || document.documentElement;
@@ -81,8 +77,12 @@ function blockedDomainCheck() {
 }
 
 if (shouldInjectProvider()) {
-    injectScript();
-    getLatestConfiguration();
+    if (document.readyState != "loading") {
+        window.location.reload();
+    } else {
+        injectScript();
+        getLatestConfiguration();
+    }
 }
 
 function getLatestConfiguration() {
