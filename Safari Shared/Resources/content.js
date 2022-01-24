@@ -4,7 +4,7 @@ if (window.location.href.startsWith("https://tokenary.io/blank")) {
     browser.runtime.sendMessage({ subject: "wakeUp" });
 }
 
-if (document.readyState === "complete") {
+if (document.readyState != "loading") {
     window.location.reload();
 }
 
