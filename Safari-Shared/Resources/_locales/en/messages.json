@@ -1,0 +1,10 @@
+{
+	"extension_name": {
+		"message": "Balance",
+		"description": "The display name for the extension."
+	},
+	"extension_description": {
+		"message": "Crypto Wallet",
+		"description": "Description of what the extension does."
+	}
+}

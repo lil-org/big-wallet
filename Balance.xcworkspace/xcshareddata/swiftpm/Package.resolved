@@ -1,0 +1,88 @@
+{
+  "object": {
+    "pins": [
+      {
+        "package": "NativeUIKit",
+        "repositoryURL": "https://github.com/ivanvorobei/NativeUIKit",
+        "state": {
+          "branch": null,
+          "revision": "29b90e3fd23c6fe5fb1825d56e478ddd46d6843d",
+          "version": "1.2.5"
+        }
+      },
+      {
+        "package": "Nuke",
+        "repositoryURL": "https://github.com/kean/Nuke",
+        "state": {
+          "branch": null,
+          "revision": "6f7c6adb11a8d22587b2995b3f7d9554682ad122",
+          "version": "10.7.0"
+        }
+      },
+      {
+        "package": "SFSymbols",
+        "repositoryURL": "https://github.com/ivanvorobei/SFSymbols",
+        "state": {
+          "branch": null,
+          "revision": "7381c9063bb4b02dd473ae8b7a0b85d9921b3db8",
+          "version": "1.0.1"
+        }
+      },
+      {
+        "package": "SPAlert",
+        "repositoryURL": "https://github.com/ivanvorobei/SPAlert",
+        "state": {
+          "branch": null,
+          "revision": "0df499e9f5dc43790ac65f227821acfa7b05b168",
+          "version": "4.2.0"
+        }
+      },
+      {
+        "package": "SparrowKit",
+        "repositoryURL": "https://github.com/ivanvorobei/SparrowKit",
+        "state": {
+          "branch": null,
+          "revision": "df2ba76dd6a27dfe721a193bb3a7888e311693d1",
+          "version": "3.5.1"
+        }
+      },
+      {
+        "package": "SPDiffable",
+        "repositoryURL": "https://github.com/ivanvorobei/SPDiffable",
+        "state": {
+          "branch": null,
+          "revision": "096ffb560906f762db4798ffa932d1c116ec8e9d",
+          "version": "4.0.1"
+        }
+      },
+      {
+        "package": "SPIndicator",
+        "repositoryURL": "https://github.com/ivanvorobei/SPIndicator",
+        "state": {
+          "branch": null,
+          "revision": "2f67eeace945680865ba2baeb38fb0654fa4d537",
+          "version": "1.6.3"
+        }
+      },
+      {
+        "package": "SPPageController",
+        "repositoryURL": "https://github.com/ivanvorobei/SPPageController",
+        "state": {
+          "branch": null,
+          "revision": "7d6c9a7cc31f7b1d668125f8bd8047e57621de96",
+          "version": "1.3.2"
+        }
+      },
+      {
+        "package": "SPPerspective",
+        "repositoryURL": "https://github.com/ivanvorobei/SPPerspective",
+        "state": {
+          "branch": null,
+          "revision": "580ed06a5daec94c5095379971570289b429fa3d",
+          "version": "1.4.1"
+        }
+      }
+    ]
+  },
+  "version": 1
+}

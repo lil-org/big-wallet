@@ -1,0 +1,30 @@
+{
+    "name": "tokenary-web3-provider",
+    "version": "0.3.0",
+    "description": "Tokenary Web3 Provider",
+    "main": "index.js",
+    "scripts": {
+        "build": "rm ../Resources/inpage.js || true && parcel build index.js --no-source-maps -o inpage.js -d ../Resources",
+        "lint": "eslint . --fix"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+ssh://git@github.com/zeriontech/Tokenary.git"
+    },
+    "keywords": [],
+    "author": "Tokenary <support@tokenary.io>",
+    "license": "MIT",
+    "dependencies": {
+        "buffer": "^5.6.0",
+        "events": "^3.2.0",
+        "isutf8": "^3.1.1"
+    },
+    "devDependencies": {
+        "babel-core": "^6.26.3",
+        "babel-preset-env": "^1.7.0",
+        "eslint": "^5.16.0",
+        "ethereumjs-util": "^7.0.5",
+        "lodash": "^4.17.21",
+        "parcel-bundler": "^1.12.4"
+    }
+}
