@@ -6,15 +6,12 @@ if (window.location.href.startsWith("https://tokenary.io/blank")) {
 
 function injectScript() {
     try {
-        const container = document.head || document.documentElement;
+        const container = document.head || document.body || document.documentElement;
         const scriptTag = document.createElement('script');
-        scriptTag.setAttribute('async', 'false');
-        var request = new XMLHttpRequest();
-        request.open('GET', browser.extension.getURL('inpage.js'), false);
-        request.send();
-        scriptTag.textContent = request.responseText;
+        scriptTag.type = 'text/javascript';
+        scriptTag.async = false;
+        scriptTag.src = browser.runtime.getURL('inpage.js');
         container.insertBefore(scriptTag, container.children[0]);
-        container.removeChild(scriptTag);
     } catch (error) {
         console.error('Tokenary: Provider injection failed.', error);
     }
