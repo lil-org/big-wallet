@@ -20,7 +20,7 @@ let package = Package(
         ),
         .package(
             name: "NativeUIKit",
-            url: "https://github.com/ivanvorobei/NativeUIKit", .upToNextMajor(from: "1.2.5")
+            url: "https://github.com/ivanvorobei/NativeUIKit", .upToNextMajor(from: "1.2.6")
         ),
         .package(
             name: "SPDiffable",
@@ -46,6 +46,11 @@ let package = Package(
             name: "SFSymbols",
             url: "https://github.com/ivanvorobei/SFSymbols", .upToNextMajor(from: "1.0.1")
         ),
+        .package(
+            name: "SPPermissions",
+            url: "https://github.com/ivanvorobei/SPPermissions",
+            .upToNextMajor(from: "7.1.1")
+        ),
         .package(name: "Constants", path: "Constants")
     ],
     targets: [
@@ -59,6 +64,7 @@ let package = Package(
                 .product(name: "SPPageController", package: "SPPageController"),
                 .product(name: "SPIndicator", package: "SPIndicator"),
                 .product(name: "SFSymbols", package: "SFSymbols"),
+                .product(name: "SPPermissionsFaceID", package: "SPPermissions"),
                 .product(name: "Nuke", package: "Nuke"),
                 .product(name: "Constants", package: "Constants")
             ]

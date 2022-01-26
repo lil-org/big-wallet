@@ -44,6 +44,10 @@ struct Keychain {
         
     }
     
+    var hasPassword: Bool {
+        password != nil
+    }
+    
     var password: String? {
         if let data = get(key: .password), let password = String(data: data, encoding: .utf8) {
             return password

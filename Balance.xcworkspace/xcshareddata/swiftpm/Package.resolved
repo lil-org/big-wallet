@@ -6,8 +6,8 @@
         "repositoryURL": "https://github.com/ivanvorobei/NativeUIKit",
         "state": {
           "branch": null,
-          "revision": "29b90e3fd23c6fe5fb1825d56e478ddd46d6843d",
-          "version": "1.2.5"
+          "revision": "e7a133f8dc4c597d791ead2f260d9579ded17753",
+          "version": "1.2.6"
         }
       },
       {
@@ -71,6 +71,15 @@
           "branch": null,
           "revision": "7d6c9a7cc31f7b1d668125f8bd8047e57621de96",
           "version": "1.3.2"
+        }
+      },
+      {
+        "package": "SPPermissions",
+        "repositoryURL": "https://github.com/ivanvorobei/SPPermissions",
+        "state": {
+          "branch": null,
+          "revision": "4328f7a40889fd9a9eb42c87841ce65a42a194a1",
+          "version": "7.1.1"
         }
       },
       {

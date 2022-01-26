@@ -3,6 +3,7 @@ import SparrowKit
 import NativeUIKit
 import SFSymbols
 import SceneKit
+import Constants
 
 class HelloOnboardingController: NativeHeaderController, OnboardingChildInterface {
     
@@ -50,23 +51,21 @@ class HelloOnboardingController: NativeHeaderController, OnboardingChildInterfac
             self.onboardingManagerDelegate?.onboardingActionComplete(for: self)
         }), for: .touchUpInside)
         
-        let scene = SCNScene(named: "untitled.scn")
+        let scene = SCNScene(named: Constants._3D.Logo.scene_filename)
         sceneView.scene = scene
-        sceneView.backgroundColor = UIColor.white
+        sceneView.backgroundColor = .clear
         scrollView.addSubview(sceneView)
         
-        if let node = scene?.rootNode.childNode(withName: "New-002", recursively: true) {
-            
+        if let node = scene?.rootNode.childNode(withName: Constants._3D.Logo.logo_node, recursively: true) {
             let action = SCNAction.rotateBy(
-                x: 0,
+                x: .zero,
                 y: CGFloat(GLKMathDegreesToRadians(360)),
-                z: 0,
+                z: .zero,
                 duration: 5
             )
             let forever = SCNAction.repeatForever(action)
             node.runAction(forever)
         }
-        
     }
     
     // MARK: - Layout
