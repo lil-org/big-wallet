@@ -81,9 +81,17 @@ class SetPasswordController: NativeHeaderTextFieldController, OnboardingChildInt
     internal func saveAction() {
         guard let text = textField.text else { return }
         let keychain = Keychain.shared
-        print("new password set to \(text)")
-        keychain.save(password: text)
-        
+        let oldPassword = keychain.password
+        let newPassword = text
+        keychain.save(password: newPassword)
+        if let oldPassword = oldPassword {
+            // Shoud update all wallets to new password
+            for wallet in WalletsManager.shared.wallets {
+                do {
+                    try? WalletsManager.shared.update(wallet: wallet, password: oldPassword, newPassword: newPassword)
+                }
+            }
+        }
         let completeAction: (()->Void) = {
             if self.onboardingManagerDelegate != nil {
                 self.onboardingManagerDelegate?.onboardingActionComplete(for: self)

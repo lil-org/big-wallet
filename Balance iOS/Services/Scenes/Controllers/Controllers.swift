@@ -69,7 +69,7 @@ enum Controllers {
             
             static var container: UIViewController { WalletOnbooardingController() }
             static var set_password: UIViewController { Controllers.Crypto.Password.set_new }
-            static var insert_old: UIViewController { Controllers.Crypto.Password.insert(completion: { _ in }) }
+            static var insert_password: UIViewController { Controllers.Crypto.Password.insert(completion: { _ in }) }
             static var import_wallet: UIViewController { ImportWalletController() }
         }
     }

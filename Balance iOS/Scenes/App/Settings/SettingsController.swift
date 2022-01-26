@@ -1,5 +1,7 @@
 import UIKit
 import SPDiffable
+import SparrowKit
+import Constants
 
 class SettingsController: SPDiffableTableController {
     
@@ -83,7 +85,20 @@ class SettingsController: SPDiffableTableController {
                         }
                     )
                 ]
-            )
+            ),
+            .init(id: "destroy", header: nil, footer: nil, items: [
+                SPDiffableTableRow(text: "Destroy (Debug Only!)", selectionStyle: .default, action: { item, indexPath in
+                    
+                    do {
+                        try? WalletsManager.shared.destroy()
+                    }
+                    Keychain.shared.removePassword()
+                    Flags.seen_tutorial = false
+                    delay(1, closure: {
+                        fatalError()
+                    })
+                })
+            ])
         ]
     }
 }

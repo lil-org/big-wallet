@@ -7,9 +7,8 @@ import SFSymbols
 class WalletOnbooardingController: BaseOnbooardingController {
     
     init() {
-        #warning("here need check if user already has password and ask insert old password.")
         super.init(controllers: [
-            Controllers.Crypto.Onboarding.set_password,
+            Keychain.shared.hasPassword ? Controllers.Crypto.Onboarding.insert_password : Controllers.Crypto.Onboarding.set_password,
             Controllers.Crypto.Import.choose_wallet_type
         ])
     }

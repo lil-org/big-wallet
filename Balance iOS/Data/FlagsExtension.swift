@@ -4,9 +4,7 @@ import Constants
 extension Flags {
     
     static var seen_tutorial: Bool {
-        get {
-            return false
-            UserDefaults.shared.bool(forKey: "main_app_seen_tutorial") }
-        set { UserDefaults.shared.set(newValue, forKey: "main_app_seen_tutorial") }
+        get {  UserDefaults.shared.bool(forKey: "main_app_seen_tutorial2") }
+        set { UserDefaults.shared.set(newValue, forKey: "main_app_seen_tutorial2") }
     }
 }

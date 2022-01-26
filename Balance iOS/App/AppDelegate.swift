@@ -11,7 +11,7 @@ class AppDelegate: SPAppScenesDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         
         SPLogger.configure(levels: SPLogger.Level.allCases, fileNameMode: .show)
-        
+
         priceService.start()
         gasService.start()
         walletsManager.start()

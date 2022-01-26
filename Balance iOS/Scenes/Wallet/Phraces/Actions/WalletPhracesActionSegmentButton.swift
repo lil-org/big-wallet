@@ -47,7 +47,7 @@ class WalletPhracesActionSegmentButton: SPButton {
     
     override func commonInit() {
         super.commonInit()
-        backgroundColor = .secondarySystemGroupedBackground
+        backgroundColor = .tertiarySystemBackground
         roundCorners(radius: 14)
         layoutMargins = .init(horizontal: NativeLayout.Spaces.default_more, vertical: NativeLayout.Spaces.default_more)
         headerLabel.text = "Title"

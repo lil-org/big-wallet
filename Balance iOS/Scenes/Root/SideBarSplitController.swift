@@ -37,6 +37,7 @@ class SideBarSplitController: UISplitViewController {
         if !Flags.seen_tutorial {
             Presenter.App.showOnboarding(on: self, afterAction: {
                 Presenter.Crypto.showWalletOnboarding(on: self)
+                Flags.seen_tutorial = true
             })
         }
     }

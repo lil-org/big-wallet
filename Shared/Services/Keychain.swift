@@ -61,6 +61,10 @@ struct Keychain {
         save(data: data, key: .password)
     }
     
+    func removePassword() {
+        removeData(forKey: .password)
+    }
+    
     // MARK: - WalletCore
     
     func getAllWalletsIds() -> [String] {

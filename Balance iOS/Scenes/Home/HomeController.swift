@@ -18,7 +18,6 @@ class HomeController: NativeHeaderTableController {
     
     public init() {
         let keychain = Keychain.shared
-        keychain.save(password: "123456")
         super.init(style: .insetGrouped, headerView: headerView)
     }
     

@@ -4,8 +4,10 @@ import NativeUIKit
 import SFSymbols
 import SPIndicator
 
-class InsertPasswordController: NativeHeaderTextFieldController, UITextFieldDelegate {
+class InsertPasswordController: NativeHeaderTextFieldController, UITextFieldDelegate, OnboardingChildInterface {
     
+    var onboardingManagerDelegate: OnboardingManagerDelegate?
+
     internal var action: ((Bool)->Void)
     
     let actionToolbarView = NativeLargeActionToolBarView().do {
@@ -32,7 +34,6 @@ class InsertPasswordController: NativeHeaderTextFieldController, UITextFieldDele
     
     override func viewDidLoad() {
         super.viewDidLoad()
-
         footerView.label.text = "Minimum 5 characters for safety."
         
         if let navigationController = self.navigationController as? NativeNavigationController {
@@ -87,9 +88,14 @@ class InsertPasswordController: NativeHeaderTextFieldController, UITextFieldDele
         if text.count < 5 { return }
         let keychain = Keychain.shared
         if keychain.password == text {
-            self.dismiss(animated: true, completion: {
-                self.action(true)
-            })
+            if onboardingManagerDelegate == nil {
+                self.dismiss(animated: true, completion: {
+                    self.action(true)
+                    self.onboardingManagerDelegate?.onboardingActionComplete(for: self)
+                })
+            } else {
+                self.onboardingManagerDelegate?.onboardingActionComplete(for: self)
+            }
         } else {
             SPIndicator.present(title: "Wrong Password", preset: .error)
             textField.text = nil
