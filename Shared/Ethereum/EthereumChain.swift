@@ -9,7 +9,7 @@ enum EthereumChain: Int {
     case optimism = 10
     case binance = 56
     case avalanche = 43114
-    case xDai = 100
+    case gnosisChain = 100
     
     // Testnets
     case arbitrumRinkeby = 421611
@@ -31,7 +31,7 @@ enum EthereumChain: Int {
         return "0x" + String(id, radix: 16, uppercase: false)
     }
     
-    static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum, .avalanche, .xDai]
+    static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum, .avalanche, .gnosisChain]
     static let allTestnets: [EthereumChain] = [.ethereumRopsten, .ethereumKovan, .ethereumRinkeby, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji]
     
     var name: String {
@@ -42,7 +42,7 @@ enum EthereumChain: Int {
         case .polygon: return "Polygon"
         case .binance: return "Binance Smart Chain"
         case .avalanche: return "Avalanche"
-        case .xDai: return "xDai"
+        case .gnosisChain: return "Gnosis Chain"
         case .arbitrumRinkeby: return "Arbitrum Rinkeby"
         case .optimisticKovan: return "Optimistic Kovan"
         case .ethereumGoerli: return "Ethereum Görli"
@@ -66,7 +66,7 @@ enum EthereumChain: Int {
             return "ETH"
         case .avalanche, .avalancheFuji:
             return "AVAX"
-        case .xDai:
+        case .gnosisChain:
             return "xDai"
         }
     }
@@ -92,7 +92,7 @@ enum EthereumChain: Int {
         case .polygon: return "https://polygon-mainnet.infura.io/v3/" + Secrets.infura
         case .binance: return "https://bsc-dataseed.binance.org/"
         case .avalanche: return "https://api.avax.network/ext/bc/C/rpc"
-        case .xDai: return "https://rpc.xdaichain.com/"
+        case .gnosisChain: return "https://rpc.gnosischain.com/"
         case .arbitrumRinkeby: return "https://rinkeby.arbitrum.io/rpc"
         case .arbitrumKovan: return "https://kovan5.arbitrum.io/rpc"
         case .optimisticKovan: return "https://kovan.optimism.io"
