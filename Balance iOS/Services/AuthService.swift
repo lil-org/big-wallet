@@ -2,17 +2,13 @@ import UIKit
 import NativeUIKit
 enum AuthService {
     
-    static func auth(on viewController: UIViewController, completion: @escaping ((Bool) -> Void)) {
+    static func auth(cancelble: Bool, on viewController: UIViewController, completion: @escaping ((Bool) -> Void)) {
         LocalAuthentication.attempt(reason: Strings.enterTokenary, presentPasswordAlertFrom: nil, passwordReason: nil) { success in
             if success {
                 completion(success)
             } else {
-                Presenter.Crypto.Password.showPassowrdInsert(action: { success in
-                    if success {
-                        completion(success)
-                    } else {
-                        completion(false)
-                    }
+                Presenter.Crypto.auth(cancelble: cancelble, action: { result in
+                    completion(result)
                 }, on: viewController)
             }
         }

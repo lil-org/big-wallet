@@ -25,7 +25,7 @@ class HelloOnboardingController: NativeHeaderController, OnboardingChildInterfac
     
     // MARK: - Views
     
-    var sceneView = SCNView()
+    var balanceLogoView = Rotation3DModelView(sceneName: Constants._3D.Logo.scene_filename, node: Constants._3D.Logo.logo_node)
     
     let actionToolbarView = NativeLargeActionToolBarView().do {
         $0.actionButton.set(
@@ -51,21 +51,7 @@ class HelloOnboardingController: NativeHeaderController, OnboardingChildInterfac
             self.onboardingManagerDelegate?.onboardingActionComplete(for: self)
         }), for: .touchUpInside)
         
-        let scene = SCNScene(named: Constants._3D.Logo.scene_filename)
-        sceneView.scene = scene
-        sceneView.backgroundColor = .clear
-        scrollView.addSubview(sceneView)
-        
-        if let node = scene?.rootNode.childNode(withName: Constants._3D.Logo.logo_node, recursively: true) {
-            let action = SCNAction.rotateBy(
-                x: .zero,
-                y: CGFloat(GLKMathDegreesToRadians(360)),
-                z: .zero,
-                duration: 5
-            )
-            let forever = SCNAction.repeatForever(action)
-            node.runAction(forever)
-        }
+        scrollView.addSubview(balanceLogoView)
     }
     
     // MARK: - Layout
@@ -73,13 +59,13 @@ class HelloOnboardingController: NativeHeaderController, OnboardingChildInterfac
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         
-        sceneView.frame = .init(side: scrollView.readableWidth * 0.8)
-        sceneView.setXCenter()
-        sceneView.frame.origin.y = headerView.frame.maxY + NativeLayout.Spaces.default_double * 2
+        balanceLogoView.frame = .init(side: scrollView.readableWidth * 0.8)
+        balanceLogoView.setXCenter()
+        balanceLogoView.frame.origin.y = headerView.frame.maxY + NativeLayout.Spaces.default_double * 2
         
         scrollView.contentSize = .init(
             width: view.frame.width,
-            height: sceneView.frame.maxY
+            height: balanceLogoView.frame.maxY
         )
     }
 }

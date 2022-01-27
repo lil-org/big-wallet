@@ -7,8 +7,9 @@ import SFSymbols
 class WalletOnbooardingController: BaseOnbooardingController {
     
     init() {
+        let passwordController = Keychain.shared.hasPassword ? Controllers.Crypto.Onboarding.insert_password : Controllers.Crypto.Onboarding.set_password
         super.init(controllers: [
-            Keychain.shared.hasPassword ? Controllers.Crypto.Onboarding.insert_password : Controllers.Crypto.Onboarding.set_password,
+            passwordController,
             Controllers.Crypto.Import.choose_wallet_type
         ])
     }

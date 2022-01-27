@@ -34,7 +34,9 @@ class SideBarSplitController: UISplitViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
-        if !Flags.seen_tutorial {
+        if Flags.seen_tutorial && Keychain.shared.hasPassword {
+            AuthService.auth(cancelble: false, on: self) { success in }
+        } else {
             Presenter.App.showOnboarding(on: self, afterAction: {
                 Presenter.Crypto.showWalletOnboarding(on: self)
                 Flags.seen_tutorial = true

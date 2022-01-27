@@ -7,6 +7,7 @@ enum Controllers {
     enum App {
         
         static var settings: UIViewController { SettingsController() }
+        static var safari_steps: UIViewController { SafariStepsController() }
         
         enum Onboarding {
             
@@ -17,16 +18,9 @@ enum Controllers {
     
     enum Crypto {
         
-        enum Password {
-            
-            static func insert(completion: @escaping (Bool)->Void) -> UIViewController {
-                InsertPasswordController(action: completion)
-            }
-            
-            static var set_new: UIViewController { SetPasswordController() }
-        }
-        
-        
+        static var auth: AuthController { AuthController() }
+        static var change_password: UIViewController { ChangePassword() }
+
         static var accounts: UIViewController { HomeController() }
         static var wallets: UIViewController { WalletsListController() }
         
@@ -68,8 +62,8 @@ enum Controllers {
         enum Onboarding {
             
             static var container: UIViewController { WalletOnbooardingController() }
-            static var set_password: UIViewController { Controllers.Crypto.Password.set_new }
-            static var insert_password: UIViewController { Controllers.Crypto.Password.insert(completion: { _ in }) }
+            static var set_password: UIViewController { SetPasswrodOnboardingController() }
+            static var insert_password: UIViewController { AuthOnboardingController() }
             static var import_wallet: UIViewController { ImportWalletController() }
         }
     }

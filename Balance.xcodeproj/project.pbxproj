@@ -193,7 +193,6 @@
 		F468F02E27A03077007DD803 /* WalletsListController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468F02D27A03077007DD803 /* WalletsListController.swift */; };
 		F468F04627A04677007DD803 /* sfekebvc_2K_Albedo.jpg in Resources */ = {isa = PBXBuildFile; fileRef = F468F04527A04677007DD803 /* sfekebvc_2K_Albedo.jpg */; };
 		F478A35A27A1467600D1398B /* WalletTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = F478A35927A1467600D1398B /* WalletTableViewCell.swift */; };
-		F478A35E27A1478D00D1398B /* SetPasswordController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F478A35D27A1478D00D1398B /* SetPasswordController.swift */; };
 		F478A36027A149AB00D1398B /* WalletOnboardingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F478A35F27A149AB00D1398B /* WalletOnboardingController.swift */; };
 		F478A36527A149F300D1398B /* OnboardingManagerDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F478A36427A149F300D1398B /* OnboardingManagerDelegate.swift */; };
 		F478A36727A14A0000D1398B /* OnboardingChildInterface.swift in Sources */ = {isa = PBXBuildFile; fileRef = F478A36627A14A0000D1398B /* OnboardingChildInterface.swift */; };
@@ -202,9 +201,21 @@
 		F478A36E27A1528E00D1398B /* WalletPhracesOnboardingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F478A36D27A1528E00D1398B /* WalletPhracesOnboardingController.swift */; };
 		F478A37027A1541200D1398B /* PhraceCollectionViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = F478A36F27A1541200D1398B /* PhraceCollectionViewCell.swift */; };
 		F478A37227A15BF600D1398B /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F478A37127A15BF600D1398B /* AuthService.swift */; };
-		F478A37527A15D3900D1398B /* InsertPasswordController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F478A37427A15D3900D1398B /* InsertPasswordController.swift */; };
 		F478A37827A16E9800D1398B /* WalletPhracesActionsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F478A37727A16E9800D1398B /* WalletPhracesActionsController.swift */; };
 		F478A37B27A16EE600D1398B /* WalletPhracesActionSegmentButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = F478A37A27A16EE600D1398B /* WalletPhracesActionSegmentButton.swift */; };
+		F4B4CD9327A29B9100300582 /* PasswordController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CD9227A29B9100300582 /* PasswordController.swift */; };
+		F4B4CD9527A29DFA00300582 /* AuthController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CD9427A29DFA00300582 /* AuthController.swift */; };
+		F4B4CD9727A2A04D00300582 /* AuthOnboardingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CD9627A2A04D00300582 /* AuthOnboardingController.swift */; };
+		F4B4CD9A27A2A4A200300582 /* ChangePassword.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CD9927A2A4A200300582 /* ChangePassword.swift */; };
+		F4B4CD9C27A2A54F00300582 /* SetPasswrodOnboardingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CD9B27A2A54F00300582 /* SetPasswrodOnboardingController.swift */; };
+		F4B4CD9E27A2A8BF00300582 /* SafariTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CD9D27A2A8BF00300582 /* SafariTableViewCell.swift */; };
+		F4B4CDA027A2AD7200300582 /* Rotation3DModelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CD9F27A2AD7200300582 /* Rotation3DModelView.swift */; };
+		F4B4CDA227A2B33E00300582 /* SafariStepsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CDA127A2B33E00300582 /* SafariStepsController.swift */; };
+		F4B4CDA427A2BB9300300582 /* Image.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CDA327A2BB9300300582 /* Image.swift */; };
+		F4B4CDAA27A2D4EC00300582 /* coin.scn in Resources */ = {isa = PBXBuildFile; fileRef = F4B4CDA927A2D4EC00300582 /* coin.scn */; };
+		F4B4CDAC27A2D62800300582 /* Safari_browser_logo.svg.png in Resources */ = {isa = PBXBuildFile; fileRef = F4B4CDAB27A2D62800300582 /* Safari_browser_logo.svg.png */; };
+		F4B4CDAE27A2D68300300582 /* Safari_(web_browser)-Logo.wine.png in Resources */ = {isa = PBXBuildFile; fileRef = F4B4CDAD27A2D68300300582 /* Safari_(web_browser)-Logo.wine.png */; };
+		F4B4CDB027A2D6E200300582 /* 054a1672b0872058e80100c2539407cd.jpg.webp in Resources */ = {isa = PBXBuildFile; fileRef = F4B4CDAF27A2D6E200300582 /* 054a1672b0872058e80100c2539407cd.jpg.webp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -414,7 +425,6 @@
 		F468F02D27A03077007DD803 /* WalletsListController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsListController.swift; sourceTree = "<group>"; };
 		F468F04527A04677007DD803 /* sfekebvc_2K_Albedo.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = sfekebvc_2K_Albedo.jpg; sourceTree = "<group>"; };
 		F478A35927A1467600D1398B /* WalletTableViewCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WalletTableViewCell.swift; sourceTree = "<group>"; };
-		F478A35D27A1478D00D1398B /* SetPasswordController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetPasswordController.swift; sourceTree = "<group>"; };
 		F478A35F27A149AB00D1398B /* WalletOnboardingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletOnboardingController.swift; sourceTree = "<group>"; };
 		F478A36427A149F300D1398B /* OnboardingManagerDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingManagerDelegate.swift; sourceTree = "<group>"; };
 		F478A36627A14A0000D1398B /* OnboardingChildInterface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingChildInterface.swift; sourceTree = "<group>"; };
@@ -423,9 +433,21 @@
 		F478A36D27A1528E00D1398B /* WalletPhracesOnboardingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletPhracesOnboardingController.swift; sourceTree = "<group>"; };
 		F478A36F27A1541200D1398B /* PhraceCollectionViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhraceCollectionViewCell.swift; sourceTree = "<group>"; };
 		F478A37127A15BF600D1398B /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
-		F478A37427A15D3900D1398B /* InsertPasswordController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsertPasswordController.swift; sourceTree = "<group>"; };
 		F478A37727A16E9800D1398B /* WalletPhracesActionsController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletPhracesActionsController.swift; sourceTree = "<group>"; };
 		F478A37A27A16EE600D1398B /* WalletPhracesActionSegmentButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletPhracesActionSegmentButton.swift; sourceTree = "<group>"; };
+		F4B4CD9227A29B9100300582 /* PasswordController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordController.swift; sourceTree = "<group>"; };
+		F4B4CD9427A29DFA00300582 /* AuthController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthController.swift; sourceTree = "<group>"; };
+		F4B4CD9627A2A04D00300582 /* AuthOnboardingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthOnboardingController.swift; sourceTree = "<group>"; };
+		F4B4CD9927A2A4A200300582 /* ChangePassword.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangePassword.swift; sourceTree = "<group>"; };
+		F4B4CD9B27A2A54F00300582 /* SetPasswrodOnboardingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetPasswrodOnboardingController.swift; sourceTree = "<group>"; };
+		F4B4CD9D27A2A8BF00300582 /* SafariTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariTableViewCell.swift; sourceTree = "<group>"; };
+		F4B4CD9F27A2AD7200300582 /* Rotation3DModelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rotation3DModelView.swift; sourceTree = "<group>"; };
+		F4B4CDA127A2B33E00300582 /* SafariStepsController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariStepsController.swift; sourceTree = "<group>"; };
+		F4B4CDA327A2BB9300300582 /* Image.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Image.swift; sourceTree = "<group>"; };
+		F4B4CDA927A2D4EC00300582 /* coin.scn */ = {isa = PBXFileReference; lastKnownFileType = file.bplist; path = coin.scn; sourceTree = "<group>"; };
+		F4B4CDAB27A2D62800300582 /* Safari_browser_logo.svg.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Safari_browser_logo.svg.png; sourceTree = "<group>"; };
+		F4B4CDAD27A2D68300300582 /* Safari_(web_browser)-Logo.wine.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Safari_(web_browser)-Logo.wine.png"; sourceTree = "<group>"; };
+		F4B4CDAF27A2D6E200300582 /* 054a1672b0872058e80100c2539407cd.jpg.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = 054a1672b0872058e80100c2539407cd.jpg.webp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -849,6 +871,7 @@
 				F468EFCA27A00EEE007DD803 /* ConstantsExtension.swift */,
 				F468EFCB27A00EEE007DD803 /* Texts.swift */,
 				F468F01727A019E4007DD803 /* FlagsExtension.swift */,
+				F4B4CDA327A2BB9300300582 /* Image.swift */,
 			);
 			path = Data;
 			sourceTree = "<group>";
@@ -902,6 +925,7 @@
 				F478A36327A149EB00D1398B /* Onboarding */,
 				F468EFDC27A00EEE007DD803 /* Layout */,
 				F468EFDE27A00EEE007DD803 /* VerticalContentScrollController.swift */,
+				F4B4CD9F27A2AD7200300582 /* Rotation3DModelView.swift */,
 			);
 			path = Interface;
 			sourceTree = "<group>";
@@ -990,6 +1014,10 @@
 		F468F00627A00F6A007DD803 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				F4B4CDAF27A2D6E200300582 /* 054a1672b0872058e80100c2539407cd.jpg.webp */,
+				F4B4CDAD27A2D68300300582 /* Safari_(web_browser)-Logo.wine.png */,
+				F4B4CDAB27A2D62800300582 /* Safari_browser_logo.svg.png */,
+				F4B4CDA927A2D4EC00300582 /* coin.scn */,
 				F446309A27A143C800AFA8BD /* 3D Logo */,
 				2CE059482764169E0042D844 /* Entitlements.entitlements */,
 				2C5FF97A26C84F7C00B32ACC /* Assets.xcassets */,
@@ -1054,6 +1082,8 @@
 			children = (
 				F468F00927A012BC007DD803 /* HomeController.swift */,
 				F468F00B27A01307007DD803 /* HomeHeaderController.swift */,
+				F4B4CD9D27A2A8BF00300582 /* SafariTableViewCell.swift */,
+				F4B4CDA127A2B33E00300582 /* SafariStepsController.swift */,
 			);
 			path = Home;
 			sourceTree = "<group>";
@@ -1061,7 +1091,9 @@
 		F478A36127A149AF00D1398B /* Onboarding */ = {
 			isa = PBXGroup;
 			children = (
+				F4B4CD9627A2A04D00300582 /* AuthOnboardingController.swift */,
 				F478A35F27A149AB00D1398B /* WalletOnboardingController.swift */,
+				F4B4CD9B27A2A54F00300582 /* SetPasswrodOnboardingController.swift */,
 			);
 			path = Onboarding;
 			sourceTree = "<group>";
@@ -1079,9 +1111,10 @@
 		F478A36C27A1527200D1398B /* Phraces */ = {
 			isa = PBXGroup;
 			children = (
-				F478A37927A16ED300D1398B /* Actions */,
 				F478A36D27A1528E00D1398B /* WalletPhracesOnboardingController.swift */,
 				F478A36A27A1520300D1398B /* WalletPhracesListController.swift */,
+				F478A37727A16E9800D1398B /* WalletPhracesActionsController.swift */,
+				F478A37A27A16EE600D1398B /* WalletPhracesActionSegmentButton.swift */,
 				F478A36F27A1541200D1398B /* PhraceCollectionViewCell.swift */,
 			);
 			path = Phraces;
@@ -1090,19 +1123,11 @@
 		F478A37627A161D500D1398B /* Password */ = {
 			isa = PBXGroup;
 			children = (
-				F478A37427A15D3900D1398B /* InsertPasswordController.swift */,
-				F478A35D27A1478D00D1398B /* SetPasswordController.swift */,
+				F4B4CD9227A29B9100300582 /* PasswordController.swift */,
+				F4B4CD9427A29DFA00300582 /* AuthController.swift */,
+				F4B4CD9927A2A4A200300582 /* ChangePassword.swift */,
 			);
 			path = Password;
-			sourceTree = "<group>";
-		};
-		F478A37927A16ED300D1398B /* Actions */ = {
-			isa = PBXGroup;
-			children = (
-				F478A37727A16E9800D1398B /* WalletPhracesActionsController.swift */,
-				F478A37A27A16EE600D1398B /* WalletPhracesActionSegmentButton.swift */,
-			);
-			path = Actions;
 			sourceTree = "<group>";
 		};
 		FB5786212D81829B0FADBD25 /* Pods */ = {
@@ -1310,15 +1335,19 @@
 			buildActionMask = 2147483647;
 			files = (
 				F468F04627A04677007DD803 /* sfekebvc_2K_Albedo.jpg in Resources */,
+				F4B4CDAC27A2D62800300582 /* Safari_browser_logo.svg.png in Resources */,
+				F4B4CDAE27A2D68300300582 /* Safari_(web_browser)-Logo.wine.png in Resources */,
 				2C96D3AA2763D13400687301 /* DataStateView.xib in Resources */,
 				2C5FF97E26C84F7C00B32ACC /* LaunchScreen.storyboard in Resources */,
 				2C40709527667A8600AB3D55 /* ImageWithLabelTableViewCell.xib in Resources */,
+				F4B4CDB027A2D6E200300582 /* 054a1672b0872058e80100c2539407cd.jpg.webp in Resources */,
 				2CC8C5A32767D3B30083FB1B /* GasPriceSliderTableViewCell.xib in Resources */,
 				2C40709127667A6600AB3D55 /* MultilineLabelTableViewCell.xib in Resources */,
 				2C96D3902762317300687301 /* AccountTableViewCell.xib in Resources */,
 				2C5FF97B26C84F7C00B32ACC /* Assets.xcassets in Resources */,
 				2C5FF97926C84F7B00B32ACC /* Main.storyboard in Resources */,
 				F446309927A142E300AFA8BD /* balance-logo.scn in Resources */,
+				F4B4CDAA27A2D4EC00300582 /* coin.scn in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1576,7 +1605,6 @@
 				2C96D3962762380400687301 /* ButtonWithExtendedArea.swift in Sources */,
 				F468F02427A025AB007DD803 /* Notifications.swift in Sources */,
 				F468F01B27A01CB9007DD803 /* ImportWalletController.swift in Sources */,
-				F478A37527A15D3900D1398B /* InsertPasswordController.swift in Sources */,
 				2CF25599275A46E200AE54B9 /* PeerMeta.swift in Sources */,
 				2CE059372763D60A0042D844 /* KeyboardObserver.swift in Sources */,
 				2CF255A0275A47DD00AE54B9 /* Bundle.swift in Sources */,
@@ -1590,6 +1618,7 @@
 				2CF255A6275A48BB00AE54B9 /* GasService.swift in Sources */,
 				2C96D392276232A300687301 /* UITableView.swift in Sources */,
 				F468F01D27A01CD0007DD803 /* ImportWalletSegmentButton.swift in Sources */,
+				F4B4CD9727A2A04D00300582 /* AuthOnboardingController.swift in Sources */,
 				2CF255A5275A48BB00AE54B9 /* ReviewRequester.swift in Sources */,
 				2CF255B6275A746000AE54B9 /* AccountsListViewController.swift in Sources */,
 				F468F00A27A012BC007DD803 /* HomeController.swift in Sources */,
@@ -1598,6 +1627,8 @@
 				F468F02C27A02AC9007DD803 /* AlertService.swift in Sources */,
 				F468EFF927A00EEE007DD803 /* SidebarController.swift in Sources */,
 				F478A35A27A1467600D1398B /* WalletTableViewCell.swift in Sources */,
+				F4B4CD9527A29DFA00300582 /* AuthController.swift in Sources */,
+				F4B4CDA427A2BB9300300582 /* Image.swift in Sources */,
 				F478A36727A14A0000D1398B /* OnboardingChildInterface.swift in Sources */,
 				2CF25597275A46D300AE54B9 /* Defaults.swift in Sources */,
 				2CF255A2275A47DD00AE54B9 /* String.swift in Sources */,
@@ -1620,19 +1651,25 @@
 				F468EFEE27A00EEE007DD803 /* ConstantsExtension.swift in Sources */,
 				F478A36B27A1520300D1398B /* WalletPhracesListController.swift in Sources */,
 				F468EFFE27A00EEE007DD803 /* Navigation+Cache.swift in Sources */,
+				F4B4CDA027A2AD7200300582 /* Rotation3DModelView.swift in Sources */,
 				F468EFF127A00EEE007DD803 /* BaseSceneDelegate.swift in Sources */,
 				2CC6EF0D275E64810040CC62 /* UIViewController.swift in Sources */,
+				F4B4CD9327A29B9100300582 /* PasswordController.swift in Sources */,
 				2CF255A9275A48BB00AE54B9 /* Keychain.swift in Sources */,
 				2CF255A7275A48BB00AE54B9 /* PriceService.swift in Sources */,
+				F4B4CD9C27A2A54F00300582 /* SetPasswrodOnboardingController.swift in Sources */,
 				2CF25598275A46D600AE54B9 /* Strings.swift in Sources */,
 				2CF255AE275A48CF00AE54B9 /* Transaction.swift in Sources */,
 				2C96D38F2762317300687301 /* AccountTableViewCell.swift in Sources */,
 				2CF255A1275A47DD00AE54B9 /* Notification.swift in Sources */,
 				F468F02827A0292E007DD803 /* WalletController.swift in Sources */,
 				2CC8C5B0276A7F310083FB1B /* SafariRequest.swift in Sources */,
+				F4B4CD9E27A2A8BF00300582 /* SafariTableViewCell.swift in Sources */,
+				F4B4CD9A27A2A4A200300582 /* ChangePassword.swift in Sources */,
 				F478A36927A14A2D00D1398B /* BaseOnboardingController.swift in Sources */,
 				2CE059392763F3FF0042D844 /* CGFloat.swift in Sources */,
 				2CF255B4275A744000AE54B9 /* PasswordViewController.swift in Sources */,
+				F4B4CDA227A2B33E00300582 /* SafariStepsController.swift in Sources */,
 				F468EFFA27A00EEE007DD803 /* Layout.swift in Sources */,
 				2C8E889F275F9967003EB8DB /* Storyboard.swift in Sources */,
 				2C96D39C2763ADE100687301 /* LocalAuthentication.swift in Sources */,
@@ -1659,7 +1696,6 @@
 				F468F01627A0194F007DD803 /* HelloOnboardingController.swift in Sources */,
 				2C8E88A4275FB7B9003EB8DB /* UIApplication.swift in Sources */,
 				F468F01F27A01F28007DD803 /* Presenter+Crypto.swift in Sources */,
-				F478A35E27A1478D00D1398B /* SetPasswordController.swift in Sources */,
 				2C40709427667A8600AB3D55 /* ImageWithLabelTableViewCell.swift in Sources */,
 				2C5FF97226C84F7B00B32ACC /* AppDelegate2.swift in Sources */,
 				F468F01027A01744007DD803 /* Wallet+CellProvider.swift in Sources */,

@@ -3,6 +3,7 @@ import SparrowKit
 import SPDiffable
 import NativeUIKit
 import SFSymbols
+import Constants
 
 class HomeController: NativeHeaderTableController {
     
@@ -17,7 +18,6 @@ class HomeController: NativeHeaderTableController {
     // MARK: - Init
     
     public init() {
-        let keychain = Keychain.shared
         super.init(style: .insetGrouped, headerView: headerView)
     }
     
@@ -38,14 +38,32 @@ class HomeController: NativeHeaderTableController {
         tableView.register(WalletTableViewCell.self)
         tableView.register(NativeLeftButtonTableViewCell.self)
         tableView.register(NativeEmptyTableViewCell.self)
+        tableView.register(SafariTableViewCell.self)
         configureDiffable(
             sections: content,
-            cellProviders: [.button, .wallet, .empty],
+            cellProviders: [.button, .wallet, .empty] + [
+                .init(clouser: { tableView, indexPath, item in
+                    if item.id == Item.safariSteps.id {
+                        let cell = tableView.dequeueReusableCell(withClass: SafariTableViewCell.self, for: indexPath)
+                        cell.closeButton.addAction(.init(handler: { _ in
+                            Flags.show_safari_extension_advice = false
+                            self.diffableDataSource?.set(self.content, animated: true)
+                        }), for: .touchUpInside)
+                        cell.button.addAction(.init(handler: { _ in
+                            Presenter.App.showSafariIntegrationSteps(on: self)
+                        }), for: .touchUpInside)
+                        return cell
+                    }
+                    return nil
+                })
+            ],
             headerFooterProviders: [.largeHeader]
         )
         NotificationCenter.default.addObserver(forName: .walletsUpdated, object: nil, queue: nil) { _ in
             self.diffableDataSource?.set(self.content, animated: true)
         }
+        
+        setSpaceBetweenHeaderAndCells(NativeLayout.Spaces.default)
     }
     
     // MARK: - Actions
@@ -58,6 +76,7 @@ class HomeController: NativeHeaderTableController {
     
     internal enum Section: String {
         
+        case safari
         case accounts
         case changePassword
         
@@ -66,6 +85,7 @@ class HomeController: NativeHeaderTableController {
     
     enum Item: String {
         
+        case safariSteps
         case emptyAccounts
         
         var id: String { return rawValue }
@@ -73,7 +93,7 @@ class HomeController: NativeHeaderTableController {
     
     private var content: [SPDiffableSection] {
         
-        let accountItems: [SPDiffableItem] = {
+        let walletItems: [SPDiffableItem] = {
             if wallets.isEmpty {
                 return [
                     NativeEmptyRowItem(
@@ -84,33 +104,50 @@ class HomeController: NativeHeaderTableController {
                     )
                 ]
             } else {
-                return wallets.prefix(5).map({ walletModel in
+                var items: [SPDiffableItem] = wallets.prefix(5).map({ walletModel in
                     SPDiffableWrapperItem(id: walletModel.id, model: walletModel) { item, indexPath in
                         guard let navigationController = self.navigationController else { return }
                         Presenter.Crypto.showWalletDetail(walletModel, on: navigationController)
                     }
-                }) + [
-                    NativeDiffableLeftButton(
-                        text: "Open All Wallets",
-                        textColor: .systemBlue,
-                        detail: "Total \(wallets.count) wallets",
-                        detailColor: .gray,
-                        icon: nil,
-                        accessoryType: .disclosureIndicator,
-                        action: { item, indexPath in
-                            guard let navigationController = self.navigationController else { return }
-                            Presenter.Crypto.showWallets(on: navigationController)
-                        }
+                })
+                if wallets.count > 5 {
+                    items.append(
+                        NativeDiffableLeftButton(
+                            text: "Open All Wallets",
+                            textColor: .systemBlue,
+                            detail: "Total \(wallets.count) wallets",
+                            detailColor: .gray,
+                            icon: nil,
+                            accessoryType: .disclosureIndicator,
+                            action: { item, indexPath in
+                                guard let navigationController = self.navigationController else { return }
+                                Presenter.Crypto.showWallets(on: navigationController)
+                            }
+                        )
                     )
-                ]
+                }
+                return items
             }
         }()
         
-        return [
+        var sections: [SPDiffableSection] = []
+        
+        if Flags.show_safari_extension_advice {
+            sections.append(
+                .init(
+                    id: Section.safari.id,
+                    header: SPDiffableTextHeaderFooter(text: "Advice"),
+                    footer: SPDiffableTextHeaderFooter(text: "Its our focus and best feature. Try it."),
+                    items: [.init(id: Item.safariSteps.id)]
+                )
+            )
+        }
+        
+        sections += [
             .init(
                 id: Section.accounts.id,
                 header: NativeLargeHeaderItem(
-                    title: "Accounts",
+                    title: "Wallets",
                     actionTitle: "See All",
                     action: { item, indexPath in
                         guard let navigationController = self.navigationController else { return }
@@ -118,11 +155,11 @@ class HomeController: NativeHeaderTableController {
                     }
                 ),
                 footer: nil,
-                items: accountItems
+                items: walletItems
             ),
             .init(
                 id: Section.changePassword.id,
-                header: nil,
+                header: SPDiffableTextHeaderFooter(text: "Danger Zone."),
                 footer: SPDiffableTextHeaderFooter(text: "You can change password and please remember new password in somewhere private places."),
                 items: [
                     NativeDiffableLeftButton(
@@ -135,9 +172,9 @@ class HomeController: NativeHeaderTableController {
                         action: { item,indexPath in
                             let alertController = UIAlertController(title: "Before change password need auth with old password", message: "Please, insert old password before", preferredStyle: .alert)
                             alertController.addAction(title: "Let's go", style: .default) { _ in
-                                AuthService.auth(on: self) { success in
+                                AuthService.auth(cancelble: true, on: self) { success in
                                     if success {
-                                        Presenter.Crypto.Password.showPasswordSet(action: { _ in }, on: self)
+                                        Presenter.Crypto.showChangePassword(on: self)
                                     }
                                 }
                             }
@@ -148,5 +185,7 @@ class HomeController: NativeHeaderTableController {
                 ]
             )
         ]
+        
+        return sections
     }
 }

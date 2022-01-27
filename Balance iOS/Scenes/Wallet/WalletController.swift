@@ -77,7 +77,7 @@ class WalletController: NativeProfileController {
                         icon: .init(.eye.circleFill),
                         action: { [weak self] _, _ in
                             guard let self = self else { return }
-                            AuthService.auth(on: self) { success in
+                            AuthService.auth(cancelble: true, on: self) { success in
                                 if success {
                                     Presenter.Crypto.showWalletPhraces(wallet: self.walletModel, on: self)
                                 }

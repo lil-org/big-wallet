@@ -89,9 +89,8 @@ class WalletPhracesActionsController: NativeHeaderController, OnboardingChildInt
             phraces = phraces + (String(phrace) + " ")
         }
         if segmentButtons.first?.appearance == .selected {
-            self.dismiss(animated: true, completion: {
-                SPAlert.present(title: "Copied to Clipboard", message: nil, preset: .done, completion: nil)
-            })
+            SPAlert.present(title: "Copied to Clipboard", message: nil, preset: .done, completion: nil)
+            self.dismissAnimated()
         } else {
             self.dismiss(animated: true) {
                 let textToShare = [phraces]

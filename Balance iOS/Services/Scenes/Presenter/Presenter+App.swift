@@ -12,5 +12,13 @@ extension Presenter {
             applyForm(.modalForm, to: controller)
             viewController.present(controller)
         }
+        
+        static func showSafariIntegrationSteps(on viewController: UIViewController) {
+            let controller = Controllers.App.safari_steps
+            let navigationController = NativeNavigationController(rootViewController: controller)
+            controller.navigationItem.rightBarButtonItem = controller.closeBarButtonItem
+            applyForm(.modalForm, to: navigationController)
+            viewController.present(navigationController)
+        }
     }
 }

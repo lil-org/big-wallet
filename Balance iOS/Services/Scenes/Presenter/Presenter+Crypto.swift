@@ -6,23 +6,26 @@ extension Presenter {
     
     enum Crypto {
         
-        enum Password {
+        static func auth(cancelble: Bool, action: @escaping (Bool)->Void, on viewController: UIViewController) {
+            let controller = Controllers.Crypto.auth
+            controller.action = action
+            let navigationController = NativeNavigationController(rootViewController: controller)
+            navigationController.inheritLayoutMarginsForСhilds = true
             
-            static func showPasswordSet(action: @escaping (Bool)->Void, on viewController: UIViewController) {
-                let controller = Controllers.Crypto.Password.set_new
-                let navigationController = NativeNavigationController(rootViewController: controller)
-                navigationController.inheritLayoutMarginsForСhilds = true
-                applyForm(.modalForm, to: navigationController)
-                viewController.present(navigationController)
+            if cancelble {
+                controller.navigationItem.rightBarButtonItem = controller.closeBarButtonItem
             }
             
-            static func showPassowrdInsert(action: @escaping (Bool)->Void, on viewController: UIViewController) {
-                let controller = Controllers.Crypto.Password.insert(completion: action)
-                let navigationController = NativeNavigationController(rootViewController: controller)
-                navigationController.inheritLayoutMarginsForСhilds = true
-                applyForm(.modalForm, to: navigationController)
-                viewController.present(navigationController)
-            }
+            applyForm(.modalForm, to: navigationController)
+            viewController.present(navigationController)
+        }
+        
+        static func showChangePassword(on viewController: UIViewController) {
+            let controller = Controllers.Crypto.change_password
+            let navigationController = NativeNavigationController(rootViewController: controller)
+            navigationController.inheritLayoutMarginsForСhilds = true
+            applyForm(.modalForm, to: navigationController)
+            viewController.present(navigationController)
         }
         
         static func showWalletOnboarding(on viewController: UIViewController) {
