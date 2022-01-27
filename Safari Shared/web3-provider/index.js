@@ -147,11 +147,15 @@ class TokenaryWeb3Provider extends EventEmitter {
                 payload.id = Utils.genId();
             }
             this.callbacks.set(payload.id, (error, data) => {
-                if (error) {
-                    reject(error);
-                } else {
-                    resolve(data);
-                }
+                // Some dapps do not get responses sent without a delay.
+                // e.g., nftx.io does not start with a latest account if response is sent without a delay.
+                setTimeout( function() {
+                    if (error) {
+                        reject(error);
+                    } else {
+                        resolve(data);
+                    }
+                }, 1);
             });
             this.wrapResults.set(payload.id, wrapResult);
             switch (payload.method) {
