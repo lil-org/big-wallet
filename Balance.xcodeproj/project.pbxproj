@@ -214,8 +214,6 @@
 		F4B4CDA427A2BB9300300582 /* Image.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CDA327A2BB9300300582 /* Image.swift */; };
 		F4B4CDAA27A2D4EC00300582 /* coin.scn in Resources */ = {isa = PBXBuildFile; fileRef = F4B4CDA927A2D4EC00300582 /* coin.scn */; };
 		F4B4CDAC27A2D62800300582 /* Safari_browser_logo.svg.png in Resources */ = {isa = PBXBuildFile; fileRef = F4B4CDAB27A2D62800300582 /* Safari_browser_logo.svg.png */; };
-		F4B4CDAE27A2D68300300582 /* Safari_(web_browser)-Logo.wine.png in Resources */ = {isa = PBXBuildFile; fileRef = F4B4CDAD27A2D68300300582 /* Safari_(web_browser)-Logo.wine.png */; };
-		F4B4CDB027A2D6E200300582 /* 054a1672b0872058e80100c2539407cd.jpg.webp in Resources */ = {isa = PBXBuildFile; fileRef = F4B4CDAF27A2D6E200300582 /* 054a1672b0872058e80100c2539407cd.jpg.webp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -446,8 +444,6 @@
 		F4B4CDA327A2BB9300300582 /* Image.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Image.swift; sourceTree = "<group>"; };
 		F4B4CDA927A2D4EC00300582 /* coin.scn */ = {isa = PBXFileReference; lastKnownFileType = file.bplist; path = coin.scn; sourceTree = "<group>"; };
 		F4B4CDAB27A2D62800300582 /* Safari_browser_logo.svg.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Safari_browser_logo.svg.png; sourceTree = "<group>"; };
-		F4B4CDAD27A2D68300300582 /* Safari_(web_browser)-Logo.wine.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Safari_(web_browser)-Logo.wine.png"; sourceTree = "<group>"; };
-		F4B4CDAF27A2D6E200300582 /* 054a1672b0872058e80100c2539407cd.jpg.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = 054a1672b0872058e80100c2539407cd.jpg.webp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1014,10 +1010,7 @@
 		F468F00627A00F6A007DD803 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				F4B4CDAF27A2D6E200300582 /* 054a1672b0872058e80100c2539407cd.jpg.webp */,
-				F4B4CDAD27A2D68300300582 /* Safari_(web_browser)-Logo.wine.png */,
-				F4B4CDAB27A2D62800300582 /* Safari_browser_logo.svg.png */,
-				F4B4CDA927A2D4EC00300582 /* coin.scn */,
+				F4B4CDB127A2E4FF00300582 /* 3D Safari Logo */,
 				F446309A27A143C800AFA8BD /* 3D Logo */,
 				2CE059482764169E0042D844 /* Entitlements.entitlements */,
 				2C5FF97A26C84F7C00B32ACC /* Assets.xcassets */,
@@ -1128,6 +1121,15 @@
 				F4B4CD9927A2A4A200300582 /* ChangePassword.swift */,
 			);
 			path = Password;
+			sourceTree = "<group>";
+		};
+		F4B4CDB127A2E4FF00300582 /* 3D Safari Logo */ = {
+			isa = PBXGroup;
+			children = (
+				F4B4CDAB27A2D62800300582 /* Safari_browser_logo.svg.png */,
+				F4B4CDA927A2D4EC00300582 /* coin.scn */,
+			);
+			path = "3D Safari Logo";
 			sourceTree = "<group>";
 		};
 		FB5786212D81829B0FADBD25 /* Pods */ = {
@@ -1336,11 +1338,9 @@
 			files = (
 				F468F04627A04677007DD803 /* sfekebvc_2K_Albedo.jpg in Resources */,
 				F4B4CDAC27A2D62800300582 /* Safari_browser_logo.svg.png in Resources */,
-				F4B4CDAE27A2D68300300582 /* Safari_(web_browser)-Logo.wine.png in Resources */,
 				2C96D3AA2763D13400687301 /* DataStateView.xib in Resources */,
 				2C5FF97E26C84F7C00B32ACC /* LaunchScreen.storyboard in Resources */,
 				2C40709527667A8600AB3D55 /* ImageWithLabelTableViewCell.xib in Resources */,
-				F4B4CDB027A2D6E200300582 /* 054a1672b0872058e80100c2539407cd.jpg.webp in Resources */,
 				2CC8C5A32767D3B30083FB1B /* GasPriceSliderTableViewCell.xib in Resources */,
 				2C40709127667A6600AB3D55 /* MultilineLabelTableViewCell.xib in Resources */,
 				2C96D3902762317300687301 /* AccountTableViewCell.xib in Resources */,
