@@ -94,7 +94,7 @@ class SettingsController: SPDiffableTableController {
                     }
                     Keychain.shared.removePassword()
                     Flags.seen_tutorial = false
-                    Flags.show_safari_extension_advice = false
+                    Flags.show_safari_extension_advice = true
                     delay(1, closure: {
                         fatalError()
                     })
