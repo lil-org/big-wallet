@@ -1,15 +1,21 @@
 # Tokenary
-Simple Crypto Wallet for  and with support for Safari Extension
+Crypto wallet with Safari extension.
 
-----
+## Development
 
-## Is Tokenary Legit 🤔?
-okenary is 100% open-source,
-supported by [Zerion](https://zerion.io), and featured by [WalletConnect](https://twitter.com/WalletConnect/status/1466339484769964032).
+Required
 
-## Is Tokenary secure 🔐?
-We use [Trust Wallet Core](https://github.com/trustwallet/wallet-core) to handle keys and
-keep them encrypted in [KeyChain](https://developer.apple.com/documentation/security/keychain_services).
+- CocoaPods
+- Node.js (`brew install node`)
+- Yarn (`brew install yarn`)
 
-## Download 🤝
-You can get Tokenary in the [App Store](https://apps.apple.com/us/app/tokenary-ethereum-wallet/id1375542355).
+Steps:
+
+1. Run `pod install`
+2. In `Safari-Shared/web3-provider` run `npm install`
+3. Create `Shared/Supporting Files/Secrets.swift` with the following contents
+   ```swift
+   struct Secrets {
+       static let infura = "YOUR INFURA PROJECT ID HERE"
+   }
+   ```
