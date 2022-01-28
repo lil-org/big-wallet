@@ -142,9 +142,6 @@ class TokenaryWeb3Provider extends EventEmitter {
      * @private Internal rpc handler
      */
     _request(payload, wrapResult = true) {
-        console.log("_request");
-        console.log(payload);
-        
         this.idMapping.tryIntifyId(payload);
         return new Promise((resolve, reject) => {
             if (!payload.id) {
