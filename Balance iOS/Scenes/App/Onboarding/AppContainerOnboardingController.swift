@@ -4,11 +4,12 @@ import SparrowKit
 import NativeUIKit
 import SPPageController
 
-class AppOnboardingController: BaseOnbooardingController {
+class AppContainerOnboardingController: BaseOnbooardingController {
     
     init() {
         super.init(controllers: [
-            Controllers.App.Onboarding.hello
+            Controllers.App.Onboarding.hello,
+            Controllers.App.Onboarding.features
         ])
         allowScroll = false
         allowDismissWithGester = false

@@ -2,6 +2,8 @@ import UIKit
 import SPDiffable
 import SparrowKit
 import Constants
+import SPPermissions
+import SPPermissionsNotification
 
 class SettingsController: SPDiffableTableController {
     
@@ -13,10 +15,18 @@ class SettingsController: SPDiffableTableController {
         fatalError("init(coder:) has not been implemented")
     }
     
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         navigationItem.title = Texts.Settings.title
         configureDiffable(sections: content, cellProviders: SPDiffableTableDataSource.CellProvider.default)
+        
+        NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: nil) { _ in
+            self.diffableDataSource?.set(self.content, animated: true, completion: nil)
+        }
     }
     
     internal var content: [SPDiffableSection] {
@@ -28,10 +38,17 @@ class SettingsController: SPDiffableTableController {
                 items: [
                     SPDiffableTableRowSwitch(
                         text: "Notifcations",
-                        icon: .init(named: "Settings Icon - Notifications"),
-                        isOn: true,
+                        icon: .init(named: "settings-notifications"),
+                        isOn: SPPermissions.Permission.notification.authorized,
                         action: { state in
-                            
+                            if SPPermissions.Permission.notification.notDetermined {
+                                SPPermissions.Permission.notification.request {
+                                    self.diffableDataSource?.set(self.content, animated: true, completion: nil)
+                                }
+                            } else {
+                                self.diffableDataSource?.set(self.content, animated: true, completion: nil)
+                                UIApplication.shared.openSettings()
+                            }
                         }
                     )
                 ]
@@ -42,30 +59,23 @@ class SettingsController: SPDiffableTableController {
                 footer: SPDiffableTextHeaderFooter(text: "Here description about notification and dont boring user. Maybe some anonces."),
                 items: [
                     SPDiffableTableRow(
-                        text: "Colors",
-                        icon: .init(named: "Settings Icon - Colors"),
-                        accessoryType: .disclosureIndicator,
-                        selectionStyle: .default,
-                        action: { item, indexPath in
-                            
-                        }
-                    ),
-                    SPDiffableTableRow(
                         text: "Appearance",
-                        icon: .init(named: "Settings Icon - Appearance"),
+                        icon: .init(named: "settings-appearance"),
                         accessoryType: .disclosureIndicator,
                         selectionStyle: .default,
                         action: { item, indexPath in
-                            
+                            guard let navigationController = self.navigationController else { return }
+                            Presenter.App.Settings.showAppearance(on: navigationController)
                         }
                     ),
                     SPDiffableTableRow(
                         text: "Languages",
-                        icon: .init(named: "Settings Icon - Languages"),
+                        icon: .init(named: "settings-language"),
                         accessoryType: .disclosureIndicator,
                         selectionStyle: .default,
                         action: { item, indexPath in
-                            
+                            guard let navigationController = self.navigationController else { return }
+                            Presenter.App.Settings.showLanguages(on: navigationController)
                         }
                     )
                 ]
@@ -77,11 +87,12 @@ class SettingsController: SPDiffableTableController {
                 items: [
                     SPDiffableTableRow(
                         text: "About App",
-                        icon: .init(named: "Settings Icon - About Us"),
+                        icon: .init(named: "settings-aboutus"),
                         accessoryType: .disclosureIndicator,
                         selectionStyle: .default,
                         action: { item, indexPath in
-                            
+                            self.tableView.deselectRow(at: indexPath, animated: true)
+                            UIApplication.shared.open(URL.init(string: "https://twitter.com/Balance_io")!, options: [:], completionHandler: nil)
                         }
                     )
                 ]

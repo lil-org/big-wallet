@@ -180,8 +180,8 @@
 		F468F00A27A012BC007DD803 /* HomeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468F00927A012BC007DD803 /* HomeController.swift */; };
 		F468F00C27A01307007DD803 /* HomeHeaderController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468F00B27A01307007DD803 /* HomeHeaderController.swift */; };
 		F468F01027A01744007DD803 /* Wallet+CellProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468F00F27A01744007DD803 /* Wallet+CellProvider.swift */; };
-		F468F01427A0193A007DD803 /* AppOnboardingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468F01327A0193A007DD803 /* AppOnboardingController.swift */; };
-		F468F01627A0194F007DD803 /* HelloOnboardingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468F01527A0194F007DD803 /* HelloOnboardingController.swift */; };
+		F468F01427A0193A007DD803 /* AppContainerOnboardingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468F01327A0193A007DD803 /* AppContainerOnboardingController.swift */; };
+		F468F01627A0194F007DD803 /* OnboardingHelloController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468F01527A0194F007DD803 /* OnboardingHelloController.swift */; };
 		F468F01827A019E4007DD803 /* FlagsExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468F01727A019E4007DD803 /* FlagsExtension.swift */; };
 		F468F01B27A01CB9007DD803 /* ImportWalletController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468F01A27A01CB9007DD803 /* ImportWalletController.swift */; };
 		F468F01D27A01CD0007DD803 /* ImportWalletSegmentButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468F01C27A01CD0007DD803 /* ImportWalletSegmentButton.swift */; };
@@ -214,6 +214,12 @@
 		F4B4CDA427A2BB9300300582 /* Image.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CDA327A2BB9300300582 /* Image.swift */; };
 		F4B4CDAA27A2D4EC00300582 /* coin.scn in Resources */ = {isa = PBXBuildFile; fileRef = F4B4CDA927A2D4EC00300582 /* coin.scn */; };
 		F4B4CDAC27A2D62800300582 /* Safari_browser_logo.svg.png in Resources */ = {isa = PBXBuildFile; fileRef = F4B4CDAB27A2D62800300582 /* Safari_browser_logo.svg.png */; };
+		F4FB72DF27A4351E008AFFF3 /* OnboardingBenefitsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4FB72DE27A4351E008AFFF3 /* OnboardingBenefitsController.swift */; };
+		F4FB72E127A43934008AFFF3 /* SettingsLanguageController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4FB72E027A43934008AFFF3 /* SettingsLanguageController.swift */; };
+		F4FB72E327A4393D008AFFF3 /* SettingsAppearanceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4FB72E227A4393D008AFFF3 /* SettingsAppearanceController.swift */; };
+		F4FB72E527A4399A008AFFF3 /* Appearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4FB72E427A4399A008AFFF3 /* Appearance.swift */; };
+		F4FB72E727A439B1008AFFF3 /* InterfaceAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4FB72E627A439B1008AFFF3 /* InterfaceAppearance.swift */; };
+		F4FB72E927A43BD3008AFFF3 /* LanguageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4FB72E827A43BD3008AFFF3 /* LanguageService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -410,8 +416,8 @@
 		F468F00927A012BC007DD803 /* HomeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeController.swift; sourceTree = "<group>"; };
 		F468F00B27A01307007DD803 /* HomeHeaderController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeHeaderController.swift; sourceTree = "<group>"; };
 		F468F00F27A01744007DD803 /* Wallet+CellProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Wallet+CellProvider.swift"; sourceTree = "<group>"; };
-		F468F01327A0193A007DD803 /* AppOnboardingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppOnboardingController.swift; sourceTree = "<group>"; };
-		F468F01527A0194F007DD803 /* HelloOnboardingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelloOnboardingController.swift; sourceTree = "<group>"; };
+		F468F01327A0193A007DD803 /* AppContainerOnboardingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContainerOnboardingController.swift; sourceTree = "<group>"; };
+		F468F01527A0194F007DD803 /* OnboardingHelloController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingHelloController.swift; sourceTree = "<group>"; };
 		F468F01727A019E4007DD803 /* FlagsExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlagsExtension.swift; sourceTree = "<group>"; };
 		F468F01A27A01CB9007DD803 /* ImportWalletController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportWalletController.swift; sourceTree = "<group>"; };
 		F468F01C27A01CD0007DD803 /* ImportWalletSegmentButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportWalletSegmentButton.swift; sourceTree = "<group>"; };
@@ -444,6 +450,12 @@
 		F4B4CDA327A2BB9300300582 /* Image.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Image.swift; sourceTree = "<group>"; };
 		F4B4CDA927A2D4EC00300582 /* coin.scn */ = {isa = PBXFileReference; lastKnownFileType = file.bplist; path = coin.scn; sourceTree = "<group>"; };
 		F4B4CDAB27A2D62800300582 /* Safari_browser_logo.svg.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Safari_browser_logo.svg.png; sourceTree = "<group>"; };
+		F4FB72DE27A4351E008AFFF3 /* OnboardingBenefitsController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingBenefitsController.swift; sourceTree = "<group>"; };
+		F4FB72E027A43934008AFFF3 /* SettingsLanguageController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsLanguageController.swift; sourceTree = "<group>"; };
+		F4FB72E227A4393D008AFFF3 /* SettingsAppearanceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAppearanceController.swift; sourceTree = "<group>"; };
+		F4FB72E427A4399A008AFFF3 /* Appearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Appearance.swift; sourceTree = "<group>"; };
+		F4FB72E627A439B1008AFFF3 /* InterfaceAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterfaceAppearance.swift; sourceTree = "<group>"; };
+		F4FB72E827A43BD3008AFFF3 /* LanguageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -532,8 +544,8 @@
 				F468EFC427A00EAA007DD803 /* ExtensionImport */,
 				F468EFC327A00E84007DD803 /* AppImport */,
 				2CCEB7A127592A1F00768473 /* Shared */,
-				2C19953E2674C4B900A8E370 /* Balance macOS */,
 				2C5FF97026C84F7B00B32ACC /* Balance iOS */,
+				2C19953E2674C4B900A8E370 /* Balance macOS */,
 				2CCEB7A227592A3800768473 /* Safari-Shared */,
 				2C09CBA0273979C1009AD39B /* Safari macOS */,
 				2CCEB82E27594E2A00768473 /* Safari iOS */,
@@ -922,6 +934,8 @@
 				F468EFDC27A00EEE007DD803 /* Layout */,
 				F468EFDE27A00EEE007DD803 /* VerticalContentScrollController.swift */,
 				F4B4CD9F27A2AD7200300582 /* Rotation3DModelView.swift */,
+				F4FB72E427A4399A008AFFF3 /* Appearance.swift */,
+				F4FB72E627A439B1008AFFF3 /* InterfaceAppearance.swift */,
 			);
 			path = Interface;
 			sourceTree = "<group>";
@@ -941,6 +955,7 @@
 				F468EFED27A00EEE007DD803 /* UserSettings.swift */,
 				F468F02B27A02AC9007DD803 /* AlertService.swift */,
 				F478A37127A15BF600D1398B /* AuthService.swift */,
+				F4FB72E827A43BD3008AFFF3 /* LanguageService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -1047,8 +1062,9 @@
 		F468F01227A01928007DD803 /* Onboarding */ = {
 			isa = PBXGroup;
 			children = (
-				F468F01327A0193A007DD803 /* AppOnboardingController.swift */,
-				F468F01527A0194F007DD803 /* HelloOnboardingController.swift */,
+				F468F01327A0193A007DD803 /* AppContainerOnboardingController.swift */,
+				F468F01527A0194F007DD803 /* OnboardingHelloController.swift */,
+				F4FB72DE27A4351E008AFFF3 /* OnboardingBenefitsController.swift */,
 			);
 			path = Onboarding;
 			sourceTree = "<group>";
@@ -1066,6 +1082,8 @@
 			isa = PBXGroup;
 			children = (
 				F468F02127A022B2007DD803 /* SettingsController.swift */,
+				F4FB72E027A43934008AFFF3 /* SettingsLanguageController.swift */,
+				F4FB72E227A4393D008AFFF3 /* SettingsAppearanceController.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -1609,7 +1627,7 @@
 				2CE059372763D60A0042D844 /* KeyboardObserver.swift in Sources */,
 				2CF255A0275A47DD00AE54B9 /* Bundle.swift in Sources */,
 				F468F00427A00EEE007DD803 /* UserSettings.swift in Sources */,
-				F468F01427A0193A007DD803 /* AppOnboardingController.swift in Sources */,
+				F468F01427A0193A007DD803 /* AppContainerOnboardingController.swift in Sources */,
 				F468F00C27A01307007DD803 /* HomeHeaderController.swift in Sources */,
 				2CF255AC275A48CF00AE54B9 /* EthereumNetwork.swift in Sources */,
 				F468EFF427A00EEE007DD803 /* SceneUserActivity.swift in Sources */,
@@ -1641,6 +1659,7 @@
 				2CC8C5B4276A96760083FB1B /* Haptic.swift in Sources */,
 				2CF255AB275A48CF00AE54B9 /* Ethereum.swift in Sources */,
 				F478A36527A149F300D1398B /* OnboardingManagerDelegate.swift in Sources */,
+				F4FB72E327A4393D008AFFF3 /* SettingsAppearanceController.swift in Sources */,
 				F468F00327A00EEE007DD803 /* Controllers.swift in Sources */,
 				F478A37027A1541200D1398B /* PhraceCollectionViewCell.swift in Sources */,
 				2CE059492764D69D0042D844 /* SafariWebExtensionHandler.swift in Sources */,
@@ -1675,6 +1694,7 @@
 				2C96D39C2763ADE100687301 /* LocalAuthentication.swift in Sources */,
 				F468EFEF27A00EEE007DD803 /* Texts.swift in Sources */,
 				F468EFF027A00EEE007DD803 /* RootSceneDelegate.swift in Sources */,
+				F4FB72E927A43BD3008AFFF3 /* LanguageService.swift in Sources */,
 				2C96D3A62763CCA000687301 /* Images.swift in Sources */,
 				2CF255AA275A48BB00AE54B9 /* SessionStorage.swift in Sources */,
 				2C96D39827623EC600687301 /* URL.swift in Sources */,
@@ -1685,15 +1705,18 @@
 				2CF255B1275A4A1800AE54B9 /* ResponseToExtension.swift in Sources */,
 				2CF2559B275A46E700AE54B9 /* AuthenticationReason.swift in Sources */,
 				2C96D3A92763D13400687301 /* DataStateView.swift in Sources */,
+				F4FB72E727A439B1008AFFF3 /* InterfaceAppearance.swift in Sources */,
 				2CF255A3275A47DD00AE54B9 /* UserDefaults.swift in Sources */,
 				F478A37B27A16EE600D1398B /* WalletPhracesActionSegmentButton.swift in Sources */,
+				F4FB72E127A43934008AFFF3 /* SettingsLanguageController.swift in Sources */,
 				F478A37827A16E9800D1398B /* WalletPhracesActionsController.swift in Sources */,
 				F468EFF327A00EEE007DD803 /* UISceneConfiguration+Scene.swift in Sources */,
 				2CF255B8275A748300AE54B9 /* ApproveTransactionViewController.swift in Sources */,
 				F468F02E27A03077007DD803 /* WalletsListController.swift in Sources */,
 				F468EFF227A00EEE007DD803 /* SettingsSceneDelegate.swift in Sources */,
+				F4FB72DF27A4351E008AFFF3 /* OnboardingBenefitsController.swift in Sources */,
 				F468F02227A022B2007DD803 /* SettingsController.swift in Sources */,
-				F468F01627A0194F007DD803 /* HelloOnboardingController.swift in Sources */,
+				F468F01627A0194F007DD803 /* OnboardingHelloController.swift in Sources */,
 				2C8E88A4275FB7B9003EB8DB /* UIApplication.swift in Sources */,
 				F468F01F27A01F28007DD803 /* Presenter+Crypto.swift in Sources */,
 				2C40709427667A8600AB3D55 /* ImageWithLabelTableViewCell.swift in Sources */,
@@ -1701,6 +1724,7 @@
 				F468F01027A01744007DD803 /* Wallet+CellProvider.swift in Sources */,
 				F478A36E27A1528E00D1398B /* WalletPhracesOnboardingController.swift in Sources */,
 				F468EFFD27A00EEE007DD803 /* Presenter.swift in Sources */,
+				F4FB72E527A4399A008AFFF3 /* Appearance.swift in Sources */,
 				F468EFFF27A00EEE007DD803 /* Navigation.swift in Sources */,
 				2CF255A8275A48BB00AE54B9 /* NetworkMonitor.swift in Sources */,
 				2C8E88A2275FA596003EB8DB /* ImportViewController.swift in Sources */,

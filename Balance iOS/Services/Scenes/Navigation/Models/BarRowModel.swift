@@ -40,7 +40,7 @@ struct BarRowModel {
         var controller: UIViewController {
             switch self {
             case .accounts: return Controllers.Crypto.accounts
-            case .settings: return Controllers.App.settings
+            case .settings: return Controllers.App.Settings.list
             }
         }
     }

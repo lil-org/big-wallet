@@ -20,5 +20,18 @@ extension Presenter {
             applyForm(.modalForm, to: navigationController)
             viewController.present(navigationController)
         }
+        
+        enum Settings {
+            
+            static func showLanguages(on navigationController: UINavigationController) {
+                let controller = Controllers.App.Settings.languages
+                navigationController.pushViewController(controller, completion: nil)
+            }
+            
+            static func showAppearance(on navigationController: UINavigationController) {
+                let controller = Controllers.App.Settings.appearance
+                navigationController.pushViewController(controller, completion: nil)
+            }
+        }
     }
 }

@@ -8,9 +8,11 @@ import Nuke
 
 class SafariStepsController: NativeHeaderController {
     
+    var views: [UIView] = []
+    
     init() {
         super.init(
-            image: UIImage.system("safari.fill"),
+            image: nil,
             title: "Integrate to Safari",
             subtitle: "You can sign in operation, swap and transfer crypto without opening app. Look at steps for integrate it."
         )
@@ -43,21 +45,23 @@ class SafariStepsController: NativeHeaderController {
             navigationController.mimicrateToolBarView = actionToolbarView
         }
         
-        scrollView.addSubview(SafariStepView(image: Image.Safari.step_1))
-        scrollView.addSubview(SafariStepArrowView())
-        scrollView.addSubview(SafariStepView(image: Image.Safari.step_2))
-        scrollView.addSubview(SafariStepArrowView())
-        scrollView.addSubview(SafariStepView(image: Image.Safari.step_3))
+        views.append(SafariStepView(image: Image.Safari.step_1))
+        views.append(SafariStepArrowView())
+        views.append(SafariStepView(image: Image.Safari.step_2))
+        views.append(SafariStepArrowView())
+        views.append(SafariStepView(image: Image.Safari.step_3))
+        
+        scrollView.addSubviews(views)
     }
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        var currrentYPosition: CGFloat = .zero
+        var currrentYPosition: CGFloat = headerView.frame.maxY + NativeLayout.Spaces.default
         
-        for view in scrollView.subviews {
+        for view in views {
             switch view {
             case let stepView as SafariStepView:
-                stepView.frame.setWidth(scrollView.readableWidth)
+                stepView.frame.setWidth(scrollView.readableWidth * 0.7)
                 stepView.setXCenter()
                 stepView.sizeToFit()
                 stepView.frame.origin.y = currrentYPosition
@@ -68,10 +72,11 @@ class SafariStepsController: NativeHeaderController {
             default:
                 break
             }
-            currrentYPosition = view.frame.maxY + NativeLayout.Spaces.default_more
+            
+            currrentYPosition = view.frame.maxY + NativeLayout.Spaces.default_half
         }
         
-        scrollView.contentSize = .init(width: scrollView.frame.width, height: currrentYPosition + actionToolbarView.frame.height + NativeLayout.Spaces.default_double)
+        scrollView.contentSize = .init(width: scrollView.frame.width, height: currrentYPosition)
     }
     
     class SafariStepArrowView: SPView {
@@ -101,7 +106,7 @@ class SafariStepView: SPView {
     let imageView = SPImageView().do {
         $0.contentMode = .scaleAspectFit
     }
-
+    
     init(image: UIImage) {
         super.init()
         self.imageView.image = image
@@ -114,7 +119,7 @@ class SafariStepView: SPView {
     override func commonInit() {
         super.commonInit()
         roundCorners(radius: 12)
-        backgroundColor = .white
+        backgroundColor = .tertiarySystemBackground
         addSubview(imageView)
         imageView.setEqualSuperviewMarginsWithAutoLayout()
     }

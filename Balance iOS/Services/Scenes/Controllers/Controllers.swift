@@ -6,13 +6,20 @@ enum Controllers {
     
     enum App {
         
-        static var settings: UIViewController { SettingsController() }
+        enum Settings {
+            
+            static var list: UIViewController { SettingsController() }
+            static var appearance: UIViewController { SettingsAppearanceController() }
+            static var languages: UIViewController { SettingsLanguageController() }
+        }
+        
         static var safari_steps: UIViewController { SafariStepsController() }
         
         enum Onboarding {
             
-            static var container: AppOnboardingController { AppOnboardingController() }
-            static var hello: UIViewController { HelloOnboardingController() }
+            static var container: AppContainerOnboardingController { AppContainerOnboardingController() }
+            static var hello: UIViewController { OnboardingHelloController() }
+            static var features: UIViewController { OnboardingBenefitsController() }
         }
     }
     

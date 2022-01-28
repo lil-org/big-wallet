@@ -17,6 +17,10 @@ class RootSceneDelegate: BaseSceneDelegate {
         if let url = connectionOptions.userActivities.first?.webpageURL ?? connectionOptions.urlContexts.first?.url {
             wasOpenedWithURL(url, onStart: true)
         }
+        
+        if let window = self.window {
+            Appearance.configure(rootWindow: window)
+        }
     }
     
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {

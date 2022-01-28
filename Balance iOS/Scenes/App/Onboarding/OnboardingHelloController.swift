@@ -5,7 +5,7 @@ import SFSymbols
 import SceneKit
 import Constants
 
-class HelloOnboardingController: NativeHeaderController, OnboardingChildInterface {
+class OnboardingHelloController: NativeHeaderController, OnboardingChildInterface {
     
     weak var onboardingManagerDelegate: OnboardingManagerDelegate?
     

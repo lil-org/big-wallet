@@ -9,7 +9,7 @@ class SettingsSceneDelegate: BaseSceneDelegate {
         windowScene.titlebar?.titleVisibility = .hidden
         #endif
         makeKeyAndVisible(in: windowScene, createViewControllerHandler: {
-            return Controllers.App.settings
+            return Controllers.App.Settings.list
         }, tint: UserSettings.tint)
     }
 }
