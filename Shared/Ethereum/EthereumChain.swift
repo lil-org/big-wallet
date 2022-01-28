@@ -23,6 +23,7 @@ enum EthereumChain: Int {
     case polygonMumbai = 80001
     case binanceTestnet = 97
     case avalancheFuji = 43113
+    case fantomTestnet = 4002
     
     var id: Int {
         return rawValue
@@ -33,7 +34,7 @@ enum EthereumChain: Int {
     }
     
     static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum, .avalanche, .gnosisChain, .fantomOpera]
-    static let allTestnets: [EthereumChain] = [.ethereumRopsten, .ethereumKovan, .ethereumRinkeby, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji]
+    static let allTestnets: [EthereumChain] = [.ethereumRopsten, .ethereumKovan, .ethereumRinkeby, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji, .fantomTestnet]
     
     var name: String {
         switch self {
@@ -56,6 +57,7 @@ enum EthereumChain: Int {
         case .arbitrumKovan: return "Arbitrum Kovan"
         case .binanceTestnet: return "BSC Testnet"
         case .avalancheFuji: return "Avalanche FUJI"
+        case .fantomTestnet: return "Fantom Testnet"
         }
     }
     
@@ -71,7 +73,7 @@ enum EthereumChain: Int {
             return "AVAX"
         case .gnosisChain:
             return "xDai"
-        case .fantomOpera:
+        case .fantomOpera, .fantomTestnet:
             return "FTM"
         }
     }
@@ -110,6 +112,7 @@ enum EthereumChain: Int {
         case .binanceTestnet: return "https://data-seed-prebsc-1-s1.binance.org:8545/"
         case .avalancheFuji: return "https://api.avax-test.network/ext/bc/C/rpc"
         case .polygonMumbai: return "https://polygon-mumbai.infura.io/v3/" + Secrets.infura
+        case .fantomTestnet: return "https://rpc.testnet.fantom.network/"
         }
     }
     
