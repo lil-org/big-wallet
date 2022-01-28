@@ -18,6 +18,7 @@ class TokenaryWeb3Provider extends EventEmitter {
         this.callbacks = new Map();
         this.wrapResults = new Map();
         this.isMetaMask = true;
+        this._metamask = true;
         this.isTokenary = true;
         this.emitConnect(config.chainId);
         this.didGetLatestConfiguration = false;
@@ -141,6 +142,9 @@ class TokenaryWeb3Provider extends EventEmitter {
      * @private Internal rpc handler
      */
     _request(payload, wrapResult = true) {
+        console.log("_request");
+        console.log(payload);
+        
         this.idMapping.tryIntifyId(payload);
         return new Promise((resolve, reject) => {
             if (!payload.id) {
