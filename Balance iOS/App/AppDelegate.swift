@@ -1,6 +1,8 @@
 import UIKit
 import SparrowKit
 
+var launchURL: URL?
+
 @main
 class AppDelegate: SPAppScenesDelegate {
 

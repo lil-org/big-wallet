@@ -66,6 +66,13 @@ enum Controllers {
             }
         }
         
+        enum Extension {
+            
+            static func choose_wallet(completion: @escaping (TokenaryWallet, ChooseWalletExtensionResponseController) -> Void) -> ChooseWalletExtensionResponseController {
+                return ChooseWalletExtensionResponseController(didSelectWallet: completion)
+            }
+        }
+        
         enum Onboarding {
             
             static var container: UIViewController { WalletOnbooardingController() }

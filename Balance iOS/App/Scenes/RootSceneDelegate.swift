@@ -1,8 +1,6 @@
 import UIKit
 import SparrowKit
 
-var launchURL: URL?
-
 class RootSceneDelegate: BaseSceneDelegate {
     
     override func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {

@@ -63,5 +63,16 @@ extension Presenter {
             applyForm(.modalForm, to: controller)
             viewController.present(controller)
         }
+        
+        enum Extension {
+            
+            static func showLinkWallet(completion: @escaping ((TokenaryWallet, ChooseWalletExtensionResponseController) -> Void), on viewController: UIViewController) {
+                let controller = Controllers.Crypto.Extension.choose_wallet(completion: completion)
+                let navgiationController = NativeNavigationController(rootViewController: controller)
+                navgiationController.inheritLayoutMarginsForСhilds = true
+                applyForm(.modalForm, to: navgiationController)
+                viewController.present(navgiationController)
+            }
+        }
     }
 }

@@ -89,6 +89,7 @@ class WalletPhracesActionsController: NativeHeaderController, OnboardingChildInt
             phraces = phraces + (String(phrace) + " ")
         }
         if segmentButtons.first?.appearance == .selected {
+            UIPasteboard.general.string = phraces
             SPAlert.present(title: "Copied to Clipboard", message: nil, preset: .done, completion: nil)
             self.dismissAnimated()
         } else {
