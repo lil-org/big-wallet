@@ -24,7 +24,7 @@ class WalletPhracesActionsController: NativeHeaderController, OnboardingChildInt
     // MARK: - Init
     
     init(phraces: [String]) {
-        super.init(image: nil, title: "Save Wallet Phraces", subtitle: "Keep it private becouse it access to your wallet.")
+        super.init(image: nil, title: "Save Wallet Phrases", subtitle: "Keep it private.")
     }
     
     required init?(coder: NSCoder) {
@@ -42,7 +42,7 @@ class WalletPhracesActionsController: NativeHeaderController, OnboardingChildInt
         let newSegmentButton = WalletPhracesActionSegmentButton()
         newSegmentButton.headerLabel.text = "Copy to Clipboard"
         newSegmentButton.iconImageView.image = .init(.doc.onDocFill)
-        newSegmentButton.descriptionLabel.text = "We paste all words to clipboard. You can paste it anywhere."
+        newSegmentButton.descriptionLabel.text = "The secret phrase will be copied to your clipboard."
         segmentButtons.append(newSegmentButton)
         
         let addSegmentButton = WalletPhracesActionSegmentButton()

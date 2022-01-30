@@ -13,7 +13,7 @@ class WalletPhracesListController: SPDiffableCollectionController, OnboardingChi
             icon: UIImage(SFSymbol.arrow.rightCircleFill),
             colorise: .init(content: .custom(.white), background: .tint)
         )
-        $0.footerLabel.text = "You shoud save this keys in somewhere private place. Tap continue and we propose you some ways."
+        $0.footerLabel.text = "Your password unlocks the app. It is separate from your secret phrase."
     }
     
     let layout = UICollectionViewFlowLayout().do {
@@ -37,7 +37,7 @@ class WalletPhracesListController: SPDiffableCollectionController, OnboardingChi
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        navigationItem.title = "Wallet Phraces"
+        navigationItem.title = "Wallet Secret Phrase"
         navigationItem.rightBarButtonItem = closeBarButtonItem
         
         view.backgroundColor = .systemGroupedBackground
