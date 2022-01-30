@@ -154,6 +154,10 @@
 		2CFDDF4E2765417E00F89019 /* ios-specific-content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CFDDF4D2765417D00F89019 /* ios-specific-content.js */; };
 		DFC5A10D00631755121FCBE6 /* Pods_Balance_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 29A83FE96A68BB9F154134EF /* Pods_Balance_iOS.framework */; };
 		F446309927A142E300AFA8BD /* balance-logo.scn in Resources */ = {isa = PBXBuildFile; fileRef = F446309827A142E300AFA8BD /* balance-logo.scn */; };
+		F468B96427A70B5600314201 /* ArchivedImportWalletController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468B96327A70B5600314201 /* ArchivedImportWalletController.swift */; };
+		F468B96627A70D0B00314201 /* WalletsManagerExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468B96527A70D0B00314201 /* WalletsManagerExtension.swift */; };
+		F468B96827A7161200314201 /* ChooseChainController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468B96727A7161200314201 /* ChooseChainController.swift */; };
+		F468B96A27A71A1D00314201 /* SPDiffableTableDataSource+Chain.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468B96927A71A1D00314201 /* SPDiffableTableDataSource+Chain.swift */; };
 		F468EFC727A00EC3007DD803 /* AppImport in Frameworks */ = {isa = PBXBuildFile; productRef = F468EFC627A00EC3007DD803 /* AppImport */; };
 		F468EFEE27A00EEE007DD803 /* ConstantsExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468EFCA27A00EEE007DD803 /* ConstantsExtension.swift */; };
 		F468EFEF27A00EEE007DD803 /* Texts.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468EFCB27A00EEE007DD803 /* Texts.swift */; };
@@ -390,6 +394,10 @@
 		C289F6A7A78D99CF20B75732 /* Pods-Balance.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Balance.debug.xcconfig"; path = "Target Support Files/Pods-Balance/Pods-Balance.debug.xcconfig"; sourceTree = "<group>"; };
 		F3B5261B155EF9E06AAD7D4C /* Pods-Balance iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Balance iOS.debug.xcconfig"; path = "Target Support Files/Pods-Balance iOS/Pods-Balance iOS.debug.xcconfig"; sourceTree = "<group>"; };
 		F446309827A142E300AFA8BD /* balance-logo.scn */ = {isa = PBXFileReference; lastKnownFileType = file.bplist; path = "balance-logo.scn"; sourceTree = "<group>"; };
+		F468B96327A70B5600314201 /* ArchivedImportWalletController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchivedImportWalletController.swift; sourceTree = "<group>"; };
+		F468B96527A70D0B00314201 /* WalletsManagerExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsManagerExtension.swift; sourceTree = "<group>"; };
+		F468B96727A7161200314201 /* ChooseChainController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChooseChainController.swift; sourceTree = "<group>"; };
+		F468B96927A71A1D00314201 /* SPDiffableTableDataSource+Chain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SPDiffableTableDataSource+Chain.swift"; sourceTree = "<group>"; };
 		F468EFC327A00E84007DD803 /* AppImport */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = AppImport; sourceTree = "<group>"; };
 		F468EFC427A00EAA007DD803 /* ExtensionImport */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = ExtensionImport; sourceTree = "<group>"; };
 		F468EFC527A00EAB007DD803 /* Constants */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = Constants; sourceTree = "<group>"; };
@@ -877,6 +885,15 @@
 			path = "3D Logo";
 			sourceTree = "<group>";
 		};
+		F468B96227A70B4600314201 /* Archived */ = {
+			isa = PBXGroup;
+			children = (
+				F468B96327A70B5600314201 /* ArchivedImportWalletController.swift */,
+				F468F01C27A01CD0007DD803 /* ImportWalletSegmentButton.swift */,
+			);
+			path = Archived;
+			sourceTree = "<group>";
+		};
 		F468EFC927A00EEE007DD803 /* Data */ = {
 			isa = PBXGroup;
 			children = (
@@ -960,6 +977,7 @@
 				F468F02B27A02AC9007DD803 /* AlertService.swift */,
 				F478A37127A15BF600D1398B /* AuthService.swift */,
 				F4FB72E827A43BD3008AFFF3 /* LanguageService.swift */,
+				F468B96527A70D0B00314201 /* WalletsManagerExtension.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -1052,6 +1070,8 @@
 				F468F02D27A03077007DD803 /* WalletsController.swift */,
 				F4F4FA5E27A546F300DF657B /* WalletsListController.swift */,
 				F4F4FA6027A547D100DF657B /* ChooseWalletExtensionResponseController.swift */,
+				F468B96727A7161200314201 /* ChooseChainController.swift */,
+				F468B96927A71A1D00314201 /* SPDiffableTableDataSource+Chain.swift */,
 			);
 			path = Wallet;
 			sourceTree = "<group>";
@@ -1078,8 +1098,8 @@
 		F468F01927A01CB0007DD803 /* Import */ = {
 			isa = PBXGroup;
 			children = (
+				F468B96227A70B4600314201 /* Archived */,
 				F468F01A27A01CB9007DD803 /* ImportWalletController.swift */,
-				F468F01C27A01CD0007DD803 /* ImportWalletSegmentButton.swift */,
 			);
 			path = Import;
 			sourceTree = "<group>";
@@ -1670,6 +1690,7 @@
 				F478A37027A1541200D1398B /* PhraceCollectionViewCell.swift in Sources */,
 				2CE059492764D69D0042D844 /* SafariWebExtensionHandler.swift in Sources */,
 				2CF2559A275A46E400AE54B9 /* SafariRequest+Helpers.swift in Sources */,
+				F468B96627A70D0B00314201 /* WalletsManagerExtension.swift in Sources */,
 				2CF255B0275A492100AE54B9 /* Secrets.swift in Sources */,
 				2CC8C5A22767D3B30083FB1B /* GasPriceSliderTableViewCell.swift in Sources */,
 				F478A36027A149AB00D1398B /* WalletOnboardingController.swift in Sources */,
@@ -1698,10 +1719,13 @@
 				F4B4CDA227A2B33E00300582 /* SafariStepsController.swift in Sources */,
 				F468EFFA27A00EEE007DD803 /* Layout.swift in Sources */,
 				2C8E889F275F9967003EB8DB /* Storyboard.swift in Sources */,
+				F468B96A27A71A1D00314201 /* SPDiffableTableDataSource+Chain.swift in Sources */,
 				2C96D39C2763ADE100687301 /* LocalAuthentication.swift in Sources */,
 				F468EFEF27A00EEE007DD803 /* Texts.swift in Sources */,
 				F468EFF027A00EEE007DD803 /* RootSceneDelegate.swift in Sources */,
 				F4FB72E927A43BD3008AFFF3 /* LanguageService.swift in Sources */,
+				F468B96827A7161200314201 /* ChooseChainController.swift in Sources */,
+				F468B96427A70B5600314201 /* ArchivedImportWalletController.swift in Sources */,
 				2C96D3A62763CCA000687301 /* Images.swift in Sources */,
 				2CF255AA275A48BB00AE54B9 /* SessionStorage.swift in Sources */,
 				2C96D39827623EC600687301 /* URL.swift in Sources */,

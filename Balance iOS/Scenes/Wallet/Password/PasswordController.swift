@@ -10,11 +10,11 @@ class PasswordController: NativeHeaderTextFieldController, UITextFieldDelegate {
     
     // MARK: - Views
     
-    let actionToolbarView = NativeLargeActionToolBarView()
+    let actionToolbarView = NativeLargeSmallActionToolBarView()
     
     // MARK: - Init
     
-    init(title: String, subtitle: String, action: String, actionIcon: UIImage?, textFieldFooter: String, toolBarFooter: String, placeholder: String) {
+    init(title: String, subtitle: String, action: String, actionIcon: UIImage?, textFieldFooter: String, toolBarFooter: String?, placeholder: String) {
         super.init(image: .init(.lock.fill), title: title, subtitle: subtitle)
         actionToolbarView.actionButton.set(
             title: action,

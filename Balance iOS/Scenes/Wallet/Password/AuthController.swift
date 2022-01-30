@@ -13,7 +13,7 @@ class AuthController: PasswordController, UIAdaptivePresentationControllerDelega
             action: "Sign In",
             actionIcon: UIImage(SFSymbol.checkmark.circleFill),
             textFieldFooter: "Minimum 5 characters for safety.",
-            toolBarFooter: "Requerid for continue with your action.",
+            toolBarFooter: nil,
             placeholder: "Your Password"
         )
     }
@@ -25,6 +25,13 @@ class AuthController: PasswordController, UIAdaptivePresentationControllerDelega
     override func viewDidLoad() {
         super.viewDidLoad()
         navigationController?.presentationController?.delegate = self
+        actionToolbarView.secondActionButton.setTitle("Reset Existing Wallet")
+        actionToolbarView.secondActionButton.addAction(.init(handler: { _ in
+            guard let parent = self.presentingViewController else { return }
+            self.dismiss(animated: true, completion: {
+                WalletsManager.startDestroyProcess(on: parent, sourceView: self.actionToolbarView.secondActionButton)
+            })
+        }), for: .touchUpInside)
     }
     
     override func askProcessPassword(_ password: String) {

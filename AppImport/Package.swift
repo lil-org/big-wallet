@@ -20,7 +20,7 @@ let package = Package(
         ),
         .package(
             name: "NativeUIKit",
-            url: "https://github.com/ivanvorobei/NativeUIKit", .upToNextMajor(from: "1.2.7")
+            url: "https://github.com/ivanvorobei/NativeUIKit", .upToNextMajor(from: "1.2.8")
         ),
         .package(
             name: "SPDiffable",

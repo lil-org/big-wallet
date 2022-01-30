@@ -3,7 +3,7 @@ import SparrowKit
 import NativeUIKit
 import SFSymbols
 
-class OnboardingBenefitsController: NativeOnboardingController, OnboardingChildInterface {
+class OnboardingBenefitsController: NativeOnboardingFeaturesController, OnboardingChildInterface {
      
     weak var onboardingManagerDelegate: OnboardingManagerDelegate?
     
@@ -21,30 +21,30 @@ class OnboardingBenefitsController: NativeOnboardingController, OnboardingChildI
         super.init(
             iconImage: .init(SFSymbol.wallet.passFill),
             title: "Features",
-            subtitle: "Check list our features, we will add more.",
-            items: [
-                .init(
-                    iconImage: .init(SFSymbol.safari).withTintColor(.systemBlue, renderingMode: .alwaysOriginal),
-                    title: "Safari Extension",
-                    description: "You can use ETH without opening main app at all. We will show you how integrate it and how use it next."
-                ),
-                .init(
-                    iconImage: .init(SFSymbol.key.fill).withTintColor(.systemGreen, renderingMode: .alwaysOriginal),
-                    title: "Safety",
-                    description: "We don't transfer passwords or any keys. Its stored only at your device and don't worry about safety."
-                ),
-                .init(
-                    iconImage: .init(SFSymbol.envelope.fill).withTintColor(.systemIndigo, renderingMode: .alwaysOriginal),
-                    title: "Open Source",
-                    description: "All app published like open source, so you can check code and even do great changes. We do it for comunity and happy to have progress in it."
-                ),
-                .init(
-                    iconImage: .init(SFSymbol.person._3Fill).withTintColor(.systemOrange, renderingMode: .alwaysOriginal),
-                    title: "Internation Team",
-                    description: "So many designers and engineers make this app. You can be sure that they are high-level specialists."
-                )
-            ]
+            subtitle: "Check list our features, we will add more."
         )
+        setFeatures([
+            .init(
+                iconImage: .init(SFSymbol.safari).withTintColor(.systemBlue, renderingMode: .alwaysOriginal),
+                title: "Safari Extension",
+                description: "You can use ETH without opening main app at all. We will show you how integrate it and how use it next."
+            ),
+            .init(
+                iconImage: .init(SFSymbol.key.fill).withTintColor(.systemGreen, renderingMode: .alwaysOriginal),
+                title: "Safety",
+                description: "We don't transfer passwords or any keys. Its stored only at your device and don't worry about safety."
+            ),
+            .init(
+                iconImage: .init(SFSymbol.envelope.fill).withTintColor(.systemIndigo, renderingMode: .alwaysOriginal),
+                title: "Open Source",
+                description: "All app published like open source, so you can check code and even do great changes. We do it for comunity and happy to have progress in it."
+            ),
+            .init(
+                iconImage: .init(SFSymbol.person._3Fill).withTintColor(.systemOrange, renderingMode: .alwaysOriginal),
+                title: "Internation Team",
+                description: "So many designers and engineers make this app. You can be sure that they are high-level specialists."
+            )
+        ])
     }
     
     required init?(coder: NSCoder) {

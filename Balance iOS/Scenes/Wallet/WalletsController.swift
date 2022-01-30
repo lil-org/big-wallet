@@ -7,7 +7,7 @@ class WalletsController: SPDiffableTableController {
     
     // MARK: - Data
     
-    private var wallets: [TokenaryWallet] { WalletsManager.shared.wallets }
+    internal var wallets: [TokenaryWallet] { WalletsManager.shared.wallets }
     
     // MARK: - Init
     
@@ -34,7 +34,7 @@ class WalletsController: SPDiffableTableController {
         
         configureDiffable(
             sections: content,
-            cellProviders: [.button, .wallet, .empty]
+            cellProviders: [.button, .wallet, .empty, .chain] + SPDiffableTableDataSource.CellProvider.default
         )
         
         NotificationCenter.default.addObserver(forName: .walletsUpdated, object: nil, queue: nil) { _ in
@@ -62,34 +62,31 @@ class WalletsController: SPDiffableTableController {
         var id: String { return rawValue }
     }
     
-    private var content: [SPDiffableSection] {
-        
-        let items: [SPDiffableItem] = {
-            if wallets.isEmpty {
-                return [
-                    NativeEmptyRowItem(
-                        id: Item.emptyWallets.id,
-                        verticalMargins: .large,
-                        text: "No Wallets",
-                        detail: "Make new wallet for start"
-                    )
-                ]
-            } else {
-                return wallets.map({ walletModel in
-                    SPDiffableWrapperItem(id: walletModel.id, model: walletModel) { item, indexPath in
-                        self.didTapWallet(walletModel)
-                    }
-                })
-            }
-        }()
-        
+    internal var content: [SPDiffableSection] {
         return [
             .init(
                 id: Section.list.id,
                 header: nil,
                 footer: nil,
-                items: items
+                items: wallets.isEmpty ? [emptyItem] : walletsItems
             )
         ]
+    }
+    
+    internal var emptyItem: SPDiffableItem {
+        return NativeEmptyRowItem(
+            id: Item.emptyWallets.id,
+            verticalMargins: .large,
+            text: "No Wallets",
+            detail: "Make new wallet for start"
+        )
+    }
+    
+    internal var walletsItems: [SPDiffableItem] {
+        return wallets.map({ walletModel in
+            SPDiffableWrapperItem(id: walletModel.id, model: walletModel) { item, indexPath in
+                self.didTapWallet(walletModel)
+            }
+        })
     }
 }

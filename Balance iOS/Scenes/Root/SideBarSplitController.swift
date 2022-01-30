@@ -72,8 +72,7 @@ class SideBarSplitController: UISplitViewController {
                 SPAlert.present(message: host, haptic: .success, completion: nil)
             }
             
-            Presenter.Crypto.Extension.showLinkWallet(completion: { wallet, controller  in
-                let chain = EthereumChain.ethereum
+            Presenter.Crypto.Extension.showLinkWallet(didSelectWallet: { wallet, chain, controller  in
                 guard let address = wallet.ethereumAddress else {
                     SPAlert.present(message: "Invalid input data", haptic: .error, completion: nil)
                     return

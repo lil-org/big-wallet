@@ -66,12 +66,17 @@ extension Presenter {
         
         enum Extension {
             
-            static func showLinkWallet(completion: @escaping ((TokenaryWallet, ChooseWalletExtensionResponseController) -> Void), on viewController: UIViewController) {
-                let controller = Controllers.Crypto.Extension.choose_wallet(completion: completion)
+            static func showLinkWallet(didSelectWallet: @escaping ((TokenaryWallet, EthereumChain, ChooseWalletExtensionResponseController) -> Void), on viewController: UIViewController) {
+                let controller = Controllers.Crypto.Extension.choose_wallet(didSelectWallet: didSelectWallet)
                 let navgiationController = NativeNavigationController(rootViewController: controller)
                 navgiationController.inheritLayoutMarginsForСhilds = true
                 applyForm(.modalForm, to: navgiationController)
                 viewController.present(navgiationController)
+            }
+            
+            static func showChangeChain(didSelectChain: @escaping ((EthereumChain) -> Void), on navigationController: UINavigationController) {
+                let controller = Controllers.Crypto.Extension.choose_chain(didSelectChain: didSelectChain)
+                navigationController.pushViewController(controller, completion: nil)
             }
         }
     }

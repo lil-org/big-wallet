@@ -1,5 +1,6 @@
 import UIKit
 import NativeUIKit
+
 enum AuthService {
     
     static func auth(cancelble: Bool, on viewController: UIViewController, completion: @escaping ((Bool) -> Void)) {

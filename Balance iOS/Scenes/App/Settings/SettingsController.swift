@@ -1,9 +1,12 @@
 import UIKit
+import SFSymbols
+import NativeUIKit
 import SPDiffable
 import SparrowKit
 import Constants
 import SPPermissions
 import SPPermissionsNotification
+import SPAlert
 
 class SettingsController: SPDiffableTableController {
     
@@ -22,8 +25,8 @@ class SettingsController: SPDiffableTableController {
     override func viewDidLoad() {
         super.viewDidLoad()
         navigationItem.title = Texts.Settings.title
-        configureDiffable(sections: content, cellProviders: SPDiffableTableDataSource.CellProvider.default)
-        
+        configureDiffable(sections: content, cellProviders: [.button] + SPDiffableTableDataSource.CellProvider.default)
+        tableView.register(NativeLeftButtonTableViewCell.self)
         NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: nil) { _ in
             self.diffableDataSource?.set(self.content, animated: true, completion: nil)
         }
@@ -98,18 +101,18 @@ class SettingsController: SPDiffableTableController {
                 ]
             ),
             .init(id: "destroy", header: nil, footer: nil, items: [
-                SPDiffableTableRow(text: "Destroy (Debug Only!)", selectionStyle: .default, action: { item, indexPath in
-                    
-                    do {
-                        try? WalletsManager.shared.destroy()
+                NativeDiffableLeftButton(
+                    text: "Destroy All Data",
+                    textColor: .destructiveColor,
+                    detail: nil,
+                    detailColor: .clear,
+                    icon: .init(SFSymbol.exclamationmark.triangleFill).withTintColor(.destructiveColor, renderingMode: .alwaysOriginal),
+                    accessoryType: .none,
+                    action: { item, indexPath in
+                        guard let cell = self.tableView.cellForRow(at: indexPath) else { return }
+                        WalletsManager.startDestroyProcess(on: self, sourceView: cell)
                     }
-                    Keychain.shared.removePassword()
-                    Flags.seen_tutorial = false
-                    Flags.show_safari_extension_advice = true
-                    delay(1, closure: {
-                        fatalError()
-                    })
-                })
+                )
             ])
         ]
     }

@@ -8,6 +8,7 @@ class WalletOnbooardingController: BaseOnbooardingController {
     
     init() {
         let passwordController = Keychain.shared.hasPassword ? Controllers.Crypto.Onboarding.insert_password : Controllers.Crypto.Onboarding.set_password
+        
         super.init(controllers: [
             passwordController,
             Controllers.Crypto.Import.choose_wallet_type

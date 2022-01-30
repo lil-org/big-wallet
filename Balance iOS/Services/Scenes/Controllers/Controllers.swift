@@ -68,8 +68,12 @@ enum Controllers {
         
         enum Extension {
             
-            static func choose_wallet(completion: @escaping (TokenaryWallet, ChooseWalletExtensionResponseController) -> Void) -> ChooseWalletExtensionResponseController {
-                return ChooseWalletExtensionResponseController(didSelectWallet: completion)
+            static func choose_wallet(didSelectWallet: @escaping (TokenaryWallet, EthereumChain, ChooseWalletExtensionResponseController) -> Void) -> ChooseWalletExtensionResponseController {
+                return ChooseWalletExtensionResponseController(didSelectWallet: didSelectWallet)
+            }
+            
+            static func choose_chain(didSelectChain: @escaping (EthereumChain) -> Void) -> ChooseChainController {
+                return ChooseChainController(didSelectChain: didSelectChain)
             }
         }
         

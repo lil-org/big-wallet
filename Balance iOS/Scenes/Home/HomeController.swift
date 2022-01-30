@@ -159,7 +159,7 @@ class HomeController: NativeHeaderTableController {
             ),
             .init(
                 id: Section.changePassword.id,
-                header: SPDiffableTextHeaderFooter(text: "Danger Zone."),
+                header: SPDiffableTextHeaderFooter(text: "Danger Zone"),
                 footer: SPDiffableTextHeaderFooter(text: "You can change password and please remember new password in somewhere private places."),
                 items: [
                     NativeDiffableLeftButton(
