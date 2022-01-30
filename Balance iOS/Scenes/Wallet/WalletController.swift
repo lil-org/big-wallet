@@ -69,11 +69,11 @@ class WalletController: NativeProfileController {
             .init(
                 id: Item.show_phraces.section_id,
                 header: nil,
-                footer: SPDiffableTextHeaderFooter(text: "You will see keys for its wallet. Make it private."),
+                footer: SPDiffableTextHeaderFooter(text: "You will see the secret phrase for this wallet. Keep it safe."),
                 items: [
                     NativeDiffableLeftButton(
                         id: Item.change_name.item_id,
-                        text: "Show Phraces",
+                        text: "Show Phrases",
                         icon: .init(.eye.circleFill),
                         action: { [weak self] _, _ in
                             guard let self = self else { return }
