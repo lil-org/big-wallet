@@ -156,7 +156,7 @@
 		F446309927A142E300AFA8BD /* balance-logo.scn in Resources */ = {isa = PBXBuildFile; fileRef = F446309827A142E300AFA8BD /* balance-logo.scn */; };
 		F468B96427A70B5600314201 /* ArchivedImportWalletController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468B96327A70B5600314201 /* ArchivedImportWalletController.swift */; };
 		F468B96627A70D0B00314201 /* WalletsManagerExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468B96527A70D0B00314201 /* WalletsManagerExtension.swift */; };
-		F468B96827A7161200314201 /* ChooseChainController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468B96727A7161200314201 /* ChooseChainController.swift */; };
+		F468B96827A7161200314201 /* ChooseNetworkController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468B96727A7161200314201 /* ChooseNetworkController.swift */; };
 		F468B96A27A71A1D00314201 /* SPDiffableTableDataSource+Chain.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468B96927A71A1D00314201 /* SPDiffableTableDataSource+Chain.swift */; };
 		F468EFC727A00EC3007DD803 /* AppImport in Frameworks */ = {isa = PBXBuildFile; productRef = F468EFC627A00EC3007DD803 /* AppImport */; };
 		F468EFEE27A00EEE007DD803 /* ConstantsExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468EFCA27A00EEE007DD803 /* ConstantsExtension.swift */; };
@@ -396,7 +396,7 @@
 		F446309827A142E300AFA8BD /* balance-logo.scn */ = {isa = PBXFileReference; lastKnownFileType = file.bplist; path = "balance-logo.scn"; sourceTree = "<group>"; };
 		F468B96327A70B5600314201 /* ArchivedImportWalletController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchivedImportWalletController.swift; sourceTree = "<group>"; };
 		F468B96527A70D0B00314201 /* WalletsManagerExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsManagerExtension.swift; sourceTree = "<group>"; };
-		F468B96727A7161200314201 /* ChooseChainController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChooseChainController.swift; sourceTree = "<group>"; };
+		F468B96727A7161200314201 /* ChooseNetworkController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChooseNetworkController.swift; sourceTree = "<group>"; };
 		F468B96927A71A1D00314201 /* SPDiffableTableDataSource+Chain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SPDiffableTableDataSource+Chain.swift"; sourceTree = "<group>"; };
 		F468EFC327A00E84007DD803 /* AppImport */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = AppImport; sourceTree = "<group>"; };
 		F468EFC427A00EAA007DD803 /* ExtensionImport */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = ExtensionImport; sourceTree = "<group>"; };
@@ -1070,7 +1070,7 @@
 				F468F02D27A03077007DD803 /* WalletsController.swift */,
 				F4F4FA5E27A546F300DF657B /* WalletsListController.swift */,
 				F4F4FA6027A547D100DF657B /* ChooseWalletExtensionResponseController.swift */,
-				F468B96727A7161200314201 /* ChooseChainController.swift */,
+				F468B96727A7161200314201 /* ChooseNetworkController.swift */,
 				F468B96927A71A1D00314201 /* SPDiffableTableDataSource+Chain.swift */,
 			);
 			path = Wallet;
@@ -1724,7 +1724,7 @@
 				F468EFEF27A00EEE007DD803 /* Texts.swift in Sources */,
 				F468EFF027A00EEE007DD803 /* RootSceneDelegate.swift in Sources */,
 				F4FB72E927A43BD3008AFFF3 /* LanguageService.swift in Sources */,
-				F468B96827A7161200314201 /* ChooseChainController.swift in Sources */,
+				F468B96827A7161200314201 /* ChooseNetworkController.swift in Sources */,
 				F468B96427A70B5600314201 /* ArchivedImportWalletController.swift in Sources */,
 				2C96D3A62763CCA000687301 /* Images.swift in Sources */,
 				2CF255AA275A48BB00AE54B9 /* SessionStorage.swift in Sources */,

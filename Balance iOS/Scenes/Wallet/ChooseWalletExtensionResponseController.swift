@@ -8,7 +8,7 @@ class ChooseWalletExtensionResponseController: WalletsController {
     
     private var didSelectWallet: (TokenaryWallet, EthereumChain, ChooseWalletExtensionResponseController) -> Void
     
-    private var choosedChain = Flags.last_selected_ethereum_chain
+    private var choosedChain = Flags.last_selected_network
     
     init(didSelectWallet: @escaping (TokenaryWallet, EthereumChain, ChooseWalletExtensionResponseController) -> Void) {
         self.didSelectWallet = didSelectWallet
@@ -54,7 +54,7 @@ class ChooseWalletExtensionResponseController: WalletsController {
                     selectionStyle: .default,
                     action: { item, indexPath in
                         guard let navigationController = self.navigationController else { return }
-                        Presenter.Crypto.Extension.showChangeChain(didSelectChain: { choosedChain in
+                        Presenter.Crypto.Extension.showChangeNetwork(didSelectNetwork: { choosedChain in
                             self.choosedChain = choosedChain
                             self.diffableDataSource?.set(self.content, animated: true, completion: nil)
                             navigationController.popToRootViewController(animated: true)
@@ -65,7 +65,7 @@ class ChooseWalletExtensionResponseController: WalletsController {
         )
         
         let walletsSection = SPDiffableSection(
-            id: "walllets-list",
+            id: "wallets-list",
             header: SPDiffableTextHeaderFooter(text: "Available Wallets"),
             footer: SPDiffableTextHeaderFooter(text: "Choose wallet or create new for continue."),
             items: self.wallets.isEmpty ? [emptyItem] : walletsItems

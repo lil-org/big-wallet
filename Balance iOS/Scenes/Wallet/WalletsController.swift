@@ -34,7 +34,7 @@ class WalletsController: SPDiffableTableController {
         
         configureDiffable(
             sections: content,
-            cellProviders: [.button, .wallet, .empty, .chain] + SPDiffableTableDataSource.CellProvider.default
+            cellProviders: [.button, .wallet, .empty, .network] + SPDiffableTableDataSource.CellProvider.default
         )
         
         NotificationCenter.default.addObserver(forName: .walletsUpdated, object: nil, queue: nil) { _ in

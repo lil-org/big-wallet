@@ -72,8 +72,8 @@ enum Controllers {
                 return ChooseWalletExtensionResponseController(didSelectWallet: didSelectWallet)
             }
             
-            static func choose_chain(didSelectChain: @escaping (EthereumChain) -> Void) -> ChooseChainController {
-                return ChooseChainController(didSelectChain: didSelectChain)
+            static func choose_network(didSelectNetwork: @escaping (EthereumChain) -> Void) -> ChooseNetworkController {
+                return ChooseNetworkController(didSelectNetwork: didSelectNetwork)
             }
         }
         

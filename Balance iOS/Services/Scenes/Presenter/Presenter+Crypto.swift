@@ -74,8 +74,8 @@ extension Presenter {
                 viewController.present(navgiationController)
             }
             
-            static func showChangeChain(didSelectChain: @escaping ((EthereumChain) -> Void), on navigationController: UINavigationController) {
-                let controller = Controllers.Crypto.Extension.choose_chain(didSelectChain: didSelectChain)
+            static func showChangeNetwork(didSelectNetwork: @escaping ((EthereumChain) -> Void), on navigationController: UINavigationController) {
+                let controller = Controllers.Crypto.Extension.choose_network(didSelectNetwork: didSelectNetwork)
                 navigationController.pushViewController(controller, completion: nil)
             }
         }

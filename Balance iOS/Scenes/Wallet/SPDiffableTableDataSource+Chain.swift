@@ -4,7 +4,7 @@ import SparrowKit
 
 extension SPDiffableTableDataSource.CellProvider {
     
-    public static var chain: SPDiffableTableDataSource.CellProvider  {
+    public static var network: SPDiffableTableDataSource.CellProvider  {
         return SPDiffableTableDataSource.CellProvider() { (tableView, indexPath, item) -> UITableViewCell? in
             guard let item = item as? SPDiffableTableRowSubtitle else { return nil }
             let cell = tableView.dequeueReusableCell(withIdentifier: SPDiffableSubtitleTableViewCell.reuseIdentifier, for: indexPath) as! SPDiffableSubtitleTableViewCell
