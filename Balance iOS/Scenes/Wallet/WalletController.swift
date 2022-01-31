@@ -34,6 +34,7 @@ class WalletController: NativeProfileController {
         configureHeader()
         
         headerView.emailButton.addAction(.init(handler: { _ in
+            UIPasteboard.general.string = self.walletModel.ethereumAddress
             SPIndicator.present(title: "Adress Copied", preset: .done)
         }), for: .touchUpInside)
         

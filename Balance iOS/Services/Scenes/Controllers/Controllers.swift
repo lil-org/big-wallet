@@ -43,6 +43,10 @@ enum Controllers {
             fatalError()
         }
         
+        static func wallet_operation_approve(transaction: Transaction, chain: EthereumChain, address: String, peerMeta: PeerMeta?, approveCompletion: @escaping (ApproveSendTransactionController, Bool) -> Void) -> ApproveSendTransactionController {
+            return ApproveSendTransactionController(transaction: transaction, chain: chain, address: address, peerMeta: peerMeta, approveCompletion: approveCompletion)
+        }
+        
         enum Import {
             
             static var choose_wallet_type: UIViewController { ImportWalletController() }

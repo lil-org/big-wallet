@@ -61,7 +61,7 @@ struct Transaction {
         } else {
             gwei = Strings.calculating
         }
-        return "Gas price: " + gwei
+        return gwei
     }
     
     func feeWithSymbol(chain: EthereumChain, ethPrice: Double?) -> String {
@@ -76,7 +76,7 @@ struct Transaction {
         } else {
             fee = Strings.calculating
         }
-        return "Fee: " + fee
+        return fee
     }
     
     func valueWithSymbol(chain: EthereumChain, ethPrice: Double?, withLabel: Bool) -> String? {
@@ -85,7 +85,7 @@ struct Transaction {
             let costString = chain.hasUSDPrice ? cost(value: decimalNumber, price: ethPrice) : ""
             if let value = ethString(decimalNumber: decimalNumber) {
                 let valueString = "\(value) \(chain.symbol)" + costString
-                return withLabel ? "Value: " + valueString : valueString
+                return withLabel ? valueString : valueString
             }
         }
         return nil

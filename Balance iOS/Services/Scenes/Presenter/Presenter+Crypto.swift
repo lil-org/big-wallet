@@ -78,6 +78,14 @@ extension Presenter {
                 let controller = Controllers.Crypto.Extension.choose_network(didSelectNetwork: didSelectNetwork)
                 navigationController.pushViewController(controller, completion: nil)
             }
+            
+            static func showApproveSendTransactionOperation(transaction: Transaction, chain: EthereumChain, address: String, peerMeta: PeerMeta?, approveCompletion: @escaping (ApproveSendTransactionController, Bool) -> Void, on viewController: UIViewController) {
+                let controller = Controllers.Crypto.wallet_operation_approve(transaction: transaction, chain: chain, address: address, peerMeta: peerMeta, approveCompletion: approveCompletion)
+                let navigationController = NativeNavigationController(rootViewController: controller)
+                navigationController.inheritLayoutMarginsForСhilds = true
+                applyForm(.modalForm, to: navigationController)
+                viewController.present(navigationController)
+            }
         }
     }
 }
