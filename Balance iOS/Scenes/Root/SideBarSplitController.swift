@@ -117,12 +117,43 @@ class SideBarSplitController: UISplitViewController {
                     controller.dismissAnimated()
                 }
             }, on: self)
-        case .signTypedMessage:
-            print("signTypedMessage operation will support later")
-            SPAlert.present(message: "signTypedMessage operation will support later", haptic: .warning, completion: nil)
         case .signPersonalMessage:
-            print("signPersonalMessage operation will support later")
-            SPAlert.present(message: "signPersonalMessage operation will support later", haptic: .warning, completion: nil)
+            guard let data = request.message, let wallet = WalletsManager.shared.getWallet(address: request.address), let address = wallet.ethereumAddress else {
+                self.showErrorAlert()
+                return
+            }
+            let text = String(data: data, encoding: .utf8) ?? data.hexString
+            Presenter.Crypto.Extension.showApproveOperation(subject: .signPersonalMessage, address: address, meta: text, peerMeta: peerMeta, approveCompletion: { controller, approved in
+                if approved {
+                    let ethereum = Ethereum.shared
+                    if let signed = try? ethereum.signPersonalMessage(data: data, wallet: wallet) {
+                        let response = ResponseToExtension(id: request.id, name: request.name, result: signed)
+                        self.respondTo(request: request, response: response, on: self)
+                    } else {
+                        self.showErrorAlert()
+                    }
+                } else {
+                    controller.dismissAnimated()
+                }
+            }, on: self)
+        case .signTypedMessage:
+            guard let raw = request.raw, let wallet = WalletsManager.shared.getWallet(address: request.address), let address = wallet.ethereumAddress else {
+                self.showErrorAlert()
+                return
+            }
+            Presenter.Crypto.Extension.showApproveOperation(subject: .signTypedData, address: address, meta: raw, peerMeta: peerMeta, approveCompletion: { controller, approved in
+                if approved {
+                    let ethereum = Ethereum.shared
+                    if let signed = try? ethereum.sign(typedData: raw, wallet: wallet) {
+                        let response = ResponseToExtension(id: request.id, name: request.name, result: signed)
+                        self.respondTo(request: request, response: response, on: self)
+                    } else {
+                        self.showErrorAlert()
+                    }
+                } else {
+                    controller.dismissAnimated()
+                }
+            }, on: self)
         case .ecRecover:
             print("ecRecover operation will support later")
             SPAlert.present(message: "ecRecover operation will support later", haptic: .warning, completion: nil)
@@ -142,16 +173,4 @@ class SideBarSplitController: UISplitViewController {
     private func showErrorAlert() {
         SPAlert.present(message: "Something went wrong", haptic: .error, completion: nil)
     }
-    /*
-     private func presentForSafariRequest(_ viewController: UIViewController, id: Int) {
-     var presentFrom: UIViewController = self
-     while let presented = presentFrom.presentedViewController, !(presented is UIAlertController) {
-     presentFrom = presented
-     }
-     if let alert = presentFrom.presentedViewController as? UIAlertController {
-     alert.dismiss(animated: false)
-     }
-     presentFrom.present(viewController, animated: true)
-     toDismissAfterResponse[id] = viewController
-     }*/
 }
