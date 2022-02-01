@@ -153,6 +153,7 @@
 		2CFDDF4C2765416F00F89019 /* macos-specific-content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CFDDF4B2765416F00F89019 /* macos-specific-content.js */; };
 		2CFDDF4E2765417E00F89019 /* ios-specific-content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CFDDF4D2765417D00F89019 /* ios-specific-content.js */; };
 		DFC5A10D00631755121FCBE6 /* Pods_Balance_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 29A83FE96A68BB9F154134EF /* Pods_Balance_iOS.framework */; };
+		F42D390727A9657A006DCF5B /* ExtensionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F42D390627A9657A006DCF5B /* ExtensionService.swift */; };
 		F446309927A142E300AFA8BD /* balance-logo.scn in Resources */ = {isa = PBXBuildFile; fileRef = F446309827A142E300AFA8BD /* balance-logo.scn */; };
 		F468B96427A70B5600314201 /* ArchivedImportWalletController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468B96327A70B5600314201 /* ArchivedImportWalletController.swift */; };
 		F468B96627A70D0B00314201 /* WalletsManagerExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468B96527A70D0B00314201 /* WalletsManagerExtension.swift */; };
@@ -394,6 +395,7 @@
 		B0F99598E16ED4AD726860D3 /* Pods-Balance.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Balance.release.xcconfig"; path = "Target Support Files/Pods-Balance/Pods-Balance.release.xcconfig"; sourceTree = "<group>"; };
 		C289F6A7A78D99CF20B75732 /* Pods-Balance.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Balance.debug.xcconfig"; path = "Target Support Files/Pods-Balance/Pods-Balance.debug.xcconfig"; sourceTree = "<group>"; };
 		F3B5261B155EF9E06AAD7D4C /* Pods-Balance iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Balance iOS.debug.xcconfig"; path = "Target Support Files/Pods-Balance iOS/Pods-Balance iOS.debug.xcconfig"; sourceTree = "<group>"; };
+		F42D390627A9657A006DCF5B /* ExtensionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionService.swift; sourceTree = "<group>"; };
 		F446309827A142E300AFA8BD /* balance-logo.scn */ = {isa = PBXFileReference; lastKnownFileType = file.bplist; path = "balance-logo.scn"; sourceTree = "<group>"; };
 		F468B96327A70B5600314201 /* ArchivedImportWalletController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchivedImportWalletController.swift; sourceTree = "<group>"; };
 		F468B96527A70D0B00314201 /* WalletsManagerExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsManagerExtension.swift; sourceTree = "<group>"; };
@@ -981,6 +983,7 @@
 				F478A37127A15BF600D1398B /* AuthService.swift */,
 				F4FB72E827A43BD3008AFFF3 /* LanguageService.swift */,
 				F468B96527A70D0B00314201 /* WalletsManagerExtension.swift */,
+				F42D390627A9657A006DCF5B /* ExtensionService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -1759,6 +1762,7 @@
 				2C5FF97426C84F7B00B32ACC /* SceneDelegate.swift in Sources */,
 				F468EFF527A00EEE007DD803 /* AppDelegate.swift in Sources */,
 				2CF2559E275A479800AE54B9 /* WalletsManager.swift in Sources */,
+				F42D390727A9657A006DCF5B /* ExtensionService.swift in Sources */,
 				F478A37227A15BF600D1398B /* AuthService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

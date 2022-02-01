@@ -32,9 +32,15 @@ class SideBarSplitController: UISplitViewController {
         fatalError("init(coder:) has not been implemented")
     }
     
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+    
     override func viewDidLoad() {
         super.viewDidLoad()
-        NotificationCenter.default.addObserver(self, selector: #selector(processInput), name: UIApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: nil) { _ in
+            ExtensionService.processInput(on: self)
+        }
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -48,129 +54,5 @@ class SideBarSplitController: UISplitViewController {
                 Flags.seen_tutorial = true
             })
         }
-    }
-    
-    // MARK: - Extension Logic
-    
-    @objc private func processInput() {
-        let prefix = "balance://"
-        guard let url = launchURL?.absoluteString, url.hasPrefix(prefix),
-              let request = SafariRequest(query: String(url.dropFirst(prefix.count))) else { return }
-        launchURL = nil
-        
-        guard ExtensionBridge.hasRequest(id: request.id) else {
-            SPAlert.present(message: "This operation will support later", haptic: .warning, completion: nil)
-            return
-        }
-        
-        let peerMeta = PeerMeta(title: request.host, iconURLString: request.iconURLString)
-        
-        switch request.method {
-        case .switchAccount, .requestAccounts:
-            Presenter.Crypto.Extension.showLinkWallet(didSelectWallet: { wallet, chain, controller  in
-                guard let address = wallet.ethereumAddress else {
-                    self.showErrorAlert()
-                    return
-                }
-                let response = ResponseToExtension(id: request.id, name: request.name, results: [address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
-                self.respondTo(request: request, response: response, on: controller)
-            }, on: self)
-        case .signTransaction:
-            guard let transaction = request.transaction, let chain = request.chain, let wallet = WalletsManager.shared.getWallet(address: request.address), let address = wallet.ethereumAddress else {
-                self.showErrorAlert()
-                return
-            }
-            Presenter.Crypto.Extension.showApproveSendTransaction(
-                transaction: transaction,
-                chain: chain,
-                address: address,
-                peerMeta: peerMeta,
-                approveCompletion: { controller, approved in
-                    controller.dismissAnimated()
-                    let ethereum = Ethereum.shared
-                    if approved {
-                        if let transactionHash = try? ethereum.send(transaction: transaction, wallet: wallet, chain: chain) {
-                            let response = ResponseToExtension(id: request.id, name: request.name, result: transactionHash)
-                            self.respondTo(request: request, response: response, on: controller)
-                        } else {
-                            self.showErrorAlert()
-                        }
-                    } else {
-                        controller.dismissAnimated()
-                    }
-                }, on: self)
-        case .signMessage:
-            guard let data = request.message, let wallet = WalletsManager.shared.getWallet(address: request.address), let address = wallet.ethereumAddress else {
-                self.showErrorAlert()
-                return
-            }
-            Presenter.Crypto.Extension.showApproveOperation(subject: .signMessage, address: address, meta: data.hexString, peerMeta: peerMeta, approveCompletion: { controller, approved in
-                if approved {
-                    let ethereum = Ethereum.shared
-                    if let signed = try? ethereum.sign(data: data, wallet: wallet) {
-                        let response = ResponseToExtension(id: request.id, name: request.name, result: signed)
-                        self.respondTo(request: request, response: response, on: self)
-                    } else {
-                        self.showErrorAlert()
-                    }
-                } else {
-                    controller.dismissAnimated()
-                }
-            }, on: self)
-        case .signPersonalMessage:
-            guard let data = request.message, let wallet = WalletsManager.shared.getWallet(address: request.address), let address = wallet.ethereumAddress else {
-                self.showErrorAlert()
-                return
-            }
-            let text = String(data: data, encoding: .utf8) ?? data.hexString
-            Presenter.Crypto.Extension.showApproveOperation(subject: .signPersonalMessage, address: address, meta: text, peerMeta: peerMeta, approveCompletion: { controller, approved in
-                if approved {
-                    let ethereum = Ethereum.shared
-                    if let signed = try? ethereum.signPersonalMessage(data: data, wallet: wallet) {
-                        let response = ResponseToExtension(id: request.id, name: request.name, result: signed)
-                        self.respondTo(request: request, response: response, on: self)
-                    } else {
-                        self.showErrorAlert()
-                    }
-                } else {
-                    controller.dismissAnimated()
-                }
-            }, on: self)
-        case .signTypedMessage:
-            guard let raw = request.raw, let wallet = WalletsManager.shared.getWallet(address: request.address), let address = wallet.ethereumAddress else {
-                self.showErrorAlert()
-                return
-            }
-            Presenter.Crypto.Extension.showApproveOperation(subject: .signTypedData, address: address, meta: raw, peerMeta: peerMeta, approveCompletion: { controller, approved in
-                if approved {
-                    let ethereum = Ethereum.shared
-                    if let signed = try? ethereum.sign(typedData: raw, wallet: wallet) {
-                        let response = ResponseToExtension(id: request.id, name: request.name, result: signed)
-                        self.respondTo(request: request, response: response, on: self)
-                    } else {
-                        self.showErrorAlert()
-                    }
-                } else {
-                    controller.dismissAnimated()
-                }
-            }, on: self)
-        case .ecRecover:
-            print("ecRecover operation will support later")
-            SPAlert.present(message: "ecRecover operation will support later", haptic: .warning, completion: nil)
-        case .addEthereumChain, .switchEthereumChain, .watchAsset:
-            print("addEthereumChain / switchEthereumChain / watchAsset operation will support later")
-            SPAlert.present(message: "addEthereumChain / switchEthereumChain / watchAsset operation will support later", haptic: .warning, completion: nil)
-        }
-    }
-    
-    private func respondTo(request: SafariRequest, response: ResponseToExtension, on controller: UIViewController) {
-        ExtensionBridge.respond(id: request.id, response: response)
-        UIApplication.shared.open(URL.blankRedirect(id: request.id)) { _ in
-            controller.dismissAnimated()
-        }
-    }
-    
-    private func showErrorAlert() {
-        SPAlert.present(message: "Something went wrong", haptic: .error, completion: nil)
     }
 }

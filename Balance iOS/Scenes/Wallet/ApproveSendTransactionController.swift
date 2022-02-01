@@ -80,8 +80,7 @@ class ApproveSendTransactionController: SPDiffableTableController {
             guard let self = self else { return }
             self.transaction = updated
             self.diffableDataSource?.set(self.content, animated: true, completion: nil)
-            self.toolBarView.actionButton.isEnabled = self.transaction.hasFee
-            self.toolBarView.setLoading(false)
+            self.toolBarView.setLoading(!self.transaction.hasFee)
         }
     }
     
