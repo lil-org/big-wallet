@@ -10,7 +10,7 @@ import IdMapping from "./id_mapping";
 import { EventEmitter } from "events";
 import isUtf8 from "isutf8";
 
-class TokenaryWeb3Provider extends EventEmitter {
+class TokenaryEthereum extends EventEmitter {
     constructor(config) {
         super();
         this.setConfig(config);
@@ -69,7 +69,7 @@ class TokenaryWeb3Provider extends EventEmitter {
     request(payload) {
         // this points to window in methods like web3.eth.getAccounts()
         var that = this;
-        if (!(this instanceof TokenaryWeb3Provider)) {
+        if (!(this instanceof TokenaryEthereum)) {
             that = window.ethereum;
         }
         return that._request(payload, false);
@@ -103,7 +103,7 @@ class TokenaryWeb3Provider extends EventEmitter {
      */
     send(payload) {
         var that = this;
-        if (!(this instanceof TokenaryWeb3Provider)) {
+        if (!(this instanceof TokenaryEthereum)) {
             that = window.ethereum;
         }
         var requestPayload = {};
@@ -123,7 +123,7 @@ class TokenaryWeb3Provider extends EventEmitter {
         console.log("sendAsync(data, callback) is deprecated, please use window.ethereum.request(data) instead.");
         // this points to window in methods like web3.eth.getAccounts()
         var that = this;
-        if (!(this instanceof TokenaryWeb3Provider)) {
+        if (!(this instanceof TokenaryEthereum)) {
             that = window.ethereum;
         }
         if (Array.isArray(payload)) {
@@ -388,4 +388,4 @@ class TokenaryWeb3Provider extends EventEmitter {
     }
 }
 
-module.exports = TokenaryWeb3Provider;
+module.exports = TokenaryEthereum;
