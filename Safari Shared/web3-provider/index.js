@@ -5,23 +5,19 @@
 
 import TokenaryEthereum from "./ethereum";
 
-window.tokenary = {Provider: TokenaryEthereum};
+window.tokenary = {};
+window.tokenary.postMessage = (jsonString) => {
+    window.postMessage({direction: "from-page-script", message: jsonString}, "*");
+};
 
-(function() {
-    var config = {address: "", chainId: "0x1", rpcUrl: "https://mainnet.infura.io/v3/3f99b6096fda424bbb26e17866dcddfc"};
-    window.ethereum = new tokenary.Provider(config);
-    
-    const handler = {
-        get(target, property) {
-            return window.ethereum;
-        }
+var config = {address: "", chainId: "0x1", rpcUrl: "https://mainnet.infura.io/v3/3f99b6096fda424bbb26e17866dcddfc"};
+window.ethereum = new TokenaryEthereum(config);
+const handler = {
+    get(target, property) {
+        return window.ethereum;
     }
-    window.web3 = new Proxy(window.ethereum, handler);
-    
-    tokenary.postMessage = (jsonString) => {
-        window.postMessage({direction: "from-page-script", message: jsonString}, "*");
-    };
-})();
+}
+window.web3 = new Proxy(window.ethereum, handler);
 
 window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "from-content-script") {
