@@ -356,17 +356,6 @@ class TokenaryEthereum extends EventEmitter {
             this.callbacks.delete(id);
         } else {
             console.log(`callback id: ${id} not found`);
-            // check if it's iframe callback
-            for (var i = 0; i < window.frames.length; i++) {
-                const frame = window.frames[i];
-                try {
-                    if (frame.ethereum.callbacks.has(id)) {
-                        frame.ethereum.sendResponse(id, result);
-                    }
-                } catch (error) {
-                    console.log(`send response to frame error: ${error}`);
-                }
-            }
         }
     }
     
