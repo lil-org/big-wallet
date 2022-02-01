@@ -79,7 +79,7 @@ class ApproveOperationController: SPDiffableTableController {
     internal var content: [SPDiffableSection] {
         return [
             .init(
-                id: "adress",
+                id: "address",
                 header: NativeLargeHeaderItem(title: "Wallet"),
                 footer: SPDiffableTextHeaderFooter(text: "Wallet, who doing this operation. It's shoud be you."),
                 items: [

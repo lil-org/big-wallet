@@ -65,7 +65,7 @@ class ApproveSendTransactionController: SPDiffableTableController {
             self.approveCompletion(self, false)
         }), for: .touchUpInside)
         
-        configureDiffable(sections: content, cellProviders: SPDiffableTableDataSource.CellProvider.default)
+        configureDiffable(sections: content, cellProviders: [.rowDetailMultiLines] + SPDiffableTableDataSource.CellProvider.default, headerFooterProviders: [.largeHeader])
         
         if let navigationController = self.navigationController as? NativeNavigationController {
             navigationController.mimicrateToolBarView = self.toolBarView
@@ -106,15 +106,6 @@ class ApproveSendTransactionController: SPDiffableTableController {
                 text: "Website",
                 detail:  peerMeta?.name ?? "Unknow",
                 icon: nil,
-                accessoryType: .none,
-                selectionStyle: .none,
-                action: nil
-            ),
-            SPDiffableTableRow(
-                id: Item.address.id,
-                text: "Address",
-                detail: address,
-                icon: Blockies(seed: address.lowercased()).createImage(),
                 accessoryType: .none,
                 selectionStyle: .none,
                 action: nil
@@ -161,8 +152,24 @@ class ApproveSendTransactionController: SPDiffableTableController {
         
         return [
             .init(
+                id: "address",
+                header: NativeLargeHeaderItem(title: "Wallet"),
+                footer: SPDiffableTextHeaderFooter(text: "Wallet, who doing this operation. It's shoud be you."),
+                items: [
+                    SPDiffableTableRow(
+                        id: Item.address.id,
+                        text: address,
+                        detail: nil,
+                        icon: Blockies(seed: address.lowercased()).createImage(),
+                        accessoryType: .none,
+                        selectionStyle: .none,
+                        action: nil
+                    )
+                ]
+            ),
+            .init(
                 id: "data",
-                header: SPDiffableTextHeaderFooter(text: "Operation Details"),
+                header: NativeLargeHeaderItem(title: "Operation Details"),
                 footer: SPDiffableTextHeaderFooter(text: "Please, descide about it operation - approve or not. After action you will be redirect to website."),
                 items: items
             )
