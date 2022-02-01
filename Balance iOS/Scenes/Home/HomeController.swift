@@ -157,7 +157,7 @@ class HomeController: NativeHeaderTableController {
                 footer: nil,
                 items: walletItems
             ),
-            .init(
+            /*.init(
                 id: Section.changePassword.id,
                 header: SPDiffableTextHeaderFooter(text: "Danger Zone"),
                 footer: SPDiffableTextHeaderFooter(text: "You can change password and please remember new password in somewhere private places."),
@@ -183,7 +183,7 @@ class HomeController: NativeHeaderTableController {
                         }
                     )
                 ]
-            )
+            )*/
         ]
         
         return sections

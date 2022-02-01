@@ -4,7 +4,8 @@ import NativeUIKit
 enum AuthService {
     
     static func auth(cancelble: Bool, on viewController: UIViewController, completion: @escaping ((Bool) -> Void)) {
-        LocalAuthentication.attempt(reason: Strings.enterTokenary, presentPasswordAlertFrom: nil, passwordReason: nil) { success in
+        completion(true)
+        /*LocalAuthentication.attempt(reason: Strings.enterTokenary, presentPasswordAlertFrom: nil, passwordReason: nil) { success in
             if success {
                 completion(success)
             } else {
@@ -12,6 +13,6 @@ enum AuthService {
                     completion(result)
                 }, on: viewController)
             }
-        }
+        }*/
     }
 }
