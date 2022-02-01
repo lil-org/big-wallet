@@ -10,8 +10,7 @@ window.tokenary.postMessage = (jsonString) => {
     window.postMessage({direction: "from-page-script", message: jsonString}, "*");
 };
 
-var config = {address: "", chainId: "0x1", rpcUrl: "https://mainnet.infura.io/v3/3f99b6096fda424bbb26e17866dcddfc"};
-window.ethereum = new TokenaryEthereum(config);
+window.ethereum = new TokenaryEthereum();
 const handler = {
     get(target, property) {
         return window.ethereum;
