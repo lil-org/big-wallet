@@ -1,6 +1,9 @@
 import UIKit
 import SFSymbols
 import SPIndicator
+import SparrowKit
+import Constants
+import SPAlert
 
 class AuthController: PasswordController, UIAdaptivePresentationControllerDelegate {
     
@@ -27,10 +30,20 @@ class AuthController: PasswordController, UIAdaptivePresentationControllerDelega
         navigationController?.presentationController?.delegate = self
         actionToolbarView.secondActionButton.setTitle("Reset Existing Wallet")
         actionToolbarView.secondActionButton.addAction(.init(handler: { _ in
-            guard let parent = self.presentingViewController else { return }
-            self.dismiss(animated: true, completion: {
-                WalletsManager.startDestroyProcess(on: parent, sourceView: self.actionToolbarView.secondActionButton)
-            })
+            WalletsManager.startDestroyProcess(on: self, sourceView: self.actionToolbarView.secondActionButton) { destroyed in
+                if destroyed {
+                    guard let parent = self.presentingViewController else { return }
+                    self.dismiss(animated: true, completion: {
+                        Presenter.App.showOnboarding(on: parent, afterAction: {
+                            Presenter.Crypto.showWalletOnboarding(on: parent)
+                            Flags.seen_tutorial = true
+                        })
+                        delay(0.1, closure: {
+                            SPAlert.present(title: "Wallet was reseted. Let's reconfigure it", message: nil, preset: .done, completion:  nil)
+                        })
+                    })
+                }
+            }
         }), for: .touchUpInside)
     }
     

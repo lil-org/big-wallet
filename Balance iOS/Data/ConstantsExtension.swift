@@ -26,11 +26,5 @@ extension Constants {
             static var scene_filename: String { "balance-logo.scn" }
             static var logo_node: String { "logo" }
         }
-        
-        enum Safari {
-            
-            static var scene_filename: String { "coin.scn" }
-            static var logo_node: String { "logo" }
-        }
     }
 }

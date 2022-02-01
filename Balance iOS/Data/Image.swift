@@ -13,4 +13,8 @@ enum Image {
     static func language(for locale: SPLocale) -> UIImage {
         UIImage(named: locale.identifier) ?? UIImage()
     }
+    
+    static var safari_icon: UIImage {
+        .init(named: "safari-icon")!
+    }
 }

@@ -110,7 +110,17 @@ class SettingsController: SPDiffableTableController {
                     accessoryType: .none,
                     action: { item, indexPath in
                         guard let cell = self.tableView.cellForRow(at: indexPath) else { return }
-                        WalletsManager.startDestroyProcess(on: self, sourceView: cell)
+                        WalletsManager.startDestroyProcess(on: self, sourceView: cell, completion: { destroyed in
+                            if destroyed {
+                                Presenter.App.showOnboarding(on: self, afterAction: {
+                                    Presenter.Crypto.showWalletOnboarding(on: self)
+                                    Flags.seen_tutorial = true
+                                })
+                                delay(0.1, closure: {
+                                    SPAlert.present(title: "Wallet was reseted. Let's reconfigure it", message: nil, preset: .done, completion:  nil)
+                                })
+                            }
+                        })
                     }
                 )
             ])

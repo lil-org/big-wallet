@@ -29,10 +29,11 @@ class SafariTableViewCell: SPTableViewCell {
         $0.set(title: "Open Steps", icon: nil, colorise: .tintedContentGroupBackground)
     }
     
-    let iconView = Rotation3DModelView(
-        sceneName: Constants._3D.Safari.scene_filename,
-        node: Constants._3D.Safari.logo_node
-    )
+    let iconView = SPImageView().do {
+        $0.contentMode = .scaleAspectFit
+        $0.backgroundColor = .clear
+        $0.image = Image.safari_icon
+    }
     
     override func commonInit() {
         super.commonInit()

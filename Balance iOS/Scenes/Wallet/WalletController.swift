@@ -105,16 +105,17 @@ class WalletController: NativeProfileController {
                                 description: "Confirm Descriptipm",
                                 actionTitle: "Delete Wallet",
                                 desctructive: true,
-                                action: { [weak self] in
+                                action: { [weak self] confirmed in
                                     guard let self = self else { return }
-                                    let walletsManager = WalletsManager.shared
-                                    do {
-                                        try? walletsManager.delete(wallet: self.walletModel)
+                                    if confirmed {
+                                        let walletsManager = WalletsManager.shared
+                                        do {
+                                            try? walletsManager.delete(wallet: self.walletModel)
+                                        }
+                                        NotificationCenter.default.post(name: .walletsUpdated)
+                                        SPAlert.present(title: "Wallet was Deleted", preset: .done, completion: nil)
+                                        self.navigationController?.popViewController()
                                     }
-                                    
-                                    NotificationCenter.default.post(name: .walletsUpdated)
-                                    SPAlert.present(title: "Wallet was Deleted", preset: .done, completion: nil)
-                                    self.navigationController?.popViewController()
                                 },
                                 sourceView: soruceView,
                                 presentOn: self

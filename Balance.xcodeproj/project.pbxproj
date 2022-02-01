@@ -216,8 +216,6 @@
 		F4B4CDA027A2AD7200300582 /* Rotation3DModelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CD9F27A2AD7200300582 /* Rotation3DModelView.swift */; };
 		F4B4CDA227A2B33E00300582 /* SafariStepsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CDA127A2B33E00300582 /* SafariStepsController.swift */; };
 		F4B4CDA427A2BB9300300582 /* Image.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CDA327A2BB9300300582 /* Image.swift */; };
-		F4B4CDAA27A2D4EC00300582 /* coin.scn in Resources */ = {isa = PBXBuildFile; fileRef = F4B4CDA927A2D4EC00300582 /* coin.scn */; };
-		F4B4CDAC27A2D62800300582 /* Safari_browser_logo.svg.png in Resources */ = {isa = PBXBuildFile; fileRef = F4B4CDAB27A2D62800300582 /* Safari_browser_logo.svg.png */; };
 		F4CF564427A8147B008C72C4 /* ApproveSendTransactionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4CF564327A8147B008C72C4 /* ApproveSendTransactionController.swift */; };
 		F4F4FA5F27A546F300DF657B /* WalletsListController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F4FA5E27A546F300DF657B /* WalletsListController.swift */; };
 		F4F4FA6127A547D100DF657B /* ChooseWalletExtensionResponseController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F4FA6027A547D100DF657B /* ChooseWalletExtensionResponseController.swift */; };
@@ -459,8 +457,6 @@
 		F4B4CD9F27A2AD7200300582 /* Rotation3DModelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rotation3DModelView.swift; sourceTree = "<group>"; };
 		F4B4CDA127A2B33E00300582 /* SafariStepsController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariStepsController.swift; sourceTree = "<group>"; };
 		F4B4CDA327A2BB9300300582 /* Image.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Image.swift; sourceTree = "<group>"; };
-		F4B4CDA927A2D4EC00300582 /* coin.scn */ = {isa = PBXFileReference; lastKnownFileType = file.bplist; path = coin.scn; sourceTree = "<group>"; };
-		F4B4CDAB27A2D62800300582 /* Safari_browser_logo.svg.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Safari_browser_logo.svg.png; sourceTree = "<group>"; };
 		F4CF564327A8147B008C72C4 /* ApproveSendTransactionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveSendTransactionController.swift; sourceTree = "<group>"; };
 		F4F4FA5E27A546F300DF657B /* WalletsListController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsListController.swift; sourceTree = "<group>"; };
 		F4F4FA6027A547D100DF657B /* ChooseWalletExtensionResponseController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChooseWalletExtensionResponseController.swift; sourceTree = "<group>"; };
@@ -1049,7 +1045,6 @@
 		F468F00627A00F6A007DD803 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				F4B4CDB127A2E4FF00300582 /* 3D Safari Logo */,
 				F446309A27A143C800AFA8BD /* 3D Logo */,
 				2CE059482764169E0042D844 /* Entitlements.entitlements */,
 				2C5FF97A26C84F7C00B32ACC /* Assets.xcassets */,
@@ -1168,15 +1163,6 @@
 				F4B4CD9927A2A4A200300582 /* ChangePassword.swift */,
 			);
 			path = Password;
-			sourceTree = "<group>";
-		};
-		F4B4CDB127A2E4FF00300582 /* 3D Safari Logo */ = {
-			isa = PBXGroup;
-			children = (
-				F4B4CDAB27A2D62800300582 /* Safari_browser_logo.svg.png */,
-				F4B4CDA927A2D4EC00300582 /* coin.scn */,
-			);
-			path = "3D Safari Logo";
 			sourceTree = "<group>";
 		};
 		FB5786212D81829B0FADBD25 /* Pods */ = {
@@ -1384,7 +1370,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				F468F04627A04677007DD803 /* sfekebvc_2K_Albedo.jpg in Resources */,
-				F4B4CDAC27A2D62800300582 /* Safari_browser_logo.svg.png in Resources */,
 				2C96D3AA2763D13400687301 /* DataStateView.xib in Resources */,
 				2C5FF97E26C84F7C00B32ACC /* LaunchScreen.storyboard in Resources */,
 				2C40709527667A8600AB3D55 /* ImageWithLabelTableViewCell.xib in Resources */,
@@ -1394,7 +1379,6 @@
 				2C5FF97B26C84F7C00B32ACC /* Assets.xcassets in Resources */,
 				2C5FF97926C84F7B00B32ACC /* Main.storyboard in Resources */,
 				F446309927A142E300AFA8BD /* balance-logo.scn in Resources */,
-				F4B4CDAA27A2D4EC00300582 /* coin.scn in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
