@@ -63,47 +63,63 @@ class SideBarSplitController: UISplitViewController {
             return
         }
         
-        // let peerMeta = PeerMeta(title: request.host, iconURLString: request.iconURLString)
+        let peerMeta = PeerMeta(title: request.host, iconURLString: request.iconURLString)
         
         switch request.method {
         case .switchAccount, .requestAccounts:
             Presenter.Crypto.Extension.showLinkWallet(didSelectWallet: { wallet, chain, controller  in
                 guard let address = wallet.ethereumAddress else {
-                    SPAlert.present(message: "Invalid input data", haptic: .error, completion: nil)
+                    self.showErrorAlert()
                     return
                 }
-                print("process with chain \(chain.name)")
                 let response = ResponseToExtension(id: request.id, name: request.name, results: [address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
                 self.respondTo(request: request, response: response, on: controller)
             }, on: self)
         case .signTransaction:
             guard let transaction = request.transaction, let chain = request.chain, let wallet = WalletsManager.shared.getWallet(address: request.address), let address = wallet.ethereumAddress else {
-                SPAlert.present(message: "Something went wrong", haptic: .error, completion: nil)
+                self.showErrorAlert()
                 return
             }
-            
-            let peerMeta = PeerMeta(title: request.host, iconURLString: request.iconURLString)
-            Presenter.Crypto.Extension.showApproveSendTransactionOperation(
+            Presenter.Crypto.Extension.showApproveSendTransaction(
                 transaction: transaction,
                 chain: chain,
                 address: address,
                 peerMeta: peerMeta,
-                approveCompletion: { controller, isApproved in
+                approveCompletion: { controller, approved in
                     controller.dismissAnimated()
                     let ethereum = Ethereum.shared
-                    if let transactionHash = try? ethereum.send(transaction: transaction, wallet: wallet, chain: chain) {
-                        let response = ResponseToExtension(id: request.id, name: request.name, result: transactionHash)
-                        self.respondTo(request: request, response: response, on: controller)
+                    if approved {
+                        if let transactionHash = try? ethereum.send(transaction: transaction, wallet: wallet, chain: chain) {
+                            let response = ResponseToExtension(id: request.id, name: request.name, result: transactionHash)
+                            self.respondTo(request: request, response: response, on: controller)
+                        } else {
+                            self.showErrorAlert()
+                        }
                     } else {
-                        SPAlert.present(message: "Something went wrong", haptic: .error, completion: nil)
+                        controller.dismissAnimated()
                     }
                 }, on: self)
+        case .signMessage:
+            guard let data = request.message, let wallet = WalletsManager.shared.getWallet(address: request.address), let address = wallet.ethereumAddress else {
+                self.showErrorAlert()
+                return
+            }
+            Presenter.Crypto.Extension.showApproveOperation(subject: .signMessage, address: address, meta: data.hexString, peerMeta: peerMeta, approveCompletion: { controller, approved in
+                if approved {
+                    let ethereum = Ethereum.shared
+                    if let signed = try? ethereum.sign(data: data, wallet: wallet) {
+                        let response = ResponseToExtension(id: request.id, name: request.name, result: signed)
+                        self.respondTo(request: request, response: response, on: self)
+                    } else {
+                        self.showErrorAlert()
+                    }
+                } else {
+                    controller.dismissAnimated()
+                }
+            }, on: self)
         case .signTypedMessage:
             print("signTypedMessage operation will support later")
             SPAlert.present(message: "signTypedMessage operation will support later", haptic: .warning, completion: nil)
-        case .signMessage:
-            print("signMessage operation will support later")
-            SPAlert.present(message: "signMessage operation will support later", haptic: .warning, completion: nil)
         case .signPersonalMessage:
             print("signPersonalMessage operation will support later")
             SPAlert.present(message: "signPersonalMessage operation will support later", haptic: .warning, completion: nil)
@@ -121,6 +137,10 @@ class SideBarSplitController: UISplitViewController {
         UIApplication.shared.open(URL.blankRedirect(id: request.id)) { _ in
             controller.dismissAnimated()
         }
+    }
+    
+    private func showErrorAlert() {
+        SPAlert.present(message: "Something went wrong", haptic: .error, completion: nil)
     }
     /*
      private func presentForSafariRequest(_ viewController: UIViewController, id: Int) {

@@ -79,8 +79,16 @@ extension Presenter {
                 navigationController.pushViewController(controller, completion: nil)
             }
             
-            static func showApproveSendTransactionOperation(transaction: Transaction, chain: EthereumChain, address: String, peerMeta: PeerMeta?, approveCompletion: @escaping (ApproveSendTransactionController, Bool) -> Void, on viewController: UIViewController) {
-                let controller = Controllers.Crypto.wallet_operation_approve(transaction: transaction, chain: chain, address: address, peerMeta: peerMeta, approveCompletion: approveCompletion)
+            static func showApproveSendTransaction(transaction: Transaction, chain: EthereumChain, address: String, peerMeta: PeerMeta?, approveCompletion: @escaping (ApproveSendTransactionController, Bool) -> Void, on viewController: UIViewController) {
+                let controller = Controllers.Crypto.wallet_transaction_approve(transaction: transaction, chain: chain, address: address, peerMeta: peerMeta, approveCompletion: approveCompletion)
+                let navigationController = NativeNavigationController(rootViewController: controller)
+                navigationController.inheritLayoutMarginsForСhilds = true
+                applyForm(.modalForm, to: navigationController)
+                viewController.present(navigationController)
+            }
+            
+            static func showApproveOperation(subject: ApprovalSubject, address: String, meta: String, peerMeta: PeerMeta?, approveCompletion: @escaping (ApproveOperationController, Bool) -> Void, on viewController: UIViewController) {
+                let controller = Controllers.Crypto.wallet_operation_approve(subject: subject, address: address, meta: meta, peerMeta: peerMeta, approveCompletion: approveCompletion)
                 let navigationController = NativeNavigationController(rootViewController: controller)
                 navigationController.inheritLayoutMarginsForСhilds = true
                 applyForm(.modalForm, to: navigationController)

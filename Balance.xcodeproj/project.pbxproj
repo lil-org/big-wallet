@@ -216,6 +216,8 @@
 		F4B4CDA027A2AD7200300582 /* Rotation3DModelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CD9F27A2AD7200300582 /* Rotation3DModelView.swift */; };
 		F4B4CDA227A2B33E00300582 /* SafariStepsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CDA127A2B33E00300582 /* SafariStepsController.swift */; };
 		F4B4CDA427A2BB9300300582 /* Image.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CDA327A2BB9300300582 /* Image.swift */; };
+		F4C9909A27A956560027286B /* ApproveOperationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4C9909927A956560027286B /* ApproveOperationController.swift */; };
+		F4C9909C27A95C620027286B /* SPDiffableTableDataSourceExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4C9909B27A95C620027286B /* SPDiffableTableDataSourceExtension.swift */; };
 		F4CF564427A8147B008C72C4 /* ApproveSendTransactionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4CF564327A8147B008C72C4 /* ApproveSendTransactionController.swift */; };
 		F4F4FA5F27A546F300DF657B /* WalletsListController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F4FA5E27A546F300DF657B /* WalletsListController.swift */; };
 		F4F4FA6127A547D100DF657B /* ChooseWalletExtensionResponseController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F4FA6027A547D100DF657B /* ChooseWalletExtensionResponseController.swift */; };
@@ -457,6 +459,8 @@
 		F4B4CD9F27A2AD7200300582 /* Rotation3DModelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rotation3DModelView.swift; sourceTree = "<group>"; };
 		F4B4CDA127A2B33E00300582 /* SafariStepsController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariStepsController.swift; sourceTree = "<group>"; };
 		F4B4CDA327A2BB9300300582 /* Image.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Image.swift; sourceTree = "<group>"; };
+		F4C9909927A956560027286B /* ApproveOperationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveOperationController.swift; sourceTree = "<group>"; };
+		F4C9909B27A95C620027286B /* SPDiffableTableDataSourceExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SPDiffableTableDataSourceExtension.swift; sourceTree = "<group>"; };
 		F4CF564327A8147B008C72C4 /* ApproveSendTransactionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveSendTransactionController.swift; sourceTree = "<group>"; };
 		F4F4FA5E27A546F300DF657B /* WalletsListController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsListController.swift; sourceTree = "<group>"; };
 		F4F4FA6027A547D100DF657B /* ChooseWalletExtensionResponseController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChooseWalletExtensionResponseController.swift; sourceTree = "<group>"; };
@@ -955,6 +959,7 @@
 				F4B4CD9F27A2AD7200300582 /* Rotation3DModelView.swift */,
 				F4FB72E427A4399A008AFFF3 /* Appearance.swift */,
 				F4FB72E627A439B1008AFFF3 /* InterfaceAppearance.swift */,
+				F4C9909B27A95C620027286B /* SPDiffableTableDataSourceExtension.swift */,
 			);
 			path = Interface;
 			sourceTree = "<group>";
@@ -1070,6 +1075,7 @@
 				F468B96727A7161200314201 /* ChooseNetworkController.swift */,
 				F468B96927A71A1D00314201 /* SPDiffableTableDataSource+Chain.swift */,
 				F4CF564327A8147B008C72C4 /* ApproveSendTransactionController.swift */,
+				F4C9909927A956560027286B /* ApproveOperationController.swift */,
 			);
 			path = Wallet;
 			sourceTree = "<group>";
@@ -1659,6 +1665,8 @@
 				F468EFF927A00EEE007DD803 /* SidebarController.swift in Sources */,
 				F478A35A27A1467600D1398B /* WalletTableViewCell.swift in Sources */,
 				F4B4CD9527A29DFA00300582 /* AuthController.swift in Sources */,
+				F4C9909C27A95C620027286B /* SPDiffableTableDataSourceExtension.swift in Sources */,
+				F4C9909A27A956560027286B /* ApproveOperationController.swift in Sources */,
 				F4B4CDA427A2BB9300300582 /* Image.swift in Sources */,
 				F478A36727A14A0000D1398B /* OnboardingChildInterface.swift in Sources */,
 				2CF25597275A46D300AE54B9 /* Defaults.swift in Sources */,
