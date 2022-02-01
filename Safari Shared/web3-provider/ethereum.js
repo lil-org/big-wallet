@@ -331,12 +331,7 @@ class TokenaryEthereum extends EventEmitter {
                 networkId: this.net_version(),
                 host: window.location.host
             };
-            if (window.tokenary.postMessage) {
-                window.tokenary.postMessage(object);
-            } else {
-                // old clients
-                window.webkit.messageHandlers[handler].postMessage(object);
-            }
+            window.tokenary.postMessage(object);
         } else {
             // don't forget to verify in the app
             this.sendError(id, new ProviderRpcError(4100, "provider is not ready"));

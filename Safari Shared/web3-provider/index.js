@@ -5,7 +5,7 @@
 
 import TokenaryEthereum from "./ethereum";
 
-window.tokenary = {Provider: TokenaryEthereum, postMessage: null};
+window.tokenary = {Provider: TokenaryEthereum};
 
 (function() {
     var config = {address: "", chainId: "0x1", rpcUrl: "https://mainnet.infura.io/v3/3f99b6096fda424bbb26e17866dcddfc"};
