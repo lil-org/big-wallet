@@ -262,6 +262,7 @@
 		2C901C462689E6D400D0926A /* ApproveTransactionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveTransactionViewController.swift; sourceTree = "<group>"; };
 		2C901C492689F01700D0926A /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		2C901C4C268A033100D0926A /* GasService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GasService.swift; sourceTree = "<group>"; };
+		2C90E5F527A95B9400C8991E /* ethereum.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = ethereum.js; path = "web3-provider/ethereum.js"; sourceTree = "<group>"; };
 		2C917428267D2A6E00049075 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
 		2C96D38D2762317300687301 /* AccountTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountTableViewCell.swift; sourceTree = "<group>"; };
 		2C96D38E2762317300687301 /* AccountTableViewCell.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = AccountTableViewCell.xib; sourceTree = "<group>"; };
@@ -587,6 +588,7 @@
 			children = (
 				2CB3844327654BF600A189B9 /* error.js */,
 				2CB3844527654BF600A189B9 /* id_mapping.js */,
+				2C90E5F527A95B9400C8991E /* ethereum.js */,
 				2CB3844727654BF600A189B9 /* index.js */,
 				2CB3844427654BF600A189B9 /* package.json */,
 				2CB3844827654BF600A189B9 /* rpc.js */,
