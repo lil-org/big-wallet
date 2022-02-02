@@ -40,11 +40,14 @@ enum ExtensionService {
                     controller.dismissAnimated()
                     let ethereum = Ethereum.shared
                     if approved {
-                        if let transactionHash = try? ethereum.send(transaction: transaction, wallet: wallet, chain: chain) {
+                        do {
+                            let transactionHash = try ethereum.send(transaction: transaction, wallet: wallet, chain: chain)
                             let response = ResponseToExtension(id: request.id, name: request.name, result: transactionHash)
                             self.respondTo(request: request, response: response, on: controller)
-                        } else {
-                            self.showErrorAlert()
+                        } catch {
+                            self.showErrorAlert(error.localizedDescription)
+                            controller.dismissAnimated()
+                            return
                         }
                     } else {
                         controller.dismissAnimated()
@@ -121,7 +124,7 @@ enum ExtensionService {
         }
     }
     
-    static private func showErrorAlert() {
-        SPAlert.present(message: "Something went wrong", haptic: .error, completion: nil)
+    static private func showErrorAlert(_ error: String? = nil) {
+        SPAlert.present(message: error ?? "Something went wrong", haptic: .error, completion: nil)
     }
 }
