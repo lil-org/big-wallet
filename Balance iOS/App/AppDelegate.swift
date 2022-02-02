@@ -1,5 +1,6 @@
 import UIKit
 import SparrowKit
+import SPAlert
 
 var launchURL: URL?
 
@@ -18,7 +19,32 @@ class AppDelegate: SPAppScenesDelegate {
         gasService.start()
         walletsManager.start()
         
+        migration()
+        
         return true
+    }
+    
+    /**
+     Use only for remove password it empty.
+     */
+    private func migration() {
+        let keychain = Keychain.shared
+        let oldPassword = keychain.password
+        let newPassword = String.empty
+        if oldPassword != newPassword {
+            keychain.save(password: newPassword)
+            if let oldPassword = oldPassword {
+                // Shoud update all wallets to new password
+                for wallet in WalletsManager.shared.wallets {
+                    do {
+                        try? WalletsManager.shared.update(wallet: wallet, password: oldPassword, newPassword: newPassword)
+                    }
+                }
+            }
+            delay(0.4, closure: {
+                SPAlert.present(title: "You did migrated to new version without password.", message: "It happen only once. Password no need more.", preset: .done, completion: nil)
+            })
+        }
     }
     
     // MARK: - Scenes

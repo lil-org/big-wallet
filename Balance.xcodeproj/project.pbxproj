@@ -912,10 +912,10 @@
 		F468EFCC27A00EEE007DD803 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				F468EFD327A00EEE007DD803 /* AppDelegate.swift */,
 				F468EFCD27A00EEE007DD803 /* Scenes */,
 				F468EFD127A00EEE007DD803 /* UISceneConfiguration+Scene.swift */,
 				F468EFD227A00EEE007DD803 /* SceneUserActivity.swift */,
-				F468EFD327A00EEE007DD803 /* AppDelegate.swift */,
 				F468F02327A025AB007DD803 /* Notifications.swift */,
 			);
 			path = App;
