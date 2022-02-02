@@ -15,12 +15,20 @@ let package = Package(
     ],
     dependencies: [
         .package(
+            name: "Alamofire",
+            url: "https://github.com/Alamofire/Alamofire.git", .upToNextMajor(from: "5.4.0")
+        ),
+        .package(
+            name: "SwiftyJSON",
+            url: "https://github.com/SwiftyJSON/SwiftyJSON.git", from: "5.0.0"
+        ),
+        .package(
             name: "SparrowKit",
             url: "https://github.com/ivanvorobei/SparrowKit", .upToNextMajor(from: "3.5.1")
         ),
         .package(
             name: "NativeUIKit",
-            url: "https://github.com/ivanvorobei/NativeUIKit", .upToNextMajor(from: "1.2.8")
+            url: "https://github.com/ivanvorobei/NativeUIKit", .upToNextMajor(from: "1.2.9")
         ),
         .package(
             name: "SPDiffable",
@@ -57,6 +65,8 @@ let package = Package(
         .target(
             name: "AppImport",
             dependencies: [
+                .product(name: "Alamofire", package: "Alamofire"),
+                .product(name: "SwiftyJSON", package: "SwiftyJSON"),
                 .product(name: "NativeUIKit", package: "NativeUIKit"),
                 .product(name: "SparrowKit", package: "SparrowKit"),
                 .product(name: "SPDiffable", package: "SPDiffable"),

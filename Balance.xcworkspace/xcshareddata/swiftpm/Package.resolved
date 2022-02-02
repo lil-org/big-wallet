@@ -2,12 +2,21 @@
   "object": {
     "pins": [
       {
+        "package": "Alamofire",
+        "repositoryURL": "https://github.com/Alamofire/Alamofire.git",
+        "state": {
+          "branch": null,
+          "revision": "f82c23a8a7ef8dc1a49a8bfc6a96883e79121864",
+          "version": "5.5.0"
+        }
+      },
+      {
         "package": "NativeUIKit",
         "repositoryURL": "https://github.com/ivanvorobei/NativeUIKit",
         "state": {
           "branch": null,
-          "revision": "541afe88eaed0f7589aa7a1c84f4d21d440ba179",
-          "version": "1.2.8"
+          "revision": "5281047729ca0474331258d97051165037af44a0",
+          "version": "1.2.9"
         }
       },
       {
@@ -89,6 +98,15 @@
           "branch": null,
           "revision": "580ed06a5daec94c5095379971570289b429fa3d",
           "version": "1.4.1"
+        }
+      },
+      {
+        "package": "SwiftyJSON",
+        "repositoryURL": "https://github.com/SwiftyJSON/SwiftyJSON.git",
+        "state": {
+          "branch": null,
+          "revision": "b3dcd7dbd0d488e1a7077cb33b00f2083e382f07",
+          "version": "5.0.1"
         }
       }
     ]
