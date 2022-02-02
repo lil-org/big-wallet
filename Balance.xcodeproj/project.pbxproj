@@ -24,7 +24,6 @@
 		2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995432674C4BA00A8E370 /* Assets.xcassets */; };
 		2C1995472674C4BA00A8E370 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995452674C4BA00A8E370 /* Main.storyboard */; };
 		2C1995562674D0F300A8E370 /* Ethereum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995552674D0F300A8E370 /* Ethereum.swift */; };
-		2C208A9F26813408005BA500 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C208A9E26813408005BA500 /* Secrets.swift */; };
 		2C3B7F022756A08600931264 /* Identifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3B7F012756A08600931264 /* Identifiers.swift */; };
 		2C40709027667A6600AB3D55 /* MultilineLabelTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C40708E27667A6600AB3D55 /* MultilineLabelTableViewCell.swift */; };
 		2C40709127667A6600AB3D55 /* MultilineLabelTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C40708F27667A6600AB3D55 /* MultilineLabelTableViewCell.xib */; };
@@ -91,8 +90,6 @@
 		2CC8C5A32767D3B30083FB1B /* GasPriceSliderTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2CC8C5A12767D3B30083FB1B /* GasPriceSliderTableViewCell.xib */; };
 		2CC8C5A5276A52670083FB1B /* ios-specific-background.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CC8C5A4276A52670083FB1B /* ios-specific-background.js */; };
 		2CC8C5A7276A54DA0083FB1B /* macos-specific-background.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CC8C5A6276A54DA0083FB1B /* macos-specific-background.js */; };
-		2CC8C5AA276A7E4F0083FB1B /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C208A9E26813408005BA500 /* Secrets.swift */; };
-		2CC8C5AB276A7E500083FB1B /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C208A9E26813408005BA500 /* Secrets.swift */; };
 		2CC8C5AC276A7EF70083FB1B /* EthereumChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */; };
 		2CC8C5AD276A7EF80083FB1B /* EthereumChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */; };
 		2CC8C5AF276A7F310083FB1B /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8C5AE276A7F310083FB1B /* SafariRequest.swift */; };
@@ -143,7 +140,6 @@
 		2CF255AC275A48CF00AE54B9 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */; };
 		2CF255AD275A48CF00AE54B9 /* EthereumChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */; };
 		2CF255AE275A48CF00AE54B9 /* Transaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D011267F73C00032A62E /* Transaction.swift */; };
-		2CF255B0275A492100AE54B9 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C208A9E26813408005BA500 /* Secrets.swift */; };
 		2CF255B1275A4A1800AE54B9 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
 		2CF255B2275A4A7200AE54B9 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC89470269A334A00879245 /* UserDefaults.swift */; };
 		2CF255B4275A744000AE54B9 /* PasswordViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF255B3275A744000AE54B9 /* PasswordViewController.swift */; };
@@ -296,7 +292,6 @@
 		2C1995482674C4BA00A8E370 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C1995492674C4BA00A8E370 /* Entitlements.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Entitlements.entitlements; sourceTree = "<group>"; };
 		2C1995552674D0F300A8E370 /* Ethereum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ethereum.swift; sourceTree = "<group>"; };
-		2C208A9E26813408005BA500 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		2C3B7F012756A08600931264 /* Identifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Identifiers.swift; sourceTree = "<group>"; };
 		2C40708E27667A6600AB3D55 /* MultilineLabelTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultilineLabelTableViewCell.swift; sourceTree = "<group>"; };
 		2C40708F27667A6600AB3D55 /* MultilineLabelTableViewCell.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = MultilineLabelTableViewCell.xib; sourceTree = "<group>"; };
@@ -518,6 +513,13 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0A0C549627AB29E0004510F4 /* Supporting Files */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = "Supporting Files";
+			sourceTree = "<group>";
+		};
 		0DC850E926B73A8200809E82 /* Models */ = {
 			isa = PBXGroup;
 			children = (
@@ -773,13 +775,13 @@
 		2CCEB7A127592A1F00768473 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				0A0C549627AB29E0004510F4 /* Supporting Files */,
 				2C901C492689F01700D0926A /* Strings.swift */,
 				2C528A15267FA8EB00CA3ADD /* Defaults.swift */,
 				2C8A09C2267513A700993638 /* Ethereum */,
 				2CF255A4275A483600AE54B9 /* Services */,
 				2CF2559F275A47B600AE54B9 /* Extension */,
 				2CD0668826B213BB00728C20 /* Wallets */,
-				2CF255AF275A490600AE54B9 /* Supporting Files */,
 				2CF25596275A468B00AE54B9 /* Models */,
 			);
 			path = Shared;
@@ -861,14 +863,6 @@
 				2C917428267D2A6E00049075 /* Keychain.swift */,
 			);
 			path = Services;
-			sourceTree = "<group>";
-		};
-		2CF255AF275A490600AE54B9 /* Supporting Files */ = {
-			isa = PBXGroup;
-			children = (
-				2C208A9E26813408005BA500 /* Secrets.swift */,
-			);
-			path = "Supporting Files";
 			sourceTree = "<group>";
 		};
 		2CF255BB275A74A400AE54B9 /* Screens */ = {
@@ -1576,7 +1570,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				2CF255B2275A4A7200AE54B9 /* UserDefaults.swift in Sources */,
-				2CC8C5AB276A7E500083FB1B /* Secrets.swift in Sources */,
 				2C773F5E27450B97007B04E7 /* ExtensionBridge.swift in Sources */,
 				2CC8C5AC276A7EF70083FB1B /* EthereumChain.swift in Sources */,
 				2CC8C5B1276A7F310083FB1B /* SafariRequest.swift in Sources */,
@@ -1596,7 +1589,6 @@
 				2C8A09D42675184700993638 /* Window.swift in Sources */,
 				2C9F0B6526BDC9AF008FA3D6 /* EthereumNetwork.swift in Sources */,
 				2C773F62274523DC007B04E7 /* ResponseToExtension.swift in Sources */,
-				2C208A9F26813408005BA500 /* Secrets.swift in Sources */,
 				2CE0594A2764D69D0042D844 /* SafariWebExtensionHandler.swift in Sources */,
 				2CC8946F269A2E8C00879245 /* SessionStorage.swift in Sources */,
 				0DC850E726B73A5900809E82 /* AuthenticationReason.swift in Sources */,
@@ -1693,7 +1685,6 @@
 				2CE059492764D69D0042D844 /* SafariWebExtensionHandler.swift in Sources */,
 				2CF2559A275A46E400AE54B9 /* SafariRequest+Helpers.swift in Sources */,
 				F468B96627A70D0B00314201 /* WalletsManagerExtension.swift in Sources */,
-				2CF255B0275A492100AE54B9 /* Secrets.swift in Sources */,
 				2CC8C5A22767D3B30083FB1B /* GasPriceSliderTableViewCell.swift in Sources */,
 				F478A36027A149AB00D1398B /* WalletOnboardingController.swift in Sources */,
 				F468EFEE27A00EEE007DD803 /* ConstantsExtension.swift in Sources */,
@@ -1784,7 +1775,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				2CE0594627640F470042D844 /* UserDefaults.swift in Sources */,
-				2CC8C5AA276A7E4F0083FB1B /* Secrets.swift in Sources */,
 				2CE0594327640EAB0042D844 /* ExtensionBridge.swift in Sources */,
 				2CC8C5AD276A7EF80083FB1B /* EthereumChain.swift in Sources */,
 				2CC8C5B2276A7F310083FB1B /* SafariRequest.swift in Sources */,

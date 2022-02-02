@@ -1,21 +1,32 @@
 # Balance
 
-Crypto wallet with Safari extension.
+Proof-of-concept EVM wallet with a Safari extension.
 
 ## Development
 
-Required
+Required:
 
 - CocoaPods
 - Node.js (`brew install nodejs`)
 
 Steps:
 
-1. Run `pod install`
-2. In `Safari-Shared/web3-provider` run `npm install`
-3. Create `Shared/Supporting Files/Secrets.swift` with the following contents
-   ```swift
-   enum Secrets {
-       static let infura = "YOUR INFURA PROJECT ID HERE"
-   }
-   ```
+1. Install packages with CocoaPods:
+
+- For M1 chips: `arch -x86_64 pod instsall` (you may need to run `sudo arch -x86_64 gem install ffi` first!)
+
+- For other chips: `pod install`
+
+2. In `Safari-Shared/web3-provider`, run `npm i` to install JavaScript dependencies
+
+3. Create `Shared/Supporting Files/Secrets.swift` with the following contents:
+
+```swift
+enum Secrets {
+    static let infura = "YOUR INFURA PROJECT ID HERE"
+}
+```
+
+## License
+
+[GPLv3](https://github.com/balance-io/Balance/blob/main/LICENSE)
