@@ -4,6 +4,7 @@
 "use strict";
 
 import TokenaryEthereum from "./ethereum";
+import TokenarySolana from "./solana";
 
 window.tokenary = {};
 window.tokenary.postMessage = (jsonString) => {
@@ -17,6 +18,8 @@ const handler = {
     }
 }
 window.web3 = new Proxy(window.ethereum, handler);
+
+window.solana = new TokenarySolana();
 
 window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "from-content-script") {
