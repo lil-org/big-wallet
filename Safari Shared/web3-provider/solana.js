@@ -60,7 +60,49 @@ class TokenarySolana extends EventEmitter {
         }
     }
     
+    signAndSendTransaction(transaction) {
+        // should return a promise with a signature
+        
+        // usage example
+//        const transaction = new Transaction();
+//        const { signature } = await window.solana.signAndSendTransaction(transaction);
+        
+        // You can also specify a SendOptions object as a second argument into signAndSendTransaction or as an options parameter when using request.
+        // https://solana-labs.github.io/solana-web3.js/modules.html#SendOptions
+//        SendOptions: { preflightCommitment?: Commitment; skipPreflight?: boolean };
+        
+        // there are also two deprecated methods to sign transactions without sending, idk if i should support em
+        // https://github.com/phantom-labs/docs/blob/master/integrating/sending-a-transaction.md#deprecated-methods
+    }
+    
+    signMessage(encodedMessage, display) {
+//        display == "utf8"
+        // const signedMessage = await window.solana.signMessage(encodedMessage, "utf8");
+    }
+    
     request(payload) {
+        // Support connecting via request
+        // also "disconnect"
+//        payload.method == "connect"
+        
+        // signAndSendTransaction request usage example
+//        const transaction = new Transaction();
+//        const { signature } = await window.solana.request({
+//            method: "signAndSendTransaction",
+//            params: {
+//                 message: bs58.encode(transaction.serializeMessage()),
+//            },
+//        });
+        
+        // signMessage request usage example
+//        const signedMessage = await window.solana.request({
+//            method: "signMessage",
+//            params: {
+//                 message: encodedMessage,
+//                 display: "hex",
+//            },
+//        });
+        
         console.log("yo solana request");
         console.log(payload);
         return this._request(payload, false);
