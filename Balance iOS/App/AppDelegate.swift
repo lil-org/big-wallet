@@ -21,13 +21,6 @@ class AppDelegate: SPAppScenesDelegate {
         
         migration()
         
-        
-        print("Start request balance")
-        
-        let wallet = WalletsManager.shared.wallets.first?.getBalance(completion: { value in
-            
-        })
-        
         return true
     }
     
