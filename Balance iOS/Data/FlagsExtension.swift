@@ -4,8 +4,13 @@ import Constants
 extension Flags {
     
     static var seen_tutorial: Bool {
-        get {  UserDefaults.shared.bool(forKey: "main_app_seen_tutorial2") }
+        get { UserDefaults.shared.bool(forKey: "main_app_seen_tutorial2") }
         set { UserDefaults.shared.set(newValue, forKey: "main_app_seen_tutorial2") }
+    }
+    
+    static var show_empty_balances: Bool {
+        get { UserDefaults.shared.bool(forKey: "show_empty_balances") }
+        set { UserDefaults.shared.set(newValue, forKey: "show_empty_balances") }
     }
     
     static var show_safari_extension_advice: Bool {

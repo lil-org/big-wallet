@@ -19,11 +19,12 @@ class WalletPhracesActionsController: NativeHeaderController, OnboardingChildInt
         $0.secondActionButton.setTitle("Cancel")
     }
     
-    internal var phraces: [String] = []
+    internal var phraces: [String]
     
     // MARK: - Init
     
     init(phraces: [String]) {
+        self.phraces = phraces
         super.init(image: nil, title: "Save Wallet Phrases", subtitle: "Keep it private.")
     }
     
@@ -84,17 +85,18 @@ class WalletPhracesActionsController: NativeHeaderController, OnboardingChildInt
     
     @objc func didTapChoose() {
         guard let parent = self.presentingViewController else { return }
-        var phraces = ""
+        var phracesFormtatted = ""
         for phrace in phraces {
-            phraces = phraces + (String(phrace) + " ")
+            phracesFormtatted = phracesFormtatted + (String(phrace) + " ")
         }
+        print("ph \(phracesFormtatted), \(phraces)")
         if segmentButtons.first?.appearance == .selected {
-            UIPasteboard.general.string = phraces
+            UIPasteboard.general.string = phracesFormtatted
             SPAlert.present(title: "Copied to Clipboard", message: nil, preset: .done, completion: nil)
             self.dismissAnimated()
         } else {
             self.dismiss(animated: true) {
-                let textToShare = [phraces]
+                let textToShare = [phracesFormtatted]
                 let activityViewController = UIActivityViewController(activityItems: textToShare, applicationActivities: nil)
                 activityViewController.popoverPresentationController?.sourceView = self.segmentButtons[safe: 2]
                 parent.present(activityViewController, animated: true, completion: nil)

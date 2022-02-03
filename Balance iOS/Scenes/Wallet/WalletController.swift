@@ -6,11 +6,12 @@ import SPDiffable
 import SFSymbols
 import BlockiesSwift
 import SPIndicator
+import Constants
 
 class WalletController: NativeProfileController {
     
     internal var walletModel: TokenaryWallet
-    internal var cahcedBalanceValue: Double?
+    internal var balances: [BalanceData] = []
     
     init(with walletModel: TokenaryWallet) {
         self.walletModel = walletModel
@@ -31,7 +32,7 @@ class WalletController: NativeProfileController {
         navigationItem.largeTitleDisplayMode = .never
         headerView.avatarView.isEditable = false
         tableView.register(NativeLeftButtonTableViewCell.self)
-        configureDiffable(sections: content, cellProviders: [.buttonMultiLines, .rowDetailMultiLines], headerFooterProviders: [.largeHeader])
+        configureDiffable(sections: content, cellProviders: [.balance, .buttonMultiLines, .rowDetailMultiLines] + SPDiffableTableDataSource.CellProvider.default, headerFooterProviders: [.largeHeader])
         configureHeader()
         
         headerView.emailButton.titleLabel?.font = UIFont.preferredFont(forTextStyle: .body, weight: .medium)
@@ -51,8 +52,8 @@ class WalletController: NativeProfileController {
         
         setSpaceBetweenHeaderAndCells(NativeLayout.Spaces.default_more)
         
-        walletModel.getBalance { balance in
-            self.cahcedBalanceValue = balance
+        walletModel.getBalances(for: EthereumChain.allMainnets + EthereumChain.allTestnets) { value, chain in
+            self.balances.append(BalanceData(chain: chain, balance: value))
             self.diffableDataSource?.set(self.content, animated: true, completion: nil)
         }
         
@@ -76,6 +77,7 @@ class WalletController: NativeProfileController {
     internal enum Item: String, CaseIterable {
         
         case info
+        case balances
         case change_name
         case show_phraces
         case sign_out
@@ -87,24 +89,28 @@ class WalletController: NativeProfileController {
     
     private var content: [SPDiffableSection] {
         let address =  walletModel.ethereumAddress ?? .space
+        
+        var balanceItems: [SPDiffableItem] = []
+        for data in self.balances.sorted(by: { ($0.balance ?? 0) > ($1.balance ?? 0) }) {
+            if let value = data.balance {
+                if !Flags.show_empty_balances && value == 0 { continue }
+                let item = SPDiffableWrapperItem(id: data.chain.name + "_balance", model: data, action: nil)
+                balanceItems.append(item)
+            }
+        }
+        
+        var formattedAddress = address
+        formattedAddress.insert("\n", at: formattedAddress.index(formattedAddress.startIndex, offsetBy: (formattedAddress.count / 2)))
+        
         return [
             SPDiffableSection(
                 id: Item.info.section_id,
-                header: SPDiffableTextHeaderFooter(text: "Wallet Info"),
-                footer: SPDiffableTextHeaderFooter(text: "Info Descr"),
+                header: SPDiffableTextHeaderFooter(text: "Address"),
+                footer: nil,
                 items: [
-                    SPDiffableTableRow(
-                        id: "balance",
-                        text: "Balance",
-                        detail: cahcedBalanceValue == nil ? "Loading..." : "\(cahcedBalanceValue!) ETH",
-                        icon: nil,
-                        accessoryType: .none,
-                        selectionStyle: .none,
-                        action: nil
-                    ),
                     NativeDiffableLeftButton(
-                        id: "address",
-                        text: address,
+                        id: "address-public-id",
+                        text: formattedAddress,
                         textColor: .tintColor,
                         icon: UIImage.init(SFSymbol.doc.onClipboardFill),
                         action: { _, _ in
@@ -112,6 +118,18 @@ class WalletController: NativeProfileController {
                             SPIndicator.present(title: "Adress Copied", preset: .done)
                         }
                     )
+                ]
+            ),
+            .init(
+                id: Item.balances.section_id,
+                header: NativeLargeHeaderItem(title: "Balances"),
+                footer: SPDiffableTextHeaderFooter(text: "We provide info for each network balance."),
+                items: balanceItems + [
+                    SPDiffableTableRowSwitch(text: "Show Empty Balances", isOn: Flags.show_empty_balances, action: { [weak self] (isOn) in
+                        guard let self = self else { return }
+                        Flags.show_empty_balances = isOn
+                        self.diffableDataSource?.set(self.content, animated: true, completion: nil)
+                    })
                 ]
             ),
             .init(
@@ -202,3 +220,5 @@ class WalletController: NativeProfileController {
         self.present(alertController)
     }
 }
+
+typealias BalanceData = (chain: EthereumChain, balance: Double?)

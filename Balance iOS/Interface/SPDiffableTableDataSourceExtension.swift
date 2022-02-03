@@ -34,4 +34,24 @@ extension SPDiffableTableDataSource.CellProvider {
             return cell
         }
     }
+    
+    public static var balance: SPDiffableTableDataSource.CellProvider  {
+        return SPDiffableTableDataSource.CellProvider() { (tableView, indexPath, item) -> UITableViewCell? in
+            guard let wrapperItem = item as? SPDiffableWrapperItem else { return nil }
+            guard let data = wrapperItem.model as? BalanceData else { return nil }
+            let cell = tableView.dequeueReusableCell(withIdentifier: SPDiffableSubtitleTableViewCell.reuseIdentifier, for: indexPath) as! SPDiffableSubtitleTableViewCell
+            cell.textLabel?.text = data.chain.name
+            cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .footnote, weight: .medium)
+            cell.textLabel?.textColor = .secondaryLabel
+            cell.textLabel?.numberOfLines = .zero
+            cell.detailTextLabel?.text = "\((data.balance ?? 0)) ETH"
+            cell.detailTextLabel?.font = UIFont.preferredFont(forTextStyle: .body)
+            cell.detailTextLabel?.textColor = .label
+            cell.detailTextLabel?.numberOfLines = .zero
+            cell.imageView?.image = nil
+            cell.accessoryType = .none
+            cell.selectionStyle = .none
+            return cell
+        }
+    }
 }

@@ -9,7 +9,12 @@ extension SPDiffableTableDataSource.CellProvider {
             guard let wrapperItem = item as? SPDiffableWrapperItem else { return nil }
             guard let walletModel = wrapperItem.model as? TokenaryWallet else { return nil }
             let cell = tableView.dequeueReusableCell(withClass: WalletTableViewCell.self, for: indexPath)
-            cell.adressLabel.text = walletModel.ethereumAddress
+            
+            var formattedAddress = walletModel.ethereumAddress ?? .space
+            formattedAddress.insert("\n", at: formattedAddress.index(formattedAddress.startIndex, offsetBy: (formattedAddress.count / 2)))
+            
+            cell.adressLabel.text = formattedAddress
+            
             if let name = walletModel.walletName {
                 cell.titleLabel.text = name
                 cell.titleLabel.textColor = .label
