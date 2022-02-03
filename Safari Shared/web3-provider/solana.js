@@ -17,7 +17,6 @@ class TokenarySolana extends EventEmitter {
 
         this.idMapping = new IdMapping();
         this.callbacks = new Map();
-        this.wrapResults = new Map();
         
         this.isPhantom = true;
         this.publicKey = new PublicKey("26qv4GCcx98RihuK3c4T6ozB3J7L6VwCuFVc7Ta2A3Uo"); // should be null initially
@@ -105,13 +104,13 @@ class TokenarySolana extends EventEmitter {
         
         console.log("yo solana request");
         console.log(payload);
-        return this._request(payload, false);
+        return this._request(payload);
     }
     
     /**
      * @private Internal rpc handler
      */
-    _request(payload, wrapResult = true) {
+    _request(payload) {
         this.idMapping.tryIntifyId(payload);
         return new Promise((resolve, reject) => {
             if (!payload.id) {
@@ -128,7 +127,6 @@ class TokenarySolana extends EventEmitter {
                     }
                 }, 1);
             });
-            this.wrapResults.set(payload.id, wrapResult);
             switch (payload.method) {
                 case "eth_accounts":
                 case "eth_sign":
@@ -139,11 +137,10 @@ class TokenarySolana extends EventEmitter {
                     throw new ProviderRpcError(4200, `Tokenary does not support calling ${payload.method}. Please use your own solution`);
                 default:
                     this.callbacks.delete(payload.id);
-                    this.wrapResults.delete(payload.id);
                     return this.rpc
                     .call(payload)
                     .then((response) => {
-                        wrapResult ? resolve(response) : resolve(response.result);
+                        resolve(response.result);
                     })
                     .catch(reject);
             }
@@ -163,8 +160,8 @@ class TokenarySolana extends EventEmitter {
             id: id,
             name: handler,
             object: data,
-            address: this.address,
-            networkId: this.net_version(),
+            address: "", // use public key for solana
+            networkId: "", // won't be there for solana
             host: window.location.host
         };
         window.tokenary.postMessage(object);
@@ -176,7 +173,6 @@ class TokenarySolana extends EventEmitter {
     sendResponse(id, result) {
         let originId = this.idMapping.tryPopId(id) || id;
         let callback = this.callbacks.get(id);
-        let wrapResult = this.wrapResults.get(id);
         let data = { jsonrpc: "2.0", id: originId };
         if (typeof result === "object" && result.jsonrpc && result.result) {
             data.result = result.result;
@@ -184,7 +180,7 @@ class TokenarySolana extends EventEmitter {
             data.result = result;
         }
         if (callback) {
-            wrapResult ? callback(null, data) : callback(null, result);
+            callback(null, result);
             this.callbacks.delete(id);
         } else {
             console.log(`callback id: ${id} not found`);
