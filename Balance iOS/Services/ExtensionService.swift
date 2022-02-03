@@ -4,11 +4,12 @@ import SPAlert
 enum ExtensionService {
     
     static func processInput(on controller: UIViewController) {
+        print("launchURL \(launchURL)")
         let prefix = "balance://"
         guard let url = launchURL?.absoluteString, url.hasPrefix(prefix),
               let request = SafariRequest(query: String(url.dropFirst(prefix.count))) else { return }
         launchURL = nil
-        
+        //print("req \(String(url.dropFirst(prefix.count)))")
         guard ExtensionBridge.hasRequest(id: request.id) else {
             SPAlert.present(message: "This operation will support later", haptic: .warning, completion: nil)
             return
@@ -28,7 +29,7 @@ enum ExtensionService {
             }, on: controller)
         case .signTransaction:
             guard let transaction = request.transaction, let chain = request.chain, let wallet = WalletsManager.shared.getWallet(address: request.address), let address = wallet.ethereumAddress else {
-                self.showErrorAlert("Missing some data in request")
+                self.showErrorAlert("Missing some data in request (signTransaction)")
                 return
             }
             Presenter.Crypto.Extension.showApproveSendTransaction(
@@ -55,7 +56,7 @@ enum ExtensionService {
                 }, on: controller)
         case .signMessage:
             guard let data = request.message, let wallet = WalletsManager.shared.getWallet(address: request.address), let address = wallet.ethereumAddress else {
-                self.showErrorAlert("Missing some data in request")
+                self.showErrorAlert("Missing some data in request (signMessage)")
                 return
             }
             Presenter.Crypto.Extension.showApproveOperation(subject: .signMessage, address: address, meta: data.hexString, peerMeta: peerMeta, approveCompletion: { controller, approved in
@@ -74,7 +75,7 @@ enum ExtensionService {
             }, on: controller)
         case .signPersonalMessage:
             guard let data = request.message, let wallet = WalletsManager.shared.getWallet(address: request.address), let address = wallet.ethereumAddress else {
-                self.showErrorAlert("Missing some data in request")
+                self.showErrorAlert("Missing some data in reques (signPersonalMessage)")
                 return
             }
             let text = String(data: data, encoding: .utf8) ?? data.hexString
@@ -94,7 +95,7 @@ enum ExtensionService {
             }, on: controller)
         case .signTypedMessage:
             guard let raw = request.raw, let wallet = WalletsManager.shared.getWallet(address: request.address), let address = wallet.ethereumAddress else {
-                self.showErrorAlert("Missing some data in request")
+                self.showErrorAlert("Missing some data in request (signTypedMessage)")
                 return
             }
             Presenter.Crypto.Extension.showApproveOperation(subject: .signTypedData, address: address, meta: raw, peerMeta: peerMeta, approveCompletion: { controller, approved in

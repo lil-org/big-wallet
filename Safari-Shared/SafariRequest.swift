@@ -41,7 +41,6 @@ struct SafariRequest {
               let data = parametersString.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
         else { return nil }
-        
         guard let name = json["name"] as? String,
               let method = Method(rawValue: name),
               let id = json["id"] as? Int,

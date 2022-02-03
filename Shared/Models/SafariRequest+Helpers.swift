@@ -15,7 +15,8 @@ extension SafariRequest {
     
     // TODO: support new transaction type
     var transaction: Transaction? {
-        if let parameters = parameters, let to = parameters["to"] as? String {
+        if let parameters = parameters {
+            let to = (parameters["to"] as? String) ?? ""
             let data = (parameters["data"] as? String) ?? "0x"
             let value = (parameters["value"] as? String) ?? "0x"
             let gas = parameters["gas"] as? String
