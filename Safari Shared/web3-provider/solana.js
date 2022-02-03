@@ -37,6 +37,7 @@ class TokenarySolana extends EventEmitter {
     }
     
     connect() {
+        this.postMessage("requestAccounts", 69, {});
         // TODO: should either respond with a latest account or request account from user
         this.isConnected = true; // TODO: should set to true only after successful account selection
         const publicKey = new PublicKey("26qv4GCcx98RihuK3c4T6ozB3J7L6VwCuFVc7Ta2A3Uo");
