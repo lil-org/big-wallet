@@ -13,7 +13,6 @@ enum EthereumChain: Int {
     
     // Testnets
     case arbitrumRinkeby = 421611
-    case arbitrumKovan = 144545313136048
     case optimisticKovan = 69
     case ethereumRopsten = 3
     case ethereumKovan = 42
@@ -32,7 +31,7 @@ enum EthereumChain: Int {
     }
     
     static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum, .avalanche, .xDai]
-    static let allTestnets: [EthereumChain] = [.ethereumRopsten, .ethereumKovan, .ethereumRinkeby, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji]
+    static let allTestnets: [EthereumChain] = [.ethereumRopsten, .ethereumKovan, .ethereumRinkeby, .ethereumGoerli, .optimisticKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji]
     
     var name: String {
         switch self {
@@ -50,7 +49,6 @@ enum EthereumChain: Int {
         case .ethereumRopsten: return "Ethereum Ropsten"
         case .ethereumKovan: return "Ethereum Kovan"
         case .ethereumRinkeby: return "Ethereum Rinkeby"
-        case .arbitrumKovan: return "Arbitrum Kovan"
         case .binanceTestnet: return "BSC Testnet"
         case .avalancheFuji: return "Avalanche FUJI"
         }
@@ -62,7 +60,7 @@ enum EthereumChain: Int {
             return "BNB"
         case .polygon, .polygonMumbai:
             return "MATIC"
-        case .arbitrum, .arbitrumKovan, .arbitrumRinkeby, .ethereum, .ethereumGoerli, .ethereumKovan, .ethereumRinkeby, .optimism, .optimisticKovan, .ethereumRopsten:
+        case .arbitrum, .arbitrumRinkeby, .ethereum, .ethereumGoerli, .ethereumKovan, .ethereumRinkeby, .optimism, .optimisticKovan, .ethereumRopsten:
             return "ETH"
         case .avalanche, .avalancheFuji:
             return "AVAX"
@@ -94,7 +92,6 @@ enum EthereumChain: Int {
         case .avalanche: return "https://api.avax.network/ext/bc/C/rpc"
         case .xDai: return "https://rpc.xdaichain.com/"
         case .arbitrumRinkeby: return "https://rinkeby.arbitrum.io/rpc"
-        case .arbitrumKovan: return "https://kovan5.arbitrum.io/rpc"
         case .optimisticKovan: return "https://kovan.optimism.io"
         case .ethereumRinkeby: return "https://rinkeby.infura.io/v3/" + Secrets.infura
         case .ethereumRopsten: return "https://ropsten.infura.io/v3/" + Secrets.infura
