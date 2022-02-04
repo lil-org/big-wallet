@@ -19,7 +19,7 @@ class SettingsLanguageController: SPDiffableTableController {
     override func viewDidLoad() {
         super.viewDidLoad()
         navigationItem.largeTitleDisplayMode = .never
-        navigationItem.title = "Languages"
+        navigationItem.title = Texts.Settings.language_title
         navigationItem.largeTitleDisplayMode = .never
         configureDiffable(sections: content, cellProviders: SPDiffableTableDataSource.CellProvider.default)
     }
@@ -35,8 +35,8 @@ class SettingsLanguageController: SPDiffableTableController {
         [
             .init(
                 id: Section.languages.id,
-                header: SPDiffableTextHeaderFooter(text: "Languages"),
-                footer: SPDiffableTextHeaderFooter(text: "You can set any supported language in settings."),
+                header: SPDiffableTextHeaderFooter(text: Texts.Settings.language_title),
+                footer: SPDiffableTextHeaderFooter(text: Texts.Settings.language_footer),
                 items: LanguageService.supported.map({ locale in
                     return SPDiffableTableRowSubtitle(
                         id: locale.identifier,

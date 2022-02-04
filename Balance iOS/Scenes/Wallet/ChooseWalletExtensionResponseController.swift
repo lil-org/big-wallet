@@ -23,7 +23,7 @@ class ChooseWalletExtensionResponseController: WalletsController {
         super.viewDidLoad()
         navigationItem.leftBarButtonItem = closeBarButtonItem
         navigationItem.largeTitleDisplayMode = .always
-        navigationItem.title = "Choose Wallet"
+        navigationItem.title = Texts.Wallet.Operation.choose_wallet
         navigationItem.rightBarButtonItem = .init(barButtonSystemItem: .add, target: self, action: #selector(showAddWallet))
     }
     
@@ -44,8 +44,8 @@ class ChooseWalletExtensionResponseController: WalletsController {
     override var content: [SPDiffableSection] {
         let chainsSection = SPDiffableSection(
             id: "chains_choose",
-            header: SPDiffableTextHeaderFooter(text: "Choose Network"),
-            footer: SPDiffableTextHeaderFooter(text: "You can switch from production to debug network"),
+            header: SPDiffableTextHeaderFooter(text: Texts.Wallet.Operation.choose_network_header),
+            footer: SPDiffableTextHeaderFooter(text: Texts.Wallet.Operation.choose_network_footer),
             items: [
                 SPDiffableTableRowSubtitle(
                     text: choosedChain.name,
@@ -66,8 +66,8 @@ class ChooseWalletExtensionResponseController: WalletsController {
         
         let walletsSection = SPDiffableSection(
             id: "wallets-list",
-            header: SPDiffableTextHeaderFooter(text: "Available Wallets"),
-            footer: SPDiffableTextHeaderFooter(text: "Choose wallet or create new for continue."),
+            header: SPDiffableTextHeaderFooter(text: Texts.Wallet.Operation.available_wallets_header),
+            footer: SPDiffableTextHeaderFooter(text: Texts.Wallet.Operation.available_wallets_footer),
             items: self.wallets.isEmpty ? [emptyItem] : walletsItems
         )
         

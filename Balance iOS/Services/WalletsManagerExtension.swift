@@ -8,8 +8,8 @@ extension WalletsManager {
     
     static func startDestroyProcess(on controller: UIViewController, sourceView: UIView, completion: @escaping (_ destroyed: Bool)->Void) {
         AlertService.confirm(
-            title: "Confirm destroy all data",
-            description: "We will remove all connection of wallets and your password", actionTitle: "Destroy Now", desctructive: true, action: { confirmed in
+            title: Texts.Wallet.Destroy.confirm_title,
+            description: Texts.Wallet.Destroy.confirm_description, actionTitle: Texts.Wallet.Destroy.action, desctructive: true, action: { confirmed in
                 if confirmed {
                     completlyDestroyData()
                     completion(true)

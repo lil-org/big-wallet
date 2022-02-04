@@ -19,7 +19,7 @@ extension SPDiffableTableDataSource.CellProvider {
                 cell.titleLabel.text = name
                 cell.titleLabel.textColor = .label
             } else {
-                cell.titleLabel.text = "No Name"
+                cell.titleLabel.text = Texts.Wallet.no_name
                 cell.titleLabel.textColor = .secondaryLabel
             }
             if let adress = walletModel.ethereumAddress {

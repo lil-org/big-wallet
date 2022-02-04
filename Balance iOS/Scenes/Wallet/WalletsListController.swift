@@ -7,7 +7,7 @@ class WalletsListController: WalletsController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        navigationItem.title = "Wallets"
+        navigationItem.title = Texts.Wallet.wallets
         navigationItem.rightBarButtonItem = .init(barButtonSystemItem: .add, target: self, action: #selector(showAddWallet))
     }
     

@@ -77,8 +77,8 @@ class WalletsController: SPDiffableTableController {
         return NativeEmptyRowItem(
             id: Item.emptyWallets.id,
             verticalMargins: .large,
-            text: "No Wallets",
-            detail: "Make new wallet for start"
+            text: Texts.Wallet.empty_title,
+            detail: Texts.Wallet.empty_description
         )
     }
     

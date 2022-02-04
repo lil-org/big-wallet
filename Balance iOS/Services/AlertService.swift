@@ -11,7 +11,7 @@ enum AlertService {
         alertController.addAction(title: actionTitle, style: desctructive ? .destructive : .default) { [] _ in
             action(true)
         }
-        alertController.addAction(title: "Cancel", style: .cancel, handler: { _ in 
+        alertController.addAction(title: Texts.Shared.cancel, style: .cancel, handler: { _ in 
             action(false)
         })
         controller.present(alertController)

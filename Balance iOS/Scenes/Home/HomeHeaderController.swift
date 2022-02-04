@@ -8,12 +8,12 @@ open class HomeHeaderController: SPView {
     private static let backgroundColor: UIColor = .secondarySystemGroupedBackground
     
     let addButton = NativeLargeActionButton().do {
-        $0.set(title: "Add Wallet", icon: UIImage(.plus.circleFill), colorise: .tinted)
+        $0.set(title: Texts.Wallet.add_wallet_action, icon: UIImage(.plus.circleFill), colorise: .tinted)
         $0.higlightStyle = .background
         $0.addTarget(self, action: #selector(didTapAdd), for: .touchUpInside)
     }
     
-    let footerAddButton = NativeFooterView(text: "You can import wallets via passphrase, private code and QR code. Also after import ETH boost to 10k$.")
+    let footerAddButton = NativeFooterView(text: Texts.Wallet.add_wallet_footer)
     
 
     // MARK: - Private

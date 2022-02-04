@@ -99,8 +99,8 @@ class HomeController: NativeHeaderTableController {
                     NativeEmptyRowItem(
                         id: Item.emptyAccounts.id,
                         verticalMargins: .large,
-                        text: "No Wallets",
-                        detail: "Make new wallet for start"
+                        text: Texts.Wallet.empty_title,
+                        detail: Texts.Wallet.empty_description
                     )
                 ]
             } else {
@@ -113,7 +113,7 @@ class HomeController: NativeHeaderTableController {
                 if wallets.count > 5 {
                     items.append(
                         NativeDiffableLeftButton(
-                            text: "Open All Wallets",
+                            text: Texts.Wallet.open_all_wallets,
                             textColor: .systemBlue,
                             detail: "Total \(wallets.count) wallets",
                             detailColor: .gray,
@@ -136,8 +136,8 @@ class HomeController: NativeHeaderTableController {
             sections.append(
                 .init(
                     id: Section.safari.id,
-                    header: SPDiffableTextHeaderFooter(text: "Advice"),
-                    footer: SPDiffableTextHeaderFooter(text: "Its our focus and best feature. Try it."),
+                    header: SPDiffableTextHeaderFooter(text: Texts.Wallet.SafariExtension.propose_header),
+                    footer: SPDiffableTextHeaderFooter(text: Texts.Wallet.SafariExtension.propose_footer),
                     items: [.init(id: Item.safariSteps.id)]
                 )
             )
@@ -147,8 +147,8 @@ class HomeController: NativeHeaderTableController {
             .init(
                 id: Section.accounts.id,
                 header: NativeLargeHeaderItem(
-                    title: "Wallets",
-                    actionTitle: "See All",
+                    title: Texts.Wallet.wallets,
+                    actionTitle: Texts.Shared.see_all,
                     action: { item, indexPath in
                         guard let navigationController = self.navigationController else { return }
                         Presenter.Crypto.showWallets(on: navigationController)

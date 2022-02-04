@@ -13,14 +13,14 @@ class ImportWalletController: NativeOnboardingActionsController, OnboardingChild
     init() {
         super.init(
             iconImage: .init(SFSymbol.wallet.passFill),
-            title: "Add or Import Wallet",
-            subtitle: "You can choose import or create new wallet. Will add it to keychain."
+            title: Texts.Wallet.Import.title,
+            subtitle: Texts.Wallet.Import.description
         )
         setActions([
             .init(
                 iconImage: .init(.doc.fillBadgePlus).withTintColor(.systemColorfulColors.randomElement()!, renderingMode: .alwaysTemplate),
-                title: "Create New",
-                description: "We will show you special words after create new wallet.",
+                title: Texts.Wallet.Import.action_new_title,
+                description: Texts.Wallet.Import.action_new_description,
                 action: {
                     guard let parent = self.presentingViewController else { return}
                     let walletsManager = WalletsManager.shared
@@ -33,8 +33,8 @@ class ImportWalletController: NativeOnboardingActionsController, OnboardingChild
             ),
             .init(
                 iconImage: .init(.arrow.downDocFill),
-                title: "Add Existing",
-                description: "You can import by anyway like passphrase, private key or files.",
+                title: Texts.Wallet.Import.action_add_exising_title,
+                description: Texts.Wallet.Import.action_add_exising_description,
                 action: {
                     guard let parent = self.presentingViewController else { return }
                     self.dismiss(animated: true) {

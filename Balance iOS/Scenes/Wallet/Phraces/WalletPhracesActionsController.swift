@@ -12,11 +12,11 @@ class WalletPhracesActionsController: NativeHeaderController, OnboardingChildInt
     
     internal let actionToolbarView = NativeLargeSmallActionToolBarView().do {
         $0.actionButton.set(
-            title: "Choose",
+            title: Texts.Wallet.Phrase.Actions.choose,
             icon: UIImage(SFSymbol.checkmark.circleFill),
             colorise: .init(content: .custom(.white), background: .tint)
         )
-        $0.secondActionButton.setTitle("Cancel")
+        $0.secondActionButton.setTitle(Texts.Wallet.Phrase.Actions.cancel)
     }
     
     internal var phraces: [String]
@@ -25,7 +25,7 @@ class WalletPhracesActionsController: NativeHeaderController, OnboardingChildInt
     
     init(phraces: [String]) {
         self.phraces = phraces
-        super.init(image: nil, title: "Save Wallet Phrases", subtitle: "Keep it private.")
+        super.init(image: nil, title: Texts.Wallet.Phrase.Actions.title, subtitle: Texts.Wallet.Phrase.Actions.description)
     }
     
     required init?(coder: NSCoder) {
@@ -41,15 +41,15 @@ class WalletPhracesActionsController: NativeHeaderController, OnboardingChildInt
         scrollView.showsVerticalScrollIndicator = false
         
         let newSegmentButton = WalletPhracesActionSegmentButton()
-        newSegmentButton.headerLabel.text = "Copy to Clipboard"
+        newSegmentButton.headerLabel.text = Texts.Wallet.Phrase.Actions.action_copy_title
         newSegmentButton.iconImageView.image = .init(.doc.onDocFill)
-        newSegmentButton.descriptionLabel.text = "The secret phrase will be copied to your clipboard."
+        newSegmentButton.descriptionLabel.text = Texts.Wallet.Phrase.Actions.action_copy_description
         segmentButtons.append(newSegmentButton)
         
         let addSegmentButton = WalletPhracesActionSegmentButton()
-        addSegmentButton.headerLabel.text = "Share"
+        addSegmentButton.headerLabel.text = Texts.Wallet.Phrase.Actions.action_share_title
         addSegmentButton.iconImageView.image = .init(.square.andArrowUpCircleFill)
-        addSegmentButton.descriptionLabel.text = "You can share text to any app, notes for example."
+        addSegmentButton.descriptionLabel.text = Texts.Wallet.Phrase.Actions.action_share_description
         segmentButtons.append(addSegmentButton)
         
         for (index, segmentButton) in segmentButtons.enumerated() {
@@ -92,7 +92,7 @@ class WalletPhracesActionsController: NativeHeaderController, OnboardingChildInt
         print("ph \(phracesFormtatted), \(phraces)")
         if segmentButtons.first?.appearance == .selected {
             UIPasteboard.general.string = phracesFormtatted
-            SPAlert.present(title: "Copied to Clipboard", message: nil, preset: .done, completion: nil)
+            SPAlert.present(title: Texts.Wallet.Phrase.Actions.action_copy_completed, message: nil, preset: .done, completion: nil)
             self.dismissAnimated()
         } else {
             self.dismiss(animated: true) {

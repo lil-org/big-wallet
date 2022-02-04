@@ -39,8 +39,8 @@ class WalletController: NativeProfileController {
         headerView.emailButton.addAction(.init(handler: { _ in
             self.showTextFieldToChangeName()
         }), for: .touchUpInside)
-        headerView.namePlaceholderLabel.text = "No Name"
-        headerView.emailButton.setTitle("Change Name")
+        headerView.namePlaceholderLabel.text = Texts.Wallet.no_name
+        headerView.emailButton.setTitle(Texts.Wallet.change_name)
         headerView.emailButton.contentEdgeInsets.top = NativeLayout.Spaces.default_half
         if let address = walletModel.ethereumAddress {
             if let image = Blockies(seed: address.lowercased(), size: 32).createImage() {
@@ -105,7 +105,7 @@ class WalletController: NativeProfileController {
         return [
             SPDiffableSection(
                 id: Item.info.section_id,
-                header: SPDiffableTextHeaderFooter(text: "Address"),
+                header: SPDiffableTextHeaderFooter(text: Texts.Wallet.address),
                 footer: nil,
                 items: [
                     NativeDiffableLeftButton(
@@ -115,17 +115,17 @@ class WalletController: NativeProfileController {
                         icon: UIImage.init(SFSymbol.doc.onClipboardFill),
                         action: { _, _ in
                             UIPasteboard.general.string = self.walletModel.ethereumAddress
-                            SPIndicator.present(title: "Adress Copied", preset: .done)
+                            SPIndicator.present(title: Texts.Wallet.address_copied, preset: .done)
                         }
                     )
                 ]
             ),
             .init(
                 id: Item.balances.section_id,
-                header: NativeLargeHeaderItem(title: "Balances"),
-                footer: SPDiffableTextHeaderFooter(text: "We provide info for each network balance."),
+                header: NativeLargeHeaderItem(title: Texts.Wallet.balances_header),
+                footer: SPDiffableTextHeaderFooter(text: Texts.Wallet.balances_footer),
                 items: balanceItems + [
-                    SPDiffableTableRowSwitch(text: "Show Empty Balances", isOn: Flags.show_empty_balances, action: { [weak self] (isOn) in
+                    SPDiffableTableRowSwitch(text: Texts.Wallet.show_empty_balances, isOn: Flags.show_empty_balances, action: { [weak self] (isOn) in
                         guard let self = self else { return }
                         Flags.show_empty_balances = isOn
                         self.diffableDataSource?.set(self.content, animated: true, completion: nil)
@@ -134,12 +134,12 @@ class WalletController: NativeProfileController {
             ),
             .init(
                 id: Item.show_phraces.section_id,
-                header: SPDiffableTextHeaderFooter(text: "Acceess"),
-                footer: SPDiffableTextHeaderFooter(text: "You will see the secret phrase for this wallet. Keep it safe."),
+                header: SPDiffableTextHeaderFooter(text: Texts.Wallet.access_header),
+                footer: SPDiffableTextHeaderFooter(text: Texts.Wallet.access_footer),
                 items: [
                     NativeDiffableLeftButton(
                         id: Item.change_name.item_id,
-                        text: "Show Phrases",
+                        text: Texts.Wallet.show_phrase,
                         icon: .init(.eye.circleFill),
                         action: { [weak self] _, _ in
                             guard let self = self else { return }
@@ -154,21 +154,21 @@ class WalletController: NativeProfileController {
             ),
             .init(
                 id: Item.delete_account.section_id,
-                header: SPDiffableTextHeaderFooter(text: "Danger Zone"),
-                footer: SPDiffableTextHeaderFooter(text: "Wallet will remove only from your device. You can connect it again later with saving passphrase."),
+                header: SPDiffableTextHeaderFooter(text: Texts.Wallet.delete_header),
+                footer: SPDiffableTextHeaderFooter(text: Texts.Wallet.delete_footer),
                 items: [
                     NativeDiffableLeftButton(
                         id: Item.delete_account.item_id,
-                        text: "Delete Wallet",
+                        text: Texts.Wallet.delete_action,
                         textColor: .destructiveColor,
                         icon: .init(.trash.fill).withTintColor(.destructiveColor, renderingMode: .alwaysOriginal),
                         action: { [weak self] _, indexPath in
                             guard let self = self else { return }
                             let soruceView = self.tableView.cellForRow(at: indexPath) ?? UIView()
                             AlertService.confirm(
-                                title: "Confirm Title",
-                                description: "Confirm Descriptipm",
-                                actionTitle: "Delete Wallet",
+                                title: Texts.Wallet.delete_confirm_title,
+                                description: Texts.Wallet.delete_confirm_description,
+                                actionTitle: Texts.Wallet.delete_confirm_action,
                                 desctructive: true,
                                 action: { [weak self] confirmed in
                                     guard let self = self else { return }
@@ -178,7 +178,7 @@ class WalletController: NativeProfileController {
                                             try? walletsManager.delete(wallet: self.walletModel)
                                         }
                                         NotificationCenter.default.post(name: .walletsUpdated)
-                                        SPAlert.present(title: "Wallet was Deleted", preset: .done, completion: nil)
+                                        SPAlert.present(title: Texts.Wallet.delete_confirm_action_completed, preset: .done, completion: nil)
                                         self.navigationController?.popViewController()
                                     }
                                 },
@@ -193,19 +193,19 @@ class WalletController: NativeProfileController {
     }
     
     internal func showTextFieldToChangeName() {
-        let alertController = UIAlertController(title: "New Name", message: "Insert name of wallet", preferredStyle: .alert)
-        let saveAction = UIAlertAction(title: "Save", style: .default) { [weak self] _ in
+        let alertController = UIAlertController(title: Texts.Wallet.new_name_title, message: Texts.Wallet.new_name_description, preferredStyle: .alert)
+        let saveAction = UIAlertAction(title: Texts.Wallet.new_name_save, style: .default) { [weak self] _ in
             guard let self = self else { return }
             guard let textField = alertController.textFields?.first else { return }
             guard let text = textField.text else { return }
             self.walletModel.walletName = text
-            SPAlert.present(title: "Name Updated", message: nil, preset: .done, completion: nil)
+            SPAlert.present(title: Texts.Wallet.new_name_saved, message: nil, preset: .done, completion: nil)
         }
         alertController.addAction(saveAction)
-        alertController.addAction(title: "Cancel", style: .cancel, handler: nil)
+        alertController.addAction(title: Texts.Shared.cancel, style: .cancel, handler: nil)
         alertController.addTextField(
             text: self.walletModel.walletName,
-            placeholder: "Wallet Name",
+            placeholder: Texts.Wallet.new_name_title,
             action: .init(handler: { [weak self] _ in
                 guard let _ = self else { return }
                 guard let textField = alertController.textFields?.first else { return }

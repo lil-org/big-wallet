@@ -4,12 +4,12 @@ import NativeUIKit
 import SFSymbols
 
 class OnboardingBenefitsController: NativeOnboardingFeaturesController, OnboardingChildInterface {
-     
+    
     weak var onboardingManagerDelegate: OnboardingManagerDelegate?
     
     let actionToolbarView = NativeLargeActionToolBarView().do {
         $0.actionButton.set(
-            title: "Start Using",
+            title: Texts.App.Onboarding.features_title,
             icon: .init(.checkmark.circleFill),
             colorise: .init(content: .custom(.white), background: .tint)
         )
@@ -20,29 +20,29 @@ class OnboardingBenefitsController: NativeOnboardingFeaturesController, Onboardi
     init() {
         super.init(
             iconImage: .init(SFSymbol.wallet.passFill),
-            title: "Features",
-            subtitle: "Check list our features, we will add more."
+            title: Texts.App.Onboarding.features_title,
+            subtitle: Texts.App.Onboarding.features_description
         )
         setFeatures([
             .init(
                 iconImage: .init(SFSymbol.safari).withTintColor(.systemBlue, renderingMode: .alwaysOriginal),
-                title: "Safari Extension",
-                description: "You can use ETH without opening main app at all. We will show you how integrate it and how use it next."
+                title: Texts.App.Onboarding.features_1_title,
+                description: Texts.App.Onboarding.features_1_description
             ),
             .init(
                 iconImage: .init(SFSymbol.key.fill).withTintColor(.systemGreen, renderingMode: .alwaysOriginal),
-                title: "Safety",
-                description: "We don't transfer passwords or any keys. Its stored only at your device and don't worry about safety."
+                title: Texts.App.Onboarding.features_2_title,
+                description: Texts.App.Onboarding.features_2_description
             ),
             .init(
                 iconImage: .init(SFSymbol.envelope.fill).withTintColor(.systemIndigo, renderingMode: .alwaysOriginal),
-                title: "Open Source",
-                description: "All app published like open source, so you can check code and even do great changes. We do it for comunity and happy to have progress in it."
+                title: Texts.App.Onboarding.features_3_title,
+                description: Texts.App.Onboarding.features_3_description
             ),
             .init(
                 iconImage: .init(SFSymbol.person._3Fill).withTintColor(.systemOrange, renderingMode: .alwaysOriginal),
-                title: "Internation Team",
-                description: "So many designers and engineers make this app. You can be sure that they are high-level specialists."
+                title: Texts.App.Onboarding.features_4_title,
+                description: Texts.App.Onboarding.features_4_description
             )
         ])
     }
@@ -64,7 +64,7 @@ class OnboardingBenefitsController: NativeOnboardingFeaturesController, Onboardi
         }), for: .touchUpInside)
     }
     
-    #warning("temp")
+#warning("temp")
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         delay(0.1, closure: {

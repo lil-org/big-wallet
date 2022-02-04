@@ -1,0 +1,21 @@
+[update]
+tasks = ["code", "normalize"]
+
+[update.code]
+codePaths = ["Balance iOS/Data/"]
+localizablePaths = ["Balance iOS/Localisations/"]
+defaultToKeys = true
+additive = false
+unstripped = false
+plistArguments = true
+
+[update.normalize]
+paths = ["Balance iOS/Localisations/"]
+sourceLocale = "en"
+harmonizeWithSource = true
+sortByKeys = true
+
+[lint]
+paths = ["Balance iOS/"]
+duplicateKeys = true
+emptyValues = true

@@ -18,7 +18,7 @@ class ChooseNetworkController: SPDiffableTableController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        navigationItem.title = "Choose Network"
+        navigationItem.title = Texts.Wallet.Operation.choose_network_header
         configureDiffable(
             sections: content,
             cellProviders: [.network] + SPDiffableTableDataSource.CellProvider.default
@@ -29,8 +29,8 @@ class ChooseNetworkController: SPDiffableTableController {
         return [
             .init(
                 id: "list-prod",
-                header: SPDiffableTextHeaderFooter(text: "Production Networks"),
-                footer: SPDiffableTextHeaderFooter(text: "List of networks."),
+                header: SPDiffableTextHeaderFooter(text: Texts.Wallet.Operation.prod_networks_header),
+                footer: SPDiffableTextHeaderFooter(text: Texts.Wallet.Operation.prod_networks_footer),
                 items: EthereumChain.allMainnets.map({ chain in
                     return SPDiffableTableRowSubtitle(
                         id: nil,
@@ -48,8 +48,8 @@ class ChooseNetworkController: SPDiffableTableController {
             ),
             .init(
                 id: "list-test",
-                header: SPDiffableTextHeaderFooter(text: "Test Networks"),
-                footer: SPDiffableTextHeaderFooter(text: "Developers user it for tests"),
+                header: SPDiffableTextHeaderFooter(text: Texts.Wallet.Operation.test_networks_header),
+                footer: SPDiffableTextHeaderFooter(text: Texts.Wallet.Operation.test_networks_footer),
                 items: EthereumChain.allTestnets.map({ chain in
                     return SPDiffableTableRowSubtitle(
                         id: nil,

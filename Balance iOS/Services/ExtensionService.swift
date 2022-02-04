@@ -11,7 +11,7 @@ enum ExtensionService {
         launchURL = nil
         //print("req \(String(url.dropFirst(prefix.count)))")
         guard ExtensionBridge.hasRequest(id: request.id) else {
-            SPAlert.present(message: "This operation will support later", haptic: .warning, completion: nil)
+            SPAlert.present(message: Texts.Wallet.operation_not_supported, haptic: .warning, completion: nil)
             return
         }
         
@@ -129,6 +129,6 @@ enum ExtensionService {
     }
     
     static private func showErrorAlert(_ error: String? = nil) {
-        SPAlert.present(message: error ?? "Something went wrong", haptic: .error, completion: nil)
+        SPAlert.present(message: error ?? Texts.Wallet.operation_faild, haptic: .error, completion: nil)
     }
 }

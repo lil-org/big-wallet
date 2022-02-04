@@ -17,7 +17,7 @@ class SettingsAppearanceController: SPDiffableTableController {
         navigationItem.largeTitleDisplayMode = .never
         tableView.tableHeaderView = UIView()
         tableView.tableHeaderView?.frame.setHeight(NativeLayout.Spaces.default)
-        navigationItem.title = "Appearance"
+        navigationItem.title = Texts.Settings.appearance_title
         configureDiffable(sections: content, cellProviders: SPDiffableTableDataSource.CellProvider.default)
     }
     
@@ -28,11 +28,11 @@ class SettingsAppearanceController: SPDiffableTableController {
             .init(
                 id: Section.automatic.id,
                 header: nil,
-                footer: SPDiffableTextHeaderFooter(text: "Interface will be same like system."),
+                footer: SPDiffableTextHeaderFooter(text: Texts.Settings.appearance_footer),
                 items: [
                     SPDiffableTableRowSwitch(
                         id: Item.automatic_switch.id,
-                        text: "Automatic",
+                        text: Texts.Settings.appearance_automatic,
                         icon: nil,
                         isOn: Appearance.currentInterfaceAppearance == .system,
                         action: { [weak self] state in
@@ -53,12 +53,12 @@ class SettingsAppearanceController: SPDiffableTableController {
             sections.append(
                 .init(
                     id: Section.choose_list.id,
-                    header: SPDiffableTextHeaderFooter(text: "Force"),
-                    footer: SPDiffableTextHeaderFooter(text: "This style will be always. Ignoring system interface style."),
+                    header: SPDiffableTextHeaderFooter(text: Texts.Settings.appearance_force_header),
+                    footer: SPDiffableTextHeaderFooter(text: Texts.Settings.appearance_force_footer),
                     items: [
                         SPDiffableTableRow(
                             id: Item.force_light.id,
-                            text: "Always Light",
+                            text: Texts.Settings.appearance_force_always_light,
                             detail: nil,
                             icon: nil,
                             accessoryType: Appearance.currentInterfaceAppearance == .light ? .checkmark : .none,
@@ -72,7 +72,7 @@ class SettingsAppearanceController: SPDiffableTableController {
                         ),
                         SPDiffableTableRow(
                             id: Item.force_dark.id,
-                            text: "Always Dark",
+                            text: Texts.Settings.appearance_force_always_dark,
                             detail: nil,
                             icon: nil,
                             accessoryType: Appearance.currentInterfaceAppearance == .dark ? .checkmark : .none,

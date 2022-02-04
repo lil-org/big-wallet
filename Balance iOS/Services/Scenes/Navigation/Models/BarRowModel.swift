@@ -25,7 +25,7 @@ struct BarRowModel {
         
         var title: String {
             switch self {
-            case .accounts: return Texts.Account.title
+            case .accounts: return Texts.Wallet.wallets
             case .settings: return Texts.Settings.title
             }
         }

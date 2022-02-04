@@ -151,6 +151,7 @@
 		DFC5A10D00631755121FCBE6 /* Pods_Balance_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 29A83FE96A68BB9F154134EF /* Pods_Balance_iOS.framework */; };
 		F40432D527AAA082001E8F1D /* WalletExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40432D427AAA082001E8F1D /* WalletExtension.swift */; };
 		F42D390727A9657A006DCF5B /* ExtensionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F42D390627A9657A006DCF5B /* ExtensionService.swift */; };
+		F43F0A7C27AD40900099C2C7 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = F43F0A7E27AD40900099C2C7 /* Localizable.strings */; };
 		F446309927A142E300AFA8BD /* balance-logo.scn in Resources */ = {isa = PBXBuildFile; fileRef = F446309827A142E300AFA8BD /* balance-logo.scn */; };
 		F468B96427A70B5600314201 /* ArchivedImportWalletController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468B96327A70B5600314201 /* ArchivedImportWalletController.swift */; };
 		F468B96627A70D0B00314201 /* WalletsManagerExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = F468B96527A70D0B00314201 /* WalletsManagerExtension.swift */; };
@@ -398,6 +399,7 @@
 		F3B5261B155EF9E06AAD7D4C /* Pods-Balance iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Balance iOS.debug.xcconfig"; path = "Target Support Files/Pods-Balance iOS/Pods-Balance iOS.debug.xcconfig"; sourceTree = "<group>"; };
 		F40432D427AAA082001E8F1D /* WalletExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletExtension.swift; sourceTree = "<group>"; };
 		F42D390627A9657A006DCF5B /* ExtensionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionService.swift; sourceTree = "<group>"; };
+		F43F0A7D27AD40900099C2C7 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		F446309827A142E300AFA8BD /* balance-logo.scn */ = {isa = PBXFileReference; lastKnownFileType = file.bplist; path = "balance-logo.scn"; sourceTree = "<group>"; };
 		F468B96327A70B5600314201 /* ArchivedImportWalletController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchivedImportWalletController.swift; sourceTree = "<group>"; };
 		F468B96527A70D0B00314201 /* WalletsManagerExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsManagerExtension.swift; sourceTree = "<group>"; };
@@ -649,6 +651,7 @@
 				F468EFD427A00EEE007DD803 /* Scenes */,
 				F468EFDF27A00EEE007DD803 /* Services */,
 				F468F00627A00F6A007DD803 /* Resources */,
+				F43F0A7927AD40720099C2C7 /* Localisations */,
 				F468F00527A00F51007DD803 /* Temp */,
 			);
 			path = "Balance iOS";
@@ -881,6 +884,14 @@
 				2C8E88A1275FA596003EB8DB /* ImportViewController.swift */,
 			);
 			path = Screens;
+			sourceTree = "<group>";
+		};
+		F43F0A7927AD40720099C2C7 /* Localisations */ = {
+			isa = PBXGroup;
+			children = (
+				F43F0A7E27AD40900099C2C7 /* Localizable.strings */,
+			);
+			path = Localisations;
 			sourceTree = "<group>";
 		};
 		F446309A27A143C800AFA8BD /* 3D Logo */ = {
@@ -1384,6 +1395,7 @@
 			files = (
 				F468F04627A04677007DD803 /* sfekebvc_2K_Albedo.jpg in Resources */,
 				2C96D3AA2763D13400687301 /* DataStateView.xib in Resources */,
+				F43F0A7C27AD40900099C2C7 /* Localizable.strings in Resources */,
 				2C5FF97E26C84F7C00B32ACC /* LaunchScreen.storyboard in Resources */,
 				2C40709527667A8600AB3D55 /* ImageWithLabelTableViewCell.xib in Resources */,
 				2CC8C5A32767D3B30083FB1B /* GasPriceSliderTableViewCell.xib in Resources */,
@@ -1833,6 +1845,14 @@
 				2C5FF97D26C84F7C00B32ACC /* Base */,
 			);
 			name = LaunchScreen.storyboard;
+			sourceTree = "<group>";
+		};
+		F43F0A7E27AD40900099C2C7 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				F43F0A7D27AD40900099C2C7 /* en */,
+			);
+			name = Localizable.strings;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */

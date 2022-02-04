@@ -12,21 +12,21 @@ class SafariTableViewCell: SPTableViewCell {
     }
     
     let titleLabel = SPLabel().do {
-        $0.text = "Safari Extension"
+        $0.text = Texts.Wallet.SafariExtension.propose_title
         $0.font = .preferredFont(forTextStyle: .title2, weight: .bold, addPoints: 1)
         $0.textColor = .label
         $0.numberOfLines = .zero
     }
     
     let desсriptionLabel = SPLabel().do {
-        $0.text = "You can sign in operation, swap and transfer crypto without opening app. Look at steps for integrate it."
+        $0.text = Texts.Wallet.SafariExtension.propose_description
         $0.font = .preferredFont(forTextStyle: .body, weight: .regular, addPoints: -1)
         $0.textColor = .secondaryLabel
         $0.numberOfLines = .zero
     }
     
     let button = NativeSmallActionButton().do {
-        $0.set(title: "Open Steps", icon: nil, colorise: .tintedContentGroupBackground)
+        $0.set(title: Texts.Wallet.SafariExtension.Steps.open, icon: nil, colorise: .tintedContentGroupBackground)
     }
     
     let iconView = SPImageView().do {

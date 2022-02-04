@@ -16,11 +16,11 @@ class ApproveOperationController: SPDiffableTableController {
     
     let toolBarView = NativeLargeSmallActionToolBarView().do {
         $0.actionButton.set(
-            title: "Approve Operation",
+            title: Texts.Wallet.Operation.approve_operation,
             icon: UIImage(SFSymbol.checkmark.circleFill),
             colorise: .init(content: .custom(.white), background: .tint)
         )
-        $0.secondActionButton.setTitle("Cancel")
+        $0.secondActionButton.setTitle(Texts.Shared.cancel)
     }
     
     // MARK: - Init
@@ -80,8 +80,8 @@ class ApproveOperationController: SPDiffableTableController {
         return [
             .init(
                 id: "address",
-                header: NativeLargeHeaderItem(title: "Wallet"),
-                footer: SPDiffableTextHeaderFooter(text: "Wallet, who doing this operation. It's shoud be you."),
+                header: NativeLargeHeaderItem(title: Texts.Wallet.address),
+                footer: SPDiffableTextHeaderFooter(text: Texts.Wallet.Operation.approve_transaction_address_description),
                 items: [
                     SPDiffableTableRow(
                         id: Item.address.id,
@@ -96,12 +96,12 @@ class ApproveOperationController: SPDiffableTableController {
             ),
             .init(
                 id: "data",
-                header: NativeLargeHeaderItem(title: "Operation Details"),
-                footer: SPDiffableTextHeaderFooter(text: "Please, descide about it operation - approve or not. After action you will be redirect to website."),
+                header: NativeLargeHeaderItem(title: Texts.Wallet.Operation.approve_transaction_details_header),
+                footer: SPDiffableTextHeaderFooter(text: Texts.Wallet.Operation.approve_transaction_details_footer),
                 items: [
                     SPDiffableTableRow(
                         id: Item.operation_type.id,
-                        text: "Type",
+                        text: Texts.Wallet.Operation.type,
                         detail: subject.title,
                         icon: nil,
                         accessoryType: .none,
@@ -110,7 +110,7 @@ class ApproveOperationController: SPDiffableTableController {
                     ),
                     SPDiffableTableRow(
                         id: Item.website.id,
-                        text: "Website",
+                        text: Texts.Wallet.Operation.approve_transaction_website,
                         detail:  peerMeta?.name ?? "Unknow",
                         icon: nil,
                         accessoryType: .none,

@@ -14,8 +14,8 @@ class OnboardingHelloController: NativeHeaderController, OnboardingChildInterfac
     init() {
         super.init(
             image: nil,
-            title: Texts.App.name_long,
-            subtitle: "Lets make wallet or import existing wallet. Will do it step by step."
+            title: Texts.App.Onboarding.hello_title,
+            subtitle: Texts.App.Onboarding.hello_description
         )
     }
     
@@ -29,11 +29,11 @@ class OnboardingHelloController: NativeHeaderController, OnboardingChildInterfac
     
     let actionToolbarView = NativeLargeActionToolBarView().do {
         $0.actionButton.set(
-            title: "Start Using",
+            title: Texts.App.Onboarding.hello_action,
             icon: UIImage(SFSymbol.play.fill),
             colorise: .init(content: .custom(.white), background: .tint)
         )
-        $0.footerLabel.text = "Clicking start you agree with our easy privacy policy about not collect any data."
+        $0.footerLabel.text = Texts.App.Onboarding.hello_footer
     }
     
     // MARK: - Lifecycle

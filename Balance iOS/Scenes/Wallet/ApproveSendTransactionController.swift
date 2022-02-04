@@ -21,11 +21,11 @@ class ApproveSendTransactionController: SPDiffableTableController {
     
     let toolBarView = NativeLargeSmallActionToolBarView().do {
         $0.actionButton.set(
-            title: "Approve Transaction",
+            title: Texts.Wallet.Operation.approve_transaction,
             icon: UIImage(SFSymbol.checkmark.circleFill),
             colorise: .init(content: .custom(.white), background: .tint)
         )
-        $0.secondActionButton.setTitle("Cancel")
+        $0.secondActionButton.setTitle(Texts.Shared.cancel)
     }
     
     // MARK: - Init
@@ -47,7 +47,7 @@ class ApproveSendTransactionController: SPDiffableTableController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        navigationItem.title = "Send Transaction"
+        navigationItem.title = Texts.Wallet.Operation.approve_transaction
         navigationItem.largeTitleDisplayMode = .never
         
         toolBarView.actionButton.addAction(.init(handler: { _ in
@@ -102,7 +102,7 @@ class ApproveSendTransactionController: SPDiffableTableController {
         var items: [SPDiffableItem] = [
             SPDiffableTableRow(
                 id: Item.website.id,
-                text: "Website",
+                text: Texts.Wallet.Operation.approve_transaction_website,
                 detail:  peerMeta?.name ?? "Unknow",
                 icon: nil,
                 accessoryType: .none,
@@ -115,7 +115,7 @@ class ApproveSendTransactionController: SPDiffableTableController {
             items.append(
                 SPDiffableTableRow(
                     id: Item.value.id,
-                    text: "Value",
+                    text: Texts.Wallet.Operation.approve_transaction_value,
                     detail: value,
                     icon: nil,
                     accessoryType: .none,
@@ -128,7 +128,7 @@ class ApproveSendTransactionController: SPDiffableTableController {
         items.append(
             SPDiffableTableRow(
                 id: Item.fee.id,
-                text: "Fee",
+                text: Texts.Wallet.Operation.approve_transaction_fee,
                 detail: transaction.feeWithSymbol(chain: chain, ethPrice: priceService.currentPrice),
                 icon: nil,
                 accessoryType: .none,
@@ -140,7 +140,7 @@ class ApproveSendTransactionController: SPDiffableTableController {
         items.append(
             SPDiffableTableRow(
                 id: Item.gas.id,
-                text: "Gas",
+                text: Texts.Wallet.Operation.approve_transaction_gas,
                 detail: transaction.gasPriceWithLabel(chain: chain),
                 icon: nil,
                 accessoryType: .none,
@@ -152,8 +152,8 @@ class ApproveSendTransactionController: SPDiffableTableController {
         return [
             .init(
                 id: "address",
-                header: NativeLargeHeaderItem(title: "Wallet"),
-                footer: SPDiffableTextHeaderFooter(text: "Wallet, who doing this operation. It's shoud be you."),
+                header: NativeLargeHeaderItem(title: Texts.Wallet.address),
+                footer: SPDiffableTextHeaderFooter(text: Texts.Wallet.Operation.approve_transaction_address_description),
                 items: [
                     SPDiffableTableRow(
                         id: Item.address.id,
@@ -168,8 +168,8 @@ class ApproveSendTransactionController: SPDiffableTableController {
             ),
             .init(
                 id: "data",
-                header: NativeLargeHeaderItem(title: "Operation Details"),
-                footer: SPDiffableTextHeaderFooter(text: "Please, descide about it operation - approve or not. After action you will be redirect to website."),
+                header: NativeLargeHeaderItem(title: Texts.Wallet.Operation.approve_transaction_details_header),
+                footer: SPDiffableTextHeaderFooter(text: Texts.Wallet.Operation.approve_transaction_details_footer),
                 items: items
             )
         ]

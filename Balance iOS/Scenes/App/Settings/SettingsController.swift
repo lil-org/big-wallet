@@ -36,11 +36,11 @@ class SettingsController: SPDiffableTableController {
         return [
             .init(
                 id: "notification",
-                header: SPDiffableTextHeaderFooter(text: "Notifications"),
-                footer: SPDiffableTextHeaderFooter(text: "Here description about notification and dont boring user. Maybe some anonces."),
+                header: SPDiffableTextHeaderFooter(text: Texts.Settings.notification_header),
+                footer: SPDiffableTextHeaderFooter(text: Texts.Settings.notification_footer),
                 items: [
                     SPDiffableTableRowSwitch(
-                        text: "Notifcations",
+                        text: Texts.Settings.notification_title,
                         icon: .init(named: "settings-notifications"),
                         isOn: SPPermissions.Permission.notification.authorized,
                         action: { state in
@@ -58,11 +58,11 @@ class SettingsController: SPDiffableTableController {
             ),
             .init(
                 id: "App",
-                header: SPDiffableTextHeaderFooter(text: "App"),
-                footer: SPDiffableTextHeaderFooter(text: "Here description about notification and dont boring user. Maybe some anonces."),
+                header: SPDiffableTextHeaderFooter(text: Texts.Settings.app_header),
+                footer: SPDiffableTextHeaderFooter(text: Texts.Settings.app_header),
                 items: [
                     SPDiffableTableRow(
-                        text: "Appearance",
+                        text: Texts.Settings.appearance_title,
                         icon: .init(named: "settings-appearance"),
                         accessoryType: .disclosureIndicator,
                         selectionStyle: .default,
@@ -72,7 +72,7 @@ class SettingsController: SPDiffableTableController {
                         }
                     ),
                     SPDiffableTableRow(
-                        text: "Languages",
+                        text: Texts.Settings.language_title,
                         icon: .init(named: "settings-language"),
                         accessoryType: .disclosureIndicator,
                         selectionStyle: .default,
@@ -86,10 +86,10 @@ class SettingsController: SPDiffableTableController {
             .init(
                 id: "about",
                 header: nil,
-                footer: SPDiffableTextHeaderFooter(text: "Deescription about app and usage and privacy."),
+                footer: SPDiffableTextHeaderFooter(text: Texts.Settings.about_footer),
                 items: [
                     SPDiffableTableRow(
-                        text: "About App",
+                        text: Texts.Settings.about_title,
                         icon: .init(named: "settings-aboutus"),
                         accessoryType: .disclosureIndicator,
                         selectionStyle: .default,
@@ -102,7 +102,7 @@ class SettingsController: SPDiffableTableController {
             ),
             .init(id: "destroy", header: nil, footer: nil, items: [
                 NativeDiffableLeftButton(
-                    text: "Destroy All Data",
+                    text: Texts.Wallet.Destroy.action,
                     textColor: .destructiveColor,
                     detail: nil,
                     detailColor: .clear,
@@ -117,7 +117,7 @@ class SettingsController: SPDiffableTableController {
                                     Flags.seen_tutorial = true
                                 })
                                 delay(0.1, closure: {
-                                    SPAlert.present(title: "Wallet was reseted. Let's reconfigure it", message: nil, preset: .done, completion:  nil)
+                                    SPAlert.present(title: Texts.Wallet.Destroy.completed, message: nil, preset: .done, completion:  nil)
                                 })
                             }
                         })

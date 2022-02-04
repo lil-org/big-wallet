@@ -13,8 +13,8 @@ class SafariStepsController: NativeHeaderController {
     init() {
         super.init(
             image: nil,
-            title: "Integrate to Safari",
-            subtitle: "You can sign in operation, swap and transfer crypto without opening app. Look at steps for integrate it."
+            title: Texts.Wallet.SafariExtension.Steps.title,
+            subtitle: Texts.Wallet.SafariExtension.Steps.description
         )
     }
     
@@ -24,11 +24,11 @@ class SafariStepsController: NativeHeaderController {
     
     let actionToolbarView = NativeLargeActionToolBarView().do {
         $0.actionButton.set(
-            title: "Open Safari",
+            title: Texts.Wallet.SafariExtension.Steps.action,
             icon: UIImage.system("safari.fill"),
             colorise: .init(content: .custom(.white), background: .tint)
         )
-        $0.footerLabel.text = "Do all step by step."
+        $0.footerLabel.text = Texts.Wallet.SafariExtension.Steps.footer
         
         $0.actionButton.addAction(.init(handler: { _ in
             guard let url = URL(string: Constants.website) else { return }
