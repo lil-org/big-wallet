@@ -85,12 +85,13 @@ enum EthereumChain: Int {
     var nodeURLString: String {
         switch self {
         case .ethereum: return "https://mainnet.infura.io/v3/" + Secrets.infura
-        case .arbitrum: return "https://arbitrum-mainnet.infura.io/v3/" + Secrets.infura
-        case .optimism: return "https://optimism-mainnet.infura.io/v3/" + Secrets.infura
-        case .polygon: return "https://polygon-mainnet.infura.io/v3/" + Secrets.infura
+        case .arbitrum: return "https://arb1.arbitrum.io/rpc"
+        case .optimism: return "https://mainnet.optimism.io"
+        case .polygon: return "https://polygon-rpc.com"
         case .binance: return "https://bsc-dataseed.binance.org/"
         case .avalanche: return "https://api.avax.network/ext/bc/C/rpc"
         case .xDai: return "https://rpc.xdaichain.com/"
+            
         case .arbitrumRinkeby: return "https://rinkeby.arbitrum.io/rpc"
         case .optimisticKovan: return "https://kovan.optimism.io"
         case .ethereumRinkeby: return "https://rinkeby.infura.io/v3/" + Secrets.infura
@@ -99,7 +100,7 @@ enum EthereumChain: Int {
         case .ethereumGoerli: return "https://goerli.infura.io/v3/" + Secrets.infura
         case .binanceTestnet: return "https://data-seed-prebsc-1-s1.binance.org:8545/"
         case .avalancheFuji: return "https://api.avax-test.network/ext/bc/C/rpc"
-        case .polygonMumbai: return "https://polygon-mumbai.infura.io/v3/" + Secrets.infura
+        case .polygonMumbai: return "https://rpc-mumbai.matic.today"
         }
     }
     
