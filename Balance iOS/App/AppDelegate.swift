@@ -19,7 +19,7 @@ class AppDelegate: SPAppScenesDelegate {
         gasService.start()
         walletsManager.start()
         
-        migration()
+        Self.migration()
         
         return true
     }
@@ -27,7 +27,7 @@ class AppDelegate: SPAppScenesDelegate {
     /**
      Use only for remove password it empty.
      */
-    private func migration() {
+    static func migration() {
         let keychain = Keychain.shared
         let oldPassword = keychain.password
         let newPassword = String.empty
@@ -41,9 +41,6 @@ class AppDelegate: SPAppScenesDelegate {
                     }
                 }
             }
-            delay(0.4, closure: {
-                SPAlert.present(title: "You did migrated to new version without password.", message: "It happen only once. Password no need more.", preset: .done, completion: nil)
-            })
         }
     }
     

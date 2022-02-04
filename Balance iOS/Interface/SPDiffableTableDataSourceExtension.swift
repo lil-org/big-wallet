@@ -4,6 +4,24 @@ import NativeUIKit
 
 extension SPDiffableTableDataSource.CellProvider {
     
+    public static var buttonMultiLinesMonospaced: SPDiffableTableDataSource.CellProvider  {
+        return SPDiffableTableDataSource.CellProvider() { (tableView, indexPath, item) -> UITableViewCell? in
+            guard item.id == "address-public-id" else { return nil }
+            guard let item = item as? NativeDiffableLeftButton else { return nil }
+            let cell = tableView.dequeueReusableCell(withClass: NativeLeftButtonTableViewCell.self, for: indexPath)
+            cell.textLabel?.text = item.text
+            cell.textLabel?.font = .preferredFont(forTextStyle: .body, weight: .medium).monospaced
+            cell.textLabel?.textColor = item.textColor
+            cell.textLabel?.numberOfLines = .zero
+            cell.detailTextLabel?.text = item.detail
+            cell.detailTextLabel?.textColor = item.detailColor
+            cell.imageView?.image = item.icon
+            cell.accessoryType = item.accessoryType
+            cell.higlightStyle = .content
+            return cell
+        }
+    }
+    
     public static var buttonMultiLines: SPDiffableTableDataSource.CellProvider  {
         return SPDiffableTableDataSource.CellProvider() { (tableView, indexPath, item) -> UITableViewCell? in
             guard let item = item as? NativeDiffableLeftButton else { return nil }

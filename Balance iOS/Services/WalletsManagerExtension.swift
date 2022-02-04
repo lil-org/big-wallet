@@ -29,6 +29,7 @@ extension WalletsManager {
         Keychain.shared.removePassword()
         Flags.seen_tutorial = false
         Flags.show_safari_extension_advice = true
+        AppDelegate.migration()
         NotificationCenter.default.post(name: .walletsUpdated, object: nil)
     }
 }

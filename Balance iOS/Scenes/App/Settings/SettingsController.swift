@@ -59,7 +59,7 @@ class SettingsController: SPDiffableTableController {
             .init(
                 id: "App",
                 header: SPDiffableTextHeaderFooter(text: Texts.Settings.app_header),
-                footer: SPDiffableTextHeaderFooter(text: Texts.Settings.app_header),
+                footer: SPDiffableTextHeaderFooter(text: Texts.Settings.app_footer),
                 items: [
                     SPDiffableTableRow(
                         text: Texts.Settings.appearance_title,

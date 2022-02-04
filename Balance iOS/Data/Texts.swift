@@ -4,8 +4,8 @@ enum Texts {
     
     enum Shared {
         
-        static var cancel: String { "cancel" }
-        static var see_all: String { "see all" }
+        static var cancel: String { NSLocalizedString("shared cancel", comment: "") }
+        static var see_all: String { NSLocalizedString("shared see all", comment: "") }
     }
     
     enum App {
@@ -49,33 +49,33 @@ enum Texts {
         static var add_wallet_action: String { NSLocalizedString("wallet add wallet action", comment: "") }
         static var add_wallet_footer: String { NSLocalizedString("wallet add wallet footer", comment: "") }
         
-        static var no_name: String { "wallet no name" }
-        static var change_name: String { "wallet change name" }
-        static var address: String { "wallet address" }
-        static var address_copied: String { "wallet address copied" }
+        static var no_name: String { NSLocalizedString("wallet no name", comment: "") }
+        static var change_name: String { NSLocalizedString("wallet change name", comment: "") }
+        static var address: String { NSLocalizedString("wallet address", comment: "") }
+        static var address_copied: String { NSLocalizedString("wallet address copied", comment: "") }
         
-        static var balances_header: String { "wallet balances header" }
-        static var balances_footer: String { "wallet balances footer" }
+        static var balances_header: String { NSLocalizedString("wallet balances header", comment: "") }
+        static var balances_footer: String { NSLocalizedString("wallet balances footer", comment: "") }
         
-        static var show_empty_balances: String { "wallet balances show empty" }
+        static var show_empty_balances: String { NSLocalizedString("wallet balances show empty", comment: "") }
         
-        static var access_header: String { "wallet access header" }
-        static var access_footer: String { "wallet access footer" }
-        static var show_phrase: String { "wallet show phrase" }
+        static var access_header: String { NSLocalizedString("wallet access header", comment: "") }
+        static var access_footer: String { NSLocalizedString("wallet access footer", comment: "") }
+        static var show_phrase: String { NSLocalizedString("wallet show phrase", comment: "") }
         
-        static var delete_header: String { "wallet delete header" }
-        static var delete_footer: String { "wallet delete footer" }
-        static var delete_action: String { "wallet delete action" }
+        static var delete_header: String { NSLocalizedString("wallet delete header", comment: "") }
+        static var delete_footer: String { NSLocalizedString("wallet delete footer", comment: "") }
+        static var delete_action: String { NSLocalizedString("wallet delete action", comment: "") }
         
-        static var delete_confirm_title: String { "wallet delete confirm title" }
-        static var delete_confirm_description: String { "wallet delete confirm description" }
-        static var delete_confirm_action: String { "wallet delete confirm action" }
-        static var delete_confirm_action_completed: String { "wallet delete confirm action completed" }
+        static var delete_confirm_title: String { NSLocalizedString("wallet delete confirm title", comment: "") }
+        static var delete_confirm_description: String { NSLocalizedString("wallet delete confirm description", comment: "") }
+        static var delete_confirm_action: String { NSLocalizedString("wallet delete confirm action", comment: "") }
+        static var delete_confirm_action_completed: String { NSLocalizedString("wallet delete confirm action completed", comment: "") }
         
-        static var new_name_title: String { "wallet new name title" }
-        static var new_name_description: String { "wallet new name description" }
-        static var new_name_save: String { "wallet new name save" }
-        static var new_name_saved: String { "wallet new name saved" }
+        static var new_name_title: String { NSLocalizedString("wallet new name title", comment: "") }
+        static var new_name_description: String { NSLocalizedString("wallet new name description", comment: "") }
+        static var new_name_save: String { NSLocalizedString("wallet new name save", comment: "") }
+        static var new_name_saved: String { NSLocalizedString("wallet new name saved", comment: "") }
         
         enum Operation {
             
@@ -86,7 +86,7 @@ enum Texts {
             static var prod_networks_header: String { NSLocalizedString("wallet operation prod networks header", comment: "") }
             static var prod_networks_footer: String { NSLocalizedString("wallet operation prod networks footer", comment: "") }
             static var test_networks_header: String { NSLocalizedString("wallet operation test networks header", comment: "") }
-            static var test_networks_footer: String { NSLocalizedString("wallet operation test networks header", comment: "") }
+            static var test_networks_footer: String { NSLocalizedString("wallet operation test networks footer", comment: "") }
             
             static var available_wallets_header: String { NSLocalizedString("wallet operation available wallets header", comment: "") }
             static var available_wallets_footer: String { NSLocalizedString("wallet operation available wallets footer", comment: "") }

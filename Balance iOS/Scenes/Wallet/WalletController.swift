@@ -32,7 +32,7 @@ class WalletController: NativeProfileController {
         navigationItem.largeTitleDisplayMode = .never
         headerView.avatarView.isEditable = false
         tableView.register(NativeLeftButtonTableViewCell.self)
-        configureDiffable(sections: content, cellProviders: [.balance, .buttonMultiLines, .rowDetailMultiLines] + SPDiffableTableDataSource.CellProvider.default, headerFooterProviders: [.largeHeader])
+        configureDiffable(sections: content, cellProviders: [.balance, .buttonMultiLinesMonospaced, .button, .rowDetailMultiLines] + SPDiffableTableDataSource.CellProvider.default, headerFooterProviders: [.largeHeader])
         configureHeader()
         
         headerView.emailButton.titleLabel?.font = UIFont.preferredFont(forTextStyle: .body, weight: .medium)
