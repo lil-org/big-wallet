@@ -25,37 +25,8 @@ window.solana = new TokenarySolana();
 window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "from-content-script") {
         const response = event.data.response;
-        
-        if (response.name == "didLoadLatestConfiguration") {
-            window.ethereum.didGetLatestConfiguration = true;
-            if (response.chainId) {
-                window.ethereum.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
-            }
-            
-            for(let payload of window.ethereum.pendingPayloads) {
-                window.ethereum._processPayload(payload);
-            }
-            
-            window.ethereum.pendingPayloads = [];
-            return;
-        }
-        
-        if ("result" in response) {
-            window.ethereum.sendResponse(event.data.id, response.result);
-        } else if ("results" in response) {
-            if (response.name == "switchEthereumChain" || response.name == "addEthereumChain") {
-                // Calling it before sending response matters for some dapps
-                window.ethereum.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
-            }
-            if (response.name != "switchAccount") {
-                window.ethereum.sendResponse(event.data.id, response.results);
-            }
-            if (response.name == "requestAccounts" || response.name == "switchAccount") {
-                // Calling it after sending response matters for some dapps
-                window.ethereum.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
-            }
-        } else if ("error" in response) {
-            window.ethereum.sendError(event.data.id, response.error);
-        }
+        window.ethereum.processTokenaryResponse(response);
+        // TODO: смотреть, что за сообщение пришло и в зависимости от этого отдавать его либо эфиру либо солане
+        // а если непонятно, то отдавать обоим, это может быть в случае switchAccount, вызыванного кнопкой
     }
 });
