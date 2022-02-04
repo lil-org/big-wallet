@@ -61,7 +61,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func processInput(url: String?) {
         guard let url = url else { return }
         
-        for scheme in ["https://balance.io/wc?uri=", "balance://wc?uri="] {
+        for scheme in ["https://www.balance.io/wc?uri=", "balance://wc?uri="] {
             if url.hasPrefix(scheme), let link = url.dropFirst(scheme.count).removingPercentEncoding, let session = walletConnect.sessionWithLink(link) {
                 processExternalRequest(.wcSession(session))
                 return

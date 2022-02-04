@@ -43,8 +43,8 @@
         "https://*.infura.io/",
         "https://*.infura.io/*",
         "https://*.infura.io/*/*",
-        "https://balance.io/*",
-        "https://balance.io/*/*",
+        "https://www.balance.io/*",
+        "https://www.balance.io/*/*",
         "activeTab"
     ],
 

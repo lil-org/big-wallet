@@ -1,6 +1,6 @@
 const pendingRequestsIds = new Set();
 
-if (window.location.href.startsWith("https://balance.io/blank")) {
+if (window.location.href.startsWith("https://www.balance.io/blank")) {
     browser.runtime.sendMessage({ subject: "wakeUp" });
 }
 
