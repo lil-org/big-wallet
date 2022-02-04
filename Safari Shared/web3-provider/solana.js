@@ -165,7 +165,7 @@ class TokenarySolana extends EventEmitter {
             networkId: "", // won't be there for solana
             host: window.location.host
         };
-        window.tokenary.postMessage(object);
+        window.tokenary.postMessage(object, "solana");
     }
     
     /**
