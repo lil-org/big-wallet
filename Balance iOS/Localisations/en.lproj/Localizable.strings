@@ -1,13 +1,263 @@
-"app onboarding hello description" = "Lets make wallet or import existing wallet. Will do it step by step.";
+/* No comment provided by engineer. */
+"app onboarding features 1 description" = "app onboarding features 1 description";
 
-"app onboarding hello action" = "Start Using";
+/* No comment provided by engineer. */
+"app onboarding features 1 title" = "app onboarding features 1 title";
 
-"app onboarding hello footer" = "Clicking start you agree with our easy privacy policy about not collect any data.";
+/* No comment provided by engineer. */
+"app onboarding features 2 description" = "app onboarding features 2 description";
 
-"app onboarding features title" = "Features";
+/* No comment provided by engineer. */
+"app onboarding features 2 title" = "app onboarding features 2 title";
 
-"app onboarding features description" = "Check list our features, we will add more.";
+/* No comment provided by engineer. */
+"app onboarding features 3 description" = "app onboarding features 3 description";
 
+/* No comment provided by engineer. */
+"app onboarding features 3 title" = "app onboarding features 3 title";
+
+/* No comment provided by engineer. */
+"app onboarding features 4 description" = "app onboarding features 4 description";
+
+/* No comment provided by engineer. */
+"app onboarding features 4 title" = "app onboarding features 4 title";
+
+/* No comment provided by engineer. */
 "app onboarding features action" = "Start Using";
 
+/* No comment provided by engineer. */
+"app onboarding features description" = "Check list our features, we will add more.";
 
+/* No comment provided by engineer. */
+"app onboarding features title" = "Features";
+
+/* No comment provided by engineer. */
+"app onboarding hello action" = "Start Using";
+
+/* No comment provided by engineer. */
+"app onboarding hello description" = "Lets make wallet or import existing wallet. Will do it step by step.";
+
+/* No comment provided by engineer. */
+"app onboarding hello footer" = "Clicking start you agree with our easy privacy policy about not collect any data.";
+
+/* No comment provided by engineer. */
+"settings about footer" = "settings about footer";
+
+/* No comment provided by engineer. */
+"settings about title" = "settings about title";
+
+/* No comment provided by engineer. */
+"settings app footer" = "settings app footer";
+
+/* No comment provided by engineer. */
+"settings app header" = "settings app header";
+
+/* No comment provided by engineer. */
+"settings appearance automatic" = "settings appearance automatic";
+
+/* No comment provided by engineer. */
+"settings appearance footer" = "settings appearance footer";
+
+/* No comment provided by engineer. */
+"settings appearance force always dark" = "settings appearance force always dark";
+
+/* No comment provided by engineer. */
+"settings appearance force always light" = "settings appearance force always light";
+
+/* No comment provided by engineer. */
+"settings appearance force footer" = "settings appearance force footer";
+
+/* No comment provided by engineer. */
+"settings appearance force header" = "settings appearance force header";
+
+/* No comment provided by engineer. */
+"settings appearance title" = "settings appearance title";
+
+/* No comment provided by engineer. */
+"settings language footer" = "settings language footer";
+
+/* No comment provided by engineer. */
+"settings language title" = "settings language title";
+
+/* No comment provided by engineer. */
+"settings notification description" = "settings notification description";
+
+/* No comment provided by engineer. */
+"settings notification header" = "settings notification header";
+
+/* No comment provided by engineer. */
+"settings notification title" = "settings notification title";
+
+/* No comment provided by engineer. */
+"settings title" = "settings title";
+
+/* No comment provided by engineer. */
+"wallet add wallet action" = "wallet add wallet action";
+
+/* No comment provided by engineer. */
+"wallet add wallet footer" = "wallet add wallet footer";
+
+/* No comment provided by engineer. */
+"wallet destroy action" = "wallet destroy action";
+
+/* No comment provided by engineer. */
+"wallet destroy completed" = "wallet destroy completed";
+
+/* No comment provided by engineer. */
+"wallet destroy confirm description" = "wallet destroy confirm description";
+
+/* No comment provided by engineer. */
+"wallet destroy confirm title" = "wallet destroy confirm title";
+
+/* No comment provided by engineer. */
+"wallet empty description" = "wallet empty description";
+
+/* No comment provided by engineer. */
+"wallet empty title" = "wallet empty title";
+
+/* No comment provided by engineer. */
+"wallet import action add exising description" = "wallet import action add exising description";
+
+/* No comment provided by engineer. */
+"wallet import action add exising title" = "wallet import action add exising title";
+
+/* No comment provided by engineer. */
+"wallet import action new description" = "wallet import action new description";
+
+/* No comment provided by engineer. */
+"wallet import action new title" = "wallet import action new title";
+
+/* No comment provided by engineer. */
+"wallet import description" = "wallet import description";
+
+/* No comment provided by engineer. */
+"wallet import title" = "wallet import title";
+
+/* No comment provided by engineer. */
+"wallet open all wallets" = "wallet open all wallets";
+
+/* No comment provided by engineer. */
+"wallet operation approve operation" = "wallet operation approve operation";
+
+/* No comment provided by engineer. */
+"wallet operation approve operation type" = "wallet operation approve operation type";
+
+/* No comment provided by engineer. */
+"wallet operation approve transaction" = "wallet operation approve transaction";
+
+/* No comment provided by engineer. */
+"wallet operation approve transaction address description" = "wallet operation approve transaction address description";
+
+/* No comment provided by engineer. */
+"wallet operation approve transaction details footer" = "wallet operation approve transaction details footer";
+
+/* No comment provided by engineer. */
+"wallet operation approve transaction details header" = "wallet operation approve transaction details header";
+
+/* No comment provided by engineer. */
+"wallet operation approve transaction fee" = "wallet operation approve transaction fee";
+
+/* No comment provided by engineer. */
+"wallet operation approve transaction gas" = "wallet operation approve transaction gas";
+
+/* No comment provided by engineer. */
+"wallet operation approve transaction value" = "wallet operation approve transaction value";
+
+/* No comment provided by engineer. */
+"wallet operation approve transaction website" = "wallet operation approve transaction website";
+
+/* No comment provided by engineer. */
+"wallet operation available wallets footer" = "wallet operation available wallets footer";
+
+/* No comment provided by engineer. */
+"wallet operation available wallets header" = "wallet operation available wallets header";
+
+/* No comment provided by engineer. */
+"wallet operation choose network footer" = "wallet operation choose network footer";
+
+/* No comment provided by engineer. */
+"wallet operation choose network header" = "wallet operation choose network header";
+
+/* No comment provided by engineer. */
+"wallet operation choose wallet" = "wallet operation choose wallet";
+
+/* No comment provided by engineer. */
+"wallet operation faild" = "wallet operation faild";
+
+/* No comment provided by engineer. */
+"wallet operation not supported" = "wallet operation not supported";
+
+/* No comment provided by engineer. */
+"wallet operation prod networks footer" = "wallet operation prod networks footer";
+
+/* No comment provided by engineer. */
+"wallet operation prod networks header" = "wallet operation prod networks header";
+
+/* No comment provided by engineer. */
+"wallet operation test networks header" = "wallet operation test networks header";
+
+/* No comment provided by engineer. */
+"wallet phrase action" = "wallet phrase action";
+
+/* No comment provided by engineer. */
+"wallet phrase actions action copy completed" = "wallet phrase actions action copy completed";
+
+/* No comment provided by engineer. */
+"wallet phrase actions action copy description" = "wallet phrase actions action copy description";
+
+/* No comment provided by engineer. */
+"wallet phrase actions action copy title" = "wallet phrase actions action copy title";
+
+/* No comment provided by engineer. */
+"wallet phrase actions action share description" = "wallet phrase actions action share description";
+
+/* No comment provided by engineer. */
+"wallet phrase actions action share title" = "wallet phrase actions action share title";
+
+/* No comment provided by engineer. */
+"wallet phrase actions cancel" = "wallet phrase actions cancel";
+
+/* No comment provided by engineer. */
+"wallet phrase actions choose" = "wallet phrase actions choose";
+
+/* No comment provided by engineer. */
+"wallet phrase actions description" = "wallet phrase actions description";
+
+/* No comment provided by engineer. */
+"wallet phrase actions title" = "wallet phrase actions title";
+
+/* No comment provided by engineer. */
+"wallet phrase footer" = "wallet phrase footer";
+
+/* No comment provided by engineer. */
+"wallet phrase title" = "wallet phrase title";
+
+/* No comment provided by engineer. */
+"wallet safari extension propose description" = "wallet safari extension propose description";
+
+/* No comment provided by engineer. */
+"wallet safari extension propose footer" = "wallet safari extension propose footer";
+
+/* No comment provided by engineer. */
+"wallet safari extension propose header" = "wallet safari extension propose header";
+
+/* No comment provided by engineer. */
+"wallet safari extension propose title" = "wallet safari extension propose title";
+
+/* No comment provided by engineer. */
+"wallet safari extension steps action" = "wallet safari extension steps action";
+
+/* No comment provided by engineer. */
+"wallet safari extension steps description" = "wallet safari extension steps description";
+
+/* No comment provided by engineer. */
+"wallet safari extension steps footer" = "wallet safari extension steps footer";
+
+/* No comment provided by engineer. */
+"wallet safari extension steps open" = "wallet safari extension steps open";
+
+/* No comment provided by engineer. */
+"wallet safari extension steps title" = "wallet safari extension steps title";
+
+/* No comment provided by engineer. */
+"wallet wallets" = "wallet wallets";
