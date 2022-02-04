@@ -13,7 +13,7 @@ Steps:
 
 1. Install packages with CocoaPods:
 
-- For M1 chips: `arch -x86_64 pod instsall` (you may need to run `sudo arch -x86_64 gem install ffi` first!)
+- For M1 chips: `arch -x86_64 pod install` (you may need to run `sudo arch -x86_64 gem install ffi` first!)
 
 - For other chips: `pod install`
 
