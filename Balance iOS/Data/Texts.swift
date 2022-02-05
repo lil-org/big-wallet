@@ -52,11 +52,11 @@ enum Texts {
         static var no_name: String { NSLocalizedString("wallet no name", comment: "New Wallet") }
         static var change_name: String { NSLocalizedString("wallet change name", comment: "Rename") }
         static var address: String { NSLocalizedString("wallet address", comment: "Wallet Ethereum Address") }
-        static var address: String { NSLocalizedString("wallet footer", comment: "All Ethereum addresses begin with 0x and are followed by 40 characters. This is how people can send assets to you that live inside the Ethereum ecosystem.") }
+        static var address_footer: String { NSLocalizedString("wallet footer", comment: "All Ethereum addresses begin with 0x and are followed by 40 characters. This is how people can send assets to you that live inside the Ethereum ecosystem.") }
         static var address_copied: String { NSLocalizedString("wallet address copied", comment: "Address Copied") }
         
         static var balances_header: String { NSLocalizedString("wallet balances header", comment: "ETH Balances") }
-        static var balances_header: String { NSLocalizedString("wallet balances subheader", comment: "You can see your ETH balance on all Ethereum Layer 2 Networks and test networks.") }
+        static var balances_subheader: String { NSLocalizedString("wallet balances subheader", comment: "You can see your ETH balance on all Ethereum Layer 2 Networks and test networks.") }
         static var balances_footer: String { NSLocalizedString("wallet balances footer", comment: "Wallets with no ETH are hidden.") } //Turn on by default
         
         static var show_empty_balances: String { NSLocalizedString("wallet balances show empty", comment: "Show Wallets with no ETH") }
@@ -192,10 +192,9 @@ enum Texts {
         
         static var about_title: String { NSLocalizedString("settings about title", comment: "About") }
 
-        
-        static var about_title: String { NSLocalizedString("settings about title", comment: "Website: balance.io") }
-        static var about_footer: String { NSLocalizedString("settings about twitter", comment: "Twitter: @balance_io") }
-        static var about_footer: String { NSLocalizedString("settings about discord", comment: "Discord: discord.gg/balance-wallet") }
+        static var about_website: String { NSLocalizedString("settings about title", comment: "Website: balance.io") }
+        static var about_twitter: String { NSLocalizedString("settings about twitter", comment: "Twitter: @balance_io") }
+        static var about_discord: String { NSLocalizedString("settings about discord", comment: "Discord: discord.gg/balance-wallet") }
         
         static var about_footer: String { NSLocalizedString("settings about footer", comment: "We are a global community of engineers, designers & operators trying to build the best open source Ethereum wallet possible.") }
     }
