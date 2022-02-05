@@ -39,40 +39,40 @@ enum Texts {
     enum Wallet {
         
         static var wallets: String { NSLocalizedString("wallet wallets", comment: "") }
-        static var operation_not_supported: String { NSLocalizedString("wallet operation not supported", comment: "Balance does not support that. We must fix this.") }
-        static var operation_faild: String { NSLocalizedString("wallet operation faild", comment: "Something failed. We must fix this.") }
+        static var operation_not_supported: String { NSLocalizedString("wallet operation not supported", comment: "") }
+        static var operation_faild: String { NSLocalizedString("wallet operation faild", comment: "") }
         
-        static var empty_title: String { NSLocalizedString("wallet empty title", comment: "No wallets") }
-        static var empty_description: String { NSLocalizedString("wallet empty description", comment: "Create or Import a Wallet") }
+        static var empty_title: String { NSLocalizedString("wallet empty title", comment: "") }
+        static var empty_description: String { NSLocalizedString("wallet empty description", comment: "") }
         static var open_all_wallets: String { NSLocalizedString("wallet open all wallets", comment: "") } //Hide this when no wallets
         
-        static var add_wallet_action: String { NSLocalizedString("wallet add wallet action", comment: "Create or Import a Wallet") }
-        static var add_wallet_footer: String { NSLocalizedString("wallet add wallet footer", comment: "You can import your secret recover phrase or create a fresh new wallet.") }
+        static var add_wallet_action: String { NSLocalizedString("wallet add wallet action", comment: "") }
+        static var add_wallet_footer: String { NSLocalizedString("wallet add wallet footer", comment: "") }
         
-        static var no_name: String { NSLocalizedString("wallet no name", comment: "New Wallet") }
-        static var change_name: String { NSLocalizedString("wallet change name", comment: "Rename") }
-        static var address: String { NSLocalizedString("wallet address", comment: "Wallet Ethereum Address") }
-        static var address_footer: String { NSLocalizedString("wallet footer", comment: "All Ethereum addresses begin with 0x and are followed by 40 characters. This is how people can send assets to you that live inside the Ethereum ecosystem.") }
-        static var address_copied: String { NSLocalizedString("wallet address copied", comment: "Address Copied") }
+        static var no_name: String { NSLocalizedString("wallet no name", comment: "") }
+        static var change_name: String { NSLocalizedString("wallet change name", comment: "") }
+        static var address: String { NSLocalizedString("wallet address", comment: "") }
+        static var address_footer: String { NSLocalizedString("wallet footer", comment: "") }
+        static var address_copied: String { NSLocalizedString("wallet address copied", comment: "") }
         
-        static var balances_header: String { NSLocalizedString("wallet balances header", comment: "ETH Balances") }
-        static var balances_subheader: String { NSLocalizedString("wallet balances subheader", comment: "You can see your ETH balance on all Ethereum Layer 2 Networks and test networks.") }
-        static var balances_footer: String { NSLocalizedString("wallet balances footer", comment: "Wallets with no ETH are hidden.") } //Turn on by default
+        static var balances_header: String { NSLocalizedString("wallet balances header", comment: "") }
+        static var balances_subheader: String { NSLocalizedString("wallet balances subheader", comment: "") }
+        static var balances_footer: String { NSLocalizedString("wallet balances footer", comment: "") } //Turn on by default
         
-        static var show_empty_balances: String { NSLocalizedString("wallet balances show empty", comment: "Show Wallets with no ETH") }
+        static var show_empty_balances: String { NSLocalizedString("wallet balances show empty", comment: "") }
         
-        static var access_header: String { NSLocalizedString("wallet access header", comment: "SECRET RECOVERY PHRASE") }
-        static var access_footer: String { NSLocalizedString("wallet access footer", comment: "These 12 words that can recover your funds in any wallet. They are also known as Seed Phrases or Mnemonic Phrase. You can learn more about how these work here: https://support.mycrypto.com/general-knowledge/cryptography/how-do-mnemonic-phrases-work/") }
-        static var show_phrase: String { NSLocalizedString("wallet show phrase", comment: "Reveal Secret Recovery Phrase") }
+        static var access_header: String { NSLocalizedString("wallet access header", comment: "") }
+        static var access_footer: String { NSLocalizedString("wallet access footer", comment: "") }
+        static var show_phrase: String { NSLocalizedString("wallet show phrase", comment: "") }
         
-        static var delete_header: String { NSLocalizedString("wallet delete header", comment: "DELETE WALLET - CANNOT UNDO") }
-        static var delete_footer: String { NSLocalizedString("wallet delete footer", comment: "Delete Wallet Forever") }
-        static var delete_action: String { NSLocalizedString("wallet delete action", comment: "If you have backed up your Secret Recovery Phrase, you can import it again. If you have not backed it up, it will be lost forever.") }
+        static var delete_header: String { NSLocalizedString("wallet delete header", comment: "") }
+        static var delete_footer: String { NSLocalizedString("wallet delete footer", comment: "") }
+        static var delete_action: String { NSLocalizedString("wallet delete action", comment: "") }
         
-        static var delete_confirm_title: String { NSLocalizedString("wallet delete confirm title", comment: "Are you sure you want to delete this forever?") }
-        static var delete_confirm_description: String { NSLocalizedString("wallet delete confirm description", comment: "There is no way for us to recover this for you.") }
-        static var delete_confirm_action: String { NSLocalizedString("wallet delete confirm action", comment: "Yes, delete my wallet.") }
-        static var delete_confirm_action_completed: String { NSLocalizedString("wallet delete confirm action completed", comment: "Wallet Deleted") }
+        static var delete_confirm_title: String { NSLocalizedString("wallet delete confirm title", comment: "") }
+        static var delete_confirm_description: String { NSLocalizedString("wallet delete confirm description", comment: "") }
+        static var delete_confirm_action: String { NSLocalizedString("wallet delete confirm action", comment: "") }
+        static var delete_confirm_action_completed: String { NSLocalizedString("wallet delete confirm action completed", comment: "") }
         
         static var new_name_title: String { NSLocalizedString("wallet new name title", comment: "") }
         static var new_name_description: String { NSLocalizedString("wallet new name description", comment: "") }
@@ -81,29 +81,29 @@ enum Texts {
         
         enum Operation {
             
-            static var choose_wallet: String { NSLocalizedString("wallet operation choose wallet", comment: "Choose Which Wallet") }
-            static var choose_network_header: String { NSLocalizedString("wallet operation choose network header", comment: "ETHEREUM-BASED NETWORKS") }
-            static var choose_network_footer: String { NSLocalizedString("wallet operation choose network footer", comment: "Choose which Ethereum network you want to connect to with your wallet. ") }
+            static var choose_wallet: String { NSLocalizedString("wallet operation choose wallet", comment: "") }
+            static var choose_network_header: String { NSLocalizedString("wallet operation choose network header", comment: "") }
+            static var choose_network_footer: String { NSLocalizedString("wallet operation choose network footer", comment: "") }
             
-            static var prod_networks_header: String { NSLocalizedString("wallet operation prod networks header", comment: "Live Ethereum Layer 2 networks & Sidechains") }
-            static var prod_networks_footer: String { NSLocalizedString("wallet operation prod networks footer", comment: "If you want to learn more about Layer 2 Ethereum networks, go here: https://ethereum.org/en/developers/docs/scaling/layer-2-rollups/") }
-            static var test_networks_header: String { NSLocalizedString("wallet operation test networks header", comment: "ETHEREUM TEST NETWORKS") }
-            static var test_networks_footer: String { NSLocalizedString("wallet operation test networks footer", comment: "Test networks are used by developers who are improving their dapps for mobile web browsers like Safari. If you are a dapp developer, please join oue Discord at: https://discord.gg/balance-wallet") }
+            static var prod_networks_header: String { NSLocalizedString("wallet operation prod networks header", comment: "") }
+            static var prod_networks_footer: String { NSLocalizedString("wallet operation prod networks footer", comment: "") }
+            static var test_networks_header: String { NSLocalizedString("wallet operation test networks header", comment: "") }
+            static var test_networks_footer: String { NSLocalizedString("wallet operation test networks footer", comment: "") }
             
-            static var available_wallets_header: String { NSLocalizedString("wallet operation available wallets header", comment: "YOUR WALLETS") }
-            static var available_wallets_footer: String { NSLocalizedString("wallet operation available wallets footer", comment: "Which wallet do you want to use to connect to this dapp?") }
+            static var available_wallets_header: String { NSLocalizedString("wallet operation available wallets header", comment: "") }
+            static var available_wallets_footer: String { NSLocalizedString("wallet operation available wallets footer", comment: "") }
             
-            static var approve_transaction: String { NSLocalizedString("wallet operation approve transaction", comment: "Approve Your Transaction") }
-            static var approve_transaction_website: String { NSLocalizedString("wallet operation approve transaction website", comment: "Dapp Website") }
-            static var approve_transaction_value: String { NSLocalizedString("wallet operation approve transaction value", comment: "Amount") }
-            static var approve_transaction_gas: String { NSLocalizedString("wallet operation approve transaction gas", comment: "Gas") }
-            static var approve_transaction_fee: String { NSLocalizedString("wallet operation approve transaction fee", comment: "Fee") }
-            static var approve_transaction_address_description: String { NSLocalizedString("wallet operation approve transaction address description", comment: "This is the wallet that will be used.") }
-            static var approve_transaction_details_header: String { NSLocalizedString("wallet operation approve transaction details header", comment: "Wallet Address") }
-            static var approve_transaction_details_footer: String { NSLocalizedString("wallet operation approve transaction details footer", comment: "This transaction will be broadcast to the Ethereum network you chose.") }
+            static var approve_transaction: String { NSLocalizedString("wallet operation approve transaction", comment: "") }
+            static var approve_transaction_website: String { NSLocalizedString("wallet operation approve transaction website", comment: "") }
+            static var approve_transaction_value: String { NSLocalizedString("wallet operation approve transaction value", comment: "") }
+            static var approve_transaction_gas: String { NSLocalizedString("wallet operation approve transaction gas", comment: "") }
+            static var approve_transaction_fee: String { NSLocalizedString("wallet operation approve transaction fee", comment: "") }
+            static var approve_transaction_address_description: String { NSLocalizedString("wallet operation approve transaction address description", comment: "") }
+            static var approve_transaction_details_header: String { NSLocalizedString("wallet operation approve transaction details header", comment: "") }
+            static var approve_transaction_details_footer: String { NSLocalizedString("wallet operation approve transaction details footer", comment: "") }
             
-            static var approve_operation: String { NSLocalizedString("wallet operation approve operation", comment: "Approve Transaction") }
-            static var type: String { NSLocalizedString("wallet operation approve operation type", comment: "Cancel") }
+            static var approve_operation: String { NSLocalizedString("wallet operation approve operation", comment: "") }
+            static var type: String { NSLocalizedString("wallet operation approve operation type", comment: "") }
         }
         
         enum SafariExtension {
@@ -126,43 +126,43 @@ enum Texts {
         
         enum Import {
             
-            static var title: String { NSLocalizedString("wallet import title", comment: "Import or Create Wallet") }
-            static var description: String { NSLocalizedString("wallet import description", comment: "You can import an existing wallet or create a new one.") }
+            static var title: String { NSLocalizedString("wallet import title", comment: "") }
+            static var description: String { NSLocalizedString("wallet import description", comment: "") }
             
-            static var action_new_title: String { NSLocalizedString("wallet import action new title", comment: "Create A Wallet") }
-            static var action_new_description: String { NSLocalizedString("wallet import action new description", comment: "Create a new Ethereum wallet. You will need to add funds to it from an exchange to use it.") }
-            static var action_add_exising_title: String { NSLocalizedString("wallet import action add exising title", comment: "Import A Wallet") }
-            static var action_add_exising_description: String { NSLocalizedString("wallet import action add exising description", comment: "If you have a Secret Recovery Phrase from any other wallet, you can paste it into this app to access those funds.") }
+            static var action_new_title: String { NSLocalizedString("wallet import action new title", comment: "") }
+            static var action_new_description: String { NSLocalizedString("wallet import action new description", comment: "") }
+            static var action_add_exising_title: String { NSLocalizedString("wallet import action add exising title", comment: "") }
+            static var action_add_exising_description: String { NSLocalizedString("wallet import action add exising description", comment: "") }
             
         }
         
         enum Phrase {
             
-            static var title: String { NSLocalizedString("wallet phrase title", comment: "Secret Recovery Phrase") }
-            static var footer: String { NSLocalizedString("wallet phrase footer", comment: "Save or Copy Phrase") }
-            static var action: String { NSLocalizedString("wallet phrase action", comment: "You should back this up somewhere safe.") }
+            static var title: String { NSLocalizedString("wallet phrase title", comment: "") }
+            static var footer: String { NSLocalizedString("wallet phrase footer", comment: "") }
+            static var action: String { NSLocalizedString("wallet phrase action", comment: "") }
             
             enum Actions {
                 
-                static var title: String { NSLocalizedString("wallet phrase actions title", comment: "Copy Phrase") }
-                static var description: String { NSLocalizedString("wallet phrase actions description", comment: "We recommend pasting this phrase into a secure application like 1Password. You can do this later.") }
-                static var choose: String { NSLocalizedString("wallet phrase actions choose", comment: "Choose this option") }
-                static var cancel: String { NSLocalizedString("wallet phrase actions cancel", comment: "Go back to the wallet") }
+                static var title: String { NSLocalizedString("wallet phrase actions title", comment: "") }
+                static var description: String { NSLocalizedString("wallet phrase actions description", comment: "") }
+                static var choose: String { NSLocalizedString("wallet phrase actions choose", comment: "") }
+                static var cancel: String { NSLocalizedString("wallet phrase actions cancel", comment: "") }
                 
-                static var action_copy_title: String { NSLocalizedString("wallet phrase actions action copy title", comment: "Copy to Clipboard") }
-                static var action_copy_description: String { NSLocalizedString("wallet phrase actions action copy description", comment: "You can copy the Secret Recovery Phrase to your clipboard.") }
-                static var action_copy_completed: String { NSLocalizedString("wallet phrase actions action copy completed", comment: "Copied") }
+                static var action_copy_title: String { NSLocalizedString("wallet phrase actions action copy title", comment: "") }
+                static var action_copy_description: String { NSLocalizedString("wallet phrase actions action copy description", comment: "") }
+                static var action_copy_completed: String { NSLocalizedString("wallet phrase actions action copy completed", comment: "") }
                 
-                static var action_share_title: String { NSLocalizedString("wallet phrase actions action share title", comment: "Share") }
-                static var action_share_description: String { NSLocalizedString("wallet phrase actions action share description", comment: "Share to an app like Notes or Messages. Not recommended!") }
+                static var action_share_title: String { NSLocalizedString("wallet phrase actions action share title", comment: "") }
+                static var action_share_description: String { NSLocalizedString("wallet phrase actions action share description", comment: "") }
             }
         }
         
         enum Destroy {
             
-            static var action: String { NSLocalizedString("wallet destroy action", comment: "Delete This Wallet") }
-            static var completed: String { NSLocalizedString("wallet destroy completed", comment: "Wallet Deleted") }
-            static var confirm_title: String { NSLocalizedString("wallet destroy confirm title", comment: "Deleted") }
+            static var action: String { NSLocalizedString("wallet destroy action", comment: "") }
+            static var completed: String { NSLocalizedString("wallet destroy completed", comment: "") }
+            static var confirm_title: String { NSLocalizedString("wallet destroy confirm title", comment: "") }
             static var confirm_description: String { NSLocalizedString("wallet destroy confirm description", comment: "") }
         }
     }
@@ -171,31 +171,31 @@ enum Texts {
         
         static var title: String { NSLocalizedString("settings title", comment: "Settings") }
         
-        static var notification_header: String { NSLocalizedString("settings notification header", comment: "Notifications") }
-        static var notification_title: String { NSLocalizedString("settings notification title", comment: "Toggle") }
-        static var notification_footer: String { NSLocalizedString("settings notification description", comment: "Balance notifies you when you are on a dapp and after you submit a transaction.") }
+        static var notification_header: String { NSLocalizedString("settings notification header", comment: "") }
+        static var notification_title: String { NSLocalizedString("settings notification title", comment: "") }
+        static var notification_footer: String { NSLocalizedString("settings notification description", comment: "") }
         
-        static var app_header: String { NSLocalizedString("settings app header", comment: "App Settings") }
-        static var app_footer: String { NSLocalizedString("settings app footer", comment: "If you need support, go to balance.io") }
+        static var app_header: String { NSLocalizedString("settings app header", comment: "") }
+        static var app_footer: String { NSLocalizedString("settings app footer", comment: "") }
         
-        static var appearance_title: String { NSLocalizedString("settings appearance title", comment: "Light & Dark Mode") }
-        static var appearance_footer: String { NSLocalizedString("settings appearance footer", comment: "You can let the app adapt automatically to your iOS settings or choose a mode.") }
+        static var appearance_title: String { NSLocalizedString("settings appearance title", comment: "") }
+        static var appearance_footer: String { NSLocalizedString("settings appearance footer", comment: "") }
         static var appearance_automatic: String { NSLocalizedString("settings appearance automatic", comment: "") }
         
-        static var appearance_force_header: String { NSLocalizedString("settings appearance force header", comment: "CHOOSE A MODE") }
-        static var appearance_force_footer: String { NSLocalizedString("settings appearance force footer", comment: "This will override the default iOS settings.") }
-        static var appearance_force_always_light: String { NSLocalizedString("settings appearance force always light", comment: "Light") }
-        static var appearance_force_always_dark: String { NSLocalizedString("settings appearance force always dark", comment: "Dark") }
+        static var appearance_force_header: String { NSLocalizedString("settings appearance force header", comment: "") }
+        static var appearance_force_footer: String { NSLocalizedString("settings appearance force footer", comment: "") }
+        static var appearance_force_always_light: String { NSLocalizedString("settings appearance force always light", comment: "") }
+        static var appearance_force_always_dark: String { NSLocalizedString("settings appearance force always dark", comment: "") }
         
-        static var language_title: String { NSLocalizedString("settings language title", comment: "LANGUAGE") }
-        static var language_footer: String { NSLocalizedString("settings language footer", comment: "If you want to help us add another language to the app, please join the Balance Discord. Go to balance.io") }
+        static var language_title: String { NSLocalizedString("settings language title", comment: "") }
+        static var language_footer: String { NSLocalizedString("settings language footer", comment: "") }
         
-        static var about_title: String { NSLocalizedString("settings about title", comment: "About") }
+        static var about_title: String { NSLocalizedString("settings about title", comment: "") }
 
-        static var about_website: String { NSLocalizedString("settings about title", comment: "Website: balance.io") }
-        static var about_twitter: String { NSLocalizedString("settings about twitter", comment: "Twitter: @balance_io") }
-        static var about_discord: String { NSLocalizedString("settings about discord", comment: "Discord: discord.gg/balance-wallet") }
+        static var about_website: String { NSLocalizedString("settings about website", comment: "") }
+        static var about_twitter: String { NSLocalizedString("settings about twitter", comment: "") }
+        static var about_discord: String { NSLocalizedString("settings about discord", comment: "") }
         
-        static var about_footer: String { NSLocalizedString("settings about footer", comment: "We are a global community of engineers, designers & operators trying to build the best open source Ethereum wallet possible.") }
+        static var about_footer: String { NSLocalizedString("settings about footer", comment: "") }
     }
 }

@@ -35,28 +35,34 @@
 "app onboarding hello action" = "Start Using";
 
 /* No comment provided by engineer. */
-"app onboarding hello description" = "Lets make wallet or import existing wallet. Will do it step by step.";
+"app onboarding hello description" = "Import an existing wallet or create a new one.";
 
 /* No comment provided by engineer. */
-"app onboarding hello footer" = "Clicking start you agree with our easy privacy policy about not collect any data.";
+"app onboarding hello footer" = "This is un-audited alpha software. You are using it at your own risk.";
 
 /* No comment provided by engineer. */
-"settings about footer" = "About footer.";
+"settings about footer" = "We are a global community of engineers, designers & operators trying to build the best open source Ethereum wallet possible.";
 
 /* No comment provided by engineer. */
-"settings about title" = "About";
+"settings about title" = "About Us";
+
+"settings about website" = "Website: balance.io";
+
+"settings about twitter" = "Twitter: @balance_io";
+
+"settings about discord" = "Discord: discord.gg/balance-wallet";
 
 /* No comment provided by engineer. */
-"settings app footer" = "settings app footer";
+"settings app footer" = "If you need support, go to balance.io";
 
 /* No comment provided by engineer. */
-"settings app header" = "App";
+"settings app header" = "App Settings";
 
 /* No comment provided by engineer. */
 "settings appearance automatic" = "Automatic";
 
 /* No comment provided by engineer. */
-"settings appearance footer" = "You can set custom appearance";
+"settings appearance footer" = "This will override the default setting.";
 
 /* No comment provided by engineer. */
 "settings appearance force always dark" = "Always Dark";
@@ -65,28 +71,28 @@
 "settings appearance force always light" = "Always Light";
 
 /* No comment provided by engineer. */
-"settings appearance force footer" = "Will be ignoring system appearance.";
+"settings appearance force footer" = "You can let the app adapt automatically to your settings or choose a mode.";
 
 /* No comment provided by engineer. */
-"settings appearance force header" = "Custom";
+"settings appearance force header" = "CHOOSE A MODE";
 
 /* No comment provided by engineer. */
-"settings appearance title" = "Appearance";
+"settings appearance title" = "Light & Dark Mode";
 
 /* No comment provided by engineer. */
-"settings language footer" = "Languages";
+"settings language footer" = "If you want to help us add another language to the app, please join the Balance Discord. Go to balance.io";
 
 /* No comment provided by engineer. */
-"settings language title" = "Languages";
+"settings language title" = "Language";
 
 /* No comment provided by engineer. */
-"settings notification description" = "You will revice notification about upcoming transaction and other.";
+"settings notification description" = "Balance notifies you when you are on a dapp and after you submit a transaction.";
 
 /* No comment provided by engineer. */
 "settings notification header" = "Get in touch";
 
 /* No comment provided by engineer. */
-"settings notification title" = "Notificatinos";
+"settings notification title" = "Notifications";
 
 /* No comment provided by engineer. */
 "settings title" = "Settings";
@@ -98,58 +104,62 @@
 "shared see all" = "See All";
 
 /* No comment provided by engineer. */
-"wallet access footer" = "Look at phrases in safety place.";
+"wallet access footer" = "These 12 words that can recover your funds in any wallet. They are also known as Seed Phrases or Mnemonic Phrase. You can learn more about how these work here: https://support.mycrypto.com/general-knowledge/cryptography/how-do-mnemonic-phrases-work/";
 
 /* No comment provided by engineer. */
-"wallet access header" = "Acceess";
+"wallet access header" = "SECRET RECOVERY PHRASE";
 
 /* No comment provided by engineer. */
-"wallet add wallet action" = "Add Wallet";
+"wallet add wallet action" = "Create or Import a Wallet";
 
 /* No comment provided by engineer. */
-"wallet add wallet footer" = "Try Balance making wallet or import existing wallet to app.";
+"wallet add wallet footer" = "You can import your Secret Recovery Phrase or create a fresh new wallet.";
 
 /* No comment provided by engineer. */
-"wallet address" = "Address";
+"wallet address" = "Wallet’s Ethereum Address";
+
+"wallet footer" = "All Ethereum addresses begin with 0x and are followed by 40 characters. This is how people can send assets to you that live inside the Ethereum ecosystem.";
 
 /* No comment provided by engineer. */
-"wallet address copied" = "Copied";
+"wallet address copied" = "Address Copied";
 
 /* No comment provided by engineer. */
-"wallet balances footer" = "If you don't want to see empty disable it.";
+"wallet balances footer" = "Wallets may have other token ERC-20 balances.";
 
 /* No comment provided by engineer. */
-"wallet balances header" = "Balances";
+"wallet balances header" = "ETH Balances";
+
+"wallet balances subheader" = "You can see your ETH balance on all Ethereum Layer 2 Networks and test networks.";
 
 /* No comment provided by engineer. */
-"wallet balances show empty" = "Show Empty Balances";
+"wallet balances show empty" = "Show Wallets with no ETH";
 
 /* No comment provided by engineer. */
-"wallet change name" = "Change Name";
+"wallet change name" = "Rename";
 
 /* No comment provided by engineer. */
 "wallet delete action" = "Delete Wallet";
 
 /* No comment provided by engineer. */
-"wallet delete confirm action" = "Wallet will be deleted";
+"wallet delete confirm action" = "This wallet will be deleted forever.";
 
 /* No comment provided by engineer. */
 "wallet delete confirm action completed" = "Wallet Deleted";
 
 /* No comment provided by engineer. */
-"wallet delete confirm description" = "Are you sure?";
+"wallet delete confirm description" = "There is no way for us to recover this for you.";
 
 /* No comment provided by engineer. */
-"wallet delete confirm title" = "Confirm deleting";
+"wallet delete confirm title" = "Are you sure you want to delete this forever?";
 
 /* No comment provided by engineer. */
 "wallet delete footer" = "After delete you can import again if now phrase.";
 
 /* No comment provided by engineer. */
-"wallet delete header" = "Danger Zone";
+"wallet delete header" = "DELETE WALLET - CANNOT UNDO";
 
 /* No comment provided by engineer. */
-"wallet destroy action" = "Destroy Wallet";
+"wallet destroy action" = "Delete Forever";
 
 /* No comment provided by engineer. */
 "wallet destroy completed" = "Data is destroyed.";
@@ -161,28 +171,28 @@
 "wallet destroy confirm title" = "Will be destroy all data";
 
 /* No comment provided by engineer. */
-"wallet empty description" = "Make new or import";
+"wallet empty description" = "Import or Create a Wallet";
 
 /* No comment provided by engineer. */
 "wallet empty title" = "No Wallets";
 
 /* No comment provided by engineer. */
-"wallet import action add exising description" = "Import Existing if you already have it";
+"wallet import action add exising description" = "Secret Recovery Phrase";
 
 /* No comment provided by engineer. */
-"wallet import action add exising title" = "Import Existing";
+"wallet import action add exising title" = "Import";
 
 /* No comment provided by engineer. */
-"wallet import action new description" = "Make new if you don't have. Its free.";
+"wallet import action new description" = "A new Ethereum address";
 
 /* No comment provided by engineer. */
-"wallet import action new title" = "Make New";
+"wallet import action new title" = "Create";
 
 /* No comment provided by engineer. */
-"wallet import description" = "Choose way to add wallet to app";
+"wallet import description" = "You can import an existing wallet or create a new one.";
 
 /* No comment provided by engineer. */
-"wallet import title" = "Import Wallet";
+"wallet import title" = "Create or Import Wallet";
 
 /* No comment provided by engineer. */
 "wallet new name description" = "Insert New Name";
@@ -197,28 +207,28 @@
 "wallet new name title" = "New Name";
 
 /* No comment provided by engineer. */
-"wallet no name" = "No Name";
+"wallet no name" = "New Wallet";
 
 /* No comment provided by engineer. */
 "wallet open all wallets" = "See All";
 
 /* No comment provided by engineer. */
-"wallet operation approve operation" = "Approve Operation";
+"wallet operation approve operation" = "Approve Transaction";
 
 /* No comment provided by engineer. */
-"wallet operation approve operation type" = "Type";
+"wallet operation approve operation type" = "Action";
 
 /* No comment provided by engineer. */
-"wallet operation approve transaction" = "Approve Transaction";
+"wallet operation approve transaction" = "Approve Your Transaction";
 
 /* No comment provided by engineer. */
-"wallet operation approve transaction address description" = "Transaction addres description here.";
+"wallet operation approve transaction address description" = "This is the wallet that will be used.";
 
 /* No comment provided by engineer. */
-"wallet operation approve transaction details footer" = "Details here.";
+"wallet operation approve transaction details footer" = "This operation will be processed and you will go back to Safari.";
 
 /* No comment provided by engineer. */
-"wallet operation approve transaction details header" = "Details";
+"wallet operation approve transaction details header" = "Transaction Details";
 
 /* No comment provided by engineer. */
 "wallet operation approve transaction fee" = "Fee";
@@ -227,85 +237,85 @@
 "wallet operation approve transaction gas" = "Gas";
 
 /* No comment provided by engineer. */
-"wallet operation approve transaction value" = "Value";
+"wallet operation approve transaction value" = "Amount";
 
 /* No comment provided by engineer. */
-"wallet operation approve transaction website" = "Website";
+"wallet operation approve transaction website" = "Dapp Website";
 
 /* No comment provided by engineer. */
-"wallet operation available wallets footer" = "Choose wallet from list.";
+"wallet operation available wallets footer" = "Which wallet do you want to use to connect to this dapp?";
 
 /* No comment provided by engineer. */
-"wallet operation available wallets header" = "Available";
+"wallet operation available wallets header" = "YOUR WALLETS";
 
 /* No comment provided by engineer. */
-"wallet operation choose network footer" = "Choose network.";
+"wallet operation choose network footer" = "Choose which Ethereum network you want to connect to with your wallet. ";
 
 /* No comment provided by engineer. */
-"wallet operation choose network header" = "Network";
+"wallet operation choose network header" = "ETHEREUM-BASED NETWORKS";
 
 /* No comment provided by engineer. */
-"wallet operation choose wallet" = "Choose Wallet";
+"wallet operation choose wallet" = "Choose Which Wallet";
 
 /* No comment provided by engineer. */
-"wallet operation faild" = "Operation Faild";
+"wallet operation faild" = "Something failed. We must fix this.";
 
 /* No comment provided by engineer. */
-"wallet operation not supported" = "Operation not supported";
+"wallet operation not supported" = "Balance does not support that. We must fix this.";
 
 /* No comment provided by engineer. */
-"wallet operation prod networks footer" = "Production Networks footer.";
+"wallet operation prod networks footer" = "If you want to learn more about Layer 2 Ethereum networks, go here: https://ethereum.org/en/developers/docs/scaling/layer-2-rollups/";
 
 /* No comment provided by engineer. */
-"wallet operation prod networks header" = "Production Networks";
+"wallet operation prod networks header" = "Live Ethereum Layer 2 networks & Sidechains";
 
 /* No comment provided by engineer. */
-"wallet operation test networks footer" = "wallet operation test networks footer";
+"wallet operation test networks footer" = "Test networks are used by developers who are improving their dapps for mobile web browsers like Safari. If you are a dapp developer, please join oue Discord at: https://discord.gg/balance-wallet";
 
 /* No comment provided by engineer. */
-"wallet operation test networks header" = "Test Networks";
+"wallet operation test networks header" = "ETHEREUM TEST NETWORKS";
 
 /* No comment provided by engineer. */
-"wallet phrase action" = "Show Phrase";
+"wallet phrase action" = "You should back this up somewhere safe.";
 
 /* No comment provided by engineer. */
 "wallet phrase actions action copy completed" = "Copied";
 
 /* No comment provided by engineer. */
-"wallet phrase actions action copy description" = "Copy description.";
+"wallet phrase actions action copy description" = "You can copy the Secret Recovery Phrase to your clipboard.";
 
 /* No comment provided by engineer. */
-"wallet phrase actions action copy title" = "Copy.";
+"wallet phrase actions action copy title" = "Copy to Clipboard";
 
 /* No comment provided by engineer. */
-"wallet phrase actions action share description" = "Share description.";
+"wallet phrase actions action share description" = "Share to an app like Notes or Messages. Not recommended!";
 
 /* No comment provided by engineer. */
 "wallet phrase actions action share title" = "Share";
 
 /* No comment provided by engineer. */
-"wallet phrase actions cancel" = "Cancel";
+"wallet phrase actions cancel" = "Go back to the wallet";
 
 /* No comment provided by engineer. */
-"wallet phrase actions choose" = "Choose";
+"wallet phrase actions choose" = "Choose this option";
 
 /* No comment provided by engineer. */
-"wallet phrase actions description" = "Show phrase here.";
+"wallet phrase actions description" = "We recommend pasting this phrase into a secure application like 1Password. You can do this later.";
 
 /* No comment provided by engineer. */
-"wallet phrase actions title" = "Show Phrase";
+"wallet phrase actions title" = "Copy Phrase";
 
 /* No comment provided by engineer. */
-"wallet phrase footer" = "Phrase footer.";
+"wallet phrase footer" = "Save or Copy Phrase";
 
 /* No comment provided by engineer. */
-"wallet phrase title" = "Phrase";
+"wallet phrase title" = "Secret Recovery Phrase";
 
 /* No comment provided by engineer. */
-"wallet safari extension propose description" = "You will be can connect wallet and approve operations.";
+"wallet safari extension propose description" = "Connect Balance to Safari now";
 
 /* No comment provided by engineer. */
-"wallet safari extension propose footer" = "Look at out extensino.";
+"wallet safari extension propose footer" = "The Safari iOS Extensions API is a totally new way to use the mobile web.";
 
 /* No comment provided by engineer. */
 "wallet safari extension propose header" = "Advice";
@@ -329,7 +339,7 @@
 "wallet safari extension steps title" = "Steps";
 
 /* No comment provided by engineer. */
-"wallet show phrase" = "Show Phrase";
+"wallet show phrase" = "Reveal Secret Recovery Phrase";
 
 /* No comment provided by engineer. */
 "wallet wallets" = "Wallets";
