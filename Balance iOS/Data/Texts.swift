@@ -11,7 +11,7 @@ enum Texts {
     enum App {
         
         static var name_short: String { "Balance" }
-        static var name_long: String { "Balance ETH Wallet" }
+        static var name_long: String { "Balance Wallet" }
         
         enum Onboarding {
             
@@ -158,37 +158,43 @@ enum Texts {
         
         enum Destroy {
             
-            static var action: String { NSLocalizedString("wallet destroy action", comment: "") }
-            static var completed: String { NSLocalizedString("wallet destroy completed", comment: "") }
-            static var confirm_title: String { NSLocalizedString("wallet destroy confirm title", comment: "") }
+            static var action: String { NSLocalizedString("wallet destroy action", comment: "Delete This Wallet") }
+            static var completed: String { NSLocalizedString("wallet destroy completed", comment: "Wallet Deleted") }
+            static var confirm_title: String { NSLocalizedString("wallet destroy confirm title", comment: "Deleted") }
             static var confirm_description: String { NSLocalizedString("wallet destroy confirm description", comment: "") }
         }
     }
     
     enum Settings {
         
-        static var title: String { NSLocalizedString("settings title", comment: "") }
+        static var title: String { NSLocalizedString("settings title", comment: "Settings") }
         
-        static var notification_title: String { NSLocalizedString("settings notification title", comment: "") }
-        static var notification_header: String { NSLocalizedString("settings notification header", comment: "") }
-        static var notification_footer: String { NSLocalizedString("settings notification description", comment: "") }
+        static var notification_header: String { NSLocalizedString("settings notification header", comment: "Notifications") }
+        static var notification_title: String { NSLocalizedString("settings notification title", comment: "Toggle") }
+        static var notification_footer: String { NSLocalizedString("settings notification description", comment: "Balance notifies you when you are on a dapp and after you submit a transaction.") }
         
-        static var app_header: String { NSLocalizedString("settings app header", comment: "") }
-        static var app_footer: String { NSLocalizedString("settings app footer", comment: "") }
+        static var app_header: String { NSLocalizedString("settings app header", comment: "App Settings") }
+        static var app_footer: String { NSLocalizedString("settings app footer", comment: "If you need support, go to balance.io") }
         
-        static var appearance_title: String { NSLocalizedString("settings appearance title", comment: "") }
-        static var appearance_footer: String { NSLocalizedString("settings appearance footer", comment: "") }
+        static var appearance_title: String { NSLocalizedString("settings appearance title", comment: "Light & Dark Mode") }
+        static var appearance_footer: String { NSLocalizedString("settings appearance footer", comment: "You can let the app adapt automatically to your iOS settings or choose a mode.") }
         static var appearance_automatic: String { NSLocalizedString("settings appearance automatic", comment: "") }
         
-        static var appearance_force_header: String { NSLocalizedString("settings appearance force header", comment: "") }
-        static var appearance_force_footer: String { NSLocalizedString("settings appearance force footer", comment: "") }
-        static var appearance_force_always_light: String { NSLocalizedString("settings appearance force always light", comment: "") }
-        static var appearance_force_always_dark: String { NSLocalizedString("settings appearance force always dark", comment: "") }
+        static var appearance_force_header: String { NSLocalizedString("settings appearance force header", comment: "CHOOSE A MODE") }
+        static var appearance_force_footer: String { NSLocalizedString("settings appearance force footer", comment: "This will override the default iOS settings.") }
+        static var appearance_force_always_light: String { NSLocalizedString("settings appearance force always light", comment: "Light") }
+        static var appearance_force_always_dark: String { NSLocalizedString("settings appearance force always dark", comment: "Dark") }
         
-        static var language_title: String { NSLocalizedString("settings language title", comment: "") }
-        static var language_footer: String { NSLocalizedString("settings language footer", comment: "") }
+        static var language_title: String { NSLocalizedString("settings language title", comment: "LANGUAGE") }
+        static var language_footer: String { NSLocalizedString("settings language footer", comment: "If you want to help us add another language to the app, please join the Balance Discord. Go to balance.io") }
         
-        static var about_title: String { NSLocalizedString("settings about title", comment: "") }
-        static var about_footer: String { NSLocalizedString("settings about footer", comment: "") }
+        static var about_title: String { NSLocalizedString("settings about title", comment: "About") }
+
+        
+        static var about_title: String { NSLocalizedString("settings about title", comment: "Website: balance.io") }
+        static var about_footer: String { NSLocalizedString("settings about twitter", comment: "Twitter: @balance_io") }
+        static var about_footer: String { NSLocalizedString("settings about discord", comment: "Discord: discord.gg/balance-wallet") }
+        
+        static var about_footer: String { NSLocalizedString("settings about footer", comment: "We are a global community of engineers, designers & operators trying to build the best open source Ethereum wallet possible.") }
     }
 }
