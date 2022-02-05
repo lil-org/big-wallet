@@ -112,13 +112,11 @@ class SettingsController: SPDiffableTableController {
                         guard let cell = self.tableView.cellForRow(at: indexPath) else { return }
                         WalletsManager.startDestroyProcess(on: self, sourceView: cell, completion: { destroyed in
                             if destroyed {
-                                Presenter.App.showOnboarding(on: self, afterAction: {
+                                /*Presenter.App.showOnboarding(on: self, afterAction: {
                                     Presenter.Crypto.showWalletOnboarding(on: self)
                                     Flags.seen_tutorial = true
-                                })
-                                delay(0.1, closure: {
-                                    SPAlert.present(title: Texts.Wallet.Destroy.completed, message: nil, preset: .done, completion:  nil)
-                                })
+                                })*/
+                                SPAlert.present(title: Texts.Wallet.Destroy.completed, message: nil, preset: .done, completion:  nil)
                             }
                         })
                     }
