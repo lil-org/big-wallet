@@ -11,6 +11,15 @@
         }
       },
       {
+        "package": "BigInt",
+        "repositoryURL": "https://github.com/attaswift/BigInt",
+        "state": {
+          "branch": null,
+          "revision": "0ed110f7555c34ff468e72e1686e59721f2b0da6",
+          "version": "5.3.0"
+        }
+      },
+      {
         "package": "NativeUIKit",
         "repositoryURL": "https://github.com/ivanvorobei/NativeUIKit",
         "state": {

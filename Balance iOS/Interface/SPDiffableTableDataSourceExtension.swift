@@ -62,7 +62,7 @@ extension SPDiffableTableDataSource.CellProvider {
             cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .footnote, weight: .medium)
             cell.textLabel?.textColor = .secondaryLabel
             cell.textLabel?.numberOfLines = .zero
-            cell.detailTextLabel?.text = "\((data.balance ?? 0)) ETH"
+            cell.detailTextLabel?.text = "\((data.balance ?? "0")) \(data.chain.symbol)"
             cell.detailTextLabel?.font = UIFont.preferredFont(forTextStyle: .body)
             cell.detailTextLabel?.textColor = .label
             cell.detailTextLabel?.numberOfLines = .zero

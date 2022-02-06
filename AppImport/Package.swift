@@ -14,6 +14,7 @@ let package = Package(
         )
     ],
     dependencies: [
+        .package(url: "https://github.com/attaswift/BigInt", .upToNextMajor(from: "5.3.0")),
         .package(
             name: "Alamofire",
             url: "https://github.com/Alamofire/Alamofire.git", .upToNextMajor(from: "5.4.0")
@@ -65,6 +66,7 @@ let package = Package(
         .target(
             name: "AppImport",
             dependencies: [
+                .product(name: "BigInt", package: "BigInt"),
                 .product(name: "Alamofire", package: "Alamofire"),
                 .product(name: "SwiftyJSON", package: "SwiftyJSON"),
                 .product(name: "NativeUIKit", package: "NativeUIKit"),

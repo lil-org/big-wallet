@@ -91,9 +91,9 @@ class WalletController: NativeProfileController {
         let address =  walletModel.ethereumAddress ?? .space
         
         var balanceItems: [SPDiffableItem] = []
-        for data in self.balances.sorted(by: { ($0.balance ?? 0) > ($1.balance ?? 0) }) {
+        for data in self.balances.sorted(by: { CLongDouble($0.balance ?? "0")! > CLongDouble($1.balance ?? "0")! }) {
             if let value = data.balance {
-                if !Flags.show_empty_balances && value == 0 { continue }
+                if !Flags.show_empty_balances && value == "0" { continue }
                 let item = SPDiffableWrapperItem(id: data.chain.name + "_balance", model: data, action: nil)
                 balanceItems.append(item)
             }
@@ -221,4 +221,4 @@ class WalletController: NativeProfileController {
     }
 }
 
-typealias BalanceData = (chain: EthereumChain, balance: Double?)
+typealias BalanceData = (chain: EthereumChain, balance: String?)
