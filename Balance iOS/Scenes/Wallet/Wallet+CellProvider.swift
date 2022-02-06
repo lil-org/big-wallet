@@ -13,10 +13,10 @@ extension SPDiffableTableDataSource.CellProvider {
             var formattedAddress = walletModel.ethereumAddress ?? .space
             formattedAddress.insert("\n", at: formattedAddress.index(formattedAddress.startIndex, offsetBy: (formattedAddress.count / 2)))
             
-            cell.adressLabel.text = formattedAddress
-            cell.adressLabel.minimumScaleFactor = 0.1
-            cell.adressLabel.numberOfLines = 2
-            cell.adressLabel.adjustsFontSizeToFitWidth = true
+            cell.addressLabel.text = formattedAddress
+            cell.addressLabel.minimumScaleFactor = 0.1
+            cell.addressLabel.numberOfLines = 2
+            cell.addressLabel.adjustsFontSizeToFitWidth = true
             
             if let name = walletModel.walletName {
                 cell.titleLabel.text = name

@@ -13,7 +13,7 @@ class WalletTableViewCell: SPTableViewCell {
         $0.textColor = .label
     }
     
-    let adressLabel = SPLabel().do {
+    let addressLabel = SPLabel().do {
         $0.font = UIFont.preferredFont(forTextStyle: .body, weight: .regular, addPoints: -2).monospaced
         $0.textColor = .secondaryLabel
     }
@@ -21,7 +21,7 @@ class WalletTableViewCell: SPTableViewCell {
     override func commonInit() {
         super.commonInit()
         accessoryType = .disclosureIndicator
-        contentView.addSubviews(avatarView, titleLabel, adressLabel)
+        contentView.addSubviews(avatarView, titleLabel, addressLabel)
     }
     
     override func layoutSubviews() {
@@ -31,12 +31,12 @@ class WalletTableViewCell: SPTableViewCell {
         let leftSpace: CGFloat = NativeLayout.Spaces.default_less
         let labelsWidth = contentView.frame.width - avatarView.frame.maxX - layoutMargins.right - leftSpace
         titleLabel.layoutDynamicHeight(x: avatarView.frame.maxX + leftSpace, y: contentView.layoutMargins.top, width: layoutWidth)
-        adressLabel.layoutDynamicHeight(x: titleLabel.frame.origin.x, y: titleLabel.frame.maxY + 2, width: labelsWidth)
+        addressLabel.layoutDynamicHeight(x: titleLabel.frame.origin.x, y: titleLabel.frame.maxY + 2, width: labelsWidth)
         avatarView.setYCenter()
     }
     
     override func sizeThatFits(_ size: CGSize) -> CGSize {
         let superSize = super.sizeThatFits(size)
-        return .init(width: superSize.width, height: adressLabel.frame.maxY + contentView.layoutMargins.bottom)
+        return .init(width: superSize.width, height: addressLabel.frame.maxY + contentView.layoutMargins.bottom)
     }
 }
