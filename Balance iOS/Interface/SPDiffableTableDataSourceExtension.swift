@@ -11,8 +11,10 @@ extension SPDiffableTableDataSource.CellProvider {
             let cell = tableView.dequeueReusableCell(withClass: NativeLeftButtonTableViewCell.self, for: indexPath)
             cell.textLabel?.text = item.text
             cell.textLabel?.font = .preferredFont(forTextStyle: .body, weight: .medium).monospaced
+            cell.textLabel?.minimumScaleFactor = 0.1
+            cell.textLabel?.adjustsFontSizeToFitWidth = true
             cell.textLabel?.textColor = item.textColor
-            cell.textLabel?.numberOfLines = .zero
+            cell.textLabel?.numberOfLines = 2
             cell.detailTextLabel?.text = item.detail
             cell.detailTextLabel?.textColor = item.detailColor
             cell.imageView?.image = item.icon
@@ -65,7 +67,8 @@ extension SPDiffableTableDataSource.CellProvider {
             cell.detailTextLabel?.text = "\((data.balance ?? "0")) \(data.chain.symbol)"
             cell.detailTextLabel?.font = UIFont.preferredFont(forTextStyle: .body)
             cell.detailTextLabel?.textColor = .label
-            cell.detailTextLabel?.numberOfLines = .zero
+            cell.detailTextLabel?.adjustsFontSizeToFitWidth = true
+            cell.detailTextLabel?.minimumScaleFactor = 0.1
             cell.imageView?.image = nil
             cell.accessoryType = .none
             cell.selectionStyle = .none

@@ -14,6 +14,9 @@ extension SPDiffableTableDataSource.CellProvider {
             formattedAddress.insert("\n", at: formattedAddress.index(formattedAddress.startIndex, offsetBy: (formattedAddress.count / 2)))
             
             cell.adressLabel.text = formattedAddress
+            cell.adressLabel.minimumScaleFactor = 0.1
+            cell.adressLabel.numberOfLines = 2
+            cell.adressLabel.adjustsFontSizeToFitWidth = true
             
             if let name = walletModel.walletName {
                 cell.titleLabel.text = name
@@ -27,7 +30,6 @@ extension SPDiffableTableDataSource.CellProvider {
                     cell.avatarView.avatarAppearance = .avatar(image)
                 }
             }
-            cell.adressLabel.numberOfLines = .zero
             cell.layoutSubviews()
             return cell
         }
