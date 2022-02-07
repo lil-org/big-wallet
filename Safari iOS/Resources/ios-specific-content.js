@@ -14,6 +14,8 @@ function injectScript() {
     }
 }
 
+let barInjected = false;
+
 let data = {
     address: `0x`,
     balance: `0.00`,
@@ -21,13 +23,37 @@ let data = {
     ticker: `ETH`,
 };
 
-function injectBalanceBar() {
+let balance;
+let address;
+let popupLeft;
+let popupRight;
+let toggle;
 
-    let balance = document.createElement(`div`);
-    let address = document.createElement(`div`);
-    let popupLeft = document.createElement(`div`);
-    let popupRight = document.createElement(`div`);
-    let toggle = document.createElement(`div`);
+function refreshBalanceBar () {
+    if (data.address.toString().length === 42) {
+        address.innerHTML = `0x<span class="bright">${data.address.slice(2, 5)}</span>&#8230;<span class="bright">${data.address.slice(-5)}</span>`;
+        if (parseFloat(data.balance) < 1) {
+            balance.innerHTML = `0.<span class="bright">${data.balance.toString().slice((data.balance.toString().length - 2) * -1)}</span> <span class="currency bright">${data.ticker}</span>`;
+        } else if (parseFloat(data.balance) >= 1) {
+            balance.innerHTML = `<span class="bright">${data.balance}</span> <span class="currency bright">${data.ticker}</span>`;
+        } else {
+            balance.innerHTML = `${data.balance} <span class="currency bright">${data.ticker}</span>`;
+        }
+    } else {
+        address.innerHTML = `Not connected`;
+        balance.innerHTML = ``;
+    }
+}
+
+function injectBalanceBar () {
+
+    barInjected = true;
+
+    balance = document.createElement(`div`);
+    address = document.createElement(`div`);
+    popupLeft = document.createElement(`div`);
+    popupRight = document.createElement(`div`);
+    toggle = document.createElement(`div`);
 
     let style = document.createElement(`style`);
 
@@ -43,19 +69,7 @@ function injectBalanceBar() {
                 popupRight.style.borderRadius = `23px`;
                 popupLeft.style.width = `100%`;
                 popupRight.style.width = `100%`;
-                setTimeout(() => {
-                    if (data.address.toString().length === 42) {
-                        address.innerHTML = `0x<span class="bright">${data.address.slice(2, 5)}</span>&#8230;<span class="bright">${data.address.slice(-5)}</span>`;
-                    }
-                    if (parseFloat(data.balance) < 1) {
-                        balance.innerHTML = `0.<span class="bright">${data.balance.toString().slice((data.balance.toString().length - 2) * -1)}</span> <span class="currency bright">${data.ticker}</span>`;
-                    } else if (parseFloat(data.balance) >= 1) {
-                        balance.innerHTML = `<span class="bright">${data.balance}</span> <span class="currency bright">${data.ticker}</span>`;
-                    } else {
-                        balance.innerHTML = data.balance;
-                    }
-                    console.log(window.ethereum);
-                }, 270);
+                setTimeout(refreshBalanceBar, 270);
             }, 1);
         } else {
             popupLeft.style.display = `none`;
@@ -181,20 +195,19 @@ function injectBalanceBar() {
 
 window.addEventListener(`message`, function (event) {
     if (event.source == window && event.data && event.data.subject && event.data.direction == `from-middleware-script`) {
-        console.log(`middleware ${event.data.subject}:`, event);
-        if (event.data.subject === `getAddress`) {
-            data.address = event.data.message;
-        } else if (event.data.subject === `getBalance`) {
-            data.balance = event.data.message;
+        if (event.data.subject === `updateBar`) {
+            const json = JSON.parse(event.data.message);
+            data.address = json.address;
+            data.balance = json.balance;
+            if (data.address !== ``) {
+                if (!barInjected) {
+                    injectBalanceBar();
+                } else if (popupLeft.style.display === `flex` && popupRight.style.display === `flex`) {
+                    refreshBalanceBar();
+                }
+            }
         }
     }
 });
 
-setTimeout(() => {
-    injectScript();
-    setTimeout(() => {
-        injectBalanceBar();
-        window.postMessage({ direction: `from-bar-script`, response: { name: `getBalance` } }, `*`);
-        window.postMessage({ direction: `from-bar-script`, response: { name: `getAddress` } }, `*`);
-    }, 100);
-}, 100);
+setTimeout(injectScript, 100);
