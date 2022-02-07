@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0A0C549F27B1B6BF004510F4 /* middleware.js in Resources */ = {isa = PBXBuildFile; fileRef = 0A0C549E27B1B6BF004510F4 /* middleware.js */; };
 		0D059AD226C2796200EE3023 /* ApprovalSubject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D059AD126C2796200EE3023 /* ApprovalSubject.swift */; };
 		0DC850E726B73A5900809E82 /* AuthenticationReason.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC850E626B73A5900809E82 /* AuthenticationReason.swift */; };
 		165363960CACBF7F60CCACA2 /* Pods_Balance.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4A2B4FCB9C257ECA0630805D /* Pods_Balance.framework */; };
@@ -276,6 +277,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0A0C549E27B1B6BF004510F4 /* middleware.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = middleware.js; sourceTree = "<group>"; };
 		0D059AD126C2796200EE3023 /* ApprovalSubject.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalSubject.swift; sourceTree = "<group>"; };
 		0DC850E626B73A5900809E82 /* AuthenticationReason.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationReason.swift; sourceTree = "<group>"; };
 		29A83FE96A68BB9F154134EF /* Pods_Balance_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Balance_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -826,6 +828,7 @@
 				2CCEB83627594E2A00768473 /* manifest.json */,
 				2CFDDF4D2765417D00F89019 /* ios-specific-content.js */,
 				2CC8C5A4276A52670083FB1B /* ios-specific-background.js */,
+				0A0C549E27B1B6BF004510F4 /* middleware.js */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -1426,6 +1429,7 @@
 				2CCEB83727594E2A00768473 /* manifest.json in Resources */,
 				2CE0594127640E8E0042D844 /* content.js in Resources */,
 				2CFDDF4E2765417E00F89019 /* ios-specific-content.js in Resources */,
+				0A0C549F27B1B6BF004510F4 /* middleware.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

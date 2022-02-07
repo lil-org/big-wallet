@@ -24,7 +24,7 @@
             "matches": ["file://*/*", "http://*/*", "https://*/*"],
             "run_at": "document_start",
             "all_frames": true,
-            "js": ["content.js", "ios-specific-content.js"]
+            "js": ["content.js", "ios-specific-content.js", "middleware.js"]
         }
     ],
 
@@ -49,5 +49,5 @@
         "balance://*"
     ],
 
-    "web_accessible_resources": ["inpage.js"]
+    "web_accessible_resources": ["inpage.js", "middleware.js"]
 }
