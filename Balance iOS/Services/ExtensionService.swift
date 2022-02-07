@@ -42,7 +42,7 @@ enum ExtensionService {
                     let ethereum = Ethereum.shared
                     if approved {
                         do {
-                            let transactionHash = try ethereum.send(transaction: transaction, wallet: wallet, chain: chain)
+                            let transactionHash = try ethereum.send(transaction: controller.transaction, wallet: wallet, chain: chain)
                             let response = ResponseToExtension(id: request.id, name: request.name, result: transactionHash)
                             self.respondTo(request: request, response: response, on: controller)
                         } catch {

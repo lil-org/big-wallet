@@ -118,12 +118,8 @@ struct Ethereum {
     func prepareTransaction(_ transaction: Transaction, chain: EthereumChain, completion: @escaping (Transaction) -> Void) {
         var transaction = transaction
         
-        if transaction.nonce == nil {
-            getNonce(chain: chain, from: transaction.from) { nonce in
-                transaction.nonce = nonce
-                completion(transaction)
-            }
-        }
+        func getGasLimitAndGasPrice(_ transaction: Transaction) {
+            var transaction = transaction
         
         func getGasIfNeeded(gasPrice: String) {
             guard transaction.gas == nil else { return }
@@ -144,7 +140,16 @@ struct Ethereum {
                 }
             }
         }
+        }
         
+        if transaction.nonce == nil {
+            getNonce(chain: chain, from: transaction.from) { nonce in
+                transaction.nonce = nonce
+                getGasLimitAndGasPrice(transaction)
+            }
+        } else {
+            getGasLimitAndGasPrice(transaction)
+        }
     }
     
     private func getGas(chain: EthereumChain, from: String, to: String, gasPrice: String, weiAmount: EthNumber, data: String, completion: @escaping (String?) -> Void) {

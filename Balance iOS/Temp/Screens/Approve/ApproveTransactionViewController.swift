@@ -94,7 +94,7 @@ class ApproveTransactionViewController: UIViewController {
         if !initially, tableView.numberOfSections > 0 {
             tableView.reloadSections(IndexSet([0]), with: .none)
         }
-        okButton.isEnabled = transaction.hasFee
+        okButton.isEnabled = transaction.hasFee && transaction.hasNonce
     }
     
     private func enableSpeedConfigurationIfNeeded() {

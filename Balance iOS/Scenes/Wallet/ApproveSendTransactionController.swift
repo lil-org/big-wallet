@@ -11,7 +11,7 @@ class ApproveSendTransactionController: SPDiffableTableController {
     private let priceService = PriceService.shared
     private let ethereum = Ethereum.shared
     
-    private var transaction: Transaction
+    private(set) var transaction: Transaction
     private let chain: EthereumChain
     private let address: String
     private let peerMeta: PeerMeta?
@@ -80,7 +80,7 @@ class ApproveSendTransactionController: SPDiffableTableController {
             guard let self = self else { return }
             self.transaction = updated
             self.diffableDataSource?.set(self.content, animated: true, completion: nil)
-            self.toolBarView.setLoading(!self.transaction.hasFee)
+            self.toolBarView.setLoading(!(self.transaction.hasFee && self.transaction.hasNonce))
         }
     }
     

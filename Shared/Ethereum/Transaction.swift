@@ -24,6 +24,10 @@ struct Transaction {
         return gas != nil && gasPrice != nil
     }
     
+    var hasNonce: Bool {
+        return nonce != nil
+    }
+    
     var gasPriceGwei: Int? {
         guard let gasPrice = gasPrice,
               let currentAsDecimal = try? EthNumber(hex: gasPrice).value().toDecimal() else { return nil }
