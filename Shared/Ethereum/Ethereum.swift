@@ -121,25 +121,25 @@ struct Ethereum {
         func getGasLimitAndGasPrice(_ transaction: Transaction) {
             var transaction = transaction
         
-        func getGasIfNeeded(gasPrice: String) {
-            guard transaction.gas == nil else { return }
-            getGas(chain: chain, from: transaction.from, to: transaction.to, gasPrice: gasPrice, weiAmount: transaction.weiAmount, data: transaction.data) { gas in
-                transaction.gas = gas
-                completion(transaction)
-            }
-        }
-        
-        if let gasPrice = transaction.gasPrice {
-            getGasIfNeeded(gasPrice: gasPrice)
-        } else {
-            getGasPrice(chain: chain) { gasPrice in
-                transaction.gasPrice = gasPrice
-                completion(transaction)
-                if let gasPrice = gasPrice {
-                    getGasIfNeeded(gasPrice: gasPrice)
+            func getGasIfNeeded(gasPrice: String) {
+                guard transaction.gas == nil else { return }
+                getGas(chain: chain, from: transaction.from, to: transaction.to, gasPrice: gasPrice, weiAmount: transaction.weiAmount, data: transaction.data) { gas in
+                    transaction.gas = gas
+                    completion(transaction)
                 }
             }
-        }
+            
+            if let gasPrice = transaction.gasPrice {
+                getGasIfNeeded(gasPrice: gasPrice)
+            } else {
+                getGasPrice(chain: chain) { gasPrice in
+                    transaction.gasPrice = gasPrice
+                    completion(transaction)
+                    if let gasPrice = gasPrice {
+                        getGasIfNeeded(gasPrice: gasPrice)
+                    }
+                }
+            }
         }
         
         if transaction.nonce == nil {

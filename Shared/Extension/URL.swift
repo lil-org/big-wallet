@@ -15,7 +15,7 @@ extension URL {
     }
     
     static func blankRedirect(id: Int) -> URL {
-        return URL(string: "https://www.balance.io/blank/\(id)")!
+        return URL(string: "https://www.balance.io/blank/?\(id)")!
     }
     
 }

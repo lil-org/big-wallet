@@ -1,7 +1,7 @@
 var pendingTabIds = {};
 
 function handleUpdated(tabId, changeInfo, tabInfo) {
-    const prefix = "https://www.balance.io/blank/";
+    const prefix = "https://www.balance.io/blank/?";
     if (tabInfo.url.startsWith(prefix)) {
         const id = tabInfo.url.replace(prefix, "");
         if (id in pendingTabIds) {
