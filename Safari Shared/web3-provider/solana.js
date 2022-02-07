@@ -153,6 +153,10 @@ class TokenarySolana extends EventEmitter {
         this.emit("connect");
     }
     
+    processTokenaryResponse(response) {
+        
+    }
+    
     /**
      * @private Internal js -> native message handler
      */
