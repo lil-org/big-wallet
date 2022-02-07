@@ -107,12 +107,16 @@ function storeConfigurationIfNeeded(request) {
     }
 }
 
+function sendToInpage(response, id) {
+    pendingRequestsIds.delete(id);
+    window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
+    storeConfigurationIfNeeded(response);
+}
+
 function processInpageMessage(message) {
     pendingRequestsIds.add(message.id);
     browser.runtime.sendMessage({ subject: "process-inpage-message", message: message }).then((response) => {
-        pendingRequestsIds.delete(message.id);
-        window.postMessage({direction: "from-content-script", response: response, id: message.id}, "*");
-        storeConfigurationIfNeeded(response);
+        sendToInpage(response, message.id);
     });
 }
 
@@ -123,9 +127,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         platformSpecificProcessMessage(request); // iOS opens app here
     } else {
         if (pendingRequestsIds.has(request.id)) {
-            pendingRequestsIds.delete(request.id);
-            window.postMessage({direction: "from-content-script", response: request, id: request.id}, "*");
-            storeConfigurationIfNeeded(request);
+            sendToInpage(request, request.id);
             browser.runtime.sendMessage({ subject: "activateTab" });
         }
     }
