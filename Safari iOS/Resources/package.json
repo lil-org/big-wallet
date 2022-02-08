@@ -1,0 +1,17 @@
+{
+    "name": "Balance-extension-iOS",
+    "version": "0.0.0",
+    "license": "GPL-3.0",
+    "source": [
+        "src/content/content.ts",
+        "src/background/background.ts",
+        "src/popup/popup.ts",
+        "src/ethereum/index.ts"
+    ],
+    "scripts": {
+        "build": "parcel build"
+    },
+    "devDependencies": {
+        "parcel": "^2.2.1"
+    }
+}
