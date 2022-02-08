@@ -3,9 +3,12 @@ import Constants
 
 extension Constants {
     
+    static var intercom_key: String { "j0fl7v0m" }
+    
     enum Bundles {
         
         static var app: String { "io.balance" }
+        static var app_id: String { "1606612333" }
     }
     
     enum Scenes {

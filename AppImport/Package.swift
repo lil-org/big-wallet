@@ -57,8 +57,11 @@ let package = Package(
         ),
         .package(
             name: "SPPermissions",
-            url: "https://github.com/ivanvorobei/SPPermissions",
-            .upToNextMajor(from: "7.1.1")
+            url: "https://github.com/ivanvorobei/SPPermissions", .upToNextMajor(from: "7.1.1")
+        ),
+        .package(
+            name: "Intercom",
+            url: "https://github.com/intercom/intercom-ios", .upToNextMajor(from: "11.1.2")
         ),
         .package(name: "Constants", path: "Constants")
     ],
@@ -66,6 +69,7 @@ let package = Package(
         .target(
             name: "AppImport",
             dependencies: [
+                .product(name: "Intercom", package: "Intercom"),
                 .product(name: "BigInt", package: "BigInt"),
                 .product(name: "Alamofire", package: "Alamofire"),
                 .product(name: "SwiftyJSON", package: "SwiftyJSON"),

@@ -7,6 +7,7 @@ import Constants
 import SPPermissions
 import SPPermissionsNotification
 import SPAlert
+import Intercom
 
 class SettingsController: SPDiffableTableController {
     
@@ -96,6 +97,16 @@ class SettingsController: SPDiffableTableController {
                         action: { item, indexPath in
                             self.tableView.deselectRow(at: indexPath, animated: true)
                             UIApplication.shared.open(URL.init(string: "https://twitter.com/Balance_io")!, options: [:], completionHandler: nil)
+                        }
+                    ),
+                    SPDiffableTableRow(
+                        text: Texts.Settings.intercom_title,
+                        icon: .init(named: "settings-intercom"),
+                        accessoryType: .disclosureIndicator,
+                        selectionStyle: .default,
+                        action: { item, indexPath in
+                            self.tableView.deselectRow(at: indexPath, animated: true)
+                            Intercom.presentMessenger()
                         }
                     )
                 ]

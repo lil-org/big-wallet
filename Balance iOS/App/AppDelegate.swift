@@ -1,6 +1,7 @@
 import UIKit
 import SparrowKit
 import SPAlert
+import Intercom
 
 var launchURL: URL?
 
@@ -17,7 +18,22 @@ class AppDelegate: SPAppScenesDelegate {
 
         priceService.start()
         gasService.start()
-        walletsManager.start()
+        
+        /**
+         Sometims wallets is empty, need handle error for undestand problem.
+         After catch bug will show alert with description.
+         */
+        do {
+            try walletsManager.start()
+        } catch {
+            SPAlert.present(message: error.localizedDescription, haptic: .error, completion: nil)
+            do {
+                try walletsManager.start()
+            } catch {
+                SPAlert.present(message: error.localizedDescription, haptic: .error, completion: nil)
+            }
+        }
+        /// End debugging start.
         
         Self.migration()
         

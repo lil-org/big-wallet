@@ -21,8 +21,8 @@ final class WalletsManager {
 
     private init() {}
 
-    func start() {
-        try? load()
+    func start() throws {
+        try load()
     }
     
     #if os(macOS)

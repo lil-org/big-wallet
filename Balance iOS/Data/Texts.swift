@@ -191,6 +191,7 @@ enum Texts {
         static var language_footer: String { NSLocalizedString("settings language footer", comment: "") }
         
         static var about_title: String { NSLocalizedString("settings about title", comment: "") }
+        static var intercom_title: String { NSLocalizedString("settings intercom title", comment: "") }
 
         static var about_website: String { NSLocalizedString("settings about website", comment: "") }
         static var about_twitter: String { NSLocalizedString("settings about twitter", comment: "") }

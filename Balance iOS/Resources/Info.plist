@@ -77,5 +77,7 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Using for support with Intercom</string>
 </dict>
 </plist>

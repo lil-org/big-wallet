@@ -20,12 +20,21 @@
         }
       },
       {
+        "package": "Intercom",
+        "repositoryURL": "https://github.com/intercom/intercom-ios",
+        "state": {
+          "branch": null,
+          "revision": "3345d9e7599141d7c844981423a7e5409f2bfb81",
+          "version": "11.1.2"
+        }
+      },
+      {
         "package": "NativeUIKit",
         "repositoryURL": "https://github.com/ivanvorobei/NativeUIKit",
         "state": {
           "branch": null,
-          "revision": "8cf65eabbc8b888d5c9d9002f61600b21525f9a9",
-          "version": "1.3.0"
+          "revision": "3729024b807e080dc7d570c78897717a5648fb00",
+          "version": "1.3.1"
         }
       },
       {
@@ -60,8 +69,8 @@
         "repositoryURL": "https://github.com/ivanvorobei/SparrowKit",
         "state": {
           "branch": null,
-          "revision": "df2ba76dd6a27dfe721a193bb3a7888e311693d1",
-          "version": "3.5.1"
+          "revision": "f872b45a3e6aa5e2833ac8d3050a3f026d97ce0b",
+          "version": "3.5.2"
         }
       },
       {

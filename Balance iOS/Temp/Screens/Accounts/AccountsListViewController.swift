@@ -36,7 +36,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         super.viewDidLoad()
         
         if walletsManager.wallets.isEmpty {
-            walletsManager.start()
+            //walletsManager.start()
         }
         
         navigationItem.title = forWalletSelection ? Strings.selectAccount : Strings.accounts

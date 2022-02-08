@@ -1,5 +1,7 @@
 import UIKit
 import SparrowKit
+import Intercom
+import Constants
 
 class RootSceneDelegate: BaseSceneDelegate {
     
@@ -19,6 +21,9 @@ class RootSceneDelegate: BaseSceneDelegate {
         if let window = self.window {
             Appearance.configure(rootWindow: window)
         }
+        
+        Intercom.setApiKey(Constants.intercom_key, forAppId: Constants.Bundles.app_id)
+        Intercom.registerUnidentifiedUser()
     }
     
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
