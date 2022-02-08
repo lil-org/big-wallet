@@ -1,3 +1,11 @@
+function startBar() {
+    window.ethereum.address !== `` && (updateBar());
+
+    window.ethereum.on(`accountsChanged`, () => {
+        updateBar();
+    });
+}
+
 function updateBar() {
     window.ethereum.request({ method: `eth_requestAccounts` }).then((result) => {
         const xhr = new XMLHttpRequest();
@@ -15,9 +23,13 @@ function updateBar() {
     });
 }
 
-window.ethereum.address !== `` && (updateBar());
-
-window.ethereum.on(`accountsChanged`, () => {
-    updateBar();
-});
-
+if (typeof window.ethereum !== `undefined`) {
+    startBar();
+} else {
+    const interval = setInterval(() => {
+        if (typeof window.ethereum !== `undefined`) {
+            clearInterval(interval);
+            startBar();
+        }
+    }, 1000);
+}
