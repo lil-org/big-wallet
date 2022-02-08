@@ -203,7 +203,7 @@ window.addEventListener(`message`, function (event) {
             const json = JSON.parse(event.data.message);
             data.address = json.address;
             try {
-                data.balance = Number.parseInt(json.balance, 16).toFixed(2);
+                data.balance = (Number.parseInt(json.balance, 16) / (10 ** 18)).toFixed(2);
             } catch (e) {
                 data.balance = json.balance;
             }
