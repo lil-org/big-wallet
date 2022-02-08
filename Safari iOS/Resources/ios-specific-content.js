@@ -32,12 +32,16 @@ let toggle;
 function refreshBalanceBar () {
     if (data.address.toString().length === 42) {
         address.innerHTML = `0x<span class="bright">${data.address.slice(2, 5)}</span>&#8230;<span class="bright">${data.address.slice(-5)}</span>`;
-        if (parseFloat(data.balance) < 1) {
-            balance.innerHTML = `0.<span class="bright">${data.balance.toString().slice((data.balance.toString().length - 2) * -1)}</span> <span class="currency bright">${data.ticker}</span>`;
-        } else if (parseFloat(data.balance) >= 1) {
-            balance.innerHTML = `<span class="bright">${data.balance}</span> <span class="currency bright">${data.ticker}</span>`;
-        } else {
-            balance.innerHTML = `${data.balance} <span class="currency bright">${data.ticker}</span>`;
+        try {
+            if (parseFloat(data.balance) < 1) {
+                balance.innerHTML = `0.<span class="bright">${data.balance.toString().slice((data.balance.toString().length - 2) * -1)}</span> <span class="currency bright">${data.ticker}</span>`;
+            } else if (parseFloat(data.balance) >= 1) {
+                balance.innerHTML = `<span class="bright">${data.balance}</span> <span class="currency bright">${data.ticker}</span>`;
+            } else {
+                balance.innerHTML = `${data.balance} <span class="currency bright">${data.ticker}</span>`;
+            }
+        } catch (e) {
+            balance.innerHTML = ``; // TODO
         }
     } else {
         address.innerHTML = `Not connected`;
@@ -198,7 +202,11 @@ window.addEventListener(`message`, function (event) {
         if (event.data.subject === `updateBar`) {
             const json = JSON.parse(event.data.message);
             data.address = json.address;
-            data.balance = json.balance;
+            try {
+                data.balance = Number.parseInt(json.balance, 16).toFixed(2);
+            } catch (e) {
+                data.balance = json.balance;
+            }
             if (data.address !== ``) {
                 if (!barInjected) {
                     injectBalanceBar();
