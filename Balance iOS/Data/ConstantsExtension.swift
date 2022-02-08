@@ -3,7 +3,8 @@ import Constants
 
 extension Constants {
     
-    static var intercom_key: String { "j0fl7v0m" }
+    static var intercom_key: String { "ios_sdk-58c8bebe9e93045233b86b57bb7f7d39551c444f" }
+    static var intercom_app_id: String { "j0fl7v0m" }
     
     enum Bundles {
         

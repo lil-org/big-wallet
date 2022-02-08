@@ -22,7 +22,7 @@ class RootSceneDelegate: BaseSceneDelegate {
             Appearance.configure(rootWindow: window)
         }
         
-        Intercom.setApiKey(Constants.intercom_key, forAppId: Constants.Bundles.app_id)
+        Intercom.setApiKey(Constants.intercom_key, forAppId: Constants.intercom_app_id)
         Intercom.registerUnidentifiedUser()
     }
     
