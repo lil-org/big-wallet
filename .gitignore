@@ -32,6 +32,7 @@ Secrets.swift
 node_modules/
 jspm_packages/
 staging/
+package-lock.json
 
 # Log Files
 *.log
