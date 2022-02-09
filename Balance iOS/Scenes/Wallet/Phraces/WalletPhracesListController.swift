@@ -1,6 +1,6 @@
 import UIKit
 import NativeUIKit
-import SFSymbols
+import SPSafeSymbols
 import SPDiffable
 
 class WalletPhracesListController: SPDiffableCollectionController, OnboardingChildInterface {
@@ -10,7 +10,7 @@ class WalletPhracesListController: SPDiffableCollectionController, OnboardingChi
     let actionToolbarView = NativeLargeActionToolBarView().do {
         $0.actionButton.set(
             title: Texts.Wallet.Phrase.action,
-            icon: UIImage(SFSymbol.arrow.rightCircleFill),
+            icon: UIImage(SPSafeSymbol.arrow.rightCircleFill),
             colorise: .init(content: .custom(.white), background: .tint)
         )
         $0.footerLabel.text = Texts.Wallet.Phrase.footer

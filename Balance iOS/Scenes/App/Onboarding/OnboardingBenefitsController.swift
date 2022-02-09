@@ -1,7 +1,7 @@
 import UIKit
 import SparrowKit
 import NativeUIKit
-import SFSymbols
+import SPSafeSymbols
 
 class OnboardingBenefitsController: NativeOnboardingFeaturesController, OnboardingChildInterface {
     
@@ -19,28 +19,28 @@ class OnboardingBenefitsController: NativeOnboardingFeaturesController, Onboardi
     
     init() {
         super.init(
-            iconImage: .init(SFSymbol.wallet.passFill),
+            iconImage: .init(SPSafeSymbol.wallet.passFill),
             title: Texts.App.Onboarding.features_title,
             subtitle: Texts.App.Onboarding.features_description
         )
         setFeatures([
             .init(
-                iconImage: .init(SFSymbol.safari).withTintColor(.systemBlue, renderingMode: .alwaysOriginal),
+                iconImage: .init(SPSafeSymbol.safari).withTintColor(.systemBlue, renderingMode: .alwaysOriginal),
                 title: Texts.App.Onboarding.features_1_title,
                 description: Texts.App.Onboarding.features_1_description
             ),
             .init(
-                iconImage: .init(SFSymbol.key.fill).withTintColor(.systemGreen, renderingMode: .alwaysOriginal),
+                iconImage: .init(SPSafeSymbol.key.fill).withTintColor(.systemGreen, renderingMode: .alwaysOriginal),
                 title: Texts.App.Onboarding.features_2_title,
                 description: Texts.App.Onboarding.features_2_description
             ),
             .init(
-                iconImage: .init(SFSymbol.envelope.fill).withTintColor(.systemIndigo, renderingMode: .alwaysOriginal),
+                iconImage: .init(SPSafeSymbol.envelope.fill).withTintColor(.systemIndigo, renderingMode: .alwaysOriginal),
                 title: Texts.App.Onboarding.features_3_title,
                 description: Texts.App.Onboarding.features_3_description
             ),
             .init(
-                iconImage: .init(SFSymbol.person._3Fill).withTintColor(.systemOrange, renderingMode: .alwaysOriginal),
+                iconImage: .init(SPSafeSymbol.person._3Fill).withTintColor(.systemOrange, renderingMode: .alwaysOriginal),
                 title: Texts.App.Onboarding.features_4_title,
                 description: Texts.App.Onboarding.features_4_description
             )

@@ -1,5 +1,5 @@
 import UIKit
-import SFSymbols
+import SPSafeSymbols
 import SPIndicator
 import SparrowKit
 import Constants
@@ -14,7 +14,7 @@ class AuthController: PasswordController, UIAdaptivePresentationControllerDelega
             title: "Current Password",
             subtitle: "You password shoud be somewhere in private plaece.",
             action: "Sign In",
-            actionIcon: UIImage(SFSymbol.checkmark.circleFill),
+            actionIcon: UIImage(SPSafeSymbol.checkmark.circleFill),
             textFieldFooter: "Minimum 5 characters for safety.",
             toolBarFooter: nil,
             placeholder: "Your Password"

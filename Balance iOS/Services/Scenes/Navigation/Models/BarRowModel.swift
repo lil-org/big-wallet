@@ -1,5 +1,5 @@
 import UIKit
-import SFSymbols
+import SPSafeSymbols
 
 struct BarRowModel {
     
@@ -32,8 +32,8 @@ struct BarRowModel {
         
         var image: UIImage {
             switch self {
-            case .accounts: return UIImage(SFSymbol.person.fill)
-            case .settings: return UIImage(SFSymbol.gear)
+            case .accounts: return UIImage(SPSafeSymbol.person.fill)
+            case .settings: return UIImage(SPSafeSymbol.gear)
             }
         }
         

@@ -47,15 +47,6 @@
         }
       },
       {
-        "package": "SFSymbols",
-        "repositoryURL": "https://github.com/ivanvorobei/SFSymbols",
-        "state": {
-          "branch": null,
-          "revision": "784d07d0d0d044fd122dfb25c3c15117a2e3f43f",
-          "version": "1.0.3"
-        }
-      },
-      {
         "package": "SPAlert",
         "repositoryURL": "https://github.com/ivanvorobei/SPAlert",
         "state": {
@@ -116,6 +107,24 @@
           "branch": null,
           "revision": "580ed06a5daec94c5095379971570289b429fa3d",
           "version": "1.4.1"
+        }
+      },
+      {
+        "package": "SPSafeSymbols",
+        "repositoryURL": "https://github.com/sparrowcode/SPSafeSymbols",
+        "state": {
+          "branch": null,
+          "revision": "7f9862273615cafcc450e7a594d84522d0cd1e1d",
+          "version": "1.0.4"
+        }
+      },
+      {
+        "package": "SPSettingsIcons",
+        "repositoryURL": "https://github.com/sparrowcode/SPSettingsIcons",
+        "state": {
+          "branch": null,
+          "revision": "15b4bd1c2f870459693bcadf9ed167460dc9bb86",
+          "version": "1.0.0"
         }
       },
       {

@@ -1,7 +1,7 @@
 import UIKit
 import SparrowKit
 import NativeUIKit
-import SFSymbols
+import SPSafeSymbols
 import SPPermissions
 import SPPermissionsFaceID
 import SPAlert
@@ -15,7 +15,7 @@ class SetPasswrodOnboardingController: PasswordController, OnboardingChildInterf
             title: "Set New Password",
             subtitle: "You will have access to wallets and app by this password.",
             action: "Set Password",
-            actionIcon: UIImage(SFSymbol.checkmark.circleFill),
+            actionIcon: UIImage(SPSafeSymbol.checkmark.circleFill),
             textFieldFooter: "Minimum 5 characters for safety.",
             toolBarFooter: "It locked only app and don't make any special password to wallet.",
             placeholder: "Set Password"

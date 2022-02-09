@@ -52,8 +52,12 @@ let package = Package(
             url: "https://github.com/kean/Nuke", .upToNextMajor(from: "10.4.1")
         ),
         .package(
-            name: "SFSymbols",
-            url: "https://github.com/ivanvorobei/SFSymbols", .upToNextMajor(from: "1.0.3")
+            name: "SPSafeSymbols",
+            url: "https://github.com/sparrowcode/SPSafeSymbols", .upToNextMajor(from: "1.0.4")
+        ),
+        .package(
+            name: "SPSettingsIcons",
+            url: "https://github.com/sparrowcode/SPSettingsIcons", .upToNextMajor(from: "1.0.0")
         ),
         .package(
             name: "SPPermissions",
@@ -79,7 +83,8 @@ let package = Package(
                 .product(name: "SPAlert", package: "SPAlert"),
                 .product(name: "SPPageController", package: "SPPageController"),
                 .product(name: "SPIndicator", package: "SPIndicator"),
-                .product(name: "SFSymbols", package: "SFSymbols"),
+                .product(name: "SPSafeSymbols", package: "SPSafeSymbols"),
+                .product(name: "SPSettingsIcons", package: "SPSettingsIcons"),
                 .product(name: "SPPermissionsNotification", package: "SPPermissions"),
                 .product(name: "SPPermissionsFaceID", package: "SPPermissions"),
                 .product(name: "Nuke", package: "Nuke"),

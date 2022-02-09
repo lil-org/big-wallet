@@ -2,12 +2,12 @@ import UIKit
 import SparrowKit
 import NativeUIKit
 import Constants
-import SFSymbols
+import SPSafeSymbols
 
 class SafariTableViewCell: SPTableViewCell {
     
     let closeButton = SPButton().do {
-        $0.setImage(.init(SFSymbol.xmark).alwaysTemplate)
+        $0.setImage(.init(SPSafeSymbol.xmark).alwaysTemplate)
         $0.tintColor = .secondaryLabel
     }
     

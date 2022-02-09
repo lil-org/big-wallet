@@ -1,5 +1,5 @@
 import UIKit
-import SFSymbols
+import SPSafeSymbols
 import SparrowKit
 import Constants
 import SPAlert
@@ -14,7 +14,7 @@ class AuthOnboardingController: PasswordController, OnboardingChildInterface {
             title: "Unlock Wallet",
             subtitle: "You password shoud be somewhere in private plaece. After login we propose import your wallets.",
             action: "Unlock Wallet",
-            actionIcon: UIImage(SFSymbol.checkmark.circleFill),
+            actionIcon: UIImage(SPSafeSymbol.checkmark.circleFill),
             textFieldFooter: "Minimum 5 characters for safety.",
             toolBarFooter: nil,
             placeholder: "Your Password"

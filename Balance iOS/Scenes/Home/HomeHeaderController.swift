@@ -1,7 +1,7 @@
 import UIKit
 import SparrowKit
 import NativeUIKit
-import SFSymbols
+import SPSafeSymbols
 
 open class HomeHeaderController: SPView {
     

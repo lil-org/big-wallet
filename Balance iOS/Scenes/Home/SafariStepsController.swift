@@ -1,7 +1,7 @@
 import UIKit
 import SPDiffable
 import NativeUIKit
-import SFSymbols
+import SPSafeSymbols
 import SparrowKit
 import Constants
 import Nuke
@@ -81,7 +81,7 @@ class SafariStepsController: NativeHeaderController {
     
     class SafariStepArrowView: SPView {
         
-        private var imageView = SPImageView(image: .init(SFSymbol.arrow.down).alwaysTemplate, contentMode: .scaleAspectFit).do {
+        private var imageView = SPImageView(image: .init(SPSafeSymbol.arrow.down).alwaysTemplate, contentMode: .scaleAspectFit).do {
             $0.tintColor = UIColor.tintColor
         }
         

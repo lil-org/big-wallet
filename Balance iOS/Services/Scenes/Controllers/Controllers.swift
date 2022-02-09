@@ -1,6 +1,6 @@
 import UIKit
 import SparrowKit
-import SFSymbols
+import SPSafeSymbols
 
 enum Controllers {
     

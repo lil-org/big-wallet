@@ -1,7 +1,7 @@
 import UIKit
 import SparrowKit
 import NativeUIKit
-import SFSymbols
+import SPSafeSymbols
 import SPAlert
 
 class ImportWalletController: NativeOnboardingActionsController, OnboardingChildInterface {
@@ -12,7 +12,7 @@ class ImportWalletController: NativeOnboardingActionsController, OnboardingChild
     
     init() {
         super.init(
-            iconImage: .init(SFSymbol.wallet.passFill),
+            iconImage: .init(SPSafeSymbol.wallet.passFill),
             title: Texts.Wallet.Import.title,
             subtitle: Texts.Wallet.Import.description
         )

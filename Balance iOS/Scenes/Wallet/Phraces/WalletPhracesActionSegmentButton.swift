@@ -1,7 +1,7 @@
 import UIKit
 import SparrowKit
 import NativeUIKit
-import SFSymbols
+import SPSafeSymbols
 
 class WalletPhracesActionSegmentButton: SPButton {
     
@@ -10,7 +10,7 @@ class WalletPhracesActionSegmentButton: SPButton {
             switch appearance {
             case .`default`:
                 borderWidth = .zero
-                checkmarkIconView.image = .init(SFSymbol.circle)
+                checkmarkIconView.image = .init(SPSafeSymbol.circle)
             case .selected:
                 borderWidth = 2.5
                 checkmarkIconView.image = .init(.checkmark.circleFill)

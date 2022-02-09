@@ -2,7 +2,7 @@ import UIKit
 import SPDiffable
 import BlockiesSwift
 import NativeUIKit
-import SFSymbols
+import SPSafeSymbols
 
 class ApproveOperationController: SPDiffableTableController {
     
@@ -17,7 +17,7 @@ class ApproveOperationController: SPDiffableTableController {
     let toolBarView = NativeLargeSmallActionToolBarView().do {
         $0.actionButton.set(
             title: Texts.Wallet.Operation.approve_operation,
-            icon: UIImage(SFSymbol.checkmark.circleFill),
+            icon: UIImage(SPSafeSymbol.checkmark.circleFill),
             colorise: .init(content: .custom(.white), background: .tint)
         )
         $0.secondActionButton.setTitle(Texts.Shared.cancel)

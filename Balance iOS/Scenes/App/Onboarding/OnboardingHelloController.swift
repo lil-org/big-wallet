@@ -1,7 +1,7 @@
 import UIKit
 import SparrowKit
 import NativeUIKit
-import SFSymbols
+import SPSafeSymbols
 import SceneKit
 import Constants
 
@@ -30,7 +30,7 @@ class OnboardingHelloController: NativeHeaderController, OnboardingChildInterfac
     let actionToolbarView = NativeLargeActionToolBarView().do {
         $0.actionButton.set(
             title: Texts.App.Onboarding.hello_action,
-            icon: UIImage(SFSymbol.play.fill),
+            icon: UIImage(SPSafeSymbol.play.fill),
             colorise: .init(content: .custom(.white), background: .tint)
         )
         $0.footerLabel.text = Texts.App.Onboarding.hello_footer

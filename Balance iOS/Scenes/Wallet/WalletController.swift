@@ -3,7 +3,7 @@ import NativeUIKit
 import SPAlert
 import SparrowKit
 import SPDiffable
-import SFSymbols
+import SPSafeSymbols
 import BlockiesSwift
 import SPIndicator
 import Constants
@@ -48,7 +48,7 @@ class WalletController: NativeProfileController {
             }
         }
         headerView.nameLabel.text = walletModel.walletName
-        headerView.emailButton.setImage(.init(SFSymbol.pencil.circleFill))
+        headerView.emailButton.setImage(.init(SPSafeSymbol.pencil.circleFill))
         
         setSpaceBetweenHeaderAndCells(NativeLayout.Spaces.default_more)
         
@@ -112,7 +112,7 @@ class WalletController: NativeProfileController {
                         id: "address-public-id",
                         text: formattedAddress,
                         textColor: .tintColor,
-                        icon: UIImage.init(SFSymbol.doc.onClipboardFill),
+                        icon: UIImage.init(SPSafeSymbol.doc.onClipboardFill),
                         action: { _, _ in
                             UIPasteboard.general.string = self.walletModel.ethereumAddress
                             SPIndicator.present(title: Texts.Wallet.address_copied, preset: .done)

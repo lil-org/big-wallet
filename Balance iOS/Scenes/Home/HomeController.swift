@@ -2,7 +2,7 @@ import UIKit
 import SparrowKit
 import SPDiffable
 import NativeUIKit
-import SFSymbols
+import SPSafeSymbols
 import Constants
 
 class HomeController: NativeHeaderTableController {
@@ -167,7 +167,7 @@ class HomeController: NativeHeaderTableController {
                         textColor: .tintColor,
                         detail: nil,
                         detailColor: .clear,
-                        icon: .init(SFSymbol.key.fill),
+                        icon: .init(SPSafeSymbol.key.fill),
                         accessoryType: .disclosureIndicator,
                         action: { item,indexPath in
                             let alertController = UIAlertController(title: "Before change password need auth with old password", message: "Please, insert old password before", preferredStyle: .alert)

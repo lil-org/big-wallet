@@ -1,5 +1,6 @@
 import UIKit
-import SFSymbols
+import SPSafeSymbols
+import SPSettingsIcons
 import NativeUIKit
 import SPDiffable
 import SparrowKit
@@ -42,7 +43,7 @@ class SettingsController: SPDiffableTableController {
                 items: [
                     SPDiffableTableRowSwitch(
                         text: Texts.Settings.notification_title,
-                        icon: .init(named: "settings-notifications"),
+                        icon: .generateSettingsIcon("bell.fill", backgroundColor: .systemRed),
                         isOn: SPPermissions.Permission.notification.authorized,
                         action: { state in
                             if SPPermissions.Permission.notification.notDetermined {
@@ -64,7 +65,7 @@ class SettingsController: SPDiffableTableController {
                 items: [
                     SPDiffableTableRow(
                         text: Texts.Settings.appearance_title,
-                        icon: .init(named: "settings-appearance"),
+                        icon: .generateSettingsIcon("lightbulb.fill", backgroundColor: .systemYellow),
                         accessoryType: .disclosureIndicator,
                         selectionStyle: .default,
                         action: { item, indexPath in
@@ -74,7 +75,7 @@ class SettingsController: SPDiffableTableController {
                     ),
                     SPDiffableTableRow(
                         text: Texts.Settings.language_title,
-                        icon: .init(named: "settings-language"),
+                        icon: .generateSettingsIcon("globe", backgroundColor: .systemGray),
                         accessoryType: .disclosureIndicator,
                         selectionStyle: .default,
                         action: { item, indexPath in
@@ -91,7 +92,7 @@ class SettingsController: SPDiffableTableController {
                 items: [
                     SPDiffableTableRow(
                         text: Texts.Settings.about_title,
-                        icon: .init(named: "settings-aboutus"),
+                        icon: .generateSettingsIcon("person.2.fill", backgroundColor: .systemIndigo),
                         accessoryType: .disclosureIndicator,
                         selectionStyle: .default,
                         action: { item, indexPath in
@@ -101,7 +102,7 @@ class SettingsController: SPDiffableTableController {
                     ),
                     SPDiffableTableRow(
                         text: Texts.Settings.intercom_title,
-                        icon: .init(named: "settings-intercom"),
+                        icon: .generateSettingsIcon("questionmark.circle.fill", backgroundColor: .systemGreen),
                         accessoryType: .disclosureIndicator,
                         selectionStyle: .default,
                         action: { item, indexPath in
@@ -117,7 +118,7 @@ class SettingsController: SPDiffableTableController {
                     textColor: .destructiveColor,
                     detail: nil,
                     detailColor: .clear,
-                    icon: .init(SFSymbol.exclamationmark.triangleFill).withTintColor(.destructiveColor, renderingMode: .alwaysOriginal),
+                    icon: .init(SPSafeSymbol.exclamationmark.triangleFill).withTintColor(.destructiveColor, renderingMode: .alwaysOriginal),
                     accessoryType: .none,
                     action: { item, indexPath in
                         guard let cell = self.tableView.cellForRow(at: indexPath) else { return }

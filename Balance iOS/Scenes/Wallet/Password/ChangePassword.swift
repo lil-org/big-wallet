@@ -1,7 +1,7 @@
 import UIKit
 import SparrowKit
 import NativeUIKit
-import SFSymbols
+import SPSafeSymbols
 import SPPermissions
 import SPPermissionsFaceID
 import SPAlert
@@ -13,7 +13,7 @@ class ChangePassword: PasswordController {
             title: "New Password",
             subtitle: "We change password for each imported wallet.",
             action: "Set Password",
-            actionIcon: UIImage(SFSymbol.checkmark.circleFill),
+            actionIcon: UIImage(SPSafeSymbol.checkmark.circleFill),
             textFieldFooter: "Minimum 5 characters for safety.",
             toolBarFooter: "It locked only app and don't make any special password to wallet.",
             placeholder: "New Password"

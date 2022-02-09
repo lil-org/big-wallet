@@ -1,7 +1,7 @@
 import UIKit
 import SparrowKit
 import NativeUIKit
-import SFSymbols
+import SPSafeSymbols
 import SPAlert
 
 class WalletPhracesActionsController: NativeHeaderController, OnboardingChildInterface {
@@ -13,7 +13,7 @@ class WalletPhracesActionsController: NativeHeaderController, OnboardingChildInt
     internal let actionToolbarView = NativeLargeSmallActionToolBarView().do {
         $0.actionButton.set(
             title: Texts.Wallet.Phrase.Actions.choose,
-            icon: UIImage(SFSymbol.checkmark.circleFill),
+            icon: UIImage(SPSafeSymbol.checkmark.circleFill),
             colorise: .init(content: .custom(.white), background: .tint)
         )
         $0.secondActionButton.setTitle(Texts.Wallet.Phrase.Actions.cancel)

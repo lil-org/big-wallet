@@ -2,7 +2,7 @@ import UIKit
 import Constants
 import SparrowKit
 import NativeUIKit
-import SFSymbols
+import SPSafeSymbols
 
 class WalletOnbooardingController: BaseOnbooardingController {
     
