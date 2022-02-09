@@ -24,7 +24,7 @@
             "matches": ["file://*/*", "http://*/*", "https://*/*"],
             "run_at": "document_start",
             "all_frames": true,
-            "js": ["content.js", "ios-specific-content.js", "middleware.js"]
+            "js": ["content.js", "ios-specific-content.js", "ios-specific-middleware.js"]
         }
     ],
 
@@ -34,7 +34,8 @@
             "19": "images/toolbar-icon-19.png",
             "32": "images/toolbar-icon-32.png",
             "38": "images/toolbar-icon-38.png"
-        }
+        },
+        "default_popup": "popup.html"
     },
 
     "permissions": [
@@ -49,5 +50,5 @@
         "balance://*"
     ],
 
-    "web_accessible_resources": ["inpage.js", "middleware.js"]
+    "web_accessible_resources": ["inpage.js", "ios-specific-middleware.js"]
 }

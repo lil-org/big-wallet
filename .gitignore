@@ -29,6 +29,7 @@ Secrets.swift
 *.map
 
 # JS
+.parcel-cache/
 node_modules/
 jspm_packages/
 staging/
