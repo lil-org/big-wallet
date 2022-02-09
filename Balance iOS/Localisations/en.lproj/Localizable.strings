@@ -41,16 +41,19 @@
 "app onboarding hello footer" = "This is un-audited alpha software. You are using it at your own risk.";
 
 /* No comment provided by engineer. */
+"settings about discord" = "Discord: discord.gg/balance-wallet";
+
+/* No comment provided by engineer. */
 "settings about footer" = "We are a global community of engineers, designers & operators trying to build the best open source Ethereum wallet possible.";
 
 /* No comment provided by engineer. */
 "settings about title" = "About Us";
 
-"settings about website" = "Website: balance.io";
-
+/* No comment provided by engineer. */
 "settings about twitter" = "Twitter: @balance_io";
 
-"settings about discord" = "Discord: discord.gg/balance-wallet";
+/* No comment provided by engineer. */
+"settings about website" = "Website: balance.io";
 
 /* No comment provided by engineer. */
 "settings app footer" = "If you need support, go to balance.io";
@@ -78,6 +81,9 @@
 
 /* No comment provided by engineer. */
 "settings appearance title" = "Light & Dark Mode";
+
+/* No comment provided by engineer. */
+"settings intercom title" = "Support";
 
 /* No comment provided by engineer. */
 "settings language footer" = "If you want to help us add another language to the app, please join the Balance Discord. Go to balance.io";
@@ -118,8 +124,6 @@
 /* No comment provided by engineer. */
 "wallet address" = "Wallet’s Ethereum Address";
 
-"wallet footer" = "All Ethereum addresses begin with 0x and are followed by 40 characters. This is how people can send assets to you that live inside the Ethereum ecosystem.";
-
 /* No comment provided by engineer. */
 "wallet address copied" = "Address Copied";
 
@@ -129,10 +133,11 @@
 /* No comment provided by engineer. */
 "wallet balances header" = "ETH Balances";
 
-"wallet balances subheader" = "You can see your ETH balance on all Ethereum Layer 2 Networks and test networks.";
-
 /* No comment provided by engineer. */
 "wallet balances show empty" = "Show Wallets with no ETH";
+
+/* No comment provided by engineer. */
+"wallet balances subheader" = "You can see your ETH balance on all Ethereum Layer 2 Networks and test networks.";
 
 /* No comment provided by engineer. */
 "wallet change name" = "Rename";
@@ -175,6 +180,9 @@
 
 /* No comment provided by engineer. */
 "wallet empty title" = "No Wallets";
+
+/* No comment provided by engineer. */
+"wallet footer" = "All Ethereum addresses begin with 0x and are followed by 40 characters. This is how people can send assets to you that live inside the Ethereum ecosystem.";
 
 /* No comment provided by engineer. */
 "wallet import action add exising description" = "Secret Recovery Phrase";
