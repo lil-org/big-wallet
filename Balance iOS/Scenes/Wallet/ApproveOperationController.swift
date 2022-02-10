@@ -61,7 +61,9 @@ class ApproveOperationController: SPDiffableTableController {
             navigationController.mimicrateToolBarView = self.toolBarView
         }
         
-        configureDiffable(sections: content, cellProviders: [.rowDetailMultiLines] + SPDiffableTableDataSource.CellProvider.default, headerFooterProviders: [.largeHeader])
+        tableView.register(BlockiesAddressTableViewCell.self)
+        
+        configureDiffable(sections: content, cellProviders: [.blockiesAddressRow, .rowDetailMultiLines] + SPDiffableTableDataSource.CellProvider.default, headerFooterProviders: [.largeHeader])
     }
     
     // MARK: - Diffable
@@ -77,6 +79,9 @@ class ApproveOperationController: SPDiffableTableController {
     }
     
     internal var content: [SPDiffableSection] {
+        var formattedAddress = address
+        formattedAddress.insert("\n", at: formattedAddress.index(formattedAddress.startIndex, offsetBy: (formattedAddress.count / 2)))
+        
         return [
             .init(
                 id: "address",
@@ -84,8 +89,8 @@ class ApproveOperationController: SPDiffableTableController {
                 footer: SPDiffableTextHeaderFooter(text: Texts.Wallet.Operation.approve_transaction_address_description),
                 items: [
                     SPDiffableTableRow(
-                        id: Item.address.id,
-                        text: address,
+                        id: "blockies-address-row",
+                        text: formattedAddress,
                         detail: nil,
                         icon: Blockies(seed: address.lowercased()).createImage(),
                         accessoryType: .none,

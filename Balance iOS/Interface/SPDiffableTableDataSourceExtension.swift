@@ -24,6 +24,23 @@ extension SPDiffableTableDataSource.CellProvider {
         }
     }
     
+    public static var blockiesAddressRow: SPDiffableTableDataSource.CellProvider  {
+        return SPDiffableTableDataSource.CellProvider() { (tableView, indexPath, item) -> UITableViewCell? in
+            guard item.id == "blockies-address-row" else { return nil }
+            guard let item = item as? SPDiffableTableRow else { return nil }
+            let cell = tableView.dequeueReusableCell(withClass: BlockiesAddressTableViewCell.self, for: indexPath)
+            cell.addressLabel.text = item.text
+            
+            cell.avatarView.avatarAppearance = .avatar(item.icon!)
+            
+            cell.accessoryType = item.accessoryType
+            
+            cell.layoutSubviews()
+            
+            return cell
+        }
+    }
+    
     public static var buttonMultiLines: SPDiffableTableDataSource.CellProvider  {
         return SPDiffableTableDataSource.CellProvider() { (tableView, indexPath, item) -> UITableViewCell? in
             guard let item = item as? NativeDiffableLeftButton else { return nil }
