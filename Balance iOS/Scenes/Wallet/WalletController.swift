@@ -43,7 +43,7 @@ class WalletController: NativeProfileController {
         headerView.emailButton.setTitle(Texts.Wallet.change_name)
         headerView.emailButton.contentEdgeInsets.top = NativeLayout.Spaces.default_half
         if let address = walletModel.ethereumAddress {
-            if let image = Blockies(seed: address.lowercased(), size: 32).createImage() {
+            if let image = Blockies(seed: address.lowercased()).createImage(customScale: 32) {
                 headerView.avatarView.avatarAppearance = .avatar(image)
             }
         }
