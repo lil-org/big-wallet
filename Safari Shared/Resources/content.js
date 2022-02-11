@@ -88,21 +88,22 @@ if (shouldInjectProvider()) {
 function getLatestConfiguration() {
     const storageItem = browser.storage.local.get(window.location.host);
     storageItem.then((storage) => {
+        var response = {};
+        
         const latest = storage[window.location.host];
-        var response = {results: [], chainId: "", name: "didLoadLatestConfiguration", rpcURL: ""};
-        if (typeof latest !== "undefined" && "results" in latest && latest.results.length > 0 && latest.rpcURL.length > 0) {
-            response.results = latest.results;
-            response.chainId = latest.chainId;
-            response.rpcURL = latest.rpcURL;
+        if (typeof latest !== "undefined") {
+            response = latest;
         }
+        
+        response.name = "didLoadLatestConfiguration";
         const id = new Date().getTime() + Math.floor(Math.random() * 1000);
         window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
     });
 }
 
 function storeConfigurationIfNeeded(request) {
-    if (window.location.host.length > 0 && (request.name == "requestAccounts" || request.name == "switchAccount" || request.name == "switchEthereumChain" || request.name == "addEthereumChain")) {
-        const latest = {results: request.results, chainId: request.chainId, rpcURL: request.rpcURL};
+    if (window.location.host.length > 0 && "configurationToStore" in request) {
+        const latest = request.configurationToStore;
         browser.storage.local.set( {[window.location.host]: latest});
     }
 }
@@ -113,18 +114,29 @@ function sendToInpage(response, id) {
     storeConfigurationIfNeeded(response);
 }
 
-function processInpageMessage(message) {
+function sendMessageToNativeApp(message) {
+    message.favicon = getFavicon();
+    message.host = window.location.host;
     pendingRequestsIds.add(message.id);
-    browser.runtime.sendMessage({ subject: "process-inpage-message", message: message }).then((response) => {
+    browser.runtime.sendMessage({ subject: "message-to-wallet", message: message }).then((response) => {
         sendToInpage(response, message.id);
     });
+    platformSpecificProcessMessage(message); // iOS opens app here
+}
+
+function didTapExtensionButton() {
+    const id = new Date().getTime() + Math.floor(Math.random() * 1000);
+    const body = {object: {}, address: ""}; // TODO: vary format depending on current provider?
+    const message = {name: "switchAccount", id: id, provider: "ethereum", body: body};
+    // TODO: pass "unknown" provider and process it in app
+    // TODO: pass current network id for ethereum. or maybe just pass latestConfiguration here as well
+    sendMessageToNativeApp(message);
 }
 
 // Receive from background
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if ("proxy" in request) {
-        pendingRequestsIds.add(request.id);
-        platformSpecificProcessMessage(request); // iOS opens app here
+    if ("didTapExtensionButton" in request) {
+        didTapExtensionButton();
     } else {
         if (pendingRequestsIds.has(request.id)) {
             sendToInpage(request, request.id);
@@ -136,9 +148,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // Receive from inpage
 window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "from-page-script") {
-        event.data.message.favicon = getFavicon();
-        processInpageMessage(event.data.message);
-        platformSpecificProcessMessage(event.data.message); // iOS opens app here
+        sendMessageToNativeApp(event.data.message);
     }
 });
 

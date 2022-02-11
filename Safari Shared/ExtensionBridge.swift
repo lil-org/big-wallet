@@ -32,8 +32,8 @@ struct ExtensionBridge {
         }
     }
     
-    static func respond(id: Int, response: ResponseToExtension) {
-        defaults?.setCodable(response, forKey: key(id: id))
+    static func respond(response: ResponseToExtension) {
+        defaults?.set(response.json, forKey: key(id: response.id))
     }
     
     static func removeResponse(id: Int) {
@@ -41,13 +41,9 @@ struct ExtensionBridge {
         defaults?.removeObject(forKey: key)
     }
     
-    static func getResponse(id: Int) -> ResponseToExtension? {
+    static func getResponse(id: Int) -> [String: AnyHashable]? {
         let key = key(id: id)
-        if let response = defaults?.codableValue(type: ResponseToExtension.self, forKey: key) {
-            return response
-        } else {
-            return nil
-        }
+        return defaults?.value(forKey: key) as? [String: AnyHashable]
     }
     
 }

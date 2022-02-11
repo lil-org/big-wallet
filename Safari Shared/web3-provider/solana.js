@@ -162,14 +162,11 @@ class TokenarySolana extends EventEmitter {
      */
     postMessage(handler, id, data) {
         let object = {
-            id: id,
-            name: handler,
             object: data,
             address: "", // use public key for solana
             networkId: "", // won't be there for solana
-            host: window.location.host
         };
-        window.tokenary.postMessage(object, "solana");
+        window.tokenary.postMessage(handler, id, object, "solana");
     }
     
     /**

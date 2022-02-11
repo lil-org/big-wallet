@@ -7,8 +7,8 @@ import TokenaryEthereum from "./ethereum";
 import TokenarySolana from "./solana";
 
 window.tokenary = {};
-window.tokenary.postMessage = (message, provider) => {
-    message.provider = provider;
+window.tokenary.postMessage = (name, id, body, provider) => {
+    const message = {name: name, id: id, provider: provider, body: body};
     window.postMessage({direction: "from-page-script", message: message}, "*");
 };
 

@@ -359,14 +359,11 @@ class TokenaryEthereum extends EventEmitter {
     postMessage(handler, id, data) {
         if (this.ready || handler === "requestAccounts") {
             let object = {
-                id: id,
-                name: handler,
                 object: data,
                 address: this.address,
-                networkId: this.net_version(),
-                host: window.location.host
+                networkId: this.net_version()
             };
-            window.tokenary.postMessage(object, "ethereum");
+            window.tokenary.postMessage(handler, id, object, "ethereum");
         } else {
             // don't forget to verify in the app
             this.sendError(id, new ProviderRpcError(4100, "provider is not ready"));

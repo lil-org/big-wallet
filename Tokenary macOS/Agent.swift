@@ -301,24 +301,25 @@ class Agent: NSObject {
     }
     
     private func processSafariRequest(_ safariRequest: SafariRequest) {
-        guard ExtensionBridge.hasRequest(id: safariRequest.id) else {
-            respondToSafariRequest(safariRequest, error: Strings.somethingWentWrong)
+        // TODO: process all chains' requests
+        guard ExtensionBridge.hasRequest(id: safariRequest.id), case let .ethereum(request) = safariRequest.body else {
+            respond(to: safariRequest, error: Strings.somethingWentWrong)
             return
         }
                 
-        let peerMeta = PeerMeta(title: safariRequest.host, iconURLString: safariRequest.iconURLString)
-        switch safariRequest.method {
+        let peerMeta = PeerMeta(title: safariRequest.host, iconURLString: safariRequest.favicon)
+        switch request.method {
         case .signPersonalMessage:
-            guard let data = safariRequest.message else {
-                respondToSafariRequest(safariRequest, error: Strings.somethingWentWrong)
+            guard let data = request.message else {
+                respond(to: safariRequest, error: Strings.somethingWentWrong)
                 return
             }
             let text = String(data: data, encoding: .utf8) ?? data.hexString
             showApprove(subject: .signPersonalMessage, meta: text, peerMeta: peerMeta, browser: .safari) { [weak self] approved in
                 if approved {
-                    self?.signPersonalMessage(address: safariRequest.address, data: data, request: safariRequest)
+                    self?.signPersonalMessage(address: request.address, data: data, request: safariRequest)
                 } else {
-                    self?.respondToSafariRequest(safariRequest, error: Strings.failedToSign)
+                    self?.respond(to: safariRequest, error: Strings.failedToSign)
                 }
             }
         case .requestAccounts, .switchAccount:
@@ -327,60 +328,56 @@ class Agent: NSObject {
             
             accountsList.onSelectedWallet = { [weak self] chain, wallet in
                 if let chain = chain, let wallet = wallet, let ethereumAddress = wallet.ethereumAddress {
-                    let response = ResponseToExtension(id: safariRequest.id,
-                                                       name: safariRequest.name,
-                                                       results: [ethereumAddress],
-                                                       chainId: chain.hexStringId,
-                                                       rpcURL: chain.nodeURLString)
-                    ExtensionBridge.respond(id: safariRequest.id, response: response)
+                    let responseBody = ResponseToExtension.Ethereum(results: [ethereumAddress], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
+                    self?.respond(to: safariRequest, body: .ethereum(responseBody))
                 } else {
-                    self?.respondToSafariRequest(safariRequest, error: Strings.canceled)
+                    self?.respond(to: safariRequest, error: Strings.canceled)
                 }
                 Window.closeAllAndActivateBrowser(force: .safari)
             }
             windowController.contentViewController = accountsList
         case .signMessage:
-            guard let data = safariRequest.message else {
-                respondToSafariRequest(safariRequest, error: Strings.somethingWentWrong)
+            guard let data = request.message else {
+                respond(to: safariRequest, error: Strings.somethingWentWrong)
                 return
             }
             showApprove(subject: .signMessage, meta: data.hexString, peerMeta: peerMeta, browser: .safari) { [weak self] approved in
                 if approved {
-                    self?.signMessage(address: safariRequest.address, data: data, request: safariRequest)
+                    self?.signMessage(address: request.address, data: data, request: safariRequest)
                 } else {
-                    self?.respondToSafariRequest(safariRequest, error: Strings.failedToSign)
+                    self?.respond(to: safariRequest, error: Strings.failedToSign)
                 }
             }
         case .signTypedMessage:
-            guard let raw = safariRequest.raw else {
-                respondToSafariRequest(safariRequest, error: Strings.somethingWentWrong)
+            guard let raw = request.raw else {
+                respond(to: safariRequest, error: Strings.somethingWentWrong)
                 return
             }
             showApprove(subject: .signTypedData, meta: raw, peerMeta: peerMeta, browser: .safari) { [weak self] approved in
                 if approved {
-                    self?.signTypedData(address: safariRequest.address, raw: raw, request: safariRequest)
+                    self?.signTypedData(address: request.address, raw: raw, request: safariRequest)
                 } else {
-                    self?.respondToSafariRequest(safariRequest, error: Strings.failedToSign)
+                    self?.respond(to: safariRequest, error: Strings.failedToSign)
                 }
             }
         case .signTransaction:
-            guard let transaction = safariRequest.transaction, let chain = safariRequest.chain else {
-                respondToSafariRequest(safariRequest, error: Strings.somethingWentWrong)
+            guard let transaction = request.transaction, let chain = request.chain else {
+                respond(to: safariRequest, error: Strings.somethingWentWrong)
                 return
             }
             showApprove(transaction: transaction, chain: chain, peerMeta: peerMeta, browser: .safari) { [weak self] transaction in
                 if let transaction = transaction {
-                    self?.sendTransaction(transaction, address: safariRequest.address, chain: chain, request: safariRequest)
+                    self?.sendTransaction(transaction, address: request.address, chain: chain, request: safariRequest)
                 } else {
-                    self?.respondToSafariRequest(safariRequest, error: Strings.canceled)
+                    self?.respond(to: safariRequest, error: Strings.canceled)
                 }
             }
         case .ecRecover:
-            if let (signature, message) = safariRequest.signatureAndMessage,
+            if let (signature, message) = request.signatureAndMessage,
                let recovered = ethereum.recover(signature: signature, message: message) {
-                ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(id: safariRequest.id, name: safariRequest.name, result: recovered))
+                respond(to: safariRequest, body: .ethereum(.init(result: recovered)))
             } else {
-                respondToSafariRequest(safariRequest, error: Strings.failedToVerify)
+                respond(to: safariRequest, error: Strings.failedToVerify)
             }
             Window.closeAllAndActivateBrowser(force: .safari)
         case .switchEthereumChain, .addEthereumChain, .watchAsset:
@@ -388,40 +385,46 @@ class Agent: NSObject {
         }
     }
     
-    private func respondToSafariRequest(_ safariRequest: SafariRequest, error: String) {
-        ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(id: safariRequest.id, name: safariRequest.name, error: error))
+    private func respond(to safariRequest: SafariRequest, body: ResponseToExtension.Body) {
+        let response = ResponseToExtension(for: safariRequest, body: body)
+        ExtensionBridge.respond(response: response)
+    }
+    
+    private func respond(to safariRequest: SafariRequest, error: String) {
+        let response = ResponseToExtension(for: safariRequest, error: error)
+        ExtensionBridge.respond(response: response)
     }
     
     private func sendTransaction(_ transaction: Transaction, address: String, chain: EthereumChain, request: SafariRequest) {
         if let wallet = walletsManager.getWallet(address: address),
            let transactionHash = try? ethereum.send(transaction: transaction, wallet: wallet, chain: chain) {
-            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(id: request.id, name: request.name, result: transactionHash))
+            respond(to: request, body: .ethereum(.init(result: transactionHash)))
         } else {
-            respondToSafariRequest(request, error: Strings.failedToSend)
+            respond(to: request, error: Strings.failedToSign)
         }
     }
     
     private func signTypedData(address: String, raw: String, request: SafariRequest) {
         if let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.sign(typedData: raw, wallet: wallet) {
-            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(id: request.id, name: request.name, result: signed))
+            respond(to: request, body: .ethereum(.init(result: signed)))
         } else {
-            respondToSafariRequest(request, error: Strings.failedToSign)
+            respond(to: request, error: Strings.failedToSign)
         }
     }
     
     private func signMessage(address: String, data: Data, request: SafariRequest) {
         if let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.sign(data: data, wallet: wallet) {
-            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(id: request.id, name: request.name, result: signed))
+            respond(to: request, body: .ethereum(.init(result: signed)))
         } else {
-            respondToSafariRequest(request, error: Strings.failedToSign)
+            respond(to: request, error: Strings.failedToSign)
         }
     }
     
     private func signPersonalMessage(address: String, data: Data, request: SafariRequest) {
         if let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.signPersonalMessage(data: data, wallet: wallet) {
-            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(id: request.id, name: request.name, result: signed))
+            respond(to: request, body: .ethereum(.init(result: signed)))
         } else {
-            respondToSafariRequest(request, error: Strings.failedToSign)
+            respond(to: request, error: Strings.failedToSign)
         }
     }
     

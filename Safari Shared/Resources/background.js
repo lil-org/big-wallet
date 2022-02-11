@@ -25,7 +25,7 @@ function handleUpdated(tabId, changeInfo, tabInfo) {
 browser.tabs.onUpdated.addListener(handleUpdated);
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.subject === "process-inpage-message") {
+    if (request.subject === "message-to-wallet") {
         didMakeRequest(request.message.id, sender.tab.id);
         browser.runtime.sendNativeMessage("mac.tokenary.io", request.message, function(response) {
             sendResponse(response);
@@ -38,15 +38,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 browser.browserAction.onClicked.addListener(function(tab) {
-    const id = new Date().getTime() + Math.floor(Math.random() * 1000);
-    const request = {id: id, name: "switchAccount", object: {}, address: "", proxy: true};
-    didMakeRequest(request.id, tab.id);
-    // TODO: pass current network id
-    // TODO: pass favicon
-    // TODO: pass host here as well
-    browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
-        browser.tabs.sendMessage(tab.id, response);
-        didCompleteRequest(request.id);
-    });
-    browser.tabs.sendMessage(tab.id, request);
+    const message = {didTapExtensionButton: true};
+    browser.tabs.sendMessage(tab.id, message);
+    // TODO: show app when clicking extension button on empty tab
 });
