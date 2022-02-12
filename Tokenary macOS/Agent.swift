@@ -16,8 +16,6 @@ class Agent: NSObject {
     private lazy var statusImage = NSImage(named: "Status")
     
     private let walletConnect = WalletConnect.shared
-    private let walletsManager = WalletsManager.shared
-    private let ethereum = Ethereum.shared
     
     private override init() { super.init() }
     private var statusBarItem: NSStatusItem!
