@@ -5,8 +5,6 @@ import UIKit
 class AccountsListViewController: UIViewController, DataStateContainer {
     
     private let walletsManager = WalletsManager.shared
-    private let keychain = Keychain.shared
-    private let ethereum = Ethereum.shared
     
     private var chain = EthereumChain.ethereum
     var onSelectedWallet: ((EthereumChain?, TokenaryWallet?) -> Void)?
@@ -78,107 +76,32 @@ class AccountsListViewController: UIViewController, DataStateContainer {
               let request = SafariRequest(query: String(url.dropFirst(prefix.count))) else { return }
         launchURL = nil
         
-        // TODO: process all chains' requests
-        guard ExtensionBridge.hasRequest(id: request.id), case let .ethereum(ethereumRequest) = request.body else {
-            respond(to: request, error: Strings.somethingWentWrong)
-            return
+        let action = DappRequestProcessor.processSafariRequest(request) { [weak self] in
+            self?.openSafari(requestId: request.id)
         }
         
-        let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
-        switch ethereumRequest.method {
-        case .switchAccount, .requestAccounts:
+        switch action {
+        case .none:
+            break
+        case .selectAccount(let action):
             let selectAccountViewController = instantiate(AccountsListViewController.self, from: .main)
-            selectAccountViewController.onSelectedWallet = { [weak self] (chain, wallet) in
-                guard let chain = chain, let address = wallet?.ethereumAddress else {
-                    self?.respond(to: request, error: Strings.canceled)
-                    return
-                }
-                let responseBody = ResponseToExtension.Ethereum(results: [address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
-                self?.respond(to: request, body: .ethereum(responseBody))
-            }
+            selectAccountViewController.onSelectedWallet = action.completion
             presentForSafariRequest(selectAccountViewController.inNavigationController, id: request.id)
-        case .signTypedMessage:
-            guard let raw = ethereumRequest.raw,
-                  let wallet = walletsManager.getWallet(address: ethereumRequest.address),
-                  let address = wallet.ethereumAddress else {
-                      respond(to: request, error: Strings.somethingWentWrong)
-                return
-            }
-            showApprove(id: request.id, subject: .signTypedData, address: address, meta: raw, peerMeta: peerMeta) { [weak self] approved in
-                if approved {
-                    self?.signTypedData(wallet: wallet, raw: raw, request: request)
-                } else {
-                    self?.respond(to: request, error: Strings.failedToSign)
-                }
-            }
-        case .signMessage:
-            guard let data = ethereumRequest.message,
-                  let wallet = walletsManager.getWallet(address: ethereumRequest.address),
-                  let address = wallet.ethereumAddress else {
-                      respond(to: request, error: Strings.somethingWentWrong)
-                return
-            }
-            showApprove(id: request.id, subject: .signMessage, address: address, meta: data.hexString, peerMeta: peerMeta) { [weak self] approved in
-                if approved {
-                    self?.signMessage(wallet: wallet, data: data, request: request)
-                } else {
-                    self?.respond(to: request, error: Strings.failedToSign)
-                }
-            }
-        case .signPersonalMessage:
-            guard let data = ethereumRequest.message,
-                  let wallet = walletsManager.getWallet(address: ethereumRequest.address),
-                  let address = wallet.ethereumAddress else {
-                      respond(to: request, error: Strings.somethingWentWrong)
-                return
-            }
-            let text = String(data: data, encoding: .utf8) ?? data.hexString
-            showApprove(id: request.id, subject: .signPersonalMessage, address: address, meta: text, peerMeta: peerMeta) { [weak self] approved in
-                if approved {
-                    self?.signPersonalMessage(wallet: wallet, data: data, request: request)
-                } else {
-                    self?.respond(to: request, error: Strings.failedToSign)
-                }
-            }
-        case .signTransaction:
-            guard let transaction = ethereumRequest.transaction,
-                  let chain = ethereumRequest.chain,
-                  let wallet = walletsManager.getWallet(address: ethereumRequest.address),
-                  let address = wallet.ethereumAddress else {
-                      respond(to: request, error: Strings.somethingWentWrong)
-                      return
-                  }
-            showApprove(id: request.id, transaction: transaction, chain: chain, address: address, peerMeta: peerMeta) { [weak self] transaction in
-                if let transaction = transaction {
-                    self?.sendTransaction(wallet: wallet, transaction: transaction, chain: chain, request: request)
-                } else {
-                    self?.respond(to: request, error: Strings.canceled)
-                }
-            }
-        case .ecRecover:
-            if let (signature, message) = ethereumRequest.signatureAndMessage,
-               let recovered = ethereum.recover(signature: signature, message: message) {
-                respond(to: request, body: .ethereum(.init(result: recovered)))
-            } else {
-                respond(to: request, error: Strings.failedToVerify)
-            }
-        case .addEthereumChain, .switchEthereumChain, .watchAsset:
-            respond(to: request, error: Strings.somethingWentWrong)
+        case .approveMessage(let action):
+            let approveViewController = ApproveViewController.with(subject: action.subject,
+                                                                   address: action.address,
+                                                                   meta: action.meta,
+                                                                   peerMeta: action.peerMeta,
+                                                                   completion: action.completion)
+            presentForSafariRequest(approveViewController.inNavigationController, id: request.id)
+        case .approveTransaction(let action):
+            let approveTransactionViewController = ApproveTransactionViewController.with(transaction: action.transaction,
+                                                                                         chain: action.chain,
+                                                                                         address: action.address,
+                                                                                         peerMeta: action.peerMeta,
+                                                                                         completion: action.completion)
+            presentForSafariRequest(approveTransactionViewController.inNavigationController, id: request.id)
         }
-    }
-    
-    func showApprove(id: Int, transaction: Transaction, chain: EthereumChain, address: String, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) {
-        let approveTransactionViewController = ApproveTransactionViewController.with(transaction: transaction,
-                                                                                     chain: chain,
-                                                                                     address: address,
-                                                                                     peerMeta: peerMeta,
-                                                                                     completion: completion)
-        presentForSafariRequest(approveTransactionViewController.inNavigationController, id: id)
-    }
-    
-    func showApprove(id: Int, subject: ApprovalSubject, address: String, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) {
-        let approveViewController = ApproveViewController.with(subject: subject, address: address, meta: meta, peerMeta: peerMeta, completion: completion)
-        presentForSafariRequest(approveViewController.inNavigationController, id: id)
     }
     
     private func presentForSafariRequest(_ viewController: UIViewController, id: Int) {
@@ -193,21 +116,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         toDismissAfterResponse[id] = viewController
     }
     
-    private func respond(to safariRequest: SafariRequest, body: ResponseToExtension.Body) {
-        let response = ResponseToExtension(for: safariRequest, body: body)
-        sendResponseAndOpenSafari(response)
-    }
-    
-    private func respond(to safariRequest: SafariRequest, error: String) {
-        let response = ResponseToExtension(for: safariRequest, error: error)
-        sendResponseAndOpenSafari(response)
-    }
-    
-    private func sendResponseAndOpenSafari(_ response: ResponseToExtension) {
-        ExtensionBridge.respond(response: response)
-        UIApplication.shared.open(URL.blankRedirect(id: response.id)) { [weak self] _ in
-            self?.toDismissAfterResponse[response.id]?.dismiss(animated: false)
-            self?.toDismissAfterResponse.removeValue(forKey: response.id)
+    private func openSafari(requestId: Int) {
+        UIApplication.shared.open(URL.blankRedirect(id: requestId)) { [weak self] _ in
+            self?.toDismissAfterResponse[requestId]?.dismiss(animated: false)
+            self?.toDismissAfterResponse.removeValue(forKey: requestId)
         }
     }
     
@@ -434,38 +346,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         alert.addAction(cancelAction)
         alert.addAction(okAction)
         present(alert, animated: true)
-    }
-    
-    private func signPersonalMessage(wallet: TokenaryWallet, data: Data, request: SafariRequest) {
-        if let signed = try? ethereum.signPersonalMessage(data: data, wallet: wallet) {
-            respond(to: request, body: .ethereum(.init(result: signed)))
-        } else {
-            respond(to: request, error: Strings.failedToSign)
-        }
-    }
-    
-    private func signTypedData(wallet: TokenaryWallet, raw: String, request: SafariRequest) {
-        if let signed = try? ethereum.sign(typedData: raw, wallet: wallet) {
-            respond(to: request, body: .ethereum(.init(result: signed)))
-        } else {
-            respond(to: request, error: Strings.failedToSign)
-        }
-    }
-    
-    private func signMessage(wallet: TokenaryWallet, data: Data, request: SafariRequest) {
-        if let signed = try? ethereum.sign(data: data, wallet: wallet) {
-            respond(to: request, body: .ethereum(.init(result: signed)))
-        } else {
-            respond(to: request, error: Strings.failedToSign)
-        }
-    }
-    
-    private func sendTransaction(wallet: TokenaryWallet, transaction: Transaction, chain: EthereumChain, request: SafariRequest) {
-        if let transactionHash = try? ethereum.send(transaction: transaction, wallet: wallet, chain: chain) {
-            respond(to: request, body: .ethereum(.init(result: transactionHash)))
-        } else {
-            respond(to: request, error: Strings.failedToSend)
-        }
     }
     
 }
