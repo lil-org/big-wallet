@@ -126,9 +126,7 @@ function sendMessageToNativeApp(message) {
 
 function didTapExtensionButton() {
     const id = new Date().getTime() + Math.floor(Math.random() * 1000);
-    const body = {object: {}, address: ""}; // TODO: vary format depending on current provider?
-    const message = {name: "switchAccount", id: id, provider: "ethereum", body: body};
-    // TODO: pass "unknown" provider and process it in app
+    const message = {name: "switchAccount", id: id, provider: "unknown", body: {}};
     // TODO: pass current network id for ethereum. or maybe just pass latestConfiguration here as well
     sendMessageToNativeApp(message);
 }

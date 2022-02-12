@@ -8,13 +8,38 @@ struct DappRequestProcessor {
     private static let ethereum = Ethereum.shared
     
     static func processSafariRequest(_ request: SafariRequest, completion: @escaping () -> Void) -> DappRequestAction {
-        // TODO: process all chains' requests
-        
-        guard ExtensionBridge.hasRequest(id: request.id), case let .ethereum(ethereumRequest) = request.body else {
+        guard ExtensionBridge.hasRequest(id: request.id) else {
             respond(to: request, error: Strings.somethingWentWrong, completion: completion)
             return .none
         }
         
+        switch request.body {
+        case let .ethereum(body):
+            return process(request: request, ethereumRequest: body, completion: completion)
+        case let .unknown(body):
+            switch body.method {
+            case .switchAccount:
+                let action = SelectAccountAction(provider: .unknown) { chain, wallet in
+                    // TODO: should work with any chain
+                    if let chain = chain, let address = wallet?.ethereumAddress {
+                        let responseBody = ResponseToExtension.Ethereum(results: [address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
+                        respond(to: request, body: .ethereum(responseBody), completion: completion)
+                        // TODO: response body type should depend on chain of selected account
+                    } else {
+                        respond(to: request, error: Strings.canceled, completion: completion)
+                    }
+                }
+                return .selectAccount(action)
+            }
+        case .solana:
+            respond(to: request, error: "Solana is not supported yet", completion: completion)
+        case .tezos:
+            respond(to: request, error: "Tezos is not supported yet", completion: completion)
+        }
+        return .none
+    }
+    
+    private static func process(request: SafariRequest, ethereumRequest: SafariRequest.Ethereum, completion: @escaping () -> Void) -> DappRequestAction {
         let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
         
         switch ethereumRequest.method {
