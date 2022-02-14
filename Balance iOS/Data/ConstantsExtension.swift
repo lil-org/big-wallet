@@ -23,6 +23,14 @@ extension Constants {
         static var show_settings: String {  Constants.Bundles.app + ".showSettings" }
     }
     
+    enum Ethereum {
+        
+        enum Units {
+            static var gwei = 1_000_000_000
+        }
+        
+    }
+    
     enum _3D {
         
         enum Logo {

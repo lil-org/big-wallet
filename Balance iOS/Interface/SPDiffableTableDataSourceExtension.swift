@@ -92,22 +92,4 @@ extension SPDiffableTableDataSource.CellProvider {
             return cell
         }
     }
-    
-    public static var gasSettings: SPDiffableTableDataSource.CellProvider  {
-        return SPDiffableTableDataSource.CellProvider() { (tableView, indexPath, item) -> UITableViewCell? in
-            guard item.id == "gas-price-row" else { return nil }
-            guard let item = item as? SPDiffableTableRowTextInputWithLabel else { return nil }
-            let cell = tableView.dequeueReusableCell(withClass: GasSettingsTableViewCell.self, for: indexPath)
-            cell.label.text = item.label
-            cell.input.text = item.value
-            
-            cell.input.addAction(UIAction { (action: UIAction) in
-                item.action(cell.input.text ?? "")
-            }, for: .editingChanged)
-            
-            cell.layoutSubviews()
-            
-            return cell
-        }
-    }
 }

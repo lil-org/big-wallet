@@ -3,6 +3,7 @@ import SPDiffable
 import BlockiesSwift
 import NativeUIKit
 import SPSafeSymbols
+import Constants
 
 class ApproveSendTransactionController: SPDiffableTableController {
     
@@ -16,6 +17,9 @@ class ApproveSendTransactionController: SPDiffableTableController {
     private let address: String
     private let peerMeta: PeerMeta?
     private let approveCompletion: (ApproveSendTransactionController, Bool) -> Void
+    
+    private var ludicrousMode = false
+    private var referenceGasPriceGwei: UInt
     
     // MARK: - Views
     
@@ -36,6 +40,7 @@ class ApproveSendTransactionController: SPDiffableTableController {
         self.address = address
         self.peerMeta = peerMeta
         self.approveCompletion = approveCompletion
+        self.referenceGasPriceGwei = UInt(transaction.gasPriceGwei ?? 0)
         super.init(style: .insetGrouped)
     }
     
@@ -66,11 +71,10 @@ class ApproveSendTransactionController: SPDiffableTableController {
         }), for: .touchUpInside)
         
         tableView.register(BlockiesAddressTableViewCell.self)
-        tableView.register(GasSettingsTableViewCell.self)
         
         configureDiffable(
             sections: content,
-            cellProviders: [.blockiesAddressRow, .gasSettings, .rowDetailMultiLines] + SPDiffableTableDataSource.CellProvider.default,
+            cellProviders: [.blockiesAddressRow, .rowDetailMultiLines] + SPDiffableTableDataSource.CellProvider.default,
             headerFooterProviders: [.largeHeader])
         
         if let navigationController = self.navigationController as? NativeNavigationController {
@@ -89,9 +93,14 @@ class ApproveSendTransactionController: SPDiffableTableController {
         ethereum.prepareTransaction(transaction, chain: chain) { [weak self] updated in
             guard let self = self else { return }
             self.transaction = updated
-            self.diffableDataSource?.set(self.content, animated: true, completion: nil)
+            self.referenceGasPriceGwei = UInt(self.transaction.gasPriceGwei ?? 0)
+            self.redraw()
             self.toolBarView.setLoading(!(self.transaction.hasFee && self.transaction.hasNonce))
         }
+    }
+    
+    private func redraw() {
+        self.diffableDataSource?.set(self.content, animated: true, completion: nil)
     }
     
     // MARK: - Diffable
@@ -128,16 +137,25 @@ class ApproveSendTransactionController: SPDiffableTableController {
         
         // Gas
         
-        var gasItems: [SPDiffableItem] = [
-            SPDiffableTableRowTextInputWithLabel(
-                id: "gas-price-row",
-                label: "Gas Price (Gwei)",
-                value: String(transaction.gasPriceGwei ?? 0),
-                action: { (newValue) in
-                    if let parsedValue = UInt(newValue) {
-                        self.transaction.setGasPrice(value: parsedValue)
-                    }
+        let gasItems: [SPDiffableItem] = [
+            SPDiffableTableRowSwitch(
+                id: "ludicrous-mode-row",
+                text: "Ludicrous Mode?",
+                isOn: self.ludicrousMode,
+                action: { (isOn) in
+                    self.ludicrousMode = isOn
+                    self.referenceGasPriceGwei = UInt(ceil(Double(self.referenceGasPriceGwei) * (isOn ? 1.5 : 0.5)))
+                    self.transaction.setGasPrice(value: self.referenceGasPriceGwei * UInt(Constants.Ethereum.Units.gwei))
+                    self.redraw()
                 }
+            ),
+            SPDiffableTableRow(
+                id: "gas-price-row",
+                text: "Gas Price",
+                detail: transaction.gasPriceWithLabel(chain: chain),
+                accessoryType: .none,
+                selectionStyle: .none,
+                action: nil
             ),
         ]
         
