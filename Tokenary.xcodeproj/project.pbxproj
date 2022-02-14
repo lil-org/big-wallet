@@ -293,6 +293,8 @@
 		2C78F8272683BDCC00C10670 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alert.swift; sourceTree = "<group>"; };
 		2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeViewController.swift; sourceTree = "<group>"; };
 		2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DappRequestAction.swift; sourceTree = "<group>"; };
+		2C89D26A27BAF2A3006C0C8D /* yarn.lock */ = {isa = PBXFileReference; lastKnownFileType = text; name = yarn.lock; path = "web3-provider/yarn.lock"; sourceTree = "<group>"; };
+		2C89D26B27BAF2A3006C0C8D /* package-lock.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "package-lock.json"; path = "web3-provider/package-lock.json"; sourceTree = "<group>"; };
 		2C8A09C5267513FC00993638 /* Agent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent.swift; sourceTree = "<group>"; };
 		2C8A09D32675184700993638 /* Window.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Window.swift; sourceTree = "<group>"; };
 		2C8A09D626751A0C00993638 /* WalletConnect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletConnect.swift; sourceTree = "<group>"; };
@@ -673,9 +675,11 @@
 				2C90E5F527A95B9400C8991E /* ethereum.js */,
 				2C90E5F627A98CB700C8991E /* solana.js */,
 				2CB3844727654BF600A189B9 /* index.js */,
-				2CB3844427654BF600A189B9 /* package.json */,
 				2CB3844827654BF600A189B9 /* rpc.js */,
 				2CB3844627654BF600A189B9 /* utils.js */,
+				2CB3844427654BF600A189B9 /* package.json */,
+				2C89D26B27BAF2A3006C0C8D /* package-lock.json */,
+				2C89D26A27BAF2A3006C0C8D /* yarn.lock */,
 			);
 			name = "web3-provider";
 			sourceTree = "<group>";
