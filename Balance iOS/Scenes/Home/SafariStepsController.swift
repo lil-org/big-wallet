@@ -31,7 +31,7 @@ class SafariStepsController: NativeHeaderController {
         $0.footerLabel.text = Texts.Wallet.SafariExtension.Steps.footer
         
         $0.actionButton.addAction(.init(handler: { _ in
-            guard let url = URL(string: Constants.website) else { return }
+            guard let url = URL(string: Constants.instructions) else { return }
             UIApplication.shared.open(url)
         }), for: .touchUpInside)
     }
