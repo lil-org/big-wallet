@@ -44,19 +44,7 @@ struct ResponseToExtension {
         }
     }
     
-    init(for request: SafariRequest) {
-        self.init(for: request, body: nil, error: nil)
-    }
-    
-    init(for request: SafariRequest, error: String) {
-        self.init(for: request, body: nil, error: error)
-    }
-        
-    init(for request: SafariRequest, body: Body) {
-        self.init(for: request, body: body, error: nil)
-    }
-    
-    private init(for request: SafariRequest, body: Body?, error: String?) {
+    init(for request: SafariRequest, body: Body? = nil, error: String? = nil) {
         self.id = request.id
         let provider = (body?.provider ?? request.provider).rawValue
         
