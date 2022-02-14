@@ -139,7 +139,7 @@ struct Transaction {
         }
     }
     
-    private mutating func setGasPrice(value: UInt) {
+    mutating func setGasPrice(value: UInt) {
         gasPrice = try? EthNumber(decimal: String(value)).value().toHexString()
     }
     

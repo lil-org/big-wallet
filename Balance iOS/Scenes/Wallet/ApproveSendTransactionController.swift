@@ -66,10 +66,11 @@ class ApproveSendTransactionController: SPDiffableTableController {
         }), for: .touchUpInside)
         
         tableView.register(BlockiesAddressTableViewCell.self)
+        tableView.register(GasSettingsTableViewCell.self)
         
         configureDiffable(
             sections: content,
-            cellProviders: [.blockiesAddressRow, .rowDetailMultiLines] + SPDiffableTableDataSource.CellProvider.default,
+            cellProviders: [.blockiesAddressRow, .gasSettings, .rowDetailMultiLines] + SPDiffableTableDataSource.CellProvider.default,
             headerFooterProviders: [.largeHeader])
         
         if let navigationController = self.navigationController as? NativeNavigationController {
@@ -78,6 +79,10 @@ class ApproveSendTransactionController: SPDiffableTableController {
         
         toolBarView.setLoading(true)
         observeEthereumValues()
+        
+        let tapper = UITapGestureRecognizer(target: self, action:#selector(endEditing))
+        tapper.cancelsTouchesInView = false
+        view.addGestureRecognizer(tapper)
     }
     
     private func observeEthereumValues() {
@@ -103,6 +108,40 @@ class ApproveSendTransactionController: SPDiffableTableController {
     }
     
     internal var content: [SPDiffableSection] {
+        
+        // Address
+        
+        var formattedAddress = address
+        formattedAddress.insert("\n", at: formattedAddress.index(formattedAddress.startIndex, offsetBy: (formattedAddress.count / 2)))
+        
+        let addressItems = [
+            SPDiffableTableRow(
+                id: "blockies-address-row",
+                text: formattedAddress,
+                detail: nil,
+                icon: Blockies(seed: address.lowercased()).createImage(),
+                accessoryType: .none,
+                selectionStyle: .none,
+                action: nil
+            )
+        ]
+        
+        // Gas
+        
+        var gasItems: [SPDiffableItem] = [
+            SPDiffableTableRowTextInputWithLabel(
+                id: "gas-price-row",
+                label: "Gas Price (Gwei)",
+                value: String(transaction.gasPriceGwei ?? 0),
+                action: { (newValue) in
+                    if let parsedValue = UInt(newValue) {
+                        self.transaction.setGasPrice(value: parsedValue)
+                    }
+                }
+            ),
+        ]
+        
+        // Data
         
         var items: [SPDiffableItem] = [
             SPDiffableTableRow(
@@ -142,37 +181,17 @@ class ApproveSendTransactionController: SPDiffableTableController {
             )
         )
         
-        items.append(
-            SPDiffableTableRow(
-                id: Item.gas.id,
-                text: Texts.Wallet.Operation.approve_transaction_gas,
-                detail: transaction.gasPriceWithLabel(chain: chain),
-                icon: nil,
-                accessoryType: .none,
-                selectionStyle: .none,
-                action: nil
-            )
-        )
-        
-        var formattedAddress = address
-        formattedAddress.insert("\n", at: formattedAddress.index(formattedAddress.startIndex, offsetBy: (formattedAddress.count / 2)))
-        
         return [
             .init(
                 id: "address",
                 header: NativeLargeHeaderItem(title: Texts.Wallet.address),
                 footer: SPDiffableTextHeaderFooter(text: Texts.Wallet.Operation.approve_transaction_address_description),
-                items: [
-                    SPDiffableTableRow(
-                        id: "blockies-address-row",
-                        text: formattedAddress,
-                        detail: nil,
-                        icon: Blockies(seed: address.lowercased()).createImage(),
-                        accessoryType: .none,
-                        selectionStyle: .none,
-                        action: nil
-                    )
-                ]
+                items: addressItems
+            ),
+            .init(
+                id: "gas",
+                header: NativeLargeHeaderItem(title: Texts.Wallet.Operation.approve_transaction_gas_header),
+                items: gasItems
             ),
             .init(
                 id: "data",

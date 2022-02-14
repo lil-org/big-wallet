@@ -93,6 +93,10 @@ enum Texts {
             static var available_wallets_header: String { NSLocalizedString("wallet operation available wallets header", comment: "") }
             static var available_wallets_footer: String { NSLocalizedString("wallet operation available wallets footer", comment: "") }
             
+            static var approve_transaction_gas_header: String { NSLocalizedString("wallet operation approve transaction gas header", comment: "") }
+            static var approve_transaction_gas_amount: String { NSLocalizedString("wallet operation approve transaction gas amount", comment: "") }
+            static var approve_transaction_gas_input: String { NSLocalizedString("wallet operation approve transaction gas amount input", comment: "") }
+            
             static var approve_transaction: String { NSLocalizedString("wallet operation approve transaction", comment: "") }
             static var approve_transaction_website: String { NSLocalizedString("wallet operation approve transaction website", comment: "") }
             static var approve_transaction_value: String { NSLocalizedString("wallet operation approve transaction value", comment: "") }
