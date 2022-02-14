@@ -86,6 +86,8 @@
 		2C773F63274523DC007B04E7 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
 		2C78F8282683BDCC00C10670 /* Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C78F8272683BDCC00C10670 /* Alert.swift */; };
 		2C797E7E267BB88800F2CE2D /* WelcomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */; };
+		2C89D26827BADCA9006C0C8D /* DappRequestAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */; };
+		2C89D26927BADCA9006C0C8D /* DappRequestAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */; };
 		2C8A09C6267513FC00993638 /* Agent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09C5267513FC00993638 /* Agent.swift */; };
 		2C8A09D42675184700993638 /* Window.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09D32675184700993638 /* Window.swift */; };
 		2C8A09D726751A0C00993638 /* WalletConnect.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09D626751A0C00993638 /* WalletConnect.swift */; };
@@ -290,6 +292,7 @@
 		2C773F61274523DC007B04E7 /* ResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseToExtension.swift; sourceTree = "<group>"; };
 		2C78F8272683BDCC00C10670 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alert.swift; sourceTree = "<group>"; };
 		2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeViewController.swift; sourceTree = "<group>"; };
+		2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DappRequestAction.swift; sourceTree = "<group>"; };
 		2C8A09C5267513FC00993638 /* Agent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent.swift; sourceTree = "<group>"; };
 		2C8A09D32675184700993638 /* Window.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Window.swift; sourceTree = "<group>"; };
 		2C8A09D626751A0C00993638 /* WalletConnect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletConnect.swift; sourceTree = "<group>"; };
@@ -751,6 +754,7 @@
 				2C0EE4012753874D00AC2AFA /* PeerMeta.swift */,
 				2C90E62127B2ED2D00C8991E /* SafariRequest+Helpers.swift */,
 				0D059AD126C2796200EE3023 /* ApprovalSubject.swift */,
+				2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */,
 				0DC850E626B73A5900809E82 /* AuthenticationReason.swift */,
 			);
 			path = Models;
@@ -1240,6 +1244,7 @@
 				2CAA412526C7CD93009F3535 /* ReviewRequester.swift in Sources */,
 				2CD0669126B5537B00728C20 /* TokenaryWallet.swift in Sources */,
 				2C0EE4022753874D00AC2AFA /* PeerMeta.swift in Sources */,
+				2C89D26827BADCA9006C0C8D /* DappRequestAction.swift in Sources */,
 				2C3B7F022756A08600931264 /* Identifiers.swift in Sources */,
 				2C8A09D726751A0C00993638 /* WalletConnect.swift in Sources */,
 				2C9F0B6826BDCB2E008FA3D6 /* EthereumChain.swift in Sources */,
@@ -1342,6 +1347,7 @@
 				2C40709427667A8600AB3D55 /* ImageWithLabelTableViewCell.swift in Sources */,
 				2C264BC727B2F2F400234393 /* SolanaSafariRequest.swift in Sources */,
 				2C5FF97226C84F7B00B32ACC /* AppDelegate.swift in Sources */,
+				2C89D26927BADCA9006C0C8D /* DappRequestAction.swift in Sources */,
 				2CF255A8275A48BB00AE54B9 /* NetworkMonitor.swift in Sources */,
 				2C8E88A2275FA596003EB8DB /* ImportViewController.swift in Sources */,
 				2C5FF97426C84F7B00B32ACC /* SceneDelegate.swift in Sources */,
