@@ -7,6 +7,7 @@ extension SafariRequest {
     struct Unknown: SafariRequestBody {
         
         enum Method: String, Decodable, CaseIterable {
+            case justShowApp
             case switchAccount
         }
         
@@ -18,7 +19,12 @@ extension SafariRequest {
         }
         
         var responseUpdatesStoredConfiguration: Bool {
-            return true
+            switch method {
+            case .justShowApp:
+                return false
+            case .switchAccount:
+                return true
+            }
         }
         
     }

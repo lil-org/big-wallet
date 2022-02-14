@@ -81,7 +81,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
         
         switch action {
-        case .none:
+        case .none, .justShowApp:
             break
         case .selectAccount(let action):
             let selectAccountViewController = instantiate(AccountsListViewController.self, from: .main)

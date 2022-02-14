@@ -44,6 +44,10 @@ struct ResponseToExtension {
         }
     }
     
+    init(for request: SafariRequest) {
+        self.init(for: request, body: nil, error: nil)
+    }
+    
     init(for request: SafariRequest, error: String) {
         self.init(for: request, body: nil, error: error)
     }

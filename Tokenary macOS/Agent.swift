@@ -311,6 +311,10 @@ class Agent: NSObject {
             showApprove(subject: action.subject, meta: action.meta, peerMeta: action.peerMeta, completion: action.completion)
         case .approveTransaction(let action):
             showApprove(transaction: action.transaction, chain: action.chain, peerMeta: action.peerMeta, completion: action.completion)
+        case .justShowApp:
+            let windowController = Window.showNew()
+            let accountsList = instantiate(AccountsListViewController.self)
+            windowController.contentViewController = accountsList
         }
     }
     

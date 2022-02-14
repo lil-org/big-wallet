@@ -18,6 +18,9 @@ struct DappRequestProcessor {
             return process(request: request, ethereumRequest: body, completion: completion)
         case let .unknown(body):
             switch body.method {
+            case .justShowApp:
+                ExtensionBridge.respond(response: ResponseToExtension(for: request))
+                return .justShowApp
             case .switchAccount:
                 let action = SelectAccountAction(provider: .unknown) { chain, wallet in
                     // TODO: should work with any chain
@@ -183,6 +186,7 @@ struct DappRequestProcessor {
 
 enum DappRequestAction {
     case none
+    case justShowApp
     case selectAccount(SelectAccountAction)
     case approveMessage(SignMessageAction)
     case approveTransaction(SendTransactionAction)
