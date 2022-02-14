@@ -41,8 +41,12 @@ browser.browserAction.onClicked.addListener(function(tab) {
     const message = {didTapExtensionButton: true};
     browser.tabs.sendMessage(tab.id, message);
     if (tab.url == "" && tab.pendingUrl == "") {
-        const id = new Date().getTime() + Math.floor(Math.random() * 1000);
+        const id = genId();
         const showAppMessage = {name: "justShowApp", id: id, provider: "unknown", body: {}, host: ""};
         browser.runtime.sendNativeMessage("mac.tokenary.io", showAppMessage);
     }
 });
+
+function genId() {
+    return new Date().getTime() + Math.floor(Math.random() * 1000);
+}

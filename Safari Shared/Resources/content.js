@@ -96,7 +96,7 @@ function getLatestConfiguration() {
         }
         
         response.name = "didLoadLatestConfiguration";
-        const id = new Date().getTime() + Math.floor(Math.random() * 1000);
+        const id = genId();
         window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
     });
 }
@@ -125,7 +125,7 @@ function sendMessageToNativeApp(message) {
 }
 
 function didTapExtensionButton() {
-    const id = new Date().getTime() + Math.floor(Math.random() * 1000);
+    const id = genId();
     const message = {name: "switchAccount", id: id, provider: "unknown", body: {}};
     // TODO: pass current network id for ethereum. or maybe just pass latestConfiguration here as well
     sendMessageToNativeApp(message);
@@ -158,4 +158,8 @@ var getFavicon = function() {
         }
     }
     return "";
+}
+
+function genId() {
+    return new Date().getTime() + Math.floor(Math.random() * 1000);
 }
