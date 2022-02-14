@@ -33,6 +33,7 @@ window.addEventListener("message", function(event) {
                 window.solana.processTokenaryResponse(response);
                 break;
             default:
+                // pass unknown provider message to all providers 
                 window.ethereum.processTokenaryResponse(response);
                 window.solana.processTokenaryResponse(response);
         }
