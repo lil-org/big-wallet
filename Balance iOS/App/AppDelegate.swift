@@ -48,6 +48,7 @@ class AppDelegate: SPAppScenesDelegate {
         let oldPassword = keychain.password
         let newPassword = String.empty
         if oldPassword != newPassword {
+            print("Changed keychain password to default.")
             keychain.save(password: newPassword)
             if let oldPassword = oldPassword {
                 // Shoud update all wallets to new password

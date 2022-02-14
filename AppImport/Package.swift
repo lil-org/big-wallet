@@ -14,7 +14,10 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/attaswift/BigInt", .upToNextMajor(from: "5.3.0")),
+        .package(
+            name: "BigInt",
+            url: "https://github.com/attaswift/BigInt", .upToNextMajor(from: "5.3.0")
+        ),
         .package(
             name: "Alamofire",
             url: "https://github.com/Alamofire/Alamofire.git", .upToNextMajor(from: "5.4.0")
@@ -25,11 +28,11 @@ let package = Package(
         ),
         .package(
             name: "SparrowKit",
-            url: "https://github.com/ivanvorobei/SparrowKit", .upToNextMajor(from: "3.5.1")
+            url: "https://github.com/ivanvorobei/SparrowKit", .upToNextMajor(from: "3.5.2")
         ),
         .package(
             name: "NativeUIKit",
-            url: "https://github.com/ivanvorobei/NativeUIKit", .upToNextMajor(from: "1.2.9")
+            url: "https://github.com/ivanvorobei/NativeUIKit", .upToNextMajor(from: "1.3.7")
         ),
         .package(
             name: "SPDiffable",
@@ -53,7 +56,7 @@ let package = Package(
         ),
         .package(
             name: "SPSafeSymbols",
-            url: "https://github.com/sparrowcode/SPSafeSymbols", .upToNextMajor(from: "1.0.4")
+            url: "https://github.com/sparrowcode/SPSafeSymbols", .upToNextMajor(from: "1.0.5")
         ),
         .package(
             name: "SPSettingsIcons",
@@ -61,7 +64,7 @@ let package = Package(
         ),
         .package(
             name: "SPPermissions",
-            url: "https://github.com/ivanvorobei/SPPermissions", .upToNextMajor(from: "7.1.1")
+            url: "https://github.com/ivanvorobei/SPPermissions", .upToNextMajor(from: "7.1.5")
         ),
         .package(
             name: "Intercom",

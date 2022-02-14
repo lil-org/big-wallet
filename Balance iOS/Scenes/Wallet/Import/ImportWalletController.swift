@@ -24,11 +24,15 @@ class ImportWalletController: NativeOnboardingActionsController, OnboardingChild
                 action: {
                     guard let parent = self.presentingViewController else { return}
                     let walletsManager = WalletsManager.shared
-                    guard let wallet = try? walletsManager.createWallet() else { return }
-                    NotificationCenter.default.post(name: .walletsUpdated, object: nil)
-                    self.dismiss(animated: true, completion: {
-                        Presenter.Crypto.showPhracesOnboarding(for: wallet, on: parent)
-                    })
+                    do {
+                        let wallet = try walletsManager.createWallet()
+                        NotificationCenter.default.post(name: .walletsUpdated, object: nil)
+                        self.dismiss(animated: true, completion: {
+                            Presenter.Crypto.showPhracesOnboarding(for: wallet, on: parent)
+                        })
+                    } catch {
+                        SPAlert.present(message: "Something went wrong. Please, restart app. Error: \(error.localizedDescription)", haptic: .error, completion: nil)
+                    }
                 }
             ),
             .init(

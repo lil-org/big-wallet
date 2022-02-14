@@ -284,7 +284,7 @@
 "wallet operation test networks header" = "ETHEREUM TEST NETWORKS";
 
 /* No comment provided by engineer. */
-"wallet phrase action" = "You should back this up somewhere safe.";
+"wallet phrase action" = "Continue";
 
 /* No comment provided by engineer. */
 "wallet phrase actions action copy completed" = "Copied";
