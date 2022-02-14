@@ -6,6 +6,7 @@ protocol SafariRequestBody {
     var responseUpdatesStoredConfiguration: Bool { get }
 }
 
+// Refactor: make codable
 struct SafariRequest {
     
     let id: Int

@@ -4,6 +4,7 @@ import Foundation
 
 extension SafariRequest {
     
+    // Refactor: make codable
     struct Ethereum: SafariRequestBody {
         
         enum Method: String, Decodable, CaseIterable {
