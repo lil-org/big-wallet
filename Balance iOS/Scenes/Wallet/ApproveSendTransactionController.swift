@@ -83,10 +83,6 @@ class ApproveSendTransactionController: SPDiffableTableController {
         
         toolBarView.setLoading(true)
         observeEthereumValues()
-        
-        let tapper = UITapGestureRecognizer(target: self, action:#selector(endEditing))
-        tapper.cancelsTouchesInView = false
-        view.addGestureRecognizer(tapper)
     }
     
     private func observeEthereumValues() {
