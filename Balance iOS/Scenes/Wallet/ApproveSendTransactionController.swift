@@ -3,6 +3,7 @@ import SPDiffable
 import BlockiesSwift
 import NativeUIKit
 import SPSafeSymbols
+import Constants
 
 class ApproveSendTransactionController: SPDiffableTableController {
     
@@ -16,6 +17,9 @@ class ApproveSendTransactionController: SPDiffableTableController {
     private let address: String
     private let peerMeta: PeerMeta?
     private let approveCompletion: (ApproveSendTransactionController, Bool) -> Void
+    
+    private var ludicrousMode = false
+    private var referenceGasPriceGwei: UInt
     
     // MARK: - Views
     
@@ -36,6 +40,7 @@ class ApproveSendTransactionController: SPDiffableTableController {
         self.address = address
         self.peerMeta = peerMeta
         self.approveCompletion = approveCompletion
+        self.referenceGasPriceGwei = UInt(transaction.gasPriceGwei ?? 0)
         super.init(style: .insetGrouped)
     }
     
@@ -84,9 +89,14 @@ class ApproveSendTransactionController: SPDiffableTableController {
         ethereum.prepareTransaction(transaction, chain: chain) { [weak self] updated in
             guard let self = self else { return }
             self.transaction = updated
-            self.diffableDataSource?.set(self.content, animated: true, completion: nil)
+            self.referenceGasPriceGwei = UInt(self.transaction.gasPriceGwei ?? 0)
+            self.redraw()
             self.toolBarView.setLoading(!(self.transaction.hasFee && self.transaction.hasNonce))
         }
+    }
+    
+    private func redraw() {
+        self.diffableDataSource?.set(self.content, animated: true, completion: nil)
     }
     
     // MARK: - Diffable
@@ -103,6 +113,49 @@ class ApproveSendTransactionController: SPDiffableTableController {
     }
     
     internal var content: [SPDiffableSection] {
+        
+        // Address
+        
+        var formattedAddress = address
+        formattedAddress.insert("\n", at: formattedAddress.index(formattedAddress.startIndex, offsetBy: (formattedAddress.count / 2)))
+        
+        let addressItems = [
+            SPDiffableTableRow(
+                id: "blockies-address-row",
+                text: formattedAddress,
+                detail: nil,
+                icon: Blockies(seed: address.lowercased()).createImage(),
+                accessoryType: .none,
+                selectionStyle: .none,
+                action: nil
+            )
+        ]
+        
+        // Gas
+        
+        let gasItems: [SPDiffableItem] = [
+            SPDiffableTableRowSwitch(
+                id: "ludicrous-mode-row",
+                text: "Ludicrous Mode?",
+                isOn: self.ludicrousMode,
+                action: { (isOn) in
+                    self.ludicrousMode = isOn
+                    self.referenceGasPriceGwei = UInt(ceil(Double(self.referenceGasPriceGwei) * (isOn ? 1.5 : 0.5)))
+                    self.transaction.setGasPrice(value: self.referenceGasPriceGwei * UInt(Constants.Ethereum.Units.gwei))
+                    self.redraw()
+                }
+            ),
+            SPDiffableTableRow(
+                id: "gas-price-row",
+                text: "Gas Price",
+                detail: transaction.gasPriceWithLabel(chain: chain),
+                accessoryType: .none,
+                selectionStyle: .none,
+                action: nil
+            ),
+        ]
+        
+        // Data
         
         var items: [SPDiffableItem] = [
             SPDiffableTableRow(
@@ -142,37 +195,17 @@ class ApproveSendTransactionController: SPDiffableTableController {
             )
         )
         
-        items.append(
-            SPDiffableTableRow(
-                id: Item.gas.id,
-                text: Texts.Wallet.Operation.approve_transaction_gas,
-                detail: transaction.gasPriceWithLabel(chain: chain),
-                icon: nil,
-                accessoryType: .none,
-                selectionStyle: .none,
-                action: nil
-            )
-        )
-        
-        var formattedAddress = address
-        formattedAddress.insert("\n", at: formattedAddress.index(formattedAddress.startIndex, offsetBy: (formattedAddress.count / 2)))
-        
         return [
             .init(
                 id: "address",
                 header: NativeLargeHeaderItem(title: Texts.Wallet.address),
                 footer: SPDiffableTextHeaderFooter(text: Texts.Wallet.Operation.approve_transaction_address_description),
-                items: [
-                    SPDiffableTableRow(
-                        id: "blockies-address-row",
-                        text: formattedAddress,
-                        detail: nil,
-                        icon: Blockies(seed: address.lowercased()).createImage(),
-                        accessoryType: .none,
-                        selectionStyle: .none,
-                        action: nil
-                    )
-                ]
+                items: addressItems
+            ),
+            .init(
+                id: "gas",
+                header: NativeLargeHeaderItem(title: Texts.Wallet.Operation.approve_transaction_gas_header),
+                items: gasItems
             ),
             .init(
                 id: "data",

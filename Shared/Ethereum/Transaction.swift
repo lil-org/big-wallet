@@ -2,6 +2,7 @@
 
 import Foundation
 import Web3Swift
+import Constants
 
 struct Transaction {
     let from: String
@@ -31,7 +32,7 @@ struct Transaction {
     var gasPriceGwei: Int? {
         guard let gasPrice = gasPrice,
               let currentAsDecimal = try? EthNumber(hex: gasPrice).value().toDecimal() else { return nil }
-        let current = NSDecimalNumber(decimal: currentAsDecimal).uintValue / 1_000_000_000
+        let current = NSDecimalNumber(decimal: currentAsDecimal).uintValue / UInt(Constants.Ethereum.Units.gwei)
         return Int(current)
     }
     
@@ -139,7 +140,7 @@ struct Transaction {
         }
     }
     
-    private mutating func setGasPrice(value: UInt) {
+    mutating func setGasPrice(value: UInt) {
         gasPrice = try? EthNumber(decimal: String(value)).value().toHexString()
     }
     

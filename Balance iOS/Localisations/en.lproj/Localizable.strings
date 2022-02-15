@@ -248,6 +248,9 @@
 "wallet operation approve transaction value" = "Amount";
 
 /* No comment provided by engineer. */
+"wallet operation approve transaction gas header" = "Gas Settings";
+
+/* No comment provided by engineer. */
 "wallet operation approve transaction website" = "Dapp Website";
 
 /* No comment provided by engineer. */

@@ -2,48 +2,138 @@
   "object": {
     "pins": [
       {
-        "package": "CryptoSwift",
-        "repositoryURL": "https://github.com/krzyzanowskim/CryptoSwift",
+        "package": "Alamofire",
+        "repositoryURL": "https://github.com/Alamofire/Alamofire.git",
         "state": {
           "branch": null,
-          "revision": "4e31051c63cc0ddf10a25cf5318856c510cf77f4",
-          "version": "1.4.0"
+          "revision": "f82c23a8a7ef8dc1a49a8bfc6a96883e79121864",
+          "version": "5.5.0"
         }
       },
       {
-        "package": "PromiseKit",
-        "repositoryURL": "https://github.com/mxcl/PromiseKit",
+        "package": "BigInt",
+        "repositoryURL": "https://github.com/attaswift/BigInt",
         "state": {
           "branch": null,
-          "revision": "d2f7ba14bcdc45e18f4f60ad9df883fb9055f081",
-          "version": "6.15.3"
+          "revision": "0ed110f7555c34ff468e72e1686e59721f2b0da6",
+          "version": "5.3.0"
         }
       },
       {
-        "package": "Starscream",
-        "repositoryURL": "https://github.com/daltoniam/Starscream",
+        "package": "Intercom",
+        "repositoryURL": "https://github.com/intercom/intercom-ios",
         "state": {
           "branch": null,
-          "revision": "e6b65c6d9077ea48b4a7bdda8994a1d3c6969c8d",
-          "version": "3.1.1"
+          "revision": "3345d9e7599141d7c844981423a7e5409f2bfb81",
+          "version": "11.1.2"
         }
       },
       {
-        "package": "swift-nio-zlib-support",
-        "repositoryURL": "https://github.com/apple/swift-nio-zlib-support.git",
+        "package": "NativeUIKit",
+        "repositoryURL": "https://github.com/ivanvorobei/NativeUIKit",
         "state": {
           "branch": null,
-          "revision": "37760e9a52030bb9011972c5213c3350fa9d41fd",
+          "revision": "20a944ec6d8f4ff8a0b45fd0723cc1c72de645f7",
+          "version": "1.3.7"
+        }
+      },
+      {
+        "package": "Nuke",
+        "repositoryURL": "https://github.com/kean/Nuke",
+        "state": {
+          "branch": null,
+          "revision": "78fa963b8491fc520791d8c2a509f1b8593d8aae",
+          "version": "10.7.1"
+        }
+      },
+      {
+        "package": "SPAlert",
+        "repositoryURL": "https://github.com/ivanvorobei/SPAlert",
+        "state": {
+          "branch": null,
+          "revision": "0df499e9f5dc43790ac65f227821acfa7b05b168",
+          "version": "4.2.0"
+        }
+      },
+      {
+        "package": "SparrowKit",
+        "repositoryURL": "https://github.com/ivanvorobei/SparrowKit",
+        "state": {
+          "branch": null,
+          "revision": "93579983cfbacf184ed9a536af14583e5e514832",
+          "version": "3.5.6"
+        }
+      },
+      {
+        "package": "SPDiffable",
+        "repositoryURL": "https://github.com/ivanvorobei/SPDiffable",
+        "state": {
+          "branch": null,
+          "revision": "49d6a86438d0e82efc8da1e0202bceee9b1f5666",
+          "version": "4.0.6"
+        }
+      },
+      {
+        "package": "SPIndicator",
+        "repositoryURL": "https://github.com/ivanvorobei/SPIndicator",
+        "state": {
+          "branch": null,
+          "revision": "17fc8e08b5428e9553f5dea7ebc8c201513a745c",
+          "version": "1.6.4"
+        }
+      },
+      {
+        "package": "SPPageController",
+        "repositoryURL": "https://github.com/ivanvorobei/SPPageController",
+        "state": {
+          "branch": null,
+          "revision": "7d6c9a7cc31f7b1d668125f8bd8047e57621de96",
+          "version": "1.3.2"
+        }
+      },
+      {
+        "package": "SPPermissions",
+        "repositoryURL": "https://github.com/ivanvorobei/SPPermissions",
+        "state": {
+          "branch": null,
+          "revision": "14299050782ac18a40edac8e7369425c13998b68",
+          "version": "7.1.5"
+        }
+      },
+      {
+        "package": "SPPerspective",
+        "repositoryURL": "https://github.com/ivanvorobei/SPPerspective",
+        "state": {
+          "branch": null,
+          "revision": "580ed06a5daec94c5095379971570289b429fa3d",
+          "version": "1.4.1"
+        }
+      },
+      {
+        "package": "SPSafeSymbols",
+        "repositoryURL": "https://github.com/sparrowcode/SPSafeSymbols",
+        "state": {
+          "branch": null,
+          "revision": "9af06f7d21b2b2ad83ce2216506c0ff4ff0c3809",
+          "version": "1.0.5"
+        }
+      },
+      {
+        "package": "SPSettingsIcons",
+        "repositoryURL": "https://github.com/sparrowcode/SPSettingsIcons",
+        "state": {
+          "branch": null,
+          "revision": "15b4bd1c2f870459693bcadf9ed167460dc9bb86",
           "version": "1.0.0"
         }
       },
       {
-        "package": "WalletConnect",
-        "repositoryURL": "https://github.com/WalletConnect/wallet-connect-swift",
+        "package": "SwiftyJSON",
+        "repositoryURL": "https://github.com/SwiftyJSON/SwiftyJSON.git",
         "state": {
-          "branch": "master",
-          "revision": "d4d45e1d94a2b96fb5c2831a1e9d23390f5ac09e",
-          "version": null
+          "branch": null,
+          "revision": "b3dcd7dbd0d488e1a7077cb33b00f2083e382f07",
+          "version": "5.0.1"
         }
       }
     ]

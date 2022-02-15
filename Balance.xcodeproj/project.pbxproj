@@ -151,6 +151,11 @@
 		2CFDDF4E2765417E00F89019 /* ios-specific-content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CFDDF4D2765417D00F89019 /* ios-specific-content.js */; };
 		6EAC8FE927B2D60900F7E4DE /* BlockiesAddressTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EAC8FE827B2D60900F7E4DE /* BlockiesAddressTableViewCell.swift */; };
 		DFC5A10D00631755121FCBE6 /* Pods_Balance_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 29A83FE96A68BB9F154134EF /* Pods_Balance_iOS.framework */; };
+		F1058BCB27B9BA3C004B112D /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1058BCA27B9BA3C004B112D /* Secrets.swift */; };
+		F1058BCC27B9BA3C004B112D /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1058BCA27B9BA3C004B112D /* Secrets.swift */; };
+		F1058BCD27B9BA3C004B112D /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1058BCA27B9BA3C004B112D /* Secrets.swift */; };
+		F1058BCE27B9BA3C004B112D /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1058BCA27B9BA3C004B112D /* Secrets.swift */; };
+		F1058BCF27B9BA3C004B112D /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1058BCA27B9BA3C004B112D /* Secrets.swift */; };
 		F40432D527AAA082001E8F1D /* WalletExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40432D427AAA082001E8F1D /* WalletExtension.swift */; };
 		F42D390727A9657A006DCF5B /* ExtensionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F42D390627A9657A006DCF5B /* ExtensionService.swift */; };
 		F43F0A7C27AD40900099C2C7 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = F43F0A7E27AD40900099C2C7 /* Localizable.strings */; };
@@ -208,11 +213,6 @@
 		F478A37227A15BF600D1398B /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F478A37127A15BF600D1398B /* AuthService.swift */; };
 		F478A37827A16E9800D1398B /* WalletPhracesActionsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F478A37727A16E9800D1398B /* WalletPhracesActionsController.swift */; };
 		F478A37B27A16EE600D1398B /* WalletPhracesActionSegmentButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = F478A37A27A16EE600D1398B /* WalletPhracesActionSegmentButton.swift */; };
-		F4AD49FF27ABD64B00F613AF /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4AD49FE27ABD64B00F613AF /* Secrets.swift */; };
-		F4AD4A0027ABD64B00F613AF /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4AD49FE27ABD64B00F613AF /* Secrets.swift */; };
-		F4AD4A0127ABD64B00F613AF /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4AD49FE27ABD64B00F613AF /* Secrets.swift */; };
-		F4AD4A0227ABD64B00F613AF /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4AD49FE27ABD64B00F613AF /* Secrets.swift */; };
-		F4AD4A0327ABD65E00F613AF /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4AD49FE27ABD64B00F613AF /* Secrets.swift */; };
 		F4B4CD9327A29B9100300582 /* PasswordController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CD9227A29B9100300582 /* PasswordController.swift */; };
 		F4B4CD9527A29DFA00300582 /* AuthController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CD9427A29DFA00300582 /* AuthController.swift */; };
 		F4B4CD9727A2A04D00300582 /* AuthOnboardingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4CD9627A2A04D00300582 /* AuthOnboardingController.swift */; };
@@ -400,6 +400,7 @@
 		97732C86E51B06E7896F9030 /* Pods-Balance iOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Balance iOS.release.xcconfig"; path = "Target Support Files/Pods-Balance iOS/Pods-Balance iOS.release.xcconfig"; sourceTree = "<group>"; };
 		B0F99598E16ED4AD726860D3 /* Pods-Balance.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Balance.release.xcconfig"; path = "Target Support Files/Pods-Balance/Pods-Balance.release.xcconfig"; sourceTree = "<group>"; };
 		C289F6A7A78D99CF20B75732 /* Pods-Balance.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Balance.debug.xcconfig"; path = "Target Support Files/Pods-Balance/Pods-Balance.debug.xcconfig"; sourceTree = "<group>"; };
+		F1058BCA27B9BA3C004B112D /* Secrets.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = Secrets.swift; path = Shared/Secrets.swift; sourceTree = SOURCE_ROOT; };
 		F3B5261B155EF9E06AAD7D4C /* Pods-Balance iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Balance iOS.debug.xcconfig"; path = "Target Support Files/Pods-Balance iOS/Pods-Balance iOS.debug.xcconfig"; sourceTree = "<group>"; };
 		F40432D427AAA082001E8F1D /* WalletExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletExtension.swift; sourceTree = "<group>"; };
 		F42D390627A9657A006DCF5B /* ExtensionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionService.swift; sourceTree = "<group>"; };
@@ -460,7 +461,6 @@
 		F478A37127A15BF600D1398B /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		F478A37727A16E9800D1398B /* WalletPhracesActionsController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletPhracesActionsController.swift; sourceTree = "<group>"; };
 		F478A37A27A16EE600D1398B /* WalletPhracesActionSegmentButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletPhracesActionSegmentButton.swift; sourceTree = "<group>"; };
-		F4AD49FE27ABD64B00F613AF /* Secrets.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		F4B4CD9227A29B9100300582 /* PasswordController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordController.swift; sourceTree = "<group>"; };
 		F4B4CD9427A29DFA00300582 /* AuthController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthController.swift; sourceTree = "<group>"; };
 		F4B4CD9627A2A04D00300582 /* AuthOnboardingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthOnboardingController.swift; sourceTree = "<group>"; };
@@ -528,7 +528,7 @@
 		0A0C549627AB29E0004510F4 /* Supporting Files */ = {
 			isa = PBXGroup;
 			children = (
-				F4AD49FE27ABD64B00F613AF /* Secrets.swift */,
+				F1058BCA27B9BA3C004B112D /* Secrets.swift */,
 			);
 			path = "Supporting Files";
 			sourceTree = "<group>";
@@ -1596,8 +1596,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				2CF255B2275A4A7200AE54B9 /* UserDefaults.swift in Sources */,
+				F1058BCD27B9BA3C004B112D /* Secrets.swift in Sources */,
 				2C773F5E27450B97007B04E7 /* ExtensionBridge.swift in Sources */,
-				F4AD4A0127ABD64B00F613AF /* Secrets.swift in Sources */,
 				2CC8C5AC276A7EF70083FB1B /* EthereumChain.swift in Sources */,
 				2CC8C5B1276A7F310083FB1B /* SafariRequest.swift in Sources */,
 				2C09CBA2273979C1009AD39B /* SafariWebExtensionHandler.swift in Sources */,
@@ -1610,7 +1610,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				2C901C4A2689F01700D0926A /* Strings.swift in Sources */,
-				F4AD49FF27ABD64B00F613AF /* Secrets.swift in Sources */,
 				2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */,
 				2CC0CDBE2692027E0072922A /* PriceService.swift in Sources */,
 				2C8A09C6267513FC00993638 /* Agent.swift in Sources */,
@@ -1639,6 +1638,7 @@
 				2CD0669226B5537B00728C20 /* WalletsManager.swift in Sources */,
 				2CD0B3F726AC619900488D92 /* AddAccountOptionCellView.swift in Sources */,
 				2C8A09E82675960D00993638 /* ErrorViewController.swift in Sources */,
+				F1058BCB27B9BA3C004B112D /* Secrets.swift in Sources */,
 				0D059AD226C2796200EE3023 /* ApprovalSubject.swift in Sources */,
 				2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */,
 				2C8E47A326A322E8007B8354 /* RightClickTableView.swift in Sources */,
@@ -1701,6 +1701,7 @@
 				F468EFF827A00EEE007DD803 /* TabBarController.swift in Sources */,
 				F468F00227A00EEE007DD803 /* BarUsage.swift in Sources */,
 				F468EFF727A00EEE007DD803 /* SideBarSplitController.swift in Sources */,
+				F1058BCC27B9BA3C004B112D /* Secrets.swift in Sources */,
 				2CF2559D275A479800AE54B9 /* TokenaryWallet.swift in Sources */,
 				F468F00027A00EEE007DD803 /* BarRowModel.swift in Sources */,
 				F468EFFC27A00EEE007DD803 /* Presenter+App.swift in Sources */,
@@ -1709,7 +1710,6 @@
 				F478A36527A149F300D1398B /* OnboardingManagerDelegate.swift in Sources */,
 				F4FB72E327A4393D008AFFF3 /* SettingsAppearanceController.swift in Sources */,
 				F468F00327A00EEE007DD803 /* Controllers.swift in Sources */,
-				F4AD4A0027ABD64B00F613AF /* Secrets.swift in Sources */,
 				F478A37027A1541200D1398B /* PhraceCollectionViewCell.swift in Sources */,
 				2CE059492764D69D0042D844 /* SafariWebExtensionHandler.swift in Sources */,
 				2CF2559A275A46E400AE54B9 /* SafariRequest+Helpers.swift in Sources */,
@@ -1797,7 +1797,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2C5FF98E26C8567D00B32ACC /* Tokenary_ScreensaverView.m in Sources */,
-				F4AD4A0327ABD65E00F613AF /* Secrets.swift in Sources */,
+				F1058BCF27B9BA3C004B112D /* Secrets.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1806,8 +1806,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				2CE0594627640F470042D844 /* UserDefaults.swift in Sources */,
+				F1058BCE27B9BA3C004B112D /* Secrets.swift in Sources */,
 				2CE0594327640EAB0042D844 /* ExtensionBridge.swift in Sources */,
-				F4AD4A0227ABD64B00F613AF /* Secrets.swift in Sources */,
 				2CC8C5AD276A7EF80083FB1B /* EthereumChain.swift in Sources */,
 				2CC8C5B2276A7F310083FB1B /* SafariRequest.swift in Sources */,
 				2CE0593F27640E300042D844 /* SafariWebExtensionHandler.swift in Sources */,
