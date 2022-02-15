@@ -133,18 +133,25 @@ class ApproveSendTransactionController: SPDiffableTableController {
         
         // Gas
         
-        let gasItems: [SPDiffableItem] = [
-            SPDiffableTableRowSwitch(
-                id: "ludicrous-mode-row",
-                text: "Ludicrous Mode?",
-                isOn: self.ludicrousMode,
-                action: { (isOn) in
-                    self.ludicrousMode = isOn
-                    self.referenceGasPriceGwei = UInt(ceil(Double(self.referenceGasPriceGwei) * (isOn ? 1.5 : 0.5)))
-                    self.transaction.setGasPrice(value: self.referenceGasPriceGwei * UInt(Constants.Ethereum.Units.gwei))
-                    self.redraw()
-                }
-            ),
+        var gasItems: [SPDiffableItem] = []
+        
+        if (chain != .arbitrum && chain != .arbitrumRinkeby && chain != .optimism && chain != .optimisticKovan) {
+            gasItems.append(
+                SPDiffableTableRowSwitch(
+                    id: "ludicrous-mode-row",
+                    text: "Ludicrous Mode?",
+                    isOn: self.ludicrousMode,
+                    action: { (isOn) in
+                        self.ludicrousMode = isOn
+                        self.referenceGasPriceGwei = UInt(ceil(Double(self.referenceGasPriceGwei) * (isOn ? 1.5 : 0.5)))
+                        self.transaction.setGasPrice(value: self.referenceGasPriceGwei * UInt(Constants.Ethereum.Units.gwei))
+                        self.redraw()
+                    }
+                )
+            )
+        }
+        
+        gasItems.append(
             SPDiffableTableRow(
                 id: "gas-price-row",
                 text: "Gas Price",
@@ -152,8 +159,8 @@ class ApproveSendTransactionController: SPDiffableTableController {
                 accessoryType: .none,
                 selectionStyle: .none,
                 action: nil
-            ),
-        ]
+            )
+        );  
         
         // Data
         
@@ -195,6 +202,8 @@ class ApproveSendTransactionController: SPDiffableTableController {
             )
         )
         
+        // - Sections
+        
         return [
             .init(
                 id: "address",
@@ -213,6 +222,6 @@ class ApproveSendTransactionController: SPDiffableTableController {
                 footer: SPDiffableTextHeaderFooter(text: Texts.Wallet.Operation.approve_transaction_details_footer),
                 items: items
             )
-        ]
+        ];
     }
 }
