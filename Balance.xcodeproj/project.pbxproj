@@ -154,6 +154,7 @@
 		F40432D527AAA082001E8F1D /* WalletExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40432D427AAA082001E8F1D /* WalletExtension.swift */; };
 		F42CF5E827BC11DC008E00DF /* WalletStyleController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F42CF5E727BC11DC008E00DF /* WalletStyleController.swift */; };
 		F42CF5EB27BC12A4008E00DF /* WalletStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = F42CF5EA27BC12A4008E00DF /* WalletStyle.swift */; };
+		F42CF5EE27BC206E008E00DF /* NFTListController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F42CF5ED27BC206E008E00DF /* NFTListController.swift */; };
 		F42D390727A9657A006DCF5B /* ExtensionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F42D390627A9657A006DCF5B /* ExtensionService.swift */; };
 		F434577D27BB83AE00160951 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F434577C27BB83AE00160951 /* Secrets.swift */; };
 		F434577E27BB83AE00160951 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F434577C27BB83AE00160951 /* Secrets.swift */; };
@@ -406,6 +407,7 @@
 		F40432D427AAA082001E8F1D /* WalletExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletExtension.swift; sourceTree = "<group>"; };
 		F42CF5E727BC11DC008E00DF /* WalletStyleController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletStyleController.swift; sourceTree = "<group>"; };
 		F42CF5EA27BC12A4008E00DF /* WalletStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletStyle.swift; sourceTree = "<group>"; };
+		F42CF5ED27BC206E008E00DF /* NFTListController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NFTListController.swift; sourceTree = "<group>"; };
 		F42D390627A9657A006DCF5B /* ExtensionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionService.swift; sourceTree = "<group>"; };
 		F434577C27BB83AE00160951 /* Secrets.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		F43F0A7D27AD40900099C2C7 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
@@ -896,6 +898,14 @@
 			path = Models;
 			sourceTree = "<group>";
 		};
+		F42CF5EC27BC2062008E00DF /* NFT */ = {
+			isa = PBXGroup;
+			children = (
+				F42CF5ED27BC206E008E00DF /* NFTListController.swift */,
+			);
+			path = NFT;
+			sourceTree = "<group>";
+		};
 		F434577B27BB83AE00160951 /* Supporting Files */ = {
 			isa = PBXGroup;
 			children = (
@@ -966,6 +976,7 @@
 		F468EFD427A00EEE007DD803 /* Scenes */ = {
 			isa = PBXGroup;
 			children = (
+				F42CF5EC27BC2062008E00DF /* NFT */,
 				F468F01127A01925007DD803 /* App */,
 				F478A35B27A1468900D1398B /* Home */,
 				F468F00827A012B1007DD803 /* Wallet */,
@@ -1704,6 +1715,7 @@
 				F468EFFB27A00EEE007DD803 /* VerticalContentScrollController.swift in Sources */,
 				F468F02C27A02AC9007DD803 /* AlertService.swift in Sources */,
 				F468EFF927A00EEE007DD803 /* SidebarController.swift in Sources */,
+				F42CF5EE27BC206E008E00DF /* NFTListController.swift in Sources */,
 				F478A35A27A1467600D1398B /* WalletTableViewCell.swift in Sources */,
 				F4B4CD9527A29DFA00300582 /* AuthController.swift in Sources */,
 				F4C9909C27A95C620027286B /* SPDiffableTableDataSourceExtension.swift in Sources */,

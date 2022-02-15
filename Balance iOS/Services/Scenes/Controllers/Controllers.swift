@@ -75,6 +75,11 @@ enum Controllers {
             }
         }
         
+        enum NFT {
+            
+            static var list: UIViewController { NFTListController() }
+        }
+        
         enum Extension {
             
             static func choose_wallet(didSelectWallet: @escaping (TokenaryWallet, EthereumChain, ChooseWalletExtensionResponseController) -> Void) -> ChooseWalletExtensionResponseController {

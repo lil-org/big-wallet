@@ -18,28 +18,32 @@ struct BarRowModel {
     
     enum Item: String, CaseIterable {
         
-        case accounts
+        case wallets
+        case nft
         case settings
         
         var id: String { return rawValue }
         
         var title: String {
             switch self {
-            case .accounts: return Texts.Wallet.wallets
+            case .wallets: return Texts.Wallet.wallets
+            case .nft: return Texts.NFT.title
             case .settings: return Texts.Settings.title
             }
         }
         
         var image: UIImage {
             switch self {
-            case .accounts: return UIImage(SPSafeSymbol.person.fill)
+            case .wallets: return UIImage(SPSafeSymbol.mail.stackFill)
+            case .nft: return UIImage(SPSafeSymbol.square.stack_3dDownRightFill)
             case .settings: return UIImage(SPSafeSymbol.gear)
             }
         }
         
         var controller: UIViewController {
             switch self {
-            case .accounts: return Controllers.Crypto.accounts
+            case .wallets: return Controllers.Crypto.accounts
+            case .nft: return Controllers.Crypto.NFT.list
             case .settings: return Controllers.App.Settings.list
             }
         }

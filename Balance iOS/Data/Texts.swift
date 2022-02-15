@@ -36,6 +36,11 @@ enum Texts {
         }
     }
     
+    enum NFT {
+        
+        static var title: String { NSLocalizedString("nft title", comment: "") }
+    }
+    
     enum Wallet {
         
         static var wallets: String { NSLocalizedString("wallet wallets", comment: "") }
