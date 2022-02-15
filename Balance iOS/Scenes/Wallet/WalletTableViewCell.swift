@@ -24,6 +24,12 @@ class WalletTableViewCell: SPTableViewCell {
         contentView.addSubviews(avatarView, titleLabel, addressLabel)
     }
     
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        titleLabel.text = nil
+        addressLabel.text = nil
+    }
+    
     override func layoutSubviews() {
         super.layoutSubviews()
         avatarView.frame = .init(side: 35)

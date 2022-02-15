@@ -31,8 +31,7 @@ extension TokenaryWallet {
             AF.request(endpoint, method: .post, parameters: parameters, encoding: JSONEncoding.default).response { response in
                 switch response.result {
                 case .success(let data):
-                    if let data = data {
-                        let json = try! JSON(data: data)
+                    if let data = data, let json = try? JSON(data: data) {
                         let value = json["result"].stringValue.removedPrefix("0x")
                         if let amount = BigUInt(value, radix: 16) {
                             completion(formatToPrecision(amount, numberDecimals: 18, formattingDecimals: 18), chain)

@@ -59,6 +59,23 @@ class SettingsController: SPDiffableTableController {
                 ]
             ),
             .init(
+                id: "cell-style",
+                header: SPDiffableTextHeaderFooter(text: Texts.Settings.wallet_style_header),
+                footer: SPDiffableTextHeaderFooter(text: Texts.Settings.wallet_style_footer),
+                items: [
+                    SPDiffableTableRow(
+                        text: Texts.Settings.wallet_style_title,
+                        icon: .generateSettingsIcon(SPSafeSymbol.list.bulletRectangleFill.name, backgroundColor: .systemIndigo),
+                        accessoryType: .disclosureIndicator,
+                        selectionStyle: .default,
+                        action: { item, indexPath in
+                            guard let navigationController = self.navigationController else { return }
+                            Presenter.App.Settings.showWalletStyle(on: navigationController)
+                        }
+                    )
+                ]
+            ),
+            .init(
                 id: "App",
                 header: SPDiffableTextHeaderFooter(text: Texts.Settings.app_header),
                 footer: SPDiffableTextHeaderFooter(text: Texts.Settings.app_footer),

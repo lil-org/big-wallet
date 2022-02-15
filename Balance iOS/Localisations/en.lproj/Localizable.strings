@@ -104,6 +104,24 @@
 "settings title" = "Settings";
 
 /* No comment provided by engineer. */
+"settings wallet style footer" = "You can hide your address and only show the wallet name.";
+
+/* No comment provided by engineer. */
+"settings wallet style header" = "Wallet Style";
+
+/* No comment provided by engineer. */
+"settings wallet style name and address" = "Name & Address";
+
+/* No comment provided by engineer. */
+"settings wallet style only address" = "Only Address";
+
+/* No comment provided by engineer. */
+"settings wallet style only name" = "Only Name";
+
+/* No comment provided by engineer. */
+"settings wallet style title" = "Wallet Style";
+
+/* No comment provided by engineer. */
 "shared cancel" = "Cancel";
 
 /* No comment provided by engineer. */
@@ -245,10 +263,10 @@
 "wallet operation approve transaction gas" = "Gas";
 
 /* No comment provided by engineer. */
-"wallet operation approve transaction value" = "Amount";
+"wallet operation approve transaction gas header" = "Gas Settings";
 
 /* No comment provided by engineer. */
-"wallet operation approve transaction gas header" = "Gas Settings";
+"wallet operation approve transaction value" = "Amount";
 
 /* No comment provided by engineer. */
 "wallet operation approve transaction website" = "Dapp Website";

@@ -199,6 +199,14 @@ enum Texts {
         static var about_twitter: String { NSLocalizedString("settings about twitter", comment: "") }
         static var about_discord: String { NSLocalizedString("settings about discord", comment: "") }
         
+        static var wallet_style_header: String { NSLocalizedString("settings wallet style header", comment: "") }
+        static var wallet_style_footer: String { NSLocalizedString("settings wallet style footer", comment: "") }
+        static var wallet_style_title: String { NSLocalizedString("settings wallet style title", comment: "") }
+        
+        static var wallet_style_only_name: String { NSLocalizedString("settings wallet style only name", comment: "") }
+        static var wallet_style_only_address: String { NSLocalizedString("settings wallet style only address", comment: "") }
+        static var wallet_style_name_address: String { NSLocalizedString("settings wallet style name and address", comment: "") }
+        
         static var about_footer: String { NSLocalizedString("settings about footer", comment: "") }
     }
 }

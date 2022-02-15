@@ -14,63 +14,21 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(
-            name: "BigInt",
-            url: "https://github.com/attaswift/BigInt", .upToNextMajor(from: "5.3.0")
-        ),
-        .package(
-            name: "Alamofire",
-            url: "https://github.com/Alamofire/Alamofire.git", .upToNextMajor(from: "5.4.0")
-        ),
-        .package(
-            name: "SwiftyJSON",
-            url: "https://github.com/SwiftyJSON/SwiftyJSON.git", from: "5.0.0"
-        ),
-        .package(
-            name: "SparrowKit",
-            url: "https://github.com/ivanvorobei/SparrowKit", .upToNextMajor(from: "3.5.2")
-        ),
-        .package(
-            name: "NativeUIKit",
-            url: "https://github.com/ivanvorobei/NativeUIKit", .upToNextMajor(from: "1.3.7")
-        ),
-        .package(
-            name: "SPDiffable",
-            url: "https://github.com/ivanvorobei/SPDiffable", .upToNextMajor(from: "4.0.0")
-        ),
-        .package(
-            name: "SPIndicator",
-            url: "https://github.com/ivanvorobei/SPIndicator", .upToNextMajor(from: "1.6.0")
-        ),
-        .package(
-            name: "SPAlert",
-            url: "https://github.com/ivanvorobei/SPAlert", .upToNextMajor(from: "4.2.0")
-        ),
-        .package(
-            name: "SPPageController",
-            url: "https://github.com/ivanvorobei/SPPageController", .upToNextMajor(from: "1.3.2")
-        ),
-        .package(
-            name: "Nuke",
-            url: "https://github.com/kean/Nuke", .upToNextMajor(from: "10.4.1")
-        ),
-        .package(
-            name: "SPSafeSymbols",
-            url: "https://github.com/sparrowcode/SPSafeSymbols", .upToNextMajor(from: "1.0.5")
-        ),
-        .package(
-            name: "SPSettingsIcons",
-            url: "https://github.com/sparrowcode/SPSettingsIcons", .upToNextMajor(from: "1.0.0")
-        ),
-        .package(
-            name: "SPPermissions",
-            url: "https://github.com/ivanvorobei/SPPermissions", .upToNextMajor(from: "7.1.5")
-        ),
-        .package(
-            name: "Intercom",
-            url: "https://github.com/intercom/intercom-ios", .upToNextMajor(from: "11.1.2")
-        ),
-        .package(name: "Constants", path: "Constants")
+        .package(url: "https://github.com/attaswift/BigInt", .upToNextMajor(from: "5.3.0")),
+        .package(url: "https://github.com/Alamofire/Alamofire.git", .upToNextMajor(from: "5.4.0")),
+        .package(url: "https://github.com/SwiftyJSON/SwiftyJSON.git", from: "5.0.0"),
+        .package(url: "https://github.com/ivanvorobei/SparrowKit", .upToNextMajor(from: "3.5.2")),
+        .package(url: "https://github.com/ivanvorobei/NativeUIKit", .upToNextMajor(from: "1.3.8")),
+        .package(url: "https://github.com/ivanvorobei/SPDiffable", .upToNextMajor(from: "4.0.0")),
+        .package(url: "https://github.com/ivanvorobei/SPIndicator", .upToNextMajor(from: "1.6.0")),
+        .package(url: "https://github.com/ivanvorobei/SPAlert", .upToNextMajor(from: "4.2.0")),
+        .package(url: "https://github.com/ivanvorobei/SPPageController", .upToNextMajor(from: "1.3.2")),
+        .package(url: "https://github.com/kean/Nuke", .upToNextMajor(from: "10.4.1")),
+        .package(url: "https://github.com/sparrowcode/SPSafeSymbols", .upToNextMajor(from: "1.0.5")),
+        .package(url: "https://github.com/sparrowcode/SPSettingsIcons", .upToNextMajor(from: "1.0.0")),
+        .package(url: "https://github.com/ivanvorobei/SPPermissions", .upToNextMajor(from: "7.1.5")),
+        .package(name: "Intercom", url: "https://github.com/intercom/intercom-ios", .upToNextMajor(from: "11.1.2")),
+        .package(path: "Constants")
     ],
     targets: [
         .target(

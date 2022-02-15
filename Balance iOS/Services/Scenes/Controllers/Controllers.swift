@@ -11,6 +11,7 @@ enum Controllers {
             static var list: UIViewController { SettingsController() }
             static var appearance: UIViewController { SettingsAppearanceController() }
             static var languages: UIViewController { SettingsLanguageController() }
+            static var wallet_style: UIViewController { WalletStyleController() }
         }
         
         static var safari_steps: UIViewController { SafariStepsController() }

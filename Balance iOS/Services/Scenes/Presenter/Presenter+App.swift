@@ -32,6 +32,11 @@ extension Presenter {
                 let controller = Controllers.App.Settings.appearance
                 navigationController.pushViewController(controller, completion: nil)
             }
+            
+            static func showWalletStyle(on navigationController: UINavigationController) {
+                let controller = Controllers.App.Settings.wallet_style
+                navigationController.pushViewController(controller, completion: nil)
+            }
         }
     }
 }
