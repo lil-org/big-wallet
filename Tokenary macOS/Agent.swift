@@ -16,8 +16,6 @@ class Agent: NSObject {
     private lazy var statusImage = NSImage(named: "Status")
     
     private let walletConnect = WalletConnect.shared
-    private let walletsManager = WalletsManager.shared
-    private let ethereum = Ethereum.shared
     
     private override init() { super.init() }
     private var statusBarItem: NSStatusItem!
@@ -89,32 +87,28 @@ class Agent: NSObject {
         }
     }
     
-    func showApprove(transaction: Transaction, chain: EthereumChain, peerMeta: PeerMeta?, browser: Browser?, completion: @escaping (Transaction?) -> Void) {
+    func showApprove(transaction: Transaction, chain: EthereumChain, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) {
         let windowController = Window.showNew()
         let approveViewController = ApproveTransactionViewController.with(transaction: transaction, chain: chain, peerMeta: peerMeta) { [weak self] transaction in
             if transaction != nil {
                 self?.askAuthentication(on: windowController.window, onStart: false, reason: .sendTransaction) { success in
                     completion(success ? transaction : nil)
-                    Window.closeAllAndActivateBrowser(force: browser)
                 }
             } else {
-                Window.closeAllAndActivateBrowser(force: browser)
                 completion(nil)
             }
         }
         windowController.contentViewController = approveViewController
     }
     
-    func showApprove(subject: ApprovalSubject, meta: String, peerMeta: PeerMeta?, browser: Browser?, completion: @escaping (Bool) -> Void) {
+    func showApprove(subject: ApprovalSubject, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) {
         let windowController = Window.showNew()
         let approveViewController = ApproveViewController.with(subject: subject, meta: meta, peerMeta: peerMeta) { [weak self] result in
             if result {
                 self?.askAuthentication(on: windowController.window, onStart: false, reason: subject.asAuthenticationReason) { success in
                     completion(success)
-                    Window.closeAllAndActivateBrowser(force: browser)
                 }
             } else {
-                Window.closeAllAndActivateBrowser(force: browser)
                 completion(result)
             }
         }
@@ -301,127 +295,26 @@ class Agent: NSObject {
     }
     
     private func processSafariRequest(_ safariRequest: SafariRequest) {
-        guard ExtensionBridge.hasRequest(id: safariRequest.id) else {
-            respondToSafariRequest(safariRequest, error: Strings.somethingWentWrong)
-            return
+        let action = DappRequestProcessor.processSafariRequest(safariRequest) {
+            Window.closeAllAndActivateBrowser(force: .safari)
         }
-                
-        let peerMeta = PeerMeta(title: safariRequest.host, iconURLString: safariRequest.iconURLString)
-        switch safariRequest.method {
-        case .signPersonalMessage:
-            guard let data = safariRequest.message else {
-                respondToSafariRequest(safariRequest, error: Strings.somethingWentWrong)
-                return
-            }
-            let text = String(data: data, encoding: .utf8) ?? data.hexString
-            showApprove(subject: .signPersonalMessage, meta: text, peerMeta: peerMeta, browser: .safari) { [weak self] approved in
-                if approved {
-                    self?.signPersonalMessage(address: safariRequest.address, data: data, request: safariRequest)
-                } else {
-                    self?.respondToSafariRequest(safariRequest, error: Strings.failedToSign)
-                }
-            }
-        case .requestAccounts, .switchAccount:
+
+        switch action {
+        case .none:
+            break
+        case .selectAccount(let action):
             let windowController = Window.showNew()
             let accountsList = instantiate(AccountsListViewController.self)
-            
-            accountsList.onSelectedWallet = { [weak self] chain, wallet in
-                if let chain = chain, let wallet = wallet, let ethereumAddress = wallet.ethereumAddress {
-                    let response = ResponseToExtension(id: safariRequest.id,
-                                                       name: safariRequest.name,
-                                                       results: [ethereumAddress],
-                                                       chainId: chain.hexStringId,
-                                                       rpcURL: chain.nodeURLString)
-                    ExtensionBridge.respond(id: safariRequest.id, response: response)
-                } else {
-                    self?.respondToSafariRequest(safariRequest, error: Strings.canceled)
-                }
-                Window.closeAllAndActivateBrowser(force: .safari)
-            }
+            accountsList.onSelectedWallet = action.completion
             windowController.contentViewController = accountsList
-        case .signMessage:
-            guard let data = safariRequest.message else {
-                respondToSafariRequest(safariRequest, error: Strings.somethingWentWrong)
-                return
-            }
-            showApprove(subject: .signMessage, meta: data.hexString, peerMeta: peerMeta, browser: .safari) { [weak self] approved in
-                if approved {
-                    self?.signMessage(address: safariRequest.address, data: data, request: safariRequest)
-                } else {
-                    self?.respondToSafariRequest(safariRequest, error: Strings.failedToSign)
-                }
-            }
-        case .signTypedMessage:
-            guard let raw = safariRequest.raw else {
-                respondToSafariRequest(safariRequest, error: Strings.somethingWentWrong)
-                return
-            }
-            showApprove(subject: .signTypedData, meta: raw, peerMeta: peerMeta, browser: .safari) { [weak self] approved in
-                if approved {
-                    self?.signTypedData(address: safariRequest.address, raw: raw, request: safariRequest)
-                } else {
-                    self?.respondToSafariRequest(safariRequest, error: Strings.failedToSign)
-                }
-            }
-        case .signTransaction:
-            guard let transaction = safariRequest.transaction, let chain = safariRequest.chain else {
-                respondToSafariRequest(safariRequest, error: Strings.somethingWentWrong)
-                return
-            }
-            showApprove(transaction: transaction, chain: chain, peerMeta: peerMeta, browser: .safari) { [weak self] transaction in
-                if let transaction = transaction {
-                    self?.sendTransaction(transaction, address: safariRequest.address, chain: chain, request: safariRequest)
-                } else {
-                    self?.respondToSafariRequest(safariRequest, error: Strings.canceled)
-                }
-            }
-        case .ecRecover:
-            if let (signature, message) = safariRequest.signatureAndMessage,
-               let recovered = ethereum.recover(signature: signature, message: message) {
-                ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(id: safariRequest.id, name: safariRequest.name, result: recovered))
-            } else {
-                respondToSafariRequest(safariRequest, error: Strings.failedToVerify)
-            }
-            Window.closeAllAndActivateBrowser(force: .safari)
-        case .switchEthereumChain, .addEthereumChain, .watchAsset:
-            Window.closeAllAndActivateBrowser(force: .safari)
-        }
-    }
-    
-    private func respondToSafariRequest(_ safariRequest: SafariRequest, error: String) {
-        ExtensionBridge.respond(id: safariRequest.id, response: ResponseToExtension(id: safariRequest.id, name: safariRequest.name, error: error))
-    }
-    
-    private func sendTransaction(_ transaction: Transaction, address: String, chain: EthereumChain, request: SafariRequest) {
-        if let wallet = walletsManager.getWallet(address: address),
-           let transactionHash = try? ethereum.send(transaction: transaction, wallet: wallet, chain: chain) {
-            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(id: request.id, name: request.name, result: transactionHash))
-        } else {
-            respondToSafariRequest(request, error: Strings.failedToSend)
-        }
-    }
-    
-    private func signTypedData(address: String, raw: String, request: SafariRequest) {
-        if let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.sign(typedData: raw, wallet: wallet) {
-            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(id: request.id, name: request.name, result: signed))
-        } else {
-            respondToSafariRequest(request, error: Strings.failedToSign)
-        }
-    }
-    
-    private func signMessage(address: String, data: Data, request: SafariRequest) {
-        if let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.sign(data: data, wallet: wallet) {
-            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(id: request.id, name: request.name, result: signed))
-        } else {
-            respondToSafariRequest(request, error: Strings.failedToSign)
-        }
-    }
-    
-    private func signPersonalMessage(address: String, data: Data, request: SafariRequest) {
-        if let wallet = walletsManager.getWallet(address: address), let signed = try? ethereum.signPersonalMessage(data: data, wallet: wallet) {
-            ExtensionBridge.respond(id: request.id, response: ResponseToExtension(id: request.id, name: request.name, result: signed))
-        } else {
-            respondToSafariRequest(request, error: Strings.failedToSign)
+        case .approveMessage(let action):
+            showApprove(subject: action.subject, meta: action.meta, peerMeta: action.peerMeta, completion: action.completion)
+        case .approveTransaction(let action):
+            showApprove(transaction: action.transaction, chain: action.chain, peerMeta: action.peerMeta, completion: action.completion)
+        case .justShowApp:
+            let windowController = Window.showNew()
+            let accountsList = instantiate(AccountsListViewController.self)
+            windowController.contentViewController = accountsList
         }
     }
     

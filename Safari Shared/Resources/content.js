@@ -88,44 +88,56 @@ if (shouldInjectProvider()) {
 function getLatestConfiguration() {
     const storageItem = browser.storage.local.get(window.location.host);
     storageItem.then((storage) => {
+        var response = {};
+        
         const latest = storage[window.location.host];
-        var response = {results: [], chainId: "", name: "didLoadLatestConfiguration", rpcURL: ""};
-        if (typeof latest !== "undefined" && "results" in latest && latest.results.length > 0 && latest.rpcURL.length > 0) {
-            response.results = latest.results;
-            response.chainId = latest.chainId;
-            response.rpcURL = latest.rpcURL;
+        if (typeof latest !== "undefined") {
+            response = latest;
         }
-        const id = new Date().getTime() + Math.floor(Math.random() * 1000);
+        
+        response.name = "didLoadLatestConfiguration";
+        const id = genId();
         window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
     });
 }
 
 function storeConfigurationIfNeeded(request) {
-    if (window.location.host.length > 0 && (request.name == "requestAccounts" || request.name == "switchAccount" || request.name == "switchEthereumChain" || request.name == "addEthereumChain")) {
-        const latest = {results: request.results, chainId: request.chainId, rpcURL: request.rpcURL};
+    if (window.location.host.length > 0 && "configurationToStore" in request) {
+        const latest = request.configurationToStore;
         browser.storage.local.set( {[window.location.host]: latest});
     }
 }
 
-function processInpageMessage(message) {
+function sendToInpage(response, id) {
+    pendingRequestsIds.delete(id);
+    window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
+    storeConfigurationIfNeeded(response);
+}
+
+function sendMessageToNativeApp(message) {
+    message.favicon = getFavicon();
+    message.host = window.location.host;
     pendingRequestsIds.add(message.id);
-    browser.runtime.sendMessage({ subject: "process-inpage-message", message: message }).then((response) => {
-        pendingRequestsIds.delete(message.id);
-        window.postMessage({direction: "from-content-script", response: response, id: message.id}, "*");
-        storeConfigurationIfNeeded(response);
+    browser.runtime.sendMessage({ subject: "message-to-wallet", message: message }).then((response) => {
+        sendToInpage(response, message.id);
     });
+    platformSpecificProcessMessage(message); // iOS opens app here
+}
+
+function didTapExtensionButton() {
+    const id = genId();
+    const message = {name: "switchAccount", id: id, provider: "unknown", body: {}};
+    // TODO: pass current network id for ethereum. or maybe just pass latestConfiguration here as well
+    sendMessageToNativeApp(message);
 }
 
 // Receive from background
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if ("proxy" in request) {
-        pendingRequestsIds.add(request.id);
-        platformSpecificProcessMessage(request); // iOS opens app here
+    if ("didTapExtensionButton" in request) {
+        didTapExtensionButton();
     } else {
         if (pendingRequestsIds.has(request.id)) {
-            pendingRequestsIds.delete(request.id);
-            window.postMessage({direction: "from-content-script", response: request, id: request.id}, "*");
-            storeConfigurationIfNeeded(request);
+            sendToInpage(request, request.id);
             browser.runtime.sendMessage({ subject: "activateTab" });
         }
     }
@@ -134,9 +146,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // Receive from inpage
 window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "from-page-script") {
-        event.data.message.favicon = getFavicon();
-        processInpageMessage(event.data.message);
-        platformSpecificProcessMessage(event.data.message); // iOS opens app here
+        sendMessageToNativeApp(event.data.message);
     }
 });
 
@@ -148,4 +158,8 @@ var getFavicon = function() {
         }
     }
     return "";
+}
+
+function genId() {
+    return new Date().getTime() + Math.floor(Math.random() * 1000);
 }

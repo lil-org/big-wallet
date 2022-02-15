@@ -2,7 +2,7 @@
 
 import Foundation
 
-extension SafariRequest {
+extension SafariRequest.Ethereum {
     
     var message: Data? {
         if let hexString = parameters?["data"] as? String,
@@ -39,7 +39,7 @@ extension SafariRequest {
             return nil
         }
     }
-
+    
     var raw: String? {
         return parameters?["raw"] as? String
     }
