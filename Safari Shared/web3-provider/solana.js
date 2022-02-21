@@ -19,21 +19,12 @@ class TokenarySolana extends EventEmitter {
         this.callbacks = new Map();
 
         this.isPhantom = true;
-        this.publicKey = new PublicKey("26qv4GCcx98RihuK3c4T6ozB3J7L6VwCuFVc7Ta2A3Uo"); // should be null initially
+        this.publicKey = null;
         this.isConnected = false;
         this.isTokenary = true;
-        this.emitConnect();
 
         this.didGetLatestConfiguration = false;
         this.pendingPayloads = [];
-
-        const originalOn = this.on;
-        this.on = (...args) => {
-            if (args[0] == "connect") {
-                setTimeout( function() { window.solana.emitConnect(); }, 1);
-            }
-            return originalOn.apply(this, args);
-        };
     }
 
     connect() {
