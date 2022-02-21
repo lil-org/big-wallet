@@ -6,6 +6,12 @@ extension ResponseToExtension {
     
     struct Solana: Codable {
         
+        let publicKey: String?
+        
+        init(publicKey: String?) {
+            self.publicKey = publicKey
+        }
+        
     }
 
 }
