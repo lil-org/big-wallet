@@ -151,12 +151,6 @@ class TokenarySolana extends EventEmitter {
     sendResponse(id, result) {
         let originId = this.idMapping.tryPopId(id) || id;
         let callback = this.callbacks.get(id);
-        let data = { jsonrpc: "2.0", id: originId };
-        if (typeof result === "object" && result.jsonrpc && result.result) {
-            data.result = result.result;
-        } else {
-            data.result = result;
-        }
         if (callback) {
             callback(null, result);
             this.callbacks.delete(id);
