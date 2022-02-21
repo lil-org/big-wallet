@@ -18,7 +18,10 @@ extension SafariRequest {
         }
         
         var responseUpdatesStoredConfiguration: Bool {
-            return false
+            switch method {
+            case .connect:
+                return true
+            }
         }
         
     }
