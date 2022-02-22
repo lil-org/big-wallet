@@ -28,10 +28,12 @@ class TokenarySolana extends EventEmitter {
     }
 
     connect() {
-        return this._request({method: "connect"});
+        return this.request({method: "connect"});
     }
 
-    disconnect() {}
+    disconnect() {
+        // support also via request "disconnect" method
+    }
 
     // provider.on("accountChanged", (publicKey: PublicKey | null));
     // TODO: support emitting accountChanged (on switch account event)
@@ -57,34 +59,6 @@ class TokenarySolana extends EventEmitter {
     }
 
     request(payload) {
-        // Support connecting via request
-        // also "disconnect"
-//        payload.method == "connect"
-
-        // signAndSendTransaction request usage example
-//        const transaction = new Transaction();
-//        const { signature } = await window.solana.request({
-//            method: "signAndSendTransaction",
-//            params: {
-//                 message: bs58.encode(transaction.serializeMessage()),
-//            },
-//        });
-
-        // signMessage request usage example
-//        const signedMessage = await window.solana.request({
-//            method: "signMessage",
-//            params: {
-//                 message: encodedMessage,
-//                 display: "hex",
-//            },
-//        });
-
-        console.log("yo solana request");
-        console.log(payload);
-        return this._request(payload);
-    }
-
-    _request(payload) {
         this.idMapping.tryIntifyId(payload);
         return new Promise((resolve, reject) => {
             if (!payload.id) {
@@ -103,7 +77,7 @@ class TokenarySolana extends EventEmitter {
             });
             switch (payload.method) {
                 case "connect":
-                    return this._processPayload(payload);
+                    return this.processPayload(payload);
                 default:
                     this.callbacks.delete(payload.id);
                     return this.rpc
@@ -114,9 +88,27 @@ class TokenarySolana extends EventEmitter {
                     .catch(reject);
             }
         });
+        
+        // signAndSendTransaction request usage example
+//        const transaction = new Transaction();
+//        const { signature } = await window.solana.request({
+//            method: "signAndSendTransaction",
+//            params: {
+//                 message: bs58.encode(transaction.serializeMessage()),
+//            },
+//        });
+
+        // signMessage request usage example
+//        const signedMessage = await window.solana.request({
+//            method: "signMessage",
+//            params: {
+//                 message: encodedMessage,
+//                 display: "hex",
+//            },
+//        });
     }
     
-    _processPayload(payload) {
+    processPayload(payload) {
         if (!this.didGetLatestConfiguration) {
             this.pendingPayloads.push(payload);
             return;
@@ -147,7 +139,7 @@ class TokenarySolana extends EventEmitter {
             }
             
             for(let payload of this.pendingPayloads) {
-                this._processPayload(payload);
+                this.processPayload(payload);
             }
             
             this.pendingPayloads = [];
