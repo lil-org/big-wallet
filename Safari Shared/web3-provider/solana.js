@@ -28,14 +28,7 @@ class TokenarySolana extends EventEmitter {
     }
 
     connect() {
-        
-        // TODO: process with request function
-        
-        this.postMessage("connect", 69, {});
-        // TODO: should either respond with a latest account or request account from user
-        this.isConnected = true; // TODO: should set to true only after successful account selection
-        const publicKey = new PublicKey("26qv4GCcx98RihuK3c4T6ozB3J7L6VwCuFVc7Ta2A3Uo");
-        return Promise.resolve({ publicKey: publicKey });
+        return this._request({method: "connect"});
     }
 
     disconnect() {}
@@ -113,13 +106,8 @@ class TokenarySolana extends EventEmitter {
                 }, 1);
             });
             switch (payload.method) {
-                case "eth_accounts":
-                case "eth_sign":
-                case "eth_requestAccounts":
+                case "connect":
                     return this._processPayload(payload);
-                case "eth_newFilter":
-                case "eth_newBlockFilter":
-                    throw new ProviderRpcError(4200, `Tokenary does not support calling ${payload.method}. Please use your own solution`);
                 default:
                     this.callbacks.delete(payload.id);
                     return this.rpc
@@ -131,13 +119,52 @@ class TokenarySolana extends EventEmitter {
             }
         });
     }
+    
+    _processPayload(payload) {
+        if (!this.didGetLatestConfiguration) {
+            this.pendingPayloads.push(payload);
+            return;
+        }
+        
+        switch (payload.method) {
+            case "connect":
+                if (!this.publicKey) {
+                    return this.postMessage("connect", payload.id, {});
+                } else {
+                    this.isConnected = true;
+                    this.emitConnect();
+                    return this.sendResponse(payload.id, {publicKey: this.publicKey});
+                }
+        }
+    }
 
     emitConnect() {
         this.emit("connect");
     }
 
     processTokenaryResponse(response) {
-
+        if (response.name == "didLoadLatestConfiguration") {
+            this.didGetLatestConfiguration = true;
+            if ("publicKey" in response) { // TODO: validate non-empty?
+                const publicKey = new PublicKey(response.publicKey);
+                this.publicKey = publicKey;
+            }
+            
+            for(let payload of this.pendingPayloads) {
+                this._processPayload(payload);
+            }
+            
+            this.pendingPayloads = [];
+            return;
+        }
+        
+        if ("publicKey" in response) { // TODO: validate non-empty?
+            this.isConnected = true;
+            const publicKey = new PublicKey(response.publicKey);
+            this.publicKey = publicKey;
+            this.sendResponse(response.id, {publicKey: publicKey});
+            this.emitConnect();
+        }
     }
 
     postMessage(handler, id, data) {
