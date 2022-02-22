@@ -25,17 +25,18 @@ window.solana = new TokenarySolana();
 window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "from-content-script") {
         const response = event.data.response;
+        const id = event.data.id;
         switch (response.provider) {
             case "ethereum":
-                window.ethereum.processTokenaryResponse(response);
+                window.ethereum.processTokenaryResponse(id, response); // TODO: pass id as a separate variable
                 break;
             case "solana":
-                window.solana.processTokenaryResponse(response);
+                window.solana.processTokenaryResponse(id, response);
                 break;
             default:
                 // pass unknown provider message to all providers 
-                window.ethereum.processTokenaryResponse(response);
-                window.solana.processTokenaryResponse(response);
+                window.ethereum.processTokenaryResponse(id, response);
+                window.solana.processTokenaryResponse(id, response);
         }
     }
 });
