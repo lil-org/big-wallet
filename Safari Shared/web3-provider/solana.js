@@ -33,10 +33,6 @@ class TokenarySolana extends EventEmitter {
 
     disconnect() {}
 
-    setAddress(address) {
-
-    }
-
     // provider.on("accountChanged", (publicKey: PublicKey | null));
     // TODO: support emitting accountChanged (on switch account event)
 
