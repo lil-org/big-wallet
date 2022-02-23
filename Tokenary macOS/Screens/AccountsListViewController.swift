@@ -11,9 +11,9 @@ class AccountsListViewController: NSViewController {
     private var chain = EthereumChain.ethereum
     private var didCallCompletion = false
     var onSelectedWallet: ((EthereumChain?, TokenaryWallet?) -> Void)?
-    var newWalletId: String?
+    var newWalletId: String? // такого на айосе нет
     
-    enum CellModel {
+    enum CellModel { // модель ячейки?
         case wallet
         case addAccountOption(AddAccountOption)
     }
@@ -83,7 +83,7 @@ class AccountsListViewController: NSViewController {
             onSelectedWallet?(chain, wallet)
         }
     }
-    
+    // создается меню при нажатии
     private func setupAccountsMenu() {
         let menu = NSMenu()
         menu.delegate = self
@@ -227,6 +227,8 @@ class AccountsListViewController: NSViewController {
         alert.alertStyle = .critical
         alert.addButton(withTitle: Strings.removeAnyway)
         alert.addButton(withTitle: Strings.cancel)
+        // все что вызывается в модалке
+        //  - надо оборачивать в отдельные вызовы
         if alert.runModal() == .alertFirstButtonReturn {
             agent.askAuthentication(on: view.window, getBackTo: self, onStart: false, reason: .removeAccount) { [weak self] allowed in
                 Window.activateWindow(self?.view.window)

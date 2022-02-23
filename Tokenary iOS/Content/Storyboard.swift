@@ -7,5 +7,7 @@ enum Storyboard: String {
 }
 
 func instantiate<ViewController: UIViewController>(_ type: ViewController.Type, from storyboard: Storyboard) -> ViewController {
-    return UIStoryboard(name: storyboard.rawValue.withFirstLetterCapitalized, bundle: nil).instantiateViewController(withIdentifier: String(describing: type)) as! ViewController
+    return UIStoryboard(
+        name: storyboard.rawValue.withFirstLetterCapitalized, bundle: nil
+    ).instantiateViewController(withIdentifier: String(describing: type)) as! ViewController
 }

@@ -18,14 +18,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     override init() {
         super.init()
         let manager = NSAppleEventManager.shared()
-        manager.setEventHandler(self, andSelector: #selector(self.getUrl(_:withReplyEvent:)),
-                                forEventClass: AEEventClass(kInternetEventClass),
-                                andEventID: AEEventID(kAEGetURL))
+        manager.setEventHandler(
+            self,
+            andSelector: #selector(self.getUrl(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
     }
     
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        return false
-    }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     
     @objc private func getUrl(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
         processInput(url: event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue)

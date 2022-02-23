@@ -3,6 +3,7 @@
 import UIKit
 
 protocol KeyboardObserver: UIResponder {
+    /// Always called on main queue
     func keyboardWill(show: Bool, height: CGFloat, animtaionOptions: UIView.AnimationOptions, duration: Double)
 }
 

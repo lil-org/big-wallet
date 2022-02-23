@@ -58,8 +58,10 @@ class ApproveViewController: UIViewController {
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
-        LocalAuthentication.attempt(reason: approveTitle, presentPasswordAlertFrom: self, passwordReason: approveTitle) { [weak self] success in
-            if success {
+        LocalAuthentication.attempt(
+            reason: approveTitle, presentPasswordAlertFrom: self, passwordReason: approveTitle
+        ) { [weak self] isSuccessful in
+            if isSuccessful {
                 self?.completion(true)
             }
         }

@@ -35,3 +35,9 @@ staging/
 
 # Log Files
 *.log
+
+# Bundler deps
+vendor/
+
+# Secrets
+Shared/Supporting\ Files/Secrets-prod.swift

@@ -48,11 +48,9 @@ class DataStateView: UIView {
         let view = loadNib(DataStateView.self)
         view.tag = tag
         view.isHidden = true
-        view.observeKeyboard()
         return view
     }
     
-    fileprivate var shouldMoveWithKeyboard = true
     fileprivate var currentState = DataState.unknown {
         didSet { updateForCurrentState() }
     }
@@ -110,25 +108,6 @@ class DataStateView: UIView {
     
 }
 
-extension DataStateView: KeyboardObserver {
-    
-    func keyboardWill(show: Bool, height: CGFloat, animtaionOptions: UIView.AnimationOptions, duration: Double) {
-        guard shouldMoveWithKeyboard else { return }
-        let centerOffset: CGFloat = show ? -105 : -50
-
-        UIView.animate(withDuration: duration,
-            delay: 0,
-            options: animtaionOptions,
-            animations: { [weak self] in
-                self?.centerYConstraint.constant = centerOffset
-                self?.layoutIfNeeded()
-            },
-            completion: nil
-        )
-    }
-    
-}
-
 extension DataStateContainer where Self: UIViewController {
     
     var dataState: DataState {
@@ -138,10 +117,6 @@ extension DataStateContainer where Self: UIViewController {
         set {
             dataStateView.currentState = newValue
         }
-    }
-    
-    func dataStateShouldMoveWithKeyboard(_ shouldMove: Bool) {
-        dataStateView.shouldMoveWithKeyboard = shouldMove
     }
     
     func setDataStateViewTransparent(_ isTransparent: Bool) {

@@ -37,12 +37,12 @@ struct ExtensionBridge {
     }
     
     static func removeResponse(id: Int) {
-        let key = key(id: id)
+        let key = ExtensionBridge.key(id: id)
         defaults?.removeObject(forKey: key)
     }
     
     static func getResponse(id: Int) -> ResponseToExtension? {
-        let key = key(id: id)
+        let key = ExtensionBridge.key(id: id)
         if let response = defaults?.codableValue(type: ResponseToExtension.self, forKey: key) {
             return response
         } else {

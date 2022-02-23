@@ -14,13 +14,13 @@ class AccountTableViewCell: UITableViewCell {
     private weak var cellDelegate: AccountTableViewCellDelegate?
     @IBOutlet weak var avatarImageView: UIImageView!
     @IBOutlet weak var titleLabel: UILabel!
-    
+    // просто сетапит ячейку
     func setup(address: String, delegate: AccountTableViewCellDelegate) {
         cellDelegate = delegate
         avatarImageView.image = Blockies(seed: address.lowercased()).createImage()
         titleLabel.text = address.trimmedAddress
     }
-    
+    // при нажатии на more
     @IBAction func moreButtonTapped(_ sender: Any) {
         cellDelegate?.didTapMoreButton(accountCell: self)
     }

@@ -77,13 +77,19 @@ class PasswordViewController: UIViewController {
     }
     
     private func askForLocalAuthentication() {
-        LocalAuthentication.attempt(reason: Strings.enterTokenary, presentPasswordAlertFrom: nil, passwordReason: nil) { [weak self] success in
-            if success {
-                self?.showAccountsList()
-            } else {
-                self?.didFailLocalAuthentication()
-            }
-        }
+        let a = AccountsListAssembly.build(for: .mainScreen)
+//        self.present(a, animated: true)
+        let b = a.inNavigationController
+        b.setNavigationBarHidden(true, animated: false)
+        UIApplication.shared.replaceRootViewController(with: b)
+        
+//        LocalAuthentication.attempt(reason: Strings.enterTokenary, presentPasswordAlertFrom: nil, passwordReason: nil) { [weak self] success in
+//            if success {
+//                self?.showAccountsList()
+//            } else {
+//                self?.didFailLocalAuthentication()
+//            }
+//        }
     }
     
     private func didFailLocalAuthentication() {
