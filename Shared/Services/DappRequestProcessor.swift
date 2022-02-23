@@ -43,7 +43,8 @@ struct DappRequestProcessor {
                 let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
                 let action = SignMessageAction(provider: request.provider, subject: .signMessage, address: body.publicKey, meta: "Solana message", peerMeta: peerMeta) { approved in
                     if approved {
-                        respond(to: request, error: "hehe", completion: completion)
+                        let responseBody = ResponseToExtension.Solana(result: "hehe")
+                        respond(to: request, body: .solana(responseBody), completion: completion)
                     } else {
                         respond(to: request, error: Strings.failedToSign, completion: completion)
                     }

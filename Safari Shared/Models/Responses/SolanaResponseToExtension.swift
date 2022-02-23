@@ -7,9 +7,11 @@ extension ResponseToExtension {
     struct Solana: Codable {
         
         let publicKey: String?
+        let result: String?
         
-        init(publicKey: String?) {
+        init(publicKey: String? = nil, result: String? = nil) {
             self.publicKey = publicKey
+            self.result = result
         }
         
     }
