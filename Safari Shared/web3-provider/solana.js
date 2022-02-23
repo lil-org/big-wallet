@@ -62,9 +62,11 @@ class TokenarySolana extends EventEmitter {
     }
 
     signMessage(encodedMessage, display) {
-//        display == "utf8"
-        // i've seen undefined display as well
-        // const signedMessage = await window.solana.signMessage(encodedMessage, "utf8");
+        var params = {message: encodedMessage};
+        if (typeof display !== "undefined") {
+            params.display = display;
+        }
+        return this.request({method: "signMessage", params: params});
     }
 
     request(payload) {
@@ -86,6 +88,7 @@ class TokenarySolana extends EventEmitter {
             });
             switch (payload.method) {
                 case "connect":
+                case "signMessage":
                     return this.processPayload(payload);
                 default:
                     this.callbacks.delete(payload.id);
@@ -132,6 +135,8 @@ class TokenarySolana extends EventEmitter {
                     this.emitConnect();
                     return this.sendResponse(payload.id, {publicKey: this.publicKey});
                 }
+            case "signMessage":
+                return this.postMessage("signMessage", payload.id, payload);
         }
     }
 
@@ -161,6 +166,10 @@ class TokenarySolana extends EventEmitter {
             this.publicKey = publicKey;
             this.sendResponse(id, {publicKey: publicKey});
             this.emitConnect();
+        }
+        
+        if ("result" in response) {
+            this.sendResponse(id, response.result);
         }
     }
 

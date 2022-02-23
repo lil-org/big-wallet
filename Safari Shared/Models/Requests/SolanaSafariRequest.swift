@@ -7,7 +7,7 @@ extension SafariRequest {
     struct Solana: SafariRequestBody {
         
         enum Method: String, Decodable, CaseIterable {
-            case connect
+            case connect, signMessage
         }
         
         let method: Method
@@ -21,6 +21,8 @@ extension SafariRequest {
             switch method {
             case .connect:
                 return true
+            case .signMessage:
+                return false
             }
         }
         

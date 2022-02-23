@@ -39,6 +39,9 @@ struct DappRequestProcessor {
             case .connect:
                 let responseBody = ResponseToExtension.Solana(publicKey: "26qv4GCcx98RihuK3c4T6ozB3J7L6VwCuFVc7Ta2A3Uo")
                 respond(to: request, body: .solana(responseBody), completion: completion)
+            case .signMessage:
+                // TODO: sign message
+                return .justShowApp
             }
         case .tezos:
             respond(to: request, error: "Tezos is not supported yet", completion: completion)
