@@ -157,26 +157,28 @@ class TokenarySolana extends EventEmitter {
             }
             
             this.pendingPayloads = [];
-            return;
-        }
-        
-        if ("publicKey" in response) { // TODO: validate non-empty?
+        } else if ("publicKey" in response) { // TODO: validate non-empty?
             this.isConnected = true;
             const publicKey = new PublicKey(response.publicKey);
             this.publicKey = publicKey;
             this.sendResponse(id, {publicKey: publicKey});
             this.emitConnect();
-        }
-        
-        if ("result" in response) {
+        } else if ("result" in response) {
             this.sendResponse(id, response.result);
+        } else if ("error" in response) {
+            this.sendError(id, response.error);
         }
     }
 
     postMessage(handler, id, data) {
+        var publicKey = "";
+        if (this.publicKey) {
+            publicKey = this.publicKey.toString();
+        }
+        
         let object = {
             object: data,
-            publicKey: "", // pass current public key if available
+            publicKey: publicKey,
         };
         window.tokenary.postMessage(handler, id, object, "solana");
     }

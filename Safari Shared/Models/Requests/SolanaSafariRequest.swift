@@ -11,10 +11,16 @@ extension SafariRequest {
         }
         
         let method: Method
+        let publicKey: String
+        let parameters: [String: Any]?
         
         init?(name: String, json: [String: Any]) {
-            guard let method = Method(rawValue: name) else { return nil }
+            guard let method = Method(rawValue: name),
+                  let publicKey = json["publicKey"] as? String else { return nil }
             self.method = method
+            self.publicKey = publicKey
+            let parameters = json["object"] as? [String: Any]
+            self.parameters = parameters
         }
         
         var responseUpdatesStoredConfiguration: Bool {

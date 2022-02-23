@@ -40,8 +40,15 @@ struct DappRequestProcessor {
                 let responseBody = ResponseToExtension.Solana(publicKey: "26qv4GCcx98RihuK3c4T6ozB3J7L6VwCuFVc7Ta2A3Uo")
                 respond(to: request, body: .solana(responseBody), completion: completion)
             case .signMessage:
-                // TODO: sign message
-                return .justShowApp
+                let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
+                let action = SignMessageAction(provider: request.provider, subject: .signMessage, address: body.publicKey, meta: "Solana message", peerMeta: peerMeta) { approved in
+                    if approved {
+                        respond(to: request, error: "hehe", completion: completion)
+                    } else {
+                        respond(to: request, error: Strings.failedToSign, completion: completion)
+                    }
+                }
+                return .approveMessage(action)
             }
         case .tezos:
             respond(to: request, error: "Tezos is not supported yet", completion: completion)
