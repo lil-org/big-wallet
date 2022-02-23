@@ -12,42 +12,45 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     func beginRequest(with context: NSExtensionContext) {
         guard let item = context.inputItems[0] as? NSExtensionItem,
               let message = item.userInfo?[SFExtensionMessageKey],
-              let id = (message as? [String: Any])?["id"] as? Int else { return }
+              let data = try? JSONSerialization.data(withJSONObject: message, options: []) else { return }
         
-        let subject = (message as? [String: Any])?["subject"] as? String
-        if subject == "getResponse" {
-            #if !os(macOS)
-            if let response = ExtensionBridge.getResponse(id: id) {
-                self.context = context
-                respond(with: response)
+        let jsonDecoder = JSONDecoder()
+        if let internalSafariRequest = try? jsonDecoder.decode(InternalSafariRequest.self, from: data) {
+            let id = internalSafariRequest.id
+            switch internalSafariRequest.subject {
+            case .getResponse:
+                #if !os(macOS)
+                if let response = ExtensionBridge.getResponse(id: id) {
+                    self.context = context
+                    respond(with: response)
+                    ExtensionBridge.removeResponse(id: id)
+                }
+                #else
+                break
+                #endif
+            case .didCompleteRequest:
                 ExtensionBridge.removeResponse(id: id)
             }
-            #endif
-        } else if subject == "didCompleteRequest" {
-            ExtensionBridge.removeResponse(id: id)
-        } else if let data = try? JSONSerialization.data(withJSONObject: message, options: []),
-                  let query = String(data: data, encoding: .utf8)?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+        } else if let query = String(data: data, encoding: .utf8)?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                   let request = SafariRequest(query: query),
                   let url = URL(string: "tokenary://safari?request=\(query)") {
             self.context = context
-            if request.method == .switchEthereumChain || request.method == .addEthereumChain {
-                if let chain = request.switchToChain {
-                    let response = ResponseToExtension(id: request.id,
-                                                       name: request.name,
-                                                       results: [request.address],
-                                                       chainId: chain.hexStringId,
-                                                       rpcURL: chain.nodeURLString)
-                    respond(with: response)
+            if case let .ethereum(ethereumRequest) = request.body,
+               ethereumRequest.method == .switchEthereumChain || ethereumRequest.method == .addEthereumChain {
+                if let chain = ethereumRequest.switchToChain {
+                    let responseBody = ResponseToExtension.Ethereum(results: [ethereumRequest.address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
+                    let response = ResponseToExtension(for: request, body: .ethereum(responseBody))
+                    respond(with: response.json)
                 } else {
-                    let response = ResponseToExtension(id: request.id, name: request.name, error: "Failed to switch chain")
-                    respond(with: response)
+                    let response = ResponseToExtension(for: request, error: "Failed to switch chain")
+                    respond(with: response.json)
                 }
             } else {
-                ExtensionBridge.makeRequest(id: id)
+                ExtensionBridge.makeRequest(id: request.id)
                 #if os(macOS)
                 NSWorkspace.shared.open(url)
                 #endif
-                poll(id: id)
+                poll(id: request.id)
             }
         }
     }
@@ -65,9 +68,9 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         }
     }
     
-    private func respond(with response: ResponseToExtension) {
+    private func respond(with response: [String: AnyHashable]) {
         let item = NSExtensionItem()
-        item.userInfo = [SFExtensionMessageKey: response.json]
+        item.userInfo = [SFExtensionMessageKey: response]
         context?.completeRequest(returningItems: [item], completionHandler: nil)
         context = nil
     }
