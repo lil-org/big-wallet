@@ -38,6 +38,14 @@ class TokenarySolana extends EventEmitter {
     // provider.on("accountChanged", (publicKey: PublicKey | null));
     // TODO: support emitting accountChanged (on switch account event)
 
+    signTransaction(transaction) {
+        
+    }
+    
+    signAllTransactions(transactions) {
+        
+    }
+    
     signAndSendTransaction(transaction) {
         // should return a promise with a signature
 
@@ -55,6 +63,7 @@ class TokenarySolana extends EventEmitter {
 
     signMessage(encodedMessage, display) {
 //        display == "utf8"
+        // i've seen undefined display as well
         // const signedMessage = await window.solana.signMessage(encodedMessage, "utf8");
     }
 
