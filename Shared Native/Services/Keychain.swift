@@ -42,7 +42,24 @@ struct Keychain {
         static func isLegacyWallet(key: String) -> Bool {
             return key.hasPrefix(legacyWalletPrefix)
         }
+    }
+    
+    public struct MetaData: Codable {
+        internal init(
+            derivedChains: [SupportedChainType],
+            keychainMigrationVersion: String,
+            vaultIdentifier: String?
+        ) {
+            self.derivedChains = derivedChains
+            self.keychainMigrationVersion = keychainMigrationVersion
+            self.vaultIdentifier = vaultIdentifier
+        }
         
+        // This is wired conversion back-and-forth, however we require it for stable values
+        public let derivedChains: [SupportedChainType]
+        
+        private let keychainMigrationVersion: String
+        private let vaultIdentifier: String?
     }
     
     var password: String? {
@@ -70,8 +87,13 @@ struct Keychain {
         return get(key: .wallet(id: id))
     }
     
-    func saveWallet(id: String, data: Data) throws {
-        save(data: data, key: .wallet(id: id))
+    func getAssociatedWalletData(id: String) -> (Date, Date?, MetaData?)? {
+        return getAttributes(forKey: .wallet(id: id))
+    }
+    
+    func saveWallet(id: String, data: Data, metaData: MetaData) throws {
+        let encodedMetaData = try JSONEncoder().encode(metaData)
+        save(data: data, key: .wallet(id: id), metaData: encodedMetaData)
     }
     
     func removeWallet(id: String) throws {
@@ -100,12 +122,50 @@ struct Keychain {
     
     // MARK: - Private
     
-    private func save(data: Data, key: ItemKey) {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                    kSecAttrAccount as String: key.stringValue,
-                                    kSecValueData as String: data]
+    private func update() {
+        
+    }
+    
+    private func save(data: Data, key: ItemKey, metaData: Data? = nil) {
+        // kSecAttrType - unsigned integer 4 char code
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key.stringValue,
+            kSecValueData as String: data
+        ]
+        
+        if let metaData = metaData {
+            query[kSecAttrGeneric as String] = metaData // Not used to determine uniqueness
+        }
+        
         SecItemDelete(query as CFDictionary)
         SecItemAdd(query as CFDictionary, nil)
+    }
+    
+    private func getAttributes(forKey key: ItemKey) -> (Date, Date?, MetaData?)? {
+        var query: [String: Any] = [:]
+        query[String(kSecReturnAttributes)] = kCFBooleanTrue
+        query[String(kSecReturnData)] = kCFBooleanFalse
+        query[String(kSecAttrAccount)] = key.stringValue
+
+        var queryResult: AnyObject?
+        let status = withUnsafeMutablePointer(to: &queryResult) {
+          SecItemCopyMatching(query as CFDictionary, $0)
+        }
+
+        guard
+            status == errSecSuccess,
+            let queriedItem = queryResult as? [String: Any],
+            let creationDate = queriedItem[String(kSecAttrCreationDate)] as? Date
+        else { return nil }
+        
+        let modificationDate = queriedItem[String(kSecAttrModificationDate)] as? Date
+        var metaData: MetaData? = nil
+        if let metaInfoData = queriedItem[String(kSecAttrGeneric)] as? Data {
+            metaData = try? JSONDecoder().decode(MetaData.self, from: metaInfoData)
+        }
+        return (creationDate, modificationDate, metaData)
+        
     }
     
     private func allStoredItemsKeys() -> [String] {

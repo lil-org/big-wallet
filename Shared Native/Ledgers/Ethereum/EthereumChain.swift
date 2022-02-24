@@ -36,7 +36,7 @@ enum EthereumChain: Int {
     static let allMainnets: [EthereumChain] = [
         .ethereum, .polygon, .optimism, 
         .binance, .arbitrum, .avalanche,
-	.gnosisChain, .fantomOpera 
+        .gnosisChain, .fantomOpera
     ]
     
     static let allTestnets: [EthereumChain] = [
@@ -45,7 +45,7 @@ enum EthereumChain: Int {
         .ethereumGoerli, .optimisticKovan,
         .arbitrumRinkeby, .polygonMumbai,
         .avalancheFuji, .binanceTestnet,
-	.fantomTestnet
+        .fantomTestnet
     ]
     
     var name: String {

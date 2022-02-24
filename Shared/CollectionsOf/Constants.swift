@@ -84,6 +84,8 @@ public struct Constants {
     }
 
     // MARK: - Databases
+    
+    public static let currentKeychainMigrationVersion: String = "0.0.1"
 
     public struct Database {
         public static let databaseName = "MDB"

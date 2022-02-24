@@ -4,10 +4,11 @@ import Foundation
 import SwiftUI
 import WalletCore
 
-public enum SupportedCoinType: String, CaseIterable {
+public enum SupportedChainType: String, CaseIterable {
     case ethereum
     case tezos
     case solana
+    // ToDo(@pettrk): Add custom derivation path
     
     public var iconName: String {
         switch self {
@@ -60,18 +61,31 @@ public enum SupportedCoinType: String, CaseIterable {
         
         public init(rawValue: Int) { self.rawValue = rawValue }
         
-        public static let ethereum: SupportedCoinType.Set = Set(rawValue: 1 << 0)
-        public static let tezos: SupportedCoinType.Set = Set(rawValue: 1 << 1)
-        public static let solana: SupportedCoinType.Set = Set(rawValue: 1 << 2)
+        public static let ethereum: SupportedChainType.Set = Set(rawValue: 1 << 0)
+        public static let tezos: SupportedChainType.Set = Set(rawValue: 1 << 1)
+        public static let solana: SupportedChainType.Set = Set(rawValue: 1 << 2)
         
         public static let all: Set = [ethereum, .tezos, .solana]
     }
+    
+    init?(coinType: CoinType) {
+        switch coinType {
+        case .ethereum:
+            self = .ethereum
+        case .tezos:
+            self = .tezos
+        case .solana:
+            self = .solana
+        default:
+            return nil
+        }
+    }
 }
 
-extension SupportedCoinType: CustomStringConvertible {
+extension SupportedChainType: CustomStringConvertible {
     public var description: String {
         "\(self.title)(\(self.ticker)), \(self.walletCoreCoinType.derivationPath())"
     }
 }
 
-extension SupportedCoinType: Equatable, Hashable, RawRepresentable {}
+extension SupportedChainType: Equatable, Hashable, RawRepresentable, Codable {}

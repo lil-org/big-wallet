@@ -3,6 +3,9 @@
 import Foundation
 
 struct Defaults {
+    struct Key<ReturnType> {
+        var name: String
+    }
  
     private static let userDefaults = UserDefaults.standard
 
@@ -60,4 +63,20 @@ struct Defaults {
         }
     }
     
+    static subscript(integerKey: Key<Int>) -> Int {
+        get {
+            return userDefaults.integer(forKey: integerKey.name)
+        }
+        set {
+            userDefaults.set(newValue, forKey: integerKey.name)
+        }
+    }
+}
+
+extension Defaults.Key {
+    static var numberOfCreatedWallets: (SupportedChainType) -> Defaults.Key<Int> {
+        return { (chainType: SupportedChainType) in
+            return .init(name: "numberOfCreatedWallets_" + chainType.ticker )
+        }
+    }
 }

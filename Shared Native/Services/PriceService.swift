@@ -2,46 +2,6 @@
 
 import Foundation
 
-//ServiceLocator.shared.testService
-//    .combineLatest(.getUsers(userIds: [123,123]), .getVasys())
-//    .subscribe {
-//        onNext: {
-//            
-//        }
-//    }
-//
-//open class AnyService: NSObject {
-//    public private(set) retrier:
-//    public private(set) queue:
-//    public private(set) middleware:
-//}
-//
-//
-//class A {
-//    func a() {
-//        let vasya: AnyService
-//        let vaysaObservable = vasya.observeValue(forKeyPath: \.retrier, of: vasay, change: [NSKeyValueChangeKey.newKey : true], context: )
-//    }
-//}
-//
-//public final class TestService: AnyService {
-//    
-//    var currentPrive: Relay<Double>
-//    ///
-//    
-//    public func getUsers(userIds: [Int]) -> Observable<User, Error> {
-//        self.sendRequest(
-//            withParameters: requestConfig.obtainUserParameters(userIds: userIds),
-//            intermidiateTransform: { (response: ApiResponseDTO<[UserDTO]>) -> in
-//                let users = response.data.compactMap { UserEntity(dto: $0) }
-//                self.saveToCache(...)
-//                return users
-//            },
-//            jsonDecoder: ...
-//        )
-//    }
-//}
-
 class PriceService {
     
     private struct PriceResponse: Codable {
@@ -83,5 +43,4 @@ class PriceService {
         }
         dataTask.resume()
     }
-    
 }

@@ -40,4 +40,4 @@ staging/
 vendor/
 
 # Secrets
-Shared/Supporting\ Files/Secrets-prod.swift
+Shared Native/Supporting Files/Secrets-prod.swift 

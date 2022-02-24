@@ -24,7 +24,8 @@ struct DappRequestProcessor {
             case .switchAccount:
                 let action = SelectAccountAction(provider: .unknown) { chain, wallet in
                     // TODO: should work with any chain
-                    if let chain = chain, let address = wallet?.ethereumAddress {
+                    let transpiledChain: SupportedChainType = .ethereum
+                    if let chain = chain, let address = wallet?[transpiledChain, .address] ?? nil {
                         let responseBody = ResponseToExtension.Ethereum(results: [address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
                         respond(to: request, body: .ethereum(responseBody), completion: completion)
                         // TODO: response body type should depend on chain of selected account
@@ -42,13 +43,17 @@ struct DappRequestProcessor {
         return .none
     }
     
-    private static func process(request: SafariRequest, ethereumRequest: SafariRequest.Ethereum, completion: @escaping () -> Void) -> DappRequestAction {
+    private static func process(
+        request: SafariRequest,
+        ethereumRequest: SafariRequest.Ethereum,
+        completion: @escaping () -> Void
+    ) -> DappRequestAction {
         let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
         
         switch ethereumRequest.method {
         case .switchAccount, .requestAccounts:
             let action = SelectAccountAction(provider: .ethereum) { chain, wallet in
-                if let chain = chain, let address = wallet?.ethereumAddress {
+                if let chain = chain, let address = wallet?[.ethereum, .address] ?? nil {
                     let responseBody = ResponseToExtension.Ethereum(results: [address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
                     respond(to: request, body: .ethereum(responseBody), completion: completion)
                 } else {
@@ -58,8 +63,8 @@ struct DappRequestProcessor {
             return .selectAccount(action)
         case .signTypedMessage:
             if let raw = ethereumRequest.raw,
-               let wallet = walletsManager.getWallet(address: ethereumRequest.address),
-               let address = wallet.ethereumAddress {
+               let wallet = walletsManager.getWallet(for: .ethereum, havingAddress: ethereumRequest.address),
+               let address = wallet[.ethereum, .address] ?? nil {
                 let action = SignMessageAction(provider: request.provider, subject: .signTypedData, address: address, meta: raw, peerMeta: peerMeta) { approved in
                     if approved {
                         signTypedData(wallet: wallet, raw: raw, request: request, completion: completion)
@@ -73,8 +78,8 @@ struct DappRequestProcessor {
             }
         case .signMessage:
             if let data = ethereumRequest.message,
-               let wallet = walletsManager.getWallet(address: ethereumRequest.address),
-               let address = wallet.ethereumAddress {
+               let wallet = walletsManager.getWallet(for: .ethereum, havingAddress: ethereumRequest.address),
+               let address = wallet[.ethereum, .address] ?? nil {
                 let action = SignMessageAction(provider: request.provider, subject: .signMessage, address: address, meta: data.hexString, peerMeta: peerMeta) { approved in
                     if approved {
                         signMessage(wallet: wallet, data: data, request: request, completion: completion)
@@ -88,8 +93,8 @@ struct DappRequestProcessor {
             }
         case .signPersonalMessage:
             if let data = ethereumRequest.message,
-               let wallet = walletsManager.getWallet(address: ethereumRequest.address),
-               let address = wallet.ethereumAddress {
+               let wallet = walletsManager.getWallet(for: .ethereum, havingAddress: ethereumRequest.address),
+               let address = wallet[.ethereum, .address] ?? nil {
                 let text = String(data: data, encoding: .utf8) ?? data.hexString
                 let action = SignMessageAction(provider: request.provider, subject: .signPersonalMessage, address: address, meta: text, peerMeta: peerMeta) { approved in
                     if approved {
@@ -105,8 +110,8 @@ struct DappRequestProcessor {
         case .signTransaction:
             if let transaction = ethereumRequest.transaction,
                let chain = ethereumRequest.chain,
-               let wallet = walletsManager.getWallet(address: ethereumRequest.address),
-               let address = wallet.ethereumAddress {
+               let wallet = walletsManager.getWallet(for: .ethereum, havingAddress: ethereumRequest.address),
+               let address = wallet[.ethereum, .address] ?? nil {
                 let action = SendTransactionAction(provider: request.provider,
                                                    transaction: transaction,
                                                    chain: chain,
