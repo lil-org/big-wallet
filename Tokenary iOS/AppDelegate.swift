@@ -15,7 +15,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     ) -> Bool {
         priceService.start()
         gasService.start()
-        walletsManager.start()
+//        walletsManager.start() It's useless to call it here, since we are not authenticated yet
         return true
     }
 

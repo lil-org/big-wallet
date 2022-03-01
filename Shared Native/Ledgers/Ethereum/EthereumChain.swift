@@ -2,7 +2,11 @@
 
 import Foundation
 
-enum EthereumChain: Int {
+/// - Note: For future references, the problem of specifying network can't be solved using protocol unification
+/// since it will require Self generic constraining, which will require Any/Generic type erasure.
+/// - Generic case can be applied since there is case where we don't know the resulting type at compile time
+/// - And any is a noop case for static variables cases
+public enum EthereumChain: Int {
     case ethereum = 1
     case arbitrum = 42161
     case polygon = 137
@@ -33,13 +37,13 @@ enum EthereumChain: Int {
         return "0x" + String(id, radix: 16, uppercase: false)
     }
     
-    static let allMainnets: [EthereumChain] = [
+    public static let mainnets: [EthereumChain] = [
         .ethereum, .polygon, .optimism, 
         .binance, .arbitrum, .avalanche,
         .gnosisChain, .fantomOpera
     ]
     
-    static let allTestnets: [EthereumChain] = [
+    public static let testnets: [EthereumChain] = [
         .ethereumRopsten, .ethereumKovan,
         .ethereumRinkeby, .arbitrumKovan,
         .ethereumGoerli, .optimisticKovan,
@@ -48,7 +52,7 @@ enum EthereumChain: Int {
         .fantomTestnet
     ]
     
-    var name: String {
+    public var title: String {
         switch self {
         case .ethereum: return "Ethereum"
         case .arbitrum: return "Arbitrum"
@@ -73,7 +77,7 @@ enum EthereumChain: Int {
         }
     }
     
-    var symbol: String {
+    public var ticker: String {
         switch self {
         case .binance, .binanceTestnet:
             return "BNB"
@@ -91,7 +95,7 @@ enum EthereumChain: Int {
     }
     
     var symbolIsETH: Bool {
-        return symbol == "ETH"
+        return self.ticker == "ETH"
     }
     
     var hasUSDPrice: Bool {

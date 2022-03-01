@@ -133,7 +133,7 @@ final class WalletsManager {
         let newKey = StoredKey(
             name: name ?? self.getMnemonicDefaultWalletName(),
             password: Data(password.utf8),
-            encryptionLevel: .standard
+            encryptionLevel: .weak // ToDo(@pettrk): This was used previously, however longer needs considerable time
         )
         
         return try self.finaliseWalletCreation(
@@ -167,7 +167,6 @@ final class WalletsManager {
         }
     }
     
-    
     // MARK: - Import
 
     // importPrivateKey ->
@@ -189,7 +188,6 @@ final class WalletsManager {
         return try self.finaliseWalletCreation(
             key: newKey, coinTypes: [coinType], isMnemonic: false, onlyToKeychain: onlyToKeychain
         )
-        
     }
 
     private func `import`(
@@ -210,7 +208,7 @@ final class WalletsManager {
     
     private func finaliseWalletCreation(
         key: StoredKey, coinTypes: [CoinType], isMnemonic: Bool, onlyToKeychain: Bool
-    ) throws -> TokenaryWallet  {
+    ) throws -> TokenaryWallet {
         guard let data = key.exportJSON() else { throw KeyStore.Error.invalidPassword }
         let id = makeNewWalletId()
         let derivedChains = coinTypes.compactMap { SupportedChainType(coinType: $0) }
@@ -247,6 +245,37 @@ final class WalletsManager {
     }
     
     // MARK: - Update
+                                   
+    public func rename(wallet: TokenaryWallet, newName: String) throws {
+        guard let password = keychain.password else { throw Error.keychainAccessFailure }
+        try update(wallet: wallet, oldPassword: password, newPassword: password, newName: newName)
+    }
+    
+    public func changeIconIn(wallet: TokenaryWallet, newIconURL: URL) {
+        _unimplemented("This is not implemented yet!")
+    }
+    
+    public func changeAccountsIn(wallet: TokenaryWallet, to newChainTypes: [SupportedChainType]) throws {
+        guard wallet.isMnemonic else { return }
+        guard let password = keychain.password else { throw Error.keychainAccessFailure }
+        let currentAccounts = Set(wallet.associatedMetadata.walletDerivationType.chainTypes)
+        let accountsToRemove = currentAccounts.subtracting(newChainTypes)
+        let accountsToAdd = Set(newChainTypes).subtracting(currentAccounts)
+        
+        self.removeAccountFrom(wallet: wallet, for: Array(accountsToRemove))
+        try self.addAccounts(key: wallet.key, password: password, coins: accountsToAdd.map { $0.walletCoreCoinType })
+        wallet.associatedMetadata.walletDerivationType = .mnemonic(newChainTypes)
+        try self.update(wallet: wallet)
+    }
+    
+    public func update(wallet: TokenaryWallet) throws {
+        guard let password = keychain.password else { throw Error.keychainAccessFailure }
+        try update(wallet: wallet, oldPassword: password, newPassword: password, newName: wallet.key.name)
+    }
+
+    public func update(wallet: TokenaryWallet, oldPassword: String, newPassword: String) throws {
+        try update(wallet: wallet, oldPassword: oldPassword, newPassword: newPassword, newName: wallet.key.name)
+    }
     
     @discardableResult
     private func addAccount(
@@ -267,27 +296,11 @@ final class WalletsManager {
         else { throw KeyStore.Error.invalidPassword }
         return coins.compactMap { key.accountForCoin(coin: $0, wallet: wallet) }
     }
-                                   
-    public func rename(wallet: TokenaryWallet, newName: String) throws {
-        guard let password = keychain.password else { throw Error.keychainAccessFailure }
-        try update(wallet: wallet, oldPassword: password, newPassword: password, newName: newName)
-    }
     
-    public func changeIconIn(wallet: TokenaryWallet, newIconURL: URL) {
-        _unimplemented("This is not implemented yet!")
-    }
-    
-    public func addAccountTo(wallet: TokenaryWallet, for chainType: SupportedChainType) throws {
-        guard let password = keychain.password else { throw Error.keychainAccessFailure }
-        try self.addAccount(key: wallet.key, password: password, coin: chainType.walletCoreCoinType)
-    }
-    
-    public func removeAccountFrom(wallet: TokenaryWallet, for chainType: SupportedChainType) {
-        wallet.key.removeAccountForCoin(coin: chainType.walletCoreCoinType)
-    }
-
-    func update(wallet: TokenaryWallet, oldPassword: String, newPassword: String) throws {
-        try update(wallet: wallet, oldPassword: oldPassword, newPassword: newPassword, newName: wallet.key.name)
+    private func removeAccountFrom(wallet: TokenaryWallet, for chainTypes: [SupportedChainType]) {
+        for chainType in chainTypes {
+            wallet.key.removeAccountForCoin(coin: chainType.walletCoreCoinType)
+        }
     }
     
     private func update(wallet: TokenaryWallet, oldPassword: String, newPassword: String, newName: String) throws {
@@ -300,7 +313,6 @@ final class WalletsManager {
         defer { privateKeyData.resetBytes(in: .zero ..< privateKeyData.count) }
         let coins = wallet.associatedMetadata.walletDerivationType.chainTypes.map({ $0.walletCoreCoinType })
         guard !coins.isEmpty else { throw KeyStore.Error.accountNotFound }
-        
         
         if
             let mnemonic = checkMnemonic(privateKeyData),

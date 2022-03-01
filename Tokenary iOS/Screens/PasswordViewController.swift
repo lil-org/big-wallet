@@ -77,19 +77,15 @@ class PasswordViewController: UIViewController {
     }
     
     private func askForLocalAuthentication() {
-        let a = AccountsListAssembly.build(for: .mainScreen)
-//        self.present(a, animated: true)
-        let b = a.inNavigationController
-        b.setNavigationBarHidden(true, animated: false)
-        UIApplication.shared.replaceRootViewController(with: b)
-        
-//        LocalAuthentication.attempt(reason: Strings.enterTokenary, presentPasswordAlertFrom: nil, passwordReason: nil) { [weak self] success in
-//            if success {
-//                self?.showAccountsList()
-//            } else {
-//                self?.didFailLocalAuthentication()
-//            }
-//        }
+        LocalAuthentication.attempt(
+            reason: Strings.enterTokenary, presentPasswordAlertFrom: nil, passwordReason: nil
+        ) { [weak self] isSuccessful in
+            if isSuccessful {
+                self?.showAccountsList()
+            } else {
+                self?.didFailLocalAuthentication()
+            }
+        }
     }
     
     private func didFailLocalAuthentication() {
@@ -131,8 +127,16 @@ class PasswordViewController: UIViewController {
     }
     
     private func showAccountsList() {
-        let accountsList = instantiate(AccountsListViewController.self, from: .main)
-        UIApplication.shared.replaceRootViewController(with: accountsList.inNavigationController)
+        let accountsListVC = AccountsListAssembly.build(for: .mainScreen) { chain, wallet in
+            print(chain, wallet)
+        }
+        let accountsListVCWrapped = accountsListVC.inNavigationController.then {
+            $0.setNavigationBarHidden(true, animated: false)
+        }
+        UIApplication.shared.replaceRootViewController(with: accountsListVCWrapped)
+        
+//        let accountsList = instantiate(AccountsListViewController.self, from: .main)
+//        UIApplication.shared.replaceRootViewController(with: accountsList.inNavigationController)
     }
     
 }
@@ -151,5 +155,4 @@ extension PasswordViewController: UITextFieldDelegate {
         proceedIfPossible()
         return true
     }
-    
 }

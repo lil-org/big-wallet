@@ -33,3 +33,19 @@ target 'Tokenary iOS' do
   platform :ios, '15.0'
   set_shared_pods.call
 end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    if target.platform_name == :ios
+      target.build_configurations.each do |config|  # platform_name
+        if ['PromiseKit', 'Starscream'].include? target.product_name
+          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '11.0'
+        elsif ['BigInt', 'secp256k1', 'SwiftyJSON'].include? target.product_name
+          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '10.0'
+        elsif Gem::Version.new('9.0') > Gem::Version.new(config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'])
+          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
+        end
+      end
+    end 
+  end
+end

@@ -14,8 +14,15 @@ extension URL {
         return URL(string: "https://etherscan.io/address/\(address)")!
     }
     
+    static func solanascan(address: String) -> URL {
+        return URL(string: "https://explorer.solana.com/address/\(address)")!
+    }
+
+    static func tezosscan(address: String) -> URL {
+        return URL(string: "https://tzkt.io/\(address)/operations")!
+    }
+    
     static func blankRedirect(id: Int) -> URL {
         return URL(string: "https://tokenary.io/blank/\(id)")!
     }
-    
 }

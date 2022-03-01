@@ -105,7 +105,12 @@ class DataStateView: UIView {
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         return button.frame.insetBy(dx: -30, dy: -30).contains(point)
     }
-    
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+
+       let hitView = super.hitTest(point, with: event)
+
+       return hitView
+    }
 }
 
 extension DataStateContainer where Self: UIViewController {
@@ -137,6 +142,7 @@ extension DataStateContainer where Self: UIViewController {
         let secondConstraint = NSLayoutConstraint.constraints(withVisualFormat: "V:|-0-[subview]-0-|", options: .directionLeadingToTrailing, metrics: nil, views: ["subview": dataStateView])
         view.addConstraints(firstConstraint + secondConstraint)
         view.bringSubviewToFront(dataStateView)
+//        view.sendSubviewToBack(dataStateView)
         return dataStateView
     }
 }

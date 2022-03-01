@@ -72,7 +72,7 @@ struct Transaction {
            let b = try? EthNumber(hex: gas).value().toDecimal() {
             let c = NSDecimalNumber(decimal: a).multiplying(by: NSDecimalNumber(decimal: b))
             let costString = chain.hasUSDPrice ? cost(value: c, price: ethPrice) : ""
-            fee = c.stringValue.prefix(7) + " \(chain.symbol)" + costString
+            fee = c.stringValue.prefix(7) + " \(chain.ticker)" + costString
         } else {
             fee = Strings.calculating
         }
@@ -84,7 +84,7 @@ struct Transaction {
             let decimalNumber = NSDecimalNumber(decimal: decimal)
             let costString = chain.hasUSDPrice ? cost(value: decimalNumber, price: ethPrice) : ""
             if let value = ethString(decimalNumber: decimalNumber) {
-                let valueString = "\(value) \(chain.symbol)" + costString
+                let valueString = "\(value) \(chain.ticker)" + costString
                 return withLabel ? "Value: " + valueString : valueString
             }
         }

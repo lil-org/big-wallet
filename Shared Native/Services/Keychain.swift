@@ -122,10 +122,6 @@ struct Keychain {
     
     // MARK: - Private
     
-    private func update() {
-        
-    }
-    
     private func save(data: Data, key: ItemKey, metaData: Data? = nil) {
         // kSecAttrType - unsigned integer 4 char code
         var query: [String: Any] = [
@@ -138,7 +134,7 @@ struct Keychain {
             query[kSecAttrGeneric as String] = metaData // Not used to determine uniqueness
         }
         
-        SecItemDelete(query as CFDictionary)
+        SecItemDelete(query as CFDictionary) // ToDo(@pettrk): This is wrong -> update
         SecItemAdd(query as CFDictionary, nil)
     }
     
@@ -147,11 +143,10 @@ struct Keychain {
         query[String(kSecReturnAttributes)] = kCFBooleanTrue
         query[String(kSecReturnData)] = kCFBooleanFalse
         query[String(kSecAttrAccount)] = key.stringValue
+        query[String(kSecMatchLimit)] = kSecMatchLimitOne
 
         var queryResult: AnyObject?
-        let status = withUnsafeMutablePointer(to: &queryResult) {
-          SecItemCopyMatching(query as CFDictionary, $0)
-        }
+        let status: OSStatus = SecItemCopyMatching(query as CFDictionary, &queryResult)
 
         guard
             status == errSecSuccess,
@@ -160,7 +155,7 @@ struct Keychain {
         else { return nil }
         
         let modificationDate = queriedItem[String(kSecAttrModificationDate)] as? Date
-        var metaData: MetaData? = nil
+        var metaData: MetaData?
         if let metaInfoData = queriedItem[String(kSecAttrGeneric)] as? Data {
             metaData = try? JSONDecoder().decode(MetaData.self, from: metaInfoData)
         }

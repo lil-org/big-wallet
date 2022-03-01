@@ -143,8 +143,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     @IBAction func chainButtonTapped(_ sender: Any) {
         let actionSheet = UIAlertController(title: Strings.selectNetwork, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.sourceView = chainButton
-        for chain in EthereumChain.allMainnets {
-            let action = UIAlertAction(title: chain.name, style: .default) { [weak self] _ in
+        for chain in EthereumChain.mainnets {
+            let action = UIAlertAction(title: chain.title, style: .default) { [weak self] _ in
                 self?.didSelectChain(chain)
             }
             actionSheet.addAction(action)
@@ -169,8 +169,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
 //#endif
         
-        for chain in EthereumChain.allTestnets {
-            let action = UIAlertAction(title: chain.name, style: .default) { [weak self] _ in
+        for chain in EthereumChain.testnets {
+            let action = UIAlertAction(title: chain.title, style: .default) { [weak self] _ in
                 self?.didSelectChain(chain)
             }
             actionSheet.addAction(action)
@@ -184,7 +184,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     //  with an empty provider -> this way we should have shown both both all-chains and their sub-chain info
     //  however for now, we just drop side-chain choosing and will implement this functionality later
     private func didSelectChain(_ chain: EthereumChain) {
-        chainButton.configuration?.title = chain.name
+        chainButton.configuration?.title = chain.title
         self.chain = chain
     }
     
@@ -273,29 +273,29 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     // функция создает реальный аккаунт
     private func createNewAccountAndShowSecretWords() {
-        guard let wallet = try? walletsManager.createWallet() else { return }
+//        guard let wallet = try? walletsManager.createWallet() else { return }
 //        reloadData() - это не нужно, потому что walletsChange
-        showKey(wallet: wallet, mnemonic: true)
+//        showKey(wallet: wallet, mnemonic: true)
     }
     // показывает реальный ключ
     private func showKey(wallet: TokenaryWallet, mnemonic: Bool) {
-        let secret: String
-        if mnemonic, let mnemonicString = try? walletsManager.exportMnemonic(wallet: wallet) {
-            secret = mnemonicString
-        } else if let data = try? walletsManager.exportPrivateKey(wallet: wallet) {
-            secret = data.hexString
-        } else {
-            return
-        }
-        
-        let alert = UIAlertController(title: mnemonic ? Strings.secretWords : Strings.privateKey, message: secret, preferredStyle: .alert)
-        let okAction = UIAlertAction(title: Strings.ok, style: .default)
-        let cancelAction = UIAlertAction(title: Strings.copy, style: .default) { _ in
-            UIPasteboard.general.string = secret
-        }
-        alert.addAction(cancelAction)
-        alert.addAction(okAction)
-        present(alert, animated: true)
+//        let secret: String
+//        if mnemonic, let mnemonicString = try? walletsManager.exportMnemonic(wallet: wallet) {
+//            secret = mnemonicString
+//        } else if let data = try? walletsManager.exportPrivateKey(wallet: wallet) {
+//            secret = data.hexString
+//        } else {
+//            return
+//        }
+//        
+//        let alert = UIAlertController(title: mnemonic ? Strings.secretWords : Strings.privateKey, message: secret, preferredStyle: .alert)
+//        let okAction = UIAlertAction(title: Strings.ok, style: .default)
+//        let cancelAction = UIAlertAction(title: Strings.copy, style: .default) { _ in
+//            UIPasteboard.general.string = secret
+//        }
+//        alert.addAction(cancelAction)
+//        alert.addAction(okAction)
+//        present(alert, animated: true)
     }
     // импортировать существующий аккаунт 
     private func importExistingAccount() {
@@ -304,34 +304,34 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     // при нажатии на ячейку или на more
     private func showActionsForWallet(_ wallet: TokenaryWallet, cell: UITableViewCell?) {
-        let address = wallet.ethereumAddress ?? ""
-        let actionSheet = UIAlertController(title: address, message: nil, preferredStyle: .actionSheet)
-        actionSheet.popoverPresentationController?.sourceView = cell
-        
-        let copyAddressAction = UIAlertAction(title: Strings.copyAddress, style: .default) { _ in
-            UIPasteboard.general.string = address
-        }
-        
-        let etherscanAction = UIAlertAction(title: Strings.viewOnEtherscan, style: .default) { _ in
-            UIApplication.shared.open(URL.etherscan(address: address))
-        }
-        
-        let showKeyAction = UIAlertAction(title: Strings.showAccountKey, style: .default) { [weak self] _ in
-            self?.didTapExportAccount(wallet)
-        }
-        
-        let removeAction = UIAlertAction(title: Strings.removeAccount, style: .destructive) { [weak self] _ in
-            self?.didTapRemoveAccount(wallet)
-        }
-        
-        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
-        
-        actionSheet.addAction(copyAddressAction)
-        actionSheet.addAction(etherscanAction)
-        actionSheet.addAction(showKeyAction)
-        actionSheet.addAction(removeAction)
-        actionSheet.addAction(cancelAction)
-        present(actionSheet, animated: true)
+//        let address = wallet.ethereumAddress ?? ""
+//        let actionSheet = UIAlertController(title: address, message: nil, preferredStyle: .actionSheet)
+//        actionSheet.popoverPresentationController?.sourceView = cell
+//
+//        let copyAddressAction = UIAlertAction(title: Strings.copyAddress, style: .default) { _ in
+//            UIPasteboard.general.string = address
+//        }
+//
+//        let etherscanAction = UIAlertAction(title: Strings.viewOnEtherscan, style: .default) { _ in
+//            UIApplication.shared.open(URL.etherscan(address: address))
+//        }
+//
+//        let showKeyAction = UIAlertAction(title: Strings.showAccountKey, style: .default) { [weak self] _ in
+//            self?.didTapExportAccount(wallet)
+//        }
+//
+//        let removeAction = UIAlertAction(title: Strings.removeAccount, style: .destructive) { [weak self] _ in
+//            self?.didTapRemoveAccount(wallet)
+//        }
+//
+//        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
+//
+//        actionSheet.addAction(copyAddressAction)
+//        actionSheet.addAction(etherscanAction)
+//        actionSheet.addAction(showKeyAction)
+//        actionSheet.addAction(removeAction)
+//        actionSheet.addAction(cancelAction)
+//        present(actionSheet, animated: true)
     }
     
     private func didTapRemoveAccount(_ wallet: TokenaryWallet) {
@@ -341,7 +341,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private func askBeforeRemoving(wallet: TokenaryWallet) {
         let alert = UIAlertController(title: Strings.removedAccountsCantBeRecovered, message: nil, preferredStyle: .alert)
         let removeAction = UIAlertAction(title: Strings.removeAnyway, style: .destructive) { [weak self] _ in
-            LocalAuthentication.attempt(reason: Strings.removeAccount, presentPasswordAlertFrom: self, passwordReason: Strings.toRemoveAccount) { success in
+            LocalAuthentication.attempt(reason: Strings.removeWallet, presentPasswordAlertFrom: self, passwordReason: Strings.toRemoveAccount) { success in
                 if success {
                     self?.removeWallet(wallet)
                 }
@@ -364,7 +364,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let title = isMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
         let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
         let okAction = UIAlertAction(title: Strings.iUnderstandTheRisks, style: .default) { [weak self] _ in
-            LocalAuthentication.attempt(reason: Strings.removeAccount, presentPasswordAlertFrom: self, passwordReason: Strings.toShowAccountKey) { success in
+            LocalAuthentication.attempt(reason: Strings.removeWallet, presentPasswordAlertFrom: self, passwordReason: Strings.toShowAccountKey) { success in
                 if success {
                     self?.showKey(wallet: wallet, mnemonic: isMnemonic)
                 }
@@ -410,7 +410,7 @@ extension AccountsListViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCellOfType(AccountTableViewCell.self, for: indexPath)
         let wallet = wallets[indexPath.row]
-        cell.setup(address: wallet.ethereumAddress ?? "", delegate: self)
+//        cell.setup(address: wallet.ethereumAddress ?? "", delegate: self)
         return cell
     }
     

@@ -23,7 +23,7 @@ class ImportViewController: UIViewController {
     }
     
     private var isWaiting = false
-    private var inputValidationResult = InputValidationResult1.invalidData
+    private var inputValidationResult = WalletsManager.InputValidationResult.invalidData
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -71,7 +71,7 @@ class ImportViewController: UIViewController {
         placeholderLabel.isHidden = !textView.text.isEmpty
         self.inputValidationResult = self.walletsManager.getValidationFor(input: self.textView.text)
         let isValid = ![
-            InputValidationResult1.invalidData, InputValidationResult1.alreadyPresent
+            WalletsManager.InputValidationResult.invalidData, WalletsManager.InputValidationResult.alreadyPresent
         ].contains(self.inputValidationResult)
         okButton.isEnabled = isValid
         if isValid && proceedIfValid {
@@ -82,8 +82,8 @@ class ImportViewController: UIViewController {
     private func attemptImportWithCurrentInput() {
         if self.inputValidationResult == .passwordProtectedJSON {
             self.askForPassword()
-        } else if let walletDerivationType = inputValidationResult.walletDerivationType {
-            self.selectCoins(input: textView.text, derivationType: walletDerivationType)
+        } else if let walletKeyType = self.inputValidationResult.walletKeyType {
+            self.selectChains(input: textView.text, walletKeyType: walletKeyType)
         }
     }
     
@@ -106,34 +106,42 @@ class ImportViewController: UIViewController {
             input: input, password: password
         )
         self.setLoading(false)
-        if let decryptedInput = decryptedInput, let walletDerivationType = inputValidationResult.walletDerivationType {
-            self.selectCoins(input: decryptedInput, derivationType: walletDerivationType)
+        if let decryptedInput = decryptedInput, let walletKeyType = inputValidationResult.walletKeyType {
+            self.selectChains(input: decryptedInput, walletKeyType: walletKeyType)
         } else {
             self.showMessageAlert(text: Strings.ImportViewController.couldNotDecryptProtectedDataAlertTitle)
         }
     }
-    
-    private func selectCoins(input: String, derivationType: InputValidationResult1.WalletDerivationType) {
-        let possibleCoinTypes = derivationType.supportedCoinTypes
-        let accountSelectionVC = AccountSelectionAssembly.build(
-            for: derivationType == .mnemonic ? .multiSelect(possibleCoinTypes) : .singleSelect(possibleCoinTypes),
-            completion: { [weak self] selectedCoinTypes in
-                self?.importWallet(input: input, coinTypes: selectedCoinTypes)
+
+    private func selectChains(input: String, walletKeyType: WalletsManager.InputValidationResult.WalletKeyType) {
+        let possibleChainTypes = walletKeyType.supportedChainTypes
+        let chainSelectionVC = ChainSelectionAssembly.build(
+            for: walletKeyType == .mnemonic ? .multiSelect(possibleChainTypes) : .singleSelect(possibleChainTypes),
+            completion: { [weak self] selectedChains in
+                if selectedChains.count != .zero {
+                    self?.importWallet(input: input, chainTypes: selectedChains)
+                } else {
+                    self?.processErrorOrCancel()
+                }
             }
         )
-        accountSelectionVC.modalPresentationStyle = .formSheet
-        present(accountSelectionVC, animated: true)
+        chainSelectionVC.modalPresentationStyle = .formSheet
+        present(chainSelectionVC, animated: true)
     }
     
-    private func importWallet(input: String, coinTypes: [SupportedCoinType]) {
+    private func importWallet(input: String, chainTypes: [SupportedChainType]) {
         do {
-            try self.walletsManager.addWallet(input: input, coinTypes: coinTypes)
+            try self.walletsManager.addWallet(input: input, chainTypes: chainTypes)
             self.presentingViewController?.dismissAnimated()
         } catch {
-            self.setLoading(false)
-            self.showMessageAlert(text: Strings.failedToImportAccount)
-            dismissAnimated()
+            self.processErrorOrCancel()
         }
+    }
+    
+    private func processErrorOrCancel() {
+        self.setLoading(false)
+        self.showMessageAlert(text: Strings.failedToImportAccount)
+        self.dismissAnimated()
     }
 }
 

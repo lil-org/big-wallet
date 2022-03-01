@@ -14,7 +14,10 @@ protocol AnyAccount {
     var derivationPath: String? { get }
 }
 
-final class TokenaryWallet: Hashable, Equatable {
+public final class TokenaryWallet: Hashable, Equatable {
+    public struct AccountDescriptor<ReturnType> {
+        var keyPath: KeyPath<AnyAccount, ReturnType>
+    }
     
     public struct AssociatedMetadata {
         public enum WalletDerivationType {
@@ -47,34 +50,10 @@ final class TokenaryWallet: Hashable, Equatable {
         
         public let createdAt: Date
         public var lastUpdatedAt: Date
-        public let walletDerivationType: WalletDerivationType
+        public var walletDerivationType: WalletDerivationType
         public let iconURL: URL?
         
         private let vaultIdentifier: String?
-    }
-
-    let id: String
-    var key: StoredKey
-    var associatedMetadata: AssociatedMetadata
-    
-    private lazy var accounts: [AnyAccount] = {
-        associatedMetadata.walletDerivationType.chainTypes.map {
-            if self.isMnemonic {
-                return DerivedMnemonicAccount(key: key, chainType: $0)
-            } else {
-                return PrivateKeyDerivedAccount(key: key, chainType: $0)
-            }
-        }
-    }()
-    
-    var isMnemonic: Bool { key.isMnemonic }
-    
-    var name: String { key.name }
-    
-    init(id: String, key: StoredKey, associatedMetadata: AssociatedMetadata) {
-        self.id = id
-        self.key = key
-        self.associatedMetadata = associatedMetadata
     }
     
     struct DerivedMnemonicAccount: AnyAccount {
@@ -82,40 +61,34 @@ final class TokenaryWallet: Hashable, Equatable {
         var chainType: SupportedChainType
         
         var privateKey: PrivateKey? {
-            get {
-                guard
-                    let password = Keychain.shared.password,
-                    let privateKey = key.privateKey(
-                        coin: chainType.walletCoreCoinType, password: Data(password.utf8)
-                    )
-                else { return nil }
-                return privateKey
-            }
+            guard
+                let password = Keychain.shared.password,
+                let privateKey = key.privateKey(
+                    coin: chainType.walletCoreCoinType, password: Data(password.utf8)
+                )
+            else { return nil }
+            return privateKey
         }
         
         var address: String? {
-            get {
-                guard
-                    let password = Keychain.shared.password,
-                    let wallet = key.wallet(password: Data(password.utf8)),
-                    let account = key.accountForCoin(coin: chainType.walletCoreCoinType, wallet: wallet)
-                else { return nil }
-                return account.address
-            }
+            guard
+                let password = Keychain.shared.password,
+                let wallet = key.wallet(password: Data(password.utf8)),
+                let account = key.accountForCoin(coin: chainType.walletCoreCoinType, wallet: wallet)
+            else { return nil }
+            return account.address
         }
         
         // ToDo(@pettrk): Applying formatter
         var privateKeyString: String? { self.privateKey?.data.hexString }
         
         var derivationPath: String? {
-            get {
-                guard
-                    let password = Keychain.shared.password,
-                    let wallet = key.wallet(password: Data(password.utf8)),
-                    let account = key.accountForCoin(coin: chainType.walletCoreCoinType, wallet: wallet)
-                else { return nil  }
-                return account.derivationPath
-            }
+            guard
+                let password = Keychain.shared.password,
+                let wallet = key.wallet(password: Data(password.utf8)),
+                let account = key.accountForCoin(coin: chainType.walletCoreCoinType, wallet: wallet)
+            else { return nil  }
+            return account.derivationPath
         }
     }
     
@@ -124,13 +97,11 @@ final class TokenaryWallet: Hashable, Equatable {
         var chainType: SupportedChainType
         
         var privateKey: PrivateKey? {
-            get {
-                guard
-                    let password = Keychain.shared.password,
-                    let privateKey = key.decryptPrivateKey(password: Data(password.utf8))
-                else { return nil }
-                return PrivateKey(data: privateKey)
-            }
+            guard
+                let password = Keychain.shared.password,
+                let privateKey = key.decryptPrivateKey(password: Data(password.utf8))
+            else { return nil }
+            return PrivateKey(data: privateKey)
         }
         
         var address: String? {
@@ -144,7 +115,45 @@ final class TokenaryWallet: Hashable, Equatable {
             key.accountForCoin(coin: chainType.walletCoreCoinType, wallet: nil)?.address
         }
     }
-        
+
+    let id: String
+    var key: StoredKey
+    var associatedMetadata: AssociatedMetadata
+    
+    private var accounts: [AnyAccount] {
+        associatedMetadata.walletDerivationType.chainTypes.map {
+            if self.isMnemonic {
+                return DerivedMnemonicAccount(key: key, chainType: $0)
+            } else {
+                return PrivateKeyDerivedAccount(key: key, chainType: $0)
+            }
+        }
+    }
+    
+    var isMnemonic: Bool { key.isMnemonic }
+    
+    var name: String { key.name }
+    
+    var mnemonic: String {
+        // swiftlint:disable implicit_getter
+        get throws {
+            guard
+                let password = Keychain.shared.password
+            else { throw WalletsManager.Error.keychainAccessFailure }
+            guard
+                let mnemonic = key.decryptMnemonic(password: Data(password.utf8))
+            else { throw KeyStore.Error.invalidPassword }
+            return mnemonic
+        }
+        // swiftlint:enable implicit_getter
+    }
+    
+    init(id: String, key: StoredKey, associatedMetadata: AssociatedMetadata) {
+        self.id = id
+        self.key = key
+        self.associatedMetadata = associatedMetadata
+    }
+     
     public subscript<T>(chainType: SupportedChainType, accountDescriptor: AccountDescriptor<T>) -> T? {
         // No throwing keypath available. Nil is sufficient here
         guard
@@ -162,25 +171,9 @@ final class TokenaryWallet: Hashable, Equatable {
         return account[keyPath: accountDescriptor.keyPath]
     }
 
-    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+    public func hash(into hasher: inout Hasher) { hasher.combine(self.id) }
 
-    static func == (lhs: TokenaryWallet, rhs: TokenaryWallet) -> Bool { lhs.id == rhs.id }
-    
-    struct AccountDescriptor<ReturnType> {
-        var keyPath: KeyPath<AnyAccount, ReturnType>
-    }
-    
-    var mnemonic: String {
-        get throws {
-            guard
-                let password = Keychain.shared.password
-            else { throw WalletsManager.Error.keychainAccessFailure }
-            guard
-                let mnemonic = key.decryptMnemonic(password: Data(password.utf8))
-            else { throw KeyStore.Error.invalidPassword }
-            return mnemonic
-        }
-    }
+    public static func == (lhs: TokenaryWallet, rhs: TokenaryWallet) -> Bool { lhs.id == rhs.id }
 }
 
 extension TokenaryWallet.AccountDescriptor {

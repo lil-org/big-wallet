@@ -17,7 +17,7 @@ enum AuthenticationReason {
         case .sendTransaction:
             return Strings.sendTransaction
         case .removeAccount:
-            return Strings.removeAccount
+            return Strings.removeWallet
         case .showPrivateKey:
             return Strings.showPrivateKey
         case .showSecretWords:

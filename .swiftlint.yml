@@ -25,6 +25,15 @@ opt_in_rules:
   - first_where
   - operator_usage_whitespace
 
+included:
+  - Shared 
+  - Shared Native
+  - Tokenary macOS 
+  - Tokenary iOS 
+  - Safari Shared 
+  - Safari macOS 
+  - Safari iOS 
+  - Screensaver
 excluded:
   - Pods
 
