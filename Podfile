@@ -11,8 +11,7 @@ workspace 'Tokenary.xcworkspace'
 
 trustWalletCoreVersion = '~> 2.6.35'
 blockiesSwiftVersion = '~> 0.1.2'
-kingfisherVersion = '~> 7.1.2' 
-composableArchitectureVersion = '~> ' 
+kingfisherVersion = '~> 7.1.2'
 
 set_shared_pods = lambda do
   pod 'Web3Swift.io', :git => 'https://github.com/grachyov/Web3Swift.git', :branch => 'develop'
@@ -24,8 +23,8 @@ end
 
 # App targets
 
-target 'Tokenary' do
-  platform :osx, '11.4'
+target 'Tokenary macOS' do
+  platform :osx, '12.0'
   set_shared_pods.call
 end
 
@@ -37,14 +36,20 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     if target.platform_name == :ios
-      target.build_configurations.each do |config|  # platform_name
+      target.build_configurations.each do |config|
         if ['PromiseKit', 'Starscream'].include? target.product_name
           config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '11.0'
         elsif ['BigInt', 'secp256k1', 'SwiftyJSON'].include? target.product_name
           config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '10.0'
         elsif Gem::Version.new('9.0') > Gem::Version.new(config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'])
           config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
+        else 
+          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
         end
+      end
+    elsif target.platform_name == :osx
+      target.build_configurations.each do |config|
+        puts config.build_settings['MACOSX_DEPLOYMENT_TARGET']
       end
     end 
   end

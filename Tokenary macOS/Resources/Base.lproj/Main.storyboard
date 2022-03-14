@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <document type="com.apple.InterfaceBuilder3.Cocoa.Storyboard.XIB" version="3.0" toolsVersion="19529" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
     <dependencies>
-        <deployment identifier="macosx"/>
         <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="19529"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
@@ -675,7 +674,7 @@
                         <outlet property="delegate" destination="Voe-Tx-rLC" id="PrD-fu-P6m"/>
                     </connections>
                 </application>
-                <customObject id="Voe-Tx-rLC" customClass="AppDelegate" customModule="Tokenary" customModuleProvider="target"/>
+                <customObject id="Voe-Tx-rLC" customClass="AppDelegate" customModule="Tokenary_macOS" customModuleProvider="target"/>
                 <customObject id="YLy-65-1bz" customClass="NSFontManager"/>
                 <customObject id="Ady-hI-5gd" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
             </objects>
@@ -717,7 +716,7 @@
         <!--Import View Controller-->
         <scene sceneID="hIz-AP-VOD">
             <objects>
-                <viewController storyboardIdentifier="ImportViewController" id="XfG-lQ-9wD" customClass="ImportViewController" customModule="Tokenary" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="ImportViewController" id="XfG-lQ-9wD" customClass="ImportViewController" customModule="Tokenary_macOS" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="m2S-Jp-Qdl">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
@@ -766,10 +765,10 @@ Gw
                                             <string key="keyEquivalent" base64-UTF8="YES">
 DQ
 </string>
-                                            <connections>
-                                                <action selector="actionButtonTapped:" target="XfG-lQ-9wD" id="hYm-ft-1Mx"/>
-                                            </connections>
                                         </buttonCell>
+                                        <connections>
+                                            <action selector="okButtonTapped:" target="XfG-lQ-9wD" id="CyQ-fu-qBa"/>
+                                        </connections>
                                     </button>
                                 </subviews>
                                 <visibilityPriorities>
@@ -801,10 +800,10 @@ DQ
             </objects>
             <point key="canvasLocation" x="75" y="740"/>
         </scene>
-        <!--Accounts List View Controller-->
+        <!--View Controller-->
         <scene sceneID="o7E-xn-hDh">
             <objects>
-                <viewController storyboardIdentifier="AccountsListViewController" id="29s-Rd-OUf" customClass="AccountsListViewController" customModule="Tokenary" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="ALViewController" id="29s-Rd-OUf" customClass="ALViewController" customModule="Tokenary_macOS" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="Yjc-Zm-uZY">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
@@ -817,118 +816,12 @@ DQ
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
                                 </textFieldCell>
                             </textField>
-                            <scrollView autohidesScrollers="YES" horizontalLineScroll="40" horizontalPageScroll="0.0" verticalLineScroll="40" verticalPageScroll="10" hasHorizontalScroller="NO" usesPredominantAxisScrolling="NO" horizontalScrollElasticity="none" translatesAutoresizingMaskIntoConstraints="NO" id="7bs-Kr-ija">
+                            <customView translatesAutoresizingMaskIntoConstraints="NO" id="XiW-M2-FoX">
                                 <rect key="frame" x="0.0" y="0.0" width="250" height="247"/>
-                                <clipView key="contentView" id="RjU-hi-SHx">
-                                    <rect key="frame" x="1" y="1" width="248" height="245"/>
-                                    <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
-                                    <subviews>
-                                        <tableView verticalHuggingPriority="750" allowsExpansionToolTips="YES" columnAutoresizingStyle="none" tableStyle="plain" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" typeSelect="NO" rowHeight="40" rowSizeStyle="automatic" viewBased="YES" id="glA-FK-Kdd" customClass="RightClickTableView" customModule="Tokenary" customModuleProvider="target">
-                                            <rect key="frame" x="0.0" y="0.0" width="248" height="245"/>
-                                            <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
-                                            <color key="backgroundColor" name="controlBackgroundColor" catalog="System" colorSpace="catalog"/>
-                                            <color key="gridColor" name="gridColor" catalog="System" colorSpace="catalog"/>
-                                            <tableColumns>
-                                                <tableColumn width="248" minWidth="40" maxWidth="1000" id="Usc-6R-O3H">
-                                                    <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="center">
-                                                        <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
-                                                        <color key="backgroundColor" name="headerColor" catalog="System" colorSpace="catalog"/>
-                                                    </tableHeaderCell>
-                                                    <textFieldCell key="dataCell" lineBreakMode="truncatingTail" selectable="YES" editable="YES" title="Text Cell" id="ieT-MJ-hVX">
-                                                        <font key="font" metaFont="system"/>
-                                                        <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
-                                                        <color key="backgroundColor" name="controlBackgroundColor" catalog="System" colorSpace="catalog"/>
-                                                    </textFieldCell>
-                                                    <prototypeCellViews>
-                                                        <tableCellView identifier="AccountCellView" id="Lp1-Zy-70c" customClass="AccountCellView" customModule="Tokenary" customModuleProvider="target">
-                                                            <rect key="frame" x="0.0" y="0.0" width="248" height="40"/>
-                                                            <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
-                                                            <subviews>
-                                                                <customView translatesAutoresizingMaskIntoConstraints="NO" id="NCN-NG-n35">
-                                                                    <rect key="frame" x="77" y="0.0" width="94" height="40"/>
-                                                                    <subviews>
-                                                                        <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="pdB-jS-gKE">
-                                                                            <rect key="frame" x="0.0" y="5" width="30" height="30"/>
-                                                                            <constraints>
-                                                                                <constraint firstAttribute="width" constant="30" id="Dmm-fG-F82"/>
-                                                                                <constraint firstAttribute="height" constant="30" id="MNb-Zm-mjg"/>
-                                                                            </constraints>
-                                                                            <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyDown" image="NSApplicationIcon" id="RY9-3f-d0k"/>
-                                                                            <userDefinedRuntimeAttributes>
-                                                                                <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
-                                                                                    <integer key="value" value="15"/>
-                                                                                </userDefinedRuntimeAttribute>
-                                                                            </userDefinedRuntimeAttributes>
-                                                                        </imageView>
-                                                                        <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="sef-hl-iPV">
-                                                                            <rect key="frame" x="34" y="8" width="62" height="25"/>
-                                                                            <textFieldCell key="cell" lineBreakMode="clipping" alignment="center" title="Label" id="2a6-9c-AzV">
-                                                                                <font key="font" metaFont="systemBold" size="21"/>
-                                                                                <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
-                                                                                <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
-                                                                            </textFieldCell>
-                                                                        </textField>
-                                                                    </subviews>
-                                                                    <constraints>
-                                                                        <constraint firstItem="sef-hl-iPV" firstAttribute="centerY" secondItem="NCN-NG-n35" secondAttribute="centerY" id="6et-F3-O5t"/>
-                                                                        <constraint firstItem="pdB-jS-gKE" firstAttribute="centerY" secondItem="NCN-NG-n35" secondAttribute="centerY" id="Nuj-zO-bLh"/>
-                                                                        <constraint firstItem="sef-hl-iPV" firstAttribute="leading" secondItem="pdB-jS-gKE" secondAttribute="trailing" constant="6" id="Y8Y-IA-9Ls"/>
-                                                                        <constraint firstItem="pdB-jS-gKE" firstAttribute="leading" secondItem="NCN-NG-n35" secondAttribute="leading" id="ey8-Sb-rLI"/>
-                                                                        <constraint firstAttribute="trailing" secondItem="sef-hl-iPV" secondAttribute="trailing" id="xR9-al-xQQ"/>
-                                                                    </constraints>
-                                                                </customView>
-                                                            </subviews>
-                                                            <constraints>
-                                                                <constraint firstItem="NCN-NG-n35" firstAttribute="centerX" secondItem="Lp1-Zy-70c" secondAttribute="centerX" id="8fG-j2-tRf"/>
-                                                                <constraint firstItem="NCN-NG-n35" firstAttribute="width" relation="lessThanOrEqual" secondItem="Lp1-Zy-70c" secondAttribute="width" constant="-20" id="LSY-Kz-5MX"/>
-                                                                <constraint firstItem="NCN-NG-n35" firstAttribute="centerY" secondItem="Lp1-Zy-70c" secondAttribute="centerY" id="TdF-hm-H9i"/>
-                                                                <constraint firstItem="NCN-NG-n35" firstAttribute="height" secondItem="Lp1-Zy-70c" secondAttribute="height" id="Wbn-Cj-NEg"/>
-                                                            </constraints>
-                                                            <connections>
-                                                                <outlet property="addressImageView" destination="pdB-jS-gKE" id="Feb-Zz-q1a"/>
-                                                                <outlet property="addressTextField" destination="sef-hl-iPV" id="aGb-wC-t98"/>
-                                                            </connections>
-                                                        </tableCellView>
-                                                        <tableCellView identifier="AddAccountOptionCellView" id="1KM-PS-nEo" customClass="AddAccountOptionCellView" customModule="Tokenary" customModuleProvider="target">
-                                                            <rect key="frame" x="0.0" y="40" width="248" height="40"/>
-                                                            <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
-                                                            <subviews>
-                                                                <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="BpB-tc-JdP">
-                                                                    <rect key="frame" x="18" y="8" width="224" height="25"/>
-                                                                    <textFieldCell key="cell" lineBreakMode="clipping" alignment="left" title="Label" id="FAR-3U-VR0">
-                                                                        <font key="font" metaFont="systemBold" size="21"/>
-                                                                        <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
-                                                                        <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
-                                                                    </textFieldCell>
-                                                                </textField>
-                                                            </subviews>
-                                                            <constraints>
-                                                                <constraint firstItem="BpB-tc-JdP" firstAttribute="centerY" secondItem="1KM-PS-nEo" secondAttribute="centerY" id="TPK-nv-hua"/>
-                                                                <constraint firstItem="BpB-tc-JdP" firstAttribute="leading" secondItem="1KM-PS-nEo" secondAttribute="leading" constant="20" id="UGV-sR-Wou"/>
-                                                                <constraint firstAttribute="trailing" secondItem="BpB-tc-JdP" secondAttribute="trailing" constant="8" id="YjX-hl-ACx"/>
-                                                            </constraints>
-                                                            <connections>
-                                                                <outlet property="titleLabel" destination="BpB-tc-JdP" id="E5r-c3-Wju"/>
-                                                            </connections>
-                                                        </tableCellView>
-                                                    </prototypeCellViews>
-                                                </tableColumn>
-                                            </tableColumns>
-                                        </tableView>
-                                    </subviews>
-                                </clipView>
                                 <constraints>
-                                    <constraint firstAttribute="width" constant="250" id="zxW-2l-wsU"/>
+                                    <constraint firstAttribute="width" constant="250" id="PIA-Wr-vBP"/>
                                 </constraints>
-                                <scroller key="horizontalScroller" hidden="YES" wantsLayer="YES" verticalHuggingPriority="750" horizontal="YES" id="IT1-B8-OHF">
-                                    <rect key="frame" x="-100" y="-100" width="238" height="16"/>
-                                    <autoresizingMask key="autoresizingMask"/>
-                                </scroller>
-                                <scroller key="verticalScroller" hidden="YES" wantsLayer="YES" verticalHuggingPriority="750" horizontal="NO" id="1fG-vB-QGH">
-                                    <rect key="frame" x="224" y="17" width="15" height="102"/>
-                                    <autoresizingMask key="autoresizingMask"/>
-                                </scroller>
-                            </scrollView>
+                            </customView>
                             <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="ngQ-Bn-Kwd">
                                 <rect key="frame" x="205" y="292" width="33" height="34"/>
                                 <buttonCell key="cell" type="inline" title="+" bezelStyle="inline" imagePosition="overlaps" alignment="center" lineBreakMode="truncatingTail" state="on" imageScaling="proportionallyDown" inset="2" id="JVh-da-a0h">
@@ -936,7 +829,7 @@ DQ
                                     <font key="font" metaFont="systemBold" size="29"/>
                                 </buttonCell>
                                 <connections>
-                                    <action selector="addButtonTapped:" target="29s-Rd-OUf" id="MKz-Ok-RUY"/>
+                                    <action selector="addButtonTapped:" target="29s-Rd-OUf" id="ZaA-pg-Drc"/>
                                 </connections>
                             </button>
                             <customView translatesAutoresizingMaskIntoConstraints="NO" id="YAr-gV-Zhp">
@@ -961,26 +854,26 @@ DQ
                         </subviews>
                         <constraints>
                             <constraint firstItem="ngQ-Bn-Kwd" firstAttribute="leading" secondItem="dkh-kG-EFj" secondAttribute="trailing" constant="10" id="2jH-ov-jln"/>
-                            <constraint firstItem="7bs-Kr-ija" firstAttribute="leading" secondItem="Yjc-Zm-uZY" secondAttribute="leading" id="3n0-jB-KwV"/>
-                            <constraint firstAttribute="trailing" secondItem="7bs-Kr-ija" secondAttribute="trailing" id="6m3-S7-WJp"/>
                             <constraint firstAttribute="trailing" secondItem="ngQ-Bn-Kwd" secondAttribute="trailing" constant="12" id="Ln4-b5-NfT"/>
-                            <constraint firstItem="7bs-Kr-ija" firstAttribute="top" secondItem="YAr-gV-Zhp" secondAttribute="bottom" id="N0R-Qm-X3z"/>
                             <constraint firstItem="ngQ-Bn-Kwd" firstAttribute="firstBaseline" secondItem="dkh-kG-EFj" secondAttribute="firstBaseline" id="RDE-f4-Heb"/>
                             <constraint firstItem="YAr-gV-Zhp" firstAttribute="top" secondItem="dkh-kG-EFj" secondAttribute="bottom" constant="5" id="eSI-xz-s5L"/>
+                            <constraint firstAttribute="bottom" secondItem="XiW-M2-FoX" secondAttribute="bottom" id="grV-q0-OTS"/>
+                            <constraint firstItem="XiW-M2-FoX" firstAttribute="leading" secondItem="Yjc-Zm-uZY" secondAttribute="leading" id="iU3-wD-PkG"/>
                             <constraint firstItem="YAr-gV-Zhp" firstAttribute="centerX" secondItem="Yjc-Zm-uZY" secondAttribute="centerX" id="ju9-P1-aBa"/>
                             <constraint firstItem="YAr-gV-Zhp" firstAttribute="width" secondItem="Yjc-Zm-uZY" secondAttribute="width" id="mzg-kX-V5F"/>
+                            <constraint firstItem="XiW-M2-FoX" firstAttribute="top" secondItem="YAr-gV-Zhp" secondAttribute="bottom" id="n4M-Jh-3Rn"/>
                             <constraint firstItem="dkh-kG-EFj" firstAttribute="top" secondItem="Yjc-Zm-uZY" secondAttribute="top" constant="24" id="oaa-yR-g0U"/>
+                            <constraint firstAttribute="trailing" secondItem="XiW-M2-FoX" secondAttribute="trailing" id="qkF-hm-MD0"/>
                             <constraint firstItem="dkh-kG-EFj" firstAttribute="centerX" secondItem="Yjc-Zm-uZY" secondAttribute="centerX" id="qoF-Dr-xWA"/>
-                            <constraint firstAttribute="bottom" secondItem="7bs-Kr-ija" secondAttribute="bottom" id="zCE-cx-u4r"/>
                         </constraints>
                     </view>
                     <connections>
-                        <outlet property="addButton" destination="ngQ-Bn-Kwd" id="FlT-oq-C5e"/>
-                        <outlet property="chainButton" destination="WBh-Qb-dhA" id="Fyv-PN-1Ln"/>
-                        <outlet property="chainButtonContainer" destination="YAr-gV-Zhp" id="0qy-nB-KfB"/>
-                        <outlet property="chainButtonHeightConstraint" destination="HaA-yk-eCj" id="2KM-mU-OO6"/>
-                        <outlet property="tableView" destination="glA-FK-Kdd" id="9aW-Qr-UuF"/>
-                        <outlet property="titleLabel" destination="dkh-kG-EFj" id="xDn-bP-HWG"/>
+                        <outlet property="accountsListContainer" destination="XiW-M2-FoX" id="fN6-Cm-rNL"/>
+                        <outlet property="addButton" destination="ngQ-Bn-Kwd" id="F5z-iz-eor"/>
+                        <outlet property="chainButton" destination="WBh-Qb-dhA" id="g7R-i8-X4y"/>
+                        <outlet property="chainButtonContainer" destination="YAr-gV-Zhp" id="Yuk-XP-xez"/>
+                        <outlet property="chainButtonHeightConstraint" destination="HaA-yk-eCj" id="Cl4-JM-CVD"/>
+                        <outlet property="titleLabel" destination="dkh-kG-EFj" id="qfq-sh-rZI"/>
                     </connections>
                 </viewController>
                 <customObject id="JTb-7y-Jwq" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
@@ -990,7 +883,7 @@ DQ
         <!--Waiting View Controller-->
         <scene sceneID="xkb-7p-mUK">
             <objects>
-                <viewController storyboardIdentifier="WaitingViewController" id="Wjt-h2-yE1" customClass="WaitingViewController" customModule="Tokenary" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="WaitingViewController" id="Wjt-h2-yE1" customClass="WaitingViewController" customModule="Tokenary_macOS" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="DVX-Gd-m4U">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
@@ -1050,7 +943,7 @@ DQ
         <!--Approve View Controller-->
         <scene sceneID="aMM-KY-BR7">
             <objects>
-                <viewController storyboardIdentifier="ApproveViewController" id="A70-cr-SWr" customClass="ApproveViewController" customModule="Tokenary" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="ApproveViewController" id="A70-cr-SWr" customClass="ApproveViewController" customModule="Tokenary_macOS" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="xvx-vV-OZe">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="372"/>
                         <autoresizingMask key="autoresizingMask"/>
@@ -1199,7 +1092,7 @@ DQ
         <!--Error View Controller-->
         <scene sceneID="LSi-74-yAS">
             <objects>
-                <viewController storyboardIdentifier="ErrorViewController" id="Os3-h2-6sc" customClass="ErrorViewController" customModule="Tokenary" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="ErrorViewController" id="Os3-h2-6sc" customClass="ErrorViewController" customModule="Tokenary_macOS" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="cFH-jd-zLP">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
@@ -1268,7 +1161,7 @@ DQ
         <!--Password View Controller-->
         <scene sceneID="Riu-mP-tQs">
             <objects>
-                <viewController storyboardIdentifier="PasswordViewController" id="KMi-XY-mOg" customClass="PasswordViewController" customModule="Tokenary" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="PasswordViewController" id="KMi-XY-mOg" customClass="PasswordViewController" customModule="Tokenary_macOS" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="Efz-OH-wm2">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
@@ -1371,7 +1264,7 @@ DQ
         <!--Welcome View Controller-->
         <scene sceneID="xdv-om-uKF">
             <objects>
-                <viewController storyboardIdentifier="WelcomeViewController" id="42G-F4-o1P" customClass="WelcomeViewController" customModule="Tokenary" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="WelcomeViewController" id="42G-F4-o1P" customClass="WelcomeViewController" customModule="Tokenary_macOS" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="n8I-Pv-qZV">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
@@ -1440,7 +1333,7 @@ DQ
         <!--Approve Transaction View Controller-->
         <scene sceneID="WAJ-YX-5QJ">
             <objects>
-                <viewController storyboardIdentifier="ApproveTransactionViewController" id="eky-J7-eog" customClass="ApproveTransactionViewController" customModule="Tokenary" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="ApproveTransactionViewController" id="eky-J7-eog" customClass="ApproveTransactionViewController" customModule="Tokenary_macOS" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="SAE-QE-uez">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="390"/>
                         <autoresizingMask key="autoresizingMask"/>
@@ -1651,7 +1544,4 @@ DQ
             <point key="canvasLocation" x="-219" y="1197"/>
         </scene>
     </scenes>
-    <resources>
-        <image name="NSApplicationIcon" width="32" height="32"/>
-    </resources>
 </document>
