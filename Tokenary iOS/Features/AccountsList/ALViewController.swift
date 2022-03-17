@@ -6,16 +6,6 @@ import UIKit
 import SwiftUI
 import WalletCore
 
-struct DappRequestProcessor1 {
-
-     private static let walletsManager = WalletsManager.shared
-     private static let ethereum = Ethereum.shared
-
-     static func processSafariRequest(_ request: SafariRequest, completion: @escaping () -> Void) -> DappRequestAction {
-         .selectAccount(.init(provider: .unknown, completion: {_, _ in }))
-     }
-}
-
 class ALViewController<ContentView: View>: WrappingViewController<ContentView>, DataStateContainer {
     private let walletsManager: WalletsManager
 
