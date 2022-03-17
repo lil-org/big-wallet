@@ -128,10 +128,7 @@ class PasswordViewController: UIViewController {
     
     private func showAccountsList() {
         let accountsListVC = AccountsListAssembly.build(for: .mainScreen)
-        let accountsListVCWrapped = accountsListVC.inNavigationController.then {
-            $0.setNavigationBarHidden(true, animated: false)
-        }
-        UIApplication.shared.replaceRootViewController(with: accountsListVCWrapped)
+        UIApplication.shared.replaceRootViewController(with: accountsListVC)
     }
 }
 

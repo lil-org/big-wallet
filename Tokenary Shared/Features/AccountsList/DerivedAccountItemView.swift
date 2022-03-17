@@ -9,33 +9,44 @@ import UIKit
 import Cocoa
 #endif
 
-struct MnemonicDerivedAccountView: View {
+struct DerivedAccountItemView: View {
     struct ViewModel: Identifiable, Equatable {
         var id = UUID()
+        var walletId: String
         var icon: Image
         var title: String
         var ticker: String
         var accountAddress: String?
         var iconShadowColor: Color
+        
+        fileprivate var chain: SupportedChainType {
+            SupportedChainType(rawValue: self.title.lowercased()) ?? .ethereum
+        }
     }
     
-    private let stackUUID = UUID()
+    @EnvironmentObject
+    private var stateProvider: AccountsListStateProvider
     
     @State
-    var maximumSubViewWidth: CGFloat = .zero
+    private var maximumSubViewWidth: CGFloat = .zero
+    
+    @State
+    private var areActionsForDerivedAccountPresented: Bool = false
+    
+    @State
+    /// Used as a work-around for not correctly working frame operations
+    private var viewBounds: CGRect = CGRect(x: .zero, y: .zero, width: 1000, height: .zero)
     
     @Binding
     var viewModel: ViewModel
     
-    @Binding
-    var selectedChainTitle: String?
+    private var attachedWallet: TokenaryWallet? {
+        self.stateProvider.wallets.first(
+            where: { $0.id == self.viewModel.walletId }
+        )
+    }
     
-    // Used as a work-around for not correctly working frame operations
-    @State
-    var viewBounds: CGRect = CGRect(x: .zero, y: .zero, width: 1000, height: .zero)
-    
-    @Binding
-    var showToastOverlay: Bool
+    private let stackUUID = UUID()
     
     var body: some View {
         HStack(alignment: .center, spacing: 6) {
@@ -83,20 +94,67 @@ struct MnemonicDerivedAccountView: View {
             }
         }
         .modifier(
-            MnemonicDerivedAccountViewStyleModifier(
+            DerivedAccountViewStyleModifier(
                 Color(light: .black, dark: .white),
                 cornerRadius: 4,
                 longPressActionClosure: {
                     withAnimation {
-                        self.showToastOverlay = true
+                        self.stateProvider.showToastOverlay = true
                     }
                     self.copyAddressToPasteboard()
                 },
                 onEndedActionClosure: {
-                    self.selectedChainTitle = self.viewModel.title
+                    if self.stateProvider.mode == .mainScreen {
+                        self.areActionsForDerivedAccountPresented.toggle()
+                    } else {
+                        if let attachedWallet = self.attachedWallet {
+                            self.stateProvider.didSelect(wallet: attachedWallet)
+                        }
+                    }
                 }
             )
         )
+        .confirmationDialog(
+            self.actionsForDerivedAccountDialogTitle,
+            isPresented: self.$areActionsForDerivedAccountPresented,
+            titleVisibility: .visible,
+            actions: {
+                self.derivedAccountActions
+            }
+        )
+    }
+    
+    private var actionsForDerivedAccountDialogTitle: String {
+        if let address = self.stateProvider.selectedWallet?[self.viewModel.chain, .address] ?? nil {
+            return address
+        } else {
+            return "\(self.viewModel.chain.title) actions"
+        }
+    }
+
+    private var derivedAccountActions: some View {
+        Unwrap(self.attachedWallet) { attachedWallet in
+            Button(Strings.copyAddress) {
+                PasteboardHelper.setPlainNotNil(attachedWallet[self.viewModel.chain, .address] ?? nil)
+            }.keyboardShortcut(.defaultAction)
+            Button(self.viewModel.chain.transactionScaner) {
+                if let address = attachedWallet[self.viewModel.chain, .address] ?? nil {
+                    LinkHelper.open(self.viewModel.chain.scanURL(address))
+                }
+            }
+            Button(Strings.showWalletKey) {
+                self.stateProvider.didTapExport(wallet: attachedWallet)
+            }
+            if attachedWallet.associatedMetadata.walletDerivationType.chainTypes.count > 1 {
+                Button("Remove account", role: .destructive) {
+                    try? WalletsManager.shared.removeAccountIn(
+                        wallet: attachedWallet,
+                        account: self.viewModel.chain
+                    )
+                }
+            }
+            Button(Strings.cancel, role: .cancel, action: {})
+        }
     }
     
     private func copyAddressToPasteboard() {
@@ -104,7 +162,7 @@ struct MnemonicDerivedAccountView: View {
     }
 }
 
-private struct MnemonicDerivedAccountViewStyleModifier<S>: ViewModifier where S: ShapeStyle {
+private struct DerivedAccountViewStyleModifier<S>: ViewModifier where S: ShapeStyle {
     private let shapeStyle: S
     private let cornerRadius: CGFloat
     private let longPressActionClosure: () -> Void
@@ -137,7 +195,11 @@ private struct MnemonicDerivedAccountViewStyleModifier<S>: ViewModifier where S:
             .onTouchGesture(
                 touchChanged: { (isInside, hasEnded) in
                     withAnimation {
-                        self.scaleValue = isInside ? 0.95 : 1.0
+                        if hasEnded {
+                            self.scaleValue = 1
+                        } else {
+                            self.scaleValue = isInside ? 0.95 : 1.0
+                        }
                     }
                     guard isInside, hasEnded else { return }
                     self.onEndedActionClosure()
@@ -151,20 +213,17 @@ private struct MnemonicDerivedAccountViewStyleModifier<S>: ViewModifier where S:
 
 struct MnemonicDerivedAccountView_Previews: PreviewProvider {
     static var previews: some View {
-        MnemonicDerivedAccountView(
+        DerivedAccountItemView(
             viewModel: .constant(
-                MnemonicDerivedAccountView.ViewModel(
+                DerivedAccountItemView.ViewModel(
+                    walletId: "1234",
                     icon: Image(packageResource: "sberbank", ofType: "png"),
                     title: "Anything else long name very long",
-                    // "Crypto Kombat"
                     ticker: "AELNVFL",
-                    // "SOL"
                     accountAddress: "0x00000000219ab540356cbb839cbe05303d7705fa",
                     iconShadowColor: Color(BridgedImage(named: "sberbank.png")?.averageColor ?? .black)
                 )
-            ),
-            selectedChainTitle: .constant("false"),
-            showToastOverlay: .constant(false)
+            )
         )
     }
 }

@@ -5,8 +5,9 @@ import BlockiesSwift
 
 protocol AccountsListStateProviderInput: AnyObject {
     var wallets: [TokenaryWallet] { get set }
+    var filteredWallets: [TokenaryWallet] { get }
     
-    func didTapAddAccount()
+    func didTapAddAccount(at buttonFrame: CGRect)
 #if canImport(AppKit)
     func scrollToWalletAndBlink(walletId: String)
 #endif
@@ -27,7 +28,7 @@ protocol AccountsListStateProviderOutput: AnyObject {
 
 class AccountsListStateProvider: ObservableObject {
     @Published
-    var accounts: [AccountView.ViewModel] = []
+    var accounts: [AccountItemView.ViewModel] = []
     
     @Published
     var wallets: [TokenaryWallet] = [] {
@@ -36,7 +37,7 @@ class AccountsListStateProvider: ObservableObject {
         }
     }
     
-    private var filteredWallets: [TokenaryWallet] {
+    var filteredWallets: [TokenaryWallet] {
         if
             case let .choseAccount(forChain: selectedChain) = mode,
             let selectedChain = selectedChain
@@ -48,8 +49,13 @@ class AccountsListStateProvider: ObservableObject {
         
     }
     
+    // iPad -> popover, iPhone -> dialog
     @Published
-    var isAddAccountPresented: Bool = false
+    var isAddAccountPopoverPresented: Bool = false
+    @Published
+    var isAddAccountDialogPresented: Bool = false
+    
+    var touchAnchor: UnitPoint = .zero
     
     @Published
     var showToastOverlay: Bool = false
@@ -69,7 +75,7 @@ class AccountsListStateProvider: ObservableObject {
         self.mode = mode
     }
 
-    private func transform(_ wallets: [TokenaryWallet]) -> [AccountView.ViewModel] {
+    private func transform(_ wallets: [TokenaryWallet]) -> [AccountItemView.ViewModel] {
         wallets
             .sorted { $0.associatedMetadata.createdAt < $1.associatedMetadata.createdAt }
             .map { wallet in
@@ -77,16 +83,24 @@ class AccountsListStateProvider: ObservableObject {
                 if wallet.isMnemonic {
                     if wallet.associatedMetadata.walletDerivationType.chainTypes.contains(.ethereum) {
                         icon = Image(
-                            Blockies(seed: wallet[.ethereum, .address]??.lowercased()).createImage(),
+                            Blockies(seed: wallet[.ethereum, .address]??.lowercased(), size: 10).createImage(),
                             defaultImage: "multiChainGrid"
                         )
                     } else {
                         icon = Image("multiChainGrid")
                     }
                 } else {
-                    icon = Image(wallet.associatedMetadata.walletDerivationType.chainTypes.first!.iconName)
+                    let privateKeyChainType = wallet.associatedMetadata.walletDerivationType.chainTypes.first!
+                    if privateKeyChainType == .ethereum {
+                        icon = Image(
+                            Blockies(seed: wallet[.address]??.lowercased(), size: 10).createImage(),
+                            defaultImage: "multiChainGrid"
+                        )
+                    } else {
+                        icon = Image(privateKeyChainType.iconName)
+                    }
                 }
-                return AccountView.ViewModel(
+                return AccountItemView.ViewModel(
                     id: wallet.id,
                     icon: icon,
                     isMnemonicBased: wallet.isMnemonic,
@@ -97,7 +111,7 @@ class AccountsListStateProvider: ObservableObject {
             }
     }
     
-    private func transform(_ wallet: TokenaryWallet) -> [MnemonicDerivedAccountView.ViewModel] {
+    private func transform(_ wallet: TokenaryWallet) -> [DerivedAccountItemView.ViewModel] {
         guard wallet.isMnemonic else { return [] }
         if
             case let .choseAccount(forChain: selectedChain) = self.mode,
@@ -106,7 +120,7 @@ class AccountsListStateProvider: ObservableObject {
             if wallet.associatedMetadata.walletDerivationType.chainTypes.contains(selectedChain) {
                 return [self.transform(wallet, chain: selectedChain)]
             } else {
-                preconditionFailure("This should not normally happen!")
+                assertionFailure("This should not normally happen!")
                 return []
             }
         }
@@ -117,20 +131,29 @@ class AccountsListStateProvider: ObservableObject {
     
     private func transform(
         _ wallet: TokenaryWallet, chain: SupportedChainType
-    ) -> MnemonicDerivedAccountView.ViewModel {
-        MnemonicDerivedAccountView.ViewModel(
+    ) -> DerivedAccountItemView.ViewModel {
+        DerivedAccountItemView.ViewModel(
+            walletId: wallet.id,
             icon: Image(chain.iconName),
             title: chain.title,
             ticker: chain.ticker,
             accountAddress: wallet[chain, .address] ?? nil,
-            iconShadowColor: Color(BridgedImage(named: chain.iconName)?.averageColor ?? .black)
+            iconShadowColor: .black
         )
     }
 }
 
 extension AccountsListStateProvider: AccountsListStateProviderInput {
-    func didTapAddAccount() {
-        self.isAddAccountPresented.toggle()
+    func didTapAddAccount(at buttonFrame: CGRect) {
+        self.touchAnchor = UnitPoint(
+            x: (buttonFrame.width / 2 + buttonFrame.minX) / UIScreen.main.bounds.width,
+            y: buttonFrame.minY / UIScreen.main.bounds.height
+        )
+        if UIDevice.isPad {
+            self.isAddAccountPopoverPresented.toggle()
+        } else {
+            self.isAddAccountDialogPresented.toggle()
+        }
     }
     
 #if canImport(AppKit)
@@ -138,7 +161,7 @@ extension AccountsListStateProvider: AccountsListStateProviderInput {
         self.scrollToWalletId = walletId
         guard let accountIdx = self.accounts.firstIndex(where: { $0.id == walletId }) else { return }
         let account = self.accounts[accountIdx]
-        self.accounts[accountIdx] = AccountView.ViewModel(
+        self.accounts[accountIdx] = AccountItemView.ViewModel(
             id: account.id,
             icon: account.icon,
             isMnemonicBased: account.isMnemonicBased,

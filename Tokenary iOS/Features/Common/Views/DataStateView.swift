@@ -10,7 +10,7 @@ enum DataState: CaseIterable {
 protocol DataStateContainer: AnyObject {
     
     var dataState: DataState { get set }
-    func configureDataState(_ dataState: DataState, description: String?, image: UIImage?, buttonTitle: String?, actionHandler: (() -> Void)?)
+    func configureDataState(_ dataState: DataState, description: String?, image: UIImage?, buttonTitle: String?, actionHandler: ((CGRect) -> Void)?)
 }
 
 class DataStateView: UIView {
@@ -20,9 +20,9 @@ class DataStateView: UIView {
         let description: String?
         let image: UIImage?
         let buttonTitle: String?
-        let actionHandler: (() -> Void)?
+        let actionHandler: ((CGRect) -> Void)?
         
-        init(description: String? = nil, image: UIImage? = nil, buttonTitle: String? = nil, actionHandler: (() -> Void)? = nil) {
+        init(description: String? = nil, image: UIImage? = nil, buttonTitle: String? = nil, actionHandler: ((CGRect) -> Void)? = nil) {
             self.description = description
             self.image = image
             self.buttonTitle = buttonTitle
@@ -69,10 +69,10 @@ class DataStateView: UIView {
     }
     
     @IBAction private func didTapButton(_ sender: Any) {
-        configurations[currentState]?.actionHandler?()
+        configurations[currentState]?.actionHandler?(self.button.frame)
     }
     
-    fileprivate func configureDataState(_ dataState: DataState, description: String? = nil, image: UIImage? = nil, buttonTitle: String? = nil, actionHandler: (() -> Void)? = nil) {
+    fileprivate func configureDataState(_ dataState: DataState, description: String? = nil, image: UIImage? = nil, buttonTitle: String? = nil, actionHandler: ((CGRect) -> Void)? = nil) {
         let newConfiguration = Configuration(description: description, image: image, buttonTitle: buttonTitle, actionHandler: actionHandler)
         configurations[dataState] = newConfiguration
     }
@@ -128,7 +128,7 @@ extension DataStateContainer where Self: UIViewController {
         dataStateView.backgroundColor = isTransparent ? .clear : .systemGroupedBackground
     }
     
-    func configureDataState(_ dataState: DataState, description: String? = nil, image: UIImage? = nil, buttonTitle: String? = nil, actionHandler: (() -> Void)? = nil) {
+    func configureDataState(_ dataState: DataState, description: String? = nil, image: UIImage? = nil, buttonTitle: String? = nil, actionHandler: ((CGRect) -> Void)? = nil) {
         dataStateView.configureDataState(dataState, description: description, image: image, buttonTitle: buttonTitle, actionHandler: actionHandler)
     }
     

@@ -401,7 +401,7 @@ final class WalletsManager {
     // MARK: Store & Destroy
     
     private func load() throws {
-        let ids = keychain.getAllWalletsIds().prefix(upTo: 2)
+        let ids = keychain.getAllWalletsIds().take(atMost: 2)
         var walletsToMigrate: [TokenaryWallet] = []
         for id in ids {
             guard

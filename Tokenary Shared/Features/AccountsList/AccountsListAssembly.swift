@@ -9,13 +9,7 @@ import SwiftUI
   import AppKit
 #endif
 
-// Pack 1
-// - Touch actions:
-//  - Empty space:
-//      - change color, show wallet actions
-//  - Account(on general screen) - show account actions
-//  - Account(on select) - select
-// - Add account filtering
+
 // Pack 2
 // - Fix account derivation time:
 //  - move to background
@@ -23,29 +17,17 @@ import SwiftUI
 //  - stop deriving addresses per request(cache them)
 // - Fix name redraw lag(remove save?)
 // Pack 3
-// - Add iPad support
-//  - Check drop-down views
-//  - overal-design
 // - Add normal pagination to ExpandableGrid
-// - Top navigation padding
-//  - Try UINavigationBar
-//  - Drop SwiftUI NavigationView, by custom redraw
 // Pack 4
 // - Prepare MR as per ivans' suggestion
-// - Drop MacOS integraion
 // check everything final, make mr
 
+//  - Account(on general screen) - show account actions
+//  - Account(on select) - select
 
 // везде показывать одинкаовый аддрес
-// для эфира показывать картику
 // для мнепоинмков показываем всегда эфир
-// уменьшить картнку, увеличить заголовок - убрать надпись multi-coin wallet
 // взять фотки у траста
-// откатить дефолтное название для кошелька
-// один эмотикон
-//
-
-// https://github.com/trustwallet/assets
 
 public enum AccountsListMode: Equatable {
     case choseAccount(forChain: SupportedChainType?)
@@ -96,7 +78,7 @@ public final class AccountsListAssembly {
         let stateProvider = AccountsListStateProvider(
             mode: mode
         )
-        let contentView = AccountsListView()
+        let contentView = AccountsListContentHolderView()
             .environmentObject(stateProvider)
         
         let wrappingVC = WrappingViewController(rootView: contentView)
@@ -117,6 +99,5 @@ public final class AccountsListAssembly {
         
         return hostingVC
     }
-
 #endif
 }

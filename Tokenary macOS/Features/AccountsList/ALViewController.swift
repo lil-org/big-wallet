@@ -111,7 +111,7 @@ class ALViewController: NSViewController, NSWindowDelegate, NSMenuDelegate {
         let font = NSFont.systemFont(ofSize: 21, weight: .bold)
         
         createItem.attributedTitle = NSAttributedString(
-            string: "🌱  " + Strings.createNew, attributes: [.font: font]
+            string: Strings.createNew, attributes: [.font: font]
         )
         importItem.attributedTitle = NSAttributedString(
             string: Strings.importExisting, attributes: [.font: font]

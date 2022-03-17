@@ -47,8 +47,8 @@ class ALViewController<ContentView: View>: WrappingViewController<ContentView>, 
         
         self.configureDataState(
             .noData, description: Strings.tokenaryIsEmpty, buttonTitle: Strings.addAccount
-        ) { [weak self] in
-            self?.stateProviderInput?.didTapAddAccount()
+        ) { [weak self] buttonFrame in
+            self?.stateProviderInput?.didTapAddAccount(at: buttonFrame)
         }
         self.setDataStateViewTransparent(true)
         self.updateDataState()
@@ -91,9 +91,10 @@ class ALViewController<ContentView: View>: WrappingViewController<ContentView>, 
             let accountsListVC = AccountsListAssembly.build(
                 for: .choseAccount(forChain: SupportedChainType(provider: action.provider)),
                 onSelectedWallet: action.completion
-            )
-            accountsListVC.isModalInPresentation = true
-            self.presentForSafariRequest(accountsListVC.inNavigationController, id: request.id)
+            ).then {
+                $0.isModalInPresentation = true
+            }
+            self.presentForSafariRequest(accountsListVC, id: request.id)
         case .approveMessage(let action):
             let approveViewController = ApproveViewController.with(subject: action.subject,
                                                                    address: action.address,
@@ -134,12 +135,16 @@ class ALViewController<ContentView: View>: WrappingViewController<ContentView>, 
     // MARK: - State Management
 
     private func updateDataState() {
-        self.dataState = self.walletsManager.wallets.isEmpty ? .noData : .hasData
+        if let isFilteredEmpty = self.stateProviderInput?.filteredWallets.isEmpty {
+            self.dataState = isFilteredEmpty ? .noData : .hasData
+        } else {
+            self.dataState = self.walletsManager.wallets.isEmpty ? .noData : .hasData
+        }
     }
     
     @objc private func reloadData() {
-        self.updateDataState()
         self.stateProviderInput?.wallets = self.walletsManager.wallets
+        self.updateDataState()
     }
     
     private func createNewAccountAndShowSecretWordsFor(chains: [SupportedChainType]) {

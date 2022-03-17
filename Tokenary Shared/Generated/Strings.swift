@@ -60,7 +60,7 @@ struct Strings {
     static let selectTestnet = "Select Testnet"
     static let importAccount = "Import Account"
     static let addAccount = "Add Account"
-    static let createNew = "Create New"
+    static let createNew = "🌱  Create New"
     static let importExisting = "💼  Import Existing"
     static let passwordDoesNotMatch = "Password does not match"
     static let toRemoveAccount = "To remove account"

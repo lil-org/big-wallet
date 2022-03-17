@@ -67,6 +67,17 @@ public enum SupportedChainType: String, CaseIterable {
         }
     }
     
+    public var transactionScaner: String {
+        switch self {
+        case .ethereum:
+            return Strings.viewOnEtherScan
+        case .tezos:
+            return Strings.viewOnTezosScan
+        case .solana:
+            return Strings.viewOnSolanaScan
+        }
+    }
+    
     public var curve: Curve { self.walletCoreCoinType.curve }
     
     @frozen public struct Set: OptionSet {

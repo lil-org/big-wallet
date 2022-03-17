@@ -137,6 +137,8 @@
 		4B1D46BA27D6EF4500162216 /* LaunchFlagHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3C227C6968E00809FB0 /* LaunchFlagHelper.swift */; };
 		4B1D46BB27D6EF4500162216 /* LaunchFlagHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3C227C6968E00809FB0 /* LaunchFlagHelper.swift */; };
 		4B1D46BF27D6FDBD00162216 /* UITableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1D46BE27D6FDBD00162216 /* UITableView.swift */; };
+		4B697DC327E12A1400934AB3 /* UIDevice+extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B697DC227E12A1400934AB3 /* UIDevice+extensions.swift */; };
+		4B697DC527E193C300934AB3 /* UIViewBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B697DC427E193C300934AB3 /* UIViewBinding.swift */; };
 		4B9073CA27D8042C00B27E80 /* PasteboardHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B9073C927D8042C00B27E80 /* PasteboardHelper.swift */; };
 		4B9073CB27D8042C00B27E80 /* PasteboardHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B9073C927D8042C00B27E80 /* PasteboardHelper.swift */; };
 		4B9073CD27D8048700B27E80 /* LinkHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B9073CC27D8048700B27E80 /* LinkHelper.swift */; };
@@ -205,14 +207,13 @@
 		4BD4B45D27C6968F00809FB0 /* Bundle+extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3CC27C6968E00809FB0 /* Bundle+extensions.swift */; };
 		4BD4B45E27C6968F00809FB0 /* AccountsListStateProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3CF27C6968E00809FB0 /* AccountsListStateProvider.swift */; };
 		4BD4B45F27C6968F00809FB0 /* AccountsListStateProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3CF27C6968E00809FB0 /* AccountsListStateProvider.swift */; };
-		4BD4B46027C6968F00809FB0 /* MnemonicDerivedAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D027C6968E00809FB0 /* MnemonicDerivedAccountView.swift */; };
-		4BD4B46127C6968F00809FB0 /* MnemonicDerivedAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D027C6968E00809FB0 /* MnemonicDerivedAccountView.swift */; };
-		4BD4B46227C6968F00809FB0 /* AccountsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D127C6968E00809FB0 /* AccountsListView.swift */; };
+		4BD4B46027C6968F00809FB0 /* DerivedAccountItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D027C6968E00809FB0 /* DerivedAccountItemView.swift */; };
+		4BD4B46127C6968F00809FB0 /* DerivedAccountItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D027C6968E00809FB0 /* DerivedAccountItemView.swift */; };
 		4BD4B46327C6968F00809FB0 /* AccountsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D127C6968E00809FB0 /* AccountsListView.swift */; };
 		4BD4B46427C6968F00809FB0 /* AccountsListContentHolderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D227C6968E00809FB0 /* AccountsListContentHolderView.swift */; };
 		4BD4B46527C6968F00809FB0 /* AccountsListContentHolderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D227C6968E00809FB0 /* AccountsListContentHolderView.swift */; };
-		4BD4B46627C6968F00809FB0 /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D327C6968E00809FB0 /* AccountView.swift */; };
-		4BD4B46727C6968F00809FB0 /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D327C6968E00809FB0 /* AccountView.swift */; };
+		4BD4B46627C6968F00809FB0 /* AccountItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D327C6968E00809FB0 /* AccountItemView.swift */; };
+		4BD4B46727C6968F00809FB0 /* AccountItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D327C6968E00809FB0 /* AccountItemView.swift */; };
 		4BD4B46927C6968F00809FB0 /* ALViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D427C6968E00809FB0 /* ALViewController.swift */; };
 		4BD4B46A27C6968F00809FB0 /* AccountsListAssembly.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D527C6968E00809FB0 /* AccountsListAssembly.swift */; };
 		4BD4B46B27C6968F00809FB0 /* AccountsListAssembly.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D527C6968E00809FB0 /* AccountsListAssembly.swift */; };
@@ -445,6 +446,8 @@
 		4B1D46BC27D6EF9F00162216 /* Tokenary macOS-Bridging-Header.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "Tokenary macOS-Bridging-Header.h"; sourceTree = "<group>"; };
 		4B1D46BD27D6F01700162216 /* Tokenary iOS-Bridging-Header.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "Tokenary iOS-Bridging-Header.h"; sourceTree = "<group>"; };
 		4B1D46BE27D6FDBD00162216 /* UITableView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UITableView.swift; sourceTree = "<group>"; };
+		4B697DC227E12A1400934AB3 /* UIDevice+extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIDevice+extensions.swift"; sourceTree = "<group>"; };
+		4B697DC427E193C300934AB3 /* UIViewBinding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIViewBinding.swift; sourceTree = "<group>"; };
 		4B9073C927D8042C00B27E80 /* PasteboardHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardHelper.swift; sourceTree = "<group>"; };
 		4B9073CC27D8048700B27E80 /* LinkHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkHelper.swift; sourceTree = "<group>"; };
 		4B9073D127D8122C00B27E80 /* NSSharingServicePickerWrapped.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSSharingServicePickerWrapped.swift; sourceTree = "<group>"; };
@@ -487,10 +490,10 @@
 		4BD4B3CB27C6968E00809FB0 /* UserDefaults+extensions.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "UserDefaults+extensions.swift"; sourceTree = "<group>"; };
 		4BD4B3CC27C6968E00809FB0 /* Bundle+extensions.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "Bundle+extensions.swift"; sourceTree = "<group>"; };
 		4BD4B3CF27C6968E00809FB0 /* AccountsListStateProvider.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AccountsListStateProvider.swift; sourceTree = "<group>"; };
-		4BD4B3D027C6968E00809FB0 /* MnemonicDerivedAccountView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MnemonicDerivedAccountView.swift; sourceTree = "<group>"; };
+		4BD4B3D027C6968E00809FB0 /* DerivedAccountItemView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DerivedAccountItemView.swift; sourceTree = "<group>"; };
 		4BD4B3D127C6968E00809FB0 /* AccountsListView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AccountsListView.swift; sourceTree = "<group>"; };
 		4BD4B3D227C6968E00809FB0 /* AccountsListContentHolderView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AccountsListContentHolderView.swift; sourceTree = "<group>"; };
-		4BD4B3D327C6968E00809FB0 /* AccountView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
+		4BD4B3D327C6968E00809FB0 /* AccountItemView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AccountItemView.swift; sourceTree = "<group>"; };
 		4BD4B3D427C6968E00809FB0 /* ALViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ALViewController.swift; sourceTree = "<group>"; };
 		4BD4B3D527C6968E00809FB0 /* AccountsListAssembly.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AccountsListAssembly.swift; sourceTree = "<group>"; };
 		4BD4B3D927C6968E00809FB0 /* DimmingButtonStyle.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DimmingButtonStyle.swift; sourceTree = "<group>"; };
@@ -810,6 +813,7 @@
 				4BD4B3A427C6968E00809FB0 /* NSLayoutConstraint+extensions.swift */,
 				2CC6EF0C275E64810040CC62 /* UIViewController.swift */,
 				2C96D3A32763C6A800687301 /* UIView+extensions.swift */,
+				4B697DC227E12A1400934AB3 /* UIDevice+extensions.swift */,
 			);
 			path = Extensions;
 			sourceTree = "<group>";
@@ -877,6 +881,7 @@
 		4B1D468327D561FD00162216 /* AccountsList */ = {
 			isa = PBXGroup;
 			children = (
+				4BD4B3D127C6968E00809FB0 /* AccountsListView.swift */,
 				4BD4B3D427C6968E00809FB0 /* ALViewController.swift */,
 			);
 			path = AccountsList;
@@ -1242,10 +1247,9 @@
 			children = (
 				4BD4B3D527C6968E00809FB0 /* AccountsListAssembly.swift */,
 				4BD4B3CF27C6968E00809FB0 /* AccountsListStateProvider.swift */,
-				4BD4B3D127C6968E00809FB0 /* AccountsListView.swift */,
 				4BD4B3D227C6968E00809FB0 /* AccountsListContentHolderView.swift */,
-				4BD4B3D327C6968E00809FB0 /* AccountView.swift */,
-				4BD4B3D027C6968E00809FB0 /* MnemonicDerivedAccountView.swift */,
+				4BD4B3D327C6968E00809FB0 /* AccountItemView.swift */,
+				4BD4B3D027C6968E00809FB0 /* DerivedAccountItemView.swift */,
 			);
 			path = AccountsList;
 			sourceTree = "<group>";
@@ -1285,6 +1289,7 @@
 				4BD4B3E027C6968E00809FB0 /* WrappingViewController.swift */,
 				4BD4B3E127C6968E00809FB0 /* UIMenuWrapped.swift */,
 				4BD4B4C727C73CC300809FB0 /* UIActivityViewControllerWrapped.swift */,
+				4B697DC427E193C300934AB3 /* UIViewBinding.swift */,
 			);
 			path = UIKitWrappedViews;
 			sourceTree = "<group>";
@@ -1856,7 +1861,7 @@
 				4B1D46AF27D6C79200162216 /* NSStoryboard+extensions.swift in Sources */,
 				2C8A09D42675184700993638 /* Window.swift in Sources */,
 				4BD4B47C27C6968F00809FB0 /* WrappingStack.swift in Sources */,
-				4BD4B46627C6968F00809FB0 /* AccountView.swift in Sources */,
+				4BD4B46627C6968F00809FB0 /* AccountItemView.swift in Sources */,
 				4BD4B43027C6968F00809FB0 /* DispatchQueue+extensions.swift in Sources */,
 				4BD4B43227C6968F00809FB0 /* String+extensions.swift in Sources */,
 				4BD4B4B227C6968F00809FB0 /* Keychain.swift in Sources */,
@@ -1875,7 +1880,6 @@
 				2C264BC127B2F2C100234393 /* EthereumSafariRequest.swift in Sources */,
 				4BD4B4D827C8049C00809FB0 /* Unwrap.swift in Sources */,
 				4BD4B48027C6968F00809FB0 /* ConstrainMinMaxWidthView.swift in Sources */,
-				4BD4B46227C6968F00809FB0 /* AccountsListView.swift in Sources */,
 				2C264BD027B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
 				4B9073DA27D90C7600B27E80 /* WrappingViewController.swift in Sources */,
 				4BD4B4B027C6968F00809FB0 /* GasService.swift in Sources */,
@@ -1897,7 +1901,7 @@
 				4BD4B49227C6968F00809FB0 /* Transaction.swift in Sources */,
 				2C8A09E82675960D00993638 /* ErrorViewController.swift in Sources */,
 				4B90741627DC437D00B27E80 /* CheckBox.swift in Sources */,
-				4BD4B46027C6968F00809FB0 /* MnemonicDerivedAccountView.swift in Sources */,
+				4BD4B46027C6968F00809FB0 /* DerivedAccountItemView.swift in Sources */,
 				4BD4B4CB27C747D100809FB0 /* SimpleSearchBar.swift in Sources */,
 				2C264BCB27B2F2FF00234393 /* TezosSafariRequest.swift in Sources */,
 				4BD4B43427C6968F00809FB0 /* Collections+extensions.swift in Sources */,
@@ -1965,7 +1969,7 @@
 				4BD4B43F27C6968F00809FB0 /* Color+extensions.swift in Sources */,
 				4BD4B4B527C6968F00809FB0 /* SessionStorage.swift in Sources */,
 				4BD4B4A327C6968F00809FB0 /* TokenaryWallet.swift in Sources */,
-				4BD4B46727C6968F00809FB0 /* AccountView.swift in Sources */,
+				4BD4B46727C6968F00809FB0 /* AccountItemView.swift in Sources */,
 				4BD4B48727C6968F00809FB0 /* ApprovalSubject.swift in Sources */,
 				4BD4B4D427C8000600809FB0 /* Web3Provider.swift in Sources */,
 				2C96D3962762380400687301 /* ButtonWithExtendedArea.swift in Sources */,
@@ -1973,7 +1977,7 @@
 				4BD4B49527C6968F00809FB0 /* EthereumNetwork.swift in Sources */,
 				2CE059372763D60A0042D844 /* KeyboardObserver.swift in Sources */,
 				4BD4B45127C6968F00809FB0 /* DappRequestProcessor.swift in Sources */,
-				4BD4B46127C6968F00809FB0 /* MnemonicDerivedAccountView.swift in Sources */,
+				4BD4B46127C6968F00809FB0 /* DerivedAccountItemView.swift in Sources */,
 				4BD4B47927C6968F00809FB0 /* UIMenuWrapped.swift in Sources */,
 				4BD4B48327C6968F00809FB0 /* GlobalOverlayViewModifier.swift in Sources */,
 				2C40709027667A6600AB3D55 /* MultilineLabelTableViewCell.swift in Sources */,
@@ -2001,6 +2005,7 @@
 				4BD4B47727C6968F00809FB0 /* WrappingViewController.swift in Sources */,
 				4BD4B47127C6968F00809FB0 /* ChainSelectionView.swift in Sources */,
 				4BD4B45527C6968F00809FB0 /* Notification.Name+extensions.swift in Sources */,
+				4B697DC327E12A1400934AB3 /* UIDevice+extensions.swift in Sources */,
 				4BD4B41D27C6968F00809FB0 /* UIEdgeInsets+extensions.swift in Sources */,
 				4B9073CB27D8042C00B27E80 /* PasteboardHelper.swift in Sources */,
 				4B90741427DA77F200B27E80 /* URL+extensions.swift in Sources */,
@@ -2032,6 +2037,7 @@
 				4BD4B46327C6968F00809FB0 /* AccountsListView.swift in Sources */,
 				4BD4B44F27C6968F00809FB0 /* LaunchFlagHelper.swift in Sources */,
 				2C264BE727B5AC6800234393 /* TezosResponseToExtension.swift in Sources */,
+				4B697DC527E193C300934AB3 /* UIViewBinding.swift in Sources */,
 				4BD4B48B27C6968F00809FB0 /* SafariRequest+Helpers.swift in Sources */,
 				4BD4B45727C6968F00809FB0 /* URL+collections.swift in Sources */,
 				2CE0594427640EB40042D844 /* ExtensionBridge.swift in Sources */,

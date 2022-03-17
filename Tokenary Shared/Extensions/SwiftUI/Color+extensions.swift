@@ -28,13 +28,58 @@ extension Color {
 
 #if canImport(UIKit)
     public static var inkGreen = Color(UIColor.inkGreen)
+    public static var systemGray2 = Color(UIColor.systemGray2)
+    public static var systemGray3 = Color(UIColor.systemGray3)
     public static var systemGray4 = Color(UIColor.systemGray4)
     public static var systemGray5 = Color(UIColor.systemGray5)
     public static var systemGray6 = Color(UIColor.systemGray6)
     public static var secondarySystemBackground = Color(UIColor.secondarySystemBackground)
 #elseif canImport(AppKit)
     public static var inkGreen = Color(NSColor.inkGreen)
-    public static var systemGray4 = Color(NSColor.lightGray)
+    public static var systemGray1 = Color(
+        light: Color(
+            red: 174 / 255,
+            green: 174 / 255,
+            blue: 178 / 255
+        ), dark: Color(
+            red: 99 / 255,
+            green: 99 / 255,
+            blue: 102 / 255
+        )
+    )
+    public static var systemGray2 = Color(
+        light: Color(
+            red: 199 / 255,
+            green: 199 / 255,
+            blue: 204 / 255
+        ), dark: Color(
+            red: 72 / 255,
+            green: 72 / 255,
+            blue: 74 / 255
+        )
+    )
+    public static var systemGray3 = Color(
+        light: Color(
+            red: 209 / 255,
+            green: 209 / 255,
+            blue: 214 / 255
+        ), dark: Color(
+            red: 58 / 255,
+            green: 58 / 255,
+            blue: 58 / 255
+        )
+    )
+    public static var systemGray4 = Color(
+        light: Color(
+            red: 209 / 255,
+            green: 209 / 255,
+            blue: 214 / 255
+        ), dark: Color(
+            red: 58 / 255,
+            green: 58 / 255,
+            blue: 60 / 255
+        )
+    )
     public static var systemGray5 = Color(
         light: Color(
             red: 229 / 255,
@@ -61,8 +106,7 @@ extension Color {
 #endif
     public static var systemPink = Color(BridgedColor.systemPink)
     public static var systemRed = Color(BridgedColor.systemRed)
-    
-    public static var iconGray = Color(
+    public static var systemGray = Color(
         light: Color(
             red: 142 / 255,
             green: 142 / 255,
