@@ -17,14 +17,10 @@ import SwiftUI
 // - Fix name redraw lag(remove save?)
 // Pack 3
 // - Add normal pagination to ExpandableGrid,
-//  - Fix WrapperStack problem
 // Pack 4
 // - Prepare MR as per ivans' suggestion
 // check everything final, make mr
 
-// везде показывать одинкаовый аддрес
-// для мнепоинмков показываем всегда эфир
-// взять фотки у траста
 
 public enum AccountsListMode: Equatable {
     case choseAccount(forChain: SupportedChainType?)

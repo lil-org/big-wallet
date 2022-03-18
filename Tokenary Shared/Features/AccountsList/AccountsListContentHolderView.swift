@@ -41,8 +41,9 @@ struct AccountsListContentHolderView: View {
                 List {
                     #if canImport(UIKit)
                     self.networkFilterButton
-                    #endif
+                    #elseif canImport(AppKit)
                     Divider()
+                    #endif
                     ForEach($stateProvider.accounts) { $account in
                         AccountItemView(
                             viewModel: $account
