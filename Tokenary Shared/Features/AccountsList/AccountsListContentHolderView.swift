@@ -103,7 +103,7 @@ struct AccountsListContentHolderView: View {
                         Button(Strings.cancel, role: .cancel, action: {})
                     }
                 )
-                .addToGlobalOverlay( // ToDo(@pettrk): This requires a normal pop-up heap manager
+                .addToGlobalOverlay( // ToDo: This requires a normal pop-up heap manager
                     overlayView:
                         SimpleToast(
                             viewModel: .init(

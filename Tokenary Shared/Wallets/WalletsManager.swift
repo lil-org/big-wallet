@@ -92,7 +92,7 @@ final class WalletsManager {
     func getValidationFor(input: String) -> InputValidationResult {
         func checkForEncryptedJSON() -> InputValidationResult {
             if false {
-                // ToDo(@pettrk): Check for all present keys and mnemonics and return this if match found
+                // ToDo: Check for all present keys and mnemonics and return this if match found
                 //                  This will require to run through all items though, maybe use another approach
                 return .alreadyPresent
             }
@@ -113,7 +113,7 @@ final class WalletsManager {
         }
     }
     
-    // ToDo(@pettrk): There is a problem with this function, since we don't handle the case for mnemonics
+    // ToDo: There is a problem with this function, since we don't handle the case for mnemonics
     //  https://github.com/ttmbank/wallet-core-first/blob/fffb7bd30e2d17e018cd1dd8c066014b159af487/tests/Keystore/Data/key.json
     // This should work, however for some reason it doesn't with current library version.
     func decryptJSONAndValidate(input: String, password: String) -> (InputValidationResult, String?) {
@@ -142,7 +142,7 @@ final class WalletsManager {
         let newKey = StoredKey(
             name: name ?? self.getMnemonicDefaultWalletName(),
             password: Data(password.utf8),
-            // ToDo(@pettrk): Weak was used previously, however longer needs considerable time
+            // ToDo: Weak was used previously, however longer needs considerable time
             encryptionLevel: .standard
         )
         
@@ -201,7 +201,7 @@ final class WalletsManager {
     }
 
     private func `import`(
-        mnemonic: String, name: String, password: String, coinTypes: [CoinType] // ToDo(@pettrk): OptionSet?
+        mnemonic: String, name: String, password: String, coinTypes: [CoinType] // ToDo: OptionSet?
     ) throws -> TokenaryWallet {
         let defaultCoinType = coinTypes.first ?? WalletsManager.defaultCoinType
         guard
@@ -427,7 +427,7 @@ final class WalletsManager {
             if wallet.name.count == .zero || wallet.name.trimmingCharacters(in: .whitespacesAndNewlines) == .empty {
                 walletsToMigrate.append(wallet)
             }
-            // ToDo(@pettrk) -> This should be an async wrapper, with stream semantics
+            // ToDo -> This should be an async wrapper, with stream semantics
             //  When size iz 50+ this works like a minute
             wallets.append(wallet)
         }

@@ -4,7 +4,7 @@ import Foundation
 import WalletConnect
 
 class SessionStorage {
-    // ToDo(@NumenZ) - Transfer models to separate files
+    // ToDo - Transfer models to separate files
     struct Item: Codable {
         let session: WCSession
         let chainId: Int?

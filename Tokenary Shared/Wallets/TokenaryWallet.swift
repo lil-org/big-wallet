@@ -78,7 +78,7 @@ public final class TokenaryWallet: Hashable, Equatable {
             return account.address
         }
         
-        // ToDo(@pettrk): Applying formatter
+        // ToDo: Applying formatter
         var privateKeyString: String? { self.privateKey?.data.hexString }
         
         var derivationPath: String? {

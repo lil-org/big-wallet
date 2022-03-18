@@ -11,71 +11,55 @@ import SwiftUI
 
 extension Image {
     public init(packageResource name: String, ofType type: String) {
-#if canImport(UIKit)
         guard let path = Bundle.main.path(forResource: name, ofType: type),
-              let image = UIImage(contentsOfFile: path) else {
+              let image = BridgedImage(contentsOfFile: path) else {
             self.init(name)
             return
         }
+#if canImport(UIKit)
         self.init(uiImage: image)
 #elseif canImport(AppKit)
-        guard let path = Bundle.main.path(forResource: name, ofType: type),
-              let image = NSImage(contentsOfFile: path) else {
-            self.init(name)
-            return
-        }
         self.init(nsImage: image)
 #endif
     }
     
     public init(_ name: String, defaultImage: String) {
-#if canImport(UIKit)
-        guard let img = UIImage(named: name) else {
+        guard let img = BridgedImage(named: name) else {
             self.init(defaultImage)
             return
         }
+#if canImport(UIKit)
         self.init(uiImage: img)
 #elseif canImport(AppKit)
-        guard let img = NSImage(named: name) else {
-            self.init(defaultImage)
-            return
-        }
         self.init(nsImage: img)
 #endif
     }
         
     public init(_ name: String, defaultSystemImage: String) {
+
+        if let img = BridgedImage(named: name) {
 #if canImport(UIKit)
-        if let img = UIImage(named: name) {
             self.init(uiImage: img)
-            return
-        }
 #elseif canImport(AppKit)
-        if let img = NSImage(named: name) {
             self.init(nsImage: img)
+#endif
             return
         }
-#endif
+
         self.init(systemName: defaultSystemImage)
     }
-    
+
+    public init(_ image: BridgedImage?, defaultImage: String) {
+        if let image = image {
 #if canImport(UIKit)
-    public init(_ image: UIImage?, defaultImage: String) {
-        if let image = image {
             self.init(uiImage: image)
-        } else {
-            self.init(defaultImage)
-        }
-    }
 #elseif canImport(AppKit)
-    public init(_ image: NSImage?, defaultImage: String) {
-        if let image = image {
             self.init(nsImage: image)
+#endif
         } else {
             self.init(defaultImage)
         }
     }
-#endif
 }
 
 extension BridgedImage {

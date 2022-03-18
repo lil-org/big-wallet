@@ -27,5 +27,4 @@ extension UITableView {
             scrollToRow(at: IndexPath(row: 0, section: 0), at: .bottom, animated: animated)
         }
     }
-    
 }

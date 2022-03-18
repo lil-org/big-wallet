@@ -2,7 +2,7 @@
 
 import Foundation
 
-// ToDo(@pettrk): Make this a collection & unify interface
+// ToDo: Make this a collection & unify interface
 struct Defaults {
     struct Key<ReturnType> {
         var name: String

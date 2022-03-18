@@ -2,7 +2,7 @@
 
 import Foundation
 
-// ToDo(@NumenZ) - Replace with TTKewchainWrapper(Static methods) - no state
+// ToDo - Replace with TTKewchainWrapper(Static methods) - no state
 struct Keychain {
     
     private init() {}
@@ -129,7 +129,7 @@ struct Keychain {
             kSecValueData as String: data
         ]
         
-        SecItemDelete(query as CFDictionary) // ToDo(@pettrk): This is wrong -> update
+        SecItemDelete(query as CFDictionary) // ToDo: This is wrong -> update
         
         if let metaData = metaData {
             query[kSecAttrGeneric as String] = metaData // Not used to determine uniqueness

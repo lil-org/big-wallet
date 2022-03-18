@@ -2,7 +2,7 @@
 
 import AppKit
 
-// ToDo(@pettrk): Generate this
+// ToDo: Generate this
 struct Images {
     
     static var status: NSImage { named("status") }

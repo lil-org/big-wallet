@@ -134,7 +134,7 @@
 		4B1D46B727D6EEC900162216 /* Strings+empty.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1D46B527D6EEC900162216 /* Strings+empty.swift */; };
 		4B1D46B827D6EEC900162216 /* Strings+empty.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1D46B527D6EEC900162216 /* Strings+empty.swift */; };
 		4B1D46B927D6EEC900162216 /* Strings+empty.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1D46B527D6EEC900162216 /* Strings+empty.swift */; };
-		4B1D46BF27D6FDBD00162216 /* UITableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1D46BE27D6FDBD00162216 /* UITableView.swift */; };
+		4B1D46BF27D6FDBD00162216 /* UITableView+extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1D46BE27D6FDBD00162216 /* UITableView+extensions.swift */; };
 		4B697DC327E12A1400934AB3 /* UIDevice+extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B697DC227E12A1400934AB3 /* UIDevice+extensions.swift */; };
 		4B697DC527E193C300934AB3 /* UIViewBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B697DC427E193C300934AB3 /* UIViewBinding.swift */; };
 		4B697DC727E4141400934AB3 /* NSAppearance+extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B697DC627E4141400934AB3 /* NSAppearance+extensions.swift */; };
@@ -226,7 +226,6 @@
 		4BD4B47327C6968F00809FB0 /* ChainSelectionAssembly.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3DD27C6968E00809FB0 /* ChainSelectionAssembly.swift */; };
 		4BD4B47527C6968F00809FB0 /* UIVisualEffectViewWrapped.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3DF27C6968E00809FB0 /* UIVisualEffectViewWrapped.swift */; };
 		4BD4B47727C6968F00809FB0 /* WrappingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3E027C6968E00809FB0 /* WrappingViewController.swift */; };
-		4BD4B47927C6968F00809FB0 /* UIMenuWrapped.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3E127C6968E00809FB0 /* UIMenuWrapped.swift */; };
 		4BD4B47A27C6968F00809FB0 /* ExpandableGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3E327C6968E00809FB0 /* ExpandableGrid.swift */; };
 		4BD4B47B27C6968F00809FB0 /* ExpandableGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3E327C6968E00809FB0 /* ExpandableGrid.swift */; };
 		4BD4B47C27C6968F00809FB0 /* WrappingStack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3E427C6968E00809FB0 /* WrappingStack.swift */; };
@@ -438,7 +437,7 @@
 		4B1D46B527D6EEC900162216 /* Strings+empty.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Strings+empty.swift"; sourceTree = "<group>"; };
 		4B1D46BC27D6EF9F00162216 /* Tokenary macOS-Bridging-Header.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "Tokenary macOS-Bridging-Header.h"; sourceTree = "<group>"; };
 		4B1D46BD27D6F01700162216 /* Tokenary iOS-Bridging-Header.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "Tokenary iOS-Bridging-Header.h"; sourceTree = "<group>"; };
-		4B1D46BE27D6FDBD00162216 /* UITableView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UITableView.swift; sourceTree = "<group>"; };
+		4B1D46BE27D6FDBD00162216 /* UITableView+extensions.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "UITableView+extensions.swift"; sourceTree = "<group>"; };
 		4B697DC227E12A1400934AB3 /* UIDevice+extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIDevice+extensions.swift"; sourceTree = "<group>"; };
 		4B697DC427E193C300934AB3 /* UIViewBinding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIViewBinding.swift; sourceTree = "<group>"; };
 		4B697DC627E4141400934AB3 /* NSAppearance+extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSAppearance+extensions.swift"; sourceTree = "<group>"; };
@@ -494,7 +493,6 @@
 		4BD4B3DD27C6968E00809FB0 /* ChainSelectionAssembly.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChainSelectionAssembly.swift; sourceTree = "<group>"; };
 		4BD4B3DF27C6968E00809FB0 /* UIVisualEffectViewWrapped.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UIVisualEffectViewWrapped.swift; sourceTree = "<group>"; };
 		4BD4B3E027C6968E00809FB0 /* WrappingViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WrappingViewController.swift; sourceTree = "<group>"; };
-		4BD4B3E127C6968E00809FB0 /* UIMenuWrapped.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UIMenuWrapped.swift; sourceTree = "<group>"; };
 		4BD4B3E327C6968E00809FB0 /* ExpandableGrid.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ExpandableGrid.swift; sourceTree = "<group>"; };
 		4BD4B3E427C6968E00809FB0 /* WrappingStack.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WrappingStack.swift; sourceTree = "<group>"; };
 		4BD4B3E527C6968E00809FB0 /* SimpleToast.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SimpleToast.swift; sourceTree = "<group>"; };
@@ -800,7 +798,7 @@
 				4BD4B39B27C6968E00809FB0 /* UIEdgeInsets+extensions.swift */,
 				4BD4B3A027C6968E00809FB0 /* UIColor+extensions.swift */,
 				4BD4B3A227C6968E00809FB0 /* UIApplication+extensions.swift */,
-				4B1D46BE27D6FDBD00162216 /* UITableView.swift */,
+				4B1D46BE27D6FDBD00162216 /* UITableView+extensions.swift */,
 				4BD4B3A327C6968E00809FB0 /* UITextInput+extensions.swift */,
 				4BD4B3A427C6968E00809FB0 /* NSLayoutConstraint+extensions.swift */,
 				2CC6EF0C275E64810040CC62 /* UIViewController.swift */,
@@ -1270,7 +1268,6 @@
 			children = (
 				4BD4B3DF27C6968E00809FB0 /* UIVisualEffectViewWrapped.swift */,
 				4BD4B3E027C6968E00809FB0 /* WrappingViewController.swift */,
-				4BD4B3E127C6968E00809FB0 /* UIMenuWrapped.swift */,
 				4BD4B4C727C73CC300809FB0 /* UIActivityViewControllerWrapped.swift */,
 				4B697DC427E193C300934AB3 /* UIViewBinding.swift */,
 			);
@@ -1943,7 +1940,7 @@
 				4B1D46B727D6EEC900162216 /* Strings+empty.swift in Sources */,
 				2CF255BA275A749300AE54B9 /* ApproveViewController.swift in Sources */,
 				4BD4B43D27C6968F00809FB0 /* View+onSizeChange.swift in Sources */,
-				4B1D46BF27D6FDBD00162216 /* UITableView.swift in Sources */,
+				4B1D46BF27D6FDBD00162216 /* UITableView+extensions.swift in Sources */,
 				4BD4B43F27C6968F00809FB0 /* Color+extensions.swift in Sources */,
 				4BD4B4B527C6968F00809FB0 /* SessionStorage.swift in Sources */,
 				4BD4B4A327C6968F00809FB0 /* TokenaryWallet.swift in Sources */,
@@ -1956,7 +1953,6 @@
 				2CE059372763D60A0042D844 /* KeyboardObserver.swift in Sources */,
 				4BD4B45127C6968F00809FB0 /* DappRequestProcessor.swift in Sources */,
 				4BD4B46127C6968F00809FB0 /* DerivedAccountItemView.swift in Sources */,
-				4BD4B47927C6968F00809FB0 /* UIMenuWrapped.swift in Sources */,
 				4BD4B48327C6968F00809FB0 /* GlobalOverlayViewModifier.swift in Sources */,
 				2C40709027667A6600AB3D55 /* MultilineLabelTableViewCell.swift in Sources */,
 				4BD4B47D27C6968F00809FB0 /* WrappingStack.swift in Sources */,

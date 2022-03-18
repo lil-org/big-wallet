@@ -410,9 +410,7 @@ extension ALViewController: AccountsListStateProviderOutput {
         }
     }
     
-    // There is one special case here - when we come to change/request accounts
-    //  with an empty provider -> this way we should have shown both both all-chains and their sub-chain info
-    //  however for now, we just drop side-chain choosing and will implement this functionality later
+    // ToDo: There is one special case here - when we come to change/request accounts with an empty provider -> this way we should have shown both both all-chains and their sub-chain info, however for now, we just drop side-chain choosing and will implement this functionality later
     func didSelect(chain: EthereumChain) {
         self.chain = chain
     }

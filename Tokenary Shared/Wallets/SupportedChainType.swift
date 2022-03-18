@@ -8,7 +8,7 @@ public enum SupportedChainType: String, CaseIterable {
     case ethereum
     case tezos
     case solana
-    // ToDo(@pettrk): Add custom derivation path
+    // ToDo: Add custom derivation path
     
     public var iconName: String {
         switch self {

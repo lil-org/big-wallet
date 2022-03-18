@@ -2,7 +2,7 @@
 
 import UIKit
 
-// ToDo(@pettrk): Generate this
+// ToDo: Generate this
 struct Images {
     
     static var noData: UIImage { systemName("wind") }

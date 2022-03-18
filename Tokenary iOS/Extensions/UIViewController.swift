@@ -50,7 +50,7 @@ extension UIViewController {
             textField.textContentType = .oneTimeCode
         }
         let okAction = UIAlertAction(title: Strings.ok, style: .default) { [weak alert] _ in
-            completion(alert?.textFields?.first?.text ?? "")
+            completion(alert?.textFields?.first?.text ?? .empty)
         }
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel) { _ in
             completion(nil)

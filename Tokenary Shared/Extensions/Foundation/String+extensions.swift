@@ -13,14 +13,14 @@ extension String {
     
     public var isOkAsPassword: Bool { self.count >= 4 }
     
-    var withFirstLetterCapitalized: String {
+    public var withFirstLetterCapitalized: String {
         guard !self.isEmpty else { return self }
         return self.prefix(1).uppercased() + self.dropFirst()
     }
     
-    var withEllipsis: String { self + Symbols.ellipsis }
+    public var withEllipsis: String { self + Symbols.ellipsis }
     
-    var trimmedAddress: String {
+    public var trimmedAddress: String {
         guard !self.isEmpty else { return self }
         let without0x = self.dropFirst(2)
         return without0x.prefix(4) + "..." + without0x.suffix(4)
@@ -58,7 +58,7 @@ extension String {
     
     // MARK: - Private Properties
     
-    // Authors favourite
+    // Authors favourites
     private static var defaultEmotion: Unicode.Scalar = "🔥"
     private static var defaultEmotion1: Unicode.Scalar = "💮"
     

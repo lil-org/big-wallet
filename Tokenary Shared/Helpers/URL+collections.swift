@@ -2,7 +2,7 @@
 
 import Foundation
 
-// ToDo(@pettrk): Make this a collection & unify interface
+// ToDo: Make this a collection & unify interface
 extension URL {
     static let twitter = URL(string: "https://tokenary.io/twitter")!
     static let github = URL(string: "https://tokenary.io/github")!

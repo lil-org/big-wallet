@@ -198,7 +198,7 @@ struct DerivedAccountItemView: View {
                 Color(light: .black, dark: .white),
                 cornerRadius: 4,
                 longPressActionClosure: {
-                    // ToDo(@pettrk): Enable when custom gesture'll be ready.
+                    // ToDo: Enable when custom gesture'll be ready.
 //                    withAnimation {
 //                        self.stateProvider.showToastOverlay = true
 //                    }
