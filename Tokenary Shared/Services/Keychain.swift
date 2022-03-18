@@ -55,7 +55,7 @@ struct Keychain {
             self.vaultIdentifier = vaultIdentifier
         }
         
-        // This is wired conversion back-and-forth, however we require it for stable values
+        // This is strange conversion back-and-forth, however we require it for stable values
         public let derivedChains: [SupportedChainType]
         
         private let keychainMigrationVersion: String

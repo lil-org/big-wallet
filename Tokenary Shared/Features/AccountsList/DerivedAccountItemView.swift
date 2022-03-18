@@ -202,7 +202,7 @@ struct DerivedAccountItemView: View {
 //                    withAnimation {
 //                        self.stateProvider.showToastOverlay = true
 //                    }
-//                    self.copyAddressToPasteboard()
+                    PasteboardHelper.setPlainNotNil(self.viewModel.accountAddress)
                 },
                 onEndedActionClosure: {
                     if self.stateProvider.mode == .mainScreen {
@@ -275,10 +275,6 @@ struct DerivedAccountItemView: View {
                 }
             }
         }
-    }
-    
-    private func copyAddressToPasteboard() {
-        PasteboardHelper.setPlainNotNil(self.viewModel.accountAddress)
     }
 }
 

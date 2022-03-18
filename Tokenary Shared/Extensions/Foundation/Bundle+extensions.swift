@@ -4,10 +4,10 @@
 import Foundation
 
 extension Bundle {
-    
     /// All id's of modules
     public enum BundleId: String, CaseIterable {
-        case helper = "io.Tokenary.tech.mobile.helper"
+        case safari = "mac.tokenary.io.Safari"
+        case main = "mac.tokenary.io"
     }
     
     /// Get `Bundle` for `BundleId`

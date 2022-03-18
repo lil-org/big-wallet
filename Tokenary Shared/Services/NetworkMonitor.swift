@@ -4,19 +4,11 @@ import Foundation
 import CoreTelephony
 import Network
 
-// ToDo(@NumenZ) - Rewrite service using observable/observer pattern
-//                  Values must be passed as sequences
-// ToDo(@NumenZ) - Make a normal ServiceRegistry structure, to manage Singletons
 public class NetworkMonitor {
-    
     var hasConnection = true
     static let shared = NetworkMonitor()
     
-    static let real = shared
-    static let mock = shared
-    
     private let nwPathMonitor = NWPathMonitor()
-    init() {}
     
     func start() {
         let queue = DispatchQueue(label: "NetworkMonitor")
@@ -33,5 +25,4 @@ public class NetworkMonitor {
             }
         }
     }
-    
 }

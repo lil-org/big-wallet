@@ -3,5 +3,5 @@
 import Foundation
 
 public struct Secrets {
-    public static let infura = "9119c2f3510f4b00981ba46e5b70b75f"
+    public static let infura = "YOUR_KEY_HERE"
 }

@@ -30,5 +30,4 @@ final class EthereumNetwork: Network {
     func call(method: String, params: [EthParameter]) throws -> Data {
         return try origin.call(method: method, params: params)
     }
-    
 }

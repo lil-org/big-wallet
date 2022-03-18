@@ -4,6 +4,6 @@ import Foundation
 
 extension ServiceLayer.Services {
     public static let networkMonitorService: NetworkMonitor = {
-        NetworkMonitor.real
+        NetworkMonitor.shared
     }()
 }

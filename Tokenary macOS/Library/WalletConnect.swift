@@ -7,7 +7,7 @@ class WalletConnect {
  
     private lazy var agent = Agent.shared
     private let sessionStorage = SessionStorage.shared
-    private let networkMonitor = NetworkMonitor.shared
+    private let networkMonitor = ServiceLayer.services.networkMonitor
     private let ethereum = Ethereum.shared
     private let walletsManager = WalletsManager.shared
     

@@ -9,19 +9,6 @@ import SwiftUI
   import AppKit
 #endif
 
-// Pack 2
-// - Fix account derivation time:
-//  - move to background
-//  - async wrapper, produce one by one?
-//  - stop deriving addresses per request(cache them)
-// - Fix name redraw lag(remove save?)
-// Pack 3
-// - Add normal pagination to ExpandableGrid,
-// Pack 4
-// - Prepare MR as per ivans' suggestion
-// check everything final, make mr
-
-
 public enum AccountsListMode: Equatable {
     case choseAccount(forChain: SupportedChainType?)
     case mainScreen

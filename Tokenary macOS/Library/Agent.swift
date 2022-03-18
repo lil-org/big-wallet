@@ -233,7 +233,7 @@ class Agent: NSObject {
     
     private func getSessionFromPasteboard() -> WCSession? {
         let pasteboard = NSPasteboard.general
-        let link = pasteboard.string(forType: .string) ?? ""
+        let link = pasteboard.string(forType: .string) ?? .empty
         let session = walletConnect.sessionWithLink(link)
         if session != nil {
             pasteboard.clearContents()

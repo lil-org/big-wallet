@@ -32,7 +32,7 @@ struct TightHeightGeometryReader<Content: View>: View {
     }
 }
 
-/// An HStack that grows vertically when single line overflows
+/// Overflowing stack
 public struct WrappingStack<Data: RandomAccessCollection, ID: Hashable, Content: View>: View {
     
     public let data: Data
@@ -61,14 +61,6 @@ public struct WrappingStack<Data: RandomAccessCollection, ID: Hashable, Content:
         return result
     }
     
-    /// Creates a new WrappingHStack
-    ///
-    /// - Parameters:
-    ///   - id: a keypath of element identifier
-    ///   - alignment: horizontal and vertical alignment. Vertical alignment is applied to every row
-    ///   - horizontalSpacing: horizontal spacing between elements
-    ///   - verticalSpacing: vertical spacing between the lines
-    ///   - create: a method that creates an array of elements
     public init(
         id: KeyPath<Data.Element, ID>,
         @ViewBuilder content create: () -> ForEach<Data, ID, Content>

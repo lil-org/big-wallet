@@ -167,7 +167,7 @@ class ALViewController<ContentView: View>: WrappingViewController<ContentView>, 
             )
             $0.addAction(
                 UIAlertAction(title: Strings.copy, style: .default) { _ in
-                    UIPasteboard.general.string = secret
+                    PasteboardHelper.setPlain(secret)
                 }
             )
         }
