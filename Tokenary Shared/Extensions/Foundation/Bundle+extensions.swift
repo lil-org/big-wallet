@@ -25,16 +25,4 @@ extension Bundle {
             : bundleURL.appendingPathComponent(bundleName + Symbols.dot + FileExt.bundle.rawValue)
         return Bundle(url: resourcesBundleUrl)
     }
-    
-    var identifier: String {
-        return infoDictionary?["CFBundleIdentifier"] as? String ?? ""
-    }
-    
-    var name: String {
-        return infoDictionary?["CFBundleName"] as? String ?? ""
-    }
-    
-    var shortVersionString: String {
-        return infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
-    }
 }

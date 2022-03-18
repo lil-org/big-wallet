@@ -134,8 +134,6 @@
 		4B1D46B727D6EEC900162216 /* Strings+empty.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1D46B527D6EEC900162216 /* Strings+empty.swift */; };
 		4B1D46B827D6EEC900162216 /* Strings+empty.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1D46B527D6EEC900162216 /* Strings+empty.swift */; };
 		4B1D46B927D6EEC900162216 /* Strings+empty.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1D46B527D6EEC900162216 /* Strings+empty.swift */; };
-		4B1D46BA27D6EF4500162216 /* LaunchFlagHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3C227C6968E00809FB0 /* LaunchFlagHelper.swift */; };
-		4B1D46BB27D6EF4500162216 /* LaunchFlagHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3C227C6968E00809FB0 /* LaunchFlagHelper.swift */; };
 		4B1D46BF27D6FDBD00162216 /* UITableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1D46BE27D6FDBD00162216 /* UITableView.swift */; };
 		4B697DC327E12A1400934AB3 /* UIDevice+extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B697DC227E12A1400934AB3 /* UIDevice+extensions.swift */; };
 		4B697DC527E193C300934AB3 /* UIViewBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B697DC427E193C300934AB3 /* UIViewBinding.swift */; };
@@ -192,8 +190,6 @@
 		4BD4B43F27C6968F00809FB0 /* Color+extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3B227C6968E00809FB0 /* Color+extensions.swift */; };
 		4BD4B44027C6968F00809FB0 /* Image+extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3B327C6968E00809FB0 /* Image+extensions.swift */; };
 		4BD4B44127C6968F00809FB0 /* Image+extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3B327C6968E00809FB0 /* Image+extensions.swift */; };
-		4BD4B44E27C6968F00809FB0 /* LaunchFlagHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3C227C6968E00809FB0 /* LaunchFlagHelper.swift */; };
-		4BD4B44F27C6968F00809FB0 /* LaunchFlagHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3C227C6968E00809FB0 /* LaunchFlagHelper.swift */; };
 		4BD4B45027C6968F00809FB0 /* DappRequestProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3C427C6968E00809FB0 /* DappRequestProcessor.swift */; };
 		4BD4B45127C6968F00809FB0 /* DappRequestProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3C427C6968E00809FB0 /* DappRequestProcessor.swift */; };
 		4BD4B45227C6968F00809FB0 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3C627C6968E00809FB0 /* Strings.swift */; };
@@ -484,7 +480,6 @@
 		4BD4B3B127C6968E00809FB0 /* View+onSizeChange.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "View+onSizeChange.swift"; sourceTree = "<group>"; };
 		4BD4B3B227C6968E00809FB0 /* Color+extensions.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "Color+extensions.swift"; sourceTree = "<group>"; };
 		4BD4B3B327C6968E00809FB0 /* Image+extensions.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "Image+extensions.swift"; sourceTree = "<group>"; };
-		4BD4B3C227C6968E00809FB0 /* LaunchFlagHelper.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LaunchFlagHelper.swift; sourceTree = "<group>"; };
 		4BD4B3C427C6968E00809FB0 /* DappRequestProcessor.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DappRequestProcessor.swift; sourceTree = "<group>"; };
 		4BD4B3C627C6968E00809FB0 /* Strings.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		4BD4B3C827C6968E00809FB0 /* Notification.Name+extensions.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "Notification.Name+extensions.swift"; sourceTree = "<group>"; };
@@ -1131,7 +1126,6 @@
 				4BD4B38E27C6968E00809FB0 /* CollectionsOf */,
 				4BD4B39227C6968E00809FB0 /* Atoms */,
 				4BD4B39727C6968E00809FB0 /* Models */,
-				4BD4B3C127C6968E00809FB0 /* Helpers */,
 				4B1D46B427D6EEA100162216 /* Extension */,
 				4BD4B3F827C6968E00809FB0 /* Supporting Files */,
 			);
@@ -1209,14 +1203,6 @@
 				4BD4B3B127C6968E00809FB0 /* View+onSizeChange.swift */,
 			);
 			path = View;
-			sourceTree = "<group>";
-		};
-		4BD4B3C127C6968E00809FB0 /* Helpers */ = {
-			isa = PBXGroup;
-			children = (
-				4BD4B3C227C6968E00809FB0 /* LaunchFlagHelper.swift */,
-			);
-			path = Helpers;
 			sourceTree = "<group>";
 		};
 		4BD4B3C527C6968E00809FB0 /* Tokenary Shared */ = {
@@ -1828,7 +1814,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4B1D46BB27D6EF4500162216 /* LaunchFlagHelper.swift in Sources */,
 				2C264BCD27B2F2FF00234393 /* TezosSafariRequest.swift in Sources */,
 				4B1D469927D6B43800162216 /* Symbols.swift in Sources */,
 				2C264BC827B2F2F400234393 /* SolanaSafariRequest.swift in Sources */,
@@ -1916,7 +1901,6 @@
 				4BD4B40E27C6968F00809FB0 /* FileExt.swift in Sources */,
 				4BD4B4AE27C6968F00809FB0 /* ReviewRequester.swift in Sources */,
 				4BD4B43E27C6968F00809FB0 /* Color+extensions.swift in Sources */,
-				4BD4B44E27C6968F00809FB0 /* LaunchFlagHelper.swift in Sources */,
 				4B9073CD27D8048700B27E80 /* LinkHelper.swift in Sources */,
 				4BD4B41027C6968F00809FB0 /* Symbols.swift in Sources */,
 				4BD4B48C27C6968F00809FB0 /* PeerMeta.swift in Sources */,
@@ -2039,7 +2023,6 @@
 				4BD4B48527C6968F00809FB0 /* TouchGestureViewModifier.swift in Sources */,
 				4BD4B4B727C6968F00809FB0 /* NetworkMonitor.swift in Sources */,
 				4BD4B46327C6968F00809FB0 /* AccountsListView.swift in Sources */,
-				4BD4B44F27C6968F00809FB0 /* LaunchFlagHelper.swift in Sources */,
 				2C264BE727B5AC6800234393 /* TezosResponseToExtension.swift in Sources */,
 				4B697DC527E193C300934AB3 /* UIViewBinding.swift in Sources */,
 				4BD4B48B27C6968F00809FB0 /* SafariRequest+Helpers.swift in Sources */,
@@ -2088,7 +2071,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4B1D46BA27D6EF4500162216 /* LaunchFlagHelper.swift in Sources */,
 				2C264BCE27B2F2FF00234393 /* TezosSafariRequest.swift in Sources */,
 				4B1D469827D6B43700162216 /* Symbols.swift in Sources */,
 				2C264BC927B2F2F400234393 /* SolanaSafariRequest.swift in Sources */,
