@@ -131,13 +131,16 @@ class Agent: NSObject {
     lazy private var statusBarMenu: NSMenu = {
         let menu = NSMenu(title: Strings.tokenary)
         
-        let showItem = NSMenuItem(title: Strings.showTokenary, action: #selector(didSelectShowMenuItem), keyEquivalent: "")
+        let showItem = NSMenuItem(title: Strings.showTokenary, action: #selector(didSelectShowMenuItem), keyEquivalent: "").then {
+            $0.attributedTitle = NSAttributedString(string: "👀 " + Strings.showTokenary, attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
+            $0.keyEquivalent = "t"
+            $0.keyEquivalentModifierMask = [.command, .option]
+        }
         let safariItem = NSMenuItem(title: Strings.enableSafariExtension.withEllipsis, action: #selector(enableSafariExtension), keyEquivalent: "")
         let mailItem = NSMenuItem(title: Strings.dropUsALine.withEllipsis, action: #selector(didSelectMailMenuItem), keyEquivalent: "")
         let githubItem = NSMenuItem(title: Strings.viewOnGithub.withEllipsis, action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
         let twitterItem = NSMenuItem(title: Strings.viewOnTwitter.withEllipsis, action: #selector(didSelectTwitterMenuItem), keyEquivalent: "")
         let quitItem = NSMenuItem(title: Strings.quit, action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
-        showItem.attributedTitle = NSAttributedString(string: "👀 " + Strings.showTokenary, attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
         
         showItem.target = self
         safariItem.target = self
@@ -206,6 +209,7 @@ class Agent: NSObject {
         statusBarItem.button?.target = self
         statusBarItem.button?.action = #selector(statusBarButtonClicked(sender:))
         statusBarItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        statusBarItem.button?.toolTip = "Tokenary - ⌥⌘T"
     }
     
     @objc private func statusBarButtonClicked(sender: NSStatusBarButton) {

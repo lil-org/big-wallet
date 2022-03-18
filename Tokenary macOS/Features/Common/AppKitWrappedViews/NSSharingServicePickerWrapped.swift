@@ -21,7 +21,6 @@ struct NSSharingServicePickerWrapped: NSViewRepresentable {
                 $0.delegate = context.coordinator
             }
 
-            // !! MUST BE CALLED IN ASYNC, otherwise blocks update
             DispatchQueue.main.async {
                 picker.show(relativeTo: .zero, of: nsView, preferredEdge: .minY)
             }
@@ -55,11 +54,8 @@ struct NSSharingServicePickerWrapped: NSViewRepresentable {
             _ sharingServicePicker: NSSharingServicePicker,
             didChoose service: NSSharingService?
         ) {
-
-            // do here whatever more needed here with selected service
-
-            sharingServicePicker.delegate = nil   // << cleanup
-            self.parent.isPresented = false        // << dismiss
+            sharingServicePicker.delegate = nil
+            self.parent.isPresented = false
         }
     }
 }

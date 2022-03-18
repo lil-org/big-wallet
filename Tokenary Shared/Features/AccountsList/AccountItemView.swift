@@ -3,6 +3,34 @@
 import SwiftUI
 import BlockiesSwift
 
+extension View {
+    var accountIconFrame: some View {
+        #if canImport(UIKit)
+        self.frame(width: 40, height: 40)
+        #elseif canImport(AppKit)
+        self.frame(width: 30, height: 30)
+        #endif
+    }
+    
+    var accountIconCornerRadius: some View {
+        #if canImport(UIKit)
+        self.cornerRadius(15)
+        #elseif canImport(AppKit)
+        self.cornerRadius(10)
+        #endif
+    }
+}
+
+extension CGFloat {
+    static var accountHorizontalStackSpacing: CGFloat {
+        #if canImport(UIKit)
+        12
+        #elseif canImport(AppKit)
+        8
+        #endif
+    }
+}
+
 struct AccountItemView: View {
     struct ViewModel: Identifiable, Equatable, Hashable {
         let id: String
@@ -39,7 +67,7 @@ struct AccountItemView: View {
     
     private var backgroundColor: Color {
         if self.isInBlink {
-            return Color.red
+            return Color.inkGreen
         } else {
             return self.isInPress
                 ? Color.systemGray5
@@ -48,13 +76,13 @@ struct AccountItemView: View {
     }
     
     var body: some View {
-        VStack {
-            HStack(spacing: 12) {
+        VStack(spacing: 4) {
+            HStack(spacing: CGFloat.accountHorizontalStackSpacing) {
                 self.viewModel.icon
                     .resizable()
-                    .cornerRadius(15)
+                    .accountIconCornerRadius
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 40, height: 40)
+                    .accountIconFrame
                     
                 VStack(alignment: .leading) {
                     Text(self.viewModel.accountName)
@@ -104,13 +132,17 @@ struct AccountItemView: View {
                 }
                 #endif
             }
-            .padding(.horizontal, 12)
+            #if canImport(UIKit)
             .padding(.top, 4)
+            .padding(.horizontal, 12)
+            #endif
             
             if self.viewModel.isMnemonicBased && self.viewModel.mnemonicDerivedViewModels.count != .zero {
                 self.derivedAccountsGrid
-                    .padding(.horizontal, 12)
+                    #if canImport(UIKit)
                     .padding(.bottom, 4)
+                    .padding(.horizontal, 12)
+                    #endif
             }
         }
         .background(self.backgroundColor, ignoresSafeAreaEdges: [.leading, .trailing])
@@ -129,17 +161,13 @@ struct AccountItemView: View {
         )
         .onChange(of: self.viewModel.preformBlink) { newValue in
             guard newValue else { return }
-            DispatchQueue.main.async {
+            withAnimation(.easeInOut(duration: 1.2)) {
                 self.isInBlink = true
             }
-            
-//            withAnimation(.easeOut(duration: 1.2)) {
-//                self.isInBlink = true
-//                DispatchQueue.main.async {
-//                    self.viewModel.preformBlink = false
-////                    self.isInBlink = false
-//                }
-//            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                self.isInBlink = false
+                self.viewModel.preformBlink = false
+            }
         }
         #if canImport(UIKit)
         .confirmationDialog(
@@ -151,14 +179,11 @@ struct AccountItemView: View {
                 Button(Strings.cancel, role: .cancel, action: {})
             }
         )
-//        .onChange(of: self.moreActionsSelectedElementId) { newValue in
-//            guard newValue != nil else { return  }
-//            self.stateProvider.selectedWallet = self.stateProvider.wallets.first(
-//                where: { $0.id == newValue }
-//            )
-//            self.areActionsForWalletPresented.toggle()
-//            self.moreActionsSelectedElementId = nil
-//        }
+        #elseif canImport(AppKit)
+        .contextMenu {
+            Text(self.actionsForWalletDialogTitle)
+            self.walletActions
+        }
         #endif
     }
     
@@ -182,18 +207,21 @@ struct AccountItemView: View {
                     }
                 }
             }
-        }
+        }.keyboardShortcut("r", modifiers: [.command])
         self.specificWalletActions
         Button(Strings.showWalletKey, role: .none) {
             if let attachedWallet = self.attachedWallet {
                 self.stateProvider.didTapExport(wallet: attachedWallet)
             }
-        }
+        }.keyboardShortcut("s", modifiers: [.command])
+        #if canImport(AppKit)
+        Divider()
+        #endif
         Button(Strings.removeWallet, role: .destructive) {
             if let attachedWallet = self.attachedWallet {
                 self.stateProvider.didTapRemove(wallet: attachedWallet)
             }
-        }
+        }.keyboardShortcut("d", modifiers: [.shift, .command])
     }
     
     private var specificWalletActions: some View {
@@ -210,7 +238,7 @@ struct AccountItemView: View {
         Unwrap(self.attachedWallet) { attachedWallet in
             Button("Configure accounts") {
                 self.stateProvider.didTapReconfigureAccountsIn(wallet: attachedWallet)
-            }
+            }.keyboardShortcut("c", modifiers: [.command])
         }
     }
     
@@ -224,47 +252,10 @@ struct AccountItemView: View {
                 if let address = attachedWallet[.address] ?? nil {
                     LinkHelper.open(chainType.scanURL(address))
                 }
-            }
+            }.keyboardShortcut("t", modifiers: [.command])
         }
     }
     
-//        .contextMenu { // appkit
-//            Button("Rename Wallet") {}
-//            Button(Strings.showWalletKey) {
-//            }.keyboardShortcut("h", modifiers: [.control, .option, .command])
-//            Divider()
-//            Button(Strings.removeWallet) {
-//            }.keyboardShortcut(.defaultAction)
-//        }
-    
-//    if canImport(AppKit)
-//    .contextMenu {
-//        Button("Rename Wallet") {
-//            if let selectedWallet = self.stateProvider.selectedWallet {
-//                self.stateProvider.didTapRename(previousName: selectedWallet.name) { newName in
-//                    if let newName = newName {
-//                        try? WalletsManager.shared.rename(
-//                            wallet: selectedWallet, newName: newName
-//                        )
-//                    }
-//                }
-//            }
-//        }
-//        self.specialWalletActions
-//        Button(Strings.showWalletKey) {
-//            if let selectedWallet = self.stateProvider.selectedWallet {
-//                self.stateProvider.didTapExport(wallet: selectedWallet)
-//            }
-//        }.keyboardShortcut("h", modifiers: [.control, .option, .command])
-//        Divider()
-//        Button(Strings.removeWallet) {
-//            if let selectedWallet = self.stateProvider.selectedWallet {
-//                self.stateProvider.didTapRemove(wallet: selectedWallet)
-//            }
-//        }.keyboardShortcut(.defaultAction)
-//    }
-//    #else
-//    
     private var derivedAccountsGrid: some View {
         WrappingStack {
             ForEach($viewModel.mnemonicDerivedViewModels, id: \.id) { $mnemonicDerivedViewModel in
@@ -274,10 +265,7 @@ struct AccountItemView: View {
             }
         }
         .wrappingStackStyle(
-            hSpacing: 8, vSpacing: 8, alignment: .leading
-        )
-        .expandableGridStyle(
-            hSpacing: 10, vSpacing: 10
+            hSpacing: 6, vSpacing: 6, alignment: .topLeading
         )
     }
 }

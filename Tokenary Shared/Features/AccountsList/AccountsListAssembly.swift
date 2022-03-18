@@ -9,7 +9,6 @@ import SwiftUI
   import AppKit
 #endif
 
-
 // Pack 2
 // - Fix account derivation time:
 //  - move to background
@@ -17,13 +16,11 @@ import SwiftUI
 //  - stop deriving addresses per request(cache them)
 // - Fix name redraw lag(remove save?)
 // Pack 3
-// - Add normal pagination to ExpandableGrid
+// - Add normal pagination to ExpandableGrid,
+//  - Fix WrapperStack problem
 // Pack 4
 // - Prepare MR as per ivans' suggestion
 // check everything final, make mr
-
-//  - Account(on general screen) - show account actions
-//  - Account(on select) - select
 
 // везде показывать одинкаовый аддрес
 // для мнепоинмков показываем всегда эфир

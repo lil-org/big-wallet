@@ -1,19 +1,7 @@
 // Copyright © 2022 Tokenary. All rights reserved.
 
 import SwiftUI
-//#elseif canImport(AppKit)
-//        .activityShare(
-//            isPresented: $isShareInvitePresented,
-//            config: .init(
-//                sharingItems: [URL.appStore],
-//                excludedSharingServiceNames: [
-//                    .addToSafariReadingList, .sendViaAirDrop, .useAsDesktopPicture,
-//                    .addToIPhoto, .addToAperture,
-//                ]
-//            )
-//        )
 
-//haptic(type: .success)
 struct AccountsListContentHolderView: View {
     @EnvironmentObject
     private var stateProvider: AccountsListStateProvider
@@ -54,11 +42,12 @@ struct AccountsListContentHolderView: View {
                     #if canImport(UIKit)
                     self.networkFilterButton
                     #endif
+                    Divider()
                     ForEach($stateProvider.accounts) { $account in
                         AccountItemView(
                             viewModel: $account
                         )
-                        .listRowInsets(EdgeInsets())
+                        .listRowInsets(.init(top: .zero, leading: .zero, bottom: .zero, trailing: .zero))
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(
                                 role: .destructive,
@@ -73,10 +62,14 @@ struct AccountsListContentHolderView: View {
                                     Label("Delete", systemImage: "trash")
                                 }
                             )
-                            .tint(Color.systemRed)
+                            .tint(Color.orange)
                         }
+                        #if canImport(AppKit)
+                        Divider()
+                        #endif
                     }
                 }
+                .background(Color(light: .white, dark: .black).ignoresSafeArea())
                 .listStyle(PlainListStyle())
                 .animation(.default, value: self.stateProvider.accounts)
                 .onChange(of: self.stateProvider.scrollToWalletId) { newValue in
@@ -235,3 +228,15 @@ struct AccountsListContentHolderView: View {
         }
     }
 }
+
+#if canImport(AppKit)
+/// While this is terrible, but SwiftUI.List is bugged for macOS, and it sets two uncontrollable internal layers(NSTableView) background colors.
+extension NSTableView {
+    open override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+
+        self.backgroundColor = NSColor.clear
+        self.enclosingScrollView!.drawsBackground = false
+    }
+}
+#endif

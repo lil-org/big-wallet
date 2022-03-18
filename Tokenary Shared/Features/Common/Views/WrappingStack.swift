@@ -89,11 +89,14 @@ public struct WrappingStack<Data: RandomAccessCollection, ID: Hashable, Content:
         for element in data {
             guard let elementWidth = sizes[element[keyPath: id]]?.width else { break }
             let newWidth = width + elementWidth
-            if newWidth < maxWidth || lineLength == 0 {
+            if newWidth < maxWidth {
                 width = newWidth + self.wrappingStackStyle.hSpacing
                 lineLength += 1
             } else {
                 width = elementWidth
+                if lineLength == .zero {
+                    lineLength += 1
+                }
                 let lineEnd = data.index(lineStart, offsetBy: lineLength)
                 result.append(lineStart ..< lineEnd)
                 lineLength = 0
@@ -174,7 +177,7 @@ extension View {
     public func wrappingStackStyle(
         hSpacing: CGFloat = 8,
         vSpacing: CGFloat = 8,
-        alignment: Alignment = .leading
+        alignment: Alignment = .topLeading
     ) -> some View {
         let style = WrappingStackStyle(
             hSpacing: hSpacing, vSpacing: vSpacing, alignment: alignment

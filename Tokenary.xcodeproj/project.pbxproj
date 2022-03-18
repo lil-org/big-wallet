@@ -59,7 +59,7 @@
 		2C5FF97E26C84F7C00B32ACC /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C5FF97C26C84F7C00B32ACC /* LaunchScreen.storyboard */; };
 		2C5FF98C26C8567D00B32ACC /* Tokenary_ScreensaverView.h in Headers */ = {isa = PBXBuildFile; fileRef = 2C5FF98B26C8567D00B32ACC /* Tokenary_ScreensaverView.h */; };
 		2C5FF98E26C8567D00B32ACC /* Tokenary_ScreensaverView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2C5FF98D26C8567D00B32ACC /* Tokenary_ScreensaverView.m */; };
-		2C6B964C26B9D92500D2C819 /* NSColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6B964B26B9D92500D2C819 /* NSColor.swift */; };
+		2C6B964C26B9D92500D2C819 /* NSColor+extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6B964B26B9D92500D2C819 /* NSColor+extensions.swift */; };
 		2C773F5E27450B97007B04E7 /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
 		2C773F5F27450FBD007B04E7 /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
 		2C773F62274523DC007B04E7 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
@@ -139,6 +139,7 @@
 		4B1D46BF27D6FDBD00162216 /* UITableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1D46BE27D6FDBD00162216 /* UITableView.swift */; };
 		4B697DC327E12A1400934AB3 /* UIDevice+extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B697DC227E12A1400934AB3 /* UIDevice+extensions.swift */; };
 		4B697DC527E193C300934AB3 /* UIViewBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B697DC427E193C300934AB3 /* UIViewBinding.swift */; };
+		4B697DC727E4141400934AB3 /* NSAppearance+extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B697DC627E4141400934AB3 /* NSAppearance+extensions.swift */; };
 		4B9073CA27D8042C00B27E80 /* PasteboardHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B9073C927D8042C00B27E80 /* PasteboardHelper.swift */; };
 		4B9073CB27D8042C00B27E80 /* PasteboardHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B9073C927D8042C00B27E80 /* PasteboardHelper.swift */; };
 		4B9073CD27D8048700B27E80 /* LinkHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B9073CC27D8048700B27E80 /* LinkHelper.swift */; };
@@ -383,7 +384,7 @@
 		2C5FF98B26C8567D00B32ACC /* Tokenary_ScreensaverView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Tokenary_ScreensaverView.h; sourceTree = "<group>"; };
 		2C5FF98D26C8567D00B32ACC /* Tokenary_ScreensaverView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Tokenary_ScreensaverView.m; sourceTree = "<group>"; };
 		2C5FF98F26C8567D00B32ACC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		2C6B964B26B9D92500D2C819 /* NSColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSColor.swift; sourceTree = "<group>"; };
+		2C6B964B26B9D92500D2C819 /* NSColor+extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSColor+extensions.swift"; sourceTree = "<group>"; };
 		2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionBridge.swift; sourceTree = "<group>"; };
 		2C773F61274523DC007B04E7 /* ResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseToExtension.swift; sourceTree = "<group>"; };
 		2C78F8272683BDCC00C10670 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alert.swift; sourceTree = "<group>"; };
@@ -448,6 +449,7 @@
 		4B1D46BE27D6FDBD00162216 /* UITableView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UITableView.swift; sourceTree = "<group>"; };
 		4B697DC227E12A1400934AB3 /* UIDevice+extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIDevice+extensions.swift"; sourceTree = "<group>"; };
 		4B697DC427E193C300934AB3 /* UIViewBinding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIViewBinding.swift; sourceTree = "<group>"; };
+		4B697DC627E4141400934AB3 /* NSAppearance+extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSAppearance+extensions.swift"; sourceTree = "<group>"; };
 		4B9073C927D8042C00B27E80 /* PasteboardHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardHelper.swift; sourceTree = "<group>"; };
 		4B9073CC27D8048700B27E80 /* LinkHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkHelper.swift; sourceTree = "<group>"; };
 		4B9073D127D8122C00B27E80 /* NSSharingServicePickerWrapped.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSSharingServicePickerWrapped.swift; sourceTree = "<group>"; };
@@ -730,8 +732,9 @@
 		2C6706A7267A6C04006AAEF2 /* Extensions */ = {
 			isa = PBXGroup;
 			children = (
-				2C6B964B26B9D92500D2C819 /* NSColor.swift */,
+				2C6B964B26B9D92500D2C819 /* NSColor+extensions.swift */,
 				4B1D46AE27D6C79200162216 /* NSStoryboard+extensions.swift */,
+				4B697DC627E4141400934AB3 /* NSAppearance+extensions.swift */,
 			);
 			path = Extensions;
 			sourceTree = "<group>";
@@ -1874,7 +1877,7 @@
 				4BD4B46E27C6968F00809FB0 /* ButtonWithBackgroundStyle.swift in Sources */,
 				4BD4B4D327C8000600809FB0 /* Web3Provider.swift in Sources */,
 				4BD4B48A27C6968F00809FB0 /* SafariRequest+Helpers.swift in Sources */,
-				2C6B964C26B9D92500D2C819 /* NSColor.swift in Sources */,
+				2C6B964C26B9D92500D2C819 /* NSColor+extensions.swift in Sources */,
 				4BD4B49427C6968F00809FB0 /* EthereumNetwork.swift in Sources */,
 				4BD4B45427C6968F00809FB0 /* Notification.Name+extensions.swift in Sources */,
 				2C264BC127B2F2C100234393 /* EthereumSafariRequest.swift in Sources */,
@@ -1887,6 +1890,7 @@
 				4B1D468727D563A000162216 /* ALViewController.swift in Sources */,
 				2C134BA627553EC500DAFBDB /* Browser.swift in Sources */,
 				4BD4B41627C6968F00809FB0 /* Unimplemented.swift in Sources */,
+				4B697DC727E4141400934AB3 /* NSAppearance+extensions.swift in Sources */,
 				2C78F8282683BDCC00C10670 /* Alert.swift in Sources */,
 				2C8A09EE2675965F00993638 /* WaitingViewController.swift in Sources */,
 				4BD4B48427C6968F00809FB0 /* TouchGestureViewModifier.swift in Sources */,

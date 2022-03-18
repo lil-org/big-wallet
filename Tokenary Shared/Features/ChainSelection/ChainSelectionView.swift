@@ -134,7 +134,9 @@ public struct ChainSelectionView: View {
                     HStack {
                         Image(rowViewModel.icon)
                             .resizable()
+                            .aspectRatio(contentMode: .fit)
                             .frame(width: 40, height: 40, alignment: .center)
+                            .clipShape(Circle())
                         VStack(alignment: .center) {
                             HStack(alignment: .firstTextBaseline) {
                                 Text(rowViewModel.title)

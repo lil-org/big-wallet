@@ -14,11 +14,10 @@ class ALViewController: NSViewController, NSWindowDelegate, NSMenuDelegate {
     @IBOutlet weak var chainButtonContainer: NSView! {
         didSet {
             self.chainButtonContainer.wantsLayer = true
-            self.chainButtonContainer.layer?.backgroundColor = NSColor.red.cgColor
         }
     }
     @IBOutlet weak var chainButton: NSPopUpButton!
-    @IBOutlet weak var accountsListContainer: NSView!
+    @IBOutlet weak var accountsListContainer: NSView! 
     @IBOutlet weak var addButton: NSButton! {
         didSet {
             let menu = NSMenu()
@@ -47,7 +46,6 @@ class ALViewController: NSViewController, NSWindowDelegate, NSMenuDelegate {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Do we need it here?
         if self.walletsManager.wallets.isEmpty {
             self.walletsManager.start()
         }
@@ -85,6 +83,16 @@ class ALViewController: NSViewController, NSWindowDelegate, NSMenuDelegate {
         self.view.window?.delegate = self
         self.promptSafariForLegacyUsersIfNeeded()
         self.blinkNewWalletCellIfNeeded()
+    }
+    
+    override func viewWillLayout() {
+        self.chainButtonContainer.layer?.backgroundColor = NSColor(name: nil) { appearance in
+            if appearance.isDarkMode {
+                return NSColor(deviceRed: 44 / 255, green: 44 / 255, blue: 46 / 255, alpha: 1)
+            } else {
+                return NSColor(deviceRed: 199 / 255, green: 199 / 255, blue: 204 / 255, alpha: 1)
+            }
+        }.cgColor
     }
     
     // MARK: - State Management
@@ -218,7 +226,7 @@ class ALViewController: NSViewController, NSWindowDelegate, NSMenuDelegate {
             onSelectedWallet?(chain, wallet)
         }
     }
-    // эту логику конечно лучше оставить во view
+    
     @objc private func didSelectChain(_ sender: AnyObject) {
         guard
             let menuItem = sender as? NSMenuItem,

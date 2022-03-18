@@ -7,8 +7,9 @@ protocol AccountsListStateProviderInput: AnyObject {
     var wallets: [TokenaryWallet] { get set }
     var filteredWallets: [TokenaryWallet] { get }
     
+#if canImport(UIKit)
     func didTapAddAccount(at buttonFrame: CGRect)
-#if canImport(AppKit)
+#elseif canImport(AppKit)
     func scrollToWalletAndBlink(walletId: String)
 #endif
 }
@@ -144,6 +145,7 @@ class AccountsListStateProvider: ObservableObject {
 }
 
 extension AccountsListStateProvider: AccountsListStateProviderInput {
+#if canImport(UIKit)
     func didTapAddAccount(at buttonFrame: CGRect) {
         self.touchAnchor = UnitPoint(
             x: (buttonFrame.width / 2 + buttonFrame.minX) / UIScreen.main.bounds.width,
@@ -155,8 +157,7 @@ extension AccountsListStateProvider: AccountsListStateProviderInput {
             self.isAddAccountDialogPresented.toggle()
         }
     }
-    
-#if canImport(AppKit)
+#elseif canImport(AppKit)
     func scrollToWalletAndBlink(walletId: String) {
         self.scrollToWalletId = walletId
         guard let accountIdx = self.accounts.firstIndex(where: { $0.id == walletId }) else { return }

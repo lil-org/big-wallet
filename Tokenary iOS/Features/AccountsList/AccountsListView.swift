@@ -17,7 +17,7 @@ struct AccountsListView: View {
         NavigationView {
             AccountsListContentHolderView()
                 .environmentObject(self.stateProvider)
-                .navigationBarTitle(Text("Accounts"), displayMode: .large)
+                .navigationBarTitle(Text(self.stateProvider.mode == .mainScreen ? "Accounts" : "Select Account"), displayMode: .large)
                 .toolbar {
                     ToolbarItemGroup(placement: .navigationBarLeading) {
                         self.leadingNavigationBarItems

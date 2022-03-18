@@ -19,7 +19,6 @@ public struct CheckBox: View {
             .trim(from: 0, to: twoState ? 1.0 : 0)
             .stroke(Color.green, lineWidth: 8)
             .animation(Animation.linear(duration: 1).repeatForever(autoreverses: false))
-            
         }
         .frame(width: 100, height: 100)
         .border(Color.red)
