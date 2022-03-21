@@ -21,8 +21,6 @@ xcuserdata
 .DS_Store
 Pods/
 
-Secrets.swift
-
 # Bundler
 .bundle
 .cache
@@ -40,4 +38,4 @@ staging/
 vendor/
 
 # Secrets
-Shared/Supporting Files/Secrets-prod.swift
+Secrets.swift

@@ -337,7 +337,7 @@ struct MnemonicDerivedAccountView_Previews: PreviewProvider {
                     title: "Anything else long name very long",
                     ticker: "AELNVFL",
                     accountAddress: "0x00000000219ab540356cbb839cbe05303d7705fa",
-                    iconShadowColor: Color(BridgedImage(named: "sberbank.png")?.averageColor ?? .black)
+                    iconShadowColor: .black
                 )
             )
         )

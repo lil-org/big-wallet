@@ -5,7 +5,7 @@ import AppKit
 import SwiftUI
 import WalletCore
 
-class ALViewController: NSViewController, NSWindowDelegate, NSMenuDelegate {
+class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDelegate {
     private let walletsManager: WalletsManager
     private let agent: Agent
     
@@ -252,13 +252,13 @@ class ALViewController: NSViewController, NSWindowDelegate, NSMenuDelegate {
         self.chain = selectedChain
     }
     
-    // MARK: - ALViewController + NSWindowDelegate
+    // MARK: - AccountsListViewController + NSWindowDelegate
     
     func windowWillClose(_ notification: Notification) {
         self.callCompletion(wallet: nil)
     }
     
-    // MARK: - ALViewController + NSMenuDelegate {
+    // MARK: - AccountsListViewController + NSMenuDelegate {
    
     func menuDidClose(_ menu: NSMenu) {
         if self.addButton.menu === menu {
@@ -266,7 +266,7 @@ class ALViewController: NSViewController, NSWindowDelegate, NSMenuDelegate {
         }
     }
     
-    // MARK: - ALViewController + AccountsListStateProviderOutput
+    // MARK: - AccountsListViewController + AccountsListStateProviderOutput
     
     @objc func didTapCreateNewMnemonicWallet() {
         let chainSelectionVC = ChainSelectionAssembly.build(
@@ -297,7 +297,7 @@ class ALViewController: NSViewController, NSWindowDelegate, NSMenuDelegate {
     }
 }
 
-extension ALViewController: AccountsListStateProviderOutput {
+extension AccountsListViewController: AccountsListStateProviderOutput {
     func didTapReconfigureAccountsIn(wallet: TokenaryWallet) {
         let currentSelection = wallet.associatedMetadata.walletDerivationType.chainTypes
         let chainSelectionVC = ChainSelectionAssembly.build(

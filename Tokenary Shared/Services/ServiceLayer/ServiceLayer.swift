@@ -15,6 +15,4 @@ public final class ServiceLayer {
     public init() {}
     
     public struct Services { }
-    
-    public static var services: Services = Services()
 }

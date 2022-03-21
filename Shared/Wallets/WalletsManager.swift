@@ -261,10 +261,6 @@ final class WalletsManager {
         try update(wallet: wallet, oldPassword: password, newPassword: password, newName: newName)
     }
     
-    public func changeIconIn(wallet: TokenaryWallet, newIconURL: URL) {
-        _unimplemented("This is not implemented yet!")
-    }
-    
     public func changeAccountsIn(wallet: TokenaryWallet, to newChainTypes: [SupportedChainType]) throws {
         guard wallet.isMnemonic else { return }
         guard let password = keychain.password else { throw Error.keychainAccessFailure }

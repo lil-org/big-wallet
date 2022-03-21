@@ -37,7 +37,7 @@ struct ExtensionBridge {
     }
     
     static func removeResponse(id: Int) {
-        let key = ExtensionBridge.key(id: id)
+        let key = key(id: id)
         defaults?.removeObject(forKey: key)
     }
     

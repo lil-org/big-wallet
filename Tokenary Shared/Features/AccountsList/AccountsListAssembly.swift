@@ -30,7 +30,7 @@ public final class AccountsListAssembly {
         let contentView = AccountsListView()
             .environmentObject(stateProvider)
         
-        let hostingVC = ALViewController(
+        let hostingVC = AccountsListViewController(
             walletsManager: WalletsManager.shared,
             rootView: contentView
         ).then {
@@ -64,9 +64,9 @@ public final class AccountsListAssembly {
         let wrappingVC = WrappingViewController(rootView: contentView)
         
         let hostingVC = NSStoryboard.main.instantiateController(
-            identifier: String(describing: ALViewController.self)
+            identifier: String(describing: AccountsListViewController.self)
         ) { coder in
-            ALViewController(
+            AccountsListViewController(
                 coder: coder, walletsManager: WalletsManager.shared, agent: Agent.shared, wrappingVC: wrappingVC
             )
         }.then {

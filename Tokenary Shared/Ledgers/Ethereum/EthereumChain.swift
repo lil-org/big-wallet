@@ -77,7 +77,7 @@ public enum EthereumChain: Int {
         }
     }
     
-    public var ticker: String {
+    public var ticker: String { // -> symbol
         switch self {
         case .binance, .binanceTestnet:
             return "BNB"

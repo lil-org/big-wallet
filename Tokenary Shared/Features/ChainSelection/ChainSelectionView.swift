@@ -4,12 +4,6 @@ import Foundation
 import SwiftUI
 
 struct ChainSelectionState: Equatable {
-    let mode: Mode
-    var rows: [ChainElementViewModel]
-    var searchQuery: String = .empty
-    
-    var previousChoiceId: UUID?
-
     enum Mode {
         case singleSelect
         case multiSelect
@@ -23,12 +17,10 @@ struct ChainSelectionState: Equatable {
         var isSelected: Bool = false
     }
     
-    var filteredRows: [ChainElementViewModel] {
-        self.rows.filter {
-            $0.title.lowercased().contains(self.searchQuery.lowercased()) ||
-            $0.ticker.lowercased().contains(self.searchQuery.lowercased())
-        }
-    }
+    let mode: Mode
+    var rows: [ChainElementViewModel]
+    
+    var previousChoiceId: UUID?
 }
 
 class ChainSelectionStateProvider: ObservableObject {
@@ -96,9 +88,6 @@ public struct ChainSelectionView: View {
     @ObservedObject
     var stateProvider: ChainSelectionStateProvider
     
-    @State
-    var searchQuery: String = .empty
-    
     public var body: some View {
         VStack(spacing: .zero) {
             VStack {
@@ -117,20 +106,12 @@ public struct ChainSelectionView: View {
                 }
                 .font(.system(size: 15, weight: .medium))
                 .padding(.horizontal, 10)
-                SimpleSearchBar(text: $searchQuery)
-                    .padding(.bottom, 10)
-                    .onChange(of: self.searchQuery) { newValue in
-                        self.stateProvider.state.searchQuery = newValue
-                    }
             }
             .padding(.horizontal, 10)
             .padding(.top, 15)
             .background(Color(light: .systemGray5, dark: .systemGray5))
             List {
-                let rows = self.searchQuery.isEmpty
-                    ? self.stateProvider.state.rows
-                    : self.stateProvider.state.filteredRows
-                ForEach(rows) { rowViewModel in
+                ForEach(self.stateProvider.state.rows) { rowViewModel in
                     HStack {
                         Image(rowViewModel.icon)
                             .resizable()

@@ -7,7 +7,7 @@ class WalletConnect {
  
     private lazy var agent = Agent.shared
     private let sessionStorage = SessionStorage.shared
-    private let networkMonitor = ServiceLayer.services.networkMonitor
+    private let networkMonitor = ServiceLayer.Services.networkMonitor
     private let ethereum = Ethereum.shared
     private let walletsManager = WalletsManager.shared
     
@@ -116,9 +116,10 @@ class WalletConnect {
     
     private func reconnectWhenPossible(interactor: WCInteractor) {
         DispatchQueue.main.async { [weak self] in
-            self?.interactorsPendingReconnection[interactor.clientId] = interactor
-            if self?.interactorsPendingReconnection.count == 1 && self?.networkMonitor.hasConnection == true {
-                DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(7)) {
+            guard let self = self else { return }
+            self.interactorsPendingReconnection[interactor.clientId] = interactor
+            if self.interactorsPendingReconnection.isSingle && self.networkMonitor.hasConnection == true {
+                DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(7)) { [weak self] in
                     self?.reconnectPendingInteractors()
                 }
             }

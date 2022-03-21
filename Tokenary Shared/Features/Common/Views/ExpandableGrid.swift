@@ -29,6 +29,7 @@ public struct ExpandableGrid<
         GeometryReader { geometryProxy in
             ZStack(alignment: .topLeading) {
                 ForEach(self.elementData, id: self.elementIndex) { currentElementData in
+                    
                     self.elementView(currentElementData)
                         .modifier(
                             ExpandableGridElementModifier(
@@ -42,7 +43,7 @@ public struct ExpandableGrid<
                         .alignmentGuide(.leading, computeValue: { _ in
                             self.alignmentGuides[currentElementData[keyPath: self.elementIndex], default: .zero].x
                         })
-                        .opacity(self.alignmentGuides[currentElementData[keyPath: self.elementIndex]].isNil ? 1 : .zero)
+                        .opacity(self.alignmentGuides[currentElementData[keyPath: self.elementIndex]] == nil ? 1 : .zero)
                 }
             }.onPreferenceChange(ExpandableGridPreferenceKey.self, perform: { preferences in
                 self.positionElements(using: geometryProxy, having: preferences)

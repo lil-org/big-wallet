@@ -12,22 +12,6 @@ public struct Constants {
         return false
         #endif
     }
-
-    public static var keychainGroup: String {
-        #if DEBUG
-        return Bundle.main.infoDictionary?["KEYCHAIN_ENTITLEMENT"] as? String ?? .empty
-        #else
-        return "" // ToDo(@petrrk) - Add entitlement parser
-        #endif
-    }
-
-    public static var appGroupID: String {
-        #if DEBUG
-        return Bundle.main.infoDictionary?["APP_GROUP_ENTITLEMENT"] as? String ?? .empty
-        #else
-        return "" // ToDo(@petrrk) - Add entitlement parser
-        #endif
-    }
     
     public static var identifier: String {
         Bundle.main.infoDictionary?["CFBundleIdentifier"] as? String ?? .empty
@@ -40,18 +24,11 @@ public struct Constants {
     public static var shortVersionString: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? .empty
     }
+    
+    public static let currentKeychainMigrationVersion: String = "0.0.1"
 
     // MARK: - Schemes
 
     public static let tokenarySchemePrefix = "tokenary://"
-    
-    public static let contactsPhoneSchemeTemplate = "tel://%@"
     public static let tokenarySchemeTemplate = "tokenary://%@"
-
-    // MARK: - Global Links
-    
-    public enum Links {
-        public static let tokenarySiteURL = "https://tokenary.io"
-        public static let rateAppstore = "https://itunes.apple.com/"
-    }
 }

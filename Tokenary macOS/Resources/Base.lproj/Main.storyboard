@@ -800,10 +800,10 @@ DQ
             </objects>
             <point key="canvasLocation" x="75" y="740"/>
         </scene>
-        <!--View Controller-->
+        <!--Accounts List View Controller-->
         <scene sceneID="o7E-xn-hDh">
             <objects>
-                <viewController storyboardIdentifier="ALViewController" id="29s-Rd-OUf" customClass="ALViewController" customModule="Tokenary_macOS" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="AccountsListViewController" id="29s-Rd-OUf" customClass="AccountsListViewController" customModule="Tokenary_macOS" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="Yjc-Zm-uZY">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>

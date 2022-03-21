@@ -6,7 +6,7 @@ import UIKit
 import SwiftUI
 import WalletCore
 
-class ALViewController<ContentView: View>: WrappingViewController<ContentView>, DataStateContainer {
+class AccountsListViewController<ContentView: View>: WrappingViewController<ContentView>, DataStateContainer {
     private let walletsManager: WalletsManager
 
     private var chain = EthereumChain.ethereum
@@ -24,7 +24,7 @@ class ALViewController<ContentView: View>: WrappingViewController<ContentView>, 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     
     func presentationControllerShouldDismiss(_ presentationController: UIPresentationController) -> Bool {
-        self.onSelectedWallet.isNil
+        self.onSelectedWallet == nil
     }
     
     override func viewDidLoad() {
@@ -180,7 +180,7 @@ class ALViewController<ContentView: View>: WrappingViewController<ContentView>, 
     }
 }
 
-extension ALViewController: AccountsListStateProviderOutput {
+extension AccountsListViewController: AccountsListStateProviderOutput {
     func didTapCreateNewMnemonicWallet() {
         let chainSelectionVC = ChainSelectionAssembly.build(
             for: .multiSelect(SupportedChainType.allCases),
