@@ -77,7 +77,7 @@ public enum EthereumChain: Int {
         }
     }
     
-    public var ticker: String { // -> symbol
+    public var symbol: String {
         switch self {
         case .binance, .binanceTestnet:
             return "BNB"
@@ -95,7 +95,7 @@ public enum EthereumChain: Int {
     }
     
     var symbolIsETH: Bool {
-        return self.ticker == "ETH"
+        return self.symbol == "ETH"
     }
     
     var hasUSDPrice: Bool {
