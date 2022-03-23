@@ -3,14 +3,14 @@
 import SwiftUI
 #if canImport(UIKit)
     import UIKit
-    public typealias BridgedColor = UIColor
+    typealias BridgedColor = UIColor
 #elseif canImport(AppKit) && !targetEnvironment(macCatalyst)
     import AppKit
-    public typealias BridgedColor = NSColor
+    typealias BridgedColor = NSColor
 #endif
 
 extension Color {
-    public init(
+    init(
         light lightModeColor: @escaping @autoclosure () -> Color,
         dark darkModeColor: @escaping @autoclosure () -> Color
     ) {
@@ -27,16 +27,16 @@ extension Color {
     }
 
 #if canImport(UIKit)
-    public static var inkGreen = Color(UIColor.inkGreen)
-    public static var systemGray2 = Color(UIColor.systemGray2)
-    public static var systemGray3 = Color(UIColor.systemGray3)
-    public static var systemGray4 = Color(UIColor.systemGray4)
-    public static var systemGray5 = Color(UIColor.systemGray5)
-    public static var systemGray6 = Color(UIColor.systemGray6)
-    public static var secondarySystemBackground = Color(UIColor.secondarySystemBackground)
+    static var inkGreen = Color(UIColor.inkGreen)
+    static var systemGray2 = Color(UIColor.systemGray2)
+    static var systemGray3 = Color(UIColor.systemGray3)
+    static var systemGray4 = Color(UIColor.systemGray4)
+    static var systemGray5 = Color(UIColor.systemGray5)
+    static var systemGray6 = Color(UIColor.systemGray6)
+    static var secondarySystemBackground = Color(UIColor.secondarySystemBackground)
 #elseif canImport(AppKit)
-    public static var inkGreen = Color(NSColor.inkGreen)
-    public static var systemGray1 = Color(
+    static var inkGreen = Color(NSColor.inkGreen)
+    static var systemGray1 = Color(
         light: Color(
             red: 174 / 255,
             green: 174 / 255,
@@ -47,7 +47,7 @@ extension Color {
             blue: 102 / 255
         )
     )
-    public static var systemGray2 = Color(
+    static var systemGray2 = Color(
         light: Color(
             red: 199 / 255,
             green: 199 / 255,
@@ -58,7 +58,7 @@ extension Color {
             blue: 74 / 255
         )
     )
-    public static var systemGray3 = Color(
+    static var systemGray3 = Color(
         light: Color(
             red: 209 / 255,
             green: 209 / 255,
@@ -69,7 +69,7 @@ extension Color {
             blue: 58 / 255
         )
     )
-    public static var systemGray4 = Color(
+    static var systemGray4 = Color(
         light: Color(
             red: 209 / 255,
             green: 209 / 255,
@@ -80,7 +80,7 @@ extension Color {
             blue: 60 / 255
         )
     )
-    public static var systemGray5 = Color(
+    static var systemGray5 = Color(
         light: Color(
             red: 229 / 255,
             green: 229 / 255,
@@ -91,7 +91,7 @@ extension Color {
             blue: 56 / 255
         )
     )
-    public static var systemGray6 = Color(
+    static var systemGray6 = Color(
         light: Color(
             red: 242 / 255,
             green: 242 / 255,
@@ -102,11 +102,11 @@ extension Color {
             blue: 30 / 255
         )
     )
-    public static var secondarySystemBackground = Color(NSColor.controlBackgroundColor)
+    static var secondarySystemBackground = Color(NSColor.controlBackgroundColor)
 #endif
-    public static var systemPink = Color(BridgedColor.systemPink)
-    public static var systemRed = Color(BridgedColor.systemRed)
-    public static var systemGray = Color(
+    static var systemPink = Color(BridgedColor.systemPink)
+    static var systemRed = Color(BridgedColor.systemRed)
+    static var systemGray = Color(
         light: Color(
             red: 142 / 255,
             green: 142 / 255,

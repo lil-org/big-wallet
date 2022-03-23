@@ -6,8 +6,8 @@
     import AppKit
 #endif
 
-public struct ApplicationHelper {
-    public static func resignFirstResponder() {
+struct ApplicationHelper {
+    static func resignFirstResponder() {
 #if canImport(UIKit)
         UIApplication.shared.sendAction(
             #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil

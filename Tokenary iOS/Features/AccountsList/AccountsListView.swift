@@ -13,7 +13,7 @@ struct AccountsListView: View {
     @State
     private var shareButton: UIView?
     
-    public var body: some View {
+    var body: some View {
         NavigationView {
             AccountsListContentHolderView()
                 .environmentObject(self.stateProvider)

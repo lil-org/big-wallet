@@ -3,7 +3,7 @@
 import Foundation
 
 extension ServiceLayer.Services {
-    public static let networkMonitor: NetworkMonitor = {
+    static let networkMonitor: NetworkMonitor = {
         NetworkMonitor.shared
     }()
 }

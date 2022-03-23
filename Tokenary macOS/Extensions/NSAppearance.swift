@@ -3,7 +3,7 @@
 import AppKit
 
 extension NSAppearance {
-    public var isDarkMode: Bool {
+    var isDarkMode: Bool {
         if self.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua {
             return true
         } else {

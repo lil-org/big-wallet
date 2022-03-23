@@ -56,7 +56,7 @@ private struct TouchGestureViewModifier: ViewModifier {
 }
 
 extension View {
-    public func onTouchGesture(
+    func onTouchGesture(
         touchChanged: @escaping (Bool, Bool) -> Void,
         useHighPriorityGesture: Bool = false,
         longPressDuration: CGFloat = 2,

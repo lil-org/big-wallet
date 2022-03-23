@@ -4,19 +4,19 @@
 import Foundation
 
 extension Collection {
-    // MARK: - Public Variables
+    // MARK: - Variables
     
-    public var isSingle: Bool { count == 1 }
+    var isSingle: Bool { count == 1 }
     
-    // MARK: - Public Methods
+    // MARK: - Methods
     
-    public func take(atMost atMostCount: Int) -> [Element] {
+    func take(atMost atMostCount: Int) -> [Element] {
         return Array(self.prefix(atMostCount))
     }
     
-    // MARK: - Public Subscripts
+    // MARK: - Subscripts
     
-    public subscript(safe index: Index) -> Iterator.Element? {
+    subscript(safe index: Index) -> Iterator.Element? {
         if
             distance(to: index) >= .zero,
             distance(from: index) > .zero {

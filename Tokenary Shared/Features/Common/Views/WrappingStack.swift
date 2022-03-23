@@ -33,11 +33,11 @@ struct TightHeightGeometryReader<Content: View>: View {
 }
 
 /// Overflowing stack
-public struct WrappingStack<Data: RandomAccessCollection, ID: Hashable, Content: View>: View {
+struct WrappingStack<Data: RandomAccessCollection, ID: Hashable, Content: View>: View {
     
-    public let data: Data
-    public var content: (Data.Element) -> Content
-    public var id: KeyPath<Data.Element, ID>
+    let data: Data
+    var content: (Data.Element) -> Content
+    var id: KeyPath<Data.Element, ID>
     
     @Environment(\.wrappingStackStyle)
     private var wrappingStackStyle: WrappingStackStyle
@@ -61,7 +61,7 @@ public struct WrappingStack<Data: RandomAccessCollection, ID: Hashable, Content:
         return result
     }
     
-    public init(
+    init(
         id: KeyPath<Data.Element, ID>,
         @ViewBuilder content create: () -> ForEach<Data, ID, Content>
     ) {
@@ -102,7 +102,7 @@ public struct WrappingStack<Data: RandomAccessCollection, ID: Hashable, Content:
         return result
     }
     
-    public var body: some View {
+    var body: some View {
         if calculatesSizesKeys.isSuperset(of: idsForCalculatingSizes) {
             TightHeightGeometryReader(alignment: self.wrappingStackStyle.alignment) { geometry in
                 let splitted = splitIntoLines(maxWidth: geometry.size.width)
@@ -141,7 +141,7 @@ public struct WrappingStack<Data: RandomAccessCollection, ID: Hashable, Content:
 }
 
 extension WrappingStack where ID == Data.Element.ID, Data.Element: Identifiable {
-    public init(
+    init(
         @ViewBuilder content create: () -> ForEach<Data, ID, Content>
     ) {
         self.init(id: \Data.Element.id, content: create)
@@ -166,7 +166,7 @@ extension EnvironmentValues {
 }
 
 extension View {
-    public func wrappingStackStyle(
+    func wrappingStackStyle(
         hSpacing: CGFloat = 8,
         vSpacing: CGFloat = 8,
         alignment: Alignment = .topLeading

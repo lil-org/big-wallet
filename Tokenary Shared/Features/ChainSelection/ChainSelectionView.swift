@@ -38,20 +38,20 @@ class ChainSelectionStateProvider: ObservableObject {
         self.updateDoneButtonState()
     }
     
-    public func doneButtonWasPressed() {
+    func doneButtonWasPressed() {
         let selectedItems = self.state.rows.filter { $0.isSelected }
         DispatchQueue.main.async {
             self.completion(selectedItems.compactMap { SupportedChainType(rawValue: $0.title.lowercased()) })
         }
     }
     
-    public func cancelButtonWasPressed() {
+    func cancelButtonWasPressed() {
         DispatchQueue.main.async {
             self.completion([])
         }
     }
     
-    public func elementWasSelected(with id: UUID) {
+    func elementWasSelected(with id: UUID) {
         guard let rowIdx = self.state.rows.firstIndex(where: { $0.id == id }) else { return }
         if self.state.mode == .singleSelect {
             if let previousChoiceId = self.state.previousChoiceId {
@@ -84,11 +84,11 @@ class ChainSelectionStateProvider: ObservableObject {
     }
 }
 
-public struct ChainSelectionView: View {
+struct ChainSelectionView: View {
     @ObservedObject
     var stateProvider: ChainSelectionStateProvider
     
-    public var body: some View {
+    var body: some View {
         VStack(spacing: .zero) {
             VStack {
                 HStack(alignment: .center) {

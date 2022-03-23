@@ -208,7 +208,7 @@ extension UIDevice {
     
     static let isPad: Bool = { current.userInterfaceIdiom == .pad }()
     static let isPhone: Bool = { current.userInterfaceIdiom == .phone }()
-    public static let isSimulator: Bool = {
+    static let isSimulator: Bool = {
         #if targetEnvironment(simulator) || (arch(i386) || arch(x86_64)) && (os(iOS) || os(watchOS) || os(tvOS))
         return true
         #else
@@ -231,16 +231,16 @@ extension UIDevice {
         UIDevice.current.systemVersion.compare(version, options: .numeric) == ComparisonResult.orderedAscending
     }
     
-    public enum DeviceType {
+    enum DeviceType {
         case iPhoneOld
         case iPhoneNew
         case iPadSmall
         case iPadLarge
     }
     
-    public static var deviceType: DeviceType { return .iPhoneNew }
+    static var deviceType: DeviceType { return .iPhoneNew }
     
-    public static var statusBarSize: CGFloat {
+    static var statusBarSize: CGFloat {
         switch self.deviceType {
         case .iPhoneOld: return 22
         case .iPhoneNew: return 44
@@ -248,7 +248,7 @@ extension UIDevice {
         }
     }
     
-    public static var tabBarSize: CGFloat {
+    static var tabBarSize: CGFloat {
         switch self.deviceType {
         case .iPhoneOld: return 49
         case .iPhoneNew: return 83
@@ -257,7 +257,7 @@ extension UIDevice {
         }
     }
     
-    public static var snapshotTolerance: CGFloat {
+    static var snapshotTolerance: CGFloat {
         switch self.deviceType {
         case .iPhoneOld: return 0.002
         case .iPhoneNew: return 0.005

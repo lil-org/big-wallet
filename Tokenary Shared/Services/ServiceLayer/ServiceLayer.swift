@@ -7,12 +7,12 @@ import Foundation
 // ToDo - Make a normal ServiceRegistry structure, to manage Singletons
 // ToDo - Add ledgers support here
 // ToDo - Mock/real service shared abstractions
-public final class ServiceLayer {
+final class ServiceLayer {
     static var operationQueue: OperationQueue = {
         OperationQueue()
     }()
 
-    public init() {}
+    init() {}
     
-    public struct Services { }
+    struct Services { }
 }

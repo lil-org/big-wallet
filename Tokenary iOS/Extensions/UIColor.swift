@@ -6,7 +6,7 @@ extension UIColor {
     
     static let inkGreen = UIColor(named: "InkGreen")!
     
-    public convenience init(
+    convenience init(
         light lightModeColor: @escaping @autoclosure () -> UIColor,
         dark darkModeColor: @escaping @autoclosure () -> UIColor
      ) {

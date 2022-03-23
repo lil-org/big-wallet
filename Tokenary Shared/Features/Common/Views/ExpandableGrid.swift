@@ -3,7 +3,7 @@
 import SwiftUI
 
 /// This layouts elements on all it's given width, so external padding needs to be enforced
-public struct ExpandableGrid<
+struct ExpandableGrid<
     ElementData: RandomAccessCollection,
     ElementView: View,
     ElementIndex: Hashable // rewrite using Identifiable
@@ -25,7 +25,7 @@ public struct ExpandableGrid<
     @State
     private var gridHeight: CGFloat = .zero
     
-    public var body: some View {
+    var body: some View {
         GeometryReader { geometryProxy in
             ZStack(alignment: .topLeading) {
                 ForEach(self.elementData, id: self.elementIndex) { currentElementData in
@@ -144,7 +144,7 @@ private struct ExpandableGridElementModifier<ElementIndex: Hashable>: ViewModifi
 }
 
 extension ExpandableGrid where ElementIndex == ElementData.Element.ID, ElementData.Element: Identifiable {
-    public init(_ data: ElementData, content: @escaping (ElementData.Element) -> ElementView) {
+    init(_ data: ElementData, content: @escaping (ElementData.Element) -> ElementView) {
         self.elementData = data
         self.elementIndex = \ElementData.Element.id
         self.elementView = content
@@ -152,7 +152,7 @@ extension ExpandableGrid where ElementIndex == ElementData.Element.ID, ElementDa
 }
 
 extension View {
-    public func expandableGridStyle(
+    func expandableGridStyle(
         hSpacing: CGFloat = 8,
         vSpacing: CGFloat = 8,
         animation: Animation? = .default

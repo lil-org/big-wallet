@@ -3,13 +3,13 @@
 import SwiftUI
 
 /// Can also be used instead of `frame(minWidth:maxWidth:)` since they don't work as expected
-public struct ClampWidthView: View {
+struct ClampWidthView: View {
     typealias Key = MaximumValuePreferenceKey
     
-    public let minWidth: CGFloat
-    public let maxWidth: CGFloat
+    let minWidth: CGFloat
+    let maxWidth: CGFloat
     
-    public var body: some View {
+    var body: some View {
         GeometryReader { proxy in
             Color.clear
                 .anchorPreference(key: MaximumValuePreferenceKey.self, value: .bounds) {
@@ -19,9 +19,9 @@ public struct ClampWidthView: View {
     }
 }
 
-public struct MaximumValuePreferenceKey: PreferenceKey {
-    public static var defaultValue: CGFloat = .zero
-    public static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+struct MaximumValuePreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = .zero
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())
     }
 }

@@ -29,7 +29,7 @@ private struct GlobalOverlayViewModifier<OverlayView>: ViewModifier where Overla
 }
 
 extension View {
-    public func addToGlobalOverlay<OverlayView: View>(overlayView: OverlayView, isShown: Binding<Bool>) -> some View {
+    func addToGlobalOverlay<OverlayView: View>(overlayView: OverlayView, isShown: Binding<Bool>) -> some View {
         self.modifier(GlobalOverlayViewModifier(isShown: isShown, overlayView: overlayView))
     }
 }

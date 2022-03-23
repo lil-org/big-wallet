@@ -9,14 +9,14 @@ import UniformTypeIdentifiers
     import AppKit
 #endif
 
-public struct PasteboardHelper {
+struct PasteboardHelper {
     static func setPlainNotNil(_ string: String?) {
         if let string = string {
             PasteboardHelper.setPlain(string)
         }
     }
     
-    public static func setPlain(_ string: String) {
+    static func setPlain(_ string: String) {
 #if canImport(UIKit)
         UIPasteboard.general.setValue(
             string as Any, forPasteboardType: UTType.utf8PlainText.identifier

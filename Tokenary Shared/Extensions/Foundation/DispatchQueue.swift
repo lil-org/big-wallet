@@ -5,13 +5,13 @@ import Foundation
 
 extension DispatchQueue {
     
-    // MARK: - Public Properties
+    // MARK: - Properties
     
-    public var isQueueCurrent: Bool { DispatchQueue.isQueueCurrent(self) }
+    var isQueueCurrent: Bool { DispatchQueue.isQueueCurrent(self) }
     
-    // MARK: - Public Methods
+    // MARK: - Methods
     
-    public class func safeMainSync(_ block: @escaping () -> Void) {
+    class func safeMainSync(_ block: @escaping () -> Void) {
         if Thread.isMainThread {
             block()
         } else {
@@ -19,7 +19,7 @@ extension DispatchQueue {
         }
     }
     
-    public class func once(file: String = #file, function: String = #function, line: Int = #line, block: () -> Void) {
+    class func once(file: String = #file, function: String = #function, line: Int = #line, block: () -> Void) {
         let token = file + ":" + function + ":" + String(line)
         objc_sync_enter(self)
         defer { objc_sync_exit(self) }
@@ -30,7 +30,7 @@ extension DispatchQueue {
         block()
     }
     
-    public class func isQueueCurrent(_ queue: DispatchQueue) -> Bool {
+    class func isQueueCurrent(_ queue: DispatchQueue) -> Bool {
         let value = OSAtomicIncrement32(&DispatchQueue.currentQueueValue)
         queue.setSpecific(key: key, value: value)
         let valueOnCurrentQueue = self.getSpecific(key: key)

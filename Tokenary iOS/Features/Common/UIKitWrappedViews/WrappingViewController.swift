@@ -4,8 +4,8 @@ import UIKit
 import SwiftUI
 
 class WrappingViewController<ContentView>: UIViewController where ContentView: View {
-    public let swiftUIHostingController: UIHostingController<ContentView>
-    public var swiftUIView: ContentView {
+    let swiftUIHostingController: UIHostingController<ContentView>
+    var swiftUIView: ContentView {
         self.swiftUIHostingController.rootView
     }
     

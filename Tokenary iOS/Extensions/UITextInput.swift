@@ -4,7 +4,7 @@
 import UIKit
 
 extension UITextInput {
-    public var selectedRange: NSRange? {
+    var selectedRange: NSRange? {
         guard let selectedRange = self.selectedTextRange else { return nil }
         return NSRange(
             location: self.offset(from: self.beginningOfDocument, to: selectedRange.start),

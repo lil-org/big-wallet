@@ -2,12 +2,12 @@
 
 import SwiftUI
 
-public struct ButtonWithBackgroundStyle: ButtonStyle {
+struct ButtonWithBackgroundStyle: ButtonStyle {
     let backgroundColor: Color
     let foregroundColor: Color
     let isActive: Bool
 
-    public init(
+    init(
         backgroundColor: Color,
         foregroundColor: Color,
         isActive: Bool = true
@@ -17,7 +17,7 @@ public struct ButtonWithBackgroundStyle: ButtonStyle {
         self.isActive = isActive
     }
     
-    public func makeBody(configuration: Self.Configuration) -> some View {
+    func makeBody(configuration: Self.Configuration) -> some View {
         configuration.label
             .foregroundColor(
                 self.foregroundColor.opacity(configuration.isPressed ? 0.75 : 1)

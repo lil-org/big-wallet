@@ -3,7 +3,7 @@
 import UIKit
 
 extension UIView {
-    public static var fromNib: Self {
+    static var fromNib: Self {
         Bundle.main.loadNibNamed(String(describing: Self.self), owner: nil, options: nil)![0] as! Self
     }
     

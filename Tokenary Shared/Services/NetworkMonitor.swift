@@ -4,7 +4,7 @@ import Foundation
 import CoreTelephony
 import Network
 
-public class NetworkMonitor {
+class NetworkMonitor {
     var hasConnection = true
     static let shared = NetworkMonitor()
     

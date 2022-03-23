@@ -35,7 +35,7 @@ struct AutoLayoutBuilder {
 }
 
 extension NSLayoutConstraint {
-     public static func activate(@AutoLayoutBuilder constraints: () -> [NSLayoutConstraint]) {
+     static func activate(@AutoLayoutBuilder constraints: () -> [NSLayoutConstraint]) {
          activate(constraints())
      }
 }
