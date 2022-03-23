@@ -324,7 +324,7 @@ private struct DerivedAccountViewStyleModifier<S>: ViewModifier where S: ShapeSt
                     guard isInside, hasEnded else { return }
                     self.onEndedActionClosure()
                 },
-                useHighPriorityGesture: false,
+                useHighPriorityGesture: true,
                 longPressDuration: 1,
                 longPressActionClosure: self.longPressActionClosure
             )
