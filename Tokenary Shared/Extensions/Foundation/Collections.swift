@@ -13,4 +13,25 @@ extension Collection {
     public func take(atMost atMostCount: Int) -> [Element] {
         return Array(self.prefix(atMostCount))
     }
+    
+    // MARK: - Public Subscripts
+    
+    public subscript(safe index: Index) -> Iterator.Element? {
+        if
+            distance(to: index) >= .zero,
+            distance(from: index) > .zero {
+            return self[index]
+        }
+        return nil
+    }
+    
+    // MARK: - Private Methods
+    
+    private func distance(from startIndex: Index) -> Int {
+        distance(from: startIndex, to: endIndex)
+    }
+
+    private func distance(to endIndex: Index) -> Int {
+        distance(from: startIndex, to: endIndex)
+    }
 }

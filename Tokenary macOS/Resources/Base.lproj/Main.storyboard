@@ -832,8 +832,8 @@ DQ
                                     <action selector="addButtonTapped:" target="29s-Rd-OUf" id="ZaA-pg-Drc"/>
                                 </connections>
                             </button>
-                            <customView translatesAutoresizingMaskIntoConstraints="NO" id="YAr-gV-Zhp">
-                                <rect key="frame" x="0.0" y="247" width="250" height="40"/>
+                            <customView misplaced="YES" translatesAutoresizingMaskIntoConstraints="NO" id="YAr-gV-Zhp">
+                                <rect key="frame" x="1" y="247" width="250" height="40"/>
                                 <subviews>
                                     <popUpButton verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="WBh-Qb-dhA">
                                         <rect key="frame" x="37" y="6" width="177" height="25"/>
@@ -874,6 +874,7 @@ DQ
                         <outlet property="chainButtonContainer" destination="YAr-gV-Zhp" id="Yuk-XP-xez"/>
                         <outlet property="chainButtonHeightConstraint" destination="HaA-yk-eCj" id="Cl4-JM-CVD"/>
                         <outlet property="titleLabel" destination="dkh-kG-EFj" id="qfq-sh-rZI"/>
+                        <outlet property="viewContainer" destination="Yjc-Zm-uZY" id="EqG-AQ-skU"/>
                     </connections>
                 </viewController>
                 <customObject id="JTb-7y-Jwq" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>

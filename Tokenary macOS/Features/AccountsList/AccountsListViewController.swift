@@ -9,6 +9,11 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
     private let walletsManager: WalletsManager
     private let agent: Agent
     
+    @IBOutlet weak var viewContainer: NSView! {
+        didSet {
+            self.viewContainer.wantsLayer = true
+        }
+    }
     @IBOutlet weak var titleLabel: NSTextField!
     @IBOutlet weak var chainButtonHeightConstraint: NSLayoutConstraint!
     @IBOutlet weak var chainButtonContainer: NSView! {
@@ -17,7 +22,11 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
         }
     }
     @IBOutlet weak var chainButton: NSPopUpButton!
-    @IBOutlet weak var accountsListContainer: NSView! 
+    @IBOutlet weak var accountsListContainer: NSView! {
+        didSet {
+            self.accountsListContainer.wantsLayer = true
+        }
+    }
     @IBOutlet weak var addButton: NSButton! {
         didSet {
             let menu = NSMenu()
@@ -93,6 +102,8 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
                 return NSColor(deviceRed: 199 / 255, green: 199 / 255, blue: 204 / 255, alpha: 1)
             }
         }.cgColor
+        self.viewContainer.layer?.backgroundColor = NSColor(Color.systemGray2).cgColor
+        self.accountsListContainer.layer?.backgroundColor = NSColor(light: .white, dark: .black).cgColor
     }
     
     // MARK: - State Management
@@ -159,8 +170,10 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
     }
     
     @objc private func reloadData() {
-        self.updateHeader()
-        self.stateProviderInput?.wallets = self.walletsManager.wallets
+        DispatchQueue.main.async {
+            self.stateProviderInput?.wallets = self.walletsManager.wallets.get()
+            self.updateHeader()
+        }
     }
     
     private func promptSafariForLegacyUsersIfNeeded() {

@@ -33,9 +33,9 @@ PODS:
     - SwiftyJSON (~> 4.3)
 
 DEPENDENCIES:
-  - BlockiesSwift (~> 0.1.2)
-  - Kingfisher (~> 7.1.2)
-  - TrustWalletCore (~> 2.6.35)
+  - BlockiesSwift
+  - Kingfisher
+  - TrustWalletCore
   - WalletConnect (from `https://github.com/grachyov/wallet-connect-swift`, branch `master`)
   - Web3Swift.io (from `https://github.com/grachyov/Web3Swift.git`, branch `develop`)
 
@@ -82,6 +82,6 @@ SPEC CHECKSUMS:
   WalletConnect: 1df75d4355b1cacfc27d7ef2416fae43862d0eb4
   Web3Swift.io: 18fd06aed9d56df9c704f9c6f87b06675bb05b53
 
-PODFILE CHECKSUM: 3f388322fba4f6820ca29927a70833e3675b65ac
+PODFILE CHECKSUM: c49cacb66b6f8d0bdaa7c0bd463aa81b59d11d8f
 
-COCOAPODS: 1.11.2
+COCOAPODS: 1.10.0

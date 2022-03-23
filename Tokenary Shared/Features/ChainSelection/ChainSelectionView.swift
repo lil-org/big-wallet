@@ -108,8 +108,9 @@ public struct ChainSelectionView: View {
                 .padding(.horizontal, 10)
             }
             .padding(.horizontal, 10)
-            .padding(.top, 15)
+            .padding(.vertical, 15)
             .background(Color(light: .systemGray5, dark: .systemGray5))
+            
             List {
                 ForEach(self.stateProvider.state.rows) { rowViewModel in
                     HStack {

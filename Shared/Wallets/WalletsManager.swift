@@ -41,12 +41,12 @@ final class WalletsManager {
     
     static let shared = WalletsManager()
     private let keychain = Keychain.shared
-    private(set) var wallets = [TokenaryWallet]()
+    private(set) var wallets = SynchronizedArray<TokenaryWallet>()
 
     private init() {}
 
     func start() {
-        try? load()
+        load()
     }
     
     #if os(macOS)
@@ -143,7 +143,7 @@ final class WalletsManager {
             name: name ?? self.getMnemonicDefaultWalletName(),
             password: Data(password.utf8),
             // ToDo: Weak was used previously, however longer needs considerable time
-            encryptionLevel: .standard
+            encryptionLevel: .weak
         )
         
         return try self.finaliseWalletCreation(
@@ -223,28 +223,13 @@ final class WalletsManager {
         let id = makeNewWalletId()
         let derivedChains = coinTypes.compactMap { SupportedChainType(coinType: $0) }
         
-        try keychain.saveWallet(
-            id: id,
-            data: data,
-            metaData: Keychain.MetaData(
-                derivedChains: derivedChains,
-                keychainMigrationVersion: Constants.currentKeychainMigrationVersion,
-                vaultIdentifier: nil
-            )
-        )
-        
-        let (createdAt, lastUpdatedAt, _) = keychain.getAssociatedWalletData(id: id) ?? (.now, .now, nil)
+        try keychain.saveWallet(id: id, data: data)
+        let walletDerivationType: TokenaryWallet.AssociatedMetadata.WalletDerivationType = isMnemonic
+            ? .mnemonic(derivedChains)
+            : .privateKey(derivedChains.first!)
         
         let wallet = TokenaryWallet(
-            id: id,
-            key: key,
-            associatedMetadata: .init(
-                createdAt: createdAt,
-                lastUpdatedAt: lastUpdatedAt ?? createdAt,
-                walletDerivationType: isMnemonic ? .mnemonic(derivedChains) : .privateKey(derivedChains.first!),
-                iconURL: nil,
-                vaultIdentifier: nil
-            )
+            id: id, key: key, associatedMetadata: .init(walletDerivationType: walletDerivationType)
         )
         
         if !onlyToKeychain {
@@ -348,21 +333,7 @@ final class WalletsManager {
         
         guard let data = wallets[index].key.exportJSON() else { throw KeyStore.Error.invalidPassword }
         
-        let walletId = wallets[index].id
-        let derivedChains = coins.compactMap { SupportedChainType(coinType: $0) }
-        
-        try keychain.saveWallet(
-            id: walletId,
-            data: data,
-            metaData: Keychain.MetaData(
-                derivedChains: derivedChains,
-                keychainMigrationVersion: Constants.currentKeychainMigrationVersion,
-                vaultIdentifier: nil
-            )
-        )
-        
-        let (_, lastUpdatedAt, _) = keychain.getAssociatedWalletData(id: walletId) ?? (.now, .now, nil)
-        wallets[index].associatedMetadata.lastUpdatedAt = lastUpdatedAt ?? .now
+        try keychain.saveWallet(id: wallets[index].id, data: data)
         
         self.postWalletsChangedNotification()
     }
@@ -396,40 +367,67 @@ final class WalletsManager {
     
     // MARK: Store & Destroy
     
-    private func load() throws {
-        let ids = keychain.getAllWalletsIds().take(atMost: 2)
-        var walletsToMigrate: [TokenaryWallet] = []
-        for id in ids {
-            guard
-                let data = keychain.getWalletData(id: id),
-                let key = StoredKey.importJSON(json: data),
-                let (createdAt, lastUpdatedAt, metaData) = keychain.getAssociatedWalletData(id: id)
-            else { continue }
+    private let operationQueue = DispatchQueue(label: "io.tokenary.WalletManager", qos: .userInitiated)
+    
+    private func load() {
+        self.operationQueue.async {
+            let ids = self.keychain.getAllWalletsIds()
+            var walletsToMigrate: [TokenaryWallet] = []
             
-            let walletDerivationType: TokenaryWallet.AssociatedMetadata.WalletDerivationType = key.isMnemonic
-                ? .mnemonic(metaData?.derivedChains ?? [WalletsManager.defaultSupportedChainType])
-                : .privateKey(metaData?.derivedChains.first ?? WalletsManager.defaultSupportedChainType)
-            let wallet = TokenaryWallet(
-                id: id,
-                key: key,
-                associatedMetadata: .init(
-                    createdAt: createdAt,
-                    lastUpdatedAt: lastUpdatedAt ?? createdAt,
-                    walletDerivationType: walletDerivationType,
-                    iconURL: nil,
-                    vaultIdentifier: nil
+            for id in ids {
+                guard
+                    let data = self.keychain.getWalletData(id: id),
+                    let key = StoredKey.importJSON(json: data)
+                else { continue }
+                
+                let walletDerivationType: TokenaryWallet.AssociatedMetadata.WalletDerivationType
+                if key.isMnemonic {
+                    var derivedChains: [SupportedChainType] = []
+                    for accountIdx in .zero ..< key.accountCount {
+                        if
+                            let account = key.account(index: accountIdx),
+                            let derivedChain = SupportedChainType(coinType: account.coin)
+                        {
+                            derivedChains.append(derivedChain)
+                        }
+                    }
+                    if derivedChains.isEmpty {
+                        derivedChains = [WalletsManager.defaultSupportedChainType]
+                    }
+                    walletDerivationType = .mnemonic(derivedChains)
+                } else {
+                    let derivedChain: SupportedChainType
+                    if
+                        let account = key.account(index: .zero),
+                        let accountChain = SupportedChainType(coinType: account.coin)
+                    {
+                        derivedChain = accountChain
+                    } else {
+                        derivedChain = WalletsManager.defaultSupportedChainType
+                    }
+                    walletDerivationType = .privateKey(derivedChain)
+                }
+                
+                let wallet = TokenaryWallet(
+                    id: id,
+                    key: key,
+                    associatedMetadata: .init(walletDerivationType: walletDerivationType)
                 )
-            )
-            if wallet.name.count == .zero || wallet.name.trimmingCharacters(in: .whitespacesAndNewlines) == .empty {
-                walletsToMigrate.append(wallet)
+                
+                if wallet.name.count == .zero || wallet.name.trimmingCharacters(in: .whitespacesAndNewlines) == .empty {
+                    walletsToMigrate.append(wallet)
+                }
+                
+                self.wallets.append(wallet)
+                
+                DispatchQueue.main.async {
+                    self.postWalletsChangedNotification()
+                }
             }
-            // ToDo -> This should be an async wrapper, with stream semantics
-            //  When size iz 50+ this works like a minute
-            wallets.append(wallet)
-        }
-        
-        for wallet in walletsToMigrate {
-            try self.rename(wallet: wallet, newName: self.getMnemonicDefaultWalletName())
+            
+            for wallet in walletsToMigrate {
+                try? self.rename(wallet: wallet, newName: self.getMnemonicDefaultWalletName())
+            }
         }
     }
     

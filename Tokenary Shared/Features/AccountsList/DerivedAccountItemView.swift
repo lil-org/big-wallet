@@ -187,7 +187,11 @@ struct DerivedAccountItemView: View {
         )
         #endif
         .retrieveBounds(viewId: self.stackUUID, $viewBounds)
-        .frame(width: min(self.viewBounds.size.width, CGFloat.derivedAccountMaxBaseFrameWidth) + 30 + 6)
+        #if canImport(AppKit)
+        .frame(width: (self.viewModel.chain == .ethereum ? 80 : 70) + 30 + 6)
+        #elseif canImport(UIKit)
+        .frame(width: (self.viewModel.chain == .ethereum ? 110 : 100) + 30 + 6)
+        #endif
         .onPreferenceChange(ClampWidthView.Key.self) { newWidth in
             DispatchQueue.main.async {
                 self.maximumSubViewWidth = newWidth
@@ -320,7 +324,7 @@ private struct DerivedAccountViewStyleModifier<S>: ViewModifier where S: ShapeSt
                     guard isInside, hasEnded else { return }
                     self.onEndedActionClosure()
                 },
-                useHighPriorityGesture: true,
+                useHighPriorityGesture: false,
                 longPressDuration: 1,
                 longPressActionClosure: self.longPressActionClosure
             )

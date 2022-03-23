@@ -133,8 +133,10 @@ class AccountsListViewController<ContentView: View>: WrappingViewController<Cont
     }
     
     @objc private func reloadData() {
-        self.stateProviderInput?.wallets = self.walletsManager.wallets
-        self.updateDataState()
+        DispatchQueue.main.async {
+            self.stateProviderInput?.wallets = self.walletsManager.wallets.get()
+            self.updateDataState()
+        }
     }
     
     private func createNewAccountAndShowSecretWordsFor(chains: [SupportedChainType]) {

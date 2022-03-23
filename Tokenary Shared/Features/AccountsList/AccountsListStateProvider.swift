@@ -34,7 +34,27 @@ class AccountsListStateProvider: ObservableObject {
     @Published
     var wallets: [TokenaryWallet] = [] {
         didSet {
-            self.accounts = self.transform(self.filteredWallets)
+            DispatchQueue.global().async {
+                for (idx, wallet) in self.filteredWallets.enumerated() {
+                    let transformedAccountViewModel: AccountItemView.ViewModel = self.transform(wallet)
+                    DispatchQueue.main.async {
+                        if let accountViewModel = self.accounts[safe: idx] {
+                            if accountViewModel == transformedAccountViewModel {
+                                return
+                            } else {
+                                self.accounts[idx] = transformedAccountViewModel
+                            }
+                        } else {
+                            self.accounts.append(transformedAccountViewModel)
+                        }
+                    }
+                }
+                DispatchQueue.main.async {
+                    if self.accounts.count != self.filteredWallets.count {
+                        self.accounts.removeLast()
+                    }
+                }
+            }
         }
     }
     
@@ -47,7 +67,6 @@ class AccountsListStateProvider: ObservableObject {
         } else {
             return self.wallets
         }
-        
     }
     
     // iPad -> popover, iPhone -> dialog
@@ -76,40 +95,36 @@ class AccountsListStateProvider: ObservableObject {
         self.mode = mode
     }
 
-    private func transform(_ wallets: [TokenaryWallet]) -> [AccountItemView.ViewModel] {
-        wallets
-            .sorted { $0.associatedMetadata.createdAt < $1.associatedMetadata.createdAt }
-            .map { wallet in
-                let icon: Image
-                if wallet.isMnemonic {
-                    if wallet.associatedMetadata.walletDerivationType.chainTypes.contains(.ethereum) {
-                        icon = Image(
-                            Blockies(seed: wallet[.ethereum, .address]??.lowercased(), size: 10).createImage(),
-                            defaultImage: "multiChainGrid"
-                        )
-                    } else {
-                        icon = Image("multiChainGrid")
-                    }
-                } else {
-                    let privateKeyChainType = wallet.associatedMetadata.walletDerivationType.chainTypes.first!
-                    if privateKeyChainType == .ethereum {
-                        icon = Image(
-                            Blockies(seed: wallet[.address]??.lowercased(), size: 10).createImage(),
-                            defaultImage: "multiChainGrid"
-                        )
-                    } else {
-                        icon = Image(privateKeyChainType.iconName)
-                    }
-                }
-                return AccountItemView.ViewModel(
-                    id: wallet.id,
-                    icon: icon,
-                    isMnemonicBased: wallet.isMnemonic,
-                    accountAddress: wallet.isMnemonic ? nil : wallet[.address] ?? nil,
-                    accountName: wallet.name,
-                    mnemonicDerivedViewModels: self.transform(wallet)
+    private func transform(_ wallet: TokenaryWallet) -> AccountItemView.ViewModel {
+        let icon: Image
+        if wallet.isMnemonic {
+            if wallet.associatedMetadata.walletDerivationType.chainTypes.contains(.ethereum) {
+                icon = Image(
+                    Blockies(seed: wallet[.ethereum, .address]??.lowercased(), size: 10).createImage(),
+                    defaultImage: "multiChainGrid"
                 )
+            } else {
+                icon = Image("multiChainGrid")
             }
+        } else {
+            let privateKeyChainType = wallet.associatedMetadata.walletDerivationType.chainTypes.first!
+            if privateKeyChainType == .ethereum {
+                icon = Image(
+                    Blockies(seed: wallet[.address]??.lowercased(), size: 10).createImage(),
+                    defaultImage: "multiChainGrid"
+                )
+            } else {
+                icon = Image(privateKeyChainType.iconName)
+            }
+        }
+        return AccountItemView.ViewModel(
+            id: wallet.id,
+            icon: icon,
+            isMnemonicBased: wallet.isMnemonic,
+            accountAddress: wallet.isMnemonic ? nil : wallet[.address] ?? nil,
+            accountName: wallet.name,
+            mnemonicDerivedViewModels: self.transform(wallet)
+        )
     }
     
     private func transform(_ wallet: TokenaryWallet) -> [DerivedAccountItemView.ViewModel] {

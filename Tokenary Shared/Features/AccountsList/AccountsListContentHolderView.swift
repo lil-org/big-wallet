@@ -72,7 +72,6 @@ struct AccountsListContentHolderView: View {
                 }
                 .background(Color(light: .white, dark: .black).ignoresSafeArea())
                 .listStyle(PlainListStyle())
-                .animation(.default, value: self.stateProvider.accounts)
                 .onChange(of: self.stateProvider.scrollToWalletId) { newValue in
                     guard
                         newValue != nil,
@@ -135,6 +134,7 @@ struct AccountsListContentHolderView: View {
             }
             .buttonStyle(.plain)
             .frame(height: 44, alignment: .leading)
+            Divider()
             Button(role: .none) {
                 self.stateProvider.didTapImportExistingAccount()
             } label: {
@@ -144,6 +144,7 @@ struct AccountsListContentHolderView: View {
             }
             .buttonStyle(.plain)
             .frame(height: 44, alignment: .leading)
+            Divider()
         }
         .padding(.leading, 20)
         .padding(.trailing, 8)

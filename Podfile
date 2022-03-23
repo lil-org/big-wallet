@@ -9,7 +9,7 @@ def shared_pods
   pod 'TrustWalletCore'
 end
 
-target 'Tokenary' do
+target 'Tokenary macOS' do
   platform :osx, '11.4'
   shared_pods
 end
