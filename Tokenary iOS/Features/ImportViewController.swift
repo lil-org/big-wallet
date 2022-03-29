@@ -59,8 +59,8 @@ class ImportViewController: UIViewController {
     }
     
     private func setLoading(_ waiting: Bool) {
-        guard waiting != self.isWaiting else { return }
-        self.isWaiting = waiting
+        guard waiting != isWaiting else { return }
+        isWaiting = waiting
         view.isUserInteractionEnabled = !waiting
         isModalInPresentation = waiting
         navigationItem.leftBarButtonItem?.isEnabled = !waiting
@@ -69,10 +69,10 @@ class ImportViewController: UIViewController {
     
     private func validateInput(proceedIfValid: Bool) {
         placeholderLabel.isHidden = !textView.text.isEmpty
-        self.inputValidationResult = self.walletsManager.getValidationFor(input: self.textView.text)
+        inputValidationResult = walletsManager.getValidationFor(input: textView.text)
         let isValid = ![
             WalletsManager.InputValidationResult.invalidData, WalletsManager.InputValidationResult.alreadyPresent
-        ].contains(self.inputValidationResult)
+        ].contains(inputValidationResult)
         okButton.isEnabled = isValid
         if isValid && proceedIfValid {
             attemptImportWithCurrentInput()
@@ -80,10 +80,10 @@ class ImportViewController: UIViewController {
     }
     
     private func attemptImportWithCurrentInput() {
-        if self.inputValidationResult == .passwordProtectedJSON {
-            self.askForPassword()
-        } else if let walletKeyType = self.inputValidationResult.walletKeyType {
-            self.selectChains(input: textView.text, walletKeyType: walletKeyType)
+        if inputValidationResult == .passwordProtectedJSON {
+            askForPassword()
+        } else if let walletKeyType = inputValidationResult.walletKeyType {
+            selectChains(input: textView.text, walletKeyType: walletKeyType)
         }
     }
     
@@ -102,14 +102,14 @@ class ImportViewController: UIViewController {
     }
     
     private func validatePasswordProtectedInput(input: String, password: String) {
-        let (inputValidationResult, decryptedInput) = self.walletsManager.decryptJSONAndValidate(
+        let (inputValidationResult, decryptedInput) = walletsManager.decryptJSONAndValidate(
             input: input, password: password
         )
-        self.setLoading(false)
+        setLoading(false)
         if let decryptedInput = decryptedInput, let walletKeyType = inputValidationResult.walletKeyType {
-            self.selectChains(input: decryptedInput, walletKeyType: walletKeyType)
+            selectChains(input: decryptedInput, walletKeyType: walletKeyType)
         } else {
-            self.showMessageAlert(text: Strings.ImportViewController.couldNotDecryptProtectedDataAlertTitle)
+            showMessageAlert(text: Strings.ImportViewController.couldNotDecryptProtectedDataAlertTitle)
         }
     }
 
@@ -131,17 +131,17 @@ class ImportViewController: UIViewController {
     
     private func importWallet(input: String, chainTypes: [ChainType]) {
         do {
-            try self.walletsManager.addWallet(input: input, chainTypes: chainTypes)
-            self.presentingViewController?.dismissAnimated()
+            try walletsManager.addWallet(input: input, chainTypes: chainTypes)
+            presentingViewController?.dismissAnimated()
         } catch {
-            self.processErrorOrCancel()
+            processErrorOrCancel()
         }
     }
     
     private func processErrorOrCancel() {
-        self.setLoading(false)
-        self.showMessageAlert(text: Strings.failedToImportAccount)
-        self.dismissAnimated()
+        setLoading(false)
+        showMessageAlert(text: Strings.failedToImportAccount)
+        dismissAnimated()
     }
 }
 
@@ -150,12 +150,12 @@ class ImportViewController: UIViewController {
 extension ImportViewController: UITextViewDelegate {
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
         if text == Symbols.newLine {
-            self.validateInput(proceedIfValid: true)
+            validateInput(proceedIfValid: true)
             return false
         } else {
             return true
         }
     }
     
-    func textViewDidChange(_ textView: UITextView) { self.validateInput(proceedIfValid: false) }
+    func textViewDidChange(_ textView: UITextView) { validateInput(proceedIfValid: false) }
 }

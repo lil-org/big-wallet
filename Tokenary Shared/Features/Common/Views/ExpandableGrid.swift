@@ -28,25 +28,25 @@ struct ExpandableGrid<
     var body: some View {
         GeometryReader { geometryProxy in
             ZStack(alignment: .topLeading) {
-                ForEach(self.elementData, id: self.elementIndex) { currentElementData in
+                ForEach(elementData, id: elementIndex) { currentElementData in
                     
-                    self.elementView(currentElementData)
+                    elementView(currentElementData)
                         .modifier(
                             ExpandableGridElementModifier(
                                 activeElementIndex: $activeElementIndex,
-                                elementIndex: currentElementData[keyPath: self.elementIndex]
+                                elementIndex: currentElementData[keyPath: elementIndex]
                             )
                         )
                         .alignmentGuide(.top, computeValue: { _ in
-                            self.alignmentGuides[currentElementData[keyPath: self.elementIndex], default: .zero].y
+                            alignmentGuides[currentElementData[keyPath: elementIndex], default: .zero].y
                         })
                         .alignmentGuide(.leading, computeValue: { _ in
-                            self.alignmentGuides[currentElementData[keyPath: self.elementIndex], default: .zero].x
+                            alignmentGuides[currentElementData[keyPath: elementIndex], default: .zero].x
                         })
-                        .opacity(self.alignmentGuides[currentElementData[keyPath: self.elementIndex]] == nil ? 1 : .zero)
+                        .opacity(alignmentGuides[currentElementData[keyPath: elementIndex]] == nil ? 1 : .zero)
                 }
             }.onPreferenceChange(ExpandableGridPreferenceKey.self, perform: { preferences in
-                self.positionElements(using: geometryProxy, having: preferences)
+                positionElements(using: geometryProxy, having: preferences)
             })
         }
     }
@@ -78,7 +78,7 @@ struct ExpandableGrid<
                 } else {
                     currentRowIndex += 1
                     widths.append(elementWidth)
-                    currentGridHeight += self.expandableGridStyle.vSpacing
+                    currentGridHeight += expandableGridStyle.vSpacing
                     offset = .init(
                         x: .zero, y: -currentGridHeight
                     )
@@ -135,12 +135,12 @@ private struct ExpandableGridElementModifier<ElementIndex: Hashable>: ViewModifi
                 key: ExpandableGridPreferenceKey.self,
                 value: .bounds,
                 transform: {[
-                    ExpandableGridPreferenceData(index: AnyHashable(self.elementIndex), bounds: $0)
+                    ExpandableGridPreferenceData(index: AnyHashable(elementIndex), bounds: $0)
                 ]}
             )
     }
     
-    func body(content: Content) -> some View { content.background(self.geometryProxiedView) }
+    func body(content: Content) -> some View { content.background(geometryProxiedView) }
 }
 
 extension ExpandableGrid where ElementIndex == ElementData.Element.ID, ElementData.Element: Identifiable {
@@ -160,6 +160,6 @@ extension View {
         let style = ExpandableGridStyle(
             hSpacing: hSpacing, vSpacing: vSpacing
         )
-        return self.environment(\.expandableGridStyle, style)
+        return environment(\.expandableGridStyle, style)
     }
 }

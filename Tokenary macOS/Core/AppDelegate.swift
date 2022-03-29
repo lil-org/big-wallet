@@ -20,7 +20,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         super.init()
         NSAppleEventManager.shared().setEventHandler(
             self,
-            andSelector: #selector(self.getUrl(_:withReplyEvent:)),
+            andSelector: #selector(getUrl(_:withReplyEvent:)),
             forEventClass: AEEventClass(kInternetEventClass),
             andEventID: AEEventID(kAEGetURL)
         )

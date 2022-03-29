@@ -8,22 +8,23 @@ extension String {
     // MARK: Public Properties
     
     public var maybeJSON: Bool {
-        self.hasPrefix(Symbols.leftCurlyBrace) && self.hasSuffix(Symbols.rightCurlyBrace) && self.count > 3
+        hasPrefix(Symbols.leftCurlyBrace) && hasSuffix(Symbols.rightCurlyBrace) && count > 3
     }
     
-    public var isOkAsPassword: Bool { self.count >= 4 }
+    public var isOkAsPassword: Bool { count >= 4 }
     
     public var withFirstLetterCapitalized: String {
-        guard !self.isEmpty else { return self }
-        return self.prefix(1).uppercased() + self.dropFirst()
+        guard !isEmpty else { return self }
+        return prefix(1).uppercased() + dropFirst()
     }
     
     public var withEllipsis: String { self + Symbols.ellipsis }
     
     public var trimmedAddress: String {
-        guard !self.isEmpty else { return self }
-        let without0x = self.dropFirst(2)
-        return without0x.prefix(4) + "..." + without0x.suffix(4)
+        guard !isEmpty else { return self }
+        let without0x = dropFirst(2)
+        let a = "dddd"
+        return without0x.prefix(4) + "..." + a + without0x.suffix(4)
     }
     
     // MARK: - Public Methods

@@ -18,7 +18,7 @@ struct AccountsListContentHolderView: View {
     /// Chain for which the networks are going to be shown
     /// Currently, when the mode is `.choseAccount(_)`, but we still have no network, we don't allow to filter
     private var selectedChain: ChainType? {
-        if case let .choseAccount(forChain: supportedChain) = self.stateProvider.mode {
+        if case let .choseAccount(forChain: supportedChain) = stateProvider.mode {
             return supportedChain
         } else {
             return nil
@@ -26,7 +26,7 @@ struct AccountsListContentHolderView: View {
     }
     
     private var isProviderNetworkFilterButtonShown: Bool {
-        if self.selectedChain == .ethereum {
+        if selectedChain == .ethereum {
             return true
         } else {
             return false
@@ -34,13 +34,13 @@ struct AccountsListContentHolderView: View {
     }
     
     var body: some View {
-        if self.stateProvider.accounts.isEmpty {
-            self.emptyViewState
+        if stateProvider.accounts.isEmpty {
+            emptyViewState
         } else {
             ScrollViewReader { scrollProxy in
                 List {
                     #if canImport(UIKit)
-                    self.networkFilterButton
+                    networkFilterButton
                     #elseif canImport(AppKit)
                     Divider()
                     #endif
@@ -53,10 +53,10 @@ struct AccountsListContentHolderView: View {
                             Button(
                                 role: .destructive,
                                 action: {
-                                    if let walletToRemove = self.stateProvider.wallets.first(
+                                    if let walletToRemove = stateProvider.wallets.first(
                                         where: { $0.id == account.id }
                                     ) {
-                                        self.stateProvider.askBeforeRemoving(wallet: walletToRemove)
+                                        stateProvider.askBeforeRemoving(wallet: walletToRemove)
                                     }
                                 },
                                 label: {
@@ -70,12 +70,12 @@ struct AccountsListContentHolderView: View {
                         #endif
                     }
                 }
-                .background(Color(light: .white, dark: .black).ignoresSafeArea())
+                .background(Color.mainBackground.ignoresSafeArea())
                 .listStyle(PlainListStyle())
-                .onChange(of: self.stateProvider.scrollToWalletId) { newValue in
+                .onChange(of: stateProvider.scrollToWalletId) { newValue in
                     guard
                         newValue != nil,
-                        let accountToScrollTo = self.stateProvider.accounts.first(where: { $0.id == newValue })
+                        let accountToScrollTo = stateProvider.accounts.first(where: { $0.id == newValue })
                     else { return }
                     
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
@@ -85,20 +85,20 @@ struct AccountsListContentHolderView: View {
                     }
                 }
                 .confirmationDialog(
-                    self.providerNetworksDialogTitle,
-                    isPresented: self.$areProviderNetworksPresented,
+                    providerNetworksDialogTitle,
+                    isPresented: $areProviderNetworksPresented,
                     titleVisibility: .visible,
                     actions: {
-                        self.providerNetworkActions
+                        providerNetworkActions
                         Button(Strings.cancel, role: .cancel, action: {})
                     }
                 )
                 .confirmationDialog(
-                    self.providerTestnetsDialogTitle,
-                    isPresented: self.$areProviderTestnetsPresented,
+                    providerTestnetsDialogTitle,
+                    isPresented: $areProviderTestnetsPresented,
                     titleVisibility: .visible,
                     actions: {
-                        self.providerTestnetActions
+                        providerTestnetActions
                         Button(Strings.cancel, role: .cancel, action: {})
                     }
                 )
@@ -126,20 +126,20 @@ struct AccountsListContentHolderView: View {
         #elseif canImport(AppKit)
         List {
             Button(role: .none) {
-                self.stateProvider.didTapCreateNewMnemonicWallet()
+                stateProvider.didTapCreateNewMnemonicWallet()
             } label: {
                 Text(Strings.createNew)
-                    .foregroundColor(Color(light: .black, dark: .white))
+                    .foregroundColor(Color.mainText)
                     .font(.system(size: 21, weight: .bold))
             }
             .buttonStyle(.plain)
             .frame(height: 44, alignment: .leading)
             Divider()
             Button(role: .none) {
-                self.stateProvider.didTapImportExistingAccount()
+                stateProvider.didTapImportExistingAccount()
             } label: {
                 Text(Strings.importExisting)
-                    .foregroundColor(Color(light: .black, dark: .white))
+                    .foregroundColor(Color.mainText)
                     .font(.system(size: 21, weight: .bold))
             }
             .buttonStyle(.plain)
@@ -153,12 +153,12 @@ struct AccountsListContentHolderView: View {
     
     @ViewBuilder
     private var networkFilterButton: some View {
-        if self.isProviderNetworkFilterButtonShown {
+        if isProviderNetworkFilterButtonShown {
             HStack {
-                Button(action: { self.areProviderNetworksPresented.toggle() }) {
+                Button(action: { areProviderNetworksPresented.toggle() }) {
                     HStack {
                         Spacer()
-                        Text(self.selectedNetworkButtonTitle)
+                        Text(selectedNetworkButtonTitle)
                         Image(systemName: "chevron.down")
                         Spacer()
                     }
@@ -180,7 +180,7 @@ struct AccountsListContentHolderView: View {
         if let selectedNetwork = self.selectedNetwork {
             return selectedNetwork.title
         } else if
-            case let .choseAccount(forChain: supportedChain) = self.stateProvider.mode,
+            case let .choseAccount(forChain: supportedChain) = stateProvider.mode,
             let supportedChain = supportedChain
         {
             return supportedChain.title
@@ -209,12 +209,12 @@ struct AccountsListContentHolderView: View {
         Unwrap(self.selectedChain) { selectedChain in
             ForEach(EthereumChain.mainnets, id: \.self) { network in
                 Button(network.title) {
-                    self.selectedNetwork = network
-                    self.stateProvider.didSelect(chain: network)
+                    selectedNetwork = network
+                    stateProvider.didSelect(chain: network)
                 }
             }
             Button(Strings.testnets.withEllipsis) {
-                self.areProviderTestnetsPresented.toggle()
+                areProviderTestnetsPresented.toggle()
             }
         }
     }
@@ -223,8 +223,8 @@ struct AccountsListContentHolderView: View {
         Unwrap(self.selectedChain) { selectedChain in
             ForEach(EthereumChain.testnets, id: \.self) { network in
                 Button(network.title) {
-                    self.selectedNetwork = network
-                    self.stateProvider.didSelect(chain: network)
+                    selectedNetwork = network
+                    stateProvider.didSelect(chain: network)
                 }
             }
         }
@@ -237,8 +237,8 @@ extension NSTableView {
     open override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
 
-        self.backgroundColor = NSColor.clear
-        self.enclosingScrollView!.drawsBackground = false
+        backgroundColor = NSColor.clear
+        enclosingScrollView!.drawsBackground = false
     }
 }
 #endif

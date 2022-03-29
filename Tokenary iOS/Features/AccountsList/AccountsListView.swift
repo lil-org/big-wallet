@@ -16,14 +16,14 @@ struct AccountsListView: View {
     var body: some View {
         NavigationView {
             AccountsListContentHolderView()
-                .environmentObject(self.stateProvider)
-                .navigationBarTitle(Text(self.stateProvider.mode == .mainScreen ? "Accounts" : "Select Account"), displayMode: .large)
+                .environmentObject(stateProvider)
+                .navigationBarTitle(Text(stateProvider.mode == .mainScreen ? "Accounts" : "Select Account"), displayMode: .large)
                 .toolbar {
                     ToolbarItemGroup(placement: .navigationBarLeading) {
-                        self.leadingNavigationBarItems
+                        leadingNavigationBarItems
                     }
                     ToolbarItemGroup(placement: .navigationBarTrailing) {
-                        self.trailingNavigationBarItems
+                        trailingNavigationBarItems
                     }
                 }
                 .padding(.zero)
@@ -32,33 +32,33 @@ struct AccountsListView: View {
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .confirmationDialog(String.empty, isPresented: $arePreferencesPresented, actions: {
-            self.preferencesActionButtons // ios
+            preferencesActionButtons // ios
             Button(Strings.cancel, role: .cancel, action: {})
         }, message: { // Custom view-hierarchy doesn't work here
             Text("❤️ " + Strings.tokenary + " ❤️" + Symbols.newLine + "Show love 4269.eth")
         })
         .confirmationDialog(Strings.addAccount, isPresented: $stateProvider.isAddAccountDialogPresented, actions: {
-            self.addAccountActionButtons // ios
+            addAccountActionButtons // ios
             Button(Strings.cancel, role: .cancel, action: {})
         })
         .popover(
-            isPresented: self.$stateProvider.isAddAccountPopoverPresented,
-            attachmentAnchor: .point(self.stateProvider.touchAnchor),
+            isPresented: $stateProvider.isAddAccountPopoverPresented,
+            attachmentAnchor: .point(stateProvider.touchAnchor),
             arrowEdge: .bottom,
             content: {
                 VStack(alignment: .leading, spacing: 8) {
-                    self.createNewButton
+                    createNewButton
                     Divider()
-                    self.importExistingButton
+                    importExistingButton
                 }
                 .padding(.vertical, 8)
                 .padding(.horizontal, 10)
                 .font(.system(size: 18, weight: .regular))
-                .foregroundColor(Color(light: .black, dark: .white))
+                .foregroundColor(Color.mainText)
             }
         )
         .activityShare(
-            isPresented: self.$isShareInvitePresented,
+            isPresented: $isShareInvitePresented,
             config: .init(
                 activityItems: [URL.appStore],
                 applicationActivities: nil,
@@ -68,17 +68,17 @@ struct AccountsListView: View {
                     .markupAsPDF
                 ]
             ),
-            bindView: self.$shareButton
+            bindView: $shareButton
         )
     }
     
     private var leadingNavigationBarItems: some View {
         HStack(alignment: .bottom) {
-            switch self.stateProvider.mode {
+            switch stateProvider.mode {
             case .mainScreen:
                 EmptyView()
             case .choseAccount(_):
-                Button(action: { self.stateProvider.cancelButtonWasTapped() }) {
+                Button(action: { stateProvider.cancelButtonWasTapped() }) {
                     Text("Cancel")
                 }
             }
@@ -87,11 +87,11 @@ struct AccountsListView: View {
     
     @ViewBuilder
     private var trailingNavigationBarItems: some View {
-        switch self.stateProvider.mode {
+        switch stateProvider.mode {
         case .mainScreen:
             if UIDevice.isPad {
                 Menu {
-                    self.preferencesActionButtons
+                    preferencesActionButtons
                     Divider()
                     let sendLoveString =
                         String(repeating: Symbols.nbsp, count: 10) + "❤️ " + Strings.tokenary + " ❤️" +
@@ -102,7 +102,7 @@ struct AccountsListView: View {
                         .background(UIViewBinding(as: $shareButton))
                 }
             } else {
-                Button(action: { self.arePreferencesPresented.toggle() }) {
+                Button(action: { arePreferencesPresented.toggle() }) {
                     Image(systemName: "gearshape")
                 }
             }
@@ -112,12 +112,12 @@ struct AccountsListView: View {
         }
         if UIDevice.isPad {
             Menu {
-                self.addAccountActionButtons
+                addAccountActionButtons
             } label: {
                 Image(systemName: "plus")
             }
         } else {
-            Button(action: { self.stateProvider.isAddAccountDialogPresented.toggle() }) {
+            Button(action: { stateProvider.isAddAccountDialogPresented.toggle() }) {
                 Image(systemName: "plus")
             }
         }
@@ -147,7 +147,7 @@ struct AccountsListView: View {
                 .imageScale(.large)
         }
         Button {
-            self.isShareInvitePresented.toggle()
+            isShareInvitePresented.toggle()
         } label: {
             Text(Strings.shareInvite.withEllipsis)
             Image(systemName: "square.and.arrow.up")
@@ -165,12 +165,12 @@ struct AccountsListView: View {
     private var createNewButton: some View {
         Button(Strings.createNew, role: .none) {
             if UIDevice.isPad {
-                self.stateProvider.isAddAccountPopoverPresented = false
+                stateProvider.isAddAccountPopoverPresented = false
             } else {
-                self.stateProvider.isAddAccountDialogPresented = false
+                stateProvider.isAddAccountDialogPresented = false
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                self.stateProvider.didTapCreateNewMnemonicWallet()
+                stateProvider.didTapCreateNewMnemonicWallet()
             }
         }
     }
@@ -178,20 +178,20 @@ struct AccountsListView: View {
     private var importExistingButton: some View {
         Button(Strings.importExisting, role: .none) {
             if UIDevice.isPad {
-                self.stateProvider.isAddAccountPopoverPresented = false
+                stateProvider.isAddAccountPopoverPresented = false
             } else {
-                self.stateProvider.isAddAccountDialogPresented = false
+                stateProvider.isAddAccountDialogPresented = false
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                self.stateProvider.didTapImportExistingAccount()
+                stateProvider.didTapImportExistingAccount()
             }
         }
     }
     
     @ViewBuilder
     private var addAccountActionButtons: some View {
-        self.createNewButton
-        self.importExistingButton
+        createNewButton
+        importExistingButton
     }
 }
 

@@ -53,7 +53,7 @@ public final class ChainSelectionAssembly {
         completion: @escaping ([ChainType]) -> Void
     ) -> BridgedViewController {
         let stateProvider = ChainSelectionStateProvider(
-            state: self.buildInitialState(for: mode),
+            state: buildInitialState(for: mode),
             completion: completion
         )
         

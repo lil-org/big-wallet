@@ -77,7 +77,6 @@
 		2C901C472689E6D400D0926A /* ApproveTransactionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C462689E6D400D0926A /* ApproveTransactionViewController.swift */; };
 		2C90E61D27B2C5C100C8991E /* InternalSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */; };
 		2C90E61E27B2C5C100C8991E /* InternalSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */; };
-		2C96D3962762380400687301 /* ButtonWithExtendedArea.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D3952762380400687301 /* ButtonWithExtendedArea.swift */; };
 		2C96D39C2763ADE100687301 /* LocalAuthentication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D39B2763ADE100687301 /* LocalAuthentication.swift */; };
 		2C96D3A42763C6A800687301 /* UIView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D3A32763C6A800687301 /* UIView.swift */; };
 		2C96D3A62763CCA000687301 /* Images.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D3A52763CCA000687301 /* Images.swift */; };
@@ -378,7 +377,6 @@
 		2C90E5F527A95B9400C8991E /* ethereum.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = ethereum.js; sourceTree = "<group>"; };
 		2C90E5F627A98CB700C8991E /* solana.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = solana.js; sourceTree = "<group>"; };
 		2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InternalSafariRequest.swift; sourceTree = "<group>"; };
-		2C96D3952762380400687301 /* ButtonWithExtendedArea.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonWithExtendedArea.swift; sourceTree = "<group>"; };
 		2C96D39B2763ADE100687301 /* LocalAuthentication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAuthentication.swift; sourceTree = "<group>"; };
 		2C96D3A32763C6A800687301 /* UIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIView.swift; sourceTree = "<group>"; };
 		2C96D3A52763CCA000687301 /* Images.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Images.swift; sourceTree = "<group>"; };
@@ -977,7 +975,6 @@
 			children = (
 				2C96D3A72763D13400687301 /* DataStateView.swift */,
 				2C96D3A82763D13400687301 /* DataStateView.xib */,
-				2C96D3952762380400687301 /* ButtonWithExtendedArea.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -1866,7 +1863,6 @@
 				4BD4B46727C6968F00809FB0 /* AccountItemView.swift in Sources */,
 				4BD4B48727C6968F00809FB0 /* ApprovalSubject.swift in Sources */,
 				4BD4B4D427C8000600809FB0 /* Web3Provider.swift in Sources */,
-				2C96D3962762380400687301 /* ButtonWithExtendedArea.swift in Sources */,
 				4BB60AFF27E92B5200F29E72 /* WalletsManager.swift in Sources */,
 				2C264BC227B2F2C100234393 /* EthereumSafariRequest.swift in Sources */,
 				4BD4B49527C6968F00809FB0 /* EthereumNetwork.swift in Sources */,

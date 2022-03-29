@@ -34,6 +34,6 @@ struct Unwrap2<Value1, Value2, Content: View>: View {
     }
     
     var body: some View {
-        value1.flatMap { value1 in value2.flatMap { value2 in self.contentProvider(value1, value2) } }
+        value1.flatMap { value1 in value2.flatMap { value2 in contentProvider(value1, value2) } }
     }
 }

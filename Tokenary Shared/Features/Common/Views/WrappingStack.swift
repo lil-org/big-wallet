@@ -20,15 +20,15 @@ struct TightHeightGeometryReader<Content: View>: View {
     
     var body: some View {
         GeometryReader { geometryProxy in
-            self.content(geometryProxy)
+            content(geometryProxy)
                 .onSizeChange { size in
-                    if self.height != size.height {
-                        self.height = size.height
+                    if height != size.height {
+                        height = size.height
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: self.alignment)
+                .frame(maxWidth: .infinity, alignment: alignment)
         }
-        .frame(height: self.height)
+        .frame(height: height)
     }
 }
 
@@ -67,8 +67,8 @@ struct WrappingStack<Data: RandomAccessCollection, ID: Hashable, Content: View>:
     ) {
         let forEach = create()
         data = forEach.data
-        content = forEach.content
-        idsForCalculatingSizes = Set(data.map { $0[keyPath: id] })
+        self.content = forEach.content
+        self.idsForCalculatingSizes = Set(data.map { $0[keyPath: id] })
         self.id = id
     }
     
@@ -82,7 +82,7 @@ struct WrappingStack<Data: RandomAccessCollection, ID: Hashable, Content: View>:
             guard let elementWidth = sizes[element[keyPath: id]]?.width else { break }
             let newWidth = width + elementWidth
             if newWidth < maxWidth {
-                width = newWidth + self.wrappingStackStyle.hSpacing
+                width = newWidth + wrappingStackStyle.hSpacing
                 lineLength += 1
             } else {
                 width = elementWidth
@@ -104,18 +104,18 @@ struct WrappingStack<Data: RandomAccessCollection, ID: Hashable, Content: View>:
     
     var body: some View {
         if calculatesSizesKeys.isSuperset(of: idsForCalculatingSizes) {
-            TightHeightGeometryReader(alignment: self.wrappingStackStyle.alignment) { geometry in
+            TightHeightGeometryReader(alignment: wrappingStackStyle.alignment) { geometry in
                 let splitted = splitIntoLines(maxWidth: geometry.size.width)
                 
                 // All sizes are known
                 VStack(
-                    alignment: self.wrappingStackStyle.alignment.horizontal,
-                    spacing: self.wrappingStackStyle.vSpacing
+                    alignment: wrappingStackStyle.alignment.horizontal,
+                    spacing: wrappingStackStyle.vSpacing
                 ) {
                     ForEach(Array(splitted.enumerated()), id: \.offset) { list in
                         HStack(
-                            alignment: self.wrappingStackStyle.alignment.vertical,
-                            spacing: self.wrappingStackStyle.hSpacing
+                            alignment: wrappingStackStyle.alignment.vertical,
+                            spacing: wrappingStackStyle.hSpacing
                         ) {
                             ForEach(data[list.element], id: id) {
                                 content($0)
@@ -175,6 +175,6 @@ extension View {
             hSpacing: hSpacing, vSpacing: vSpacing, alignment: alignment
         )
         
-        return self.environment(\.wrappingStackStyle, style)
+        return environment(\.wrappingStackStyle, style)
     }
 }

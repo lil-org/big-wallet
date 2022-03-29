@@ -16,8 +16,8 @@ struct NSSharingServicePickerWrapped: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        if self.isPresented {
-            let picker = NSSharingServicePicker(items: self.config.sharingItems).then {
+        if isPresented {
+            let picker = NSSharingServicePicker(items: config.sharingItems).then {
                 $0.delegate = context.coordinator
             }
 
@@ -42,7 +42,7 @@ struct NSSharingServicePickerWrapped: NSViewRepresentable {
             proposedSharingServices proposedServices: [NSSharingService]
         ) -> [NSSharingService] {
             var excludedServices = [NSSharingService]()
-            for name in self.parent.config.excludedSharingServiceNames {
+            for name in parent.config.excludedSharingServiceNames {
                 if let service = NSSharingService(named: name) {
                     excludedServices += [service]
                 }
@@ -55,7 +55,7 @@ struct NSSharingServicePickerWrapped: NSViewRepresentable {
             didChoose service: NSSharingService?
         ) {
             sharingServicePicker.delegate = nil
-            self.parent.isPresented = false
+            parent.isPresented = false
         }
     }
 }
@@ -65,7 +65,7 @@ extension View {
         isPresented: Binding<Bool>,
         config: NSSharingServicePickerWrapped.Config
     ) -> some View {
-        self.background(
+        background(
             NSSharingServicePickerWrapped(isPresented: isPresented, config: config)
         )
     }

@@ -8,7 +8,7 @@ extension UIView {
     }
     
     func addSubviewConstrainedToFrame(_ subview: UIView) {
-        self.addSubview(subview)
+        addSubview(subview)
         subview.translatesAutoresizingMaskIntoConstraints = false
         let firstConstraints = NSLayoutConstraint.constraints(
             withVisualFormat: "H:|-0-[subview]-0-|",
@@ -20,6 +20,6 @@ extension UIView {
             options: .directionLeadingToTrailing, metrics: nil,
             views: ["subview": subview]
         )
-        self.addConstraints(firstConstraints + secondConstraints)
+        addConstraints(firstConstraints + secondConstraints)
     }
 }

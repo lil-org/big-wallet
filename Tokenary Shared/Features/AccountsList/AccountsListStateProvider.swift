@@ -68,9 +68,9 @@ class AccountsListStateProvider: ObservableObject {
             case let .choseAccount(forChain: selectedChain) = mode,
             let selectedChain = selectedChain
         {
-            return self.wallets.filter { $0.associatedMetadata.allChains.contains(selectedChain) }
+            return wallets.filter { $0.associatedMetadata.allChains.contains(selectedChain) }
         } else {
-            return self.wallets
+            return wallets
         }
     }
     
@@ -128,25 +128,25 @@ class AccountsListStateProvider: ObservableObject {
             isMnemonicBased: wallet.isMnemonic,
             accountAddress: wallet.isMnemonic ? nil : wallet[.address] ?? nil,
             accountName: wallet.name,
-            mnemonicDerivedViewModels: self.transform(wallet)
+            mnemonicDerivedViewModels: transform(wallet)
         )
     }
     
     private func transform(_ wallet: TokenaryWallet) -> [DerivedAccountItemView.ViewModel] {
         guard wallet.isMnemonic else { return [] }
         if
-            case let .choseAccount(forChain: selectedChain) = self.mode,
+            case let .choseAccount(forChain: selectedChain) = mode,
             let selectedChain = selectedChain
         {
             if wallet.associatedMetadata.allChains.contains(selectedChain) {
-                return [self.transform(wallet, chain: selectedChain)]
+                return [transform(wallet, chain: selectedChain)]
             } else {
                 assertionFailure("This should not normally happen!")
                 return []
             }
         }
         return wallet.associatedMetadata.allChains.map {
-            self.transform(wallet, chain: $0)
+            transform(wallet, chain: $0)
         }
     }
     
@@ -166,22 +166,22 @@ class AccountsListStateProvider: ObservableObject {
 extension AccountsListStateProvider: AccountsListStateProviderInput {
 #if canImport(UIKit)
     func didTapAddAccount(at buttonFrame: CGRect) {
-        self.touchAnchor = UnitPoint(
+        touchAnchor = UnitPoint(
             x: (buttonFrame.width / 2 + buttonFrame.minX) / UIScreen.main.bounds.width,
             y: buttonFrame.minY / UIScreen.main.bounds.height
         )
         if UIDevice.isPad {
-            self.isAddAccountPopoverPresented.toggle()
+            isAddAccountPopoverPresented.toggle()
         } else {
-            self.isAddAccountDialogPresented.toggle()
+            isAddAccountDialogPresented.toggle()
         }
     }
 #elseif canImport(AppKit)
     func scrollToWalletAndBlink(walletId: String) {
-        self.scrollToWalletId = walletId
-        guard let accountIdx = self.accounts.firstIndex(where: { $0.id == walletId }) else { return }
-        let account = self.accounts[accountIdx]
-        self.accounts[accountIdx] = AccountItemView.ViewModel(
+        scrollToWalletId = walletId
+        guard let accountIdx = accounts.firstIndex(where: { $0.id == walletId }) else { return }
+        let account = accounts[accountIdx]
+        accounts[accountIdx] = AccountItemView.ViewModel(
             id: account.id,
             icon: account.icon,
             isMnemonicBased: account.isMnemonicBased,
@@ -195,27 +195,27 @@ extension AccountsListStateProvider: AccountsListStateProviderInput {
 }
 
 extension AccountsListStateProvider: AccountsListStateProviderOutput {
-    func didTapCreateNewMnemonicWallet() { self.output?.didTapCreateNewMnemonicWallet() }
+    func didTapCreateNewMnemonicWallet() { output?.didTapCreateNewMnemonicWallet() }
     
-    func didTapImportExistingAccount() { self.output?.didTapImportExistingAccount() }
+    func didTapImportExistingAccount() { output?.didTapImportExistingAccount() }
     
-    func didTapRemove(wallet: TokenaryWallet) { self.output?.didTapRemove(wallet: wallet) }
+    func didTapRemove(wallet: TokenaryWallet) { output?.didTapRemove(wallet: wallet) }
     
-    func cancelButtonWasTapped() { self.output?.cancelButtonWasTapped() }
+    func cancelButtonWasTapped() { output?.cancelButtonWasTapped() }
     
-    func didSelect(chain: EthereumChain) { self.output?.didSelect(chain: chain) }
+    func didSelect(chain: EthereumChain) { output?.didSelect(chain: chain) }
     
-    func didTapExport(wallet: TokenaryWallet) { self.output?.didTapExport(wallet: wallet) }
+    func didTapExport(wallet: TokenaryWallet) { output?.didTapExport(wallet: wallet) }
     
-    func askBeforeRemoving(wallet: TokenaryWallet) { self.output?.askBeforeRemoving(wallet: wallet) }
+    func askBeforeRemoving(wallet: TokenaryWallet) { output?.askBeforeRemoving(wallet: wallet) }
     
-    func didSelect(wallet: TokenaryWallet) { self.output?.didSelect(wallet: wallet) }
+    func didSelect(wallet: TokenaryWallet) { output?.didSelect(wallet: wallet) }
     
     func didTapRename(previousName: String, completion: @escaping (String?) -> Void) {
-        self.output?.didTapRename(previousName: previousName, completion: completion)
+        output?.didTapRename(previousName: previousName, completion: completion)
     }
     
     func didTapReconfigureAccountsIn(wallet: TokenaryWallet) {
-        self.output?.didTapReconfigureAccountsIn(wallet: wallet)
+        output?.didTapReconfigureAccountsIn(wallet: wallet)
     }
 }

@@ -189,7 +189,7 @@ extension UIDevice {
             )
     }()
     
-    static var isPhoneX: Bool { self.isPhone && self.iPhoneXHeights.contains(UIScreen.main.nativeBounds.size.height) }
+    static var isPhoneX: Bool { isPhone && iPhoneXHeights.contains(UIScreen.main.nativeBounds.size.height) }
     
     static let modelName: String = {
         var systemInfo = utsname()
@@ -241,7 +241,7 @@ extension UIDevice {
     static var deviceType: DeviceType { return .iPhoneNew }
     
     static var statusBarSize: CGFloat {
-        switch self.deviceType {
+        switch deviceType {
         case .iPhoneOld: return 22
         case .iPhoneNew: return 44
         case .iPadSmall, .iPadLarge: return 24
@@ -249,7 +249,7 @@ extension UIDevice {
     }
     
     static var tabBarSize: CGFloat {
-        switch self.deviceType {
+        switch deviceType {
         case .iPhoneOld: return 49
         case .iPhoneNew: return 83
         case .iPadSmall: return 50
@@ -258,7 +258,7 @@ extension UIDevice {
     }
     
     static var snapshotTolerance: CGFloat {
-        switch self.deviceType {
+        switch deviceType {
         case .iPhoneOld: return 0.002
         case .iPhoneNew: return 0.005
         case .iPadSmall: return 0.007

@@ -35,11 +35,11 @@ class ChainSelectionStateProvider: ObservableObject {
     init(state: ChainSelectionState, completion: @escaping ([ChainType]) -> Void) {
         self.state = state
         self.completion = completion
-        self.updateDoneButtonState()
+        updateDoneButtonState()
     }
     
     func doneButtonWasPressed() {
-        let selectedItems = self.state.rows.filter { $0.isSelected }
+        let selectedItems = state.rows.filter { $0.isSelected }
         DispatchQueue.main.async {
             self.completion(selectedItems.compactMap { ChainType(rawValue: $0.id) })
         }
@@ -52,34 +52,34 @@ class ChainSelectionStateProvider: ObservableObject {
     }
     
     func elementWasSelected(with id: UInt32) {
-        guard let rowIdx = self.state.rows.firstIndex(where: { $0.id == id }) else { return }
-        if self.state.mode == .singleSelect {
-            if let previousChoiceId = self.state.previousChoiceId {
+        guard let rowIdx = state.rows.firstIndex(where: { $0.id == id }) else { return }
+        if state.mode == .singleSelect {
+            if let previousChoiceId = state.previousChoiceId {
                 guard
-                    let previousRowIdx = self.state.rows.firstIndex(where: { $0.id == previousChoiceId })
+                    let previousRowIdx = state.rows.firstIndex(where: { $0.id == previousChoiceId })
                 else { return }
-                self.state.rows[previousRowIdx].isSelected.toggle()
+                state.rows[previousRowIdx].isSelected.toggle()
                 if previousChoiceId != id {
-                    self.state.rows[rowIdx].isSelected.toggle()
-                    self.state.previousChoiceId = id
+                    state.rows[rowIdx].isSelected.toggle()
+                    state.previousChoiceId = id
                 } else {
-                    self.state.previousChoiceId = nil
+                    state.previousChoiceId = nil
                 }
             } else {
-                self.state.rows[rowIdx].isSelected.toggle()
-                self.state.previousChoiceId = id
+                state.rows[rowIdx].isSelected.toggle()
+                state.previousChoiceId = id
             }
         } else {
-            self.state.rows[rowIdx].isSelected.toggle()
+            state.rows[rowIdx].isSelected.toggle()
         }
-        self.updateDoneButtonState()
+        updateDoneButtonState()
     }
     
     private func updateDoneButtonState() {
-        if self.state.rows.contains(where: { $0.isSelected }) {
-            self.isDoneButtonEnabled = true
+        if state.rows.contains(where: { $0.isSelected }) {
+            isDoneButtonEnabled = true
         } else {
-            self.isDoneButtonEnabled = false
+            isDoneButtonEnabled = false
         }
     }
 }
@@ -93,13 +93,13 @@ struct ChainSelectionView: View {
             VStack {
                 HStack(alignment: .center) {
                     Button("Cancel") {
-                        self.stateProvider.cancelButtonWasPressed()
+                        stateProvider.cancelButtonWasPressed()
                     }.keyboardShortcut(.cancelAction)
                     Spacer()
                     Text("Ledgers")
                     Spacer()
                     Button("Done") {
-                        self.stateProvider.doneButtonWasPressed()
+                        stateProvider.doneButtonWasPressed()
                     }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!stateProvider.isDoneButtonEnabled)
@@ -112,7 +112,7 @@ struct ChainSelectionView: View {
             .background(Color(light: .systemGray5, dark: .systemGray5))
             
             List {
-                ForEach(self.stateProvider.state.rows) { rowViewModel in
+                ForEach(stateProvider.state.rows) { rowViewModel in
                     HStack {
                         Image(rowViewModel.icon)
                             .resizable()
@@ -122,7 +122,7 @@ struct ChainSelectionView: View {
                         VStack(alignment: .center) {
                             HStack(alignment: .firstTextBaseline) {
                                 Text(rowViewModel.title)
-                                    .foregroundColor(Color(light: .black, dark: .white))
+                                    .foregroundColor(Color.mainText)
                                     .font(.headline)
                                 Text("(\(rowViewModel.ticker))")
                                     .foregroundColor(.gray)
@@ -130,31 +130,33 @@ struct ChainSelectionView: View {
                             }
                         }
                         Spacer()
-                        if self.stateProvider.state.mode == .multiSelect {
+                        if stateProvider.state.mode == .multiSelect {
                             Image(systemName: rowViewModel.isSelected ? "checkmark.square.fill" : "square")
                                 .resizable()
                                 .frame(width: 20, height: 20, alignment: .center)
-                                .foregroundColor(Color(light: .black, dark: .white))
+                                .foregroundColor(Color.mainText)
                                 .padding(.trailing, 10)
                         } else {
                             if rowViewModel.isSelected {
                                 Image(systemName: "checkmark")
                                     .resizable()
                                     .frame(width: 20, height: 20, alignment: .center)
-                                    .foregroundColor(Color(light: .black, dark: .white))
+                                    .foregroundColor(Color.mainText)
                                     .padding(.trailing, 10)
                             }
                             
                         }
-//                        #if canImport(AppKit)
-//                        Divider()
-//                        #endif
                     }
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        self.stateProvider.elementWasSelected(with: rowViewModel.id)
+                        stateProvider.elementWasSelected(with: rowViewModel.id)
                     }
+                    #if canImport(UIKit)
                     .listRowSeparator(.visible)
+                    #endif // ToDo: Change when https://forums.swift.org/t/if-for-postfix-member-expressions/44159
+                    #if canImport(AppKit)
+                    Divider()
+                    #endif
                 }
             }
             .listStyle(PlainListStyle())

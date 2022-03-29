@@ -98,8 +98,8 @@ struct DerivedAccountItemView: View {
     var viewModel: ViewModel
     
     private var attachedWallet: TokenaryWallet? {
-        self.stateProvider.wallets.first(
-            where: { $0.id == self.viewModel.walletId }
+        stateProvider.wallets.first(
+            where: { $0.id == viewModel.walletId }
         )
     }
     
@@ -107,13 +107,13 @@ struct DerivedAccountItemView: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: CGFloat.derivedAccountIconSpacing) {
-            self.viewModel.icon
+            viewModel.icon
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .derivedAccountIconFrame
                 .clipShape(Circle())
                 .shadow(
-                    color: self.viewModel.iconShadowColor,
+                    color: viewModel.iconShadowColor,
                     radius: 4, x: 1, y: 1
                 )
                 #if canImport(AppKit)
@@ -121,13 +121,13 @@ struct DerivedAccountItemView: View {
                 #endif
             VStack {
                 HStack(alignment: .firstTextBaseline, spacing: CGFloat.derivedAccountTextSpacing) {
-                    Text(self.viewModel.title)
-                        .foregroundColor(Color(light: .black, dark: .white))
+                    Text(viewModel.title)
+                        .foregroundColor(Color.mainText)
                         .derivedAccountTextFont
                         .lineLimit(1)
                         .multilineTextAlignment(.center)
                         .truncationMode(.middle)
-                    Text("(\(self.viewModel.ticker))")
+                    Text("(\(viewModel.ticker))")
                         .foregroundColor(.gray)
                         .derivedAccountTextFont
                         .multilineTextAlignment(.leading)
@@ -137,61 +137,61 @@ struct DerivedAccountItemView: View {
                 .layoutPriority(1)
                 .textSizeClampingOverlay
                 
-                Text(self.viewModel.accountAddress ?? .empty)
-                    .foregroundColor(Color(light: .black, dark: .white))
+                Text(viewModel.accountAddress ?? .empty)
+                    .foregroundColor(Color.mainText)
                     .truncationMode(.middle)
                     .lineLimit(1)
                     .derivedAccountTextFont
                     .layoutPriority(-1)
                     .multilineTextAlignment(.center)
-                    .frame(width: self.maximumSubViewWidth, alignment: .center)
+                    .frame(width: maximumSubViewWidth, alignment: .center)
             }
-            .saveBounds(viewId: self.stackUUID, coordinateSpace: .local)
+            .saveBounds(viewId: stackUUID, coordinateSpace: .local)
         }
         #if canImport(AppKit)
         .offset(x: 1)
         #endif
         #if canImport(UIKit)
         .confirmationDialog(
-            self.actionsForDerivedAccountDialogTitle,
-            isPresented: self.$areActionsForDerivedAccountPresented,
+            actionsForDerivedAccountDialogTitle,
+            isPresented: $areActionsForDerivedAccountPresented,
             titleVisibility: .visible,
             actions: {
-                self.derivedAccountActions
+                derivedAccountActions
             }
         )
         #elseif canImport(AppKit)
         .popover(
-            isPresented: self.$areActionsForDerivedAccountPresented,
+            isPresented: $areActionsForDerivedAccountPresented,
             attachmentAnchor: .point(.trailing),
             arrowEdge: .trailing,
             content: {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(self.actionsForDerivedAccountDialogTitle)
+                    Text(actionsForDerivedAccountDialogTitle)
                         .foregroundColor(.gray)
                     Divider()
-                    self.copyAddressAction
-                    self.openTransactionInScanerAction
-                    self.showWalletKeyAction
-                    self.removeAccountAction
+                    copyAddressAction
+                    openTransactionInScanerAction
+                    showWalletKeyAction
+                    removeAccountAction
                         .foregroundColor(.red)
                 }
                 .padding(.vertical, 8)
                 .padding(.horizontal, 10)
                 .font(.system(size: 15, weight: .regular))
-                .foregroundColor(Color(light: .black, dark: .white))
+                .foregroundColor(Color.mainText)
             }
         )
         #endif
-        .retrieveBounds(viewId: self.stackUUID, $viewBounds)
+        .retrieveBounds(viewId: stackUUID, $viewBounds)
         #if canImport(AppKit)
-        .frame(width: (self.viewModel.chain == .ethereum ? 80 : 70) + 30 + 6)
+        .frame(width: (viewModel.chain == .ethereum ? 80 : 70) + 30 + 6)
         #elseif canImport(UIKit)
-        .frame(width: (self.viewModel.chain == .ethereum ? 110 : 100) + 30 + 6)
+        .frame(width: (viewModel.chain == .ethereum ? 110 : 100) + 30 + 6)
         #endif
         .onPreferenceChange(ClampWidthView.Key.self) { newWidth in
             DispatchQueue.main.async {
-                self.maximumSubViewWidth = newWidth
+                maximumSubViewWidth = newWidth
             }
         }
         .modifier(
@@ -201,18 +201,18 @@ struct DerivedAccountItemView: View {
                 longPressActionClosure: {
                     // ToDo: Enable when custom gesture'll be ready.
 //                    withAnimation {
-//                        self.stateProvider.showToastOverlay = true
+//                        stateProvider.showToastOverlay = true
 //                    }
-                    PasteboardHelper.setPlainNotNil(self.viewModel.accountAddress)
+                    PasteboardHelper.setPlainNotNil(viewModel.accountAddress)
                 },
                 onEndedActionClosure: {
-                    if self.stateProvider.mode == .mainScreen {
+                    if stateProvider.mode == .mainScreen {
                         DispatchQueue.main.async {
-                            self.areActionsForDerivedAccountPresented = true
+                            areActionsForDerivedAccountPresented = true
                         }
                     } else {
                         if let attachedWallet = self.attachedWallet {
-                            self.stateProvider.didSelect(wallet: attachedWallet)
+                            stateProvider.didSelect(wallet: attachedWallet)
                         }
                     }
                 }
@@ -221,19 +221,19 @@ struct DerivedAccountItemView: View {
     }
     
     private var actionsForDerivedAccountDialogTitle: String {
-        if let address = self.stateProvider.selectedWallet?[self.viewModel.chain, .address] ?? nil {
+        if let address = stateProvider.selectedWallet?[viewModel.chain, .address] ?? nil {
             return address
         } else {
-            return "\(self.viewModel.chain.title) actions"
+            return "\(viewModel.chain.title) actions"
         }
     }
 
     private var derivedAccountActions: some View {
         Unwrap(self.attachedWallet) { attachedWallet in
-            self.copyAddressAction
-            self.openTransactionInScanerAction
-            self.showWalletKeyAction
-            self.removeAccountAction
+            copyAddressAction
+            openTransactionInScanerAction
+            showWalletKeyAction
+            removeAccountAction
             Button(Strings.cancel, role: .cancel, action: {})
         }
     }
@@ -241,17 +241,17 @@ struct DerivedAccountItemView: View {
     private var copyAddressAction: some View {
         Unwrap(self.attachedWallet) { attachedWallet in
             Button(Strings.copyAddress) {
-                PasteboardHelper.setPlainNotNil(attachedWallet[self.viewModel.chain, .address] ?? nil)
-                self.areActionsForDerivedAccountPresented = false
+                PasteboardHelper.setPlainNotNil(attachedWallet[viewModel.chain, .address] ?? nil)
+                areActionsForDerivedAccountPresented = false
             }
         }
     }
     
     private var openTransactionInScanerAction: some View  {
         Unwrap(self.attachedWallet) { attachedWallet in
-            Button(self.viewModel.chain.transactionScaner) {
-                if let address = attachedWallet[self.viewModel.chain, .address] ?? nil {
-                    LinkHelper.open(self.viewModel.chain.scanURL(address))
+            Button(viewModel.chain.transactionScaner) {
+                if let address = attachedWallet[viewModel.chain, .address] ?? nil {
+                    LinkHelper.open(viewModel.chain.scanURL(address))
                 }
             }
         }
@@ -260,7 +260,7 @@ struct DerivedAccountItemView: View {
     private var showWalletKeyAction: some View {
         Unwrap(self.attachedWallet) { attachedWallet in
             Button(Strings.showWalletKey) {
-                self.stateProvider.didTapExport(wallet: attachedWallet)
+                stateProvider.didTapExport(wallet: attachedWallet)
             }
         }
     }
@@ -271,7 +271,7 @@ struct DerivedAccountItemView: View {
                 Button("Remove account", role: .destructive) {
                     try? WalletsManager.shared.removeAccountIn(
                         wallet: attachedWallet,
-                        account: self.viewModel.chain
+                        account: viewModel.chain
                     )
                 }
             }
@@ -303,27 +303,27 @@ private struct DerivedAccountViewStyleModifier<S>: ViewModifier where S: ShapeSt
     func body(content: Content) -> some View {
         content
             .overlay(
-                RoundedRectangle(cornerRadius: self.cornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .inset(by: -CGFloat.derivedAccountBorderPadding)
-                    .stroke(self.shapeStyle, lineWidth: CGFloat.pixel)
+                    .stroke(shapeStyle, lineWidth: CGFloat.pixel)
             )
             .padding(CGFloat.derivedAccountBorderPadding)
-            .scaleEffect(self.scaleValue, anchor: .center)
+            .scaleEffect(scaleValue, anchor: .center)
             .onTouchGesture(
                 touchChanged: { (isInside, hasEnded) in
                     withAnimation {
                         if hasEnded {
-                            self.scaleValue = 1
+                            scaleValue = 1
                         } else {
-                            self.scaleValue = isInside ? 0.95 : 1.0
+                            scaleValue = isInside ? 0.95 : 1.0
                         }
                     }
                     guard isInside, hasEnded else { return }
-                    self.onEndedActionClosure()
+                    onEndedActionClosure()
                 },
                 useHighPriorityGesture: true,
                 longPressDuration: 1,
-                longPressActionClosure: self.longPressActionClosure
+                longPressActionClosure: longPressActionClosure
             )
     }
 }

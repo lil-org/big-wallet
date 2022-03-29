@@ -5,10 +5,10 @@ import UIKit
 
 extension UITextInput {
     var selectedRange: NSRange? {
-        guard let selectedRange = self.selectedTextRange else { return nil }
+        guard let selectedRange = selectedTextRange else { return nil }
         return NSRange(
-            location: self.offset(from: self.beginningOfDocument, to: selectedRange.start),
-            length: self.offset(from: selectedRange.start, to: selectedRange.end)
+            location: offset(from: beginningOfDocument, to: selectedRange.start),
+            length: offset(from: selectedRange.start, to: selectedRange.end)
         )
     }
 }

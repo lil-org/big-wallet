@@ -63,7 +63,7 @@ public final class TokenaryWallet: Hashable, Equatable {
         let address: String?
         
         // ToDo: Applying formatter
-        var privateKeyString: String? { self.privateKey?.data.hexString }
+        var privateKeyString: String? { privateKey?.data.hexString }
         
         var derivationPath: String? {
             guard
@@ -96,7 +96,7 @@ public final class TokenaryWallet: Hashable, Equatable {
         let address: String?
         
         var privateKeyString: String? {
-            self.privateKey?.data.hexString
+            privateKey?.data.hexString
         }
         
         var derivationPath: String? {
@@ -112,7 +112,7 @@ public final class TokenaryWallet: Hashable, Equatable {
     }
     private(set) var associatedMetadata: AssociatedMetadata {
         didSet {
-            self.accounts = self.generateAccounts()
+            accounts = generateAccounts()
         }
     }
     
@@ -145,21 +145,21 @@ public final class TokenaryWallet: Hashable, Equatable {
     public subscript<T>(chainType: ChainType, accountDescriptor: AccountDescriptor<T>) -> T? {
         // No throwing keypath available. Nil is sufficient here
         guard
-            self.isMnemonic,
-            let account = self.accounts.first(where: { $0.chainType == chainType })
+            isMnemonic,
+            let account = accounts.first(where: { $0.chainType == chainType })
         else { return nil }
         return account[keyPath: accountDescriptor.keyPath]
     }
     
     public subscript<T>(accountDescriptor: AccountDescriptor<T>) -> T? {
         guard
-            !self.isMnemonic,
-            let account = self.accounts.first
+            !isMnemonic,
+            let account = accounts.first
         else { return nil }
         return account[keyPath: accountDescriptor.keyPath]
     }
 
-    public func hash(into hasher: inout Hasher) { hasher.combine(self.id) }
+    public func hash(into hasher: inout Hasher) { hasher.combine(id) }
 
     public static func == (lhs: TokenaryWallet, rhs: TokenaryWallet) -> Bool { lhs.id == rhs.id }
     

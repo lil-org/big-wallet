@@ -69,7 +69,7 @@ class DataStateView: UIView {
     }
     
     @IBAction private func didTapButton(_ sender: Any) {
-        configurations[currentState]?.actionHandler?(self.button.frame)
+        configurations[currentState]?.actionHandler?(button.frame)
     }
     
     fileprivate func configureDataState(_ dataState: DataState, description: String? = nil, image: UIImage? = nil, buttonTitle: String? = nil, actionHandler: ((CGRect) -> Void)? = nil) {

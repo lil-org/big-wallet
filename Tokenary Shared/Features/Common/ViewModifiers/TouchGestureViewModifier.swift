@@ -20,24 +20,24 @@ private struct TouchGestureViewModifier: ViewModifier {
         func checkBoundaries(for value: DragGesture.Value, isEndGesture: Bool) {
             if value.location.x < .zero ||
                 value.location.y < .zero ||
-                value.location.x > self.contentBounds.size.width ||
-                value.location.y > self.contentBounds.size.height {
-                self.touchChanged(false, isEndGesture)
+                value.location.x > contentBounds.size.width ||
+                value.location.y > contentBounds.size.height {
+                touchChanged(false, isEndGesture)
             } else {
-                self.touchChanged(true, isEndGesture)
+                touchChanged(true, isEndGesture)
             }
         }
         let dragGesture = DragGesture(minimumDistance: .zero, coordinateSpace: .local)
             .onChanged { checkBoundaries(for: $0, isEndGesture: false) }
             .onEnded { checkBoundaries(for: $0, isEndGesture: true) }
-        let longPressGesture = LongPressGesture(minimumDuration: self.longPressDuration)
+        let longPressGesture = LongPressGesture(minimumDuration: longPressDuration)
             .onEnded { _ in
-                self.longPressActionClosure?()
+                longPressActionClosure?()
             }
 
         let viewWithSavedBounds = content
-            .saveBounds(viewId: self.viewId, coordinateSpace: .local)
-            .retrieveBounds(viewId: self.viewId, $contentBounds)
+            .saveBounds(viewId: viewId, coordinateSpace: .local)
+            .retrieveBounds(viewId: viewId, $contentBounds)
         
         if useHighPriorityGesture {
             return AnyView(

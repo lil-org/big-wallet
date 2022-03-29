@@ -27,8 +27,8 @@ struct SimpleToast: View {
 
                 Spacer()
                 HStack {
-                    self.viewModel.icon
-                    Text(self.viewModel.title)
+                    viewModel.icon
+                    Text(viewModel.title)
                 }
                 .font(.headline)
                 .foregroundColor(.primary)
@@ -44,12 +44,12 @@ struct SimpleToast: View {
         .transition(AnyTransition.move(edge: .bottom).combined(with: .opacity))
         .onTapGesture {
             withAnimation {
-                self.isShown = false
+                isShown = false
             }
         }.onAppear(perform: {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 withAnimation {
-                    self.isShown = false
+                    isShown = false
                 }
             }
         })

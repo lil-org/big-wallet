@@ -4,7 +4,7 @@ import SwiftUI
 
 extension View {
     func onSizeChange(perform action: @escaping (CGSize) -> Void) -> some View {
-        self.background(
+        background(
             GeometryReader { proxy in
                 Color.clear.preference(
                     key: OnSizeChangePreferenceKey.self, value: proxy.size

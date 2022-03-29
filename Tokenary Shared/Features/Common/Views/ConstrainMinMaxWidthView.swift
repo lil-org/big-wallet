@@ -13,7 +13,7 @@ struct ClampWidthView: View {
         GeometryReader { proxy in
             Color.clear
                 .anchorPreference(key: MaximumValuePreferenceKey.self, value: .bounds) {
-                    min(max(self.minWidth, proxy[$0].size.width), self.maxWidth)
+                    min(max(minWidth, proxy[$0].size.width), maxWidth)
                 }
         }
     }

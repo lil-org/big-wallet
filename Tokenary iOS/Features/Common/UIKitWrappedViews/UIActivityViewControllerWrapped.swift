@@ -19,7 +19,7 @@ struct UIActivityViewControllerWrapper: UIViewControllerRepresentable {
         private var bindView: Binding<UIView?>
         
         init(isPresented: Binding<Bool>, config: Config, bindView: Binding<UIView?>) {
-            self._isPresented = isPresented
+            _isPresented = isPresented
             self.config = config
             self.bindView = bindView
             super.init(nibName: nil, bundle: nil)
@@ -28,8 +28,8 @@ struct UIActivityViewControllerWrapper: UIViewControllerRepresentable {
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
         
         fileprivate func prepareActivity() {
-            guard self.isPreparingForPresentation == false else { return }
-            self.isPreparingForPresentation = true
+            guard isPreparingForPresentation == false else { return }
+            isPreparingForPresentation = true
             DispatchQueue.global().async { [self] in
                 guard self.activityVCWrapper == nil else { return }
                 self.activityVCWrapper = UIActivityViewController(
@@ -49,16 +49,16 @@ struct UIActivityViewControllerWrapper: UIViewControllerRepresentable {
         
         fileprivate func showActivity() {
             guard
-                self.viewIfLoaded?.window != nil, self.isPresented
+                viewIfLoaded?.window != nil, isPresented
             else {
-                self.pollForWindow()
+                pollForWindow()
                 return
             }
             if UIDevice.isPad {
-                let presentationVC = self.activityVCWrapper!.popoverPresentationController
-                presentationVC?.sourceView = self.bindView.wrappedValue
+                let presentationVC = activityVCWrapper!.popoverPresentationController
+                presentationVC?.sourceView = bindView.wrappedValue
             }
-            self.present(self.activityVCWrapper!, animated: true, completion: {
+            present(activityVCWrapper!, animated: true, completion: {
                 self.isPreparingForPresentation = false
                 self.activityVCWrapper = nil
             })
@@ -79,20 +79,20 @@ struct UIActivityViewControllerWrapper: UIViewControllerRepresentable {
     private let config: Config
 
     init(isPresented: Binding<Bool>, config: Config, bindView: Binding<UIView?>) {
-        self._isPresented = isPresented
-        self._bindView = bindView
+        _isPresented = isPresented
+        _bindView = bindView
         self.config = config
     }
 
     func makeUIViewController(context: Context) -> UIViewController {
-        ActivityViewControllerInternalWrapper(isPresented: self.$isPresented, config: self.config, bindView: self.$bindView)
+        ActivityViewControllerInternalWrapper(isPresented: $isPresented, config: config, bindView: $bindView)
     }
 
     func updateUIViewController(
         _ uiViewController: UIViewController,
         context: Context
     ) {
-        if self.isPresented {
+        if isPresented {
             (uiViewController as? ActivityViewControllerInternalWrapper)?.prepareActivity()
         } else {
             uiViewController.dismissAnimated()
@@ -106,7 +106,7 @@ extension View {
         config: UIActivityViewControllerWrapper.Config,
         bindView: Binding<UIView?>
     ) -> some View {
-        self.background(
+        background(
             UIActivityViewControllerWrapper(isPresented: isPresented, config: config, bindView: bindView)
         )
     }

@@ -41,7 +41,7 @@ struct AccountItemView: View {
         var mnemonicDerivedViewModels: [DerivedAccountItemView.ViewModel]
         var preformBlink: Bool = false
         
-        func hash(into hasher: inout Hasher) { hasher.combine(self.id) }
+        func hash(into hasher: inout Hasher) { hasher.combine(id) }
     }
     
     @EnvironmentObject
@@ -60,38 +60,38 @@ struct AccountItemView: View {
     var viewModel: ViewModel
     
     private var attachedWallet: TokenaryWallet? {
-        self.stateProvider.wallets.first(
-            where: { $0.id == self.viewModel.id }
+        stateProvider.wallets.first(
+            where: { $0.id == viewModel.id }
         )
     }
     
     private var backgroundColor: Color {
-        if self.isInBlink {
+        if isInBlink {
             return Color.inkGreen
         } else {
-            return self.isInPress
+            return isInPress
                 ? Color.systemGray5
-                : Color(light: .white, dark: .black)
+                : Color.mainBackground
         }
     }
     
     var body: some View {
         VStack(spacing: 4) {
             HStack(spacing: CGFloat.accountHorizontalStackSpacing) {
-                self.viewModel.icon
+                viewModel.icon
                     .resizable()
                     .accountIconCornerRadius
                     .aspectRatio(contentMode: .fill)
                     .accountIconFrame
                     
                 VStack(alignment: .leading) {
-                    Text(self.viewModel.accountName)
+                    Text(viewModel.accountName)
                         .font(.system(size: 19, weight: .medium))
                         .lineLimit(1)
                         .truncationMode(.middle)
                     if
-                        !self.viewModel.isMnemonicBased,
-                        let accountAddress = self.viewModel.accountAddress
+                        !viewModel.isMnemonicBased,
+                        let accountAddress = viewModel.accountAddress
                     {
                         Text(accountAddress)
                             .font(.system(size: 15, weight: .regular))
@@ -103,8 +103,8 @@ struct AccountItemView: View {
                 #if canImport(UIKit)
                 if UIDevice.isPad {
                     Menu {
-                        Text(self.actionsForWalletDialogTitle)
-                        self.walletActions
+                        Text(actionsForWalletDialogTitle)
+                        walletActions
                     } label: {
                         Image(systemName: "ellipsis.circle")
                             .font(.title3)
@@ -117,7 +117,7 @@ struct AccountItemView: View {
                     }
                     .offset(x: 15)
                 } else {
-                    Button(action: { self.areActionsForWalletPresented.toggle() }) {
+                    Button(action: { areActionsForWalletPresented.toggle() }) {
                         Image(systemName: "ellipsis.circle")
                             .font(.title3)
                             .foregroundColor(.blue)
@@ -137,58 +137,58 @@ struct AccountItemView: View {
             .padding(.horizontal, 12)
             #endif
             
-            if self.viewModel.isMnemonicBased && self.viewModel.mnemonicDerivedViewModels.count != .zero {
-                self.derivedAccountsGrid
+            if viewModel.isMnemonicBased && viewModel.mnemonicDerivedViewModels.count != .zero {
+                derivedAccountsGrid
                     #if canImport(UIKit)
                     .padding(.bottom, 4)
                     .padding(.horizontal, 12)
                     #endif
             }
         }
-        .background(self.backgroundColor, ignoresSafeAreaEdges: [.leading, .trailing])
+        .background(backgroundColor, ignoresSafeAreaEdges: [.leading, .trailing])
         .onTouchGesture(
             touchChanged: { isInside, hasEnded  in
                 withAnimation(.linear(duration: 0.1)) {
                     if hasEnded {
-                        self.isInPress = false
+                        isInPress = false
                     } else {
-                        self.isInPress = isInside ? true : false
+                        isInPress = isInside ? true : false
                     }
                 }
                 guard hasEnded, isInside else { return }
-                self.areActionsForWalletPresented.toggle()
+                areActionsForWalletPresented.toggle()
             }
         )
-        .onChange(of: self.viewModel.preformBlink) { newValue in
+        .onChange(of: viewModel.preformBlink) { newValue in
             guard newValue else { return }
             withAnimation(.easeInOut(duration: 1.2)) {
-                self.isInBlink = true
+                isInBlink = true
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                self.isInBlink = false
-                self.viewModel.preformBlink = false
+                isInBlink = false
+                viewModel.preformBlink = false
             }
         }
         #if canImport(UIKit)
         .confirmationDialog(
-            self.actionsForWalletDialogTitle,
-            isPresented: self.$areActionsForWalletPresented,
+            actionsForWalletDialogTitle,
+            isPresented: $areActionsForWalletPresented,
             titleVisibility: .visible,
             actions: {
-                self.walletActions
+                walletActions
                 Button(Strings.cancel, role: .cancel, action: {})
             }
         )
         #elseif canImport(AppKit)
         .contextMenu {
-            Text(self.actionsForWalletDialogTitle)
-            self.walletActions
+            Text(actionsForWalletDialogTitle)
+            walletActions
         }
         #endif
     }
     
     private var actionsForWalletDialogTitle: String {
-        if let address = self.attachedWallet?[.address] ?? nil {
+        if let address = attachedWallet?[.address] ?? nil {
             return address
         } else {
             return "Mnemonic wallet"
@@ -199,7 +199,7 @@ struct AccountItemView: View {
     private var walletActions: some View {
         Button("Rename Wallet", role: .none) {
             if let attachedWallet = self.attachedWallet {
-                self.stateProvider.didTapRename(previousName: attachedWallet.name) { newName in
+                stateProvider.didTapRename(previousName: attachedWallet.name) { newName in
                     if let newName = newName {
                         try? WalletsManager.shared.rename(
                             wallet: attachedWallet, newName: newName
@@ -208,10 +208,10 @@ struct AccountItemView: View {
                 }
             }
         }.keyboardShortcut("r", modifiers: [.command])
-        self.specificWalletActions
+        specificWalletActions
         Button(Strings.showWalletKey, role: .none) {
             if let attachedWallet = self.attachedWallet {
-                self.stateProvider.didTapExport(wallet: attachedWallet)
+                stateProvider.didTapExport(wallet: attachedWallet)
             }
         }.keyboardShortcut("s", modifiers: [.command])
         #if canImport(AppKit)
@@ -219,7 +219,7 @@ struct AccountItemView: View {
         #endif
         Button(Strings.removeWallet, role: .destructive) {
             if let attachedWallet = self.attachedWallet {
-                self.stateProvider.didTapRemove(wallet: attachedWallet)
+                stateProvider.didTapRemove(wallet: attachedWallet)
             }
         }.keyboardShortcut("d", modifiers: [.shift, .command])
     }
@@ -227,9 +227,9 @@ struct AccountItemView: View {
     private var specificWalletActions: some View {
         Unwrap(self.attachedWallet) { attachedWallet in
             if attachedWallet.isMnemonic {
-                self.mnemonicWalletActions
+                mnemonicWalletActions
             } else {
-                self.privateKeyWalletActions
+                privateKeyWalletActions
             }
         }
     }
@@ -237,7 +237,7 @@ struct AccountItemView: View {
     private var mnemonicWalletActions: some View {
         Unwrap(self.attachedWallet) { attachedWallet in
             Button("Configure accounts") {
-                self.stateProvider.didTapReconfigureAccountsIn(wallet: attachedWallet)
+                stateProvider.didTapReconfigureAccountsIn(wallet: attachedWallet)
             }.keyboardShortcut("c", modifiers: [.command])
         }
     }

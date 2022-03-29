@@ -20,7 +20,7 @@ final class EthereumNetwork: Network {
     private let origin: GethNetwork
     
     init(url: String) {
-        origin = GethNetwork(url: url)
+        self.origin = GethNetwork(url: url)
     }
     
     func id() throws -> IntegerScalar {

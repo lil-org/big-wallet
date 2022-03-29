@@ -20,15 +20,15 @@ struct ButtonWithBackgroundStyle: ButtonStyle {
     func makeBody(configuration: Self.Configuration) -> some View {
         configuration.label
             .foregroundColor(
-                self.foregroundColor.opacity(configuration.isPressed ? 0.75 : 1)
+                foregroundColor.opacity(configuration.isPressed ? 0.75 : 1)
             )
             .padding([.leading, .trailing], 50)
             .padding([.top, .bottom], 15)
             .background(
                 RoundedRectangle(cornerRadius: 5)
                     .fill(
-                        self.backgroundColor
-                            .opacity(self.isActive && !configuration.isPressed ? 1 : 0.75)
+                        backgroundColor
+                            .opacity(isActive && !configuration.isPressed ? 1 : 0.75)
                     )
             )
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)

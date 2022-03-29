@@ -11,7 +11,7 @@ extension Collection {
     // MARK: - Methods
     
     func take(atMost atMostCount: Int) -> [Element] {
-        return Array(self.prefix(atMostCount))
+        return Array(prefix(atMostCount))
     }
     
     // MARK: - Subscripts

@@ -25,7 +25,7 @@ struct SynchronizedArray<T>: RangeReplaceableCollection {
 extension SynchronizedArray {
 
     init<S>(_ elements: S) where S: Sequence, SynchronizedArray.Element == S.Element {
-        array = [S.Element](elements)
+        self.array = [S.Element](elements)
     }
 
     init() { self.init([]) }
@@ -127,7 +127,7 @@ extension SynchronizedArray {
         array.removeSubrange(bounds)
     }
 
-    mutating func replaceSubrange<C, R>(_ subrange: R, with newElements: C) where C : Collection, R : RangeExpression, T == C.Element, SynchronizedArray<Element>.Index == R.Bound {
+    mutating func replaceSubrange<C, R>(_ subrange: R, with newElements: C) where C: Collection, R: RangeExpression, T == C.Element, SynchronizedArray<Element>.Index == R.Bound {
         _wait(); defer { _signal() }
         array.replaceSubrange(subrange, with: newElements)
     }

@@ -95,7 +95,7 @@ public enum EthereumChain: Int {
     }
     
     var symbolIsETH: Bool {
-        return self.symbol == "ETH"
+        return symbol == "ETH"
     }
     
     var hasUSDPrice: Bool {

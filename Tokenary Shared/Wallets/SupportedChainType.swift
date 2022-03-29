@@ -123,7 +123,7 @@ extension ChainType {
 
 extension ChainType: CustomStringConvertible {
     public var description: String {
-        "\(String(describing: self.title))(\(String(describing: self.ticker))), \(self.derivationPath())"
+        "\(String(describing: title))(\(String(describing: ticker))), \(derivationPath())"
     }
 }
 

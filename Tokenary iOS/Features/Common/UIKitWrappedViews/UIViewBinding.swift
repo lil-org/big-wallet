@@ -19,19 +19,19 @@ struct UIViewBinding: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(binding: self.binding)
+        Coordinator(binding: binding)
     }
 
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
-        self.binding.wrappedValue = view
+        binding.wrappedValue = view
         return view
     }
 
     func updateUIView(_ view: UIView, context: Context) {
         context.coordinator.binding.wrappedValue = nil
-        context.coordinator.binding = self.binding
-        self.binding.wrappedValue = view
+        context.coordinator.binding = binding
+        binding.wrappedValue = view
     }
 
     static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {

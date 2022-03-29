@@ -5,7 +5,7 @@ import SwiftUI
 
 extension View {
     func saveBounds(viewId: UUID, coordinateSpace: CoordinateSpace = .global) -> some View {
-        self.background(
+        background(
             GeometryReader { proxy in
                 Color.clear.preference(
                     key: SaveBoundsPreferenceKey.self,
@@ -18,7 +18,7 @@ extension View {
     }
     
     func retrieveBounds(viewId: UUID, _ rect: Binding<CGRect>) -> some View {
-        self.onPreferenceChange(SaveBoundsPreferenceKey.self) { preferences in
+        onPreferenceChange(SaveBoundsPreferenceKey.self) { preferences in
             DispatchQueue.main.async {
                 let p = preferences.first(where: { $0.viewId == viewId })
                 rect.wrappedValue = p?.bounds ?? .zero

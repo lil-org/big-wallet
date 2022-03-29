@@ -65,7 +65,7 @@ final class WalletsManager {
             keychain.save(password: legacyPassword)
             for keystore in legacyKeystores {
                 _ = try? importJSON(keystore,
-                                    name: self.getMnemonicDefaultWalletName(),
+                                    name: getMnemonicDefaultWalletName(),
                                     password: legacyPassword,
                                     newPassword: legacyPassword,
                                     coin: .ethereum,
@@ -85,12 +85,14 @@ final class WalletsManager {
             let data = key.decryptPrivateKey(password: Data(password.utf8))
         else { throw KeyStore.Error.invalidPassword }
         if let mnemonic = checkMnemonic(data) {
-            return try self.`import`(
+            return try `import`(
                 mnemonic: mnemonic, name: name, password: newPassword, coinTypes: [coin]
             )
         }
-        guard let privateKey = PrivateKey(data: data) else { throw KeyStore.Error.invalidKey } // This method doesn't do shit
-        return try self.`import`(
+        guard
+            let privateKey = PrivateKey(data: data) // This method doesn't do shit
+        else { throw KeyStore.Error.invalidKey }
+        return try `import`(
             privateKey: privateKey, name: name, password: newPassword, coinType: coin, onlyToKeychain: onlyToKeychain
         )
     }
@@ -130,7 +132,7 @@ final class WalletsManager {
             let key = StoredKey.importJSON(json: json),
             let data = key.decryptPrivateKey(password: Data(password.utf8)),
             let stringRepresentation = String(data: data, encoding: .ascii),
-            let validRepresentation = self.getValidationFor(input: stringRepresentation).walletKeyType
+            let validRepresentation = getValidationFor(input: stringRepresentation).walletKeyType
         {
             if validRepresentation == .mnemonic {
                 return (.valid(validRepresentation), stringRepresentation)
@@ -148,12 +150,12 @@ final class WalletsManager {
         guard coinTypes.count != .zero else { throw Error.invalidInput }
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         let newKey = StoredKey(
-            name: name ?? self.getMnemonicDefaultWalletName(),
+            name: name ?? getMnemonicDefaultWalletName(),
             password: Data(password.utf8),
             encryptionLevel: .weak
         )
         
-        return try self.finaliseWalletCreation(
+        return try finaliseWalletCreation(
             key: newKey, coinTypes: coinTypes, isMnemonic: true, onlyToKeychain: false
         )
     }
@@ -164,7 +166,7 @@ final class WalletsManager {
         if Mnemonic.isValid(mnemonic: input) {
             return try `import`(
                 mnemonic: input,
-                name: self.getMnemonicDefaultWalletName(),
+                name: getMnemonicDefaultWalletName(),
                 password: password,
                 coinTypes: chainTypes
             )
@@ -175,7 +177,7 @@ final class WalletsManager {
         {
             return try `import`(
                 privateKey: privateKey,
-                name: self.getPrivateKeyDefaultWalletName(for: chain),
+                name: getPrivateKeyDefaultWalletName(for: chain),
                 password: password,
                 coinType: chain,
                 onlyToKeychain: false
@@ -196,7 +198,7 @@ final class WalletsManager {
             )
         else { throw KeyStore.Error.invalidKey }
         
-        return try self.finaliseWalletCreation(
+        return try finaliseWalletCreation(
             key: newKey, coinTypes: [coinType], isMnemonic: false, onlyToKeychain: onlyToKeychain
         )
     }
@@ -210,9 +212,9 @@ final class WalletsManager {
                 mnemonic: mnemonic, name: name, password: Data(password.utf8), coin: defaultCoinType
             )
         else { throw KeyStore.Error.invalidMnemonic }
-        try self.addAccounts(key: newKey, password: password, chainTypes: Array(coinTypes.dropFirst()))
+        try addAccounts(key: newKey, password: password, chainTypes: Array(coinTypes.dropFirst()))
         
-        return try self.finaliseWalletCreation(
+        return try finaliseWalletCreation(
             key: newKey, coinTypes: coinTypes, isMnemonic: true, onlyToKeychain: false
         )
     }
@@ -230,9 +232,9 @@ final class WalletsManager {
         )
         
         if !onlyToKeychain {
-            self.wallets.append(wallet)
+            wallets.append(wallet)
         }
-        self.postWalletsChangedNotification()
+        postWalletsChangedNotification()
         return wallet
     }
     
@@ -250,15 +252,15 @@ final class WalletsManager {
         let accountsToRemove = currentAccounts.subtracting(newChainTypes)
         let accountsToAdd = Set(newChainTypes).subtracting(currentAccounts)
         
-        self.removeAccountFrom(wallet: wallet, for: accountsToRemove)
-        try self.addAccounts(key: wallet.key, password: password, chainTypes: Array(accountsToAdd))
-        try self.update(wallet: wallet)
+        removeAccountFrom(wallet: wallet, for: accountsToRemove)
+        try addAccounts(key: wallet.key, password: password, chainTypes: Array(accountsToAdd))
+        try update(wallet: wallet)
     }
     
     public func removeAccountIn(wallet: TokenaryWallet, account: ChainType) throws {
         guard wallet.isMnemonic else { return }
-        self.removeAccountFrom(wallet: wallet, for: [account])
-        try self.update(wallet: wallet)
+        removeAccountFrom(wallet: wallet, for: [account])
+        try update(wallet: wallet)
     }
     
     public func update(wallet: TokenaryWallet) throws {
@@ -313,7 +315,7 @@ final class WalletsManager {
                 mnemonic: mnemonic, name: newName, password: Data(newPassword.utf8), coin: coins[0]
             )
         {
-            try self.addAccounts(key: key, password: newPassword, chainTypes: Array(coins.dropFirst()))
+            try addAccounts(key: key, password: newPassword, chainTypes: Array(coins.dropFirst()))
             wallets[index].key = key
         } else if
             let key = StoredKey.importPrivateKey(
@@ -329,7 +331,7 @@ final class WalletsManager {
         
         try keychain.saveWallet(id: wallets[index].id, data: data)
         
-        self.postWalletsChangedNotification()
+        postWalletsChangedNotification()
     }
     
     // MARK: - Get
@@ -364,7 +366,7 @@ final class WalletsManager {
     private let operationQueue = DispatchQueue(label: "io.tokenary.WalletManager", qos: .userInitiated)
     
     private func load() {
-        self.operationQueue.async {
+        operationQueue.async {
             let ids = self.keychain.getAllWalletsIds()
             var walletsToMigrate: [TokenaryWallet] = []
             
@@ -412,7 +414,7 @@ final class WalletsManager {
     func destroy() throws {
         wallets.removeAll(keepingCapacity: false)
         try keychain.removeAllWallets()
-        self.postWalletsChangedNotification()
+        postWalletsChangedNotification()
     }
     
     // MARK: - Helper

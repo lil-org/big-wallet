@@ -11,20 +11,20 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
     
     @IBOutlet weak var viewContainer: NSView! {
         didSet {
-            self.viewContainer.wantsLayer = true
+            viewContainer.wantsLayer = true
         }
     }
     @IBOutlet weak var titleLabel: NSTextField!
     @IBOutlet weak var chainButtonHeightConstraint: NSLayoutConstraint!
     @IBOutlet weak var chainButtonContainer: NSView! {
         didSet {
-            self.chainButtonContainer.wantsLayer = true
+            chainButtonContainer.wantsLayer = true
         }
     }
     @IBOutlet weak var chainButton: NSPopUpButton!
     @IBOutlet weak var accountsListContainer: NSView! {
         didSet {
-            self.accountsListContainer.wantsLayer = true
+            accountsListContainer.wantsLayer = true
         }
     }
     @IBOutlet weak var addButton: NSButton! {
@@ -55,33 +55,33 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        if self.walletsManager.wallets.isEmpty {
-            self.walletsManager.start()
+        if walletsManager.wallets.isEmpty {
+            walletsManager.start()
         }
         
-        self.addChild(self.wrappingVC)
-        self.wrappingVC.view.translatesAutoresizingMaskIntoConstraints = false
-        self.accountsListContainer.addSubview(self.wrappingVC.view)
+        addChild(wrappingVC)
+        wrappingVC.view.translatesAutoresizingMaskIntoConstraints = false
+        accountsListContainer.addSubview(wrappingVC.view)
         
         NSLayoutConstraint.activate([
-            self.wrappingVC.view.widthAnchor.constraint(equalTo: self.accountsListContainer.widthAnchor),
-            self.wrappingVC.view.heightAnchor.constraint(equalTo: self.accountsListContainer.heightAnchor),
-            self.wrappingVC.view.topAnchor.constraint(equalTo: self.accountsListContainer.topAnchor),
-            self.wrappingVC.view.leadingAnchor.constraint(equalTo: self.accountsListContainer.leadingAnchor),
-            self.wrappingVC.view.trailingAnchor.constraint(equalTo: self.accountsListContainer.trailingAnchor),
-            self.wrappingVC.view.bottomAnchor.constraint(equalTo: self.accountsListContainer.bottomAnchor)
+            wrappingVC.view.widthAnchor.constraint(equalTo: accountsListContainer.widthAnchor),
+            wrappingVC.view.heightAnchor.constraint(equalTo: accountsListContainer.heightAnchor),
+            wrappingVC.view.topAnchor.constraint(equalTo: accountsListContainer.topAnchor),
+            wrappingVC.view.leadingAnchor.constraint(equalTo: accountsListContainer.leadingAnchor),
+            wrappingVC.view.trailingAnchor.constraint(equalTo: accountsListContainer.trailingAnchor),
+            wrappingVC.view.bottomAnchor.constraint(equalTo: accountsListContainer.bottomAnchor)
         ])
         
-        self.reloadData()
+        reloadData()
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(self.didBecomeActive),
+            selector: #selector(didBecomeActive),
             name: NSApplication.didBecomeActiveNotification,
             object: nil
         )
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(self.reloadData),
+            selector: #selector(reloadData),
             name: Notification.Name.walletsChanged,
             object: nil
         )
@@ -89,21 +89,21 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
 
     override func viewDidAppear() {
         super.viewDidAppear()
-        self.view.window?.delegate = self
-        self.promptSafariForLegacyUsersIfNeeded()
-        self.blinkNewWalletCellIfNeeded()
+        view.window?.delegate = self
+        promptSafariForLegacyUsersIfNeeded()
+        blinkNewWalletCellIfNeeded()
     }
     
     override func viewWillLayout() {
-        self.chainButtonContainer.layer?.backgroundColor = NSColor(name: nil) { appearance in
+        chainButtonContainer.layer?.backgroundColor = NSColor(name: nil) { appearance in
             if appearance.isDarkMode {
                 return NSColor(deviceRed: 44 / 255, green: 44 / 255, blue: 46 / 255, alpha: 1)
             } else {
                 return NSColor(deviceRed: 199 / 255, green: 199 / 255, blue: 204 / 255, alpha: 1)
             }
         }.cgColor
-        self.viewContainer.layer?.backgroundColor = NSColor(Color.systemGray2).cgColor
-        self.accountsListContainer.layer?.backgroundColor = NSColor(light: .white, dark: .black).cgColor
+        viewContainer.layer?.backgroundColor = NSColor(Color.systemGray2).cgColor
+        accountsListContainer.layer?.backgroundColor = NSColor(light: .white, dark: .black).cgColor
     }
     
     // MARK: - State Management
@@ -112,10 +112,10 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
         let menu = sender.menu
         
         let createItem = NSMenuItem(
-            title: "", action: #selector(self.didTapCreateNewMnemonicWallet), keyEquivalent: ""
+            title: "", action: #selector(didTapCreateNewMnemonicWallet), keyEquivalent: ""
         )
         let importItem = NSMenuItem(
-            title: "", action: #selector(self.didTapImportExistingAccount), keyEquivalent: ""
+            title: "", action: #selector(didTapImportExistingAccount), keyEquivalent: ""
         )
         let font = NSFont.systemFont(ofSize: 21, weight: .bold)
         
@@ -144,7 +144,7 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
             let menu = NSMenu()
             for mainnet in EthereumChain.mainnets {
                 let item = NSMenuItem(
-                    title: mainnet.title, action: #selector(self.didSelectChain(_:)), keyEquivalent: ""
+                    title: mainnet.title, action: #selector(didSelectChain(_:)), keyEquivalent: ""
                 )
                 item.tag = mainnet.id
                 menu.addItem(item)
@@ -155,7 +155,7 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
             let submenu = NSMenu()
             for testnet in EthereumChain.testnets {
                 let item = NSMenuItem(
-                    title: testnet.title, action: #selector(self.didSelectChain(_:)), keyEquivalent: ""
+                    title: testnet.title, action: #selector(didSelectChain(_:)), keyEquivalent: ""
                 )
                 item.tag = testnet.id
                 submenu.addItem(item)
@@ -164,8 +164,8 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
             submenuItem.submenu = submenu
             menu.addItem(.separator())
             menu.addItem(submenuItem)
-            self.testnetsMenuItem = submenuItem
-            self.chainButton.menu = menu
+            testnetsMenuItem = submenuItem
+            chainButton.menu = menu
         }
     }
     
@@ -183,18 +183,18 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
     }
     
     private func blinkNewWalletCellIfNeeded() {
-        guard let newWalletId = newWalletId else { return }
+        guard let newWalletId = self.newWalletId else { return }
         self.newWalletId = nil
-        self.stateProviderInput?.scrollToWalletAndBlink(walletId: newWalletId)
+        stateProviderInput?.scrollToWalletAndBlink(walletId: newWalletId)
     }
     
     private func createNewAccountAndShowSecretWordsFor(chains: [ChainType]) {
         guard
-            let wallet = try? self.walletsManager.createMnemonicWallet(coinTypes: chains)
+            let wallet = try? walletsManager.createMnemonicWallet(coinTypes: chains)
         else { return }
-        self.newWalletId = wallet.id
-        self.blinkNewWalletCellIfNeeded()
-        self.showKey(wallet: wallet, mnemonic: true)
+        newWalletId = wallet.id
+        blinkNewWalletCellIfNeeded()
+        showKey(wallet: wallet, mnemonic: true)
     }
     
     private func showKey(wallet: TokenaryWallet, mnemonic: Bool) {
@@ -219,7 +219,7 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
     }
     
     private func update(wallet: TokenaryWallet, newChainList: [ChainType]) {
-        try? self.walletsManager.changeAccountsIn(wallet: wallet, to: newChainList)
+        try? walletsManager.changeAccountsIn(wallet: wallet, to: newChainList)
     }
     
     @objc
@@ -228,7 +228,7 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
         if let completion = agent.getWalletSelectionCompletionIfShouldSelect() {
             onSelectedWallet = completion
         }
-        self.updateHeader()
+        updateHeader()
     }
     
     private func callCompletion(wallet: TokenaryWallet?) {
@@ -256,23 +256,23 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
                 self.testnetsMenuItem = nil
             }
 
-            self.chainButton.menu?.addItem(menuItem)
-            self.chainButton.select(menuItem)
+            chainButton.menu?.addItem(menuItem)
+            chainButton.select(menuItem)
         }
         
-        self.chain = selectedChain
+        chain = selectedChain
     }
     
     // MARK: - AccountsListViewController + NSWindowDelegate
     
     func windowWillClose(_ notification: Notification) {
-        self.callCompletion(wallet: nil)
+        callCompletion(wallet: nil)
     }
     
     // MARK: - AccountsListViewController + NSMenuDelegate {
    
     func menuDidClose(_ menu: NSMenu) {
-        if self.addButton.menu === menu {
+        if addButton.menu === menu {
             menu.removeAllItems()
         }
     }
@@ -298,13 +298,13 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
                 }
             }
         )
-        self.view.window?.contentViewController = chainSelectionVC
+        view.window?.contentViewController = chainSelectionVC
     }
     
     @objc func didTapImportExistingAccount() {
         let importAccountVC = instantiate(ImportViewController.self)
         importAccountVC.onSelectedWallet = onSelectedWallet
-        self.view.window?.contentViewController = importAccountVC
+        view.window?.contentViewController = importAccountVC
     }
 }
 
@@ -327,11 +327,11 @@ extension AccountsListViewController: AccountsListStateProviderOutput {
                 self?.update(wallet: wallet, newChainList: chosenChains)
             }
         )
-        self.view.window?.contentViewController = chainSelectionVC
+        view.window?.contentViewController = chainSelectionVC
     }
     
     func didTapRemove(wallet: TokenaryWallet) {
-        self.askBeforeRemoving(wallet: wallet)
+        askBeforeRemoving(wallet: wallet)
     }
     
     func didTapRename(previousName: String, completion: @escaping (String?) -> Void) {
@@ -384,8 +384,8 @@ extension AccountsListViewController: AccountsListStateProviderOutput {
         }
         if alert.runModal() == .alertFirstButtonReturn {
             let reason: AuthenticationReason = isMnemonic ? .showSecretWords : .showPrivateKey
-            self.agent.askAuthentication(
-                on: self.view.window,
+            agent.askAuthentication(
+                on: view.window,
                 getBackTo: self,
                 onStart: false,
                 reason: reason
@@ -408,7 +408,7 @@ extension AccountsListViewController: AccountsListStateProviderOutput {
         
         if alert.runModal() == .alertFirstButtonReturn {
             agent.askAuthentication(
-                on: self.view.window,
+                on: view.window,
                 getBackTo: self,
                 onStart: false,
                 reason: .removeAccount
@@ -427,10 +427,10 @@ extension AccountsListViewController: AccountsListStateProviderOutput {
     }
     
     func cancelButtonWasTapped() {
-        self.callCompletion(wallet: nil)
+        callCompletion(wallet: nil)
     }
     
     func didSelect(wallet: TokenaryWallet) {
-        self.callCompletion(wallet: wallet)
+        callCompletion(wallet: wallet)
     }
 }

@@ -10,6 +10,7 @@ public struct Symbols {
     public static let leftCurlyBrace = "{"
     public static let rightCurlyBrace = "}"
     public static let ellipsis = "…"
+    public static let threeDots = "..."
     public static let leftBracket: Character = "<"
     public static let newLineChar: Character = "\u{000A}"
     public static let newLine: String = "\n"

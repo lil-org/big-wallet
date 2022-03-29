@@ -12,7 +12,7 @@ private struct GlobalOverlayViewModifier<OverlayView>: ViewModifier where Overla
         content
             .onTapGesture {
                 withAnimation {
-                    self.isShown = false
+                    isShown = false
                 }
             }
             .overlay(overlay)
@@ -20,9 +20,9 @@ private struct GlobalOverlayViewModifier<OverlayView>: ViewModifier where Overla
     
     @ViewBuilder
     private var overlay: some View {
-        if self.isShown {
+        if isShown {
             ZStack {
-                self.overlayView
+                overlayView
             }
         }
     }
@@ -30,6 +30,6 @@ private struct GlobalOverlayViewModifier<OverlayView>: ViewModifier where Overla
 
 extension View {
     func addToGlobalOverlay<OverlayView: View>(overlayView: OverlayView, isShown: Binding<Bool>) -> some View {
-        self.modifier(GlobalOverlayViewModifier(isShown: isShown, overlayView: overlayView))
+        modifier(GlobalOverlayViewModifier(isShown: isShown, overlayView: overlayView))
     }
 }

@@ -25,6 +25,9 @@ extension Color {
 #endif
         self.init(color)
     }
+    
+    static var mainBackground = Color(light: .white, dark: .black)
+    static var mainText = Color(light: .black, dark: .white)
 
 #if canImport(UIKit)
     static var inkGreen = Color(UIColor.inkGreen)

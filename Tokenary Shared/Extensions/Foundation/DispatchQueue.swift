@@ -33,7 +33,7 @@ extension DispatchQueue {
     class func isQueueCurrent(_ queue: DispatchQueue) -> Bool {
         let value = OSAtomicIncrement32(&DispatchQueue.currentQueueValue)
         queue.setSpecific(key: key, value: value)
-        let valueOnCurrentQueue = self.getSpecific(key: key)
+        let valueOnCurrentQueue = getSpecific(key: key)
         queue.setSpecific(key: key, value: nil)
         return value == valueOnCurrentQueue
     }

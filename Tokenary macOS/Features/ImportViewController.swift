@@ -7,8 +7,8 @@ class ImportViewController: NSViewController {
     
     @IBOutlet weak var textField: NSTextField! {
         didSet {
-            self.textField.delegate = self
-            self.textField.placeholderString = Strings.importAccountTextFieldPlaceholder
+            textField.delegate = self
+            textField.placeholderString = Strings.importAccountTextFieldPlaceholder
         }
     }
     @IBOutlet weak var okButton: NSButton!
@@ -17,15 +17,15 @@ class ImportViewController: NSViewController {
     private var inputValidationResult = WalletsManager.InputValidationResult.invalidData
 
     @IBAction func okButtonTapped(_ sender: Any) {
-        if self.inputValidationResult == .passwordProtectedJSON {
-            self.askForPassword()
-        } else if let walletKeyType = self.inputValidationResult.walletKeyType {
-            self.selectChains(input: self.textField.stringValue, walletKeyType: walletKeyType)
+        if inputValidationResult == .passwordProtectedJSON {
+            askForPassword()
+        } else if let walletKeyType = inputValidationResult.walletKeyType {
+            selectChains(input: textField.stringValue, walletKeyType: walletKeyType)
         }
     }
     
     @IBAction func cancelButtonTapped(_ sender: NSButton) {
-        self.showAccountsList(newWalletId: nil)
+        showAccountsList(newWalletId: nil)
     }
 
     private func askForPassword() {
@@ -41,11 +41,11 @@ class ImportViewController: NSViewController {
     }
     
     private func validatePasswordProtectedInput(input: String, password: String) {
-        let (inputValidationResult, decryptedInput) = self.walletsManager.decryptJSONAndValidate(
+        let (inputValidationResult, decryptedInput) = walletsManager.decryptJSONAndValidate(
             input: input, password: password
         )
         if let decryptedInput = decryptedInput, let walletKeyType = inputValidationResult.walletKeyType {
-            self.selectChains(input: decryptedInput, walletKeyType: walletKeyType)
+            selectChains(input: decryptedInput, walletKeyType: walletKeyType)
         } else {
             Alert.showWithMessage(
                 Strings.ImportViewController.couldNotDecryptProtectedDataAlertTitle, style: .critical
@@ -70,10 +70,10 @@ class ImportViewController: NSViewController {
     
     private func importWallet(input: String, chainTypes: [ChainType]) {
         do {
-            let createdWallet = try self.walletsManager.addWallet(input: input, chainTypes: chainTypes)
-            self.showAccountsList(newWalletId: createdWallet.id)
+            let createdWallet = try walletsManager.addWallet(input: input, chainTypes: chainTypes)
+            showAccountsList(newWalletId: createdWallet.id)
         } catch {
-            self.processErrorOrCancel(showAlert: true)
+            processErrorOrCancel(showAlert: true)
         }
     }
     
@@ -96,10 +96,10 @@ class ImportViewController: NSViewController {
 
 extension ImportViewController: NSTextFieldDelegate {
     func controlTextDidChange(_ obj: Notification) {
-        self.inputValidationResult = self.walletsManager.getValidationFor(input: self.textField.stringValue)
+        inputValidationResult = walletsManager.getValidationFor(input: textField.stringValue)
         let isValid = ![
             WalletsManager.InputValidationResult.invalidData, WalletsManager.InputValidationResult.alreadyPresent
-        ].contains(self.inputValidationResult)
+        ].contains(inputValidationResult)
         okButton.isEnabled = isValid
     }
 }

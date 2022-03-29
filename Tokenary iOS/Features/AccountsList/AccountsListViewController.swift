@@ -24,34 +24,34 @@ class AccountsListViewController<ContentView: View>: WrappingViewController<Cont
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     
     func presentationControllerShouldDismiss(_ presentationController: UIPresentationController) -> Bool {
-        self.onSelectedWallet == nil
+        onSelectedWallet == nil
     }
     
     override func viewDidLoad() {
         super.viewDidLoad()
         // Be sure to call here (Keychain bug #)
         //  Or maybe there is problem with permissions
-        if self.walletsManager.wallets.isEmpty {
-            self.walletsManager.start()
+        if walletsManager.wallets.isEmpty {
+            walletsManager.start()
         }
         
-        self.configureDataState(
+        configureDataState(
             .noData, description: Strings.tokenaryIsEmpty, buttonTitle: Strings.addAccount
         ) { [weak self] buttonFrame in
             self?.stateProviderInput?.didTapAddAccount(at: buttonFrame)
         }
-        self.setDataStateViewTransparent(true)
-        self.updateDataState()
+        setDataStateViewTransparent(true)
+        updateDataState()
         
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(self.processInput),
+            selector: #selector(processInput),
             name: UIApplication.didBecomeActiveNotification,
             object: nil
         )
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(self.reloadData(notification:)),
+            selector: #selector(reloadData(notification:)),
             name: Notification.Name.walletsChanged,
             object: nil
         )
@@ -59,7 +59,7 @@ class AccountsListViewController<ContentView: View>: WrappingViewController<Cont
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        self.reloadData()
+        reloadData()
     }
 
     @objc private func processInput() {
@@ -84,21 +84,21 @@ class AccountsListViewController<ContentView: View>: WrappingViewController<Cont
             ).then {
                 $0.isModalInPresentation = true
             }
-            self.presentForSafariRequest(accountsListVC, id: request.id)
+            presentForSafariRequest(accountsListVC, id: request.id)
         case .approveMessage(let action):
             let approveViewController = ApproveViewController.with(subject: action.subject,
                                                                    address: action.address,
                                                                    meta: action.meta,
                                                                    peerMeta: action.peerMeta,
                                                                    completion: action.completion)
-            self.presentForSafariRequest(approveViewController.inNavigationController, id: request.id)
+            presentForSafariRequest(approveViewController.inNavigationController, id: request.id)
         case .approveTransaction(let action):
             let approveTransactionViewController = ApproveTransactionViewController.with(transaction: action.transaction,
                                                                                          chain: action.chain,
                                                                                          address: action.address,
                                                                                          peerMeta: action.peerMeta,
                                                                                          completion: action.completion)
-            self.presentForSafariRequest(approveTransactionViewController.inNavigationController, id: request.id)
+            presentForSafariRequest(approveTransactionViewController.inNavigationController, id: request.id)
         }
     }
     
@@ -119,16 +119,16 @@ class AccountsListViewController<ContentView: View>: WrappingViewController<Cont
             alert.dismiss(animated: false)
         }
         presentFrom.present(viewController, animated: true)
-        self.toDismissAfterResponse[id] = viewController
+        toDismissAfterResponse[id] = viewController
     }
     
     // MARK: - State Management
 
     private func updateDataState() {
-        if let isFilteredEmpty = self.stateProviderInput?.filteredWallets.isEmpty {
-            self.dataState = isFilteredEmpty ? .noData : .hasData
+        if let isFilteredEmpty = stateProviderInput?.filteredWallets.isEmpty {
+            dataState = isFilteredEmpty ? .noData : .hasData
         } else {
-            self.dataState = self.walletsManager.wallets.isEmpty ? .noData : .hasData
+            dataState = walletsManager.wallets.isEmpty ? .noData : .hasData
         }
     }
     
@@ -143,11 +143,11 @@ class AccountsListViewController<ContentView: View>: WrappingViewController<Cont
     
     private func createNewAccountAndShowSecretWordsFor(chains: [ChainType]) {
         guard
-            let wallet = try? self.walletsManager.createMnemonicWallet(
+            let wallet = try? walletsManager.createMnemonicWallet(
                 coinTypes: chains
             )
         else { return }
-        self.showKey(wallet: wallet, mnemonic: true)
+        showKey(wallet: wallet, mnemonic: true)
     }
     
     private func showKey(wallet: TokenaryWallet, mnemonic: Bool) {
@@ -176,11 +176,11 @@ class AccountsListViewController<ContentView: View>: WrappingViewController<Cont
             )
         }
         
-        self.present(alert, animated: true)
+        present(alert, animated: true)
     }
     
     private func update(wallet: TokenaryWallet, newChainList: [ChainType]) {
-        try? self.walletsManager.changeAccountsIn(wallet: wallet, to: newChainList)
+        try? walletsManager.changeAccountsIn(wallet: wallet, to: newChainList)
     }
 }
 
@@ -208,7 +208,7 @@ extension AccountsListViewController: AccountsListStateProviderOutput {
                 self?.present(alert, animated: true)
             }
         )
-        self.present(chainSelectionVC, animated: true)
+        present(chainSelectionVC, animated: true)
     }
     
     func didTapImportExistingAccount() {
@@ -232,15 +232,15 @@ extension AccountsListViewController: AccountsListStateProviderOutput {
                 self?.update(wallet: wallet, newChainList: chosenChains)
             }
         )
-        self.present(chainSelectionVC, animated: true)
+        present(chainSelectionVC, animated: true)
     }
     
     func didTapRemove(wallet: TokenaryWallet) {
-        self.askBeforeRemoving(wallet: wallet)
+        askBeforeRemoving(wallet: wallet)
     }
     
     func didTapRename(previousName: String, completion: @escaping (String?) -> Void) {
-        self.showRenameAlert(title: "Rename wallet?", currentName: previousName, completion: completion)
+        showRenameAlert(title: "Rename wallet?", currentName: previousName, completion: completion)
     }
 
     func didTapExport(wallet: TokenaryWallet) {
@@ -291,10 +291,10 @@ extension AccountsListViewController: AccountsListStateProviderOutput {
     }
     
     func cancelButtonWasTapped() {
-        self.onSelectedWallet?(nil, nil)
+        onSelectedWallet?(nil, nil)
     }
     
     func didSelect(wallet: TokenaryWallet) {
-        self.onSelectedWallet?(chain, wallet)
+        onSelectedWallet?(chain, wallet)
     }
 }
