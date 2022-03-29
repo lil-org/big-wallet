@@ -4,22 +4,14 @@ import Foundation
 import SwiftUI
 import WalletCore
 
-public enum SupportedChainType: String, CaseIterable {
-    case ethereum
-    case tezos
-    case solana
-    // ToDo: Add custom derivation path
-    
-    public var iconName: String {
-        switch self {
-        case .ethereum:
-            return "eth"
-        case .tezos:
-            return "tez"
-        case .solana:
-            return "sol"
-        }
-    }
+public typealias ChainType = CoinType
+
+extension ChainType {
+    private static var defaultTitle: String = ""
+    private static var defaultTicker: String = ""
+    private static var defaultIconName: String = ""
+    private static var defaultScanURL: (String) -> URL = { _ in URL(staticString: "") }
+    private static var transactionScaner: String = ""
     
     public var title: String {
         switch self {
@@ -29,6 +21,8 @@ public enum SupportedChainType: String, CaseIterable {
             return "Tezos"
         case .solana:
             return "Solana"
+        default:
+            return ChainType.defaultTitle
         }
     }
     
@@ -40,6 +34,21 @@ public enum SupportedChainType: String, CaseIterable {
             return "XTZ"
         case .solana:
             return "SOL"
+        default:
+            return ChainType.defaultTicker
+        }
+    }
+    
+    public var iconName: String {
+        switch self {
+        case .ethereum:
+            return "eth"
+        case .tezos:
+            return "tez"
+        case .solana:
+            return "sol"
+        default:
+            return ChainType.defaultIconName
         }
     }
     
@@ -52,18 +61,9 @@ public enum SupportedChainType: String, CaseIterable {
                 return URL.tezosscan(address: addressString)
             case .solana:
                 return URL.solanascan(address: addressString)
+            default:
+                return ChainType.defaultScanURL(addressString)
             }
-        }
-    }
-    
-    public var walletCoreCoinType: CoinType {
-        switch self {
-        case .ethereum:
-            return CoinType.ethereum
-        case .tezos:
-            return CoinType.tezos
-        case .solana:
-            return CoinType.solana
         }
     }
     
@@ -75,34 +75,23 @@ public enum SupportedChainType: String, CaseIterable {
             return Strings.viewOnTezosScan
         case .solana:
             return Strings.viewOnSolanaScan
+        default:
+            return ChainType.transactionScaner
         }
     }
     
-    public var curve: Curve { self.walletCoreCoinType.curve }
+    public static var supportedChains: [ChainType] { [.ethereum, .tezos, .solana] }
     
-    @frozen public struct Set: OptionSet {
+    @frozen public struct SupportedSet: OptionSet {
         public let rawValue: Int
         
         public init(rawValue: Int) { self.rawValue = rawValue }
         
-        public static let ethereum: SupportedChainType.Set = Set(rawValue: 1 << 0)
-        public static let tezos: SupportedChainType.Set = Set(rawValue: 1 << 1)
-        public static let solana: SupportedChainType.Set = Set(rawValue: 1 << 2)
+        public static let ethereum: ChainType.SupportedSet = SupportedSet(rawValue: 1 << 0)
+        public static let tezos: ChainType.SupportedSet = SupportedSet(rawValue: 1 << 1)
+        public static let solana: ChainType.SupportedSet = SupportedSet(rawValue: 1 << 2)
         
-        public static let all: Set = [ethereum, .tezos, .solana]
-    }
-    
-    init?(coinType: CoinType) {
-        switch coinType {
-        case .ethereum:
-            self = .ethereum
-        case .tezos:
-            self = .tezos
-        case .solana:
-            self = .solana
-        default:
-            return nil
-        }
+        public static let all: SupportedSet = [ethereum, .tezos, .solana]
     }
     
     init?(provider: Web3Provider) {
@@ -117,12 +106,25 @@ public enum SupportedChainType: String, CaseIterable {
             return nil
         }
     }
-}
-
-extension SupportedChainType: CustomStringConvertible {
-    public var description: String {
-        "\(self.title)(\(self.ticker)), \(self.walletCoreCoinType.derivationPath())"
+    
+    init?(title: String) {
+        switch title {
+        case ChainType.ethereum.title:
+            self = .ethereum
+        case ChainType.tezos.title:
+            self = .tezos
+        case ChainType.solana.title:
+            self = .solana
+        default:
+            return nil
+        }
     }
 }
 
-extension SupportedChainType: Equatable, Hashable, RawRepresentable, Codable {}
+extension ChainType: CustomStringConvertible {
+    public var description: String {
+        "\(String(describing: self.title))(\(String(describing: self.ticker))), \(self.derivationPath())"
+    }
+}
+
+extension ChainType: Codable {}

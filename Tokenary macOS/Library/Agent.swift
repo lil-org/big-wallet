@@ -312,7 +312,7 @@ class Agent: NSObject {
         case .selectAccount(let action):
             let windowController = Window.showNew()
             let accountsListVC = AccountsListAssembly.build(
-                for: .choseAccount(forChain: SupportedChainType(provider: action.provider)),
+                for: .choseAccount(forChain: ChainType(provider: action.provider)),
                 onSelectedWallet: action.completion
             )
             windowController.contentViewController = accountsListVC

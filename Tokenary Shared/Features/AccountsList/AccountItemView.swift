@@ -37,7 +37,7 @@ struct AccountItemView: View {
         let icon: Image
         let isMnemonicBased: Bool
         let accountAddress: String?
-        let accountName: String
+        var accountName: String
         var mnemonicDerivedViewModels: [DerivedAccountItemView.ViewModel]
         var preformBlink: Bool = false
         
@@ -243,13 +243,12 @@ struct AccountItemView: View {
     }
     
     private var privateKeyWalletActions: some View {
-        Unwrap(self.attachedWallet) { attachedWallet in
-            let chainType = attachedWallet.associatedMetadata.walletDerivationType.chainTypes.first!
+        Unwrap2(self.attachedWallet, attachedWallet?.associatedMetadata.privateKeyChain) { unwrappedWallet, chainType in
             Button(Strings.copyAddress) {
-                PasteboardHelper.setPlainNotNil(attachedWallet[.address] ?? nil)
+                PasteboardHelper.setPlainNotNil(unwrappedWallet[.address] ?? nil)
             }.keyboardShortcut(.defaultAction)
             Button(chainType.transactionScaner) {
-                if let address = attachedWallet[.address] ?? nil {
+                if let address = unwrappedWallet[.address] ?? nil {
                     LinkHelper.open(chainType.scanURL(address))
                 }
             }.keyboardShortcut("t", modifiers: [.command])

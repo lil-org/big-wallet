@@ -12,9 +12,9 @@ import SwiftUI
 #endif
 
 public enum ChainSelectionMode: Equatable {
-    case singleSelect([SupportedChainType])
-    case multiSelect([SupportedChainType])
-    case multiReSelect(currentlySelected: [SupportedChainType], possibleElements: [SupportedChainType])
+    case singleSelect([ChainType])
+    case multiSelect([ChainType])
+    case multiReSelect(currentlySelected: [ChainType], possibleElements: [ChainType])
     
     fileprivate var stateMode: ChainSelectionState.Mode {
         switch self {
@@ -27,7 +27,7 @@ public enum ChainSelectionMode: Equatable {
         }
     }
     
-    fileprivate var supportedCoinTypes: [SupportedChainType] {
+    fileprivate var supportedCoinTypes: [ChainType] {
         switch self {
         case let .singleSelect(supportedChainTypes),
             let .multiSelect(supportedChainTypes),
@@ -36,7 +36,7 @@ public enum ChainSelectionMode: Equatable {
         }
     }
     
-    fileprivate var currentlySelected: [SupportedChainType] {
+    fileprivate var currentlySelected: [ChainType] {
         switch self {
         case let .multiReSelect(currentlySelected, _):
             return currentlySelected
@@ -50,7 +50,7 @@ public enum ChainSelectionMode: Equatable {
 public final class ChainSelectionAssembly {
     public static func build(
         for mode: ChainSelectionMode,
-        completion: @escaping ([SupportedChainType]) -> Void
+        completion: @escaping ([ChainType]) -> Void
     ) -> BridgedViewController {
         let stateProvider = ChainSelectionStateProvider(
             state: self.buildInitialState(for: mode),
@@ -65,10 +65,11 @@ public final class ChainSelectionAssembly {
     
     private static func buildInitialState(for mode: ChainSelectionMode) -> ChainSelectionState {
         let currentlySelected = mode.currentlySelected
-        var previousChoiceId: UUID?
+        var previousChoiceId: UInt32?
         let viewModels = mode.supportedCoinTypes.map { coinType -> ChainSelectionState.ChainElementViewModel in
             let isSelected = currentlySelected.contains(coinType)
             let newVM = ChainSelectionState.ChainElementViewModel(
+                id: coinType.rawValue,
                 icon: coinType.iconName,
                 title: coinType.title,
                 ticker: coinType.ticker,

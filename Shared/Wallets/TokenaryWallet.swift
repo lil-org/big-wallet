@@ -5,7 +5,7 @@ import Foundation
 import WalletCore
 
 protocol AnyAccount {
-    var chainType: SupportedChainType { get }
+    var chainType: ChainType { get }
     
     var privateKey: PrivateKey? { get }
     var address: String? { get }
@@ -18,43 +18,43 @@ public final class TokenaryWallet: Hashable, Equatable {
         var keyPath: KeyPath<AnyAccount, ReturnType>
     }
     
+    /// Used so we cache `StoredKey.account(index:_)` calls
     public struct AssociatedMetadata {
-        public enum WalletDerivationType {
-            case mnemonic([SupportedChainType])
-            case privateKey(SupportedChainType)
-            
-            var chainTypes: [SupportedChainType] {
-                switch self {
-                case let .mnemonic(supportedChains):
-                    return supportedChains
-                case let .privateKey(supportedChain):
-                    return [supportedChain]
-                }
+        private var indexToChainMap: [ChainType] = []
+        private var chainToIndexMap: [ChainType: Int] = [:]
+        
+        func indexFor(chain: ChainType) -> Int? { chainToIndexMap[chain] }
+        
+        func chainFor(index: Int) -> ChainType? { indexToChainMap[index] }
+        
+        public var privateKeyChain: ChainType? { indexToChainMap[.zero] }
+        
+        public var allChains: [ChainType] { Array(chainToIndexMap.keys) }
+        
+        internal init(key: StoredKey) {
+            for index in .zero ..< key.accountCount {
+                guard let accountChain = key.account(index: index)?.coin else { return }
+                indexToChainMap.append(accountChain)
+                chainToIndexMap[accountChain] = index
             }
         }
-        
-        internal init(walletDerivationType: WalletDerivationType) {
-            self.walletDerivationType = walletDerivationType
-        }
-        
-        public var walletDerivationType: WalletDerivationType
     }
     
     struct DerivedMnemonicAccount: AnyAccount {
-        init?(key: StoredKey, chainType: SupportedChainType, address: String?) {
+        init?(key: StoredKey, chainType: ChainType, address: String?) {
             self.key = key
             self.chainType = chainType
             self.address = address
         }
         
         var key: StoredKey
-        var chainType: SupportedChainType
+        var chainType: ChainType
         
         var privateKey: PrivateKey? {
             guard
                 let password = Keychain.shared.password,
                 let privateKey = key.privateKey(
-                    coin: chainType.walletCoreCoinType, password: Data(password.utf8)
+                    coin: chainType, password: Data(password.utf8)
                 )
             else { return nil }
             return privateKey
@@ -69,21 +69,21 @@ public final class TokenaryWallet: Hashable, Equatable {
             guard
                 let password = Keychain.shared.password,
                 let wallet = key.wallet(password: Data(password.utf8)),
-                let account = key.accountForCoin(coin: chainType.walletCoreCoinType, wallet: wallet)
+                let account = key.accountForCoin(coin: chainType, wallet: wallet)
             else { return nil  }
             return account.derivationPath
         }
     }
     
     struct PrivateKeyDerivedAccount: AnyAccount {
-        internal init(key: StoredKey, chainType: SupportedChainType, address: String?) {
+        internal init(key: StoredKey, chainType: ChainType, address: String?) {
             self.key = key
             self.chainType = chainType
             self.address = address
         }
         
         var key: StoredKey
-        var chainType: SupportedChainType
+        var chainType: ChainType
         
         var privateKey: PrivateKey? {
             guard
@@ -100,13 +100,17 @@ public final class TokenaryWallet: Hashable, Equatable {
         }
         
         var derivationPath: String? {
-            key.accountForCoin(coin: chainType.walletCoreCoinType, wallet: nil)?.address
+            key.accountForCoin(coin: chainType, wallet: nil)?.address
         }
     }
 
     let id: String
-    var key: StoredKey
-    var associatedMetadata: AssociatedMetadata {
+    var key: StoredKey {
+        didSet {
+            associatedMetadata = AssociatedMetadata(key: key)
+        }
+    }
+    private(set) var associatedMetadata: AssociatedMetadata {
         didSet {
             self.accounts = self.generateAccounts()
         }
@@ -138,7 +142,7 @@ public final class TokenaryWallet: Hashable, Equatable {
         self.associatedMetadata = associatedMetadata
     }
      
-    public subscript<T>(chainType: SupportedChainType, accountDescriptor: AccountDescriptor<T>) -> T? {
+    public subscript<T>(chainType: ChainType, accountDescriptor: AccountDescriptor<T>) -> T? {
         // No throwing keypath available. Nil is sufficient here
         guard
             self.isMnemonic,
@@ -160,21 +164,15 @@ public final class TokenaryWallet: Hashable, Equatable {
     public static func == (lhs: TokenaryWallet, rhs: TokenaryWallet) -> Bool { lhs.id == rhs.id }
     
     private func generateAccounts() -> [AnyAccount] {
-        if self.isMnemonic {
-            guard
-                let password = Keychain.shared.password,
-                let wallet = key.wallet(password: Data(password.utf8))
-            else { return [] }
-            return associatedMetadata.walletDerivationType.chainTypes.compactMap {
-                let address = key.accountForCoin(coin: $0.walletCoreCoinType, wallet: wallet)?.address
-                return DerivedMnemonicAccount(key: key, chainType: $0, address: address)
+        (.zero ..< key.accountCount)
+            .compactMap { key.account(index: $0) }
+            .compactMap {
+                if isMnemonic {
+                    return DerivedMnemonicAccount(key: key, chainType: $0.coin, address: $0.address)
+                } else {
+                    return PrivateKeyDerivedAccount(key: key, chainType: $0.coin, address: $0.address)
+                }
             }
-        } else {
-            return associatedMetadata.walletDerivationType.chainTypes.compactMap {
-                let address = key.accountForCoin(coin: $0.walletCoreCoinType, wallet: nil)?.address
-                return PrivateKeyDerivedAccount(key: key, chainType: $0, address: address)
-            }
-        }
     }
 }
 

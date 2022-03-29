@@ -10,7 +10,7 @@ import SwiftUI
 #endif
 
 public enum AccountsListMode: Equatable {
-    case choseAccount(forChain: SupportedChainType?)
+    case choseAccount(forChain: ChainType?)
     case mainScreen
 }
 

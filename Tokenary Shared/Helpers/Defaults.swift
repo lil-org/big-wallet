@@ -75,8 +75,8 @@ struct Defaults {
 }
 
 extension Defaults.Key {
-    static var numberOfCreatedWallets: (SupportedChainType) -> Defaults.Key<Int> {
-        return { (chainType: SupportedChainType) in
+    static var numberOfCreatedWallets: (ChainType) -> Defaults.Key<Int> {
+        return { (chainType: ChainType) in
             return .init(name: "numberOfCreatedWallets_" + chainType.ticker )
         }
     }

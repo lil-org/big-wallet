@@ -17,7 +17,7 @@ struct AccountsListContentHolderView: View {
     
     /// Chain for which the networks are going to be shown
     /// Currently, when the mode is `.choseAccount(_)`, but we still have no network, we don't allow to filter
-    private var selectedChain: SupportedChainType? {
+    private var selectedChain: ChainType? {
         if case let .choseAccount(forChain: supportedChain) = self.stateProvider.mode {
             return supportedChain
         } else {

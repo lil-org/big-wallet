@@ -68,7 +68,7 @@ class ImportViewController: NSViewController {
         view.window?.contentViewController = chainSelectionVC
     }
     
-    private func importWallet(input: String, chainTypes: [SupportedChainType]) {
+    private func importWallet(input: String, chainTypes: [ChainType]) {
         do {
             let createdWallet = try self.walletsManager.addWallet(input: input, chainTypes: chainTypes)
             self.showAccountsList(newWalletId: createdWallet.id)

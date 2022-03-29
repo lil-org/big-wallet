@@ -24,7 +24,7 @@ struct DappRequestProcessor {
             case .switchAccount:
                 let action = SelectAccountAction(provider: .unknown) { chain, wallet in
                     // TODO: should work with any chain
-                    let transpiledChain: SupportedChainType = .ethereum
+                    let transpiledChain: ChainType = .ethereum
                     if let chain = chain, let address = wallet?[transpiledChain, .address] ?? nil {
                         let responseBody = ResponseToExtension.Ethereum(results: [address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
                         respond(to: request, body: .ethereum(responseBody), completion: completion)

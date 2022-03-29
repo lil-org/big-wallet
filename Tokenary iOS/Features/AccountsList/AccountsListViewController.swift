@@ -51,7 +51,7 @@ class AccountsListViewController<ContentView: View>: WrappingViewController<Cont
         )
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(self.reloadData),
+            selector: #selector(self.reloadData(notification:)),
             name: Notification.Name.walletsChanged,
             object: nil
         )
@@ -79,7 +79,7 @@ class AccountsListViewController<ContentView: View>: WrappingViewController<Cont
             break
         case .selectAccount(let action):
             let accountsListVC = AccountsListAssembly.build(
-                for: .choseAccount(forChain: SupportedChainType(provider: action.provider)),
+                for: .choseAccount(forChain: ChainType(provider: action.provider)),
                 onSelectedWallet: action.completion
             ).then {
                 $0.isModalInPresentation = true
@@ -132,17 +132,19 @@ class AccountsListViewController<ContentView: View>: WrappingViewController<Cont
         }
     }
     
-    @objc private func reloadData() {
+    @objc private func reloadData(notification: NSNotification? = nil) {
         DispatchQueue.main.async {
-            self.stateProviderInput?.wallets = self.walletsManager.wallets.get()
+            if let walletsChangeSet = notification?.userInfo?["changeset"] as? WalletsManager.TokenaryWalletChangeSet {
+                self.stateProviderInput?.updateAccounts(with: walletsChangeSet)
+            }
             self.updateDataState()
         }
     }
     
-    private func createNewAccountAndShowSecretWordsFor(chains: [SupportedChainType]) {
+    private func createNewAccountAndShowSecretWordsFor(chains: [ChainType]) {
         guard
             let wallet = try? self.walletsManager.createMnemonicWallet(
-                coinTypes: chains.map { $0.walletCoreCoinType }
+                coinTypes: chains
             )
         else { return }
         self.showKey(wallet: wallet, mnemonic: true)
@@ -177,7 +179,7 @@ class AccountsListViewController<ContentView: View>: WrappingViewController<Cont
         self.present(alert, animated: true)
     }
     
-    private func update(wallet: TokenaryWallet, newChainList: [SupportedChainType]) {
+    private func update(wallet: TokenaryWallet, newChainList: [ChainType]) {
         try? self.walletsManager.changeAccountsIn(wallet: wallet, to: newChainList)
     }
 }
@@ -185,7 +187,7 @@ class AccountsListViewController<ContentView: View>: WrappingViewController<Cont
 extension AccountsListViewController: AccountsListStateProviderOutput {
     func didTapCreateNewMnemonicWallet() {
         let chainSelectionVC = ChainSelectionAssembly.build(
-            for: .multiSelect(SupportedChainType.allCases),
+            for: .multiSelect(ChainType.supportedChains),
             completion: { [weak self] chosenChains in
                 self?.dismissAnimated()
                 guard chosenChains.count != .zero else { return }
@@ -215,11 +217,11 @@ extension AccountsListViewController: AccountsListStateProviderOutput {
     }
     
     func didTapReconfigureAccountsIn(wallet: TokenaryWallet) {
-        let currentSelection = wallet.associatedMetadata.walletDerivationType.chainTypes
+        let currentSelection = wallet.associatedMetadata.allChains
         let chainSelectionVC = ChainSelectionAssembly.build(
             for: .multiReSelect(
                 currentlySelected: currentSelection,
-                possibleElements: SupportedChainType.allCases
+                possibleElements: ChainType.supportedChains
             ),
             completion: { [weak self] chosenChains in
                 self?.dismissAnimated()

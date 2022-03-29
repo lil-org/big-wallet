@@ -7,15 +7,23 @@ import WalletCore
 final class WalletsManager {
     // MARK: - Types
     
+    struct TokenaryWalletChangeSet {
+        var toAdd: [TokenaryWallet]
+        var toRemove: [TokenaryWallet]
+        var toUpdate: [TokenaryWallet]
+    }
+    
     enum InputValidationResult: Equatable {
         public enum WalletKeyType: Equatable {
             case mnemonic
-            case privateKey([SupportedChainType])
+            case privateKey([ChainType])
             
-            var supportedChainTypes: [SupportedChainType] {
+            var supportedChainTypes: [ChainType] {
                 switch self {
-                case .mnemonic: return SupportedChainType.allCases
-                case let .privateKey(supportedChainTypes): return supportedChainTypes
+                case .mnemonic:
+                    return ChainType.supportedChains
+                case let .privateKey(supportedChainTypes):
+                    return supportedChainTypes
                 }
             }
         }
@@ -101,7 +109,7 @@ final class WalletsManager {
         if Mnemonic.isValid(mnemonic: input) {
             return .valid(.mnemonic)
         } else if let data = Data(hexString: input) {
-            let possiblePrivateKeyDerivations: [SupportedChainType] = [.ethereum, .solana]
+            let possiblePrivateKeyDerivations: [ChainType] = [.ethereum, .solana]
                 .compactMap { PrivateKey.isValid(data: data, curve: $0.curve) ? $0 : nil }
             if possiblePrivateKeyDerivations.count != .zero {
                 return .valid(.privateKey(possiblePrivateKeyDerivations))
@@ -142,7 +150,6 @@ final class WalletsManager {
         let newKey = StoredKey(
             name: name ?? self.getMnemonicDefaultWalletName(),
             password: Data(password.utf8),
-            // ToDo: Weak was used previously, however longer needs considerable time
             encryptionLevel: .weak
         )
         
@@ -152,14 +159,14 @@ final class WalletsManager {
     }
     
     @discardableResult
-    func addWallet(input: String, chainTypes: [SupportedChainType]) throws -> TokenaryWallet {
+    func addWallet(input: String, chainTypes: [ChainType]) throws -> TokenaryWallet {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         if Mnemonic.isValid(mnemonic: input) {
             return try `import`(
                 mnemonic: input,
                 name: self.getMnemonicDefaultWalletName(),
                 password: password,
-                coinTypes: chainTypes.map { $0.walletCoreCoinType }
+                coinTypes: chainTypes
             )
         } else if
             let data = Data(hexString: input),
@@ -170,7 +177,7 @@ final class WalletsManager {
                 privateKey: privateKey,
                 name: self.getPrivateKeyDefaultWalletName(for: chain),
                 password: password,
-                coinType: chain.walletCoreCoinType,
+                coinType: chain,
                 onlyToKeychain: false
             )
         } else {
@@ -180,12 +187,6 @@ final class WalletsManager {
     
     // MARK: - Import
 
-    // importPrivateKey ->
-    //  TWStoredKeyImportPrivateKey ->
-    //  create StoredKey through createWithPrivateKeyAddDefaultAddress(wrapped in TWStoreField) ->
-    //  check if curves are matching  ->
-    //      it's often true, so it doesn't help(except when checking for nist256p1 or secp256k1)
-    //  Create private key(simultaneously encrypting it)
     private func `import`(
         privateKey: PrivateKey, name: String, password: String, coinType: CoinType, onlyToKeychain: Bool
     ) throws -> TokenaryWallet {
@@ -209,7 +210,7 @@ final class WalletsManager {
                 mnemonic: mnemonic, name: name, password: Data(password.utf8), coin: defaultCoinType
             )
         else { throw KeyStore.Error.invalidMnemonic }
-        try self.addAccounts(key: newKey, password: password, coins: Array(coinTypes.dropFirst()))
+        try self.addAccounts(key: newKey, password: password, chainTypes: Array(coinTypes.dropFirst()))
         
         return try self.finaliseWalletCreation(
             key: newKey, coinTypes: coinTypes, isMnemonic: true, onlyToKeychain: false
@@ -221,15 +222,11 @@ final class WalletsManager {
     ) throws -> TokenaryWallet {
         guard let data = key.exportJSON() else { throw KeyStore.Error.invalidPassword }
         let id = makeNewWalletId()
-        let derivedChains = coinTypes.compactMap { SupportedChainType(coinType: $0) }
         
         try keychain.saveWallet(id: id, data: data)
-        let walletDerivationType: TokenaryWallet.AssociatedMetadata.WalletDerivationType = isMnemonic
-            ? .mnemonic(derivedChains)
-            : .privateKey(derivedChains.first!)
         
         let wallet = TokenaryWallet(
-            id: id, key: key, associatedMetadata: .init(walletDerivationType: walletDerivationType)
+            id: id, key: key, associatedMetadata: .init(key: key)
         )
         
         if !onlyToKeychain {
@@ -246,24 +243,21 @@ final class WalletsManager {
         try update(wallet: wallet, oldPassword: password, newPassword: password, newName: newName)
     }
     
-    public func changeAccountsIn(wallet: TokenaryWallet, to newChainTypes: [SupportedChainType]) throws {
+    public func changeAccountsIn(wallet: TokenaryWallet, to newChainTypes: [ChainType]) throws {
         guard wallet.isMnemonic else { return }
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
-        let currentAccounts = Set(wallet.associatedMetadata.walletDerivationType.chainTypes)
+        let currentAccounts = Set(wallet.associatedMetadata.allChains)
         let accountsToRemove = currentAccounts.subtracting(newChainTypes)
         let accountsToAdd = Set(newChainTypes).subtracting(currentAccounts)
         
-        self.removeAccountFrom(wallet: wallet, for: Array(accountsToRemove))
-        try self.addAccounts(key: wallet.key, password: password, coins: accountsToAdd.map { $0.walletCoreCoinType })
-        wallet.associatedMetadata.walletDerivationType = .mnemonic(newChainTypes)
+        self.removeAccountFrom(wallet: wallet, for: accountsToRemove)
+        try self.addAccounts(key: wallet.key, password: password, chainTypes: Array(accountsToAdd))
         try self.update(wallet: wallet)
     }
     
-    public func removeAccountIn(wallet: TokenaryWallet, account: SupportedChainType) throws {
+    public func removeAccountIn(wallet: TokenaryWallet, account: ChainType) throws {
         guard wallet.isMnemonic else { return }
         self.removeAccountFrom(wallet: wallet, for: [account])
-        let currentAccounts = wallet.associatedMetadata.walletDerivationType.chainTypes
-        wallet.associatedMetadata.walletDerivationType = .mnemonic(currentAccounts.filter { $0 != account })
         try self.update(wallet: wallet)
     }
     
@@ -278,27 +272,27 @@ final class WalletsManager {
     
     @discardableResult
     private func addAccount(
-        key: StoredKey, password: String, coin: CoinType
+        key: StoredKey, password: String, chainType: ChainType
     ) throws -> Account? {
         guard
             let wallet = key.wallet(password: Data(password.utf8))
         else { throw KeyStore.Error.invalidPassword }
-        return key.accountForCoin(coin: coin, wallet: wallet)
+        return key.accountForCoin(coin: chainType, wallet: wallet)
     }
     
     @discardableResult
     private func addAccounts(
-        key: StoredKey, password: String, coins: [CoinType]
+        key: StoredKey, password: String, chainTypes: [ChainType]
     ) throws -> [Account] {
         guard
             let wallet = key.wallet(password: Data(password.utf8))
         else { throw KeyStore.Error.invalidPassword }
-        return coins.compactMap { key.accountForCoin(coin: $0, wallet: wallet) }
+        return chainTypes.compactMap { key.accountForCoin(coin: $0, wallet: wallet) }
     }
     
-    private func removeAccountFrom(wallet: TokenaryWallet, for chainTypes: [SupportedChainType]) {
+    private func removeAccountFrom(wallet: TokenaryWallet, for chainTypes: Set<ChainType>) {
         for chainType in chainTypes {
-            wallet.key.removeAccountForCoin(coin: chainType.walletCoreCoinType)
+            wallet.key.removeAccountForCoin(coin: chainType)
         }
     }
     
@@ -310,7 +304,7 @@ final class WalletsManager {
             var privateKeyData = wallet.key.decryptPrivateKey(password: Data(oldPassword.utf8))
         else { throw KeyStore.Error.invalidPassword }
         defer { privateKeyData.resetBytes(in: .zero ..< privateKeyData.count) }
-        let coins = wallet.associatedMetadata.walletDerivationType.chainTypes.map({ $0.walletCoreCoinType })
+        let coins = wallet.associatedMetadata.allChains
         guard !coins.isEmpty else { throw KeyStore.Error.accountNotFound }
         
         if
@@ -319,7 +313,7 @@ final class WalletsManager {
                 mnemonic: mnemonic, name: newName, password: Data(newPassword.utf8), coin: coins[0]
             )
         {
-            try self.addAccounts(key: key, password: newPassword, coins: Array(coins.dropFirst()))
+            try self.addAccounts(key: key, password: newPassword, chainTypes: Array(coins.dropFirst()))
             wallets[index].key = key
         } else if
             let key = StoredKey.importPrivateKey(
@@ -344,10 +338,10 @@ final class WalletsManager {
         return wallets.first(where: { $0.id == id })
     }
     
-    func getWallet(for chainType: SupportedChainType, havingAddress address: String) -> TokenaryWallet? {
+    func getWallet(for chainType: ChainType, havingAddress address: String) -> TokenaryWallet? {
         wallets.first(where: { wallet in
             if wallet.isMnemonic {
-                for chain in wallet.associatedMetadata.walletDerivationType.chainTypes {
+                for chain in wallet.associatedMetadata.allChains {
                     if let currentAddress = wallet[chain, .address] ?? nil {
                         if currentAddress.lowercased() == address.lowercased() {
                             return true
@@ -380,38 +374,10 @@ final class WalletsManager {
                     let key = StoredKey.importJSON(json: data)
                 else { continue }
                 
-                let walletDerivationType: TokenaryWallet.AssociatedMetadata.WalletDerivationType
-                if key.isMnemonic {
-                    var derivedChains: [SupportedChainType] = []
-                    for accountIdx in .zero ..< key.accountCount {
-                        if
-                            let account = key.account(index: accountIdx),
-                            let derivedChain = SupportedChainType(coinType: account.coin)
-                        {
-                            derivedChains.append(derivedChain)
-                        }
-                    }
-                    if derivedChains.isEmpty {
-                        derivedChains = [WalletsManager.defaultSupportedChainType]
-                    }
-                    walletDerivationType = .mnemonic(derivedChains)
-                } else {
-                    let derivedChain: SupportedChainType
-                    if
-                        let account = key.account(index: .zero),
-                        let accountChain = SupportedChainType(coinType: account.coin)
-                    {
-                        derivedChain = accountChain
-                    } else {
-                        derivedChain = WalletsManager.defaultSupportedChainType
-                    }
-                    walletDerivationType = .privateKey(derivedChain)
-                }
-                
                 let wallet = TokenaryWallet(
                     id: id,
                     key: key,
-                    associatedMetadata: .init(walletDerivationType: walletDerivationType)
+                    associatedMetadata: .init(key: key)
                 )
                 
                 if wallet.name.count == .zero || wallet.name.trimmingCharacters(in: .whitespacesAndNewlines) == .empty {
@@ -466,7 +432,7 @@ final class WalletsManager {
         "Wallet " + String.getRandomEmoticonsCollection(ofSize: 1).joined(separator: .empty)
     }
     
-    private func getPrivateKeyDefaultWalletName(for chainType: SupportedChainType) -> String {
+    private func getPrivateKeyDefaultWalletName(for chainType: ChainType) -> String {
         defer { Defaults[.numberOfCreatedWallets(chainType)] += 1 }
         let numberOfCreatedWallets = Defaults[.numberOfCreatedWallets(chainType)]
         let walletNumber = numberOfCreatedWallets == .zero ? .empty : String(numberOfCreatedWallets) + Symbols.space
@@ -482,5 +448,4 @@ final class WalletsManager {
     }
     
     private static var defaultCoinType: CoinType = .ethereum
-    private static var defaultSupportedChainType: SupportedChainType = .init(coinType: WalletsManager.defaultCoinType)!
 }

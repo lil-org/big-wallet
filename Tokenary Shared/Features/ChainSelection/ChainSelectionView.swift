@@ -10,7 +10,7 @@ struct ChainSelectionState: Equatable {
     }
     
     struct ChainElementViewModel: Equatable, Identifiable {
-        let id: UUID = UUID()
+        let id: UInt32
         let icon: String
         let title: String
         let ticker: String
@@ -20,7 +20,7 @@ struct ChainSelectionState: Equatable {
     let mode: Mode
     var rows: [ChainElementViewModel]
     
-    var previousChoiceId: UUID?
+    var previousChoiceId: UInt32?
 }
 
 class ChainSelectionStateProvider: ObservableObject {
@@ -30,9 +30,9 @@ class ChainSelectionStateProvider: ObservableObject {
     @Published
     var isDoneButtonEnabled: Bool = false
     
-    let completion: ([SupportedChainType]) -> Void
+    let completion: ([ChainType]) -> Void
     
-    init(state: ChainSelectionState, completion: @escaping ([SupportedChainType]) -> Void) {
+    init(state: ChainSelectionState, completion: @escaping ([ChainType]) -> Void) {
         self.state = state
         self.completion = completion
         self.updateDoneButtonState()
@@ -41,7 +41,7 @@ class ChainSelectionStateProvider: ObservableObject {
     func doneButtonWasPressed() {
         let selectedItems = self.state.rows.filter { $0.isSelected }
         DispatchQueue.main.async {
-            self.completion(selectedItems.compactMap { SupportedChainType(rawValue: $0.title.lowercased()) })
+            self.completion(selectedItems.compactMap { ChainType(rawValue: $0.id) })
         }
     }
     
@@ -51,7 +51,7 @@ class ChainSelectionStateProvider: ObservableObject {
         }
     }
     
-    func elementWasSelected(with id: UUID) {
+    func elementWasSelected(with id: UInt32) {
         guard let rowIdx = self.state.rows.firstIndex(where: { $0.id == id }) else { return }
         if self.state.mode == .singleSelect {
             if let previousChoiceId = self.state.previousChoiceId {
@@ -146,11 +146,15 @@ struct ChainSelectionView: View {
                             }
                             
                         }
+//                        #if canImport(AppKit)
+//                        Divider()
+//                        #endif
                     }
                     .contentShape(Rectangle())
                     .onTapGesture {
                         self.stateProvider.elementWasSelected(with: rowViewModel.id)
                     }
+                    .listRowSeparator(.visible)
                 }
             }
             .listStyle(PlainListStyle())

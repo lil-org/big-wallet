@@ -74,14 +74,11 @@ struct DerivedAccountItemView: View {
         var id = UUID()
         var walletId: String
         var icon: Image
-        var title: String
-        var ticker: String
+        var chain: ChainType
+        var title: String { chain.title }
+        var ticker: String { chain.ticker }
         var accountAddress: String?
         var iconShadowColor: Color
-        
-        fileprivate var chain: SupportedChainType {
-            SupportedChainType(rawValue: self.title.lowercased()) ?? .ethereum
-        }
     }
     
     @EnvironmentObject
@@ -270,7 +267,7 @@ struct DerivedAccountItemView: View {
     
     private var removeAccountAction: some View {
         Unwrap(self.attachedWallet) { attachedWallet in
-            if attachedWallet.associatedMetadata.walletDerivationType.chainTypes.count > 1 {
+            if attachedWallet.associatedMetadata.allChains.count > 1 {
                 Button("Remove account", role: .destructive) {
                     try? WalletsManager.shared.removeAccountIn(
                         wallet: attachedWallet,
@@ -338,8 +335,7 @@ struct MnemonicDerivedAccountView_Previews: PreviewProvider {
                 DerivedAccountItemView.ViewModel(
                     walletId: "1234",
                     icon: Image(packageResource: "sberbank", ofType: "png"),
-                    title: "Anything else long name very long",
-                    ticker: "AELNVFL",
+                    chain: .algorand,
                     accountAddress: "0x00000000219ab540356cbb839cbe05303d7705fa",
                     iconShadowColor: .black
                 )

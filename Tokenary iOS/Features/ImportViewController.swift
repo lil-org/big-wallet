@@ -129,7 +129,7 @@ class ImportViewController: UIViewController {
         present(chainSelectionVC, animated: true)
     }
     
-    private func importWallet(input: String, chainTypes: [SupportedChainType]) {
+    private func importWallet(input: String, chainTypes: [ChainType]) {
         do {
             try self.walletsManager.addWallet(input: input, chainTypes: chainTypes)
             self.presentingViewController?.dismissAnimated()

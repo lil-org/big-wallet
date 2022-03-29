@@ -188,11 +188,9 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
         self.stateProviderInput?.scrollToWalletAndBlink(walletId: newWalletId)
     }
     
-    private func createNewAccountAndShowSecretWordsFor(chains: [SupportedChainType]) {
+    private func createNewAccountAndShowSecretWordsFor(chains: [ChainType]) {
         guard
-            let wallet = try? self.walletsManager.createMnemonicWallet(
-                coinTypes: chains.map { $0.walletCoreCoinType }
-            )
+            let wallet = try? self.walletsManager.createMnemonicWallet(coinTypes: chains)
         else { return }
         self.newWalletId = wallet.id
         self.blinkNewWalletCellIfNeeded()
@@ -220,7 +218,7 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
         }
     }
     
-    private func update(wallet: TokenaryWallet, newChainList: [SupportedChainType]) {
+    private func update(wallet: TokenaryWallet, newChainList: [ChainType]) {
         try? self.walletsManager.changeAccountsIn(wallet: wallet, to: newChainList)
     }
     
@@ -283,7 +281,7 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
     
     @objc func didTapCreateNewMnemonicWallet() {
         let chainSelectionVC = ChainSelectionAssembly.build(
-            for: .multiSelect(SupportedChainType.allCases),
+            for: .multiSelect(ChainType.supportedChains),
             completion: { [weak self] chosenChains in
                 let newWindow = Window.showNew()
                 newWindow.contentViewController = self
@@ -312,11 +310,11 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
 
 extension AccountsListViewController: AccountsListStateProviderOutput {
     func didTapReconfigureAccountsIn(wallet: TokenaryWallet) {
-        let currentSelection = wallet.associatedMetadata.walletDerivationType.chainTypes
+        let currentSelection = wallet.associatedMetadata.allChains
         let chainSelectionVC = ChainSelectionAssembly.build(
             for: .multiReSelect(
                 currentlySelected: currentSelection,
-                possibleElements: SupportedChainType.allCases
+                possibleElements: ChainType.supportedChains
             ),
             completion: { [weak self] chosenChains in
                 let newWindow = Window.showNew()

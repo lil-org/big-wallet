@@ -8,7 +8,7 @@ struct SynchronizedArray<T>: RangeReplaceableCollection {
     typealias Index = Int
     typealias SubSequence = SynchronizedArray<T>
     typealias Indices = Range<Int>
-    fileprivate var array: Array<T>
+    fileprivate var array: [T]
     var startIndex: Int { return array.startIndex }
     var endIndex: Int { return array.endIndex }
     var indices: Range<Int> { return array.indices }
@@ -24,8 +24,8 @@ struct SynchronizedArray<T>: RangeReplaceableCollection {
 
 extension SynchronizedArray {
 
-    init<S>(_ elements: S) where S : Sequence, SynchronizedArray.Element == S.Element {
-        array = Array<S.Element>(elements)
+    init<S>(_ elements: S) where S: Sequence, SynchronizedArray.Element == S.Element {
+        array = [S.Element](elements)
     }
 
     init() { self.init([]) }
@@ -45,7 +45,7 @@ extension SynchronizedArray {
         array.append(newElement)
     }
 
-    public mutating func append<S>(contentsOf newElements: S) where S : Sequence, SynchronizedArray.Element == S.Element {
+    public mutating func append<S>(contentsOf newElements: S) where S: Sequence, SynchronizedArray.Element == S.Element {
         _wait(); defer { _signal() }
         array.append(contentsOf: newElements)
     }
@@ -61,7 +61,7 @@ extension SynchronizedArray {
         array.insert(newElement, at: i)
     }
 
-    mutating func insert<S>(contentsOf newElements: S, at i: SynchronizedArray.Index) where S : Collection, SynchronizedArray.Element == S.Element {
+    mutating func insert<S>(contentsOf newElements: S, at i: SynchronizedArray.Index) where S: Collection, SynchronizedArray.Element == S.Element {
         _wait(); defer { _signal() }
         array.insert(contentsOf: newElements, at: i)
     }
@@ -166,7 +166,7 @@ extension SynchronizedArray {
 
     // Multy actions
 
-    mutating func get(closure: ([T])->()) {
+    mutating func get(closure: ([T]) -> Void) {
         _wait(); defer { _signal() }
         closure(array)
     }
@@ -182,10 +182,8 @@ extension SynchronizedArray {
 extension SynchronizedArray {
 
     subscript(bounds: Range<SynchronizedArray.Index>) -> SynchronizedArray.SubSequence {
-        get {
-            _wait(); defer { _signal() }
-            return SynchronizedArray(array[bounds])
-        }
+        _wait(); defer { _signal() }
+        return SynchronizedArray(array[bounds])
     }
 
     subscript(bounds: SynchronizedArray.Index) -> SynchronizedArray.Element {
@@ -204,15 +202,15 @@ extension SynchronizedArray {
 
 extension SynchronizedArray {
 
-    static func + <Other>(lhs: Other, rhs: SynchronizedArray) -> SynchronizedArray where Other : Sequence, SynchronizedArray.Element == Other.Element {
+    static func + <Other>(lhs: Other, rhs: SynchronizedArray) -> SynchronizedArray where Other: Sequence, SynchronizedArray.Element == Other.Element {
         return SynchronizedArray(lhs + rhs.get())
     }
 
-    static func + <Other>(lhs: SynchronizedArray, rhs: Other) -> SynchronizedArray where Other : Sequence, SynchronizedArray.Element == Other.Element {
+    static func + <Other>(lhs: SynchronizedArray, rhs: Other) -> SynchronizedArray where Other: Sequence, SynchronizedArray.Element == Other.Element {
         return SynchronizedArray(lhs.get() + rhs)
     }
 
-    static func + <Other>(lhs: SynchronizedArray, rhs: Other) -> SynchronizedArray where Other : RangeReplaceableCollection, SynchronizedArray.Element == Other.Element {
+    static func + <Other>(lhs: SynchronizedArray, rhs: Other) -> SynchronizedArray where Other: RangeReplaceableCollection, SynchronizedArray.Element == Other.Element {
         return SynchronizedArray(lhs.get() + rhs)
     }
 
@@ -220,7 +218,7 @@ extension SynchronizedArray {
         return SynchronizedArray(lhs.get() + rhs.get())
     }
 
-    static func += <Other>(lhs: inout SynchronizedArray, rhs: Other) where Other : Sequence, SynchronizedArray.Element == Other.Element {
+    static func += <Other>(lhs: inout SynchronizedArray, rhs: Other) where Other: Sequence, SynchronizedArray.Element == Other.Element {
         lhs._wait(); defer { lhs._signal() }
         lhs.array += rhs
     }
@@ -237,7 +235,7 @@ extension SynchronizedArray: CustomStringConvertible {
 
 // MARK: - Equatable
 
-extension SynchronizedArray where Element : Equatable {
+extension SynchronizedArray where Element: Equatable {
 
     func split(separator: Element, maxSplits: Int, omittingEmptySubsequences: Bool) -> [ArraySlice<Element>] {
         _wait(); defer { _signal() }
@@ -254,12 +252,12 @@ extension SynchronizedArray where Element : Equatable {
         return array.lastIndex(of: element)
     }
 
-    func starts<PossiblePrefix>(with possiblePrefix: PossiblePrefix) -> Bool where PossiblePrefix : Sequence, Element == PossiblePrefix.Element {
+    func starts<PossiblePrefix>(with possiblePrefix: PossiblePrefix) -> Bool where PossiblePrefix: Sequence, Element == PossiblePrefix.Element {
         _wait(); defer { _signal() }
         return array.starts(with: possiblePrefix)
     }
 
-    func elementsEqual<OtherSequence>(_ other: OtherSequence) -> Bool where OtherSequence : Sequence, Element == OtherSequence.Element {
+    func elementsEqual<OtherSequence>(_ other: OtherSequence) -> Bool where OtherSequence: Sequence, Element == OtherSequence.Element {
         _wait(); defer { _signal() }
         return array.elementsEqual(other)
     }

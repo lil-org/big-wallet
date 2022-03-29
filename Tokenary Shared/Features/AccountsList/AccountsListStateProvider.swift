@@ -7,6 +7,8 @@ protocol AccountsListStateProviderInput: AnyObject {
     var wallets: [TokenaryWallet] { get set }
     var filteredWallets: [TokenaryWallet] { get }
     
+    func updateAccounts(with walletsChangeSet: WalletsManager.TokenaryWalletChangeSet)
+    
 #if canImport(UIKit)
     func didTapAddAccount(at buttonFrame: CGRect)
 #elseif canImport(AppKit)
@@ -31,39 +33,42 @@ class AccountsListStateProvider: ObservableObject {
     @Published
     var accounts: [AccountItemView.ViewModel] = []
     
-    @Published
-    var wallets: [TokenaryWallet] = [] {
-        didSet {
-            DispatchQueue.global().async {
-                for (idx, wallet) in self.filteredWallets.enumerated() {
-                    let transformedAccountViewModel: AccountItemView.ViewModel = self.transform(wallet)
-                    DispatchQueue.main.async {
-                        if let accountViewModel = self.accounts[safe: idx] {
-                            if accountViewModel == transformedAccountViewModel {
-                                return
-                            } else {
-                                self.accounts[idx] = transformedAccountViewModel
-                            }
-                        } else {
-                            self.accounts.append(transformedAccountViewModel)
-                        }
+    func updateAccounts(with walletsChangeSet: WalletsManager.TokenaryWalletChangeSet) {
+        DispatchQueue.global().async {
+            let vmToAdd: [AccountItemView.ViewModel] = walletsChangeSet.toAdd.map(self.transform)
+            let indicesToRemove: IndexSet = IndexSet(
+                self.accounts
+                    .enumerated()
+                    .filter { accountEnumeration in
+                        walletsChangeSet.toRemove.contains(where: { $0.id == accountEnumeration.element.id })
                     }
+                    .map { $0.offset }
+            )
+            let updateVM: [(Int, AccountItemView.ViewModel)] = walletsChangeSet.toUpdate.compactMap { updateWallet in
+                guard let updateIdx = self.accounts.firstIndex(where: { $0.id == updateWallet.id }) else { return nil }
+                let updateVM: AccountItemView.ViewModel = self.transform(updateWallet)
+                return (updateIdx, updateVM)
+            }
+            
+            DispatchQueue.main.async {
+                for (updateIdx, accountVM) in updateVM {
+                    self.accounts[updateIdx] = accountVM
                 }
-                DispatchQueue.main.async {
-                    if self.accounts.count != self.filteredWallets.count {
-                        self.accounts.removeLast()
-                    }
-                }
+                self.accounts.remove(atOffsets: indicesToRemove)
+                self.accounts.append(contentsOf: vmToAdd)
             }
         }
     }
+    
+    @Published
+    var wallets: [TokenaryWallet] = []
     
     var filteredWallets: [TokenaryWallet] {
         if
             case let .choseAccount(forChain: selectedChain) = mode,
             let selectedChain = selectedChain
         {
-            return self.wallets.filter { $0.associatedMetadata.walletDerivationType.chainTypes.contains(selectedChain) }
+            return self.wallets.filter { $0.associatedMetadata.allChains.contains(selectedChain) }
         } else {
             return self.wallets
         }
@@ -98,7 +103,7 @@ class AccountsListStateProvider: ObservableObject {
     private func transform(_ wallet: TokenaryWallet) -> AccountItemView.ViewModel {
         let icon: Image
         if wallet.isMnemonic {
-            if wallet.associatedMetadata.walletDerivationType.chainTypes.contains(.ethereum) {
+            if wallet.associatedMetadata.allChains.contains(.ethereum) {
                 icon = Image(
                     Blockies(seed: wallet[.ethereum, .address]??.lowercased(), size: 10).createImage(),
                     defaultImage: "multiChainGrid"
@@ -107,7 +112,7 @@ class AccountsListStateProvider: ObservableObject {
                 icon = Image("multiChainGrid")
             }
         } else {
-            let privateKeyChainType = wallet.associatedMetadata.walletDerivationType.chainTypes.first!
+            let privateKeyChainType = wallet.associatedMetadata.privateKeyChain!
             if privateKeyChainType == .ethereum {
                 icon = Image(
                     Blockies(seed: wallet[.address]??.lowercased(), size: 10).createImage(),
@@ -133,26 +138,25 @@ class AccountsListStateProvider: ObservableObject {
             case let .choseAccount(forChain: selectedChain) = self.mode,
             let selectedChain = selectedChain
         {
-            if wallet.associatedMetadata.walletDerivationType.chainTypes.contains(selectedChain) {
+            if wallet.associatedMetadata.allChains.contains(selectedChain) {
                 return [self.transform(wallet, chain: selectedChain)]
             } else {
                 assertionFailure("This should not normally happen!")
                 return []
             }
         }
-        return wallet.associatedMetadata.walletDerivationType.chainTypes.map {
+        return wallet.associatedMetadata.allChains.map {
             self.transform(wallet, chain: $0)
         }
     }
     
     private func transform(
-        _ wallet: TokenaryWallet, chain: SupportedChainType
+        _ wallet: TokenaryWallet, chain: ChainType
     ) -> DerivedAccountItemView.ViewModel {
         DerivedAccountItemView.ViewModel(
             walletId: wallet.id,
             icon: Image(chain.iconName),
-            title: chain.title,
-            ticker: chain.ticker,
+            chain: chain,
             accountAddress: wallet[chain, .address] ?? nil,
             iconShadowColor: .black
         )

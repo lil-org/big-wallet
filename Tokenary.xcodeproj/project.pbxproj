@@ -271,8 +271,6 @@
 		4BD4B4B827C697ED00809FB0 /* EthereumChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3F727C6968E00809FB0 /* EthereumChain.swift */; };
 		4BD4B4B927C697EE00809FB0 /* EthereumChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3F727C6968E00809FB0 /* EthereumChain.swift */; };
 		4BD4B4C927C73CC300809FB0 /* UIActivityViewControllerWrapped.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B4C727C73CC300809FB0 /* UIActivityViewControllerWrapped.swift */; };
-		4BD4B4CB27C747D100809FB0 /* SimpleSearchBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B4CA27C747D100809FB0 /* SimpleSearchBar.swift */; };
-		4BD4B4CC27C747D100809FB0 /* SimpleSearchBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B4CA27C747D100809FB0 /* SimpleSearchBar.swift */; };
 		4BD4B4D327C8000600809FB0 /* Web3Provider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B4D227C8000600809FB0 /* Web3Provider.swift */; };
 		4BD4B4D427C8000600809FB0 /* Web3Provider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B4D227C8000600809FB0 /* Web3Provider.swift */; };
 		4BD4B4D527C8000800809FB0 /* Web3Provider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B4D227C8000600809FB0 /* Web3Provider.swift */; };
@@ -500,7 +498,6 @@
 		4BD4B40A27C6968E00809FB0 /* SessionStorage.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SessionStorage.swift; sourceTree = "<group>"; };
 		4BD4B40B27C6968E00809FB0 /* NetworkMonitor.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		4BD4B4C727C73CC300809FB0 /* UIActivityViewControllerWrapped.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIActivityViewControllerWrapped.swift; sourceTree = "<group>"; };
-		4BD4B4CA27C747D100809FB0 /* SimpleSearchBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSearchBar.swift; sourceTree = "<group>"; };
 		4BD4B4D227C8000600809FB0 /* Web3Provider.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Web3Provider.swift; sourceTree = "<group>"; };
 		4BD4B4D727C8049C00809FB0 /* Unwrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Unwrap.swift; sourceTree = "<group>"; };
 		79196256009C6E698EB7AA59 /* Pods-Tokenary.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary.release.xcconfig"; path = "Target Support Files/Pods-Tokenary/Pods-Tokenary.release.xcconfig"; sourceTree = "<group>"; };
@@ -1243,7 +1240,6 @@
 				4BD4B3E427C6968E00809FB0 /* WrappingStack.swift */,
 				4BD4B3E527C6968E00809FB0 /* SimpleToast.swift */,
 				4BD4B3E627C6968E00809FB0 /* ConstrainMinMaxWidthView.swift */,
-				4BD4B4CA27C747D100809FB0 /* SimpleSearchBar.swift */,
 				4BD4B4D727C8049C00809FB0 /* Unwrap.swift */,
 			);
 			path = Views;
@@ -1801,7 +1797,6 @@
 				4BD4B49227C6968F00809FB0 /* Transaction.swift in Sources */,
 				2C8A09E82675960D00993638 /* ErrorViewController.swift in Sources */,
 				4BD4B46027C6968F00809FB0 /* DerivedAccountItemView.swift in Sources */,
-				4BD4B4CB27C747D100809FB0 /* SimpleSearchBar.swift in Sources */,
 				2C264BCB27B2F2FF00234393 /* TezosSafariRequest.swift in Sources */,
 				4BD4B43427C6968F00809FB0 /* Collections.swift in Sources */,
 				4BD4B46427C6968F00809FB0 /* AccountsListContentHolderView.swift in Sources */,
@@ -1860,7 +1855,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				4B9073CE27D8048700B27E80 /* LinkHelper.swift in Sources */,
-				4BD4B4CC27C747D100809FB0 /* SimpleSearchBar.swift in Sources */,
 				4BD4B41127C6968F00809FB0 /* Symbols.swift in Sources */,
 				4B1D46B727D6EEC900162216 /* String+empty.swift in Sources */,
 				2CF255BA275A749300AE54B9 /* ApproveViewController.swift in Sources */,
