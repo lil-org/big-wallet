@@ -9,8 +9,8 @@ final class WalletsManager {
     
     struct TokenaryWalletChangeSet {
         var toAdd: [TokenaryWallet]
-        var toRemove: [TokenaryWallet]
         var toUpdate: [TokenaryWallet]
+        var toRemove: [TokenaryWallet]
     }
     
     enum InputValidationResult: Equatable {
@@ -151,9 +151,9 @@ final class WalletsManager {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         let newKey = StoredKey(
             name: name ?? getMnemonicDefaultWalletName(),
-            password: Data(password.utf8),
-            encryptionLevel: .weak
+            password: Data(password.utf8)
         )
+        try addAccounts(key: newKey, password: password, chainTypes: coinTypes)
         
         return try finaliseWalletCreation(
             key: newKey, coinTypes: coinTypes, isMnemonic: true, onlyToKeychain: false
@@ -234,7 +234,7 @@ final class WalletsManager {
         if !onlyToKeychain {
             wallets.append(wallet)
         }
-        postWalletsChangedNotification()
+        postWalletsChangedNotification(toAdd: [wallet])
         return wallet
     }
     
@@ -254,12 +254,14 @@ final class WalletsManager {
         
         removeAccountFrom(wallet: wallet, for: accountsToRemove)
         try addAccounts(key: wallet.key, password: password, chainTypes: Array(accountsToAdd))
+        wallet.refreshAssociatedData()
         try update(wallet: wallet)
     }
     
     public func removeAccountIn(wallet: TokenaryWallet, account: ChainType) throws {
         guard wallet.isMnemonic else { return }
         removeAccountFrom(wallet: wallet, for: [account])
+        wallet.refreshAssociatedData()
         try update(wallet: wallet)
     }
     
@@ -331,7 +333,7 @@ final class WalletsManager {
         
         try keychain.saveWallet(id: wallets[index].id, data: data)
         
-        postWalletsChangedNotification()
+        postWalletsChangedNotification(toUpdate: [wallet])
     }
     
     // MARK: - Get
@@ -387,10 +389,10 @@ final class WalletsManager {
                 }
                 
                 self.wallets.append(wallet)
-                
-                DispatchQueue.main.async {
-                    self.postWalletsChangedNotification()
-                }
+            }
+            
+            DispatchQueue.main.async {
+                self.postWalletsChangedNotification(toAdd: self.wallets.get())
             }
             
             for wallet in walletsToMigrate {
@@ -408,19 +410,32 @@ final class WalletsManager {
         defer { privateKey.resetBytes(in: 0 ..< privateKey.count) }
         wallets.remove(at: index)
         try keychain.removeWallet(id: wallet.id)
-        postWalletsChangedNotification()
+        postWalletsChangedNotification(toRemove: [wallet])
     }
     
     func destroy() throws {
         wallets.removeAll(keepingCapacity: false)
         try keychain.removeAllWallets()
-        postWalletsChangedNotification()
+        postWalletsChangedNotification(toRemove: wallets.get())
     }
     
     // MARK: - Helper
     
-    private func postWalletsChangedNotification() {
-        NotificationCenter.default.post(name: Notification.Name.walletsChanged, object: nil)
+    private func postWalletsChangedNotification(
+        toAdd: [TokenaryWallet] = [], toUpdate: [TokenaryWallet] = [], toRemove: [TokenaryWallet] = []
+    ) {
+        NotificationCenter.default.post(
+            name: Notification.Name.walletsChanged,
+            object: nil,
+            userInfo: [
+                "changeset":
+                    TokenaryWalletChangeSet(
+                        toAdd: toAdd,
+                        toUpdate: toUpdate,
+                        toRemove: toRemove
+                    )
+            ]
+        )
     }
     
     private func makeNewWalletId() -> String {

@@ -136,6 +136,10 @@ class AccountsListViewController<ContentView: View>: WrappingViewController<Cont
         DispatchQueue.main.async {
             if let walletsChangeSet = notification?.userInfo?["changeset"] as? WalletsManager.TokenaryWalletChangeSet {
                 self.stateProviderInput?.updateAccounts(with: walletsChangeSet)
+            } else {
+                self.stateProviderInput?.updateAccounts(
+                    with: .init(toAdd: self.walletsManager.wallets.get(), toUpdate: [], toRemove: [])
+                )
             }
             self.updateDataState()
         }

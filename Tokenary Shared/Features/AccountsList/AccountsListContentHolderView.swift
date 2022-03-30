@@ -53,9 +53,7 @@ struct AccountsListContentHolderView: View {
                             Button(
                                 role: .destructive,
                                 action: {
-                                    if let walletToRemove = stateProvider.wallets.first(
-                                        where: { $0.id == account.id }
-                                    ) {
+                                    if let walletToRemove = WalletsManager.shared.getWallet(id: account.id) {
                                         stateProvider.askBeforeRemoving(wallet: walletToRemove)
                                     }
                                 },

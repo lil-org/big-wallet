@@ -4,7 +4,6 @@ import SwiftUI
 import BlockiesSwift
 
 protocol AccountsListStateProviderInput: AnyObject {
-    var wallets: [TokenaryWallet] { get set }
     var filteredWallets: [TokenaryWallet] { get }
     
     func updateAccounts(with walletsChangeSet: WalletsManager.TokenaryWalletChangeSet)
@@ -60,10 +59,8 @@ class AccountsListStateProvider: ObservableObject {
         }
     }
     
-    @Published
-    var wallets: [TokenaryWallet] = []
-    
     var filteredWallets: [TokenaryWallet] {
+        let wallets = WalletsManager.shared.wallets.get()
         if
             case let .choseAccount(forChain: selectedChain) = mode,
             let selectedChain = selectedChain
@@ -87,9 +84,6 @@ class AccountsListStateProvider: ObservableObject {
     
     @Published
     var mode: AccountsListMode
-    
-    @Published
-    var selectedWallet: TokenaryWallet?
     
     @Published
     var scrollToWalletId: String?
@@ -144,9 +138,10 @@ class AccountsListStateProvider: ObservableObject {
                 assertionFailure("This should not normally happen!")
                 return []
             }
-        }
-        return wallet.associatedMetadata.allChains.map {
-            transform(wallet, chain: $0)
+        } else {
+            return wallet.associatedMetadata.allChains.map {
+                transform(wallet, chain: $0)
+            }
         }
     }
     

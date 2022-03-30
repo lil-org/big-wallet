@@ -60,9 +60,7 @@ struct AccountItemView: View {
     var viewModel: ViewModel
     
     private var attachedWallet: TokenaryWallet? {
-        stateProvider.wallets.first(
-            where: { $0.id == viewModel.id }
-        )
+        WalletsManager.shared.getWallet(id: viewModel.id)
     }
     
     private var backgroundColor: Color {
@@ -146,19 +144,38 @@ struct AccountItemView: View {
             }
         }
         .background(backgroundColor, ignoresSafeAreaEdges: [.leading, .trailing])
-        .onTouchGesture(
-            touchChanged: { isInside, hasEnded  in
+//        .simultaneousGesture(
+//            DragGesture(minimumDistance: .zero, coordinateSpace: .local)
+//                .onChanged({ value in
+//                    isInPress = true
+//                })
+//                .onEnded({ value in
+//                    isInPress = false
+//                    areActionsForWalletPresented.toggle()
+//                })
+//        )
+        .onTapGesture {
+            withAnimation(.linear(duration: 0.1)) {
+                isInPress = true
                 withAnimation(.linear(duration: 0.1)) {
-                    if hasEnded {
-                        isInPress = false
-                    } else {
-                        isInPress = isInside ? true : false
-                    }
+                    isInPress = false
                 }
-                guard hasEnded, isInside else { return }
-                areActionsForWalletPresented.toggle()
             }
-        )
+            areActionsForWalletPresented.toggle()
+        }
+//        .onTouchGesture(
+//            touchChanged: { isInside, hasEnded  in
+//                withAnimation(.linear(duration: 0.1)) {
+//                    if hasEnded {
+//                        isInPress = false
+//                    } else {
+//                        isInPress = isInside ? true : false
+//                    }
+//                }
+//                guard hasEnded, isInside else { return }
+//                areActionsForWalletPresented.toggle()
+//            }
+//        )
         .onChange(of: viewModel.preformBlink) { newValue in
             guard newValue else { return }
             withAnimation(.easeInOut(duration: 1.2)) {

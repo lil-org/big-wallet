@@ -163,6 +163,10 @@ public final class TokenaryWallet: Hashable, Equatable {
 
     public static func == (lhs: TokenaryWallet, rhs: TokenaryWallet) -> Bool { lhs.id == rhs.id }
     
+    public func refreshAssociatedData() {
+        associatedMetadata = AssociatedMetadata(key: key)
+    }
+    
     private func generateAccounts() -> [AnyAccount] {
         (.zero ..< key.accountCount)
             .compactMap { key.account(index: $0) }

@@ -98,9 +98,7 @@ struct DerivedAccountItemView: View {
     var viewModel: ViewModel
     
     private var attachedWallet: TokenaryWallet? {
-        stateProvider.wallets.first(
-            where: { $0.id == viewModel.walletId }
-        )
+        WalletsManager.shared.getWallet(id: viewModel.walletId)
     }
     
     private let stackUUID = UUID()
@@ -221,7 +219,7 @@ struct DerivedAccountItemView: View {
     }
     
     private var actionsForDerivedAccountDialogTitle: String {
-        if let address = stateProvider.selectedWallet?[viewModel.chain, .address] ?? nil {
+        if let address = attachedWallet?[viewModel.chain, .address] ?? nil {
             return address
         } else {
             return "\(viewModel.chain.title) actions"

@@ -93,9 +93,8 @@ struct UIActivityViewControllerWrapper: UIViewControllerRepresentable {
         context: Context
     ) {
         if isPresented {
+            // Need to be really careful here. Called not when state for this controller changes, but each update of containing view(read `who even knowns when`).
             (uiViewController as? ActivityViewControllerInternalWrapper)?.prepareActivity()
-        } else {
-            uiViewController.dismissAnimated()
         }
     }
 }
