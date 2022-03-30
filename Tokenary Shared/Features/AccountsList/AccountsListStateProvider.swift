@@ -122,7 +122,7 @@ class AccountsListStateProvider: ObservableObject {
             isMnemonicBased: wallet.isMnemonic,
             accountAddress: wallet.isMnemonic ? nil : wallet[.address] ?? nil,
             accountName: wallet.name,
-            mnemonicDerivedViewModels: transform(wallet)
+            mnemonicDerivedViewModels: transform(wallet).sorted(by: { $0.title > $1.title })
         )
     }
     

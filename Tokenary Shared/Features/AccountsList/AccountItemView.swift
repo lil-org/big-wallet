@@ -144,38 +144,10 @@ struct AccountItemView: View {
             }
         }
         .background(backgroundColor, ignoresSafeAreaEdges: [.leading, .trailing])
-//        .simultaneousGesture(
-//            DragGesture(minimumDistance: .zero, coordinateSpace: .local)
-//                .onChanged({ value in
-//                    isInPress = true
-//                })
-//                .onEnded({ value in
-//                    isInPress = false
-//                    areActionsForWalletPresented.toggle()
-//                })
-//        )
-        .onTapGesture {
-            withAnimation(.linear(duration: 0.1)) {
-                isInPress = true
-                withAnimation(.linear(duration: 0.1)) {
-                    isInPress = false
-                }
-            }
+        .delaysTouches(isInPress: $isInPress) {
             areActionsForWalletPresented.toggle()
         }
-//        .onTouchGesture(
-//            touchChanged: { isInside, hasEnded  in
-//                withAnimation(.linear(duration: 0.1)) {
-//                    if hasEnded {
-//                        isInPress = false
-//                    } else {
-//                        isInPress = isInside ? true : false
-//                    }
-//                }
-//                guard hasEnded, isInside else { return }
-//                areActionsForWalletPresented.toggle()
-//            }
-//        )
+        .gesture(DragGesture(minimumDistance: 0))
         .onChange(of: viewModel.preformBlink) { newValue in
             guard newValue else { return }
             withAnimation(.easeInOut(duration: 1.2)) {
@@ -299,5 +271,45 @@ struct AccountView_Previews: PreviewProvider {
             ))
         )
         .frame(width: 250, height: 350)
+    }
+}
+extension View {
+    func delaysTouches(isInPress: Binding<Bool>, onTap action: @escaping () -> Void = {}) -> some View {
+        modifier(DelaysTouches(isInPress: isInPress, action: action))
+    }
+}
+
+fileprivate struct DelaysTouches: ViewModifier {
+    @Binding var isInPress: Bool
+
+    var action: () -> Void
+
+    func body(content: Content) -> some View {
+        Button(action: action) {
+            content
+        }
+        .buttonStyle(DelaysTouchesButtonStyle(isInPress: $isInPress))
+    }
+}
+
+fileprivate struct DelaysTouchesButtonStyle: ButtonStyle {
+    @Binding var isInPress: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration
+            .label
+            .onChange(of: configuration.isPressed, perform: handleIsPressed)
+    }
+
+    private func handleIsPressed(isPressed: Bool) {
+        if isPressed {
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isInPress = true
+            }
+        } else {
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isInPress = false
+            }
+        }
     }
 }

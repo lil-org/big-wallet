@@ -81,7 +81,7 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
         )
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(reloadData),
+            selector: #selector(reloadData(notification:)),
             name: Notification.Name.walletsChanged,
             object: nil
         )
@@ -169,9 +169,15 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
         }
     }
     
-    @objc private func reloadData() {
+    @objc private func reloadData(notification: NSNotification? = nil) {
         DispatchQueue.main.async {
-            self.stateProviderInput?.wallets = self.walletsManager.wallets.get()
+            if let walletsChangeSet = notification?.userInfo?["changeset"] as? WalletsManager.TokenaryWalletChangeSet {
+                self.stateProviderInput?.updateAccounts(with: walletsChangeSet)
+            } else {
+                self.stateProviderInput?.updateAccounts(
+                    with: .init(toAdd: self.walletsManager.wallets.get(), toUpdate: [], toRemove: [])
+                )
+            }
             self.updateHeader()
         }
     }
