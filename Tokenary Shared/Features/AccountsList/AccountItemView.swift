@@ -148,6 +148,16 @@ struct AccountItemView: View {
                     #endif
             }
         }
+        .onChange(of: viewModel.preformBlink) { newValue in
+//            guard newValue else { return }
+            withAnimation(.easeInOut(duration: 1.2)) {
+                isInBlink = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                isInBlink = false
+                viewModel.preformBlink = false
+            }
+        }
         .background(backgroundColor, ignoresSafeAreaEdges: [.leading, .trailing])
         .delaysTouches(isInPress: $isInPress) {
             if
@@ -163,16 +173,6 @@ struct AccountItemView: View {
             }
         }
         .gesture(DragGesture(minimumDistance: 0))
-        .onChange(of: viewModel.preformBlink) { newValue in
-            guard newValue else { return }
-            withAnimation(.easeInOut(duration: 1.2)) {
-                isInBlink = true
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                isInBlink = false
-                viewModel.preformBlink = false
-            }
-        }
         #if canImport(UIKit)
         .confirmationDialog(
             actionsForWalletDialogTitle,

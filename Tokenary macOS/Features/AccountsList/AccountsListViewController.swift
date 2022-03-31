@@ -190,7 +190,7 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
     
     private func blinkNewWalletCellIfNeeded() {
         guard let newWalletId = self.newWalletId else { return }
-        self.newWalletId = nil
+        defer { self.newWalletId = nil }
         stateProviderInput?.scrollToWalletAndBlink(walletId: newWalletId)
     }
     
@@ -312,6 +312,7 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
     @objc func didTapImportExistingAccount() {
         let importAccountVC = instantiate(ImportViewController.self)
         importAccountVC.onSelectedWallet = onSelectedWallet
+        importAccountVC.accountsListVC = self
         view.window?.contentViewController = importAccountVC
     }
 }

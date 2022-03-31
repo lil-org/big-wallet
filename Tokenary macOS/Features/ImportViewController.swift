@@ -13,6 +13,8 @@ class ImportViewController: NSViewController {
     }
     @IBOutlet weak var okButton: NSButton!
     
+    public weak var accountsListVC: AccountsListViewController?
+    
     var onSelectedWallet: ((EthereumChain?, TokenaryWallet?) -> Void)?
     private var inputValidationResult = WalletsManager.InputValidationResult.invalidData
 
@@ -86,9 +88,7 @@ class ImportViewController: NSViewController {
     }
     
     private func showAccountsList(newWalletId: String?) {
-        let accountsListVC = AccountsListAssembly.build(
-            for: .mainScreen, newWalletId: newWalletId, onSelectedWallet: onSelectedWallet
-        )
+        accountsListVC?.newWalletId = newWalletId
         let newWindow = Window.showNew()
         newWindow.contentViewController = accountsListVC
     }

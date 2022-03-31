@@ -34,7 +34,7 @@ struct AccountsListContentHolderView: View {
     }
     
     var body: some View {
-        if stateProvider.accounts.isEmpty {
+        if Keychain.shared.getAllWalletsIds().isEmpty {
             emptyViewState
         } else {
             ScrollViewReader { scrollProxy in
@@ -70,15 +70,12 @@ struct AccountsListContentHolderView: View {
                 }
                 .background(Color.mainBackground.ignoresSafeArea())
                 .listStyle(PlainListStyle())
-                .onChange(of: stateProvider.scrollToWalletId) { newValue in
-                    guard
-                        newValue != nil,
-                        let accountToScrollTo = stateProvider.accounts.first(where: { $0.id == newValue })
-                    else { return }
+                .onChange(of: stateProvider.scrollToAccountIndex) { newValue in
+                    guard let scrollToAccountIndex = newValue else { return }
                     
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        withAnimation(.easeOut(duration: 0.5)) {
-                            scrollProxy.scrollTo(accountToScrollTo.id, anchor: .bottom)
+                        withAnimation(.easeInOut(duration: 0.5)) {
+                            scrollProxy.scrollTo(stateProvider.accounts[scrollToAccountIndex].id, anchor: .bottom)
                         }
                     }
                 }

@@ -75,6 +75,9 @@ class AccountsListStateProvider: ObservableObject {
                 }
                 self.accounts.remove(atOffsets: indicesToRemove)
                 self.accounts.append(contentsOf: vmToAdd)
+                if vmToAdd.count == 1 && updateVM.count == .zero && indicesToRemove.count == .zero {
+                    self.scrollToWalletAndBlink(walletId: vmToAdd.first!.id)
+                }
             }
         }
     }
@@ -106,7 +109,7 @@ class AccountsListStateProvider: ObservableObject {
     var mode: AccountsListMode
     
     @Published
-    var scrollToWalletId: String?
+    var scrollToAccountIndex: Int?
     
     weak var output: AccountsListStateProviderOutput?
     
@@ -193,18 +196,9 @@ extension AccountsListStateProvider: AccountsListStateProviderInput {
     }
 #elseif canImport(AppKit)
     func scrollToWalletAndBlink(walletId: String) {
-        scrollToWalletId = walletId
         guard let accountIdx = accounts.firstIndex(where: { $0.id == walletId }) else { return }
-        let account = accounts[accountIdx]
-        accounts[accountIdx] = AccountItemView.ViewModel(
-            id: account.id,
-            icon: account.icon,
-            isMnemonicBased: account.isMnemonicBased,
-            accountAddress: account.accountAddress,
-            accountName: account.accountName,
-            mnemonicDerivedViewModels: account.mnemonicDerivedViewModels,
-            preformBlink: true
-        )
+        scrollToAccountIndex = accountIdx
+        accounts[accountIdx].preformBlink = true
     }
 #endif
 }
