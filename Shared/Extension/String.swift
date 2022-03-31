@@ -23,10 +23,15 @@ extension String {
     
     public var withEllipsis: String { self + Symbols.ellipsis }
     
-    public var trimmedAddress: String {
+    public var commonlyPrefixedTrimmedAddress: String {
         guard !isEmpty else { return self }
         let without0x = dropFirst(2)
         return without0x.prefix(4) + "..." + without0x.suffix(4)
+    }
+    
+    public var trimmedAddress: String {
+        guard !isEmpty else { return self }
+        return prefix(4 + 2) + "..." + suffix(4)
     }
     
     // MARK: - Public Methods

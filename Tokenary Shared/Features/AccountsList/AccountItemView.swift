@@ -185,8 +185,14 @@ struct AccountItemView: View {
         )
         #elseif canImport(AppKit)
         .contextMenu {
-            Text(actionsForWalletDialogTitle)
-            walletActions
+            if let attachedWallet = self.attachedWallet {
+                Text(
+                    attachedWallet.isMnemonic
+                        ? actionsForWalletDialogTitle
+                        : actionsForWalletDialogTitle.trimmedAddress
+                )
+                walletActions
+            }
         }
         #endif
     }

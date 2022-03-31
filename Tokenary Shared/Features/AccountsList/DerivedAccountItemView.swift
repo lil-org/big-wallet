@@ -160,7 +160,7 @@ struct DerivedAccountItemView: View {
             arrowEdge: .trailing,
             content: {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(actionsForDerivedAccountDialogTitle)
+                    Text(actionsForDerivedAccountDialogTitle.trimmedAddress)
                         .foregroundColor(.gray)
                     Divider()
                     copyAddressAction

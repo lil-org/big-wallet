@@ -75,7 +75,7 @@ final class WalletsManager {
                                     name: getMnemonicDefaultWalletName(),
                                     password: legacyPassword,
                                     newPassword: legacyPassword,
-                                    coin: .ethereum,
+                                    chainType: .ethereum,
                                     onlyToKeychain: true)
             }
             Defaults.shouldPromptSafariForLegacyUsers = true
