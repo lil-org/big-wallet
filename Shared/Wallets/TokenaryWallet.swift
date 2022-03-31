@@ -4,6 +4,7 @@
 import Foundation
 import WalletCore
 
+/// ToDo: This belongs to Tokenary Shared
 protocol AnyAccount {
     var chainType: ChainType { get }
     
@@ -152,6 +153,7 @@ public final class TokenaryWallet: Hashable, Equatable {
     }
     
     public subscript<T>(accountDescriptor: AccountDescriptor<T>) -> T? {
+        // Usage requires that you manually check, either provided descriptor actually matches
         guard
             !isMnemonic,
             let account = accounts.first

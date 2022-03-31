@@ -34,16 +34,36 @@ class AccountsListStateProvider: ObservableObject {
     
     func updateAccounts(with walletsChangeSet: WalletsManager.TokenaryWalletChangeSet) {
         DispatchQueue.global().async {
-            let vmToAdd: [AccountItemView.ViewModel] = walletsChangeSet.toAdd.map(self.transform)
+            var filteredWalletsChangeSet = walletsChangeSet
+            filteredWalletsChangeSet.applyFilter { wallets in
+                if
+                    case let .choseAccount(forChain: selectedChain) = self.mode,
+                    let selectedChain = selectedChain
+                {
+                    return wallets.filter { $0.associatedMetadata.allChains.contains(selectedChain) }
+                } else {
+                    return wallets
+                }
+            }
+            var updatedDeletedIds: [String] = []
+            // This is special case, when we update filtered model, in such way it should not be displayed anymore
+            if filteredWalletsChangeSet.toUpdate != walletsChangeSet.toUpdate {
+                updatedDeletedIds = Set(walletsChangeSet.toUpdate)
+                    .subtracting(filteredWalletsChangeSet.toUpdate)
+                    .map(\.id)
+            }
+            
+            let vmToAdd: [AccountItemView.ViewModel] = filteredWalletsChangeSet.toAdd.map(self.transform)
             let indicesToRemove: IndexSet = IndexSet(
                 self.accounts
                     .enumerated()
                     .filter { accountEnumeration in
-                        walletsChangeSet.toRemove.contains(where: { $0.id == accountEnumeration.element.id })
+                        filteredWalletsChangeSet.toRemove.contains(where: { $0.id == accountEnumeration.element.id }) ||
+                        updatedDeletedIds.contains(accountEnumeration.element.id)
                     }
                     .map { $0.offset }
             )
-            let updateVM: [(Int, AccountItemView.ViewModel)] = walletsChangeSet.toUpdate.compactMap { updateWallet in
+            let updateVM: [(Int, AccountItemView.ViewModel)] = filteredWalletsChangeSet.toUpdate.compactMap { updateWallet in
                 guard let updateIdx = self.accounts.firstIndex(where: { $0.id == updateWallet.id }) else { return nil }
                 let updateVM: AccountItemView.ViewModel = self.transform(updateWallet)
                 return (updateIdx, updateVM)
@@ -58,7 +78,7 @@ class AccountsListStateProvider: ObservableObject {
             }
         }
     }
-    
+
     var filteredWallets: [TokenaryWallet] {
         let wallets = WalletsManager.shared.wallets.get()
         if

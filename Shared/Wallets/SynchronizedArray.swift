@@ -2,6 +2,9 @@
 
 import Foundation
 
+/// This approach is used: https://stackoverflow.com/questions/28191079/create-thread-safe-array-in-swift
+/// ToDo: Rewrite using mutex/wait-free construction
+/// ToDo: This belongs to Tokenary Shared
 struct SynchronizedArray<T>: RangeReplaceableCollection {
 
     typealias Element = T

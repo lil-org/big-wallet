@@ -148,7 +148,7 @@ class AccountsListViewController<ContentView: View>: WrappingViewController<Cont
     private func createNewAccountAndShowSecretWordsFor(chains: [ChainType]) {
         guard
             let wallet = try? walletsManager.createMnemonicWallet(
-                coinTypes: chains
+                chainTypes: chains
             )
         else { return }
         showKey(wallet: wallet, mnemonic: true)

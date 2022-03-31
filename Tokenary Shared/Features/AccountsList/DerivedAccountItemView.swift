@@ -90,10 +90,6 @@ struct DerivedAccountItemView: View {
     @State
     private var areActionsForDerivedAccountPresented: Bool = false
     
-    @State
-    /// Used as a work-around for not correctly working frame operations
-    private var viewBounds: CGRect = CGRect(x: .zero, y: .zero, width: 1000, height: .zero)
-    
     @Binding
     var viewModel: ViewModel
     
@@ -144,7 +140,6 @@ struct DerivedAccountItemView: View {
                     .multilineTextAlignment(.center)
                     .frame(width: maximumSubViewWidth, alignment: .center)
             }
-            .saveBounds(viewId: stackUUID, coordinateSpace: .local)
         }
         #if canImport(AppKit)
         .offset(x: 1)
@@ -181,7 +176,6 @@ struct DerivedAccountItemView: View {
             }
         )
         #endif
-        .retrieveBounds(viewId: stackUUID, $viewBounds)
         #if canImport(AppKit)
         .frame(width: (viewModel.chain == .ethereum ? 80 : 70) + 30 + 6)
         #elseif canImport(UIKit)

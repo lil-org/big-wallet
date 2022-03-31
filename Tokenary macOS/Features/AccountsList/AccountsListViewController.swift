@@ -196,7 +196,9 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
     
     private func createNewAccountAndShowSecretWordsFor(chains: [ChainType]) {
         guard
-            let wallet = try? walletsManager.createMnemonicWallet(coinTypes: chains)
+            let wallet = try? walletsManager.createMnemonicWallet(
+                chainTypes: chains
+            )
         else { return }
         newWalletId = wallet.id
         blinkNewWalletCellIfNeeded()

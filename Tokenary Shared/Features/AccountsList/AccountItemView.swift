@@ -73,6 +73,10 @@ struct AccountItemView: View {
         }
     }
     
+    private var areDerivedAccountsPresent: Bool {
+        viewModel.isMnemonicBased && viewModel.mnemonicDerivedViewModels.count != .zero
+    }
+    
     var body: some View {
         VStack(spacing: 4) {
             HStack(spacing: CGFloat.accountHorizontalStackSpacing) {
@@ -132,10 +136,11 @@ struct AccountItemView: View {
             }
             #if canImport(UIKit)
             .padding(.top, 4)
+            .padding(.bottom, areDerivedAccountsPresent ? .zero : 4)
             .padding(.horizontal, 12)
             #endif
             
-            if viewModel.isMnemonicBased && viewModel.mnemonicDerivedViewModels.count != .zero {
+            if areDerivedAccountsPresent {
                 derivedAccountsGrid
                     #if canImport(UIKit)
                     .padding(.bottom, 4)
@@ -145,7 +150,17 @@ struct AccountItemView: View {
         }
         .background(backgroundColor, ignoresSafeAreaEdges: [.leading, .trailing])
         .delaysTouches(isInPress: $isInPress) {
-            areActionsForWalletPresented.toggle()
+            if
+                stateProvider.mode != .mainScreen,
+                let attachedWallet = self.attachedWallet,
+                !attachedWallet.isMnemonic
+            {
+                stateProvider.didSelect(wallet: attachedWallet)
+            } else {
+                DispatchQueue.main.async {
+                    areActionsForWalletPresented.toggle()
+                }
+            }
         }
         .gesture(DragGesture(minimumDistance: 0))
         .onChange(of: viewModel.preformBlink) { newValue in
@@ -271,45 +286,5 @@ struct AccountView_Previews: PreviewProvider {
             ))
         )
         .frame(width: 250, height: 350)
-    }
-}
-extension View {
-    func delaysTouches(isInPress: Binding<Bool>, onTap action: @escaping () -> Void = {}) -> some View {
-        modifier(DelaysTouches(isInPress: isInPress, action: action))
-    }
-}
-
-fileprivate struct DelaysTouches: ViewModifier {
-    @Binding var isInPress: Bool
-
-    var action: () -> Void
-
-    func body(content: Content) -> some View {
-        Button(action: action) {
-            content
-        }
-        .buttonStyle(DelaysTouchesButtonStyle(isInPress: $isInPress))
-    }
-}
-
-fileprivate struct DelaysTouchesButtonStyle: ButtonStyle {
-    @Binding var isInPress: Bool
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration
-            .label
-            .onChange(of: configuration.isPressed, perform: handleIsPressed)
-    }
-
-    private func handleIsPressed(isPressed: Bool) {
-        if isPressed {
-            withAnimation(.easeInOut(duration: 0.1)) {
-                isInPress = true
-            }
-        } else {
-            withAnimation(.easeInOut(duration: 0.1)) {
-                isInPress = false
-            }
-        }
     }
 }

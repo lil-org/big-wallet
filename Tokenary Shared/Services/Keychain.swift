@@ -99,7 +99,7 @@ struct Keychain {
     
     // MARK: - Private
     
-    private func save(data: Data, key: ItemKey, metaData: Data? = nil) {
+    private func save(data: Data, key: ItemKey) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key.stringValue,

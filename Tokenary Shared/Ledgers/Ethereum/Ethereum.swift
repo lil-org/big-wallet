@@ -32,7 +32,7 @@ struct Ethereum {
               PublicKey.isValid(data: publicKey.data, type: publicKey.keyType) else {
                   return nil
               }
-        return CoinType.ethereum.deriveAddressFromPublicKey(publicKey: publicKey)
+        return ChainType.ethereum.deriveAddressFromPublicKey(publicKey: publicKey)
     }
     
     private func prefixedDataHash(data: Data) -> Data? {
@@ -42,7 +42,7 @@ struct Ethereum {
     }
     
     private func sign(data: Data, wallet: TokenaryWallet, addPrefix: Bool) throws -> String {
-        guard let ethereumPrivateKey = wallet[.ethereum, .privateKey] else { throw Error.keyNotFound }
+        guard let ethereumPrivateKey = wallet[.ethereum, .privateKey] ?? wallet[.privateKey] else { throw Error.keyNotFound }
         
         let digest: Data
         if addPrefix {
@@ -52,15 +52,15 @@ struct Ethereum {
             digest = data
         }
         
-        guard var signed = ethereumPrivateKey?.sign(digest: digest, curve: CoinType.ethereum.curve) else { throw Error.failedToSign }
+        guard var signed = ethereumPrivateKey?.sign(digest: digest, curve: ChainType.ethereum.curve) else { throw Error.failedToSign }
         signed[64] += 27
         return signed.toPrefixedHexString()
     }
     
     func sign(typedData: String, wallet: TokenaryWallet) throws -> String {
-        guard let ethereumPrivateKey = wallet[.ethereum, .privateKey] else { throw Error.keyNotFound }
+        guard let ethereumPrivateKey = wallet[.ethereum, .privateKey] ?? wallet[.privateKey] else { throw Error.keyNotFound }
         let digest = EthereumAbi.encodeTyped(messageJson: typedData)
-        guard var signed = ethereumPrivateKey?.sign(digest: digest, curve: CoinType.ethereum.curve) else { throw Error.failedToSign }
+        guard var signed = ethereumPrivateKey?.sign(digest: digest, curve: ChainType.ethereum.curve) else { throw Error.failedToSign }
         signed[64] += 27
         return signed.toPrefixedHexString()
     }
@@ -77,7 +77,7 @@ struct Ethereum {
     
     private func signedTransactionBytes(transaction: Transaction, wallet: TokenaryWallet, chain: EthereumChain) throws -> EthContractCallBytes {
         let network = EthereumNetwork.forChain(chain)
-        guard let privateKeyString = wallet[.ethereum, .privateKeyString] ?? nil else { throw Error.keyNotFound }
+        guard let privateKeyString = wallet[.ethereum, .privateKeyString] ?? wallet[.privateKeyString] ?? nil else { throw Error.keyNotFound }
         let senderKey = EthPrivateKey(hex: privateKeyString)
         let contractAddress = EthAddress(hex: transaction.to)
         let functionCall = BytesFromHexString(hex: transaction.data)

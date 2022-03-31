@@ -32,16 +32,16 @@ struct AccountsListView: View {
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .confirmationDialog(String.empty, isPresented: $arePreferencesPresented, actions: {
-            preferencesActionButtons // ios
+            preferencesActionButtons // iOS
             Button(Strings.cancel, role: .cancel, action: {})
         }, message: { // Custom view-hierarchy doesn't work here
             Text("❤️ " + Strings.tokenary + " ❤️" + Symbols.newLine + "Show love 4269.eth")
         })
         .confirmationDialog(Strings.addAccount, isPresented: $stateProvider.isAddAccountDialogPresented, actions: {
-            addAccountActionButtons // ios
+            addAccountActionButtons // iOS
             Button(Strings.cancel, role: .cancel, action: {})
         })
-        .popover(
+        .popover( // iPadOS
             isPresented: $stateProvider.isAddAccountPopoverPresented,
             attachmentAnchor: .point(stateProvider.touchAnchor),
             arrowEdge: .bottom,

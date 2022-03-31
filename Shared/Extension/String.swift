@@ -3,9 +3,12 @@
 
 import Foundation
 
+/// ToDo: This belongs to Tokenary Shared
 extension String {
     
     // MARK: Public Properties
+    
+    public static var empty: String = ""
     
     public var maybeJSON: Bool {
         hasPrefix(Symbols.leftCurlyBrace) && hasSuffix(Symbols.rightCurlyBrace) && count > 3
@@ -23,8 +26,7 @@ extension String {
     public var trimmedAddress: String {
         guard !isEmpty else { return self }
         let without0x = dropFirst(2)
-        let a = "dddd"
-        return without0x.prefix(4) + "..." + a + without0x.suffix(4)
+        return without0x.prefix(4) + "..." + without0x.suffix(4)
     }
     
     // MARK: - Public Methods

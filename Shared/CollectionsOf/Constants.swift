@@ -30,5 +30,4 @@ public struct Constants {
     // MARK: - Schemes
 
     public static let tokenarySchemePrefix = "tokenary://"
-    public static let tokenarySchemeTemplate = "tokenary://%@"
 }

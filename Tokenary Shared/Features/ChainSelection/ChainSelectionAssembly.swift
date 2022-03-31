@@ -27,7 +27,7 @@ public enum ChainSelectionMode: Equatable {
         }
     }
     
-    fileprivate var supportedCoinTypes: [ChainType] {
+    fileprivate var supportedChainTypes: [ChainType] {
         switch self {
         case let .singleSelect(supportedChainTypes),
             let .multiSelect(supportedChainTypes),
@@ -66,13 +66,13 @@ public final class ChainSelectionAssembly {
     private static func buildInitialState(for mode: ChainSelectionMode) -> ChainSelectionState {
         let currentlySelected = mode.currentlySelected
         var previousChoiceId: UInt32?
-        let viewModels = mode.supportedCoinTypes.map { coinType -> ChainSelectionState.ChainElementViewModel in
-            let isSelected = currentlySelected.contains(coinType)
+        let viewModels = mode.supportedChainTypes.map { chainType -> ChainSelectionState.ChainElementViewModel in
+            let isSelected = currentlySelected.contains(chainType)
             let newVM = ChainSelectionState.ChainElementViewModel(
-                id: coinType.rawValue,
-                icon: coinType.iconName,
-                title: coinType.title,
-                ticker: coinType.ticker,
+                id: chainType.rawValue,
+                icon: chainType.iconName,
+                title: chainType.title,
+                ticker: chainType.ticker,
                 isSelected: isSelected
             )
             if case .singleSelect(_) = mode, isSelected {

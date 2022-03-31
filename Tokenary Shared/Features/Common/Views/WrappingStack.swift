@@ -33,7 +33,11 @@ struct TightHeightGeometryReader<Content: View>: View {
 }
 
 /// Overflowing stack
-struct WrappingStack<Data: RandomAccessCollection, ID: Hashable, Content: View>: View {
+struct WrappingStack<
+    Data: RandomAccessCollection,
+    ID: Hashable,
+    Content: View
+>: View {
     
     let data: Data
     var content: (Data.Element) -> Content
