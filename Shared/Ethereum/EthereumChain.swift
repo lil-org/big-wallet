@@ -42,7 +42,7 @@ enum EthereumChain: Int {
         case .arbitrum: return "Arbitrum"
         case .optimism: return "Optimism"
         case .polygon: return "Polygon"
-        case .binance: return "Binance Smart Chain"
+        case .binance: return "BNB Smart Chain"
         case .avalanche: return "Avalanche"
         case .gnosisChain: return "Gnosis Chain"
         case .fantomOpera: return "Fantom Opera"
@@ -55,7 +55,7 @@ enum EthereumChain: Int {
         case .ethereumKovan: return "Ethereum Kovan"
         case .ethereumRinkeby: return "Ethereum Rinkeby"
         case .arbitrumKovan: return "Arbitrum Kovan"
-        case .binanceTestnet: return "BSC Testnet"
+        case .binanceTestnet: return "BNB Testnet"
         case .avalancheFuji: return "Avalanche FUJI"
         case .fantomTestnet: return "Fantom Testnet"
         }
