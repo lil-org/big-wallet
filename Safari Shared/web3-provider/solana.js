@@ -11,7 +11,7 @@ import isUtf8 from "isutf8";
 
 class TokenarySolana extends EventEmitter {
 
-    processTokenaryResponse(response) {
+    processTokenaryResponse(id, response) {
 
     }
 

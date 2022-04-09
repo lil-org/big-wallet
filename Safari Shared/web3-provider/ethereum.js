@@ -319,7 +319,7 @@ class TokenaryEthereum extends EventEmitter {
         this.postMessage("addEthereumChain", payload.id, payload.params[0]);
     }
     
-    processTokenaryResponse(response) {
+    processTokenaryResponse(id, response) {
         if (response.name == "didLoadLatestConfiguration") {
             this.didGetLatestConfiguration = true;
             if (response.chainId) {
@@ -335,21 +335,21 @@ class TokenaryEthereum extends EventEmitter {
         }
         
         if ("result" in response) {
-            this.sendResponse(event.data.id, response.result);
+            this.sendResponse(id, response.result);
         } else if ("results" in response) {
             if (response.name == "switchEthereumChain" || response.name == "addEthereumChain") {
                 // Calling it before sending response matters for some dapps
                 this.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
             }
             if (response.name != "switchAccount") {
-                this.sendResponse(event.data.id, response.results);
+                this.sendResponse(id, response.results);
             }
             if (response.name == "requestAccounts" || response.name == "switchAccount") {
                 // Calling it after sending response matters for some dapps
                 this.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
             }
         } else if ("error" in response) {
-            this.sendError(event.data.id, response.error);
+            this.sendError(id, response.error);
         }
     }
     
