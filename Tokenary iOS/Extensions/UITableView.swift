@@ -3,10 +3,13 @@
 import UIKit
 
 extension UITableView {
-    
     func registerReusableCell<Cell: UITableViewCell>(type: Cell.Type) {
         let cellName = String(describing: type)
         register(UINib(nibName: cellName, bundle: nil), forCellReuseIdentifier: cellName)
+    }
+    
+    func register<T: UITableViewCell>(cellWithClass name: T.Type) {
+        register(T.self, forCellReuseIdentifier: String(describing: name))
     }
     
     func registerReusableHeaderFooter<Header: UITableViewHeaderFooterView>(type: Header.Type) {

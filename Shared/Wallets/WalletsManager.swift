@@ -21,7 +21,7 @@ final class WalletsManager {
     }
     
     enum InputValidationResult: Equatable {
-        public enum WalletKeyType: Equatable {
+        enum WalletKeyType: Equatable {
             case mnemonic
             case privateKey([ChainType])
             
@@ -247,12 +247,12 @@ final class WalletsManager {
     
     // MARK: - Update
                                    
-    public func rename(wallet: TokenaryWallet, newName: String) throws {
+    func rename(wallet: TokenaryWallet, newName: String) throws {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         try update(wallet: wallet, oldPassword: password, newPassword: password, newName: newName)
     }
     
-    public func changeAccountsIn(wallet: TokenaryWallet, to newChainTypes: [ChainType]) throws {
+    func changeAccountsIn(wallet: TokenaryWallet, to newChainTypes: [ChainType]) throws {
         guard wallet.isMnemonic else { return }
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         let currentAccounts = Set(wallet.associatedMetadata.allChains)
@@ -265,19 +265,19 @@ final class WalletsManager {
         try update(wallet: wallet)
     }
     
-    public func removeAccountIn(wallet: TokenaryWallet, account: ChainType) throws {
+    func removeAccountIn(wallet: TokenaryWallet, account: ChainType) throws {
         guard wallet.isMnemonic else { return }
         removeAccountFrom(wallet: wallet, for: [account])
         wallet.refreshAssociatedData()
         try update(wallet: wallet)
     }
     
-    public func update(wallet: TokenaryWallet) throws {
+    func update(wallet: TokenaryWallet) throws {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         try update(wallet: wallet, oldPassword: password, newPassword: password, newName: wallet.key.name)
     }
 
-    public func update(wallet: TokenaryWallet, oldPassword: String, newPassword: String) throws {
+    func update(wallet: TokenaryWallet, oldPassword: String, newPassword: String) throws {
         try update(wallet: wallet, oldPassword: oldPassword, newPassword: newPassword, newName: wallet.key.name)
     }
     

@@ -6,7 +6,7 @@ import Foundation
 /// since it will require Self generic constraining, which will require Any/Generic type erasure.
 /// - Generic case can be applied since there is case where we don't know the resulting type at compile time
 /// - And any is a noop case for static variables cases
-public enum EthereumChain: Int {
+enum EthereumChain: Int {
     case ethereum = 1
     case arbitrum = 42161
     case polygon = 137
@@ -37,13 +37,13 @@ public enum EthereumChain: Int {
         return "0x" + String(id, radix: 16, uppercase: false)
     }
     
-    public static let mainnets: [EthereumChain] = [
+    static let mainnets: [EthereumChain] = [
         .ethereum, .polygon, .optimism, 
         .binance, .arbitrum, .avalanche,
         .gnosisChain, .fantomOpera
     ]
     
-    public static let testnets: [EthereumChain] = [
+    static let testnets: [EthereumChain] = [
         .ethereumRopsten, .ethereumKovan,
         .ethereumRinkeby, .arbitrumKovan,
         .ethereumGoerli, .optimisticKovan,
@@ -52,7 +52,7 @@ public enum EthereumChain: Int {
         .fantomTestnet
     ]
     
-    public var title: String {
+    var title: String {
         switch self {
         case .ethereum: return "Ethereum"
         case .arbitrum: return "Arbitrum"
@@ -77,7 +77,7 @@ public enum EthereumChain: Int {
         }
     }
     
-    public var symbol: String {
+    var symbol: String {
         switch self {
         case .binance, .binanceTestnet:
             return "BNB"

@@ -3,9 +3,9 @@
 
 import Foundation
 
-public protocol Then {}
+protocol Then {}
 
-public extension Then where Self: AnyObject {
+extension Then where Self: AnyObject {
     @inlinable func then(_ block: (Self) -> Void) -> Self {
         block(self)
         return self

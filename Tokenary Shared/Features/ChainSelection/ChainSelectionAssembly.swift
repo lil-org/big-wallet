@@ -5,13 +5,13 @@ import SwiftUI
 
 #if canImport(UIKit)
     import UIKit
-    public typealias BridgedViewController = UIViewController
+    typealias BridgedViewController = UIViewController
 #elseif canImport(AppKit) && !targetEnvironment(macCatalyst)
     import AppKit
-    public typealias BridgedViewController = NSViewController
+    typealias BridgedViewController = NSViewController
 #endif
 
-public enum ChainSelectionMode: Equatable {
+enum ChainSelectionMode: Equatable {
     case singleSelect([ChainType])
     case multiSelect([ChainType])
     case multiReSelect(currentlySelected: [ChainType], possibleElements: [ChainType])
@@ -47,8 +47,8 @@ public enum ChainSelectionMode: Equatable {
     }
 }
 
-public final class ChainSelectionAssembly {
-    public static func build(
+final class ChainSelectionAssembly {
+    static func build(
         for mode: ChainSelectionMode,
         completion: @escaping ([ChainType]) -> Void
     ) -> BridgedViewController {

@@ -43,12 +43,12 @@ extension SynchronizedArray {
 
 extension SynchronizedArray {
 
-    public mutating func append(_ newElement: SynchronizedArray.Element) {
+    mutating func append(_ newElement: SynchronizedArray.Element) {
         _wait(); defer { _signal() }
         array.append(newElement)
     }
 
-    public mutating func append<S>(contentsOf newElements: S) where S: Sequence, SynchronizedArray.Element == S.Element {
+    mutating func append<S>(contentsOf newElements: S) where S: Sequence, SynchronizedArray.Element == S.Element {
         _wait(); defer { _signal() }
         array.append(contentsOf: newElements)
     }
@@ -59,7 +59,7 @@ extension SynchronizedArray {
         return SynchronizedArray(subArray)
     }
 
-    public mutating func insert(_ newElement: SynchronizedArray.Element, at i: SynchronizedArray.Index) {
+    mutating func insert(_ newElement: SynchronizedArray.Element, at i: SynchronizedArray.Index) {
         _wait(); defer { _signal() }
         array.insert(newElement, at: i)
     }
@@ -114,7 +114,7 @@ extension SynchronizedArray {
         array.removeLast(k)
     }
 
-    @inlinable public func forEach(_ body: (Element) throws -> Void) rethrows {
+    @inlinable func forEach(_ body: (Element) throws -> Void) rethrows {
         _wait(); defer { _signal() }
         try array.forEach(body)
     }
@@ -140,12 +140,12 @@ extension SynchronizedArray {
         array.reserveCapacity(n)
     }
 
-    public var count: Int {
+    var count: Int {
         _wait(); defer { _signal() }
         return array.count
     }
 
-    public var isEmpty: Bool {
+    var isEmpty: Bool {
         _wait(); defer { _signal() }
         return array.isEmpty
     }

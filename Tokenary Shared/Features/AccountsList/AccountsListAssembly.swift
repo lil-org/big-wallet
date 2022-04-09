@@ -9,48 +9,45 @@ import SwiftUI
   import AppKit
 #endif
 
-public enum AccountsListMode: Equatable {
+enum AccountsListMode: Equatable {
     case choseAccount(forChain: ChainType?)
     case mainScreen
+    
+    var isFilteringAccounts: Bool {
+        if
+            case let .choseAccount(forChain: chainType) = self, chainType == nil || self == .mainScreen
+        {
+            return true
+        } else {
+            return false
+        }
+    }
 }
 
-public final class AccountsListAssembly {
+final class AccountsListAssembly {
 #if canImport(UIKit)
-    public static func build(
+    static func build(
         for mode: AccountsListMode,
         onSelectedWallet: ((EthereumChain?, TokenaryWallet?) -> Void)? = nil
     ) -> UIViewController {
-        UITableView.appearance().tableHeaderView = UIView(
-            frame: CGRect(x: .zero, y: .zero, width: .zero, height: CGFloat.leastNormalMagnitude)
-        )
-        UINavigationBar.appearance().isHidden = true
-        let stateProvider = AccountsListStateProvider(
+        let presenter = AccountsListPresenter(
+            walletsManager: WalletsManager.shared,
+            onSelectedWallet: onSelectedWallet,
             mode: mode
         )
-        let contentView = AccountsListView()
-            .environmentObject(stateProvider)
-        
-        let hostingVC = AccountsListViewController(
+        let viewController = AccountsListViewController(
             walletsManager: WalletsManager.shared,
-            rootView: contentView
-        ).then {
-            // This is done, so the empty DataState viewer appears
-            //  to be presented beneath SwiftUI navigation thingy
-            $0.swiftUIHostingController.view.backgroundColor = .clear
-            $0.view.backgroundColor = .clear
-            
-            $0.onSelectedWallet = onSelectedWallet
-        }
+            presenter: presenter
+        )
         
-        stateProvider.output = hostingVC
-        hostingVC.stateProviderInput = stateProvider
+        presenter.view = viewController
         
-        return hostingVC
+        return viewController.inNavigationController
     }
     
 #elseif canImport(AppKit)
     
-    public static func build(
+    static func build(
         for mode: AccountsListMode,
         newWalletId: String? = nil,
         onSelectedWallet: ((EthereumChain?, TokenaryWallet?) -> Void)? = nil

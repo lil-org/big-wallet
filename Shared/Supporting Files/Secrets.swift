@@ -2,6 +2,6 @@
 
 import Foundation
 
-public struct Secrets {
-    public static let infura = "YOUR_KEY_HERE"
+struct Secrets {
+    static let infura = "YOUR_KEY_HERE"
 }

@@ -14,13 +14,13 @@ protocol AnyAccount {
     var derivationPath: String? { get }
 }
 
-public final class TokenaryWallet: Hashable, Equatable {
-    public struct AccountDescriptor<ReturnType> {
+final class TokenaryWallet: Hashable, Equatable {
+    struct AccountDescriptor<ReturnType> {
         var keyPath: KeyPath<AnyAccount, ReturnType>
     }
     
     /// Used so we cache `StoredKey.account(index:_)` calls
-    public struct AssociatedMetadata {
+    struct AssociatedMetadata {
         private var indexToChainMap: [ChainType] = []
         private var chainToIndexMap: [ChainType: Int] = [:]
         
@@ -28,9 +28,9 @@ public final class TokenaryWallet: Hashable, Equatable {
         
         func chainFor(index: Int) -> ChainType? { indexToChainMap[index] }
         
-        public var privateKeyChain: ChainType? { indexToChainMap[.zero] }
+        var privateKeyChain: ChainType? { indexToChainMap[safe: .zero] }
         
-        public var allChains: [ChainType] { Array(chainToIndexMap.keys) }
+        var allChains: [ChainType] { Array(chainToIndexMap.keys) }
         
         internal init(key: StoredKey) {
             for index in .zero ..< key.accountCount {
@@ -143,7 +143,7 @@ public final class TokenaryWallet: Hashable, Equatable {
         self.associatedMetadata = associatedMetadata
     }
      
-    public subscript<T>(chainType: ChainType, accountDescriptor: AccountDescriptor<T>) -> T? {
+    subscript<T>(chainType: ChainType, accountDescriptor: AccountDescriptor<T>) -> T? {
         // No throwing keypath available. Nil is sufficient here
         guard
             isMnemonic,
@@ -152,7 +152,7 @@ public final class TokenaryWallet: Hashable, Equatable {
         return account[keyPath: accountDescriptor.keyPath]
     }
     
-    public subscript<T>(accountDescriptor: AccountDescriptor<T>) -> T? {
+    subscript<T>(accountDescriptor: AccountDescriptor<T>) -> T? {
         // Usage requires that you manually check, either provided descriptor actually matches
         guard
             !isMnemonic,
@@ -161,11 +161,11 @@ public final class TokenaryWallet: Hashable, Equatable {
         return account[keyPath: accountDescriptor.keyPath]
     }
 
-    public func hash(into hasher: inout Hasher) { hasher.combine(id) }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
 
-    public static func == (lhs: TokenaryWallet, rhs: TokenaryWallet) -> Bool { lhs.id == rhs.id }
+    static func == (lhs: TokenaryWallet, rhs: TokenaryWallet) -> Bool { lhs.id == rhs.id }
     
-    public func refreshAssociatedData() {
+    func refreshAssociatedData() {
         associatedMetadata = AssociatedMetadata(key: key)
     }
     

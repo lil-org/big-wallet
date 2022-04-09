@@ -11,6 +11,8 @@ protocol DataStateContainer: AnyObject {
     
     var dataState: DataState { get set }
     func configureDataState(_ dataState: DataState, description: String?, image: UIImage?, buttonTitle: String?, actionHandler: ((CGRect) -> Void)?)
+    func updateDataState(menu: UIMenu)
+    func updateDataState(actionHandler: @escaping UIActionHandler)
 }
 
 class DataStateView: UIView {
@@ -61,7 +63,7 @@ class DataStateView: UIView {
     @IBOutlet private weak var activityIndicator: UIActivityIndicatorView!
     @IBOutlet private weak var imageView: UIImageView!
     @IBOutlet private weak var descriptionLabel: UILabel!
-    @IBOutlet private weak var button: UIButton!
+    @IBOutlet fileprivate weak var button: UIButton!
     @IBOutlet private weak var activityIndicatorDescriptionLabel: UILabel! {
         didSet {
             activityIndicatorDescriptionLabel.text = Strings.loading.uppercased()
@@ -130,6 +132,15 @@ extension DataStateContainer where Self: UIViewController {
     
     func configureDataState(_ dataState: DataState, description: String? = nil, image: UIImage? = nil, buttonTitle: String? = nil, actionHandler: ((CGRect) -> Void)? = nil) {
         dataStateView.configureDataState(dataState, description: description, image: image, buttonTitle: buttonTitle, actionHandler: actionHandler)
+    }
+    
+    func updateDataState(menu: UIMenu) {
+        dataStateView.button.menu = menu
+        dataStateView.button.showsMenuAsPrimaryAction = true
+    }
+    
+    func updateDataState(actionHandler: @escaping UIActionHandler) {
+        dataStateView.button.addAction(for: .touchUpInside, handler: actionHandler)
     }
     
     private var dataStateView: DataStateView {

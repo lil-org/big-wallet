@@ -13,7 +13,7 @@ class ImportViewController: NSViewController {
     }
     @IBOutlet weak var okButton: NSButton!
     
-    public weak var accountsListVC: AccountsListViewController?
+    var accountsListVC: AccountsListViewController?
     
     var onSelectedWallet: ((EthereumChain?, TokenaryWallet?) -> Void)?
     private var inputValidationResult = WalletsManager.InputValidationResult.invalidData

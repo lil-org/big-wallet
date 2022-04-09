@@ -6,37 +6,37 @@ import Foundation
 /// ToDo: This belongs to Tokenary Shared
 extension String {
     
-    // MARK: Public Properties
+    // MARK: Properties
     
-    public static var empty: String = ""
+    static var empty: String = ""
     
-    public var maybeJSON: Bool {
+    var maybeJSON: Bool {
         hasPrefix(Symbols.leftCurlyBrace) && hasSuffix(Symbols.rightCurlyBrace) && count > 3
     }
     
-    public var isOkAsPassword: Bool { count >= 4 }
+    var isOkAsPassword: Bool { count >= 4 }
     
-    public var withFirstLetterCapitalized: String {
+    var withFirstLetterCapitalized: String {
         guard !isEmpty else { return self }
         return prefix(1).uppercased() + dropFirst()
     }
     
-    public var withEllipsis: String { self + Symbols.ellipsis }
+    var withEllipsis: String { self + Symbols.ellipsis }
     
-    public var commonlyPrefixedTrimmedAddress: String {
+    var commonlyPrefixedTrimmedAddress: String {
         guard !isEmpty else { return self }
         let without0x = dropFirst(2)
         return without0x.prefix(4) + "..." + without0x.suffix(4)
     }
     
-    public var trimmedAddress: String {
+    var trimmedAddress: String {
         guard !isEmpty else { return self }
         return prefix(4 + 2) + "..." + suffix(4)
     }
     
-    // MARK: - Public Methods
+    // MARK: - Methods
     
-    public func removingOccurrences(of substrings: [String]) -> String {
+    func removingOccurrences(of substrings: [String]) -> String {
         var result = self
         substrings.forEach { character in
             result = result.replacingOccurrences(of: character, with: String.empty)
@@ -44,7 +44,7 @@ extension String {
         return result
     }
     
-    public static func getRandomEmoticonsCollection(ofSize count: Int) -> [String] {
+    static func getRandomEmoticonsCollection(ofSize count: Int) -> [String] {
         var result: Set<String> = []
         outerLoop: for idx in .zero ..< count {
             while true {

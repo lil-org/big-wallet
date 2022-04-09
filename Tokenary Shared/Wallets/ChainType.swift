@@ -4,7 +4,7 @@ import Foundation
 import SwiftUI
 import WalletCore
 
-public typealias ChainType = CoinType
+typealias ChainType = CoinType
 
 extension ChainType {
     private static var defaultTitle: String = ""
@@ -13,7 +13,7 @@ extension ChainType {
     private static var defaultScanURL: (String) -> URL = { _ in URL(staticString: "") }
     private static var transactionScaner: String = ""
     
-    public var title: String {
+    var title: String {
         switch self {
         case .ethereum:
             return "Ethereum"
@@ -26,7 +26,7 @@ extension ChainType {
         }
     }
     
-    public var ticker: String {
+    var ticker: String {
         switch self {
         case .ethereum:
             return "ETH"
@@ -39,7 +39,7 @@ extension ChainType {
         }
     }
     
-    public var iconName: String {
+    var iconName: String {
         switch self {
         case .ethereum:
             return "eth"
@@ -52,7 +52,7 @@ extension ChainType {
         }
     }
     
-    public var scanURL: (String) -> URL {
+    var scanURL: (String) -> URL {
         return { addressString in
             switch self {
             case .ethereum:
@@ -67,7 +67,7 @@ extension ChainType {
         }
     }
     
-    public var transactionScaner: String {
+    var transactionScaner: String {
         switch self {
         case .ethereum:
             return Strings.viewOnEtherScan
@@ -80,18 +80,18 @@ extension ChainType {
         }
     }
     
-    public static var supportedChains: [ChainType] { [.ethereum, .tezos, .solana] }
+    static var supportedChains: [ChainType] { [.ethereum, .tezos, .solana] }
     
-    @frozen public struct SupportedSet: OptionSet {
-        public let rawValue: Int
+    struct SupportedSet: OptionSet {
+        let rawValue: Int
         
-        public init(rawValue: Int) { self.rawValue = rawValue }
+        init(rawValue: Int) { self.rawValue = rawValue }
         
-        public static let ethereum: ChainType.SupportedSet = SupportedSet(rawValue: 1 << 0)
-        public static let tezos: ChainType.SupportedSet = SupportedSet(rawValue: 1 << 1)
-        public static let solana: ChainType.SupportedSet = SupportedSet(rawValue: 1 << 2)
+        static let ethereum: ChainType.SupportedSet = SupportedSet(rawValue: 1 << 0)
+        static let tezos: ChainType.SupportedSet = SupportedSet(rawValue: 1 << 1)
+        static let solana: ChainType.SupportedSet = SupportedSet(rawValue: 1 << 2)
         
-        public static let all: SupportedSet = [ethereum, .tezos, .solana]
+        static let all: SupportedSet = [ethereum, .tezos, .solana]
     }
     
     init?(provider: Web3Provider) {

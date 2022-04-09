@@ -290,7 +290,7 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
     @objc func didTapCreateNewMnemonicWallet() {
         let chainSelectionVC = ChainSelectionAssembly.build(
             for: .multiSelect(ChainType.supportedChains),
-            completion: { [weak self] chosenChains in
+            completion: { [self] chosenChains in
                 let newWindow = Window.showNew()
                 newWindow.contentViewController = self
                 
@@ -302,7 +302,7 @@ class AccountsListViewController: NSViewController, NSWindowDelegate, NSMenuDele
                 alert.addButton(withTitle: Strings.ok)
                 alert.addButton(withTitle: Strings.cancel)
                 if alert.runModal() == .alertFirstButtonReturn {
-                    self?.createNewAccountAndShowSecretWordsFor(chains: chosenChains)
+                    self.createNewAccountAndShowSecretWordsFor(chains: chosenChains)
                 }
             }
         )
@@ -325,7 +325,7 @@ extension AccountsListViewController: AccountsListStateProviderOutput {
                 currentlySelected: currentSelection,
                 possibleElements: ChainType.supportedChains
             ),
-            completion: { [weak self] chosenChains in
+            completion: { [self] chosenChains in
                 let newWindow = Window.showNew()
                 newWindow.contentViewController = self
                 
@@ -333,7 +333,7 @@ extension AccountsListViewController: AccountsListStateProviderOutput {
                     chosenChains.count != .zero,
                     chosenChains != currentSelection
                 else { return }
-                self?.update(wallet: wallet, newChainList: chosenChains)
+                self.update(wallet: wallet, newChainList: chosenChains)
             }
         )
         view.window?.contentViewController = chainSelectionVC

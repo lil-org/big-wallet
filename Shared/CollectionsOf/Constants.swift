@@ -2,10 +2,10 @@
 
 import Foundation
 
-public struct Constants {
-    // MARK: - Public Properties
+struct Constants {
+    // MARK: - Properties
 
-    public static var isDebug: Bool {
+    static var isDebug: Bool {
         #if DEBUG
         return true
         #else
@@ -13,21 +13,21 @@ public struct Constants {
         #endif
     }
     
-    public static var identifier: String {
+    static var identifier: String {
         Bundle.main.infoDictionary?["CFBundleIdentifier"] as? String ?? .empty
     }
     
-    public static var name: String {
+    static var name: String {
         Bundle.main.infoDictionary?["CFBundleName"] as? String ?? .empty
     }
     
-    public static var shortVersionString: String {
+    static var shortVersionString: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? .empty
     }
     
-    public static let currentKeychainMigrationVersion: String = "0.0.1"
+    static let currentKeychainMigrationVersion: String = "0.0.1"
 
     // MARK: - Schemes
 
-    public static let tokenarySchemePrefix = "tokenary://"
+    static let tokenarySchemePrefix = "tokenary://"
 }
