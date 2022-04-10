@@ -48,7 +48,6 @@ class AccountsListItemCell: UITableViewCell {
     
     private lazy var moreButton = ExtendedHitAreaButton().then {
         $0.setImage(UIImage(systemName: "ellipsis.circle"), for: .normal)
-        $0.imageView?.tintColor = .blue
         $0.translatesAutoresizingMaskIntoConstraints = false
         $0.setContentCompressionResistancePriority(.required, for: .horizontal)
     }
@@ -105,6 +104,7 @@ class AccountsListItemCell: UITableViewCell {
     
     private func setupStyle() {
         selectionStyle = .default
+        backgroundColor = UIColor(light: .white, dark: .black)
     }
     
     private let proxyView = UIView()

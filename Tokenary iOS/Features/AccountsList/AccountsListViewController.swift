@@ -141,6 +141,7 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
         $0.estimatedRowHeight = 44 + 50
         $0.dataSource = self.presenter
         $0.delegate = self.presenter
+        $0.backgroundColor = UIColor(light: .white, dark: .black)
         $0.accessibilityIdentifier = "TableView"
         $0.isAccessibilityElement = true
     }
