@@ -9,6 +9,7 @@ protocol AccountsListInput: LifecycleObserver, UITableViewDelegate, UITableViewD
     func createNewAccountAndShowSecretWordsFor(chains: [ChainType])
     func cancelButtonWasTapped()
     func didSelect(chain: EthereumChain)
+    func didSelect(wallet: TokenaryWallet)
 }
 
 protocol AccountsListOutput: DataStateContainer {

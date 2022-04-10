@@ -137,6 +137,10 @@ class AccountsListItemCell: UITableViewCell {
             
             moreButton.centerYAnchor.constraint(equalTo: mainContainerView.centerYAnchor)
             mainContainerView.trailingAnchor.constraint(equalTo: moreButton.trailingAnchor, constant: 20)
+//            labelHolderStack.trailingAnchor.constraint(equalTo: moreButton.leadingAnchor, constant: -10)
+//                .then {
+//                $0.priority = .defaultHigh
+//            }
             labelHolderStack.trailingAnchor.constraint(lessThanOrEqualTo: moreButton.leadingAnchor, constant: -10)
             
             accountIconImage.widthAnchor.constraint(equalToConstant: 40)
@@ -308,10 +312,15 @@ extension AccountsListItemCell: Configurable {
         }
     }
     
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        print(1234)
+    }
+    
     private func configureDerivedAccounts(with viewModel: ViewModel) {
         items = viewModel.derivedItemViewModels
 //        setNeedsLayout()
-//        wrappingCollectionLayout.invalidateLayout()
+        wrappingCollectionLayout.invalidateLayout()
         switch viewModel.derivedItemViewModels.count {
         case 3:
             myCollectionViewHeight?.constant = 38 * 2 + 6 * 2
@@ -320,18 +329,20 @@ extension AccountsListItemCell: Configurable {
         default:
             myCollectionViewHeight?.constant = .zero
         }
-        
-        self.updateConstraints()
+
+        accountsCollection.setNeedsUpdateConstraints()
     }
     
     func update(name: String) {
-        accountNameLabel.text = name
+        if accountNameLabel.text != name {
+            accountNameLabel.text = name
+        }
     }
     
     func update(collection elements: [AccountsListDerivedItemCell.ViewModel]) {
         items = elements
 //        setNeedsLayout()
-//        wrappingCollectionLayout.invalidateLayout()
+        wrappingCollectionLayout.invalidateLayout()
         switch elements.count {
         case 3:
             myCollectionViewHeight?.constant = 38 * 2 + 6 * 2
@@ -340,8 +351,8 @@ extension AccountsListItemCell: Configurable {
         default:
             myCollectionViewHeight?.constant = .zero
         }
-        
-        self.updateConstraints()
+
+        accountsCollection.setNeedsUpdateConstraints()
     }
 }
 

@@ -180,14 +180,33 @@ class AccountsListPresenter: NSObject, AccountsListInput {
 //                    self.scrollToWalletAndBlink(walletId: vmToAdd.first!.id)
 //                }
                 if updateVM.count == 1 {
+                    UIView.setAnimationsEnabled(false)
                     self.view?.tableView.beginUpdates()
                     let cell = self.view?.tableView.cellForRow(at: IndexPath(item: updateVM.first!.0, section: .zero)) as? AccountsListItemCell
                     cell?.update(collection: updateVM.first!.1.derivedItemViewModels)
                     cell?.update(name: updateVM.first!.1.accountName)
-//                    self.view?.tableView.reloadRows(at: [IndexPath(item: updateVM.first!.0, section: .zero)], with: .top)
-                    
+//                    cell?.layoutSubviews()
                     self.view?.tableView.endUpdates()
-                } else {
+                    UIView.setAnimationsEnabled(true)
+//                    self.view?.tableView.reloadRows(at: [IndexPath(item: updateVM.first!.0, section: .zero)], with: .none)
+//                    self.view?.tableView.reconfigureRows(at: <#T##[IndexPath]#>)
+                    
+                }
+                if indicesToRemove.count != .zero {
+//                    self.view?.tableView.beginUpdates()
+                    let indexPaths = indicesToRemove.map { IndexPath(item: $0, section: .zero) }
+                    self.view?.tableView.deleteRows(at: indexPaths, with: .none)
+//                    self.view?.tableView.endUpdates()
+                }
+                
+                if vmToAdd.count == 1 {
+//                    self.view?.tableView.beginUpdates()
+                    self.view?.tableView.insertRows(
+                        at: [IndexPath(row: self.accounts.count - 1, section: .zero)], with: .fade
+                    )
+//                    self.view?.tableView.endUpdates()
+                }
+                if vmToAdd.count > 1 {
                     self.view?.tableView.reloadData()
                 }
             }
@@ -256,7 +275,8 @@ class AccountsListPresenter: NSObject, AccountsListInput {
             accountIcon: UIImage(named: chain.iconName)!,
             address: address ?? .empty,
             chainType: chain,
-            iconShadowColor: .black
+            iconShadowColor: .black,
+            isFilteringAccounts: mode.isFilteringAccounts
         )
     }
 }
@@ -306,6 +326,17 @@ extension AccountsListPresenter {
         tableView.deselectRow(at: indexPath, animated: true)
         if mode != .mainScreen, let selectedWallet = filteredWallets[safe: indexPath.row] {
             didSelect(wallet: selectedWallet)
+        }
+    }
+    
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        switch accounts[indexPath.row].derivedItemViewModels.count {
+        case 3:
+            return (76 + 12 + 50)
+        case 2, 1:
+            return 38 + 6 + 40 + 10
+        default:
+            return 40 + 10
         }
     }
 }

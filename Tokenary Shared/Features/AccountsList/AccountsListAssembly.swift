@@ -13,13 +13,16 @@ enum AccountsListMode: Equatable {
     case choseAccount(forChain: ChainType?)
     case mainScreen
     
-    var isFilteringAccounts: Bool {
-        if
-            case let .choseAccount(forChain: chainType) = self, chainType == nil || self == .mainScreen
-        {
-            return true
-        } else {
+    var isFilteringAccounts: Bool { self != .mainScreen }
+    
+    var isPossibleToApplyFilter: Bool {
+        switch self {
+        case let .choseAccount(forChain: chainType) where chainType == nil:
+            fallthrough
+        case .mainScreen:
             return false
+        default:
+            return true
         }
     }
 }

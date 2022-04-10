@@ -34,7 +34,6 @@ extension CALayer {
     
     func applyShadow(for shadowPath: UIBezierPath, having shadowAppearance: ShadowAppearance) {
         self.applySimpleShadow(with: shadowAppearance)
-        self.masksToBounds = true
         guard let shadowPathSpread = shadowAppearance.spread else {
             self.shadowPath = shadowPath.cgPath
             return

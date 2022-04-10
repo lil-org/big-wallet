@@ -71,10 +71,10 @@ extension UIView {
         let view = block()
         add { view }
         NSLayoutConstraint.activate {
-            self.topAnchor.constraint(equalTo: view.topAnchor, constant: insets.top)
-            self.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: insets.left)
-            self.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -insets.right)
-            self.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -insets.bottom)
+            view.topAnchor.constraint(equalTo: self.topAnchor, constant: insets.top)
+            view.leadingAnchor.constraint(equalTo: self.leadingAnchor, constant: insets.left)
+            view.trailingAnchor.constraint(equalTo: self.trailingAnchor, constant: -insets.right)
+            view.bottomAnchor.constraint(equalTo: self.bottomAnchor, constant: -insets.bottom)
         }
         return self
     }

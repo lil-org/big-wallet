@@ -137,25 +137,26 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
         $0.tableFooterView = UIView(
             frame: CGRect(x: .zero, y: .zero, width: .zero, height: CGFloat.leastNormalMagnitude)
         )
+        $0.rowHeight = UITableView.automaticDimension
+        $0.estimatedRowHeight = 44 + 50
         $0.dataSource = self.presenter
         $0.delegate = self.presenter
         $0.accessibilityIdentifier = "TableView"
         $0.isAccessibilityElement = true
     }
     
-    
     lazy var chainFilterButton = UIButton(configuration: .gray()).then {
+        var configuration: UIButton.Configuration = .gray()
+        configuration.imagePlacement = .trailing
+        configuration.image = UIImage(systemName: "chevron.down")
+        configuration.title = EthereumChain.ethereum.title
+        $0.configuration = configuration
+        $0.addTarget(self, action: #selector(chainFilterButtonWasTapped), for: .touchUpInside)
         $0.translatesAutoresizingMaskIntoConstraints = false
     }
     
     private lazy var chainFilterButtonContainer = UIView().then {
         $0.translatesAutoresizingMaskIntoConstraints = false
-    }
-    
-    private lazy var contentView = UIView().then {
-        $0.backgroundColor = .red
-        $0.accessibilityIdentifier = "ContentView"
-        $0.isAccessibilityElement = true
     }
     
     // MARK: - Public Properties
@@ -181,6 +182,8 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
         setDataStateViewTransparent(true)
         setupViewHierarchy()
         setupNavigationBar()
+        self.tableView.rowHeight = UITableView.automaticDimension
+        self.tableView.estimatedRowHeight = 50 + 44
     }
     
     private func setupNavigationBar() {
@@ -232,16 +235,21 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
             tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor)
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
             
+            tableView.centerXAnchor.constraint(equalTo: chainFilterButtonContainer.centerXAnchor)
+            tableView.widthAnchor.constraint(equalTo: chainFilterButtonContainer.widthAnchor)
+            tableView.topAnchor.constraint(equalTo: chainFilterButtonContainer.topAnchor)
+            
             chainFilterButton.heightAnchor.constraint(equalToConstant: 52)
         }
         view.sendSubviewToBack(tableView)
         
-        if presenter.mode == .mainScreen {
+        if !presenter.mode.isPossibleToApplyFilter {
             chainFilterButtonContainer.isHidden = true
-            chainFilterButtonContainer.frame = CGRect(
-                x: .zero, y: .zero, width: .zero, height: CGFloat.leastNormalMagnitude
-            )
+            tableView.tableHeaderView?.removeFromSuperview()
+            tableView.tableHeaderView = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: CGFloat.leastNonzeroMagnitude))
         }
+
+        tableView.layoutSubviews()
     }
     
     @objc private func cancelButtonWasTapped() {
@@ -285,7 +293,6 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
         self.presenter.didSelect(chain: chain)
     }
 
-    
     private func showShareActivity() {
         let shareVC = UIActivityViewController(
             activityItems: [URL.appStore], applicationActivities: nil
@@ -339,6 +346,10 @@ extension AccountsListViewController: AccountsListDerivedItemEventsRespondable {
         try? WalletsManager.shared.removeAccountIn(
             wallet: wallet, account: account
         )
+    }
+    
+    func didSelect(wallet: TokenaryWallet) {
+        self.presenter.didSelect(wallet: wallet)
     }
 }
 

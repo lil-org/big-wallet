@@ -4,19 +4,34 @@ import UIKit
 
 protocol AccountsListDerivedItemEventsRespondable: AnyObject {
     func didTapExport(wallet: TokenaryWallet)
+    func didSelect(wallet: TokenaryWallet)
     func didTapRemoveAccountIn(wallet: TokenaryWallet, account: ChainType)
 }
 
 class AccountsListDerivedItemCell: UICollectionViewCell {
+    private lazy var accountIconShadowView = UIView().then {
+        $0.backgroundColor = UIColor.clear
+        $0.layer.rasterizationScale = UIScreen.main.scale
+        $0.translatesAutoresizingMaskIntoConstraints = false
+    }
+    
+    private lazy var accountIconBorderView = UIView().then {
+        $0.layer.cornerRadius = 10
+        $0.layer.borderColor = UIColor.gray.cgColor
+        $0.layer.borderWidth = 1.0
+        $0.layer.masksToBounds = true
+        $0.translatesAutoresizingMaskIntoConstraints = false
+    }
+
     private lazy var accountIconImage = UIImageView().then {
         $0.contentMode = .scaleAspectFit
         $0.layer.cornerRadius = 8
         $0.clipsToBounds = true
         $0.translatesAutoresizingMaskIntoConstraints = false
     }
-    
+
     fileprivate lazy var buttonProxy = CustomButton().then {
-        $0.addTarget(self, action: #selector(test), for: .touchUpInside)
+        $0.addTarget(self, action: #selector(derivedCellWasTapped), for: .touchUpInside)
         $0.isUserInteractionEnabled = true
         $0.translatesAutoresizingMaskIntoConstraints = false
         $0.showsMenuAsPrimaryAction = true
@@ -26,6 +41,7 @@ class AccountsListDerivedItemCell: UICollectionViewCell {
         $0.isUserInteractionEnabled = false
         $0.axis = .vertical
         $0.spacing = 2
+        $0.alignment = .center
         $0.translatesAutoresizingMaskIntoConstraints = false
         $0.setContentHuggingPriority(.required, for: .vertical)
     }
@@ -97,26 +113,17 @@ class AccountsListDerivedItemCell: UICollectionViewCell {
     
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
-        
         buttonProxy.layer.borderColor = UIColor(light: .black, dark: .white).cgColor
-    }
-    
-    let pressedDownTransform = CGAffineTransform.identity.scaledBy(x: 0.95, y: 0.95)
-    private func animate(_ cell: UICollectionViewCell, to transform: CGAffineTransform) {
-        UIView.animate(withDuration: 0.4,
-                        delay: 0,
-                        usingSpringWithDamping: 0.4,
-                        initialSpringVelocity: 3,
-                        options: [.curveEaseInOut],
-                        animations: {
-                        cell.transform = transform
-            }, completion: nil)
     }
     
     private func addSubviews() {
         contentView.add(insets: .zero) {
             buttonProxy.add {
-                accountIconImage
+                accountIconShadowView.add(insets: .zero) {
+                    accountIconBorderView.add(insets: .zero) {
+                        accountIconImage
+                    }
+                }
                 textContentStackView.add {
                     namingLabelsStackView.add {
                         tokenTitleLabel
@@ -130,77 +137,89 @@ class AccountsListDerivedItemCell: UICollectionViewCell {
 
     private func makeConstraints() {
         NSLayoutConstraint.activate {
-            accountIconImage.leadingAnchor.constraint(equalTo: buttonProxy.leadingAnchor, constant: 6)
-            accountIconImage.topAnchor.constraint(equalTo: buttonProxy.topAnchor, constant: 4)
-            accountIconImage.bottomAnchor.constraint(equalTo: buttonProxy.bottomAnchor, constant: -4)
-            textContentStackView.leadingAnchor.constraint(equalTo: accountIconImage.trailingAnchor, constant: 4)
-            textContentStackView.topAnchor.constraint(equalTo: accountIconImage.topAnchor)
-            textContentStackView.bottomAnchor.constraint(equalTo: accountIconImage.bottomAnchor)
+            accountIconShadowView.leadingAnchor.constraint(equalTo: buttonProxy.leadingAnchor, constant: 6)
+            accountIconShadowView.topAnchor.constraint(equalTo: buttonProxy.topAnchor, constant: 4)
+            accountIconShadowView.bottomAnchor.constraint(equalTo: buttonProxy.bottomAnchor, constant: -4)
+            
+            textContentStackView.leadingAnchor.constraint(equalTo: accountIconShadowView.trailingAnchor, constant: 4)
+            textContentStackView.topAnchor.constraint(equalTo: accountIconShadowView.topAnchor)
+            textContentStackView.bottomAnchor.constraint(equalTo: accountIconShadowView.bottomAnchor)
             textContentStackView.trailingAnchor.constraint(equalTo: buttonProxy.trailingAnchor, constant: -6)
             
             accountIconImage.widthAnchor.constraint(equalToConstant: 30)
             accountIconImage.heightAnchor.constraint(equalToConstant: 30)
         }
-        textLayoutWidthConstraint = textContentStackView.widthAnchor.constraint(equalToConstant: 130)
+        textLayoutWidthConstraint = textContentStackView.widthAnchor.constraint(equalToConstant: 130).then {
+            $0.priority = UILayoutPriority.defaultHigh
+        }
     }
     
     private var textLayoutWidthConstraint: NSLayoutConstraint?
     private var viewModel: ViewModel! {
         didSet {
             if UIDevice.isPad {
-            DispatchQueue.main.async {
-                self.buttonProxy.menu = UIMenu(
-                    title: self.viewModel.address,
-                    children: [
-                        UIDeferredMenuElement.uncached { [self] completion in
-                        let copyAddressAction = UIAction(title: Strings.copyAddress) { _ in
-                            if let attachedWallet = self.attachedWallet {
-                                PasteboardHelper.setPlainNotNil(attachedWallet[viewModel.chainType, .address] ?? nil)
-                            }
-                        }
-                        let showInChainScannerAction = UIAction(title: viewModel.chainType.transactionScaner) { _ in
-                            if let address = self.attachedWallet?[viewModel.chainType, .address] ?? nil {
-                                LinkHelper.open(viewModel.chainType.scanURL(address))
-                            }
-                        }
-                        let showKeyAction = UIAction(title: Strings.showWalletKey) { _ in
-                            if let attachedWallet = self.attachedWallet {
-                                self.responder.object?.didTapExport(wallet: attachedWallet)
-                            }
-                        }
-                        let removeAccountAction = UIAction(title: "Remove account", attributes: .destructive) { _ in
-                            if let attachedWallet = self.attachedWallet {
-                                self.responder.object?.didTapRemoveAccountIn(wallet: attachedWallet, account: viewModel.chainType)
-                            }
-                            
-                        }
-                        var itemMenuChildren: [UIMenuElement] = [copyAddressAction, showInChainScannerAction, showKeyAction]
-                        if let attachedWallet = self.attachedWallet, attachedWallet.associatedMetadata.allChains.count > 1 {
-                            itemMenuChildren.append(removeAccountAction)
-                        }
-                            completion([
-                                UIMenu(
-                                    title: "\(viewModel.chainType.title) actions",
-                                    options: .displayInline,
-                                    children: itemMenuChildren
+                DispatchQueue.main.async {
+                    self.buttonProxy.showsMenuAsPrimaryAction = true
+                    self.buttonProxy.menu = UIMenu(
+                        title: self.viewModel.address,
+                        children: [
+                            UIDeferredMenuElement.uncached { [self] completion in
+                                let copyAddressAction = UIAction(title: Strings.copyAddress) { _ in
+                                    if let attachedWallet = self.attachedWallet {
+                                        PasteboardHelper.setPlainNotNil(attachedWallet[viewModel.chainType, .address] ?? nil)
+                                    }
+                                }
+                                let showInChainScannerAction = UIAction(title: viewModel.chainType.transactionScaner) { _ in
+                                    if let address = self.attachedWallet?[viewModel.chainType, .address] ?? nil {
+                                        LinkHelper.open(viewModel.chainType.scanURL(address))
+                                    }
+                                }
+                                let showKeyAction = UIAction(title: Strings.showWalletKey) { _ in
+                                    if let attachedWallet = self.attachedWallet {
+                                        self.responder.object?.didTapExport(wallet: attachedWallet)
+                                    }
+                                }
+                                let removeAccountAction = UIAction(title: "Remove account", attributes: .destructive) { _ in
+                                    if let attachedWallet = self.attachedWallet {
+                                        self.responder.object?.didTapRemoveAccountIn(wallet: attachedWallet, account: viewModel.chainType)
+                                    }
+                                    
+                                }
+                                var itemMenuChildren: [UIMenuElement] = [
+                                    copyAddressAction, showInChainScannerAction, showKeyAction
+                                ]
+                                if
+                                    let attachedWallet = self.attachedWallet,
+                                    attachedWallet.associatedMetadata.allChains.count > 1,
+                                    !viewModel.isFilteringAccounts
+                                {
+                                    itemMenuChildren.append(removeAccountAction)
+                                }
+                                completion(
+                                    [
+                                        UIMenu(
+                                            title: "\(viewModel.chainType.title) actions",
+                                            options: .displayInline,
+                                            children: itemMenuChildren
+                                        )
+                                    ]
                                 )
-                            ])
-                        }
+                            }
                         ]
                     )
+                }
             }
-            }
-            
         }
     }
 }
 
 extension AccountsListDerivedItemCell: Configurable {
     struct ViewModel {
-        var accountIcon: UIImage
-        var address: String
-        var chainType: ChainType
-        var iconShadowColor: UIColor
+        let accountIcon: UIImage
+        let address: String
+        let chainType: ChainType
+        let iconShadowColor: UIColor
+        let isFilteringAccounts: Bool
     
         var title: String { chainType.title }
         var ticker: String { chainType.ticker }
@@ -208,13 +227,13 @@ extension AccountsListDerivedItemCell: Configurable {
     
     func configure(with viewModel: ViewModel) {
         accountIconImage.image = viewModel.accountIcon
-//        accountIconImage.layer.applySimpleShadow(
-//            with: .init(color: viewModel.iconShadowColor, opacity: 0.1, offset: CGPoint(x: 1, y: 1), radius: 4)
-//        )
-        accountIconImage.layer.applyShadow(
-            for: UIBezierPath(roundedRect: accountIconImage.frame, cornerRadius: 8),
-            having: .init(color: .green, opacity: 1, offset: CGPoint(x: 1, y: 1), radius: 4)
-        )
+        
+        if viewModel.chainType == .solana {
+            accountIconBorderView.layer.cornerRadius = 10
+        } else {
+            accountIconBorderView.layer.cornerRadius = 15
+        }
+        
         tokenTitleLabel.text = viewModel.title
         tokenTickerLabel.text = "(\(viewModel.ticker))"
         addressLabel.text = viewModel.address
@@ -225,53 +244,54 @@ extension AccountsListDerivedItemCell: Configurable {
             textLayoutWidthConstraint?.constant = 100 + 30 + 6
         }
         textLayoutWidthConstraint?.isActive = true
-        setNeedsUpdateConstraints()
+        layoutIfNeeded()
         self.viewModel = viewModel
     }
     
-    @objc private func test() {
-        // attachedWallet, chainType
-        let copyAddressAction = UIAlertAction(title: Strings.copyAddress, style: .default) { _ in
+    @objc private func derivedCellWasTapped() {
+        if viewModel.isFilteringAccounts {
             if let attachedWallet = self.attachedWallet {
-                PasteboardHelper.setPlainNotNil(attachedWallet[self.viewModel.chainType, .address] ?? nil)
+                self.responder.object?.didSelect(wallet: attachedWallet)
             }
-        }
-        let showInChainScannerAction = UIAlertAction(title: viewModel.chainType.transactionScaner, style: .default) { _ in
-            if let address = self.attachedWallet?[self.viewModel.chainType, .address] ?? nil {
-                LinkHelper.open(self.viewModel.chainType.scanURL(address))
+        } else {
+            let copyAddressAction = UIAlertAction(title: Strings.copyAddress, style: .default) { _ in
+                if let attachedWallet = self.attachedWallet {
+                    PasteboardHelper.setPlainNotNil(attachedWallet[self.viewModel.chainType, .address] ?? nil)
+                }
             }
-        }
-        let showKeyAction = UIAlertAction(title: Strings.showWalletKey, style: .default) { _ in
-            if let attachedWallet = self.attachedWallet {
-                self.responder.object?.didTapExport(wallet: attachedWallet)
+            let showInChainScannerAction = UIAlertAction(title: viewModel.chainType.transactionScaner, style: .default) { _ in
+                if let address = self.attachedWallet?[self.viewModel.chainType, .address] ?? nil {
+                    LinkHelper.open(self.viewModel.chainType.scanURL(address))
+                }
             }
-        }
-        let removeAccountAction = UIAlertAction(title: "Remove account", style: .default) { _ in
-            if let attachedWallet = self.attachedWallet {
-                self.responder.object?.didTapRemoveAccountIn(wallet: attachedWallet, account: self.viewModel.chainType)
+            let showKeyAction = UIAlertAction(title: Strings.showWalletKey, style: .default) { _ in
+                if let attachedWallet = self.attachedWallet {
+                    self.responder.object?.didTapExport(wallet: attachedWallet)
+                }
             }
-        }
-        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
-        let alertVC = UIAlertController(
-            title: "\(self.viewModel.chainType.title) actions", message: nil, preferredStyle: .actionSheet
-        ).then {
-            $0.addAction(copyAddressAction)
-            $0.addAction(showInChainScannerAction)
-            $0.addAction(showKeyAction)
-            if let attachedWallet = self.attachedWallet, attachedWallet.associatedMetadata.allChains.count > 1 {
-                $0.addAction(removeAccountAction)
+            let removeAccountAction = UIAlertAction(title: "Remove account", style: .default) { _ in
+                if let attachedWallet = self.attachedWallet {
+                    self.responder.object?.didTapRemoveAccountIn(wallet: attachedWallet, account: self.viewModel.chainType)
+                }
             }
-            $0.addAction(cancelAction)
+            let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
+            let alertVC = UIAlertController(
+                title: "\(self.viewModel.chainType.title) actions", message: nil, preferredStyle: .actionSheet
+            ).then {
+                $0.addAction(copyAddressAction)
+                $0.addAction(showInChainScannerAction)
+                $0.addAction(showKeyAction)
+                if let attachedWallet = self.attachedWallet, attachedWallet.associatedMetadata.allChains.count > 1 {
+                    $0.addAction(removeAccountAction)
+                }
+                $0.addAction(cancelAction)
+            }
+            self.parentViewController?.present(alertVC, animated: true, completion: nil)
         }
-        self.parentViewController?.present(alertVC, animated: true, completion: nil)
-    }
-    
-    private func configureMenu(with viewModel: ViewModel) {
-        
     }
 }
 
-class CustomButton: UIButton {
+private class CustomButton: UIButton {
     override var isHighlighted: Bool {
         didSet {
             self.animateScale(isHighlighted: self.isHighlighted, scale: 0.95, animationDuration: 0.1)
