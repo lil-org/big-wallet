@@ -5,6 +5,7 @@ import UIKit
 extension UIColor {
     
     static let inkGreen = UIColor(named: "InkGreen")!
+    static let tokenary = UIColor(named: "tokenary")!
     
     convenience init(
         light lightModeColor: @escaping @autoclosure () -> UIColor,

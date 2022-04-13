@@ -18,5 +18,4 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         walletsManager.start() // ToDo: It's useless to call it here, since we are not authenticated yet
         return true
     }
-
 }

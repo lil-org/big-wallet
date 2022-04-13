@@ -6,4 +6,8 @@ extension ServiceLayer.Services {
     static let networkMonitor: NetworkMonitor = {
         NetworkMonitor.shared
     }()
+    
+    static let cachedImaged: CachedImages = {
+        CachedImagesService.shared
+    }()
 }

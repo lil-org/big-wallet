@@ -13,42 +13,38 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
     private lazy var addAccountBarItemButton = UIBarButtonItem(
         systemItem: .add, primaryAction: nil, menu: nil
     ).then {
+        let createNewAction = UIAction(title: Strings.createNew) { _ in
+            self.didTapCreateNewMnemonicWallet()
+        }
+        let importExistingAction = UIAction(title: Strings.importExisting) { _ in
+            self.didTapImportExistingAccount()
+        }
+        let menu = UIMenu(
+            title: Strings.addAccount,
+            children: [createNewAction, importExistingAction]
+        )
+        $0.menu = menu
         if UIDevice.isPad {
-            let createNewAction = UIAction(title: Strings.createNew) { _ in
-                self.didTapCreateNewMnemonicWallet()
-            }
-            let importExistingAction = UIAction(title: Strings.importExisting) { _ in
-                self.didTapImportExistingAccount()
-            }
-            let menu = UIMenu(
-                title: Strings.addAccount,
-                children: [createNewAction, importExistingAction]
-            )
-            $0.menu = menu
             self.updateDataState(menu: menu)
         } else {
-            $0.customView = UIButton().then {
-                $0.setImage( UIImage(systemName: "plus"), for: .normal)
-                let actionHandler: UIActionHandler = { [weak self] _ in
-                    let createNewAction = UIAlertAction(title: Strings.createNew, style: .default) { _ in
-                        self?.didTapCreateNewMnemonicWallet()
-                    }
-                    let importExistingAction = UIAlertAction(title: Strings.importExisting, style: .default) { _ in
-                        self?.didTapImportExistingAccount()
-                    }
-                    let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
-                    let alertVC = UIAlertController(
-                        title: Strings.addAccount, message: nil, preferredStyle: .actionSheet
-                    ).then {
-                        $0.addAction(createNewAction)
-                        $0.addAction(importExistingAction)
-                        $0.addAction(cancelAction)
-                    }
-                    self?.present(alertVC, animated: true, completion: nil)
+            let actionHandler: UIActionHandler = { [weak self] _ in
+                let createNewAction = UIAlertAction(title: Strings.createNew, style: .default) { _ in
+                    self?.didTapCreateNewMnemonicWallet()
                 }
-                $0.addAction(for: .touchUpInside, handler: actionHandler)
-                self.updateDataState(actionHandler: actionHandler)
+                let importExistingAction = UIAlertAction(title: Strings.importExisting, style: .default) { _ in
+                    self?.didTapImportExistingAccount()
+                }
+                let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
+                let alertVC = UIAlertController(
+                    title: Strings.addAccount, message: nil, preferredStyle: .actionSheet
+                ).then {
+                    $0.addAction(createNewAction)
+                    $0.addAction(importExistingAction)
+                    $0.addAction(cancelAction)
+                }
+                self?.present(alertVC, animated: true, completion: nil)
             }
+            self.updateDataState(actionHandler: actionHandler)
         }
         $0.accessibilityIdentifier = "AddAccountBarItemButton"
         $0.accessibilityLabel = "AddAccountBarItemButton"
@@ -56,68 +52,31 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
     }
 
     private lazy var preferencesBarButtonItem = UIBarButtonItem().then {
-        if UIDevice.isPad {
-            $0.image = UIImage(systemName: "gearshape")
-            let twitterAction = UIAction(title: Strings.viewOnTwitter, image: UIImage(named: "twitter.png")) { _ in
-                LinkHelper.open(URL.twitter)
-            }
-            let githubAction = UIAction(title: Strings.viewOnGithub, image: UIImage(named: "github.png")) { _ in
-                LinkHelper.open(URL.github)
-            }
-            let emailAction = UIAction(title: Strings.dropUsALine.withEllipsis, image: UIImage(systemName: "at")) { _ in
-                LinkHelper.open(URL.email)
-            }
-            let shareAction = UIAction(title: Strings.shareInvite.withEllipsis, image: UIImage(systemName: "square.and.arrow.up")) { _ in
-                self.showShareActivity()
-            }
-            let enableSafariAction = UIAction(
-                title: Strings.howToEnableSafariExtension, image: UIImage(systemName: "info.circle")
-            ) { _ in
-                LinkHelper.open(URL.iosSafariGuide)
-            }
-            $0.menu = UIMenu(
-                title: "❤️ " + Strings.tokenary + " ❤️" + Symbols.newLine + "Show love 4269.eth",
-                options: [],
-                children: [
-                    twitterAction, githubAction, emailAction, shareAction, enableSafariAction
-                ]
-            )
-        } else {
-            $0.customView = UIButton().then {
-                $0.setImage( UIImage(systemName: "gearshape"), for: .normal)
-                $0.addAction(for: .touchUpInside) { [weak self] _ in
-                    let twitterAction = UIAlertAction(title: Strings.viewOnTwitter, style: .default) { _ in
-                        LinkHelper.open(URL.twitter)
-                    }
-                    let githubAction = UIAlertAction(title: Strings.viewOnGithub, style: .default) { _ in
-                        LinkHelper.open(URL.github)
-                    }
-                    let emailAction = UIAlertAction(title: Strings.dropUsALine.withEllipsis, style: .default) { _ in
-                        LinkHelper.open(URL.email)
-                    }
-                    let shareAction = UIAlertAction(title: Strings.shareInvite.withEllipsis, style: .default) { _ in
-                        self?.showShareActivity()
-                    }
-                    let enableSafariAction = UIAlertAction(title: Strings.howToEnableSafariExtension, style: .default) { _ in
-                        LinkHelper.open(URL.iosSafariGuide)
-                    }
-                    let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
-                    let alertVC = UIAlertController(
-                        title: "❤️ " + Strings.tokenary + " ❤️" + Symbols.newLine + "Show love 4269.eth",
-                        message: nil,
-                        preferredStyle: .actionSheet
-                    ).then {
-                        $0.addAction(twitterAction)
-                        $0.addAction(githubAction)
-                        $0.addAction(emailAction)
-                        $0.addAction(shareAction)
-                        $0.addAction(enableSafariAction)
-                        $0.addAction(cancelAction)
-                    }
-                    self?.present(alertVC, animated: true, completion: nil)
-                }
-            }
+        $0.image = UIImage(systemName: "gearshape")
+        let twitterAction = UIAction(title: Strings.viewOnTwitter, image: UIImage(named: "twitter.png")) { _ in
+            LinkHelper.open(URL.twitter)
         }
+        let githubAction = UIAction(title: Strings.viewOnGithub, image: UIImage(named: "github.png")) { _ in
+            LinkHelper.open(URL.github)
+        }
+        let emailAction = UIAction(title: Strings.dropUsALine.withEllipsis, image: UIImage(systemName: "at")) { _ in
+            LinkHelper.open(URL.email)
+        }
+        let shareAction = UIAction(title: Strings.shareInvite.withEllipsis, image: UIImage(systemName: "square.and.arrow.up")) { _ in
+            self.showShareActivity()
+        }
+        let enableSafariAction = UIAction(
+            title: Strings.howToEnableSafariExtension, image: UIImage(systemName: "info.circle")
+        ) { _ in
+            LinkHelper.open(URL.iosSafariGuide)
+        }
+        $0.menu = UIMenu(
+            title: "❤️ " + Strings.tokenary + " ❤️" + Symbols.newLine + "Show love 4269.eth",
+            options: [],
+            children: [
+                twitterAction, githubAction, emailAction, shareAction, enableSafariAction
+            ]
+        )
         $0.accessibilityIdentifier = "PreferencesBarButtonItem"
         $0.isAccessibilityElement = true
     }
@@ -130,18 +89,17 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
         $0.isAccessibilityElement = true
     }
     
-    lazy var tableView = UITableView().then {
+    lazy var tableView = UITableView(frame: .zero, style: .insetGrouped).then {
         $0.translatesAutoresizingMaskIntoConstraints = false
-        $0.register(cellWithClass: AccountsListItemCell.self)
+        $0.register(cellWithClass: AccountsListDerivedItemCell.self)
+        $0.register(headerFooterWithClass: AccountsListSectionHeaderCell.self)
         $0.tableHeaderView = chainFilterButtonContainer
         $0.tableFooterView = UIView(
             frame: CGRect(x: .zero, y: .zero, width: .zero, height: CGFloat.leastNormalMagnitude)
         )
-        $0.rowHeight = UITableView.automaticDimension
-        $0.estimatedRowHeight = 44 + 50
         $0.dataSource = self.presenter
         $0.delegate = self.presenter
-        $0.backgroundColor = UIColor(light: .white, dark: .black)
+        $0.backgroundColor = .systemGroupedBackground
         $0.accessibilityIdentifier = "TableView"
         $0.isAccessibilityElement = true
     }
@@ -183,8 +141,6 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
         setDataStateViewTransparent(true)
         setupViewHierarchy()
         setupNavigationBar()
-        self.tableView.rowHeight = UITableView.automaticDimension
-        self.tableView.estimatedRowHeight = 50 + 44
     }
     
     private func setupNavigationBar() {
@@ -251,6 +207,10 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
         }
 
         tableView.layoutSubviews()
+        
+        if presenter.mode != .mainScreen {
+            tableView.allowsSelection = false
+        }
     }
     
     @objc private func cancelButtonWasTapped() {
@@ -354,7 +314,7 @@ extension AccountsListViewController: AccountsListDerivedItemEventsRespondable {
     }
 }
 
-extension AccountsListViewController: AccountsListItemEventsRespondable {
+extension AccountsListViewController: AccountsListSectionHeaderEventsRespondable {
     func didTapRemove(wallet: TokenaryWallet) {
         let alert = UIAlertController(
             title: Strings.removedAccountsCantBeRecovered, message: nil, preferredStyle: .alert

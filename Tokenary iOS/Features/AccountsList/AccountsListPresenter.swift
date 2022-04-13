@@ -17,7 +17,7 @@ class AccountsListPresenter: NSObject, AccountsListInput {
     private var chain = EthereumChain.ethereum
     private let walletsManager: WalletsManager
     
-    private var accounts: [AccountsListItemCell.ViewModel] = []
+    private var accounts: [AccountsListSectionHeaderCell.ViewModel] = []
     
     private var filteredWallets: [TokenaryWallet] {
         let wallets = WalletsManager.shared.wallets.get()
@@ -154,7 +154,7 @@ class AccountsListPresenter: NSObject, AccountsListInput {
                     .map(\.id)
             }
             
-            let vmToAdd: [AccountsListItemCell.ViewModel] = filteredWalletsChangeSet.toAdd.map(self.transform)
+            let vmToAdd: [AccountsListSectionHeaderCell.ViewModel] = filteredWalletsChangeSet.toAdd.map(self.transform)
             let indicesToRemove: IndexSet = IndexSet(
                 self.accounts
                     .enumerated()
@@ -164,9 +164,9 @@ class AccountsListPresenter: NSObject, AccountsListInput {
                     }
                     .map { $0.offset }
             )
-            let updateVM: [(Int, AccountsListItemCell.ViewModel)] = filteredWalletsChangeSet.toUpdate.compactMap { updateWallet in
+            let updateVM: [(Int, AccountsListSectionHeaderCell.ViewModel)] = filteredWalletsChangeSet.toUpdate.compactMap { updateWallet in
                 guard let updateIdx = self.accounts.firstIndex(where: { $0.id == updateWallet.id }) else { return nil }
-                let updateVM: AccountsListItemCell.ViewModel = self.transform(updateWallet)
+                let updateVM: AccountsListSectionHeaderCell.ViewModel = self.transform(updateWallet)
                 return (updateIdx, updateVM)
             }
             
@@ -179,36 +179,36 @@ class AccountsListPresenter: NSObject, AccountsListInput {
 //                if vmToAdd.count == 1 && updateVM.count == .zero && indicesToRemove.count == .zero {
 //                    self.scrollToWalletAndBlink(walletId: vmToAdd.first!.id)
 //                }
-                if updateVM.count == 1 {
-                    UIView.setAnimationsEnabled(false)
-                    self.view?.tableView.beginUpdates()
-                    let cell = self.view?.tableView.cellForRow(at: IndexPath(item: updateVM.first!.0, section: .zero)) as? AccountsListItemCell
-                    cell?.update(collection: updateVM.first!.1.derivedItemViewModels)
-                    cell?.update(name: updateVM.first!.1.accountName)
-//                    cell?.layoutSubviews()
-                    self.view?.tableView.endUpdates()
-                    UIView.setAnimationsEnabled(true)
-//                    self.view?.tableView.reloadRows(at: [IndexPath(item: updateVM.first!.0, section: .zero)], with: .none)
-//                    self.view?.tableView.reconfigureRows(at: <#T##[IndexPath]#>)
-                    
-                }
-                if indicesToRemove.count != .zero {
+//                if updateVM.count == 1 {
+//                    UIView.setAnimationsEnabled(false)
 //                    self.view?.tableView.beginUpdates()
-                    let indexPaths = indicesToRemove.map { IndexPath(item: $0, section: .zero) }
-                    self.view?.tableView.deleteRows(at: indexPaths, with: .none)
+//                    let cell = self.view?.tableView.cellForRow(at: IndexPath(item: updateVM.first!.0, section: .zero)) as? AccountsListItemCell
+//                    cell?.update(collection: updateVM.first!.1.derivedItemViewModels)
+//                    cell?.update(name: updateVM.first!.1.accountName)
+////                    cell?.layoutSubviews()
 //                    self.view?.tableView.endUpdates()
-                }
-                
-                if vmToAdd.count == 1 {
-//                    self.view?.tableView.beginUpdates()
-                    self.view?.tableView.insertRows(
-                        at: [IndexPath(row: self.accounts.count - 1, section: .zero)], with: .fade
-                    )
-//                    self.view?.tableView.endUpdates()
-                }
-                if vmToAdd.count > 1 {
+//                    UIView.setAnimationsEnabled(true)
+////                    self.view?.tableView.reloadRows(at: [IndexPath(item: updateVM.first!.0, section: .zero)], with: .none)
+////                    self.view?.tableView.reconfigureRows(at: <#T##[IndexPath]#>)
+//
+//                }
+//                if indicesToRemove.count != .zero {
+////                    self.view?.tableView.beginUpdates()
+//                    let indexPaths = indicesToRemove.map { IndexPath(item: $0, section: .zero) }
+//                    self.view?.tableView.deleteRows(at: indexPaths, with: .none)
+////                    self.view?.tableView.endUpdates()
+//                }
+//
+//                if vmToAdd.count == 1 {
+////                    self.view?.tableView.beginUpdates()
+//                    self.view?.tableView.insertRows(
+//                        at: [IndexPath(row: self.accounts.count - 1, section: .zero)], with: .fade
+//                    )
+////                    self.view?.tableView.endUpdates()
+//                }
+//                if vmToAdd.count > 1 {
                     self.view?.tableView.reloadData()
-                }
+//                }
             }
         }
     }
@@ -217,7 +217,7 @@ class AccountsListPresenter: NSObject, AccountsListInput {
         self.view?.tableView.reloadData()
     }
 
-    private func transform(_ wallet: TokenaryWallet) -> AccountsListItemCell.ViewModel {
+    private func transform(_ wallet: TokenaryWallet) -> AccountsListSectionHeaderCell.ViewModel {
         let icon: UIImage
         let privateKeyChainType = wallet.associatedMetadata.privateKeyChain
         
@@ -238,13 +238,12 @@ class AccountsListPresenter: NSObject, AccountsListInput {
                 icon = UIImage(named: privateKeyChainType!.iconName)!
             }
         }
-
-        return AccountsListItemCell.ViewModel(
+//        transform(wallet).sorted(by: { $0.title > $1.title })
+        return AccountsListSectionHeaderCell.ViewModel(
             id: wallet.id,
             icon: icon,
             accountName: wallet.name,
-            accountAddress: wallet.isMnemonic ? nil : wallet[.address] ?? nil,
-            chainType: wallet.isMnemonic ? nil : privateKeyChainType!,
+            privateKeyChainType: wallet.isMnemonic ? nil : privateKeyChainType!,
             isFilteringAccounts: mode.isFilteringAccounts,
             derivedItemViewModels: transform(wallet).sorted(by: { $0.title > $1.title })
         )
@@ -275,7 +274,6 @@ class AccountsListPresenter: NSObject, AccountsListInput {
             accountIcon: UIImage(named: chain.iconName)!,
             address: address ?? .empty,
             chainType: chain,
-            iconShadowColor: .black,
             isFilteringAccounts: mode.isFilteringAccounts
         )
     }
@@ -330,29 +328,203 @@ extension AccountsListPresenter {
     }
     
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        switch accounts[indexPath.row].derivedItemViewModels.count {
-        case 3:
-            return (76 + 12 + 50)
-        case 2, 1:
-            return 38 + 6 + 40 + 10
-        default:
-            return 40 + 10
+        46
+    }
+    
+//    func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+//
+//        // Top corners
+//        let maskPathTop = UIBezierPath(roundedRect: cell.contentView.bounds, byRoundingCorners: [.topLeft, .topRight], cornerRadii: CGSize(width: 10.0, height: 10.0))
+//        let shapeLayerTop = CAShapeLayer()
+//        shapeLayerTop.frame = cell.contentView.bounds
+//        shapeLayerTop.path = maskPathTop.cgPath
+//
+//        //Bottom corners
+//        let maskPathBottom = UIBezierPath(roundedRect: cell.contentView.bounds, byRoundingCorners: [.bottomLeft, .bottomRight], cornerRadii: CGSize(width: 5.0, height: 5.0))
+//        let shapeLayerBottom = CAShapeLayer()
+//        shapeLayerBottom.frame = cell.contentView.bounds
+//        shapeLayerBottom.path = maskPathBottom.cgPath
+//
+//        // All corners
+//        let maskPathAll = UIBezierPath(roundedRect: cell.contentView.bounds, byRoundingCorners: [.topLeft, .topRight, .bottomRight, .bottomLeft], cornerRadii: CGSize(width: 5.0, height: 5.0))
+//        let shapeLayerAll = CAShapeLayer()
+//        shapeLayerAll.frame = cell.contentView.bounds
+//        shapeLayerAll.path = maskPathAll.cgPath
+//
+//        if indexPath.row == 0 && indexPath.row == tableView.numberOfRows(inSection: indexPath.section) - 1 {
+//            cell.contentView.layer.mask = shapeLayerAll
+//        } else if indexPath.row == 0 {
+//            cell.contentView.layer.mask = shapeLayerTop
+//        } else if indexPath.row == tableView.numberOfRows(inSection: indexPath.section) - 1 {
+//            cell.contentView.layer.mask = shapeLayerBottom
+//        }
+//    }
+    
+    struct AccountsListContextMenuIdentifier: Codable {
+        let accountIdentifier: String
+        let chainType: ChainType
+        let rowIndex: Int
+        
+        init(accountIdentifier: String, chainType: ChainType, rowIndex: Int) {
+            self.accountIdentifier = accountIdentifier
+            self.chainType = chainType
+            self.rowIndex = rowIndex
         }
+        
+        func copy(with zone: NSZone? = nil) -> Any {
+            AccountsListContextMenuIdentifier(
+                accountIdentifier: accountIdentifier, chainType: chainType, rowIndex: rowIndex
+            )
+        }
+    }
+    
+    func tableView(
+        _ tableView: UITableView,
+        contextMenuConfigurationForRowAt indexPath: IndexPath,
+        point: CGPoint
+    ) -> UIContextMenuConfiguration? {
+        let identifier = AccountsListContextMenuIdentifier(
+            accountIdentifier: accounts[indexPath.section].id,
+            chainType: accounts[indexPath.section].derivedItemViewModels[indexPath.row].chainType,
+            rowIndex: indexPath.row
+        )
+        let encoded = try? JSONEncoder().encode(identifier)
+        let encodedStr = String(data: encoded!, encoding: .utf8)!
+        let accountVM = accounts[indexPath.section].derivedItemViewModels[indexPath.row]
+        let attachedWallet: TokenaryWallet? = WalletsManager.shared.getWallet(id: self.accounts[indexPath.section].id)
+        return UIContextMenuConfiguration(
+            identifier: NSString(string: encodedStr),
+            previewProvider: {
+                AccountsListPreviewViewController(chainType: accountVM.chainType)
+            },
+            actionProvider: { _ in
+                return UIMenu(
+                    title: accountVM.address,
+                    children: [
+                        UIDeferredMenuElement.uncached { [self] completion in
+                            let copyAddressAction = UIAction(title: Strings.copyAddress) { _ in
+                                if let attachedWallet = attachedWallet {
+                                    PasteboardHelper.setPlainNotNil(attachedWallet[accountVM.chainType, .address] ?? nil)
+                                }
+                            }
+                            let showInChainScannerAction = UIAction(title: accountVM.chainType.transactionScaner) { _ in
+                                if let address = attachedWallet?[accountVM.chainType, .address] ?? nil {
+                                    LinkHelper.open(accountVM.chainType.scanURL(address))
+                                }
+                            }
+                            let showKeyAction = UIAction(title: Strings.showWalletKey) { _ in
+                                if let attachedWallet = attachedWallet {
+//                                    self.responder.object?.didTapExport(wallet: attachedWallet)
+                                }
+                            }
+                            let removeAccountAction = UIAction(title: "Remove account", attributes: .destructive) { _ in
+                                if let attachedWallet = attachedWallet {
+//                                    self.responder.object?.didTapRemoveAccountIn(wallet: attachedWallet, account: accountVM.chainType)
+                                }
+                                
+                            }
+                            var itemMenuChildren: [UIMenuElement] = [
+                                copyAddressAction, showInChainScannerAction, showKeyAction
+                            ]
+                            if
+                                let attachedWallet = attachedWallet,
+                                attachedWallet.associatedMetadata.allChains.count > 1,
+                                !accountVM.isFilteringAccounts
+                            {
+                                itemMenuChildren.append(removeAccountAction)
+                            }
+                            completion(
+                                [
+                                    UIMenu(
+                                        title: "\(accountVM.chainType.title) actions",
+                                        options: .displayInline,
+                                        children: itemMenuChildren
+                                    )
+                                ]
+                            )
+                        }
+                    ]
+                )
+            }
+        )
+    }
+    
+    func tableView(
+        _ tableView: UITableView,
+        willPerformPreviewActionForMenuWith configuration: UIContextMenuConfiguration,
+        animator: UIContextMenuInteractionCommitAnimating
+    ) {
+        animator.addCompletion {
+            if let identifier = configuration.identifier as? AccountsListContextMenuIdentifier {
+                print("We are printing: \(identifier.accountIdentifier)")
+            }
+        }
+    }
+    
+    private func makeTargetedPreview(
+        for configuration: UIContextMenuConfiguration,
+        isHighlighting: Bool
+    ) -> UITargetedPreview? {
+        guard
+            let contextIdentifierJSON = configuration.identifier as? String,
+            let contextIdentifierData = contextIdentifierJSON.data(using: .utf8),
+            let contextIdentifier = try? JSONDecoder().decode(AccountsListContextMenuIdentifier.self, from: contextIdentifierData),
+            let sectionIndex = accounts.firstIndex(where: { $0.id == contextIdentifier.accountIdentifier }),
+            let cell = view?.tableView.cellForRow(
+                at: IndexPath(row: contextIdentifier.rowIndex, section: sectionIndex)
+            ) as? AccountsListDerivedItemCell,
+            let snapshot = cell.accountIconBorderView.snapshotView(afterScreenUpdates: false)
+        else { return nil }
+
+        let parameters = UIPreviewParameters()
+        parameters.backgroundColor = .clear
+        
+        let previewTarget = UIPreviewTarget(
+            container: cell.accountIconBorderView,
+            center: CGPoint(x: cell.accountIconBorderView.bounds.midX, y: cell.accountIconBorderView.bounds.midY)
+        )
+        return UITargetedPreview(view: snapshot, parameters: parameters, target: previewTarget)
+    }
+    
+    func tableView(
+        _ tableView: UITableView,
+        previewForHighlightingContextMenuWithConfiguration configuration: UIContextMenuConfiguration
+    ) -> UITargetedPreview? {
+        makeTargetedPreview(for: configuration, isHighlighting: true)
+    }
+    
+    func tableView(
+        _ tableView: UITableView,
+        previewForDismissingContextMenuWithConfiguration configuration: UIContextMenuConfiguration
+    ) -> UITargetedPreview? {
+        makeTargetedPreview(for: configuration, isHighlighting: false)
     }
 }
 
 // MARK: - AccountsListPresenter + UITableViewDataSource
 
-extension AccountsListPresenter {    
+extension AccountsListPresenter {
+    
+    func numberOfSections(in tableView: UITableView) -> Int { accounts.count }
+    
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        accounts.count
+        accounts[section].derivedItemViewModels.count
+    }
+    
+    func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
+        let cell = tableView.dequeueReusableHeaderFooterOfType(AccountsListSectionHeaderCell.self)
+        DispatchQueue.main.async {
+            cell.configure(with: self.accounts[section])
+            cell.attachedWallet = WalletsManager.shared.getWallet(id: self.accounts[section].id)
+        }
+        return cell
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCellOfType(AccountsListItemCell.self, for: indexPath)
+        let cell = tableView.dequeueReusableCellOfType(AccountsListDerivedItemCell.self, for: indexPath)
         DispatchQueue.main.async {
-            cell.configure(with: self.accounts[indexPath.row])
-            cell.attachedWallet = WalletsManager.shared.getWallet(id: self.accounts[indexPath.row].id)
+            cell.configure(with: self.accounts[indexPath.section].derivedItemViewModels[indexPath.row])
+            cell.attachedWallet = WalletsManager.shared.getWallet(id: self.accounts[indexPath.section].id)
         }
         return cell
     }

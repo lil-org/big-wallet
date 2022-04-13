@@ -12,6 +12,10 @@ extension UITableView {
         register(T.self, forCellReuseIdentifier: String(describing: name))
     }
     
+    func register<T: UITableViewHeaderFooterView>(headerFooterWithClass name: T.Type) {
+        register(T.self, forHeaderFooterViewReuseIdentifier: String(describing: name))
+    }
+    
     func registerReusableHeaderFooter<Header: UITableViewHeaderFooterView>(type: Header.Type) {
         let headerFooterName = String(describing: type)
         register(UINib(nibName: headerFooterName, bundle: nil), forHeaderFooterViewReuseIdentifier: headerFooterName)
