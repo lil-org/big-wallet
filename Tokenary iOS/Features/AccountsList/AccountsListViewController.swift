@@ -6,7 +6,7 @@ import UIKit
 import SwiftUI
 import WalletCore
 
-class AccountsListViewController: LifecycleObservableViewController, DataStateContainer {
+class AccountsListViewController: LifecycleObservableViewController, DataStateContainer, ActivityIndicatorDisplayable {
     
     // MARK: - Subview Properties
     
@@ -255,19 +255,31 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
     }
 
     private func showShareActivity() {
-        let shareVC = UIActivityViewController(
-            activityItems: [URL.appStore], applicationActivities: nil
-        ).then {
-            if UIDevice.isPad {
-                $0.popoverPresentationController?.barButtonItem = self.preferencesBarButtonItem
-            }
-            $0.excludedActivityTypes = [
-                .addToReadingList, .airDrop, .assignToContact,
-                .openInIBooks, .postToFlickr, .postToVimeo,
-                .markupAsPDF
-            ]
+        self.showActivityIndicator {
+            print("This was done")
         }
-        self.present(shareVC, animated: true)
+        DispatchQueue.global().async {
+            let shareVC = UIActivityViewController(
+                activityItems: [URL.appStore], applicationActivities: nil
+            ).then {
+                if UIDevice.isPad {
+                    $0.popoverPresentationController?.barButtonItem = self.preferencesBarButtonItem
+                }
+                $0.excludedActivityTypes = [
+                    .addToReadingList, .airDrop, .assignToContact,
+                    .openInIBooks, .postToFlickr, .postToVimeo,
+                    .markupAsPDF
+                ]
+            }
+            DispatchQueue.main.async {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    self.hideActivityIndicator {
+                        print("This was done again")
+                    }
+                }
+                self.present(shareVC, animated: true)
+            }
+        }
     }
     
     private func didTapCreateNewMnemonicWallet() {
@@ -299,18 +311,6 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
     private func didTapImportExistingAccount() {
         let importAccountViewController = instantiate(ImportViewController.self, from: .main)
         present(importAccountViewController.inNavigationController, animated: true)
-    }
-}
-
-extension AccountsListViewController: AccountsListDerivedItemEventsRespondable {
-    func didTapRemoveAccountIn(wallet: TokenaryWallet, account: ChainType) {
-        try? WalletsManager.shared.removeAccountIn(
-            wallet: wallet, account: account
-        )
-    }
-    
-    func didSelect(wallet: TokenaryWallet) {
-        self.presenter.didSelect(wallet: wallet)
     }
 }
 

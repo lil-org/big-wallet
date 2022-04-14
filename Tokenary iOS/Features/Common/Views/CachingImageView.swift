@@ -4,11 +4,7 @@ import Foundation
 import UIKit
 import Combine
 
-protocol Reusable {
-    func prepareForReuse()
-}
-
-class CachingImageView: UIImageView, Reusable {
+class CachingImageView: UIImageView {
     private var cancellable: AnyCancellable?
     private var animator: UIViewPropertyAnimator?
     
@@ -28,6 +24,10 @@ class CachingImageView: UIImageView, Reusable {
         animator?.stopAnimation(true)
         cancellable?.cancel()
     }
+    
+    open func loadImage(for identifier: String) -> AnyPublisher<UIImage?, Never> {
+        Just(nil).eraseToAnyPublisher()
+    }
 }
 
 extension CachingImageView: Configurable {
@@ -46,14 +46,5 @@ extension CachingImageView: Configurable {
                 self.alpha = 1.0
             }
         )
-    }
-
-    private func loadImage(for identifier: String) -> AnyPublisher<UIImage?, Never> {
-        return Just(identifier)
-        .flatMap({ poster -> AnyPublisher<UIImage?, Never> in
-            let url = URL(string: identifier)!
-            return ImageLoader.shared.loadImage(from: url)
-        })
-        .eraseToAnyPublisher()
     }
 }

@@ -278,12 +278,17 @@
 		4BD4B4D627C8000900809FB0 /* Web3Provider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B4D227C8000600809FB0 /* Web3Provider.swift */; };
 		4BD4B4D827C8049C00809FB0 /* Unwrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B4D727C8049C00809FB0 /* Unwrap.swift */; };
 		4BD4B4D927C8049C00809FB0 /* Unwrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B4D727C8049C00809FB0 /* Unwrap.swift */; };
-		4BF7BCD72808EC50008575D4 /* CachedImagesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCD62808EC50008575D4 /* CachedImagesService.swift */; };
-		4BF7BCD82808EC50008575D4 /* CachedImagesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCD62808EC50008575D4 /* CachedImagesService.swift */; };
+		4BF7BCD72808EC50008575D4 /* ImagesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCD62808EC50008575D4 /* ImagesService.swift */; };
+		4BF7BCD82808EC50008575D4 /* ImagesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCD62808EC50008575D4 /* ImagesService.swift */; };
 		4BF7BCDA280907C3008575D4 /* UIImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCD9280907C3008575D4 /* UIImage.swift */; };
 		4BF7BCDC28090BAE008575D4 /* CachingImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCDB28090BAE008575D4 /* CachingImageView.swift */; };
 		4BF7BCDE28091043008575D4 /* AccountsListPreviewViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCDD28091043008575D4 /* AccountsListPreviewViewController.swift */; };
 		4BF7BCE028091061008575D4 /* CGSize.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCDF28091061008575D4 /* CGSize.swift */; };
+		4BF7BCE2280956A6008575D4 /* AccountsListImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCE1280956A6008575D4 /* AccountsListImageView.swift */; };
+		4BF7BCE4280960F0008575D4 /* CacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCE3280960F0008575D4 /* CacheService.swift */; };
+		4BF7BCE6280A2437008575D4 /* DispatchQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCE5280A2437008575D4 /* DispatchQueue.swift */; };
+		4BF7BCE8280A4B3B008575D4 /* FileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCE7280A4B3B008575D4 /* FileManager.swift */; };
+		4BF7BCEA280CCCC8008575D4 /* ActivityIndicatorDisplayable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCE9280CCCC8008575D4 /* ActivityIndicatorDisplayable.swift */; };
 		B823433BC0A2163D2575A4B0 /* Pods_Tokenary_macOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1C652E83F7B0E720DF5DFD43 /* Pods_Tokenary_macOS.framework */; };
 /* End PBXBuildFile section */
 
@@ -514,11 +519,16 @@
 		4BD4B4C727C73CC300809FB0 /* UIActivityViewControllerWrapped.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIActivityViewControllerWrapped.swift; sourceTree = "<group>"; };
 		4BD4B4D227C8000600809FB0 /* Web3Provider.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Web3Provider.swift; sourceTree = "<group>"; };
 		4BD4B4D727C8049C00809FB0 /* Unwrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Unwrap.swift; sourceTree = "<group>"; };
-		4BF7BCD62808EC50008575D4 /* CachedImagesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedImagesService.swift; sourceTree = "<group>"; };
+		4BF7BCD62808EC50008575D4 /* ImagesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagesService.swift; sourceTree = "<group>"; };
 		4BF7BCD9280907C3008575D4 /* UIImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIImage.swift; sourceTree = "<group>"; };
 		4BF7BCDB28090BAE008575D4 /* CachingImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachingImageView.swift; sourceTree = "<group>"; };
 		4BF7BCDD28091043008575D4 /* AccountsListPreviewViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsListPreviewViewController.swift; sourceTree = "<group>"; };
 		4BF7BCDF28091061008575D4 /* CGSize.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CGSize.swift; sourceTree = "<group>"; };
+		4BF7BCE1280956A6008575D4 /* AccountsListImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsListImageView.swift; sourceTree = "<group>"; };
+		4BF7BCE3280960F0008575D4 /* CacheService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheService.swift; sourceTree = "<group>"; };
+		4BF7BCE5280A2437008575D4 /* DispatchQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DispatchQueue.swift; sourceTree = "<group>"; };
+		4BF7BCE7280A4B3B008575D4 /* FileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileManager.swift; sourceTree = "<group>"; };
+		4BF7BCE9280CCCC8008575D4 /* ActivityIndicatorDisplayable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityIndicatorDisplayable.swift; sourceTree = "<group>"; };
 		79196256009C6E698EB7AA59 /* Pods-Tokenary.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary.release.xcconfig"; path = "Target Support Files/Pods-Tokenary/Pods-Tokenary.release.xcconfig"; sourceTree = "<group>"; };
 		79E83B47DE0EB9BC8AC9B236 /* Pods-Tokenary iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary iOS.debug.xcconfig"; path = "Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS.debug.xcconfig"; sourceTree = "<group>"; };
 		9FB2D4E7F11F60183689311C /* Pods-Tokenary.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary.debug.xcconfig"; path = "Target Support Files/Pods-Tokenary/Pods-Tokenary.debug.xcconfig"; sourceTree = "<group>"; };
@@ -794,6 +804,7 @@
 				4B06ED6F27FE4F42003EED7C /* UICollectionView.swift */,
 				4BF7BCD9280907C3008575D4 /* UIImage.swift */,
 				4BF7BCDF28091061008575D4 /* CGSize.swift */,
+				4BF7BCE5280A2437008575D4 /* DispatchQueue.swift */,
 			);
 			path = Extensions;
 			sourceTree = "<group>";
@@ -876,8 +887,8 @@
 				4B06ED5127F7A75E003EED7C /* AccountsListPresenter.swift */,
 				4B2BE84D2804EFAD001833B6 /* AccountsListDerivedItemCell.swift */,
 				4B2BE84F2804F245001833B6 /* AccountsListSectionHeaderCell.swift */,
-				4BF7BCDB28090BAE008575D4 /* CachingImageView.swift */,
 				4BF7BCDD28091043008575D4 /* AccountsListPreviewViewController.swift */,
+				4BF7BCE1280956A6008575D4 /* AccountsListImageView.swift */,
 			);
 			path = AccountsList;
 			sourceTree = "<group>";
@@ -1015,9 +1026,11 @@
 		4B1D46A827D6C39E00162216 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				4BF7BCDB28090BAE008575D4 /* CachingImageView.swift */,
 				2C96D3A72763D13400687301 /* DataStateView.swift */,
 				2C96D3A82763D13400687301 /* DataStateView.xib */,
 				4B06ED6027FBB964003EED7C /* ExtendedHitAreaButton.swift */,
+				4BF7BCE9280CCCC8008575D4 /* ActivityIndicatorDisplayable.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -1171,6 +1184,7 @@
 				2CE059382763F3FF0042D844 /* CGFloat.swift */,
 				4BD4B3AA27C6968E00809FB0 /* Collections.swift */,
 				4B90741227DA77F200B27E80 /* URL.swift */,
+				4BF7BCE7280A4B3B008575D4 /* FileManager.swift */,
 			);
 			path = Foundation;
 			sourceTree = "<group>";
@@ -1359,7 +1373,8 @@
 			children = (
 				4BD4B40327C6968E00809FB0 /* ServiceLayer.swift */,
 				4BD4B40527C6968E00809FB0 /* ServiceLayer+Services.swift */,
-				4BF7BCD62808EC50008575D4 /* CachedImagesService.swift */,
+				4BF7BCD62808EC50008575D4 /* ImagesService.swift */,
+				4BF7BCE3280960F0008575D4 /* CacheService.swift */,
 			);
 			path = ServiceLayer;
 			sourceTree = "<group>";
@@ -1820,7 +1835,7 @@
 				4BD4B4AC27C6968F00809FB0 /* PriceService.swift in Sources */,
 				4B1D468727D563A000162216 /* AccountsListViewController.swift in Sources */,
 				4BB60B0027E92B5200F29E72 /* TokenaryWallet.swift in Sources */,
-				4BF7BCD72808EC50008575D4 /* CachedImagesService.swift in Sources */,
+				4BF7BCD72808EC50008575D4 /* ImagesService.swift in Sources */,
 				2C134BA627553EC500DAFBDB /* Browser.swift in Sources */,
 				4BB60B0327E92B7400F29E72 /* String.swift in Sources */,
 				4B697DC727E4141400934AB3 /* NSAppearance.swift in Sources */,
@@ -1902,8 +1917,10 @@
 				4BD4B43F27C6968F00809FB0 /* Color.swift in Sources */,
 				4B06ED4B27F51FEE003EED7C /* DelayTouchButtonStyle.swift in Sources */,
 				4BD4B4B527C6968F00809FB0 /* SessionStorage.swift in Sources */,
+				4BF7BCE8280A4B3B008575D4 /* FileManager.swift in Sources */,
 				4BD4B48727C6968F00809FB0 /* ApprovalSubject.swift in Sources */,
 				4BD4B4D427C8000600809FB0 /* Web3Provider.swift in Sources */,
+				4BF7BCEA280CCCC8008575D4 /* ActivityIndicatorDisplayable.swift in Sources */,
 				4BB60AFF27E92B5200F29E72 /* WalletsManager.swift in Sources */,
 				2C264BC227B2F2C100234393 /* EthereumSafariRequest.swift in Sources */,
 				4BD4B49527C6968F00809FB0 /* EthereumNetwork.swift in Sources */,
@@ -1921,6 +1938,7 @@
 				4B9073F927D938DC00B27E80 /* ApplicationHelper.swift in Sources */,
 				4BD4B41527C6968F00809FB0 /* Then.swift in Sources */,
 				4BD4B4A527C6968F00809FB0 /* ChainType.swift in Sources */,
+				4BF7BCE6280A2437008575D4 /* DispatchQueue.swift in Sources */,
 				4BD4B48927C6968F00809FB0 /* AuthenticationReason.swift in Sources */,
 				4BD4B44127C6968F00809FB0 /* Image.swift in Sources */,
 				4BD4B48127C6968F00809FB0 /* ConstrainMinMaxWidthView.swift in Sources */,
@@ -1933,7 +1951,7 @@
 				4B06ED6927FD016E003EED7C /* CGAffineTransform.swift in Sources */,
 				4BD4B45527C6968F00809FB0 /* Notification.Name.swift in Sources */,
 				4B697DC327E12A1400934AB3 /* UIDevice.swift in Sources */,
-				4BF7BCD82808EC50008575D4 /* CachedImagesService.swift in Sources */,
+				4BF7BCD82808EC50008575D4 /* ImagesService.swift in Sources */,
 				4BD4B41D27C6968F00809FB0 /* UIEdgeInsets.swift in Sources */,
 				4B9073CB27D8042C00B27E80 /* PasteboardHelper.swift in Sources */,
 				4B90741427DA77F200B27E80 /* URL.swift in Sources */,
@@ -1950,6 +1968,7 @@
 				2C264BDD27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */,
 				2CE059392763F3FF0042D844 /* CGFloat.swift in Sources */,
 				2C264BBD27B2F25E00234393 /* SafariRequest.swift in Sources */,
+				4BF7BCE2280956A6008575D4 /* AccountsListImageView.swift in Sources */,
 				4B06ED5B27FB6A25003EED7C /* LifecycleObserver.swift in Sources */,
 				4B06ED5D27FB6A42003EED7C /* LifecycleObservableViewController.swift in Sources */,
 				4B06ED5027F7A744003EED7C /* AccountsListIO.swift in Sources */,
@@ -1974,6 +1993,7 @@
 				4B2BE84E2804EFAD001833B6 /* AccountsListDerivedItemCell.swift in Sources */,
 				4B06ED5227F7A75E003EED7C /* AccountsListPresenter.swift in Sources */,
 				4BD4B40D27C6968F00809FB0 /* Constants.swift in Sources */,
+				4BF7BCE4280960F0008575D4 /* CacheService.swift in Sources */,
 				4BD4B4AD27C6968F00809FB0 /* PriceService.swift in Sources */,
 				4BD4B49327C6968F00809FB0 /* Transaction.swift in Sources */,
 				4BD4B47B27C6968F00809FB0 /* ExpandableGrid.swift in Sources */,

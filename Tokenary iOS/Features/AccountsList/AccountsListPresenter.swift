@@ -218,39 +218,16 @@ class AccountsListPresenter: NSObject, AccountsListInput {
     }
 
     private func transform(_ wallet: TokenaryWallet) -> AccountsListSectionHeaderCell.ViewModel {
-        let icon: UIImage
-        let privateKeyChainType = wallet.associatedMetadata.privateKeyChain
-        
-        if wallet.isMnemonic {
-            if wallet.associatedMetadata.allChains.contains(.ethereum) {
-                icon = Blockies(
-                    seed: wallet[.ethereum, .address]??.lowercased(), size: 10
-                ).createImage() ?? UIImage(named: "multiChainGrid")!
-            } else {
-                icon = UIImage(named: "multiChainGrid")!
-            }
-        } else {
-            if privateKeyChainType! == .ethereum {
-                icon = Blockies(
-                    seed: wallet[.address]??.lowercased(), size: 10
-                ).createImage() ?? UIImage(named: "multiChainGrid")!
-            } else {
-                icon = UIImage(named: privateKeyChainType!.iconName)!
-            }
-        }
-//        transform(wallet).sorted(by: { $0.title > $1.title })
-        return AccountsListSectionHeaderCell.ViewModel(
+        AccountsListSectionHeaderCell.ViewModel(
             id: wallet.id,
-            icon: icon,
             accountName: wallet.name,
-            privateKeyChainType: wallet.isMnemonic ? nil : privateKeyChainType!,
+            privateKeyChainType: wallet.isMnemonic ? nil : wallet.associatedMetadata.privateKeyChain,
             isFilteringAccounts: mode.isFilteringAccounts,
             derivedItemViewModels: transform(wallet).sorted(by: { $0.title > $1.title })
         )
     }
     
     private func transform(_ wallet: TokenaryWallet) -> [AccountsListDerivedItemCell.ViewModel] {
-        guard wallet.isMnemonic else { return [] }
         if
             case let .choseAccount(forChain: selectedChain) = mode,
             let selectedChain = selectedChain
@@ -269,7 +246,12 @@ class AccountsListPresenter: NSObject, AccountsListInput {
     }
     
     private func transform(_ wallet: TokenaryWallet, chain: ChainType) -> AccountsListDerivedItemCell.ViewModel {
-        let address = wallet[chain, .address] ?? .empty
+        let address: String?
+        if wallet.isMnemonic {
+            address = wallet[chain, .address] ?? .empty
+        } else {
+            address = wallet[.address] ?? .empty
+        }
         return AccountsListDerivedItemCell.ViewModel(
             accountIcon: UIImage(named: chain.iconName)!,
             address: address ?? .empty,
@@ -321,8 +303,8 @@ extension AccountsListPresenter {
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
         if mode != .mainScreen, let selectedWallet = filteredWallets[safe: indexPath.row] {
+            tableView.deselectRow(at: indexPath, animated: true)
             didSelect(wallet: selectedWallet)
         }
     }
@@ -371,10 +353,26 @@ extension AccountsListPresenter {
             self.rowIndex = rowIndex
         }
         
-        func copy(with zone: NSZone? = nil) -> Any {
-            AccountsListContextMenuIdentifier(
-                accountIdentifier: accountIdentifier, chainType: chainType, rowIndex: rowIndex
-            )
+        init?(from copyObject: NSCopying) throws {
+            guard
+                let contextIdentifierString = copyObject as? String,
+                let contextIdentifierData = contextIdentifierString.data(using: .utf8),
+                let contextIdentifier = try? JSONDecoder().decode(
+                    AccountsListContextMenuIdentifier.self, from: contextIdentifierData
+                )
+            else { return nil }
+            self = contextIdentifier
+        }
+        
+        var toCopyObject: NSCopying? {
+            get throws {
+                guard
+                    let encodedData = try? JSONEncoder().encode(self),
+                    let encodedString = String(data: encodedData, encoding: .utf8)
+                else { return nil }
+                
+                return NSString(string: encodedString)
+            }
         }
     }
     
@@ -383,17 +381,16 @@ extension AccountsListPresenter {
         contextMenuConfigurationForRowAt indexPath: IndexPath,
         point: CGPoint
     ) -> UIContextMenuConfiguration? {
+        guard mode == .mainScreen else { return nil }
         let identifier = AccountsListContextMenuIdentifier(
             accountIdentifier: accounts[indexPath.section].id,
             chainType: accounts[indexPath.section].derivedItemViewModels[indexPath.row].chainType,
             rowIndex: indexPath.row
         )
-        let encoded = try? JSONEncoder().encode(identifier)
-        let encodedStr = String(data: encoded!, encoding: .utf8)!
         let accountVM = accounts[indexPath.section].derivedItemViewModels[indexPath.row]
         let attachedWallet: TokenaryWallet? = WalletsManager.shared.getWallet(id: self.accounts[indexPath.section].id)
         return UIContextMenuConfiguration(
-            identifier: NSString(string: encodedStr),
+            identifier: try? identifier.toCopyObject,
             previewProvider: {
                 AccountsListPreviewViewController(chainType: accountVM.chainType)
             },
@@ -414,14 +411,15 @@ extension AccountsListPresenter {
                             }
                             let showKeyAction = UIAction(title: Strings.showWalletKey) { _ in
                                 if let attachedWallet = attachedWallet {
-//                                    self.responder.object?.didTapExport(wallet: attachedWallet)
+                                    self.view?.didTapExport(wallet: attachedWallet)
                                 }
                             }
                             let removeAccountAction = UIAction(title: "Remove account", attributes: .destructive) { _ in
                                 if let attachedWallet = attachedWallet {
-//                                    self.responder.object?.didTapRemoveAccountIn(wallet: attachedWallet, account: accountVM.chainType)
+                                    try? WalletsManager.shared.removeAccountIn(
+                                        wallet: attachedWallet, account: accountVM.chainType
+                                    )
                                 }
-                                
                             }
                             var itemMenuChildren: [UIMenuElement] = [
                                 copyAddressAction, showInChainScannerAction, showKeyAction
@@ -449,26 +447,12 @@ extension AccountsListPresenter {
         )
     }
     
-    func tableView(
-        _ tableView: UITableView,
-        willPerformPreviewActionForMenuWith configuration: UIContextMenuConfiguration,
-        animator: UIContextMenuInteractionCommitAnimating
-    ) {
-        animator.addCompletion {
-            if let identifier = configuration.identifier as? AccountsListContextMenuIdentifier {
-                print("We are printing: \(identifier.accountIdentifier)")
-            }
-        }
-    }
-    
     private func makeTargetedPreview(
         for configuration: UIContextMenuConfiguration,
         isHighlighting: Bool
     ) -> UITargetedPreview? {
         guard
-            let contextIdentifierJSON = configuration.identifier as? String,
-            let contextIdentifierData = contextIdentifierJSON.data(using: .utf8),
-            let contextIdentifier = try? JSONDecoder().decode(AccountsListContextMenuIdentifier.self, from: contextIdentifierData),
+            let contextIdentifier = try? AccountsListContextMenuIdentifier(from: configuration.identifier),
             let sectionIndex = accounts.firstIndex(where: { $0.id == contextIdentifier.accountIdentifier }),
             let cell = view?.tableView.cellForRow(
                 at: IndexPath(row: contextIdentifier.rowIndex, section: sectionIndex)
@@ -490,14 +474,28 @@ extension AccountsListPresenter {
         _ tableView: UITableView,
         previewForHighlightingContextMenuWithConfiguration configuration: UIContextMenuConfiguration
     ) -> UITargetedPreview? {
-        makeTargetedPreview(for: configuration, isHighlighting: true)
+        guard mode == .mainScreen else { return nil }
+        return makeTargetedPreview(for: configuration, isHighlighting: true)
     }
     
     func tableView(
         _ tableView: UITableView,
         previewForDismissingContextMenuWithConfiguration configuration: UIContextMenuConfiguration
     ) -> UITargetedPreview? {
-        makeTargetedPreview(for: configuration, isHighlighting: false)
+        guard mode == .mainScreen else { return nil }
+        return makeTargetedPreview(for: configuration, isHighlighting: false)
+    }
+    
+    func tableView(
+        _ tableView: UITableView,
+        willPerformPreviewActionForMenuWith configuration: UIContextMenuConfiguration,
+        animator: UIContextMenuInteractionCommitAnimating
+    ) {
+        animator.addCompletion {
+            if let contextIdentifier = try? AccountsListContextMenuIdentifier(from: configuration.identifier) {
+                print("We are printing: \(contextIdentifier.accountIdentifier)")
+            }
+        }
     }
 }
 
@@ -524,7 +522,6 @@ extension AccountsListPresenter {
         let cell = tableView.dequeueReusableCellOfType(AccountsListDerivedItemCell.self, for: indexPath)
         DispatchQueue.main.async {
             cell.configure(with: self.accounts[indexPath.section].derivedItemViewModels[indexPath.row])
-            cell.attachedWallet = WalletsManager.shared.getWallet(id: self.accounts[indexPath.section].id)
         }
         return cell
     }

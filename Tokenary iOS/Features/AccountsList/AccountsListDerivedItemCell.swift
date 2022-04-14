@@ -2,12 +2,6 @@
 
 import UIKit
 
-protocol AccountsListDerivedItemEventsRespondable: AnyObject {
-    func didTapExport(wallet: TokenaryWallet)
-    func didSelect(wallet: TokenaryWallet)
-    func didTapRemoveAccountIn(wallet: TokenaryWallet, account: ChainType)
-}
-
 class AccountsListDerivedItemCell: UITableViewCell {
     // MARK: - Subview Properties
     
@@ -74,12 +68,6 @@ class AccountsListDerivedItemCell: UITableViewCell {
         $0.translatesAutoresizingMaskIntoConstraints = false
         $0.setContentCompressionResistancePriority(.required, for: .vertical)
     }
-    
-    // MARK: - Private Properties
-    
-    weak var attachedWallet: TokenaryWallet?
-    
-    private lazy var responder = Weak(firstResponder(of: AccountsListDerivedItemEventsRespondable.self))
     
     // MARK: - UITableViewCell
 

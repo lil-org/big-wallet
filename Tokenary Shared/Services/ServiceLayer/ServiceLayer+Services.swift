@@ -7,7 +7,20 @@ extension ServiceLayer.Services {
         NetworkMonitor.shared
     }()
     
-    static let cachedImaged: CachedImages = {
-        CachedImagesService.shared
+    static let images: ImagesService = {
+        ImagesServiceImp(
+            operationsQueue: DispatchQueue(label: "io.Tokenary.image_service"),
+            cache: imagesCache
+        )
     }()
+    
+    static let imagesCache: ImageCacheService = {
+        ImageCacheServiceImp(
+            diskOperationsQueue: DispatchQueue(label: "io.Tokenary.image_disk_cache"),
+            dataCachePath: NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true)[0] + "/image",
+            softLimit: 15 * 1024 * 1024,
+            hardLimit: 20 * 1024 * 1024
+        )
+    }()
+    
 }

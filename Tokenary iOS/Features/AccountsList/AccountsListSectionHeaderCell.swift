@@ -16,7 +16,7 @@ class AccountsListSectionHeaderCell: UITableViewHeaderFooterView {
         $0.translatesAutoresizingMaskIntoConstraints = false
     }
     
-    private lazy var accountIconImage = CachingImageView().then {
+    private lazy var accountIconImage = AccountsListImageView().then {
         $0.layer.cornerRadius = 8
         $0.clipsToBounds = true
         $0.contentMode = .scaleAspectFit
@@ -52,20 +52,18 @@ class AccountsListSectionHeaderCell: UITableViewHeaderFooterView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        accountIconImage.prepareForReuse()
+    }
 
     // MARK: - Private Methods
 
     private func commonInit() {
-        setupStyle()
         addSubviews()
         makeConstraints()
     }
-    
-    private func setupStyle() {
-//        backgroundColor = UIColor(light: .white, dark: .black)
-    }
-    
-    private let proxyView = UIView()
     
     private func addSubviews() {
         contentView.add(insets: .zero) {
@@ -100,7 +98,6 @@ class AccountsListSectionHeaderCell: UITableViewHeaderFooterView {
 extension AccountsListSectionHeaderCell: Configurable {
     struct ViewModel {
         let id: String
-        let icon: UIImage
         let accountName: String
         let privateKeyChainType: ChainType?
         let isFilteringAccounts: Bool
@@ -108,8 +105,7 @@ extension AccountsListSectionHeaderCell: Configurable {
     }
     
     func configure(with viewModel: ViewModel) {
-        accountIconImage.image = viewModel.icon
-        accountIconImage.configure(with: "")
+        accountIconImage.configure(with: viewModel.id)
         accountNameLabel.text = viewModel.accountName
         configureMenu(with: viewModel)
     }
@@ -118,21 +114,23 @@ extension AccountsListSectionHeaderCell: Configurable {
         if UIDevice.isPad {
             moreButton.showsMenuAsPrimaryAction = true
             moreButton.menu = UIMenu(
-                title: .empty,
+                title: self.actionsForWalletDialogTitle,
                 children: [
                     UIDeferredMenuElement.uncached { [weak self] completion in
+                        guard let self = self else { completion([]); return }
+                        
                         var moreMenuChildren: [UIMenuElement] = []
                         let renameAction = UIAction(title: "Rename Wallet") { _ in
-                            if let attachedWallet = self?.attachedWallet {
-                                self?.responder.object?.didTapRename(wallet: attachedWallet)
+                            if let attachedWallet = self.attachedWallet {
+                                self.responder.object?.didTapRename(wallet: attachedWallet)
                             }
                         }
                         moreMenuChildren.append(renameAction)
-                        if let attachedWallet = self?.attachedWallet, attachedWallet.isMnemonic {
+                        if let attachedWallet = self.attachedWallet, attachedWallet.isMnemonic {
                             if !viewModel.isFilteringAccounts {
                                 let configureAction = UIAction(title: "Configure accounts") { _ in
-                                    if let attachedWallet = self?.attachedWallet {
-                                        self?.responder.object?.didTapReconfigureAccountsIn(wallet: attachedWallet)
+                                    if let attachedWallet = self.attachedWallet {
+                                        self.responder.object?.didTapReconfigureAccountsIn(wallet: attachedWallet)
                                     }
                                 }
                                 moreMenuChildren.append(configureAction)
@@ -140,13 +138,13 @@ extension AccountsListSectionHeaderCell: Configurable {
                         } else {
                             if let privateKeyChainType = viewModel.privateKeyChainType {
                                 let copyAddressAction = UIAction(title: Strings.copyAddress) { _ in
-                                    if let attachedWallet = self?.attachedWallet {
+                                    if let attachedWallet = self.attachedWallet {
                                         PasteboardHelper.setPlainNotNil(attachedWallet[.address] ?? nil)
                                     }
                                 }
                                     
                                 let transactionScannerAction = UIAction(title: privateKeyChainType.transactionScaner) { _ in
-                                    if let address = self?.attachedWallet?[.address] ?? nil {
+                                    if let address = self.attachedWallet?[.address] ?? nil {
                                         LinkHelper.open(privateKeyChainType.scanURL(address))
                                     }
                                 }
@@ -154,13 +152,13 @@ extension AccountsListSectionHeaderCell: Configurable {
                             }
                         }
                         let showWalletKeyAction = UIAction(title: Strings.showWalletKey) { _ in
-                            if let attachedWallet = self?.attachedWallet {
-                                self?.responder.object?.didTapExport(wallet: attachedWallet)
+                            if let attachedWallet = self.attachedWallet {
+                                self.responder.object?.didTapExport(wallet: attachedWallet)
                             }
                         }
                         let removeWalletAction = UIAction(title: Strings.removeWallet, attributes: .destructive) { _ in
-                            if let attachedWallet = self?.attachedWallet {
-                                self?.responder.object?.didTapRemove(wallet: attachedWallet)
+                            if let attachedWallet = self.attachedWallet {
+                                self.responder.object?.didTapRemove(wallet: attachedWallet)
                             }
                         }
                         if viewModel.isFilteringAccounts {
@@ -170,7 +168,7 @@ extension AccountsListSectionHeaderCell: Configurable {
                         }
                         completion([
                             UIMenu(
-                                title: .empty,
+                                title: self.actionsForWalletDialogTitle,
                                 options: .displayInline,
                                 children: moreMenuChildren
                             )
