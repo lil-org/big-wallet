@@ -165,6 +165,7 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
     }
     
     override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
         DispatchQueue.main.async {
             self.navigationController?.navigationBar.sizeToFit()
         }
@@ -255,28 +256,21 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
     }
 
     private func showShareActivity() {
-        self.showActivityIndicator {
-            print("This was done")
-        }
+        self.showActivityIndicator()
         DispatchQueue.global().async {
             let shareVC = UIActivityViewController(
                 activityItems: [URL.appStore], applicationActivities: nil
             ).then {
-                if UIDevice.isPad {
-                    $0.popoverPresentationController?.barButtonItem = self.preferencesBarButtonItem
-                }
                 $0.excludedActivityTypes = [
-                    .addToReadingList, .airDrop, .assignToContact,
-                    .openInIBooks, .postToFlickr, .postToVimeo,
-                    .markupAsPDF
+                    .addToReadingList, .assignToContact, .markupAsPDF,
+                    .openInIBooks, .postToFlickr, .postToVimeo
                 ]
             }
             DispatchQueue.main.async {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    self.hideActivityIndicator {
-                        print("This was done again")
-                    }
+                if UIDevice.isPad {
+                    shareVC.popoverPresentationController?.barButtonItem = self.preferencesBarButtonItem
                 }
+                self.hideActivityIndicator()
                 self.present(shareVC, animated: true)
             }
         }

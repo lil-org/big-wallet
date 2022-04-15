@@ -25,8 +25,8 @@ class CachingImageView: UIImageView {
         cancellable?.cancel()
     }
     
-    open func loadImage(for identifier: String) -> AnyPublisher<UIImage?, Never> {
-        Just(nil).eraseToAnyPublisher()
+    open func loadImage(for identifier: String) -> AnyPublisher<UIImage, Never> {
+        Just(UIImage()).eraseToAnyPublisher()
     }
 }
 
@@ -34,7 +34,11 @@ extension CachingImageView: Configurable {
     typealias ViewModel = String
     
     func configure(with viewModel: String) {
-        cancellable = loadImage(for: viewModel).sink { [unowned self] image in self.show(image: image) }
+        cancellable = loadImage(for: viewModel).sink { [unowned self] image in
+            DispatchQueue.main.async {
+                self.show(image: image)
+            }
+        }
     }
     
     private func show(image: UIImage?) {

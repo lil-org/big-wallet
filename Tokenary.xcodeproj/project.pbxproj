@@ -289,6 +289,7 @@
 		4BF7BCE6280A2437008575D4 /* DispatchQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCE5280A2437008575D4 /* DispatchQueue.swift */; };
 		4BF7BCE8280A4B3B008575D4 /* FileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCE7280A4B3B008575D4 /* FileManager.swift */; };
 		4BF7BCEA280CCCC8008575D4 /* ActivityIndicatorDisplayable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCE9280CCCC8008575D4 /* ActivityIndicatorDisplayable.swift */; };
+		4BF7BCEC280D1172008575D4 /* RandomAccessCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCEB280D1172008575D4 /* RandomAccessCollection.swift */; };
 		B823433BC0A2163D2575A4B0 /* Pods_Tokenary_macOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1C652E83F7B0E720DF5DFD43 /* Pods_Tokenary_macOS.framework */; };
 /* End PBXBuildFile section */
 
@@ -529,6 +530,7 @@
 		4BF7BCE5280A2437008575D4 /* DispatchQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DispatchQueue.swift; sourceTree = "<group>"; };
 		4BF7BCE7280A4B3B008575D4 /* FileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileManager.swift; sourceTree = "<group>"; };
 		4BF7BCE9280CCCC8008575D4 /* ActivityIndicatorDisplayable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityIndicatorDisplayable.swift; sourceTree = "<group>"; };
+		4BF7BCEB280D1172008575D4 /* RandomAccessCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RandomAccessCollection.swift; sourceTree = "<group>"; };
 		79196256009C6E698EB7AA59 /* Pods-Tokenary.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary.release.xcconfig"; path = "Target Support Files/Pods-Tokenary/Pods-Tokenary.release.xcconfig"; sourceTree = "<group>"; };
 		79E83B47DE0EB9BC8AC9B236 /* Pods-Tokenary iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary iOS.debug.xcconfig"; path = "Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS.debug.xcconfig"; sourceTree = "<group>"; };
 		9FB2D4E7F11F60183689311C /* Pods-Tokenary.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary.debug.xcconfig"; path = "Target Support Files/Pods-Tokenary/Pods-Tokenary.debug.xcconfig"; sourceTree = "<group>"; };
@@ -1185,6 +1187,7 @@
 				4BD4B3AA27C6968E00809FB0 /* Collections.swift */,
 				4B90741227DA77F200B27E80 /* URL.swift */,
 				4BF7BCE7280A4B3B008575D4 /* FileManager.swift */,
+				4BF7BCEB280D1172008575D4 /* RandomAccessCollection.swift */,
 			);
 			path = Foundation;
 			sourceTree = "<group>";
@@ -2010,6 +2013,7 @@
 				4BD4B4A727C6968F00809FB0 /* ServiceLayer.swift in Sources */,
 				4BB60B0127E92B5200F29E72 /* TokenaryWallet.swift in Sources */,
 				4BD4B46D27C6968F00809FB0 /* DimmingButtonStyle.swift in Sources */,
+				4BF7BCEC280D1172008575D4 /* RandomAccessCollection.swift in Sources */,
 				4BD4B43B27C6968F00809FB0 /* View+savingBounds.swift in Sources */,
 				4BD4B45327C6968F00809FB0 /* Strings.swift in Sources */,
 				2C264BC727B2F2F400234393 /* SolanaSafariRequest.swift in Sources */,

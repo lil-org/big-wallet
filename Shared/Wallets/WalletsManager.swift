@@ -373,6 +373,37 @@ final class WalletsManager {
         })
     }
     
+    // MARK: - Misc
+    
+    func getEthereumAddress(walletId: String) -> String? {
+        guard let wallet = wallets.first(where: { $0.id == walletId }) else { return nil }
+        
+        if wallet.isMnemonic {
+            if wallet.associatedMetadata.allChains.contains(.ethereum) {
+                return wallet[.ethereum, .address] ?? nil
+            } else {
+                return try? addDeriveRemoveAccount(key: wallet.key, chainType: .ethereum)
+            }
+        } else {
+            if wallet.associatedMetadata.privateKeyChain == .some(.ethereum) {
+                return wallet[.address] ?? nil
+            } else {
+                return nil
+            }
+        }
+    }
+    
+    private func addDeriveRemoveAccount(
+        key: StoredKey, chainType: ChainType
+    ) throws -> String? {
+        guard let password = keychain.password else { throw Error.keychainAccessFailure }
+        guard let wallet = key.wallet(password: Data(password.utf8)) else { throw KeyStore.Error.invalidPassword }
+        
+        let address = key.accountForCoin(coin: chainType, wallet: wallet)?.address
+        key.removeAccountForCoin(coin: chainType)
+        return address
+    }
+    
     // MARK: Store & Destroy
     
     private let operationQueue = DispatchQueue(label: "io.tokenary.WalletManager", qos: .userInitiated)

@@ -80,6 +80,19 @@ extension ChainType {
         }
     }
     
+    var stableIndex: Int {
+        switch self {
+        case .ethereum:
+            return .zero
+        case .tezos:
+            return 1
+        case .solana:
+            return 2
+        default:
+            return .zero
+        }
+    }
+    
     static var supportedChains: [ChainType] { [.ethereum, .tezos, .solana] }
     
     struct SupportedSet: OptionSet {

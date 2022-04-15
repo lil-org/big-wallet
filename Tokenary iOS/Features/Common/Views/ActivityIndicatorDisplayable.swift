@@ -5,20 +5,23 @@ import Foundation
 import UIKit
 
 public protocol ActivityIndicatorDisplayable {
-    func showActivityIndicator(on controller: UIViewController?, completion: (() -> Void)?)
-    func hideActivityIndicator(withCompletion completion: (() -> Void)?)
+    func showActivityIndicator(on controller: UIViewController?)
+    func hideActivityIndicator()
 }
 
 public extension ActivityIndicatorDisplayable where Self: UIViewController {
-    func showActivityIndicator(on controller: UIViewController? = nil, completion: (() -> Void)? = nil) {
+    func showActivityIndicator(on controller: UIViewController? = nil) {
         let presentingVC = controller ?? tabBarController ?? navigationController ?? self
         let superView = presentingVC.view!
         let activityIndicatorView = UIActivityIndicatorView(style: .medium).then {
             $0.transform = CGAffineTransform(scaleX: .zero, y: .zero)
+            $0.translatesAutoresizingMaskIntoConstraints = false
         }
         let activityIndicatorHolderView = ViewContainer(
             wrappedView: activityIndicatorView, viewController: presentingVC
-        )
+        ).then {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
         
         if let navigationVC = presentingVC as? UINavigationController {
             navigationVC.interactivePopGestureRecognizer?.isEnabled = false
@@ -36,7 +39,7 @@ public extension ActivityIndicatorDisplayable where Self: UIViewController {
 
         self.activityIndicatorHolderView = activityIndicatorHolderView
         
-        UIView.animate(withDuration: 0.5) {
+        UIView.animate(withDuration: 0.15) {
             activityIndicatorView.transform = .identity
         }
 
@@ -46,7 +49,7 @@ public extension ActivityIndicatorDisplayable where Self: UIViewController {
         activityIndicatorView.startAnimating()
     }
     
-    func hideActivityIndicator(withCompletion completion: (() -> Void)? = nil) {
+    func hideActivityIndicator() {
         guard let activityIndicatorHolderView = self.activityIndicatorHolderView else { return }
         
         let presentingVC = activityIndicatorHolderView.viewController
@@ -57,12 +60,13 @@ public extension ActivityIndicatorDisplayable where Self: UIViewController {
             presentingVC?.navigationController?.interactivePopGestureRecognizer?.isEnabled = true
         }
         UIView.animate(
-            withDuration: 0.5,
+            withDuration: 0.15,
             animations: {
                 activityIndicatorHolderView.wrappedView.alpha = .zero
                 activityIndicatorHolderView.wrappedView.transform = CGAffineTransform(scaleX: .zero, y: .zero)
             },
             completion: { _ in
+                activityIndicatorHolderView.removeFromSuperview()
                 activityIndicatorHolderView.wrappedView.removeFromSuperview()
                 self.activityIndicatorHolderView = nil
             }

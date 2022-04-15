@@ -164,57 +164,61 @@ class AccountsListPresenter: NSObject, AccountsListInput {
                     }
                     .map { $0.offset }
             )
-            let updateVM: [(Int, AccountsListSectionHeaderCell.ViewModel)] = filteredWalletsChangeSet.toUpdate.compactMap { updateWallet in
+            let updateVMs: [(Int, AccountsListSectionHeaderCell.ViewModel)] = filteredWalletsChangeSet.toUpdate.compactMap { updateWallet in
                 guard let updateIdx = self.accounts.firstIndex(where: { $0.id == updateWallet.id }) else { return nil }
                 let updateVM: AccountsListSectionHeaderCell.ViewModel = self.transform(updateWallet)
                 return (updateIdx, updateVM)
             }
             
             DispatchQueue.main.async {
-                for (updateIdx, accountVM) in updateVM {
+                var previousVM: AccountsListSectionHeaderCell.ViewModel?
+                for (updateIdx, accountVM) in updateVMs {
+                    previousVM = self.accounts[updateIdx]
                     self.accounts[updateIdx] = accountVM
                 }
                 self.accounts.remove(atOffsets: indicesToRemove)
                 self.accounts.append(contentsOf: vmToAdd)
-//                if vmToAdd.count == 1 && updateVM.count == .zero && indicesToRemove.count == .zero {
-//                    self.scrollToWalletAndBlink(walletId: vmToAdd.first!.id)
-//                }
-//                if updateVM.count == 1 {
-//                    UIView.setAnimationsEnabled(false)
-//                    self.view?.tableView.beginUpdates()
-//                    let cell = self.view?.tableView.cellForRow(at: IndexPath(item: updateVM.first!.0, section: .zero)) as? AccountsListItemCell
-//                    cell?.update(collection: updateVM.first!.1.derivedItemViewModels)
-//                    cell?.update(name: updateVM.first!.1.accountName)
-////                    cell?.layoutSubviews()
-//                    self.view?.tableView.endUpdates()
-//                    UIView.setAnimationsEnabled(true)
-////                    self.view?.tableView.reloadRows(at: [IndexPath(item: updateVM.first!.0, section: .zero)], with: .none)
-////                    self.view?.tableView.reconfigureRows(at: <#T##[IndexPath]#>)
-//
-//                }
-//                if indicesToRemove.count != .zero {
-////                    self.view?.tableView.beginUpdates()
-//                    let indexPaths = indicesToRemove.map { IndexPath(item: $0, section: .zero) }
-//                    self.view?.tableView.deleteRows(at: indexPaths, with: .none)
-////                    self.view?.tableView.endUpdates()
-//                }
-//
-//                if vmToAdd.count == 1 {
-////                    self.view?.tableView.beginUpdates()
-//                    self.view?.tableView.insertRows(
-//                        at: [IndexPath(row: self.accounts.count - 1, section: .zero)], with: .fade
-//                    )
-////                    self.view?.tableView.endUpdates()
-//                }
-//                if vmToAdd.count > 1 {
+
+                if updateVMs.count == 1, let updateVM = updateVMs.first, let previousVM = previousVM {
+                    UIView.setAnimationsEnabled(false)
+                    self.view?.tableView.beginUpdates()
+                    
+                    let accountsDif = previousVM.derivedItemViewModels.count - updateVM.1.derivedItemViewModels.count
+//                    previousVM.derivedItemViewModels[.zero].chainType.stableIndex
+                    if accountsDif < .zero {
+                        if accountsDif == -1 {
+                            self.view?.tableView.insertRows(at: [IndexPath(index: 2)], with: .fade)
+                        } else {
+                            self.view?.tableView.insertRows(at: [IndexPath(index: 1), IndexPath(index: 2)], with: .fade)
+                        }
+                    } else {
+                        self.view?.tableView.deleteRows(at: [IndexPath(index: 1)], with: .fade)
+                    }
+                    
+                    let header = self.view?.tableView.headerView(forSection: updateVM.0) as? AccountsListSectionHeaderCell
+                    header?.update(name: updateVM.1.accountName)
+                    header?.layoutSubviews()
+                    self.view?.tableView.endUpdates()
+                    UIView.setAnimationsEnabled(true)
+                }
+                
+                if indicesToRemove.count != .zero {
+                    self.view?.tableView.beginUpdates()
+                    self.view?.tableView.deleteSections(IndexSet(indicesToRemove), with: .fade)
+                    self.view?.tableView.endUpdates()
+                }
+                
+                if vmToAdd.count == 1 {
+                    self.view?.tableView.beginUpdates()
+                    self.view?.tableView.insertSections(IndexSet(integer: self.accounts.count - 1), with: .fade)
+                    self.view?.tableView.endUpdates()
+                }
+                
+                if vmToAdd.count > 1 {
                     self.view?.tableView.reloadData()
-//                }
+                }
             }
         }
-    }
-    
-    private func scrollToWalletAndBlink(walletId: String) {
-        self.view?.tableView.reloadData()
     }
 
     private func transform(_ wallet: TokenaryWallet) -> AccountsListSectionHeaderCell.ViewModel {
@@ -292,13 +296,43 @@ extension AccountsListPresenter {
 
 extension AccountsListPresenter {
     
-    func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool { true }
+    func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
+        true
+    }
     
     func tableView(
-        _ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath
-    ) {
-        if editingStyle == .delete, let walletToRemove = filteredWallets[safe: indexPath.row] {
-            view?.didTapRemove(wallet: walletToRemove)
+        _ tableView: UITableView,
+        trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath
+    ) -> UISwipeActionsConfiguration? {
+        guard let numberOfAccounts = accounts[safe: indexPath.section]?.derivedItemViewModels.count else { return nil }
+        let deleteAction: UIContextualAction
+        if numberOfAccounts > 1 {
+            deleteAction = UIContextualAction(style: .destructive, title: "Remove\nAccount") { _, _, completionHandler in
+                if
+                    let attachedWallet = self.filteredWallets[safe: indexPath.section],
+                    let accountInfo = self.accounts[safe: indexPath.section]?.derivedItemViewModels[safe: indexPath.row]
+                {
+                    try? WalletsManager.shared.removeAccountIn(
+                        wallet: attachedWallet, account: accountInfo.chainType
+                    )
+                    completionHandler(true)
+                } else {
+                    completionHandler(false)
+                }
+                completionHandler(true)
+            }
+        } else {
+            deleteAction = UIContextualAction(style: .destructive, title: "Remove\nWallet") { _, _, completionHandler in
+                if let walletToRemove = self.filteredWallets[safe: indexPath.section] {
+                    self.view?.didTapRemove(wallet: walletToRemove)
+                    completionHandler(true)
+                } else {
+                    completionHandler(false)
+                }
+            }
+        }
+        return .init(actions: [deleteAction]).then {
+            $0.performsFirstActionWithFullSwipe = true
         }
     }
     
@@ -309,38 +343,7 @@ extension AccountsListPresenter {
         }
     }
     
-    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        46
-    }
-    
-//    func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
-//
-//        // Top corners
-//        let maskPathTop = UIBezierPath(roundedRect: cell.contentView.bounds, byRoundingCorners: [.topLeft, .topRight], cornerRadii: CGSize(width: 10.0, height: 10.0))
-//        let shapeLayerTop = CAShapeLayer()
-//        shapeLayerTop.frame = cell.contentView.bounds
-//        shapeLayerTop.path = maskPathTop.cgPath
-//
-//        //Bottom corners
-//        let maskPathBottom = UIBezierPath(roundedRect: cell.contentView.bounds, byRoundingCorners: [.bottomLeft, .bottomRight], cornerRadii: CGSize(width: 5.0, height: 5.0))
-//        let shapeLayerBottom = CAShapeLayer()
-//        shapeLayerBottom.frame = cell.contentView.bounds
-//        shapeLayerBottom.path = maskPathBottom.cgPath
-//
-//        // All corners
-//        let maskPathAll = UIBezierPath(roundedRect: cell.contentView.bounds, byRoundingCorners: [.topLeft, .topRight, .bottomRight, .bottomLeft], cornerRadii: CGSize(width: 5.0, height: 5.0))
-//        let shapeLayerAll = CAShapeLayer()
-//        shapeLayerAll.frame = cell.contentView.bounds
-//        shapeLayerAll.path = maskPathAll.cgPath
-//
-//        if indexPath.row == 0 && indexPath.row == tableView.numberOfRows(inSection: indexPath.section) - 1 {
-//            cell.contentView.layer.mask = shapeLayerAll
-//        } else if indexPath.row == 0 {
-//            cell.contentView.layer.mask = shapeLayerTop
-//        } else if indexPath.row == tableView.numberOfRows(inSection: indexPath.section) - 1 {
-//            cell.contentView.layer.mask = shapeLayerBottom
-//        }
-//    }
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat { 46 }
     
     struct AccountsListContextMenuIdentifier: Codable {
         let accountIdentifier: String
@@ -365,6 +368,7 @@ extension AccountsListPresenter {
         }
         
         var toCopyObject: NSCopying? {
+            // swiftlint:disable implicit_getter
             get throws {
                 guard
                     let encodedData = try? JSONEncoder().encode(self),
@@ -373,6 +377,7 @@ extension AccountsListPresenter {
                 
                 return NSString(string: encodedString)
             }
+            // swiftlint:enable implicit_getter
         }
     }
     

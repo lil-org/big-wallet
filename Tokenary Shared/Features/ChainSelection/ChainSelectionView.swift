@@ -112,7 +112,7 @@ struct ChainSelectionView: View {
             .background(Color(light: .systemGray5, dark: .systemGray5))
             
             List {
-                ForEach(stateProvider.state.rows) { rowViewModel in
+                ForEach(stateProvider.state.rows.indexed(), id: \.1.id) { index, rowViewModel in
                     HStack {
                         Image(rowViewModel.icon)
                             .resizable()
@@ -130,22 +130,10 @@ struct ChainSelectionView: View {
                             }
                         }
                         Spacer()
-                        if stateProvider.state.mode == .multiSelect {
-                            Image(systemName: rowViewModel.isSelected ? "checkmark.square.fill" : "square")
-                                .resizable()
-                                .frame(width: 20, height: 20, alignment: .center)
-                                .foregroundColor(Color.mainText)
-                                .padding(.trailing, 10)
-                        } else {
-                            if rowViewModel.isSelected {
-                                Image(systemName: "checkmark")
-                                    .resizable()
-                                    .frame(width: 20, height: 20, alignment: .center)
-                                    .foregroundColor(Color.mainText)
-                                    .padding(.trailing, 10)
-                            }
-                            
-                        }
+                        Toggle(".empty", isOn: self.$stateProvider.state.rows[index].isSelected)
+                            .frame(width: 20, height: 20, alignment: .center)
+                            .foregroundColor(Color.mainText)
+                            .padding(.trailing, 10)
                     }
                     .contentShape(Rectangle())
                     .onTapGesture {

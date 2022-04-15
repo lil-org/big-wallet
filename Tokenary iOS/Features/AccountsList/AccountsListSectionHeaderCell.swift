@@ -110,6 +110,10 @@ extension AccountsListSectionHeaderCell: Configurable {
         configureMenu(with: viewModel)
     }
     
+    func update(name newName: String) {
+        accountNameLabel.text = newName
+    }
+    
     private func configureMenu(with viewModel: ViewModel) {
         if UIDevice.isPad {
             moreButton.showsMenuAsPrimaryAction = true

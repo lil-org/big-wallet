@@ -3,12 +3,11 @@
 import Foundation
 import Combine
 import UIKit
+import BlockiesSwift
 
 protocol ImagesService {
     func loadRemoteImage(from url: URL, force: Bool, skipCache: Bool) -> AnyPublisher<UIImage?, Never>
-    func loadWalletImage(
-        walletId: String, imageComputeClosure: () -> UIImage, fallbackImage: UIImage
-    ) -> AnyPublisher<UIImage, Never>
+    func loadWalletImage(walletId: String, fallbackImage: UIImage) -> AnyPublisher<UIImage, Never>
 }
 
 extension ImagesService {
@@ -47,9 +46,28 @@ final class ImagesServiceImp: ImagesService {
             .eraseToAnyPublisher()
     }
     
-    func loadWalletImage(
-        walletId: String, imageComputeClosure: () -> UIImage, fallbackImage: UIImage
-    ) -> AnyPublisher<UIImage, Never> {
-        Just(UIImage()).eraseToAnyPublisher()
+    func loadWalletImage(walletId: String, fallbackImage: UIImage) -> AnyPublisher<UIImage, Never> {
+        Future<UIImage, Never> { promise in
+            DispatchQueue.global().async {
+                var icon: UIImage? = nil
+                
+                if let image = self.cache.image(forKey: walletId, having: .both) {
+                    promise(.success(image))
+                    return
+                }
+                
+                if let ethAddress = WalletsManager.shared.getEthereumAddress(walletId: walletId) {
+                    icon = Blockies(
+                        seed: ethAddress.lowercased(), size: 10
+                    ).createImage()
+                }
+                
+                promise(.success(icon ?? fallbackImage))
+            }
+        }
+        .handleEvents(receiveOutput: { [unowned self] image in
+            self.cache.cache(image: image, forKey: walletId, having: .both)
+        })
+        .eraseToAnyPublisher()
     }
 }
