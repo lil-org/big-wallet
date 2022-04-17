@@ -117,7 +117,7 @@ final class TokenaryWallet: Hashable, Equatable {
         }
     }
     
-    private lazy var accounts: [AnyAccount] = self.generateAccounts()
+    private lazy var accounts: [AnyAccount] = generateAccounts()
     
     var isMnemonic: Bool { key.isMnemonic }
     

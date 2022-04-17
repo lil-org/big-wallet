@@ -28,7 +28,7 @@ struct SynchronizedArray<T>: RangeReplaceableCollection {
 extension SynchronizedArray {
 
     init<S>(_ elements: S) where S: Sequence, SynchronizedArray.Element == S.Element {
-        self.array = [S.Element](elements)
+        array = [S.Element](elements)
     }
 
     init() { self.init([]) }

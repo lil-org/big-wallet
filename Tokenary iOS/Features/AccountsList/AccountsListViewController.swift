@@ -25,7 +25,7 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
         )
         $0.menu = menu
         if UIDevice.isPad {
-            self.updateDataState(menu: menu)
+            updateDataState(menu: menu)
         } else {
             let actionHandler: UIActionHandler = { [weak self] _ in
                 let createNewAction = UIAlertAction(title: Strings.createNew, style: .default) { _ in
@@ -44,7 +44,7 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
                 }
                 self?.present(alertVC, animated: true, completion: nil)
             }
-            self.updateDataState(actionHandler: actionHandler)
+            updateDataState(actionHandler: actionHandler)
         }
         $0.accessibilityIdentifier = "AddAccountBarItemButton"
         $0.accessibilityLabel = "AddAccountBarItemButton"
@@ -97,8 +97,8 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
         $0.tableFooterView = UIView(
             frame: CGRect(x: .zero, y: .zero, width: .zero, height: CGFloat.leastNormalMagnitude)
         )
-        $0.dataSource = self.presenter
-        $0.delegate = self.presenter
+        $0.dataSource = presenter
+        $0.delegate = presenter
         $0.backgroundColor = .systemGroupedBackground
         $0.accessibilityIdentifier = "TableView"
         $0.isAccessibilityElement = true
@@ -184,7 +184,13 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
         view.add {
             tableView
         }
-        chainFilterButtonContainer.add(insets: .init(vertical: 4, horizontal: 20)) {
+        let filterButtonInsets: UIEdgeInsets
+        if UIDevice.isPad {
+            filterButtonInsets = .init(vertical: 10, horizontal: 16 + 14)
+        } else {
+            filterButtonInsets = .init(vertical: 4, horizontal: 20)
+        }
+        chainFilterButtonContainer.add(insets: filterButtonInsets) {
             chainFilterButton
         }
         NSLayoutConstraint.activate {
@@ -208,14 +214,10 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
         }
 
         tableView.layoutSubviews()
-        
-        if presenter.mode != .mainScreen {
-            tableView.allowsSelection = false
-        }
     }
     
     @objc private func cancelButtonWasTapped() {
-        self.presenter.cancelButtonWasTapped()
+        presenter.cancelButtonWasTapped()
     }
     
     @objc private func chainFilterButtonWasTapped() {
@@ -252,11 +254,11 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
 
     private func didSelect(chain: EthereumChain) {
         chainFilterButton.configuration?.title = chain.title
-        self.presenter.didSelect(chain: chain)
+        presenter.didSelect(chain: chain)
     }
 
     private func showShareActivity() {
-        self.showActivityIndicator()
+        showActivityIndicator()
         DispatchQueue.global().async {
             let shareVC = UIActivityViewController(
                 activityItems: [URL.appStore], applicationActivities: nil

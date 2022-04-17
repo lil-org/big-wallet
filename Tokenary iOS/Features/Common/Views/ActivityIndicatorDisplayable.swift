@@ -4,12 +4,12 @@
 import Foundation
 import UIKit
 
-public protocol ActivityIndicatorDisplayable {
+protocol ActivityIndicatorDisplayable {
     func showActivityIndicator(on controller: UIViewController?)
     func hideActivityIndicator()
 }
 
-public extension ActivityIndicatorDisplayable where Self: UIViewController {
+extension ActivityIndicatorDisplayable where Self: UIViewController {
     func showActivityIndicator(on controller: UIViewController? = nil) {
         let presentingVC = controller ?? tabBarController ?? navigationController ?? self
         let superView = presentingVC.view!

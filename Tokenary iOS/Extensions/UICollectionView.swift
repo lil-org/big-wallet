@@ -6,7 +6,7 @@ import UIKit
 extension UICollectionView {
     // MARK: - Dequeue
 
-    public func dequeueReusableCell<T: UICollectionViewCell>(for indexPath: IndexPath) -> T {
+    func dequeueReusableCell<T: UICollectionViewCell>(for indexPath: IndexPath) -> T {
         guard let wrappedView = dequeueReusableCell(
             withReuseIdentifier: String(describing: T.self), for: indexPath
         ) as? T else { preconditionFailure() }
@@ -15,7 +15,7 @@ extension UICollectionView {
     
     // MARK: - Register
 
-    public func registerCell<T: UICollectionViewCell>(class name: T.Type) {
+    func registerCell<T: UICollectionViewCell>(class name: T.Type) {
         register(
             T.self,
             forCellWithReuseIdentifier: String(describing: name)

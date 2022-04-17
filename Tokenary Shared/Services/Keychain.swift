@@ -100,14 +100,21 @@ struct Keychain {
     // MARK: - Private
     
     private func save(data: Data, key: ItemKey) {
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key.stringValue,
+        ]
+        let attributes: [String: Any] = [
             kSecValueData as String: data
         ]
         
-        SecItemDelete(query as CFDictionary) // ToDo: This is wrong -> update
-        SecItemAdd(query as CFDictionary, nil)
+        let updateStatus = SecItemUpdate(
+            query as CFDictionary, attributes as CFDictionary
+        )
+        if updateStatus == errSecItemNotFound {
+            query.merge(attributes) { (current, _) in current }
+            SecItemAdd(query as CFDictionary, nil)
+        }
     }
     
     private func allStoredItemsKeys() -> [String] {

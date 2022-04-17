@@ -115,13 +115,13 @@ class AccountsListPresenter: NSObject, AccountsListInput {
     
     @objc private func reloadData(notification: NSNotification? = nil) {
         if let walletsChangeSet = notification?.userInfo?["changeset"] as? WalletsManager.TokenaryWalletChangeSet {
-            self.updateAccounts(with: walletsChangeSet)
+            updateAccounts(with: walletsChangeSet)
         } else {
-            self.updateAccounts(
-                with: .init(toAdd: self.walletsManager.wallets.get(), toUpdate: [], toRemove: [])
+            updateAccounts(
+                with: .init(toAdd: walletsManager.wallets.get(), toUpdate: [], toRemove: [])
             )
         }
-        self.updateDataState()
+        updateDataState()
     }
     
     private func updateDataState() {
@@ -133,6 +133,7 @@ class AccountsListPresenter: NSObject, AccountsListInput {
         }
     }
     
+    // ToDo: Rewrite this when sections-rows model becomes flatten
     func updateAccounts(with walletsChangeSet: WalletsManager.TokenaryWalletChangeSet) {
         DispatchQueue.global().async {
             var filteredWalletsChangeSet = walletsChangeSet
@@ -183,21 +184,33 @@ class AccountsListPresenter: NSObject, AccountsListInput {
                     UIView.setAnimationsEnabled(false)
                     self.view?.tableView.beginUpdates()
                     
-                    let accountsDif = previousVM.derivedItemViewModels.count - updateVM.1.derivedItemViewModels.count
-//                    previousVM.derivedItemViewModels[.zero].chainType.stableIndex
-                    if accountsDif < .zero {
-                        if accountsDif == -1 {
-                            self.view?.tableView.insertRows(at: [IndexPath(index: 2)], with: .fade)
+                    if previousVM.derivedItemViewModels != updateVM.1.derivedItemViewModels {
+                        // This is the simplest possible approach:
+                        //  - First ensure that the cell.count == account.count
+                        //  - Update all
+                        if previousVM.derivedItemViewModels.count == updateVM.1.derivedItemViewModels.count {
+                            let updateIndices = (.zero ..< previousVM.derivedItemViewModels.count)
+                                .map { IndexPath(row: $0, section: updateVM.0) }
+                            self.view?.tableView.reloadRows(at: updateIndices, with: .fade)
                         } else {
-                            self.view?.tableView.insertRows(at: [IndexPath(index: 1), IndexPath(index: 2)], with: .fade)
+                            if previousVM.derivedItemViewModels.count < updateVM.1.derivedItemViewModels.count {
+                                let insertIndices = (previousVM.derivedItemViewModels.count ..< updateVM.1.derivedItemViewModels.count)
+                                    .map { IndexPath(row: $0, section: updateVM.0) }
+                                self.view?.tableView.insertRows(at: insertIndices, with: .fade)
+                            } else { // >
+                                let deleteIndices = (updateVM.1.derivedItemViewModels.count ..< previousVM.derivedItemViewModels.count)
+                                    .map { IndexPath(row: $0, section: updateVM.0) }
+                                self.view?.tableView.deleteRows(at: deleteIndices, with: .fade)
+                            }
+                            
+                            let updateIndices = (.zero ..< updateVM.1.derivedItemViewModels.count)
+                                .map { IndexPath(row: $0, section: updateVM.0) }
+                            self.view?.tableView.reloadRows(at: updateIndices, with: .fade)
                         }
-                    } else {
-                        self.view?.tableView.deleteRows(at: [IndexPath(index: 1)], with: .fade)
                     }
                     
                     let header = self.view?.tableView.headerView(forSection: updateVM.0) as? AccountsListSectionHeaderCell
                     header?.update(name: updateVM.1.accountName)
-                    header?.layoutSubviews()
                     self.view?.tableView.endUpdates()
                     UIView.setAnimationsEnabled(true)
                 }
@@ -227,7 +240,7 @@ class AccountsListPresenter: NSObject, AccountsListInput {
             accountName: wallet.name,
             privateKeyChainType: wallet.isMnemonic ? nil : wallet.associatedMetadata.privateKeyChain,
             isFilteringAccounts: mode.isFilteringAccounts,
-            derivedItemViewModels: transform(wallet).sorted(by: { $0.title > $1.title })
+            derivedItemViewModels: transform(wallet).sorted(by: { $0.chainType.stableIndex > $1.chainType.stableIndex })
         )
     }
     
@@ -296,9 +309,7 @@ extension AccountsListPresenter {
 
 extension AccountsListPresenter {
     
-    func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
-        true
-    }
+    func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool { true }
     
     func tableView(
         _ tableView: UITableView,
@@ -337,8 +348,8 @@ extension AccountsListPresenter {
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
         if mode != .mainScreen, let selectedWallet = filteredWallets[safe: indexPath.row] {
-            tableView.deselectRow(at: indexPath, animated: true)
             didSelect(wallet: selectedWallet)
         }
     }
@@ -380,6 +391,32 @@ extension AccountsListPresenter {
             // swiftlint:enable implicit_getter
         }
     }
+
+    func tableView(
+        _ tableView: UITableView,
+        willEndContextMenuInteraction configuration: UIContextMenuConfiguration,
+        animator: UIContextMenuInteractionAnimating?
+    ) {
+        guard let cell = cell(forConfiguration: configuration) else { return }
+        tableView // Simple `track after-update` fix
+            .visibleCells
+            .compactMap { $0 as? AccountsListDerivedItemCell }
+            .forEach { $0.proxySetHighlighted = false }
+        DispatchQueue.main.async {
+            cell.setHighlighted(false, animated: true)
+        }
+    }
+    
+    private func cell(forConfiguration configuration: UIContextMenuConfiguration) -> AccountsListDerivedItemCell? {
+        guard
+            let contextIdentifier = try? AccountsListContextMenuIdentifier(from: configuration.identifier),
+            let sectionIndex = accounts.firstIndex(where: { $0.id == contextIdentifier.accountIdentifier }),
+            let cell = view?.tableView.cellForRow(
+                at: IndexPath(row: contextIdentifier.rowIndex, section: sectionIndex)
+            ) as? AccountsListDerivedItemCell
+        else { return nil }
+        return cell
+    }
     
     func tableView(
         _ tableView: UITableView,
@@ -393,7 +430,7 @@ extension AccountsListPresenter {
             rowIndex: indexPath.row
         )
         let accountVM = accounts[indexPath.section].derivedItemViewModels[indexPath.row]
-        let attachedWallet: TokenaryWallet? = WalletsManager.shared.getWallet(id: self.accounts[indexPath.section].id)
+        let attachedWallet: TokenaryWallet? = WalletsManager.shared.getWallet(id: accounts[indexPath.section].id)
         return UIContextMenuConfiguration(
             identifier: try? identifier.toCopyObject,
             previewProvider: {
@@ -462,8 +499,13 @@ extension AccountsListPresenter {
             let cell = view?.tableView.cellForRow(
                 at: IndexPath(row: contextIdentifier.rowIndex, section: sectionIndex)
             ) as? AccountsListDerivedItemCell,
-            let snapshot = cell.accountIconBorderView.snapshotView(afterScreenUpdates: false)
+            let snapshot = cell.accountIconBorderView.snapshotView(afterScreenUpdates: true)
         else { return nil }
+        
+        if isHighlighting {
+            cell.setHighlighted(true, animated: false)
+            cell.proxySetHighlighted = true
+        }
 
         let parameters = UIPreviewParameters()
         parameters.backgroundColor = .clear
@@ -498,7 +540,7 @@ extension AccountsListPresenter {
     ) {
         animator.addCompletion {
             if let contextIdentifier = try? AccountsListContextMenuIdentifier(from: configuration.identifier) {
-                print("We are printing: \(contextIdentifier.accountIdentifier)")
+                print("We are routing to: \(contextIdentifier.accountIdentifier)")
             }
         }
     }

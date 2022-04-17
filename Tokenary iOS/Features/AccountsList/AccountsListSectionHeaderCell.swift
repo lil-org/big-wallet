@@ -111,6 +111,7 @@ extension AccountsListSectionHeaderCell: Configurable {
     }
     
     func update(name newName: String) {
+        guard accountNameLabel.text != newName else { return }
         accountNameLabel.text = newName
     }
     
@@ -118,18 +119,19 @@ extension AccountsListSectionHeaderCell: Configurable {
         if UIDevice.isPad {
             moreButton.showsMenuAsPrimaryAction = true
             moreButton.menu = UIMenu(
-                title: self.actionsForWalletDialogTitle,
+                title: .empty,
                 children: [
                     UIDeferredMenuElement.uncached { [weak self] completion in
                         guard let self = self else { completion([]); return }
                         
-                        var moreMenuChildren: [UIMenuElement] = []
+                        var generalActions: [UIMenuElement] = []
+                        var importantActions: [UIMenuElement] = []
                         let renameAction = UIAction(title: "Rename Wallet") { _ in
                             if let attachedWallet = self.attachedWallet {
                                 self.responder.object?.didTapRename(wallet: attachedWallet)
                             }
                         }
-                        moreMenuChildren.append(renameAction)
+                        generalActions.append(renameAction)
                         if let attachedWallet = self.attachedWallet, attachedWallet.isMnemonic {
                             if !viewModel.isFilteringAccounts {
                                 let configureAction = UIAction(title: "Configure accounts") { _ in
@@ -137,7 +139,7 @@ extension AccountsListSectionHeaderCell: Configurable {
                                         self.responder.object?.didTapReconfigureAccountsIn(wallet: attachedWallet)
                                     }
                                 }
-                                moreMenuChildren.append(configureAction)
+                                generalActions.append(configureAction)
                             }
                         } else {
                             if let privateKeyChainType = viewModel.privateKeyChainType {
@@ -152,29 +154,30 @@ extension AccountsListSectionHeaderCell: Configurable {
                                         LinkHelper.open(privateKeyChainType.scanURL(address))
                                     }
                                 }
-                                moreMenuChildren.append(contentsOf: [copyAddressAction, transactionScannerAction])
+                                generalActions.append(contentsOf: [copyAddressAction, transactionScannerAction])
                             }
                         }
-                        let showWalletKeyAction = UIAction(title: Strings.showWalletKey) { _ in
+                        let showWalletKeyAction = UIAction(title: Strings.showWalletKey, attributes: .destructive) { _ in
                             if let attachedWallet = self.attachedWallet {
                                 self.responder.object?.didTapExport(wallet: attachedWallet)
                             }
                         }
+                        importantActions.append(showWalletKeyAction)
                         let removeWalletAction = UIAction(title: Strings.removeWallet, attributes: .destructive) { _ in
                             if let attachedWallet = self.attachedWallet {
                                 self.responder.object?.didTapRemove(wallet: attachedWallet)
                             }
                         }
-                        if viewModel.isFilteringAccounts {
-                            moreMenuChildren.append(showWalletKeyAction)
-                        } else {
-                            moreMenuChildren.append(contentsOf: [showWalletKeyAction, removeWalletAction])
-                        }
+                        importantActions.append(removeWalletAction)
+                        
                         completion([
                             UIMenu(
-                                title: self.actionsForWalletDialogTitle,
+                                title: .empty, // This is lagging really badly - don't use it
                                 options: .displayInline,
-                                children: moreMenuChildren
+                                children: [
+                                    UIMenu(title: .empty, options: .displayInline, children: generalActions),
+                                    UIMenu(title: .empty, options: .displayInline, children: importantActions)
+                                ]
                             )
                         ])
                     }

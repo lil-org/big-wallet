@@ -9,7 +9,7 @@ class AccountsListDerivedItemCell: UITableViewCell {
         $0.translatesAutoresizingMaskIntoConstraints = false
     }
     
-    public private(set) lazy var accountIconBorderView = UIView().then {
+    private(set) lazy var accountIconBorderView = UIView().then {
         $0.layer.cornerRadius = 10
         $0.layer.borderColor = UIColor.gray.cgColor
         $0.layer.borderWidth = 1.0
@@ -17,7 +17,7 @@ class AccountsListDerivedItemCell: UITableViewCell {
         $0.translatesAutoresizingMaskIntoConstraints = false
     }
 
-    public private(set) lazy var accountIconImage = UIImageView().then {
+    private(set) lazy var accountIconImage = UIImageView().then {
         $0.contentMode = .scaleAspectFit
         $0.layer.cornerRadius = 8
         $0.clipsToBounds = true
@@ -69,6 +69,10 @@ class AccountsListDerivedItemCell: UITableViewCell {
         $0.setContentCompressionResistancePriority(.required, for: .vertical)
     }
     
+    // MARK: - Public Properties
+    
+    var proxySetHighlighted: Bool = true
+    
     // MARK: - UITableViewCell
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -77,6 +81,21 @@ class AccountsListDerivedItemCell: UITableViewCell {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        proxySetHighlighted = false
+    }
+    
+    override func setHighlighted(_ highlighted: Bool, animated: Bool) {
+        if proxySetHighlighted {
+            if highlighted {
+                super.setHighlighted(highlighted, animated: animated)
+            }
+        } else {
+            super.setHighlighted(highlighted, animated: animated)
+        }
+    }
 
     // MARK: - Private Methods
 
@@ -127,7 +146,7 @@ class AccountsListDerivedItemCell: UITableViewCell {
 }
     
 extension AccountsListDerivedItemCell: Configurable {
-    struct ViewModel {
+    struct ViewModel: Equatable {
         let accountIcon: UIImage
         let address: String
         let chainType: ChainType

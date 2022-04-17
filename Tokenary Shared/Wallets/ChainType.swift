@@ -80,6 +80,7 @@ extension ChainType {
         }
     }
     
+    /// Used for absolute positioning elements in list(i.e. sorting)
     var stableIndex: Int {
         switch self {
         case .ethereum:
