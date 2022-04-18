@@ -7,12 +7,7 @@ protocol AccountsListStateProviderInput: AnyObject {
     var filteredWallets: [TokenaryWallet] { get }
     
     func updateAccounts(with walletsChangeSet: WalletsManager.TokenaryWalletChangeSet)
-    
-#if canImport(UIKit)
-    func didTapAddAccount(at buttonFrame: CGRect)
-#elseif canImport(AppKit)
     func scrollToWalletAndBlink(walletId: String)
-#endif
 }
 
 protocol AccountsListStateProviderOutput: AnyObject {
@@ -30,7 +25,7 @@ protocol AccountsListStateProviderOutput: AnyObject {
 
 class AccountsListStateProvider: ObservableObject {
     @Published
-    var accounts: [AccountItemView.ViewModel] = []
+    var accounts: [AccountsListSectionHeaderView.ViewModel] = []
     
     func updateAccounts(with walletsChangeSet: WalletsManager.TokenaryWalletChangeSet) {
         DispatchQueue.global().async {
@@ -53,7 +48,7 @@ class AccountsListStateProvider: ObservableObject {
                     .map(\.id)
             }
             
-            let vmToAdd: [AccountItemView.ViewModel] = filteredWalletsChangeSet.toAdd.map(self.transform)
+            let vmToAdd: [AccountsListSectionHeaderView.ViewModel] = filteredWalletsChangeSet.toAdd.map(self.transform)
             let indicesToRemove: IndexSet = IndexSet(
                 self.accounts
                     .enumerated()
@@ -63,9 +58,9 @@ class AccountsListStateProvider: ObservableObject {
                     }
                     .map { $0.offset }
             )
-            let updateVM: [(Int, AccountItemView.ViewModel)] = filteredWalletsChangeSet.toUpdate.compactMap { updateWallet in
+            let updateVM: [(Int, AccountsListSectionHeaderView.ViewModel)] = filteredWalletsChangeSet.toUpdate.compactMap { updateWallet in
                 guard let updateIdx = self.accounts.firstIndex(where: { $0.id == updateWallet.id }) else { return nil }
-                let updateVM: AccountItemView.ViewModel = self.transform(updateWallet)
+                let updateVM: AccountsListSectionHeaderView.ViewModel = self.transform(updateWallet)
                 return (updateIdx, updateVM)
             }
             
@@ -117,7 +112,7 @@ class AccountsListStateProvider: ObservableObject {
         self.mode = mode
     }
 
-    private func transform(_ wallet: TokenaryWallet) -> AccountItemView.ViewModel {
+    private func transform(_ wallet: TokenaryWallet) -> AccountsListSectionHeaderView.ViewModel {
         let icon: Image
         if wallet.isMnemonic {
             if wallet.associatedMetadata.allChains.contains(.ethereum) {
@@ -136,21 +131,18 @@ class AccountsListStateProvider: ObservableObject {
                     defaultImage: "multiChainGrid"
                 )
             } else {
-                icon = Image(privateKeyChainType.iconName)
+                icon = Image("multiChainGrid")
             }
         }
-        return AccountItemView.ViewModel(
+        return AccountsListSectionHeaderView.ViewModel(
             id: wallet.id,
             icon: icon,
-            isMnemonicBased: wallet.isMnemonic,
-            accountAddress: wallet.isMnemonic ? nil : wallet[.address] ?? nil,
             accountName: wallet.name,
             mnemonicDerivedViewModels: transform(wallet).sorted(by: { $0.title > $1.title })
         )
     }
     
-    private func transform(_ wallet: TokenaryWallet) -> [DerivedAccountItemView.ViewModel] {
-        guard wallet.isMnemonic else { return [] }
+    private func transform(_ wallet: TokenaryWallet) -> [AccountsListDerivedItemView.ViewModel] {
         if
             case let .choseAccount(forChain: selectedChain) = mode,
             let selectedChain = selectedChain
@@ -170,37 +162,28 @@ class AccountsListStateProvider: ObservableObject {
     
     private func transform(
         _ wallet: TokenaryWallet, chain: ChainType
-    ) -> DerivedAccountItemView.ViewModel {
-        DerivedAccountItemView.ViewModel(
+    ) -> AccountsListDerivedItemView.ViewModel {
+        let address: String?
+        if wallet.isMnemonic {
+            address = wallet[chain, .address] ?? .empty
+        } else {
+            address = wallet[.address] ?? .empty
+        }
+        return AccountsListDerivedItemView.ViewModel(
             walletId: wallet.id,
             icon: Image(chain.iconName),
             chain: chain,
-            accountAddress: wallet[chain, .address] ?? nil,
-            iconShadowColor: .black
+            accountAddress: address ?? .empty
         )
     }
 }
 
 extension AccountsListStateProvider: AccountsListStateProviderInput {
-#if canImport(UIKit)
-    func didTapAddAccount(at buttonFrame: CGRect) {
-        touchAnchor = UnitPoint(
-            x: (buttonFrame.width / 2 + buttonFrame.minX) / UIScreen.main.bounds.width,
-            y: buttonFrame.minY / UIScreen.main.bounds.height
-        )
-        if UIDevice.isPad {
-            isAddAccountPopoverPresented.toggle()
-        } else {
-            isAddAccountDialogPresented.toggle()
-        }
-    }
-#elseif canImport(AppKit)
     func scrollToWalletAndBlink(walletId: String) {
         guard let accountIdx = accounts.firstIndex(where: { $0.id == walletId }) else { return }
         scrollToAccountIndex = accountIdx
         accounts[accountIdx].preformBlink = true
     }
-#endif
 }
 
 extension AccountsListStateProvider: AccountsListStateProviderOutput {

@@ -206,9 +206,9 @@
 		4BD4B45A27C6968F00809FB0 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3CB27C6968E00809FB0 /* UserDefaults.swift */; };
 		4BD4B45B27C6968F00809FB0 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3CB27C6968E00809FB0 /* UserDefaults.swift */; };
 		4BD4B45E27C6968F00809FB0 /* AccountsListStateProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3CF27C6968E00809FB0 /* AccountsListStateProvider.swift */; };
-		4BD4B46027C6968F00809FB0 /* DerivedAccountItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D027C6968E00809FB0 /* DerivedAccountItemView.swift */; };
+		4BD4B46027C6968F00809FB0 /* AccountsListDerivedItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D027C6968E00809FB0 /* AccountsListDerivedItemView.swift */; };
 		4BD4B46427C6968F00809FB0 /* AccountsListContentHolderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D227C6968E00809FB0 /* AccountsListContentHolderView.swift */; };
-		4BD4B46627C6968F00809FB0 /* AccountItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D327C6968E00809FB0 /* AccountItemView.swift */; };
+		4BD4B46627C6968F00809FB0 /* AccountsListSectionHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D327C6968E00809FB0 /* AccountsListSectionHeaderView.swift */; };
 		4BD4B46927C6968F00809FB0 /* AccountsListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D427C6968E00809FB0 /* AccountsListViewController.swift */; };
 		4BD4B46A27C6968F00809FB0 /* AccountsListAssembly.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D527C6968E00809FB0 /* AccountsListAssembly.swift */; };
 		4BD4B46B27C6968F00809FB0 /* AccountsListAssembly.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD4B3D527C6968E00809FB0 /* AccountsListAssembly.swift */; };
@@ -290,6 +290,10 @@
 		4BF7BCE8280A4B3B008575D4 /* FileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCE7280A4B3B008575D4 /* FileManager.swift */; };
 		4BF7BCEA280CCCC8008575D4 /* ActivityIndicatorDisplayable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCE9280CCCC8008575D4 /* ActivityIndicatorDisplayable.swift */; };
 		4BF7BCEC280D1172008575D4 /* RandomAccessCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCEB280D1172008575D4 /* RandomAccessCollection.swift */; };
+		4BF7BCED280E7BE6008575D4 /* CacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCE3280960F0008575D4 /* CacheService.swift */; };
+		4BF7BCEE280E7C0F008575D4 /* FileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCE7280A4B3B008575D4 /* FileManager.swift */; };
+		4BF7BCEF280E7C65008575D4 /* DispatchQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCE5280A2437008575D4 /* DispatchQueue.swift */; };
+		4BF7BCF0280E7CB2008575D4 /* RandomAccessCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCEB280D1172008575D4 /* RandomAccessCollection.swift */; };
 		B823433BC0A2163D2575A4B0 /* Pods_Tokenary_macOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1C652E83F7B0E720DF5DFD43 /* Pods_Tokenary_macOS.framework */; };
 /* End PBXBuildFile section */
 
@@ -481,9 +485,9 @@
 		4BD4B3C927C6968E00809FB0 /* URLs.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = URLs.swift; sourceTree = "<group>"; };
 		4BD4B3CB27C6968E00809FB0 /* UserDefaults.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UserDefaults.swift; sourceTree = "<group>"; };
 		4BD4B3CF27C6968E00809FB0 /* AccountsListStateProvider.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AccountsListStateProvider.swift; sourceTree = "<group>"; };
-		4BD4B3D027C6968E00809FB0 /* DerivedAccountItemView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DerivedAccountItemView.swift; sourceTree = "<group>"; };
+		4BD4B3D027C6968E00809FB0 /* AccountsListDerivedItemView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AccountsListDerivedItemView.swift; sourceTree = "<group>"; };
 		4BD4B3D227C6968E00809FB0 /* AccountsListContentHolderView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AccountsListContentHolderView.swift; sourceTree = "<group>"; };
-		4BD4B3D327C6968E00809FB0 /* AccountItemView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AccountItemView.swift; sourceTree = "<group>"; };
+		4BD4B3D327C6968E00809FB0 /* AccountsListSectionHeaderView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AccountsListSectionHeaderView.swift; sourceTree = "<group>"; };
 		4BD4B3D427C6968E00809FB0 /* AccountsListViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AccountsListViewController.swift; sourceTree = "<group>"; };
 		4BD4B3D527C6968E00809FB0 /* AccountsListAssembly.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AccountsListAssembly.swift; sourceTree = "<group>"; };
 		4BD4B3D927C6968E00809FB0 /* DimmingButtonStyle.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DimmingButtonStyle.swift; sourceTree = "<group>"; };
@@ -806,7 +810,6 @@
 				4B06ED6F27FE4F42003EED7C /* UICollectionView.swift */,
 				4BF7BCD9280907C3008575D4 /* UIImage.swift */,
 				4BF7BCDF28091061008575D4 /* CGSize.swift */,
-				4BF7BCE5280A2437008575D4 /* DispatchQueue.swift */,
 			);
 			path = Extensions;
 			sourceTree = "<group>";
@@ -915,6 +918,10 @@
 			isa = PBXGroup;
 			children = (
 				4B1D468627D563A000162216 /* AccountsListViewController.swift */,
+				4BD4B3CF27C6968E00809FB0 /* AccountsListStateProvider.swift */,
+				4BD4B3D227C6968E00809FB0 /* AccountsListContentHolderView.swift */,
+				4BD4B3D327C6968E00809FB0 /* AccountsListSectionHeaderView.swift */,
+				4BD4B3D027C6968E00809FB0 /* AccountsListDerivedItemView.swift */,
 			);
 			path = AccountsList;
 			sourceTree = "<group>";
@@ -1181,6 +1188,7 @@
 		4BD4B3A727C6968E00809FB0 /* Foundation */ = {
 			isa = PBXGroup;
 			children = (
+				4BF7BCE5280A2437008575D4 /* DispatchQueue.swift */,
 				4BD4B3CB27C6968E00809FB0 /* UserDefaults.swift */,
 				4BD4B3C827C6968E00809FB0 /* Notification.Name.swift */,
 				2CE059382763F3FF0042D844 /* CGFloat.swift */,
@@ -1241,10 +1249,6 @@
 			isa = PBXGroup;
 			children = (
 				4BD4B3D527C6968E00809FB0 /* AccountsListAssembly.swift */,
-				4BD4B3CF27C6968E00809FB0 /* AccountsListStateProvider.swift */,
-				4BD4B3D227C6968E00809FB0 /* AccountsListContentHolderView.swift */,
-				4BD4B3D327C6968E00809FB0 /* AccountItemView.swift */,
-				4BD4B3D027C6968E00809FB0 /* DerivedAccountItemView.swift */,
 			);
 			path = AccountsList;
 			sourceTree = "<group>";
@@ -1816,7 +1820,7 @@
 				4B1D46AF27D6C79200162216 /* NSStoryboard.swift in Sources */,
 				2C8A09D42675184700993638 /* Window.swift in Sources */,
 				4B06ED7327FEC112003EED7C /* WrappingStack.swift in Sources */,
-				4BD4B46627C6968F00809FB0 /* AccountItemView.swift in Sources */,
+				4BD4B46627C6968F00809FB0 /* AccountsListSectionHeaderView.swift in Sources */,
 				4BD4B4B227C6968F00809FB0 /* Keychain.swift in Sources */,
 				2C264BC627B2F2F400234393 /* SolanaSafariRequest.swift in Sources */,
 				2C773F62274523DC007B04E7 /* ResponseToExtension.swift in Sources */,
@@ -1841,10 +1845,13 @@
 				4BF7BCD72808EC50008575D4 /* ImagesService.swift in Sources */,
 				2C134BA627553EC500DAFBDB /* Browser.swift in Sources */,
 				4BB60B0327E92B7400F29E72 /* String.swift in Sources */,
+				4BF7BCF0280E7CB2008575D4 /* RandomAccessCollection.swift in Sources */,
 				4B697DC727E4141400934AB3 /* NSAppearance.swift in Sources */,
 				2C78F8282683BDCC00C10670 /* Alert.swift in Sources */,
+				4BF7BCED280E7BE6008575D4 /* CacheService.swift in Sources */,
 				2C8A09EE2675965F00993638 /* WaitingViewController.swift in Sources */,
 				4BD4B48427C6968F00809FB0 /* TouchGestureViewModifier.swift in Sources */,
+				4BF7BCEF280E7C65008575D4 /* DispatchQueue.swift in Sources */,
 				2C797E7E267BB88800F2CE2D /* WelcomeViewController.swift in Sources */,
 				4BD4B47027C6968F00809FB0 /* ChainSelectionView.swift in Sources */,
 				4BD4B48627C6968F00809FB0 /* ApprovalSubject.swift in Sources */,
@@ -1853,7 +1860,7 @@
 				4BD4B47227C6968F00809FB0 /* ChainSelectionAssembly.swift in Sources */,
 				4BD4B49227C6968F00809FB0 /* Transaction.swift in Sources */,
 				2C8A09E82675960D00993638 /* ErrorViewController.swift in Sources */,
-				4BD4B46027C6968F00809FB0 /* DerivedAccountItemView.swift in Sources */,
+				4BD4B46027C6968F00809FB0 /* AccountsListDerivedItemView.swift in Sources */,
 				2C264BCB27B2F2FF00234393 /* TezosSafariRequest.swift in Sources */,
 				4BD4B43427C6968F00809FB0 /* Collections.swift in Sources */,
 				4BD4B46427C6968F00809FB0 /* AccountsListContentHolderView.swift in Sources */,
@@ -1895,6 +1902,7 @@
 				4BD4B47E27C6968F00809FB0 /* SimpleToast.swift in Sources */,
 				4BD4B4B427C6968F00809FB0 /* SessionStorage.swift in Sources */,
 				4BD4B41A27C6968F00809FB0 /* DappRequestAction.swift in Sources */,
+				4BF7BCEE280E7C0F008575D4 /* FileManager.swift in Sources */,
 				4B9073CF27D80BF900B27E80 /* CGFloat.swift in Sources */,
 				4BB60AFE27E92B5200F29E72 /* WalletsManager.swift in Sources */,
 				2C264BE627B5AC6800234393 /* TezosResponseToExtension.swift in Sources */,

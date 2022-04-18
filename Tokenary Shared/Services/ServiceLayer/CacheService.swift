@@ -2,6 +2,11 @@
 
 import Foundation
 import Kingfisher
+#if canImport(UIKit)
+  import UIKit
+#elseif canImport(AppKit) && !targetEnvironment(macCatalyst)
+  import AppKit
+#endif
 
 struct CacheItemAvailability: OptionSet {
     let rawValue: Int
@@ -15,11 +20,11 @@ struct CacheItemAvailability: OptionSet {
 }
 
 private struct ImageCacheItem {
-    var image: UIImage
+    var image: BridgedImage
     var size: CGFloat
     var timestamp: CFAbsoluteTime
     
-    init(image: UIImage, size: CGFloat) {
+    init(image: BridgedImage, size: CGFloat) {
         self.image = image
         self.size = size
         self.timestamp = CFAbsoluteTimeGetCurrent()
@@ -31,8 +36,8 @@ private struct ImageCacheItem {
 }
 
 protocol ImageCacheService {
-    func cache(image: UIImage, forKey key: String, having availability: CacheItemAvailability)
-    func image(forKey key: String, having availability: CacheItemAvailability) -> UIImage?
+    func cache(image: BridgedImage, forKey key: String, having availability: CacheItemAvailability)
+    func image(forKey key: String, having availability: CacheItemAvailability) -> BridgedImage?
     func move(from oldKey: String, to newKey: String)
     func remove(key: String)
     
@@ -61,6 +66,7 @@ final class ImageCacheServiceImp: ImageCacheService {
             try? fileManager.createDirectory(atPath: diskCachePath, withIntermediateDirectories: true, attributes: nil)
         }
         
+        #if canImport(UIKit)
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(didReceiveMemoryWarning(notification:)),
@@ -73,6 +79,7 @@ final class ImageCacheServiceImp: ImageCacheService {
             name: UIApplication.didEnterBackgroundNotification,
             object: nil
         )
+        #endif
     }
     
     deinit {
@@ -97,10 +104,15 @@ final class ImageCacheServiceImp: ImageCacheService {
     
     // MARK: - Public Methods
     
-    func cache(image: UIImage, forKey key: String, having availability: CacheItemAvailability) {
+    func cache(image: BridgedImage, forKey key: String, having availability: CacheItemAvailability) {
         if availability.contains(.memory) {
             let actionClosure = {
+                #if canImport(UIKit)
                 let size = image.size.width * image.size.height * image.scale * 4 // width * height * pixels * color
+                #elseif canImport(AppKit)
+                let imageRepresentation = image.representations.first
+                let size = CGFloat((imageRepresentation?.pixelsWide ?? 1) * (imageRepresentation?.pixelsHigh ?? 1) * 4)
+                #endif
                 if let cachedItem = self.memoryCache[key] {
                     self.occupiedMemory -= cachedItem.size
                 }
@@ -121,11 +133,11 @@ final class ImageCacheServiceImp: ImageCacheService {
         }
     }
     
-    func image(forKey key: String, having availability: CacheItemAvailability) -> UIImage? {
-        var result: UIImage?
+    func image(forKey key: String, having availability: CacheItemAvailability) -> BridgedImage? {
+        var result: BridgedImage?
         
         if availability.contains(.memory) {
-            var image: UIImage?
+            var image: BridgedImage?
             DispatchQueue.safeMainSync {
                 if let cachedItem = self.memoryCache[key] {
                     self.memoryCache[key] = ImageCacheItem(updatingTimestamp: cachedItem)
@@ -139,7 +151,7 @@ final class ImageCacheServiceImp: ImageCacheService {
         }
         
         if availability.contains(.disk) {
-            var image: UIImage?
+            var image: BridgedImage?
             diskOperationsQueue.sync {
                 let options = [
                     kCGImageSourceShouldCache: kCFBooleanTrue // decode immediately
@@ -148,7 +160,11 @@ final class ImageCacheServiceImp: ImageCacheService {
                     let imageSource = CGImageSourceCreateWithURL(self.diskCacheURL(having: key) as CFURL, nil),
                     let cgImage = CGImageSourceCreateImageAtIndex(imageSource, .zero, options)
                 {
-                    image = UIImage(cgImage: cgImage)
+                    #if canImport(UIKit)
+                    image = BridgedImage(cgImage: cgImage)
+                    #elseif canImport(AppKit)
+                    image = BridgedImage(cgImage: cgImage, size: NSZeroSize)
+                    #endif
                     if availability.contains(.memory) {
                         cache(image: image!, forKey: key, having: .memory)
                     }
@@ -255,5 +271,15 @@ final class ImageCacheServiceImp: ImageCacheService {
                 }
             }
         }
+    }
+}
+
+extension NSImage {
+    func pngData() -> Data? {
+        guard
+            let tiffRepresentation = tiffRepresentation,
+            let bitmapImage = NSBitmapImageRep(data: tiffRepresentation)
+        else { return nil }
+        return bitmapImage.representation(using: .png, properties: [:])
     }
 }

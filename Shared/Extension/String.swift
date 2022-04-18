@@ -34,6 +34,11 @@ extension String {
         return prefix(4 + 2) + "..." + suffix(4)
     }
     
+    func trimmingAddress(sideLength: Int) -> String {
+        guard !isEmpty, count > sideLength * 2 + 2 else { return self }
+        return prefix(2 + sideLength) + "..." + suffix(sideLength)
+    }
+    
     // MARK: - Methods
     
     func removingOccurrences(of substrings: [String]) -> String {

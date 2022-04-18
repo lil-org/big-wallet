@@ -2,16 +2,20 @@
 
 import Foundation
 import Combine
-import UIKit
 import BlockiesSwift
+#if canImport(UIKit)
+  import UIKit
+#elseif canImport(AppKit) && !targetEnvironment(macCatalyst)
+  import AppKit
+#endif
 
 protocol ImagesService {
-    func loadRemoteImage(from url: URL, force: Bool, skipCache: Bool) -> AnyPublisher<UIImage?, Never>
-    func loadWalletImage(walletId: String, fallbackImage: UIImage) -> AnyPublisher<UIImage, Never>
+    func loadRemoteImage(from url: URL, force: Bool, skipCache: Bool) -> AnyPublisher<BridgedImage?, Never>
+    func loadWalletImage(walletId: String, fallbackImage: BridgedImage) -> AnyPublisher<BridgedImage, Never>
 }
 
 extension ImagesService {
-    func loadRemoteImage(from url: URL) -> AnyPublisher<UIImage?, Never> {
+    func loadRemoteImage(from url: URL) -> AnyPublisher<BridgedImage?, Never> {
         loadRemoteImage(from: url, force: false, skipCache: false)
     }
 }
@@ -26,14 +30,14 @@ final class ImagesServiceImp: ImagesService {
         self.cache = cache
     }
 
-    func loadRemoteImage(from url: URL, force: Bool, skipCache: Bool) -> AnyPublisher<UIImage?, Never> {
+    func loadRemoteImage(from url: URL, force: Bool, skipCache: Bool) -> AnyPublisher<BridgedImage?, Never> {
         if !force {
             if let image = cache.image(forKey: url.path, having: .both) {
                 return Just(image).eraseToAnyPublisher()
             }
         }
         return URLSession.shared.dataTaskPublisher(for: url)
-            .map { (data, response) -> UIImage? in return UIImage(data: data) }
+            .map { (data, response) -> BridgedImage? in return BridgedImage(data: data) }
             .catch { error in return Just(nil) }
             .handleEvents(receiveOutput: { [unowned self] image in
                 guard let image = image else { return }
@@ -46,10 +50,10 @@ final class ImagesServiceImp: ImagesService {
             .eraseToAnyPublisher()
     }
     
-    func loadWalletImage(walletId: String, fallbackImage: UIImage) -> AnyPublisher<UIImage, Never> {
-        Future<UIImage, Never> { promise in
+    func loadWalletImage(walletId: String, fallbackImage: BridgedImage) -> AnyPublisher<BridgedImage, Never> {
+        Future<BridgedImage, Never> { promise in
             DispatchQueue.global().async {
-                var icon: UIImage? = nil
+                var icon: BridgedImage? = nil
                 
                 if let image = self.cache.image(forKey: walletId, having: .both) {
                     promise(.success(image))
