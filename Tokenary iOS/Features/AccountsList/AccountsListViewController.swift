@@ -1,7 +1,6 @@
 // Copyright © 2022 Tokenary. All rights reserved.
 
 import Foundation
-
 import UIKit
 import SwiftUI
 import WalletCore
@@ -93,6 +92,7 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
         $0.translatesAutoresizingMaskIntoConstraints = false
         $0.register(cellWithClass: AccountsListDerivedItemCell.self)
         $0.register(headerFooterWithClass: AccountsListSectionHeaderCell.self)
+        $0.contentInsetAdjustmentBehavior = .never
         $0.tableHeaderView = chainFilterButtonContainer
         $0.tableFooterView = UIView(
             frame: CGRect(x: .zero, y: .zero, width: .zero, height: CGFloat.leastNormalMagnitude)
@@ -143,6 +143,28 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
         setupNavigationBar()
     }
     
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        biggestTopSafeAreaInset = max(tableView.safeAreaInsets.top, biggestTopSafeAreaInset)
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        DispatchQueue.main.async {
+            self.navigationController?.navigationBar.sizeToFit()
+        }
+    }
+    
+    // MARK: - Private Properties
+    
+    private let walletsManager: WalletsManager
+    private var toDismissAfterResponse = [Int: UIViewController]()
+    
+    private var biggestTopSafeAreaInset: CGFloat = 0
+    private var isInScrollToTopAnimation: Bool = false
+    
+    // MARK: - Private Methods
+    
     private func setupNavigationBar() {
         navigationItem.title = presenter.mode == .mainScreen ? Strings.accounts : Strings.selectAccount
         navigationController?.navigationBar.prefersLargeTitles = true
@@ -163,20 +185,6 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
         navigationItem.scrollEdgeAppearance = appearance
         navigationItem.standardAppearance = appearance
     }
-    
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        DispatchQueue.main.async {
-            self.navigationController?.navigationBar.sizeToFit()
-        }
-    }
-    
-    // MARK: - Private Properties
-    
-    private let walletsManager: WalletsManager
-    private var toDismissAfterResponse = [Int: UIViewController]()
-    
-    // MARK: - Private Methods
     
     private func setupViewHierarchy() {
         view.backgroundColor = .white
@@ -209,8 +217,10 @@ class AccountsListViewController: LifecycleObservableViewController, DataStateCo
         
         if !presenter.mode.isPossibleToApplyFilter {
             chainFilterButtonContainer.isHidden = true
-            tableView.tableHeaderView?.removeFromSuperview()
-            tableView.tableHeaderView = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: CGFloat.leastNonzeroMagnitude))
+            chainFilterButtonContainer.removeFromSuperview()
+            tableView.tableHeaderView = UIView(
+                frame: CGRect(x: 0, y: 0, width: 0, height: CGFloat.leastNonzeroMagnitude)
+            )
         }
 
         tableView.layoutSubviews()
@@ -443,6 +453,20 @@ extension AccountsListViewController: AccountsListOutput {
             }
             presentFrom.present(viewController, animated: true)
             self.toDismissAfterResponse[id] = viewController
+        }
+    }
+    
+    func scrollToTopNow() {
+        DispatchQueue.main.async {
+            guard !self.isInScrollToTopAnimation else { return }
+            self.isInScrollToTopAnimation = true
+            
+            CATransaction.begin()
+            CATransaction.setCompletionBlock {
+                self.isInScrollToTopAnimation = false
+            }
+            self.tableView.setContentOffset(CGPoint(x: 0, y: -self.view.safeAreaInsets.top), animated: true)
+            CATransaction.commit()
         }
     }
 }

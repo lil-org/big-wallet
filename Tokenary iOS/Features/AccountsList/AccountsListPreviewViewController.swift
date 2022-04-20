@@ -14,6 +14,7 @@ class AccountsListPreviewViewController: UIViewController {
     
     private lazy var tokenaryTitleViewHolder = UIView().then {
         $0.translatesAutoresizingMaskIntoConstraints = false
+        $0.isHidden = true
     }
     
     private lazy var tokenaryLogoImage = UIImageView().then {

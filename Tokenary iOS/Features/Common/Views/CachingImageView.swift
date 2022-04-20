@@ -18,10 +18,21 @@ class CachingImageView: UIImageView {
     
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     
+    deinit {
+        cancellable?.cancel()
+        if let animator = self.animator, animator.state != .inactive {
+            animator.stopAnimation(true)
+            animator.finishAnimation(at: .end)
+            self.animator = nil
+        }
+    }
+    
     func prepareForReuse() {
         image = nil
         alpha = 0.0
         animator?.stopAnimation(true)
+        animator?.finishAnimation(at: .end)
+        animator = nil
         cancellable?.cancel()
     }
     
@@ -43,7 +54,8 @@ extension CachingImageView: Configurable {
     
     private func show(image: UIImage?) {
         alpha = 0.0
-        animator?.stopAnimation(false)
+        animator?.stopAnimation(true)
+        animator?.finishAnimation(at: .end)
         self.image = image
         animator = UIViewPropertyAnimator.runningPropertyAnimator(
             withDuration: 0.3, delay: 0, options: .curveLinear, animations: {

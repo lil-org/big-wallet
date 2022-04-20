@@ -47,14 +47,12 @@ class AccountsListDerivedItemCell: UITableViewCell {
         $0.font = .systemFont(ofSize: 14, weight: .bold)
         $0.numberOfLines = 1
         $0.lineBreakMode = .byTruncatingMiddle
-        $0.textAlignment = .center
         $0.translatesAutoresizingMaskIntoConstraints = false
         $0.setContentCompressionResistancePriority(.required, for: .vertical)
     }
     
     private lazy var tokenTickerLabel = UILabel().then {
         $0.textColor = .gray
-        $0.textAlignment = .left
         $0.setContentCompressionResistancePriority(.required, for: .horizontal)
         $0.translatesAutoresizingMaskIntoConstraints = false
     }
@@ -64,7 +62,6 @@ class AccountsListDerivedItemCell: UITableViewCell {
         $0.font = .systemFont(ofSize: 14, weight: .regular)
         $0.numberOfLines = 1
         $0.lineBreakMode = .byTruncatingMiddle
-        $0.textAlignment = .center
         $0.translatesAutoresizingMaskIntoConstraints = false
         $0.setContentCompressionResistancePriority(.required, for: .vertical)
     }

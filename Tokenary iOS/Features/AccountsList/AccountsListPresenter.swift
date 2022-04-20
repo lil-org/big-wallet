@@ -189,10 +189,20 @@ class AccountsListPresenter: NSObject, AccountsListInput {
                         //  - First ensure that the cell.count == account.count
                         //  - Update all
                         if previousVM.derivedItemViewModels.count == updateVM.1.derivedItemViewModels.count {
-                            let updateIndices = (.zero ..< previousVM.derivedItemViewModels.count)
-                                .map { IndexPath(row: $0, section: updateVM.0) }
-                            self.view?.tableView.reloadRows(at: updateIndices, with: .fade)
+                            var reloadIndicies: [IndexPath] = []
+                            for rowIdx in (.zero ..< updateVM.1.derivedItemViewModels.count) {
+                                if updateVM.1.derivedItemViewModels[rowIdx] != previousVM.derivedItemViewModels[rowIdx] {
+                                    reloadIndicies.append(IndexPath(row: rowIdx, section: updateVM.0))
+                                }
+                            }
+                            self.view?.tableView.reloadRows(at: reloadIndicies, with: .fade)
                         } else {
+                            var insetIndices: [IndexPath] = []
+                            var reloadIndices: [IndexPath] = []
+                            var deleteIndices: [IndexPath] = []
+                            for rowIdx in (.zero ..< updateVM.1.derivedItemViewModels.count) {
+                                
+                            }
                             if previousVM.derivedItemViewModels.count < updateVM.1.derivedItemViewModels.count {
                                 let insertIndices = (previousVM.derivedItemViewModels.count ..< updateVM.1.derivedItemViewModels.count)
                                     .map { IndexPath(row: $0, section: updateVM.0) }
@@ -349,12 +359,57 @@ extension AccountsListPresenter {
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        if mode != .mainScreen, let selectedWallet = filteredWallets[safe: indexPath.row] {
-            didSelect(wallet: selectedWallet)
+        if let selectedWallet = filteredWallets[safe: indexPath.section] {
+            if mode != .mainScreen {
+                didSelect(wallet: selectedWallet)
+            } else if let selectedAccount = accounts[safe: indexPath.section]?.derivedItemViewModels[safe: indexPath.row] {
+                let copyAddressAction = UIAlertAction(
+                    title: Strings.copyAddress, style: .default
+                ) { _ in
+                    PasteboardHelper.setPlainNotNil(selectedWallet[selectedAccount.chainType, .address] ?? nil)
+                }
+                let showInChainScannerAction = UIAlertAction(
+                    title: selectedAccount.chainType.transactionScaner, style: .default
+                ) { _ in
+                    if let address = selectedWallet[selectedAccount.chainType, .address] ?? nil {
+                        LinkHelper.open(selectedAccount.chainType.scanURL(address))
+                    }
+                }
+                let showKeyAction = UIAlertAction(
+                    title: Strings.showWalletKey, style: .default
+                ) { _ in
+                    self.view?.didTapExport(wallet: selectedWallet)
+                }
+                let removeAccountAction = UIAlertAction(
+                    title: "Remove account", style: .destructive
+                ) { _ in
+                    try? WalletsManager.shared.removeAccountIn(
+                        wallet: selectedWallet, account: selectedAccount.chainType
+                    )
+                }
+                let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel) { _ in }
+                let alertVC = UIAlertController(
+                    title: "\(selectedAccount.chainType.title) actions", message: nil, preferredStyle: .actionSheet
+                ).then {
+                    $0.addAction(copyAddressAction)
+                    $0.addAction(showInChainScannerAction)
+                    $0.addAction(showKeyAction)
+                    if
+                        selectedWallet.associatedMetadata.allChains.count > 1,
+                        !selectedAccount.isFilteringAccounts
+                    {
+                        $0.addAction(removeAccountAction)
+                    }
+                    $0.addAction(cancelAction)
+                }
+                self.view?.tableView.parentViewController?.present(alertVC, animated: true, completion: nil)
+            }
         }
     }
     
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat { 46 }
+    
+    func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat { 35 }
     
     struct AccountsListContextMenuIdentifier: Codable {
         let accountIdentifier: String
@@ -543,6 +598,15 @@ extension AccountsListPresenter {
                 print("We are routing to: \(contextIdentifier.accountIdentifier)")
             }
         }
+    }
+}
+
+// MARK: - AccountsListPresenter + UIScrollViewDelegate
+
+extension AccountsListPresenter {
+    func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool {
+        view?.scrollToTopNow()
+        return false
     }
 }
 

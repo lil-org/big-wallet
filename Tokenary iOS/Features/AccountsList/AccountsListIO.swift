@@ -20,4 +20,5 @@ protocol AccountsListOutput: DataStateContainer {
     func didTapExport(wallet: TokenaryWallet)
     func openSafari(requestId: Int)
     func presentForSafariRequest(_ viewController: UIViewController, id: Int)
+    func scrollToTopNow()
 }

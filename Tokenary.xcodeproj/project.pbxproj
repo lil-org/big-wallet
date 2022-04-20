@@ -294,6 +294,9 @@
 		4BF7BCEE280E7C0F008575D4 /* FileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCE7280A4B3B008575D4 /* FileManager.swift */; };
 		4BF7BCEF280E7C65008575D4 /* DispatchQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCE5280A2437008575D4 /* DispatchQueue.swift */; };
 		4BF7BCF0280E7CB2008575D4 /* RandomAccessCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCEB280D1172008575D4 /* RandomAccessCollection.swift */; };
+		4BF7BCF2280F72B6008575D4 /* NSImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCF1280F72B6008575D4 /* NSImage.swift */; };
+		4BF7BCF4280F9241008575D4 /* QRCodeGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCF3280F9240008575D4 /* QRCodeGenerator.swift */; };
+		4BF7BCF6280F9255008575D4 /* CGContextWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF7BCF5280F9255008575D4 /* CGContextWrapper.swift */; };
 		B823433BC0A2163D2575A4B0 /* Pods_Tokenary_macOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1C652E83F7B0E720DF5DFD43 /* Pods_Tokenary_macOS.framework */; };
 /* End PBXBuildFile section */
 
@@ -535,6 +538,9 @@
 		4BF7BCE7280A4B3B008575D4 /* FileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileManager.swift; sourceTree = "<group>"; };
 		4BF7BCE9280CCCC8008575D4 /* ActivityIndicatorDisplayable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityIndicatorDisplayable.swift; sourceTree = "<group>"; };
 		4BF7BCEB280D1172008575D4 /* RandomAccessCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RandomAccessCollection.swift; sourceTree = "<group>"; };
+		4BF7BCF1280F72B6008575D4 /* NSImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSImage.swift; sourceTree = "<group>"; };
+		4BF7BCF3280F9240008575D4 /* QRCodeGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCodeGenerator.swift; sourceTree = "<group>"; };
+		4BF7BCF5280F9255008575D4 /* CGContextWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CGContextWrapper.swift; sourceTree = "<group>"; };
 		79196256009C6E698EB7AA59 /* Pods-Tokenary.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary.release.xcconfig"; path = "Target Support Files/Pods-Tokenary/Pods-Tokenary.release.xcconfig"; sourceTree = "<group>"; };
 		79E83B47DE0EB9BC8AC9B236 /* Pods-Tokenary iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary iOS.debug.xcconfig"; path = "Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS.debug.xcconfig"; sourceTree = "<group>"; };
 		9FB2D4E7F11F60183689311C /* Pods-Tokenary.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary.debug.xcconfig"; path = "Target Support Files/Pods-Tokenary/Pods-Tokenary.debug.xcconfig"; sourceTree = "<group>"; };
@@ -723,6 +729,7 @@
 				2C6B964B26B9D92500D2C819 /* NSColor.swift */,
 				4B1D46AE27D6C79200162216 /* NSStoryboard.swift */,
 				4B697DC627E4141400934AB3 /* NSAppearance.swift */,
+				4BF7BCF1280F72B6008575D4 /* NSImage.swift */,
 			);
 			path = Extensions;
 			sourceTree = "<group>";
@@ -870,6 +877,8 @@
 				2C8E88A1275FA596003EB8DB /* ImportViewController.swift */,
 				4B1D468327D561FD00162216 /* AccountsList */,
 				4B1D468227D561EF00162216 /* Common */,
+				4BF7BCF3280F9240008575D4 /* QRCodeGenerator.swift */,
+				4BF7BCF5280F9255008575D4 /* CGContextWrapper.swift */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -1833,6 +1842,7 @@
 				2C6B964C26B9D92500D2C819 /* NSColor.swift in Sources */,
 				4BD4B49427C6968F00809FB0 /* EthereumNetwork.swift in Sources */,
 				4BD4B45427C6968F00809FB0 /* Notification.Name.swift in Sources */,
+				4BF7BCF2280F72B6008575D4 /* NSImage.swift in Sources */,
 				2C264BC127B2F2C100234393 /* EthereumSafariRequest.swift in Sources */,
 				4BD4B4D827C8049C00809FB0 /* Unwrap.swift in Sources */,
 				4BD4B48027C6968F00809FB0 /* ConstrainMinMaxWidthView.swift in Sources */,
@@ -2026,6 +2036,7 @@
 				4BD4B45327C6968F00809FB0 /* Strings.swift in Sources */,
 				2C264BC727B2F2F400234393 /* SolanaSafariRequest.swift in Sources */,
 				4BB60B0727EB0E0500F29E72 /* SynchronizedArray.swift in Sources */,
+				4BF7BCF6280F9255008575D4 /* CGContextWrapper.swift in Sources */,
 				4B06ED5627F7B043003EED7C /* Weak.swift in Sources */,
 				4BD4B49727C6968F00809FB0 /* EthereumChain.swift in Sources */,
 				4B06ED6E27FE4BE3003EED7C /* UIControl.swift in Sources */,
@@ -2034,6 +2045,7 @@
 				4B06ED6127FBB964003EED7C /* ExtendedHitAreaButton.swift in Sources */,
 				4BD4B46F27C6968F00809FB0 /* ButtonWithBackgroundStyle.swift in Sources */,
 				2C8E88A2275FA596003EB8DB /* ImportViewController.swift in Sources */,
+				4BF7BCF4280F9241008575D4 /* QRCodeGenerator.swift in Sources */,
 				2C5FF97426C84F7B00B32ACC /* SceneDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
