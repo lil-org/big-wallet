@@ -127,7 +127,16 @@ class TokenarySolana extends EventEmitter {
                     return this.sendResponse(payload.id, {publicKey: this.publicKey});
                 }
             case "signMessage":
+                if (typeof payload.params.message !== "string") {
+                    payload.params.message = Utils.bufferToHex(payload.params.message);
+                }
                 return this.postMessage("signMessage", payload.id, payload);
+            case "signTransaction":
+                return this.postMessage("signTransaction", payload.id, payload);
+            case "signAllTransactions":
+                return this.postMessage("signAllTransactions", payload.id, payload);
+            case "signAndSendTransaction":
+                return this.postMessage("signAndSendTransaction", payload.id, payload);
         }
     }
 
