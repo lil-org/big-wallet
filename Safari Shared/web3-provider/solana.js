@@ -36,6 +36,7 @@ class TokenarySolana extends EventEmitter {
     }
 
     disconnect() {
+        // TODO: implement
         // support also via request "disconnect" method
     }
 
