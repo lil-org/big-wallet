@@ -131,8 +131,8 @@ class TokenarySolana extends EventEmitter {
         }
     }
 
-    emitConnect() {
-        this.emit("connect");
+    emitConnect(publicKey) {
+        this.emit("connect", publicKey);
     }
 
     processTokenaryResponse(id, response) {
