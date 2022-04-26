@@ -122,7 +122,7 @@ class TokenarySolana extends EventEmitter {
                     return this.postMessage("connect", payload.id, {});
                 } else {
                     this.isConnected = true;
-                    this.emitConnect();
+                    this.emitConnect(this.publicKey);
                     return this.sendResponse(payload.id, {publicKey: this.publicKey});
                 }
             case "signMessage":
@@ -152,7 +152,7 @@ class TokenarySolana extends EventEmitter {
             const publicKey = new PublicKey(response.publicKey);
             this.publicKey = publicKey;
             this.sendResponse(id, {publicKey: publicKey});
-            this.emitConnect();
+            this.emitConnect(publicKey);
         } else if ("result" in response) {
             this.sendResponse(id, response.result);
         } else if ("error" in response) {
