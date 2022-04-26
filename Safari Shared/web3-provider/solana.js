@@ -9,6 +9,7 @@ import IdMapping from "./id_mapping";
 import { EventEmitter } from "events";
 import isUtf8 from "isutf8";
 import { PublicKey, Transaction } from "@solana/web3.js";
+import bs58 from "bs58";
 
 class TokenarySolana extends EventEmitter {
     
@@ -17,6 +18,9 @@ class TokenarySolana extends EventEmitter {
 
         this.idMapping = new IdMapping();
         this.callbacks = new Map();
+        
+        this.respondWithBuffer = new Map();
+        this.transactionsPendingSignature = new Map();
 
         this.isPhantom = true;
         this.publicKey = null;
@@ -39,34 +43,35 @@ class TokenarySolana extends EventEmitter {
     // TODO: support emitting accountChanged (on switch account event)
 
     signTransaction(transaction) {
-        
+        const params = {message: bs58.encode(transaction.serializeMessage())};
+        const payload = {method: "signTransaction", params: params, id: Utils.genId()};
+        this.transactionsPendingSignature.set(payload.id, [transaction]);
+        return this.request(payload);
     }
     
     signAllTransactions(transactions) {
-        
+        const messages = transactions.map(transaction => {
+            return bs58.encode(transaction.serializeMessage());
+        });
+        const params = {messages: messages};
+        const payload = {method: "signAllTransactions", params: params, id: Utils.genId()};
+        this.transactionsPendingSignature.set(payload.id, transactions);
+        return this.request(payload);
+    }
+
+    signAndSendTransaction(transaction) {
+        const params = {message: bs58.encode(transaction.serializeMessage())};
+        return this.request({method: "signAndSendTransaction", params: params});
     }
     
-    signAndSendTransaction(transaction) {
-        // should return a promise with a signature
-
-        // usage example
-//        const transaction = new Transaction();
-//        const { signature } = await window.solana.signAndSendTransaction(transaction);
-
-        // You can also specify a SendOptions object as a second argument into signAndSendTransaction or as an options parameter when using request.
-        // https://solana-labs.github.io/solana-web3.js/modules.html#SendOptions
-//        SendOptions: { preflightCommitment?: Commitment; skipPreflight?: boolean };
-
-        // there are also two deprecated methods to sign transactions without sending, idk if i should support em
-        // https://github.com/phantom-labs/docs/blob/master/integrating/sending-a-transaction.md#deprecated-methods
-    }
-
     signMessage(encodedMessage, display) {
         var params = {message: encodedMessage};
         if (typeof display !== "undefined") {
             params.display = display;
         }
-        return this.request({method: "signMessage", params: params});
+        const payload = {method: "signMessage", params: params, id: Utils.genId()};
+        this.respondWithBuffer.set(payload.id, true);
+        return this.request(payload);
     }
 
     request(payload) {
@@ -89,6 +94,9 @@ class TokenarySolana extends EventEmitter {
             switch (payload.method) {
                 case "connect":
                 case "signMessage":
+                case "signTransaction":
+                case "signAllTransactions":
+                case "signAndSendTransaction":
                     return this.processPayload(payload);
                 default:
                     this.callbacks.delete(payload.id);
@@ -100,24 +108,6 @@ class TokenarySolana extends EventEmitter {
                     .catch(reject);
             }
         });
-        
-        // signAndSendTransaction request usage example
-//        const transaction = new Transaction();
-//        const { signature } = await window.solana.request({
-//            method: "signAndSendTransaction",
-//            params: {
-//                 message: bs58.encode(transaction.serializeMessage()),
-//            },
-//        });
-
-        // signMessage request usage example
-//        const signedMessage = await window.solana.request({
-//            method: "signMessage",
-//            params: {
-//                 message: encodedMessage,
-//                 display: "hex",
-//            },
-//        });
     }
     
     processPayload(payload) {

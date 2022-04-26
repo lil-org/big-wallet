@@ -15,6 +15,7 @@
     "author": "Tokenary <support@tokenary.io>",
     "license": "MIT",
     "dependencies": {
+        "bs58": "^5.0.0",
         "buffer": "^5.6.0",
         "events": "^3.2.0",
         "isutf8": "^3.1.1"
