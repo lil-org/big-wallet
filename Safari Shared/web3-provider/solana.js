@@ -145,6 +145,9 @@ class TokenarySolana extends EventEmitter {
     }
 
     processTokenaryResponse(id, response) {
+        // TODO: use and clean up respondWithBuffer
+        // TODO: use and clean up transactionsPendingSignature
+        
         if (response.name == "didLoadLatestConfiguration") {
             this.didGetLatestConfiguration = true;
             if ("publicKey" in response) { // TODO: validate non-empty?
@@ -164,7 +167,38 @@ class TokenarySolana extends EventEmitter {
             this.sendResponse(id, {publicKey: publicKey});
             this.emitConnect(publicKey);
         } else if ("result" in response) {
-            this.sendResponse(id, response.result);
+            if (response.name == "signTransaction" || response.name == "signAndSendTransaction") {
+                if (this.transactionsPendingSignature.has(id)) {
+                    const pending = this.transactionsPendingSignature.get(id);
+                    this.transactionsPendingSignature.delete(id); // TODO: there are other cases to delete it as well;
+                    const buffer = Utils.messageToBuffer(bs58.decode(response.result));
+                    const transaction = pending[0];
+                    transaction.addSignature(this.publicKey, buffer);
+                    this.sendResponse(id, transaction);
+                } else {
+                    this.sendResponse(id, {signature: response.result, publicKey: this.publicKey.toString()});
+                }
+            } else {
+                if (this.respondWithBuffer.get(id) === true) {
+                    this.respondWithBuffer.delete(id); // TODO: there are other cases to delete it as well;
+                    const buffer = Utils.messageToBuffer(bs58.decode(response.result));
+                    this.sendResponse(id, {signature: buffer, publicKey: this.publicKey});
+                } else {
+                    this.sendResponse(id, {signature: response.result, publicKey: this.publicKey.toString()});
+                }
+            }
+        } else if ("results" in response) {
+            if (this.transactionsPendingSignature.has(id)) {
+                const transactions = this.transactionsPendingSignature.get(id);
+                this.transactionsPendingSignature.delete(id); // TODO: there are other cases to delete it as well;
+                response.results.forEach( (signature, index) => {
+                    const buffer = Utils.messageToBuffer(bs58.decode(signature));
+                    transactions[index].addSignature(this.publicKey, buffer);
+                });
+                this.sendResponse(id, transactions);
+            } else {
+                this.sendResponse(id, {signatures: response.results, publicKey: this.publicKey.toString()});
+            }
         } else if ("error" in response) {
             this.sendError(id, response.error);
         }
