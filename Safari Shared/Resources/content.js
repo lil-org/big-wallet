@@ -1,8 +1,6 @@
-const pendingRequestsIds = new Set();
+// Copyright © 2022 Tokenary. All rights reserved.
 
-if (window.location.href.startsWith("https://tokenary.io/blank")) {
-    browser.runtime.sendMessage({ subject: "wakeUp" });
-}
+const pendingRequestsIds = new Set();
 
 function injectScript() {
     try {
@@ -135,11 +133,6 @@ function didTapExtensionButton() {
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if ("didTapExtensionButton" in request) {
         didTapExtensionButton();
-    } else {
-        if (pendingRequestsIds.has(request.id)) {
-            sendToInpage(request, request.id);
-            browser.runtime.sendMessage({ subject: "activateTab" });
-        }
     }
 });
 
