@@ -36,7 +36,6 @@ struct DappRequestProcessor {
                 return .selectAccount(action)
             }
         case let .solana(body):
-            // TODO: actually send transaction on signAndSendTransaction
             switch body.method {
             case .connect:
                 let responseBody = ResponseToExtension.Solana(publicKey: "A87Upx1f1whNV5P8xQCK2YUTwE3uMYigjoKJAF3jiNpz")
