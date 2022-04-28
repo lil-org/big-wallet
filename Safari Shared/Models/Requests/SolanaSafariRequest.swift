@@ -10,6 +10,12 @@ extension SafariRequest {
             case connect, signMessage, signTransaction, signAllTransactions, signAndSendTransaction
         }
         
+        struct SendOptions: Codable {
+            let maxRetries: Int?
+            let preflightCommitment: String?
+            let skipPreflight: Bool?
+        }
+        
         let method: Method
         let publicKey: String
         let message: String?

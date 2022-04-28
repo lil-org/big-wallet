@@ -60,8 +60,11 @@ class TokenarySolana extends EventEmitter {
         return this.request(payload);
     }
 
-    signAndSendTransaction(transaction) {
-        const params = {message: bs58.encode(transaction.serializeMessage())};
+    signAndSendTransaction(transaction, options) {
+        var params = {message: bs58.encode(transaction.serializeMessage())};
+        if (typeof options !== "undefined") {
+            params.options = options;
+        }
         return this.request({method: "signAndSendTransaction", params: params});
     }
     
