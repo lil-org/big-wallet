@@ -4,9 +4,9 @@
 // terms governing use, modification, and redistribution, is contained in the
 // file LICENSE at the root of the source code distribution tree.
 
-public typealias FIOPublicAddress = TW_FIO_Proto_PublicAddress;
-public typealias FIONewFundsContent = TW_FIO_Proto_NewFundsContent;
-public typealias FIOAction = TW_FIO_Proto_Action;
-public typealias FIOChainParams = TW_FIO_Proto_ChainParams;
-public typealias FIOSigningInput = TW_FIO_Proto_SigningInput;
-public typealias FIOSigningOutput = TW_FIO_Proto_SigningOutput;
+public typealias FIOPublicAddress = TW_FIO_Proto_PublicAddress
+public typealias FIONewFundsContent = TW_FIO_Proto_NewFundsContent
+public typealias FIOAction = TW_FIO_Proto_Action
+public typealias FIOChainParams = TW_FIO_Proto_ChainParams
+public typealias FIOSigningInput = TW_FIO_Proto_SigningInput
+public typealias FIOSigningOutput = TW_FIO_Proto_SigningOutput

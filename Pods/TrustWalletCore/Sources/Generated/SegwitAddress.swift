@@ -31,6 +31,10 @@ public final class SegwitAddress: Address {
         return HRP(rawValue: TWSegwitAddressHRP(rawValue).rawValue)!
     }
 
+    public var witnessVersion: Int32 {
+        return TWSegwitAddressWitnessVersion(rawValue)
+    }
+
     public var witnessProgram: Data {
         return TWDataNSData(TWSegwitAddressWitnessProgram(rawValue))
     }

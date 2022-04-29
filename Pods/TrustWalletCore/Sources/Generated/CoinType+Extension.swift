@@ -49,6 +49,10 @@ extension CoinType {
         return TWCoinTypeSlip44Id(TWCoinType(rawValue: rawValue))
     }
 
+    public var publicKeyType: PublicKeyType {
+        return PublicKeyType(rawValue: TWCoinTypePublicKeyType(TWCoinType(rawValue: rawValue)).rawValue)!
+    }
+
     public func validate(address: String) -> Bool {
         let addressString = TWStringCreateWithNSString(address)
         defer {

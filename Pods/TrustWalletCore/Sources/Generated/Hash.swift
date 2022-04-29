@@ -107,22 +107,6 @@ public struct Hash {
         return TWDataNSData(TWHashGroestl512(dataData))
     }
 
-    public static func xxhash64(data: Data, seed: UInt64) -> Data {
-        let dataData = TWDataCreateWithNSData(data)
-        defer {
-            TWDataDelete(dataData)
-        }
-        return TWDataNSData(TWHashXXHash64(dataData, seed))
-    }
-
-    public static func twoXXHash64Concat(data: Data) -> Data {
-        let dataData = TWDataCreateWithNSData(data)
-        defer {
-            TWDataDelete(dataData)
-        }
-        return TWDataNSData(TWHashTwoXXHash64Concat(dataData))
-    }
-
     public static func sha256SHA256(data: Data) -> Data {
         let dataData = TWDataCreateWithNSData(data)
         defer {

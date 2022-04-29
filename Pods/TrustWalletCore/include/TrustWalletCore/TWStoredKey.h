@@ -13,6 +13,7 @@
 #include "TWPrivateKey.h"
 #include "TWString.h"
 #include "TWStoredKeyEncryptionLevel.h"
+#include "TWDerivation.h"
 
 TW_EXTERN_C_BEGIN
 
@@ -71,13 +72,17 @@ struct TWAccount* _Nullable TWStoredKeyAccount(struct TWStoredKey* _Nonnull key,
 TW_EXPORT_METHOD
 struct TWAccount* _Nullable TWStoredKeyAccountForCoin(struct TWStoredKey* _Nonnull key, enum TWCoinType coin, struct TWHDWallet* _Nullable wallet);
 
+/// Returns the account for a specific coin + derivation, creating it if necessary.  Returned object needs to be deleted.
+TW_EXPORT_METHOD
+struct TWAccount* _Nullable TWStoredKeyAccountForCoinDerivation(struct TWStoredKey* _Nonnull key, enum TWCoinType coin, enum TWDerivation derivation, struct TWHDWallet* _Nullable wallet);
+
 /// Remove the account for a specific coin
 TW_EXPORT_METHOD
 void TWStoredKeyRemoveAccountForCoin(struct TWStoredKey* _Nonnull key, enum TWCoinType coin);
 
 /// Adds a new account.
 TW_EXPORT_METHOD
-void TWStoredKeyAddAccount(struct TWStoredKey* _Nonnull key, TWString* _Nonnull address, enum TWCoinType coin, TWString* _Nonnull derivationPath, TWString* _Nonnull extetndedPublicKey);
+void TWStoredKeyAddAccount(struct TWStoredKey* _Nonnull key, TWString* _Nonnull address, enum TWCoinType coin, TWString* _Nonnull derivationPath, TWString* _Nonnull publicKey, TWString* _Nonnull extendedPublicKey);
 
 /// Saves the key to a file.
 TW_EXPORT_METHOD

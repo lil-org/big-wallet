@@ -29,6 +29,12 @@ public struct TW_Solana_Proto_Transfer {
 
   public var value: UInt64 = 0
 
+  /// optional
+  public var memo: String = String()
+
+  /// optional referenced public keys
+  public var references: [String] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -157,6 +163,12 @@ public struct TW_Solana_Proto_TokenTransfer {
   /// Note: 8-bit value
   public var decimals: UInt32 = 0
 
+  /// optional
+  public var memo: String = String()
+
+  /// optional referenced public keys
+  public var references: [String] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -182,6 +194,12 @@ public struct TW_Solana_Proto_CreateAndTransferToken {
 
   /// Note: 8-bit value
   public var decimals: UInt32 = 0
+
+  /// optional
+  public var memo: String = String()
+
+  /// optional referenced public keys
+  public var references: [String] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -358,6 +376,8 @@ extension TW_Solana_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf._Messag
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "recipient"),
     2: .same(proto: "value"),
+    3: .same(proto: "memo"),
+    4: .same(proto: "references"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -368,6 +388,8 @@ extension TW_Solana_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf._Messag
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.recipient) }()
       case 2: try { try decoder.decodeSingularUInt64Field(value: &self.value) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.memo) }()
+      case 4: try { try decoder.decodeRepeatedStringField(value: &self.references) }()
       default: break
       }
     }
@@ -380,12 +402,20 @@ extension TW_Solana_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf._Messag
     if self.value != 0 {
       try visitor.visitSingularUInt64Field(value: self.value, fieldNumber: 2)
     }
+    if !self.memo.isEmpty {
+      try visitor.visitSingularStringField(value: self.memo, fieldNumber: 3)
+    }
+    if !self.references.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.references, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Solana_Proto_Transfer, rhs: TW_Solana_Proto_Transfer) -> Bool {
     if lhs.recipient != rhs.recipient {return false}
     if lhs.value != rhs.value {return false}
+    if lhs.memo != rhs.memo {return false}
+    if lhs.references != rhs.references {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -659,6 +689,8 @@ extension TW_Solana_Proto_TokenTransfer: SwiftProtobuf.Message, SwiftProtobuf._M
     3: .standard(proto: "recipient_token_address"),
     4: .same(proto: "amount"),
     5: .same(proto: "decimals"),
+    6: .same(proto: "memo"),
+    7: .same(proto: "references"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -672,6 +704,8 @@ extension TW_Solana_Proto_TokenTransfer: SwiftProtobuf.Message, SwiftProtobuf._M
       case 3: try { try decoder.decodeSingularStringField(value: &self.recipientTokenAddress) }()
       case 4: try { try decoder.decodeSingularUInt64Field(value: &self.amount) }()
       case 5: try { try decoder.decodeSingularUInt32Field(value: &self.decimals) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.memo) }()
+      case 7: try { try decoder.decodeRepeatedStringField(value: &self.references) }()
       default: break
       }
     }
@@ -693,6 +727,12 @@ extension TW_Solana_Proto_TokenTransfer: SwiftProtobuf.Message, SwiftProtobuf._M
     if self.decimals != 0 {
       try visitor.visitSingularUInt32Field(value: self.decimals, fieldNumber: 5)
     }
+    if !self.memo.isEmpty {
+      try visitor.visitSingularStringField(value: self.memo, fieldNumber: 6)
+    }
+    if !self.references.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.references, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -702,6 +742,8 @@ extension TW_Solana_Proto_TokenTransfer: SwiftProtobuf.Message, SwiftProtobuf._M
     if lhs.recipientTokenAddress != rhs.recipientTokenAddress {return false}
     if lhs.amount != rhs.amount {return false}
     if lhs.decimals != rhs.decimals {return false}
+    if lhs.memo != rhs.memo {return false}
+    if lhs.references != rhs.references {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -716,6 +758,8 @@ extension TW_Solana_Proto_CreateAndTransferToken: SwiftProtobuf.Message, SwiftPr
     4: .standard(proto: "sender_token_address"),
     5: .same(proto: "amount"),
     6: .same(proto: "decimals"),
+    7: .same(proto: "memo"),
+    8: .same(proto: "references"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -730,6 +774,8 @@ extension TW_Solana_Proto_CreateAndTransferToken: SwiftProtobuf.Message, SwiftPr
       case 4: try { try decoder.decodeSingularStringField(value: &self.senderTokenAddress) }()
       case 5: try { try decoder.decodeSingularUInt64Field(value: &self.amount) }()
       case 6: try { try decoder.decodeSingularUInt32Field(value: &self.decimals) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.memo) }()
+      case 8: try { try decoder.decodeRepeatedStringField(value: &self.references) }()
       default: break
       }
     }
@@ -754,6 +800,12 @@ extension TW_Solana_Proto_CreateAndTransferToken: SwiftProtobuf.Message, SwiftPr
     if self.decimals != 0 {
       try visitor.visitSingularUInt32Field(value: self.decimals, fieldNumber: 6)
     }
+    if !self.memo.isEmpty {
+      try visitor.visitSingularStringField(value: self.memo, fieldNumber: 7)
+    }
+    if !self.references.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.references, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -764,6 +816,8 @@ extension TW_Solana_Proto_CreateAndTransferToken: SwiftProtobuf.Message, SwiftPr
     if lhs.senderTokenAddress != rhs.senderTokenAddress {return false}
     if lhs.amount != rhs.amount {return false}
     if lhs.decimals != rhs.decimals {return false}
+    if lhs.memo != rhs.memo {return false}
+    if lhs.references != rhs.references {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

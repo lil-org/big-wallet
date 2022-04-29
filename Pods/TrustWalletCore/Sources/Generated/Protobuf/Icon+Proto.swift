@@ -4,5 +4,5 @@
 // terms governing use, modification, and redistribution, is contained in the
 // file LICENSE at the root of the source code distribution tree.
 
-public typealias IconSigningInput = TW_Icon_Proto_SigningInput;
-public typealias IconSigningOutput = TW_Icon_Proto_SigningOutput;
+public typealias IconSigningInput = TW_Icon_Proto_SigningInput
+public typealias IconSigningOutput = TW_Icon_Proto_SigningOutput

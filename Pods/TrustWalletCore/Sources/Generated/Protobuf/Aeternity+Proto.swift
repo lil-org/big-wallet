@@ -4,5 +4,5 @@
 // terms governing use, modification, and redistribution, is contained in the
 // file LICENSE at the root of the source code distribution tree.
 
-public typealias AeternitySigningInput = TW_Aeternity_Proto_SigningInput;
-public typealias AeternitySigningOutput = TW_Aeternity_Proto_SigningOutput;
+public typealias AeternitySigningInput = TW_Aeternity_Proto_SigningInput
+public typealias AeternitySigningOutput = TW_Aeternity_Proto_SigningOutput

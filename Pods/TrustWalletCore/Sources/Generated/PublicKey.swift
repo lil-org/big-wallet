@@ -91,6 +91,18 @@ public final class PublicKey {
         return TWPublicKeyVerify(rawValue, signatureData, messageData)
     }
 
+    public func verifyAsDER(signature: Data, message: Data) -> Bool {
+        let signatureData = TWDataCreateWithNSData(signature)
+        defer {
+            TWDataDelete(signatureData)
+        }
+        let messageData = TWDataCreateWithNSData(message)
+        defer {
+            TWDataDelete(messageData)
+        }
+        return TWPublicKeyVerifyAsDER(rawValue, signatureData, messageData)
+    }
+
     public func verifySchnorr(signature: Data, message: Data) -> Bool {
         let signatureData = TWDataCreateWithNSData(signature)
         defer {
