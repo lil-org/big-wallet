@@ -19,7 +19,7 @@ xcuserdata
 *.moved-aside
 *.xcuserstate
 .DS_Store
-Pods/
+WalletCoreCommon.xcframework/
 
 Secrets.swift
 

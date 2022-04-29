@@ -1,0 +1,13 @@
+${PODS_ROOT}/Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS-frameworks.sh
+${BUILT_PRODUCTS_DIR}/BigInt-iOS/BigInt.framework
+${BUILT_PRODUCTS_DIR}/BlockiesSwift-iOS/BlockiesSwift.framework
+${BUILT_PRODUCTS_DIR}/CryptoSwift-iOS/CryptoSwift.framework
+${BUILT_PRODUCTS_DIR}/Kingfisher-iOS/Kingfisher.framework
+${BUILT_PRODUCTS_DIR}/PromiseKit/PromiseKit.framework
+${BUILT_PRODUCTS_DIR}/Starscream-iOS/Starscream.framework
+${BUILT_PRODUCTS_DIR}/SwiftProtobuf-iOS/SwiftProtobuf.framework
+${BUILT_PRODUCTS_DIR}/SwiftyJSON-iOS/SwiftyJSON.framework
+${BUILT_PRODUCTS_DIR}/TrustWalletCore-iOS/WalletCore.framework
+${BUILT_PRODUCTS_DIR}/WalletConnect-iOS/WalletConnect.framework
+${BUILT_PRODUCTS_DIR}/Web3Swift.io-iOS/Web3Swift.framework
+${BUILT_PRODUCTS_DIR}/secp256k1.swift-iOS/secp256k1.framework

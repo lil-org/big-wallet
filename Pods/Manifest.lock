@@ -1,0 +1,87 @@
+PODS:
+  - BigInt (5.2.0)
+  - BlockiesSwift (0.1.2)
+  - CryptoSwift (1.4.2)
+  - Kingfisher (7.1.2)
+  - PromiseKit (6.15.3):
+    - PromiseKit/CorePromise (= 6.15.3)
+    - PromiseKit/Foundation (= 6.15.3)
+    - PromiseKit/UIKit (= 6.15.3)
+  - PromiseKit/CorePromise (6.15.3)
+  - PromiseKit/Foundation (6.15.3):
+    - PromiseKit/CorePromise
+  - PromiseKit/UIKit (6.15.3):
+    - PromiseKit/CorePromise
+  - secp256k1.swift (0.1.4)
+  - Starscream (3.1.1)
+  - SwiftProtobuf (1.18.0)
+  - SwiftyJSON (4.3.0)
+  - TrustWalletCore (2.6.35):
+    - TrustWalletCore/Core (= 2.6.35)
+  - TrustWalletCore/Core (2.6.35):
+    - TrustWalletCore/Types
+  - TrustWalletCore/Types (2.6.35):
+    - SwiftProtobuf
+  - WalletConnect (0.1.0):
+    - CryptoSwift
+    - PromiseKit
+    - Starscream (~> 3.1.1)
+  - Web3Swift.io (0.0.4):
+    - BigInt (~> 5.0)
+    - CryptoSwift (~> 1.0)
+    - secp256k1.swift (~> 0.1)
+    - SwiftyJSON (~> 4.3)
+
+DEPENDENCIES:
+  - BlockiesSwift
+  - Kingfisher
+  - TrustWalletCore
+  - WalletConnect (from `https://github.com/grachyov/wallet-connect-swift`, branch `master`)
+  - Web3Swift.io (from `https://github.com/grachyov/Web3Swift.git`, branch `develop`)
+
+SPEC REPOS:
+  trunk:
+    - BigInt
+    - BlockiesSwift
+    - CryptoSwift
+    - Kingfisher
+    - PromiseKit
+    - secp256k1.swift
+    - Starscream
+    - SwiftProtobuf
+    - SwiftyJSON
+    - TrustWalletCore
+
+EXTERNAL SOURCES:
+  WalletConnect:
+    :branch: master
+    :git: https://github.com/grachyov/wallet-connect-swift
+  Web3Swift.io:
+    :branch: develop
+    :git: https://github.com/grachyov/Web3Swift.git
+
+CHECKOUT OPTIONS:
+  WalletConnect:
+    :commit: 30040bab47c26002648eec96ed6c19403cc38d71
+    :git: https://github.com/grachyov/wallet-connect-swift
+  Web3Swift.io:
+    :commit: 951e6217f7899b5614b1530c3fbd2a46ee315b3c
+    :git: https://github.com/grachyov/Web3Swift.git
+
+SPEC CHECKSUMS:
+  BigInt: f668a80089607f521586bbe29513d708491ef2f7
+  BlockiesSwift: 22d8d56dd187e6bfd16cb8c8fbd4fd4896c3e65d
+  CryptoSwift: a532e74ed010f8c95f611d00b8bbae42e9fe7c17
+  Kingfisher: 44ed6a8504763f27bab46163adfac83f5deb240c
+  PromiseKit: 3b2b6995e51a954c46dbc550ce3da44fbfb563c5
+  secp256k1.swift: a7e7a214f6db6ce5db32cc6b2b45e5c4dd633634
+  Starscream: 4bb2f9942274833f7b4d296a55504dcfc7edb7b0
+  SwiftProtobuf: c3c12645230d9b09c72267e0de89468c5543bd86
+  SwiftyJSON: 6faa0040f8b59dead0ee07436cbf76b73c08fd08
+  TrustWalletCore: a375c7bdd6c71ad6ab4f1fe0140ca65be45d2fa9
+  WalletConnect: 1df75d4355b1cacfc27d7ef2416fae43862d0eb4
+  Web3Swift.io: 18fd06aed9d56df9c704f9c6f87b06675bb05b53
+
+PODFILE CHECKSUM: 5e1990f0cf7f2500cb219414068bf0f54b047530
+
+COCOAPODS: 1.11.2
