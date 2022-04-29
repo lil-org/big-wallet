@@ -15,8 +15,16 @@ public final class Account {
         return TWStringNSString(TWAccountAddress(rawValue))
     }
 
+    public var derivation: Derivation {
+        return Derivation(rawValue: TWAccountDerivation(rawValue).rawValue)!
+    }
+
     public var derivationPath: String {
         return TWStringNSString(TWAccountDerivationPath(rawValue))
+    }
+
+    public var publicKey: String {
+        return TWStringNSString(TWAccountPublicKey(rawValue))
     }
 
     public var extendedPublicKey: String {
@@ -33,7 +41,7 @@ public final class Account {
         self.rawValue = rawValue
     }
 
-    public init(address: String, coin: CoinType, derivationPath: String, extendedPublicKey: String) {
+    public init(address: String, coin: CoinType, derivation: Derivation, derivationPath: String, publicKey: String, extendedPublicKey: String) {
         let addressString = TWStringCreateWithNSString(address)
         defer {
             TWStringDelete(addressString)
@@ -42,11 +50,15 @@ public final class Account {
         defer {
             TWStringDelete(derivationPathString)
         }
+        let publicKeyString = TWStringCreateWithNSString(publicKey)
+        defer {
+            TWStringDelete(publicKeyString)
+        }
         let extendedPublicKeyString = TWStringCreateWithNSString(extendedPublicKey)
         defer {
             TWStringDelete(extendedPublicKeyString)
         }
-        rawValue = TWAccountCreate(addressString, TWCoinType(rawValue: coin.rawValue), derivationPathString, extendedPublicKeyString)
+        rawValue = TWAccountCreate(addressString, TWCoinType(rawValue: coin.rawValue), TWDerivation(rawValue: derivation.rawValue), derivationPathString, publicKeyString, extendedPublicKeyString)
     }
 
     deinit {

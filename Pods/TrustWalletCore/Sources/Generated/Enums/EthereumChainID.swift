@@ -27,4 +27,10 @@ public enum EthereumChainID: UInt32, CaseIterable {
     case fantom = 250
     case celo = 42220
     case ronin = 2020
+    case cronos = 25
+    case smartBitcoinCash = 10000
+    case kuCoinCommunityChain = 321
+    case boba = 288
+    case metis = 1088
+    case aurora = 1313161554
 }

@@ -298,11 +298,50 @@ public struct TW_Bitcoin_Proto_SigningOutput {
   /// Optional error
   public var error: TW_Common_Proto_SigningError = .ok
 
+  /// error description
+  public var errorMessage: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _transaction: TW_Bitcoin_Proto_Transaction? = nil
+}
+
+public struct TW_Bitcoin_Proto_HashPublicKey {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  //// Pre-image data hash that will be used for signing
+  public var dataHash: Data = Data()
+
+  //// public key hash used for signing
+  public var publicKeyHash: Data = Data()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+//// Transaction pre-signing output
+public struct TW_Bitcoin_Proto_PreSigningOutput {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  //// hash, public key list
+  public var hashPublicKeys: [TW_Bitcoin_Proto_HashPublicKey] = []
+
+  //// error code, 0 is ok, other codes will be treated as errors
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  //// error description
+  public var errorMessage: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -782,6 +821,7 @@ extension TW_Bitcoin_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
     2: .same(proto: "encoded"),
     3: .standard(proto: "transaction_id"),
     4: .same(proto: "error"),
+    5: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -794,6 +834,7 @@ extension TW_Bitcoin_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
       case 2: try { try decoder.decodeSingularBytesField(value: &self.encoded) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.transactionID) }()
       case 4: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -816,6 +857,9 @@ extension TW_Bitcoin_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
     if self.error != .ok {
       try visitor.visitSingularEnumField(value: self.error, fieldNumber: 4)
     }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -824,6 +868,89 @@ extension TW_Bitcoin_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
     if lhs.encoded != rhs.encoded {return false}
     if lhs.transactionID != rhs.transactionID {return false}
     if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Bitcoin_Proto_HashPublicKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".HashPublicKey"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "data_hash"),
+    2: .standard(proto: "public_key_hash"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.dataHash) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.publicKeyHash) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.dataHash.isEmpty {
+      try visitor.visitSingularBytesField(value: self.dataHash, fieldNumber: 1)
+    }
+    if !self.publicKeyHash.isEmpty {
+      try visitor.visitSingularBytesField(value: self.publicKeyHash, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Bitcoin_Proto_HashPublicKey, rhs: TW_Bitcoin_Proto_HashPublicKey) -> Bool {
+    if lhs.dataHash != rhs.dataHash {return false}
+    if lhs.publicKeyHash != rhs.publicKeyHash {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Bitcoin_Proto_PreSigningOutput: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PreSigningOutput"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "hash_public_keys"),
+    2: .same(proto: "error"),
+    3: .standard(proto: "error_message"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.hashPublicKeys) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.hashPublicKeys.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.hashPublicKeys, fieldNumber: 1)
+    }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 2)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Bitcoin_Proto_PreSigningOutput, rhs: TW_Bitcoin_Proto_PreSigningOutput) -> Bool {
+    if lhs.hashPublicKeys != rhs.hashPublicKeys {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

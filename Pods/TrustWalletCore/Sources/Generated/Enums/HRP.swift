@@ -28,11 +28,12 @@ public enum HRP: UInt32, CaseIterable, CustomStringConvertible  {
     case bandChain = 17
     case elrond = 18
     case binance = 19
-    case thorchain = 20
-    case harmony = 21
-    case cardano = 22
-    case qtum = 23
-    case osmosis = 24
+    case ecash = 20
+    case thorchain = 21
+    case harmony = 22
+    case cardano = 23
+    case qtum = 24
+    case osmosis = 25
 
     public var description: String {
         switch self {
@@ -56,6 +57,7 @@ public enum HRP: UInt32, CaseIterable, CustomStringConvertible  {
         case .bandChain: return "band"
         case .elrond: return "erd"
         case .binance: return "bnb"
+        case .ecash: return "ecash"
         case .thorchain: return "thor"
         case .harmony: return "one"
         case .cardano: return "addr"

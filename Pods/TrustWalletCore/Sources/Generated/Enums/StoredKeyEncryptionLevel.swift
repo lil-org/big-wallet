@@ -9,6 +9,7 @@
 
 public enum StoredKeyEncryptionLevel: UInt32, CaseIterable {
     case `default` = 0
-    case weak = 1
-    case standard = 2
+    case minimal = 1
+    case weak = 2
+    case standard = 3
 }

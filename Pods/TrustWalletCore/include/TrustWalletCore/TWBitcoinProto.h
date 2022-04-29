@@ -18,3 +18,5 @@ typedef TWData *_Nonnull TW_Bitcoin_Proto_UnspentTransaction;
 typedef TWData *_Nonnull TW_Bitcoin_Proto_SigningInput;
 typedef TWData *_Nonnull TW_Bitcoin_Proto_TransactionPlan;
 typedef TWData *_Nonnull TW_Bitcoin_Proto_SigningOutput;
+typedef TWData *_Nonnull TW_Bitcoin_Proto_HashPublicKey;
+typedef TWData *_Nonnull TW_Bitcoin_Proto_PreSigningOutput;

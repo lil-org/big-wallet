@@ -54,7 +54,7 @@ public enum CoinType: UInt32, CaseIterable {
     case viacoin = 14
     case wanchain = 5718350
     case zcash = 133
-    case zcoin = 136
+    case firo = 136
     case zilliqa = 313
     case zelcash = 19167
     case ravencoin = 175
@@ -83,4 +83,11 @@ public enum CoinType: UInt32, CaseIterable {
     case celo = 52752
     case ronin = 10002020
     case osmosis = 10000118
+    case ecash = 899
+    case cronosChain = 10000025
+    case smartBitcoinCash = 10000145
+    case kuCoinCommunityChain = 10000321
+    case boba = 10000288
+    case metis = 1001088
+    case aurora = 1323161554
 }

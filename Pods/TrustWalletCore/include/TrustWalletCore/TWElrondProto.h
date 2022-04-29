@@ -10,6 +10,10 @@
 
 #include "TWData.h"
 
-typedef TWData *_Nonnull TW_Elrond_Proto_TransactionMessage;
+typedef TWData *_Nonnull TW_Elrond_Proto_GenericAction;
+typedef TWData *_Nonnull TW_Elrond_Proto_EGLDTransfer;
+typedef TWData *_Nonnull TW_Elrond_Proto_ESDTTransfer;
+typedef TWData *_Nonnull TW_Elrond_Proto_ESDTNFTTransfer;
+typedef TWData *_Nonnull TW_Elrond_Proto_Accounts;
 typedef TWData *_Nonnull TW_Elrond_Proto_SigningInput;
 typedef TWData *_Nonnull TW_Elrond_Proto_SigningOutput;

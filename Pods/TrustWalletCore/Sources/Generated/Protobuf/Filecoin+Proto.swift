@@ -4,5 +4,5 @@
 // terms governing use, modification, and redistribution, is contained in the
 // file LICENSE at the root of the source code distribution tree.
 
-public typealias FilecoinSigningInput = TW_Filecoin_Proto_SigningInput;
-public typealias FilecoinSigningOutput = TW_Filecoin_Proto_SigningOutput;
+public typealias FilecoinSigningInput = TW_Filecoin_Proto_SigningInput
+public typealias FilecoinSigningOutput = TW_Filecoin_Proto_SigningOutput

@@ -136,4 +136,12 @@ public final class HDWallet {
         return TWStringNSString(TWHDWalletGetExtendedPublicKey(rawValue, TWPurpose(rawValue: purpose.rawValue), TWCoinType(rawValue: coin.rawValue), TWHDVersion(rawValue: version.rawValue)))
     }
 
+    public func getExtendedPrivateKeyAccount(purpose: Purpose, coin: CoinType, version: HDVersion, account: UInt32) -> String {
+        return TWStringNSString(TWHDWalletGetExtendedPrivateKeyAccount(rawValue, TWPurpose(rawValue: purpose.rawValue), TWCoinType(rawValue: coin.rawValue), TWHDVersion(rawValue: version.rawValue), account))
+    }
+
+    public func getExtendedPublicKeyAccount(purpose: Purpose, coin: CoinType, version: HDVersion, account: UInt32) -> String {
+        return TWStringNSString(TWHDWalletGetExtendedPublicKeyAccount(rawValue, TWPurpose(rawValue: purpose.rawValue), TWCoinType(rawValue: coin.rawValue), TWHDVersion(rawValue: version.rawValue), account))
+    }
+
 }

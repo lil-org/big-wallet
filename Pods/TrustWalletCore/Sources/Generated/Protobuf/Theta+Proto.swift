@@ -4,5 +4,5 @@
 // terms governing use, modification, and redistribution, is contained in the
 // file LICENSE at the root of the source code distribution tree.
 
-public typealias ThetaSigningInput = TW_Theta_Proto_SigningInput;
-public typealias ThetaSigningOutput = TW_Theta_Proto_SigningOutput;
+public typealias ThetaSigningInput = TW_Theta_Proto_SigningInput
+public typealias ThetaSigningOutput = TW_Theta_Proto_SigningOutput

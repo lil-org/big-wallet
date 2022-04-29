@@ -348,6 +348,12 @@ public struct TW_Ethereum_Proto_SigningOutput {
   /// The payload part, supplied in the input or assembled from input parameters
   public var data: Data = Data()
 
+  //// error code, 0 is ok, other codes will be treated as errors
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  //// error code description
+  public var errorMessage: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -856,6 +862,8 @@ extension TW_Ethereum_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf.
     3: .same(proto: "r"),
     4: .same(proto: "s"),
     5: .same(proto: "data"),
+    6: .same(proto: "error"),
+    7: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -869,6 +877,8 @@ extension TW_Ethereum_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf.
       case 3: try { try decoder.decodeSingularBytesField(value: &self.r) }()
       case 4: try { try decoder.decodeSingularBytesField(value: &self.s) }()
       case 5: try { try decoder.decodeSingularBytesField(value: &self.data) }()
+      case 6: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -890,6 +900,12 @@ extension TW_Ethereum_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf.
     if !self.data.isEmpty {
       try visitor.visitSingularBytesField(value: self.data, fieldNumber: 5)
     }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 6)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -899,6 +915,8 @@ extension TW_Ethereum_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf.
     if lhs.r != rhs.r {return false}
     if lhs.s != rhs.s {return false}
     if lhs.data != rhs.data {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

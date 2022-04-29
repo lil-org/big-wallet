@@ -4,5 +4,5 @@
 // terms governing use, modification, and redistribution, is contained in the
 // file LICENSE at the root of the source code distribution tree.
 
-public typealias NimiqSigningInput = TW_Nimiq_Proto_SigningInput;
-public typealias NimiqSigningOutput = TW_Nimiq_Proto_SigningOutput;
+public typealias NimiqSigningInput = TW_Nimiq_Proto_SigningInput
+public typealias NimiqSigningOutput = TW_Nimiq_Proto_SigningOutput

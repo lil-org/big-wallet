@@ -145,11 +145,18 @@ public final class StoredKey {
         return Account(rawValue: value)
     }
 
+    public func accountForCoinDerivation(coin: CoinType, derivation: Derivation, wallet: HDWallet?) -> Account? {
+        guard let value = TWStoredKeyAccountForCoinDerivation(rawValue, TWCoinType(rawValue: coin.rawValue), TWDerivation(rawValue: derivation.rawValue), wallet?.rawValue) else {
+            return nil
+        }
+        return Account(rawValue: value)
+    }
+
     public func removeAccountForCoin(coin: CoinType) -> Void {
         return TWStoredKeyRemoveAccountForCoin(rawValue, TWCoinType(rawValue: coin.rawValue))
     }
 
-    public func addAccount(address: String, coin: CoinType, derivationPath: String, extetndedPublicKey: String) -> Void {
+    public func addAccount(address: String, coin: CoinType, derivationPath: String, publicKey: String, extendedPublicKey: String) -> Void {
         let addressString = TWStringCreateWithNSString(address)
         defer {
             TWStringDelete(addressString)
@@ -158,11 +165,15 @@ public final class StoredKey {
         defer {
             TWStringDelete(derivationPathString)
         }
-        let extetndedPublicKeyString = TWStringCreateWithNSString(extetndedPublicKey)
+        let publicKeyString = TWStringCreateWithNSString(publicKey)
         defer {
-            TWStringDelete(extetndedPublicKeyString)
+            TWStringDelete(publicKeyString)
         }
-        return TWStoredKeyAddAccount(rawValue, addressString, TWCoinType(rawValue: coin.rawValue), derivationPathString, extetndedPublicKeyString)
+        let extendedPublicKeyString = TWStringCreateWithNSString(extendedPublicKey)
+        defer {
+            TWStringDelete(extendedPublicKeyString)
+        }
+        return TWStoredKeyAddAccount(rawValue, addressString, TWCoinType(rawValue: coin.rawValue), derivationPathString, publicKeyString, extendedPublicKeyString)
     }
 
     public func store(path: String) -> Bool {

@@ -9,7 +9,7 @@
 
 Crypto related functions and helpers for [Swift](https://swift.org) implemented in Swift. ([#PureSwift](https://twitter.com/hashtag/pureswift))
 
-**Note**: The `master` branch follows the latest currently released **version of Swift**. If you need an earlier version for an older version of Swift, you can specify its version in your `Podfile` or use the code on the branch for that version. Older branches are unsupported. Check [versions](#swift-versions-support) for details.
+**Note**: The `main` branch follows the latest currently released **version of Swift**. If you need an earlier version for an older version of Swift, you can specify its version in your `Podfile` or use the code on the branch for that version. Older branches are unsupported. Check [versions](#swift-versions-support) for details.
 
 ---
 
@@ -122,7 +122,7 @@ It is recommended to enable [Whole-Module Optimization](https://swift.org/blog/w
 You can use [Swift Package Manager](https://swift.org/package-manager/) and specify dependency in `Package.swift` by adding this:
 
 ```swift
-.package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", .upToNextMajor(from: "1.4.2"))
+.package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", .upToNextMajor(from: "1.5.1"))
 ```
 
 See: [Package.swift - manual](http://blog.krzyzanowskim.com/2016/08/09/package-swift-manual/)
@@ -185,7 +185,7 @@ In the project, you'll find [single scheme](https://mxcl.dev/PromiseKit/news/201
 - Swift 4.2, branch [swift42](https://github.com/krzyzanowskim/CryptoSwift/tree/swift42) version <= 0.15.0
 - Swift 5.0, branch [swift5](https://github.com/krzyzanowskim/CryptoSwift/tree/swift5) version <= 1.2.0
 - Swift 5.1, branch [swift5](https://github.com/krzyzanowskim/CryptoSwift/tree/swift51) version <= 1.3.3
-- Swift 5.3 and newer, branch [master](https://github.com/krzyzanowskim/CryptoSwift/tree/master)
+- Swift 5.3 and newer, branch [main](https://github.com/krzyzanowskim/CryptoSwift/tree/main)
 
 ## How-to
 
@@ -520,6 +520,33 @@ Check documentation or CCM specification for valid parameters for CCM.
 ```swift
 let encrypt = try AEADChaCha20Poly1305.encrypt(plaintext, key: key, iv: nonce, authenticationHeader: header)
 let decrypt = try AEADChaCha20Poly1305.decrypt(ciphertext, key: key, iv: nonce, authenticationHeader: header, authenticationTag: tagArr: tag)
+```
+
+##### RSA
+
+RSA initialization from parameters
+
+```swift
+let input: Array<UInt8> = [0,1,2,3,4,5,6,7,8,9]
+
+let n: Array<UInt8> = // RSA modulus
+let e: Array<UInt8> = // RSA public exponent
+let d: Array<UInt8> = // RSA private exponent
+
+let rsa = RSA(n: n, e: e, d: d)
+
+do {
+    let encrypted = try rsa.encrypt(input)
+    let decrypted = try rsa.decrypt(encrypted)
+} catch {
+    print(error)
+}
+```
+
+RSA key generation
+
+```swift
+let rsa = RSA(keySize: 2048) // This generates a modulus, public exponent and private exponent with the given size
 ```
 
 ## Author

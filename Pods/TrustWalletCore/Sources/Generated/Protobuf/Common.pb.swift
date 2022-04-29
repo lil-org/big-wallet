@@ -36,6 +36,10 @@ public enum TW_Common_Proto_SigningError: SwiftProtobuf.Enum {
   /// Requested amount is zero
   case errorZeroAmountRequested // = 4
   case errorMissingPrivateKey // = 5
+  case errorInvalidPrivateKey // = 15
+  case errorInvalidAddress // = 16
+  case errorInvalidUtxo // = 17
+  case errorInvalidUtxoAmount // = 18
 
   /// chain-generic, fee
   case errorWrongFee // = 6
@@ -60,6 +64,21 @@ public enum TW_Common_Proto_SigningError: SwiftProtobuf.Enum {
 
   /// [BTC] Unrecognized witness program
   case errorScriptWitnessProgram // = 13
+
+  /// e.g. [XRP] Invalid tag
+  case errorInvalidMemo // = 14
+
+  /// e.g. Invalid input data
+  case errorInputParse // = 19
+
+  /// e.g. Not support multi-input and multi-output transaction
+  case errorNoSupportN2N // = 20
+
+  /// Incorrect count of signatures passed to compile
+  case errorSignaturesCount // = 21
+
+  /// Incorrect parameters
+  case errorInvalidParams // = 22
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -82,6 +101,15 @@ public enum TW_Common_Proto_SigningError: SwiftProtobuf.Enum {
     case 11: self = .errorScriptRedeem
     case 12: self = .errorScriptOutput
     case 13: self = .errorScriptWitnessProgram
+    case 14: self = .errorInvalidMemo
+    case 15: self = .errorInvalidPrivateKey
+    case 16: self = .errorInvalidAddress
+    case 17: self = .errorInvalidUtxo
+    case 18: self = .errorInvalidUtxoAmount
+    case 19: self = .errorInputParse
+    case 20: self = .errorNoSupportN2N
+    case 21: self = .errorSignaturesCount
+    case 22: self = .errorInvalidParams
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -102,6 +130,15 @@ public enum TW_Common_Proto_SigningError: SwiftProtobuf.Enum {
     case .errorScriptRedeem: return 11
     case .errorScriptOutput: return 12
     case .errorScriptWitnessProgram: return 13
+    case .errorInvalidMemo: return 14
+    case .errorInvalidPrivateKey: return 15
+    case .errorInvalidAddress: return 16
+    case .errorInvalidUtxo: return 17
+    case .errorInvalidUtxoAmount: return 18
+    case .errorInputParse: return 19
+    case .errorNoSupportN2N: return 20
+    case .errorSignaturesCount: return 21
+    case .errorInvalidParams: return 22
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -119,6 +156,10 @@ extension TW_Common_Proto_SigningError: CaseIterable {
     .errorLowBalance,
     .errorZeroAmountRequested,
     .errorMissingPrivateKey,
+    .errorInvalidPrivateKey,
+    .errorInvalidAddress,
+    .errorInvalidUtxo,
+    .errorInvalidUtxoAmount,
     .errorWrongFee,
     .errorSigning,
     .errorTxTooBig,
@@ -127,6 +168,11 @@ extension TW_Common_Proto_SigningError: CaseIterable {
     .errorScriptRedeem,
     .errorScriptOutput,
     .errorScriptWitnessProgram,
+    .errorInvalidMemo,
+    .errorInputParse,
+    .errorNoSupportN2N,
+    .errorSignaturesCount,
+    .errorInvalidParams,
   ]
 }
 
@@ -150,5 +196,14 @@ extension TW_Common_Proto_SigningError: SwiftProtobuf._ProtoNameProviding {
     11: .same(proto: "Error_script_redeem"),
     12: .same(proto: "Error_script_output"),
     13: .same(proto: "Error_script_witness_program"),
+    14: .same(proto: "Error_invalid_memo"),
+    15: .same(proto: "Error_invalid_private_key"),
+    16: .same(proto: "Error_invalid_address"),
+    17: .same(proto: "Error_invalid_utxo"),
+    18: .same(proto: "Error_invalid_utxo_amount"),
+    19: .same(proto: "Error_input_parse"),
+    20: .same(proto: "Error_no_support_n2n"),
+    21: .same(proto: "Error_signatures_count"),
+    22: .same(proto: "Error_invalid_params"),
   ]
 }

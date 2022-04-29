@@ -4,7 +4,7 @@
 // terms governing use, modification, and redistribution, is contained in the
 // file LICENSE at the root of the source code distribution tree.
 //
-// This is a GENERATED FILE from \coins.json, changes made here WILL BE LOST.
+// This is a GENERATED FILE from \registry.json, changes made here WILL BE LOST.
 //
 
 #pragma once
@@ -38,6 +38,7 @@ enum TWHRP {
     TWHRPBandChain     /* "band" */,
     TWHRPElrond     /* "erd" */,
     TWHRPBinance     /* "bnb" */,
+    TWHRPECash     /* "ecash" */,
     TWHRPTHORChain     /* "thor" */,
     TWHRPHarmony     /* "one" */,
     TWHRPCardano     /* "addr" */,
@@ -64,6 +65,7 @@ static const char *_Nonnull HRP_BLUZELLE = "bluzelle";
 static const char *_Nonnull HRP_BAND = "band";
 static const char *_Nonnull HRP_ELROND = "erd";
 static const char *_Nonnull HRP_BINANCE = "bnb";
+static const char *_Nonnull HRP_ECASH = "ecash";
 static const char *_Nonnull HRP_THORCHAIN = "thor";
 static const char *_Nonnull HRP_HARMONY = "one";
 static const char *_Nonnull HRP_CARDANO = "addr";
