@@ -107,9 +107,11 @@ function storeConfigurationIfNeeded(request) {
 }
 
 function sendToInpage(response, id) {
-    pendingRequestsIds.delete(id);
-    window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
-    storeConfigurationIfNeeded(response);
+    if (pendingRequestsIds.has(id)) {
+        pendingRequestsIds.delete(id);
+        window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
+        storeConfigurationIfNeeded(response);
+    }
 }
 
 function sendMessageToNativeApp(message) {
