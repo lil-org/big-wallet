@@ -14,8 +14,4 @@ extension URL {
         return URL(string: "https://etherscan.io/address/\(address)")!
     }
     
-    static func blankRedirect(id: Int) -> URL {
-        return URL(string: "https://tokenary.io/blank/\(id)")!
-    }
-    
 }

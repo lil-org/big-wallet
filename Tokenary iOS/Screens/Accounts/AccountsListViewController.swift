@@ -117,10 +117,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func openSafari(requestId: Int) {
-        UIApplication.shared.open(URL.blankRedirect(id: requestId)) { [weak self] _ in
-            self?.toDismissAfterResponse[requestId]?.dismiss(animated: false)
-            self?.toDismissAfterResponse.removeValue(forKey: requestId)
-        }
+        UIApplication.shared.openSafari()
+        toDismissAfterResponse[requestId]?.dismiss(animated: false)
+        toDismissAfterResponse.removeValue(forKey: requestId)
     }
     
     private func hideChainSelectionHeader() {

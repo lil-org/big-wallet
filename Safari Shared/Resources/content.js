@@ -1,8 +1,6 @@
-const pendingRequestsIds = new Set();
+// Copyright © 2022 Tokenary. All rights reserved.
 
-if (window.location.href.startsWith("https://tokenary.io/blank")) {
-    browser.runtime.sendMessage({ subject: "wakeUp" });
-}
+const pendingRequestsIds = new Set();
 
 function injectScript() {
     try {
@@ -109,9 +107,11 @@ function storeConfigurationIfNeeded(request) {
 }
 
 function sendToInpage(response, id) {
-    pendingRequestsIds.delete(id);
-    window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
-    storeConfigurationIfNeeded(response);
+    if (pendingRequestsIds.has(id)) {
+        pendingRequestsIds.delete(id);
+        window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
+        storeConfigurationIfNeeded(response);
+    }
 }
 
 function sendMessageToNativeApp(message) {
@@ -135,11 +135,6 @@ function didTapExtensionButton() {
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if ("didTapExtensionButton" in request) {
         didTapExtensionButton();
-    } else {
-        if (pendingRequestsIds.has(request.id)) {
-            sendToInpage(request, request.id);
-            browser.runtime.sendMessage({ subject: "activateTab" });
-        }
     }
 });
 
