@@ -34,7 +34,7 @@ window.addEventListener("message", function(event) {
         const id = event.data.id;
         switch (response.provider) {
             case "ethereum":
-                window.ethereum.processTokenaryResponse(id, response); // TODO: pass id as a separate variable
+                window.ethereum.processTokenaryResponse(id, response);
                 break;
             case "solana":
                 window.solana.processTokenaryResponse(id, response);
