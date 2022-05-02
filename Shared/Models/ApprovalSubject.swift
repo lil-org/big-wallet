@@ -4,6 +4,7 @@ enum ApprovalSubject {
     case signMessage
     case signPersonalMessage
     case signTypedData
+    case approveTransaction
     
     var asAuthenticationReason: AuthenticationReason {
         switch self {
@@ -13,6 +14,8 @@ enum ApprovalSubject {
             return .signPersonalMessage
         case .signTypedData:
             return .signTypedData
+        case .approveTransaction:
+            return .approveTransaction
         }
     }
     
@@ -24,6 +27,8 @@ enum ApprovalSubject {
             return Strings.signPersonalMessage
         case .signTypedData:
             return Strings.signTypedData
+        case .approveTransaction:
+            return Strings.approveTransaction
         }
     }
 }
