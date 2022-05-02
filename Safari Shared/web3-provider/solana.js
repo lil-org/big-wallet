@@ -150,7 +150,7 @@ class TokenarySolana extends EventEmitter {
     processTokenaryResponse(id, response) {
         if (response.name == "didLoadLatestConfiguration") {
             this.didGetLatestConfiguration = true;
-            if ("publicKey" in response) { // TODO: validate non-empty?
+            if ("publicKey" in response) {
                 const publicKey = new PublicKey(response.publicKey);
                 this.publicKey = publicKey;
             }
@@ -160,7 +160,7 @@ class TokenarySolana extends EventEmitter {
             }
             
             this.pendingPayloads = [];
-        } else if ("publicKey" in response) { // TODO: validate non-empty?
+        } else if ("publicKey" in response) {
             this.isConnected = true;
             const publicKey = new PublicKey(response.publicKey);
             this.publicKey = publicKey;
