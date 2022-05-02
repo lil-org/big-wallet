@@ -1,12 +1,12 @@
 // Copyright © 2022 Tokenary. All rights reserved.
 
 import Foundation
-import WalletCore // TODO: this is temporary
 
 struct DappRequestProcessor {
     
     private static let walletsManager = WalletsManager.shared
     private static let ethereum = Ethereum.shared
+    private static let solana = Solana.shared
     
     static func processSafariRequest(_ request: SafariRequest, completion: @escaping () -> Void) -> DappRequestAction {
         guard ExtensionBridge.hasRequest(id: request.id) else {
@@ -17,6 +17,11 @@ struct DappRequestProcessor {
         switch request.body {
         case let .ethereum(body):
             return process(request: request, ethereumRequest: body, completion: completion)
+        case let .solana(body):
+            return process(request: request, solanaRequest: body, completion: completion)
+        case .tezos:
+            respond(to: request, error: "Tezos is not supported yet", completion: completion)
+            return .none
         case let .unknown(body):
             switch body.method {
             case .justShowApp:
@@ -35,61 +40,78 @@ struct DappRequestProcessor {
                 }
                 return .selectAccount(action)
             }
-        case let .solana(body):
-            switch body.method {
-            case .connect:
-                let responseBody = ResponseToExtension.Solana(publicKey: "A87Upx1f1whNV5P8xQCK2YUTwE3uMYigjoKJAF3jiNpz")
-                respond(to: request, body: .solana(responseBody), completion: completion)
-            case .signAllTransactions:
-                let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
-                let displayMessage = body.messages!.joined(separator: "\n")
-                let action = SignMessageAction(provider: request.provider, subject: .signMessage, address: body.publicKey, meta: displayMessage, peerMeta: peerMeta) { approved in
-                    if approved {
-                        var results = [String]()
-                        for message in body.messages! {
-                            let digest = Base58.decodeNoCheck(string: message)!
-                            guard let signed = sign(digest: digest) else { return }
-                            results.append(signed)
-                        }
-                        let responseBody = ResponseToExtension.Solana(results: results)
-                        respond(to: request, body: .solana(responseBody), completion: completion)
-                    } else {
-                        respond(to: request, error: Strings.failedToSign, completion: completion)
-                    }
-                }
-                return .approveMessage(action)
-            case .signMessage, .signTransaction, .signAndSendTransaction:
-                let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
-                let devWarning = body.method == .signAndSendTransaction ? "🛑 This one requires sending!\n" : ""
-                let message = body.message!
-                let action = SignMessageAction(provider: request.provider, subject: .signMessage, address: body.publicKey, meta: devWarning + message, peerMeta: peerMeta) { approved in
-                    if approved {
-                        let digest = body.method == .signMessage ? Data(hex: message) : Base58.decodeNoCheck(string: message)!
-                        guard let signed = sign(digest: digest) else { return }
-                        let responseBody = ResponseToExtension.Solana(result: signed)
-                        respond(to: request, body: .solana(responseBody), completion: completion)
-                    } else {
-                        respond(to: request, error: Strings.failedToSign, completion: completion)
-                    }
-                }
-                return .approveMessage(action)
-            }
-        case .tezos:
-            respond(to: request, error: "Tezos is not supported yet", completion: completion)
         }
-        return .none
     }
     
-    private static func sign(digest: Data) -> String? {
-        let words = ""
-        let password = "yoyo"
-        let key = StoredKey.importHDWallet(mnemonic: words, name: "hello", password: Data(password.utf8), coin: .solana)!
-        let wallet = key.wallet(password: Data(password.utf8))
-        let phantomPrivateKey = wallet!.getKey(coin: .solana, derivationPath: "m/44'/501'/0'/0'")
-        if let data = phantomPrivateKey.sign(digest: digest, curve: CoinType.solana.curve) {
-            return Base58.encodeNoCheck(data: data)
-        } else {
-            return nil
+    private static func process(request: SafariRequest, solanaRequest body: SafariRequest.Solana, completion: @escaping () -> Void) -> DappRequestAction {
+        let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
+        switch body.method {
+        case .connect:
+            let responseBody = ResponseToExtension.Solana(publicKey: "A87Upx1f1whNV5P8xQCK2YUTwE3uMYigjoKJAF3jiNpz")
+            respond(to: request, body: .solana(responseBody), completion: completion)
+            return .none // TODO: replace with .selectAccount
+        case .signAllTransactions:
+            guard let messages = body.messages else {
+                respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+                return .none
+            }
+            let displayMessage = messages.joined(separator: "\n\n")
+            let action = SignMessageAction(provider: request.provider, subject: .approveTransaction, address: body.publicKey, meta: displayMessage, peerMeta: peerMeta) { approved in
+                if approved {
+                    var results = [String]()
+                    for message in messages {
+                        guard let signed = solana.sign(message: message, asHex: false) else {
+                            respond(to: request, error: Strings.failedToSign, completion: completion)
+                            return
+                        }
+                        results.append(signed)
+                    }
+                    let responseBody = ResponseToExtension.Solana(results: results)
+                    respond(to: request, body: .solana(responseBody), completion: completion)
+                } else {
+                    respond(to: request, error: Strings.failedToSign, completion: completion)
+                }
+            }
+            return .approveMessage(action)
+        case .signMessage, .signTransaction, .signAndSendTransaction:
+            guard let message = body.message else {
+                respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+                return .none
+            }
+            let displayMessage: String
+            let subject: ApprovalSubject
+            switch body.method {
+            case .signMessage:
+                displayMessage = body.displayHex ? message : (String(data: Data(hex: message), encoding: .utf8) ?? message)
+                subject = .signMessage
+            default:
+                displayMessage = message
+                subject = .approveTransaction
+            }
+            let action = SignMessageAction(provider: request.provider, subject: subject, address: body.publicKey, meta: displayMessage, peerMeta: peerMeta) { approved in
+                guard approved else {
+                    respond(to: request, error: Strings.failedToSign, completion: completion)
+                    return
+                }
+                
+                if body.method == .signAndSendTransaction {
+                    solana.sendSolanaTransaction(message: message, options: body.sendOptions) { result in
+                        switch result {
+                        case let .success(signature):
+                            let responseBody = ResponseToExtension.Solana(result: signature)
+                            respond(to: request, body: .solana(responseBody), completion: completion)
+                        case .failure:
+                            respond(to: request, error: Strings.failedToSend, completion: completion)
+                        }
+                    }
+                } else if let signed = solana.sign(message: message, asHex: body.method == .signMessage) {
+                    let responseBody = ResponseToExtension.Solana(result: signed)
+                    respond(to: request, body: .solana(responseBody), completion: completion)
+                } else {
+                    respond(to: request, error: Strings.failedToSign, completion: completion)
+                }
+            }
+            return .approveMessage(action)
         }
     }
     
