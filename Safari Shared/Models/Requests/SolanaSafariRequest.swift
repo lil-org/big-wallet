@@ -10,17 +10,12 @@ extension SafariRequest {
             case connect, signMessage, signTransaction, signAllTransactions, signAndSendTransaction
         }
         
-        struct SendOptions: Codable {
-            let maxRetries: Int?
-            let preflightCommitment: String?
-            let skipPreflight: Bool?
-        }
-        
         let method: Method
         let publicKey: String
         let message: String?
         let messages: [String]?
-        let display: String?
+        let displayHex: Bool
+        let sendOptions: [String: Any]?
         
         init?(name: String, json: [String: Any]) {
             guard let method = Method(rawValue: name),
@@ -30,7 +25,8 @@ extension SafariRequest {
             let parameters = (json["object"] as? [String: Any])?["params"] as? [String: Any]
             self.message = parameters?["message"] as? String
             self.messages = parameters?["messages"] as? [String]
-            self.display = parameters?["display"] as? String
+            self.displayHex = (parameters?["display"] as? String) == "hex"
+            self.sendOptions = parameters?["options"] as? [String: Any]
         }
         
         var responseUpdatesStoredConfiguration: Bool {
