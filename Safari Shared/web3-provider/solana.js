@@ -148,9 +148,6 @@ class TokenarySolana extends EventEmitter {
     }
 
     processTokenaryResponse(id, response) {
-        // TODO: use and clean up respondWithBuffer
-        // TODO: use and clean up transactionsPendingSignature
-        
         if (response.name == "didLoadLatestConfiguration") {
             this.didGetLatestConfiguration = true;
             if ("publicKey" in response) { // TODO: validate non-empty?
@@ -173,7 +170,7 @@ class TokenarySolana extends EventEmitter {
             if (response.name == "signTransaction" || response.name == "signAndSendTransaction") {
                 if (this.transactionsPendingSignature.has(id)) {
                     const pending = this.transactionsPendingSignature.get(id);
-                    this.transactionsPendingSignature.delete(id); // TODO: there are other cases to delete it as well;
+                    this.transactionsPendingSignature.delete(id);
                     const buffer = Utils.messageToBuffer(bs58.decode(response.result));
                     const transaction = pending[0];
                     transaction.addSignature(this.publicKey, buffer);
@@ -183,7 +180,7 @@ class TokenarySolana extends EventEmitter {
                 }
             } else {
                 if (this.respondWithBuffer.get(id) === true) {
-                    this.respondWithBuffer.delete(id); // TODO: there are other cases to delete it as well;
+                    this.respondWithBuffer.delete(id);
                     const buffer = Utils.messageToBuffer(bs58.decode(response.result));
                     this.sendResponse(id, {signature: buffer, publicKey: this.publicKey});
                 } else {
@@ -193,7 +190,7 @@ class TokenarySolana extends EventEmitter {
         } else if ("results" in response) {
             if (this.transactionsPendingSignature.has(id)) {
                 const transactions = this.transactionsPendingSignature.get(id);
-                this.transactionsPendingSignature.delete(id); // TODO: there are other cases to delete it as well;
+                this.transactionsPendingSignature.delete(id);
                 response.results.forEach( (signature, index) => {
                     const buffer = Utils.messageToBuffer(bs58.decode(signature));
                     transactions[index].addSignature(this.publicKey, buffer);
@@ -203,6 +200,8 @@ class TokenarySolana extends EventEmitter {
                 this.sendResponse(id, {signatures: response.results, publicKey: this.publicKey.toString()});
             }
         } else if ("error" in response) {
+            this.respondWithBuffer.delete(id);
+            this.transactionsPendingSignature.delete(id);
             this.sendError(id, response.error);
         }
     }
