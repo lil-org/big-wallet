@@ -86,7 +86,7 @@ class Solana {
                 case .blockhashNotFound:
                     self?.updateBlockhash(message: message) { updatedMessage in
                         if let updatedMessage = updatedMessage {
-                            self?.signAndSendTransaction(message: updatedMessage, options: options, completion: completion)
+                            self?.signAndSendTransaction(retryCount: retryCount + 1, message: updatedMessage, options: options, completion: completion)
                         } else {
                             completion(.failure(.unknown))
                         }
