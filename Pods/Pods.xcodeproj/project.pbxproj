@@ -2046,7 +2046,7 @@
 		0BC6F792CB0DFA6E91AD68F1F495DBF8 /* PrivateKey.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PrivateKey.swift; path = Web3Swift/PrivateKey/PrivateKey.swift; sourceTree = "<group>"; };
 		0BE4C75865786D8792A58E056186E7F5 /* Zilliqa+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Zilliqa+Proto.swift"; path = "Sources/Generated/Protobuf/Zilliqa+Proto.swift"; sourceTree = "<group>"; };
 		0C08184AB558B6AA1897AB3930B177D5 /* DecodedABIFixedBytes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DecodedABIFixedBytes.swift; path = Web3Swift/ABI/Decoding/DecodedABIFixedBytes.swift; sourceTree = "<group>"; };
-		0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher-iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Kingfisher-iOS"; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		0CAE171CF14EDDEBEBDA988C9FA69060 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.15.sdk/System/Library/Frameworks/Accelerate.framework; sourceTree = DEVELOPER_DIR; };
 		0CC7158C53839A71B7980C97646F1797 /* ABIString.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ABIString.swift; path = Web3Swift/ABI/Parameters/ABIString.swift; sourceTree = "<group>"; };
 		0D0EDAB2490DE845D584EC9361FEB3AC /* Tezos+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Tezos+Proto.swift"; path = "Sources/Generated/Protobuf/Tezos+Proto.swift"; sourceTree = "<group>"; };
@@ -2409,7 +2409,7 @@
 		60991819817906177CD5C321104F3F07 /* OFB.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = OFB.swift; path = Sources/CryptoSwift/BlockMode/OFB.swift; sourceTree = "<group>"; };
 		60A2D33ED80276DEC03619236B9238FF /* Nimiq+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Nimiq+Proto.swift"; path = "Sources/Generated/Protobuf/Nimiq+Proto.swift"; sourceTree = "<group>"; };
 		60B264411D1937CD9A407D38E6E52865 /* Ternary.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Ternary.swift; path = Web3Swift/BooleanScalar/Ternary.swift; sourceTree = "<group>"; };
-		60CD9336BF0D87EB43F318C3C417DB66 /* WalletCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = WalletCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		60CD9336BF0D87EB43F318C3C417DB66 /* TrustWalletCore-iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "TrustWalletCore-iOS"; path = WalletCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		60CF5F7F09551DE78F12A41F47C2BCE6 /* Scrypt.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Scrypt.swift; path = Sources/CryptoSwift/Scrypt.swift; sourceTree = "<group>"; };
 		60FC0C859031157329A00EE7ACD0C8B4 /* NSURLSession+AnyPromise.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = "NSURLSession+AnyPromise.m"; path = "Extensions/Foundation/Sources/NSURLSession+AnyPromise.m"; sourceTree = "<group>"; };
 		611E2CD1740FC70206833C9177A3A52E /* EthTransactionLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EthTransactionLog.swift; path = Web3Swift/TransactionLogs/EthTransactionLog.swift; sourceTree = "<group>"; };
@@ -4030,7 +4030,7 @@
 				F32FBB742C2738F997207F1797526411 /* BlockiesSwift.framework */,
 				5149F2ED76FF28D39794B30B6B89D8E4 /* CryptoSwift.framework */,
 				9F31F040285B537203E6C689A6967D3C /* CryptoSwift.framework */,
-				0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher.framework */,
+				0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher-iOS */,
 				9537468CF4D5C16DB31E0F967000827C /* Kingfisher.framework */,
 				95BAA53196A79D500C92AFCCDED26039 /* Pods_Tokenary.framework */,
 				985063CF25F026FD329CB9B4D9F3E0A6 /* Pods-Tokenary iOS */,
@@ -4044,7 +4044,7 @@
 				5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf.framework */,
 				6F348CF3DF73CCBE882148B54AFDFDD5 /* SwiftyJSON.framework */,
 				4F8AD269CABED4BA00EA90C05C8D1BCF /* SwiftyJSON.framework */,
-				60CD9336BF0D87EB43F318C3C417DB66 /* WalletCore.framework */,
+				60CD9336BF0D87EB43F318C3C417DB66 /* TrustWalletCore-iOS */,
 				0A90AABC168E7ACBF249426FCA99F19B /* WalletCore.framework */,
 				14947ABD97F09420FCF875C8739F13AC /* WalletConnect.framework */,
 				9D756198C12012F347EA72608A363520 /* WalletConnect.framework */,
@@ -5323,7 +5323,7 @@
 			);
 			name = "Kingfisher-iOS";
 			productName = Kingfisher;
-			productReference = 0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher.framework */;
+			productReference = 0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher-iOS */;
 			productType = "com.apple.product-type.framework";
 		};
 		7157F7558BC7EE54294EBB38912D8FCB /* Web3Swift.io-macOS */ = {
@@ -5614,7 +5614,7 @@
 			);
 			name = "TrustWalletCore-iOS";
 			productName = WalletCore;
-			productReference = 60CD9336BF0D87EB43F318C3C417DB66 /* WalletCore.framework */;
+			productReference = 60CD9336BF0D87EB43F318C3C417DB66 /* TrustWalletCore-iOS */;
 			productType = "com.apple.product-type.framework";
 		};
 		EE29523135DBE5945D51241FC81B4B07 /* secp256k1.swift-macOS */ = {
