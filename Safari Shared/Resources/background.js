@@ -1,38 +1,16 @@
-var pendingTabIds = {};
-
-function handleUpdated(tabId, changeInfo, tabInfo) {
-    const prefix = "https://tokenary.io/blank/";
-    if (tabInfo.url.startsWith(prefix)) {
-        const id = tabInfo.url.replace(prefix, "");
-        if (id in pendingTabIds) {
-            const pendingTabId = pendingTabIds[id];
-            browser.tabs.update(pendingTabId, { active: true });
-            delete pendingTabIds[id];
-        } else {
-            const request = {id: parseInt(id), subject: "getResponse"};
-            browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
-                browser.tabs.query({}, function(tabs) {
-                    tabs.forEach(tab => {
-                        browser.tabs.sendMessage(tab.id, response);
-                    });
-                });
-            });
-        }
-        browser.tabs.remove(tabId);
-    }
-}
-
-browser.tabs.onUpdated.addListener(handleUpdated);
+// Copyright © 2022 Tokenary. All rights reserved.
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.subject === "message-to-wallet") {
-        didMakeRequest(request.message.id, sender.tab.id);
         browser.runtime.sendNativeMessage("mac.tokenary.io", request.message, function(response) {
             sendResponse(response);
+            browser.tabs.update(sender.tab.id, { active: true });
             didCompleteRequest(request.message.id);
         });
-    } else if (request.subject === "activateTab") {
-        browser.tabs.update(sender.tab.id, { active: true });
+    } else if (request.subject === "getResponse") {
+        browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
+            sendResponse(response);
+        });
     }
     return true;
 });

@@ -24,6 +24,12 @@ final class TokenaryWallet: Hashable, Equatable {
         return account
     }
     
+    func getAccount(password: String, coin: CoinType, derivation: Derivation) throws -> Account {
+        let wallet = key.wallet(password: Data(password.utf8))
+        guard let account = key.accountForCoinDerivation(coin: coin, derivation: derivation, wallet: wallet) else { throw KeyStore.Error.invalidPassword }
+        return account
+    }
+    
     func getAccounts(password: String, coins: [CoinType]) throws -> [Account] {
         guard let wallet = key.wallet(password: Data(password.utf8)) else { throw KeyStore.Error.invalidPassword }
         return coins.compactMap({ key.accountForCoin(coin: $0, wallet: wallet) })
