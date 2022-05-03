@@ -95,7 +95,7 @@ struct DappRequestProcessor {
                 }
                 
                 if body.method == .signAndSendTransaction {
-                    solana.sendSolanaTransaction(message: message, options: body.sendOptions) { result in
+                    solana.signAndSendTransaction(message: message, options: body.sendOptions) { result in
                         switch result {
                         case let .success(signature):
                             let responseBody = ResponseToExtension.Solana(result: signature)
