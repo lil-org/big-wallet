@@ -47,7 +47,8 @@ struct DappRequestProcessor {
         let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
         switch body.method {
         case .connect:
-            let responseBody = ResponseToExtension.Solana(publicKey: "A87Upx1f1whNV5P8xQCK2YUTwE3uMYigjoKJAF3jiNpz")
+            // TODO: pick an address from the list
+            let responseBody = ResponseToExtension.Solana(publicKey: "")
             respond(to: request, body: .solana(responseBody), completion: completion)
             return .none // TODO: replace with .selectAccount
         case .signAllTransactions:
