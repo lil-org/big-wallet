@@ -2,12 +2,9 @@
 
 "use strict";
 
-import RPCServer from "./rpc";
-import ProviderRpcError from "./error";
 import Utils from "./utils";
 import IdMapping from "./id_mapping";
 import { EventEmitter } from "events";
-import isUtf8 from "isutf8";
 import { PublicKey, Transaction } from "@solana/web3.js";
 import bs58 from "bs58";
 
@@ -104,12 +101,7 @@ class TokenarySolana extends EventEmitter {
                     return this.processPayload(payload);
                 default:
                     this.callbacks.delete(payload.id);
-                    return this.rpc
-                    .call(payload)
-                    .then((response) => {
-                        resolve(response.result);
-                    })
-                    .catch(reject);
+                    return;
             }
         });
     }
