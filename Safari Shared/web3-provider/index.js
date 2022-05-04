@@ -13,14 +13,20 @@ window.tokenary.postMessage = (name, id, body, provider) => {
 };
 
 window.ethereum = new TokenaryEthereum();
-const handler = {
+const ethereumHandler = {
     get(target, property) {
         return window.ethereum;
     }
 }
-window.web3 = new Proxy(window.ethereum, handler);
+window.web3 = new Proxy(window.ethereum, ethereumHandler);
 
 window.solana = new TokenarySolana();
+const solanaHandler = {
+    get(target, property) {
+        return window.solana;
+    }
+}
+window.phantom = new Proxy(window.solana, solanaHandler);
 
 window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "from-content-script") {

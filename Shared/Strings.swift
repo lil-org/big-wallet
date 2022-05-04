@@ -76,5 +76,6 @@ struct Strings {
     static let calculating = "Calculating…"
     static let howToEnableSafariExtension = "How to enable Safari extension?"
     static let shareInvite = "Share an invite"
+    static let approveTransaction = "Approve Transaction"
     
 }

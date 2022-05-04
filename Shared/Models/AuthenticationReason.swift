@@ -9,6 +9,7 @@ enum AuthenticationReason {
     case signMessage
     case signPersonalMessage
     case signTypedData
+    case approveTransaction
     
     var title: String {
         switch self {
@@ -28,6 +29,8 @@ enum AuthenticationReason {
             return Strings.signPersonalMessage
         case .signTypedData:
             return Strings.signTypedData
+        case .approveTransaction:
+            return Strings.approveTransaction
         }
     }
 }
