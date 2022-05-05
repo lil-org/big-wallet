@@ -4,6 +4,10 @@ import Foundation
 
 struct Keychain {
     
+    enum KeychainError: Error {
+        case failedToUpdate
+    }
+    
     private init() {}
     
     static let shared = Keychain()
@@ -73,6 +77,10 @@ struct Keychain {
         save(data: data, key: .wallet(id: id))
     }
     
+    func updateWallet(id: String, data: Data) throws {
+        try update(data: data, key: .wallet(id: id))
+    }
+    
     func removeWallet(id: String) throws {
         removeData(forKey: .wallet(id: id))
     }
@@ -98,6 +106,14 @@ struct Keychain {
     }
     
     // MARK: - Private
+    
+    private func update(data: Data, key: ItemKey) throws {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                    kSecAttrAccount as String: key.stringValue]
+        let attributes: [String: Any] = [kSecValueData as String: data]
+        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        guard status == errSecSuccess else { throw KeychainError.failedToUpdate }
+    }
     
     private func save(data: Data, key: ItemKey) {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
