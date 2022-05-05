@@ -37,9 +37,6 @@ class TokenarySolana extends EventEmitter {
         // support also via request "disconnect" method
     }
 
-    // provider.on("accountChanged", (publicKey: PublicKey | null));
-    // TODO: support emitting accountChanged (on switch account event)
-
     signTransaction(transaction) {
         const params = {message: bs58.encode(transaction.serializeMessage())};
         const payload = {method: "signTransaction", params: params, id: Utils.genId()};
@@ -158,6 +155,9 @@ class TokenarySolana extends EventEmitter {
             this.publicKey = publicKey;
             this.sendResponse(id, {publicKey: publicKey});
             this.emitConnect(publicKey);
+            if (response.name == "switchAccount") {
+                this.emit("accountChanged", publicKey);
+            }
         } else if ("result" in response) {
             if (response.name == "signTransaction" || response.name == "signAndSendTransaction") {
                 if (this.transactionsPendingSignature.has(id)) {
