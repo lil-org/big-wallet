@@ -89,7 +89,7 @@ final class WalletsManager {
         let wallet = TokenaryWallet(id: id, key: key)
         _ = try wallet.getAccount(password: password, coin: coin)
         wallets.append(wallet)
-        try save(wallet: wallet)
+        try save(wallet: wallet, isUpdate: false)
         return wallet
     }
 
@@ -114,7 +114,7 @@ final class WalletsManager {
         if !onlyToKeychain {
             wallets.append(wallet)
         }
-        try save(wallet: wallet)
+        try save(wallet: wallet, isUpdate: false)
         return wallet
     }
 
@@ -124,7 +124,7 @@ final class WalletsManager {
         let wallet = TokenaryWallet(id: id, key: key)
         _ = try wallet.getAccount(password: encryptPassword, coin: coin)
         wallets.append(wallet)
-        try save(wallet: wallet)
+        try save(wallet: wallet, isUpdate: false)
         return wallet
     }
 
@@ -140,11 +140,13 @@ final class WalletsManager {
         return mnemonic
     }
 
-    func update(wallet: TokenaryWallet, password: String, newPassword: String) throws {
+    func update(wallet: TokenaryWallet, newPassword: String) throws {
+        guard let password = keychain.password else { throw Error.keychainAccessFailure }
         try update(wallet: wallet, password: password, newPassword: newPassword, newName: wallet.key.name)
     }
 
-    func update(wallet: TokenaryWallet, password: String, newName: String) throws {
+    func update(wallet: TokenaryWallet, newName: String) throws {
+        guard let password = keychain.password else { throw Error.keychainAccessFailure }
         try update(wallet: wallet, password: password, newPassword: password, newName: newName)
     }
 
@@ -189,13 +191,19 @@ final class WalletsManager {
             throw KeyStore.Error.invalidKey
         }
         
+        // TODO: вот так будут теряться аккаунты с разными derivation
+        
         _ = try wallets[index].getAccounts(password: newPassword, coins: coins)
-        try save(wallet: wallets[index])
+        try save(wallet: wallets[index], isUpdate: true)
     }
 
-    private func save(wallet: TokenaryWallet) throws {
+    private func save(wallet: TokenaryWallet, isUpdate: Bool) throws {
         guard let data = wallet.key.exportJSON() else { throw KeyStore.Error.invalidPassword }
-        try keychain.saveWallet(id: wallet.id, data: data)
+        if isUpdate {
+            try keychain.updateWallet(id: wallet.id, data: data)
+        } else {
+            try keychain.saveWallet(id: wallet.id, data: data)
+        }
         postWalletsChangedNotification()
     }
     
