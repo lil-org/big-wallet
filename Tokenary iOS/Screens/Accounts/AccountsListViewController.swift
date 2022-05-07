@@ -7,7 +7,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private let walletsManager = WalletsManager.shared
     
     private var chain = EthereumChain.ethereum
-    var onSelectedWallet: ((EthereumChain?, TokenaryWallet?) -> Void)?
+    var onSelectedWallet: ((EthereumChain?, TokenaryWallet?, Account?) -> Void)?
     var forWalletSelection: Bool {
         return onSelectedWallet != nil
     }
@@ -37,7 +37,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             walletsManager.start()
         }
         
-        navigationItem.title = forWalletSelection ? Strings.selectAccount : Strings.accounts
+        navigationItem.title = forWalletSelection ? Strings.selectAccount : Strings.wallets
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
         isModalInPresentation = true
@@ -50,7 +50,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         if forWalletSelection {
             navigationItem.leftBarButtonItem = cancelItem
         }
-        configureDataState(.noData, description: Strings.tokenaryIsEmpty, buttonTitle: Strings.addAccount) { [weak self] in
+        configureDataState(.noData, description: Strings.tokenaryIsEmpty, buttonTitle: Strings.addWallet) { [weak self] in
             self?.addAccount()
         }
         dataStateShouldMoveWithKeyboard(false)
@@ -218,7 +218,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     @objc private func addAccount() {
-        let actionSheet = UIAlertController(title: Strings.addAccount, message: nil, preferredStyle: .actionSheet)
+        let actionSheet = UIAlertController(title: Strings.addWallet, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.barButtonItem = addAccountItem
         let newAccountAction = UIAlertAction(title: "🌱 " + Strings.createNew, style: .default) { [weak self] _ in
             self?.createNewAccount()
@@ -288,7 +288,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             UIApplication.shared.open(URL.etherscan(address: address))
         }
         
-        let showKeyAction = UIAlertAction(title: Strings.showAccountKey, style: .default) { [weak self] _ in
+        let title = wallet.isMnemonic ? Strings.showSecretWords : Strings.showPrivateKey
+        let showKeyAction = UIAlertAction(title: title, style: .default) { [weak self] _ in
             self?.didTapExportAccount(wallet)
         }
         
@@ -335,7 +336,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let title = isMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
         let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
         let okAction = UIAlertAction(title: Strings.iUnderstandTheRisks, style: .default) { [weak self] _ in
-            LocalAuthentication.attempt(reason: Strings.removeAccount, presentPasswordAlertFrom: self, passwordReason: Strings.toShowAccountKey) { success in
+            let reason = isMnemonic ? Strings.toShowSecretWords : Strings.toShowPrivateKey
+            LocalAuthentication.attempt(reason: Strings.removeAccount, presentPasswordAlertFrom: self, passwordReason: reason) { success in
                 if success {
                     self?.showKey(wallet: wallet, mnemonic: isMnemonic)
                 }
