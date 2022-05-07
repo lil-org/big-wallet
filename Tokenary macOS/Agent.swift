@@ -4,6 +4,7 @@ import Cocoa
 import WalletConnect
 import SafariServices
 import LocalAuthentication
+import WalletCore
 
 class Agent: NSObject {
     
@@ -13,7 +14,6 @@ class Agent: NSObject {
     }
     
     static let shared = Agent()
-    private lazy var statusImage = NSImage(named: "Status")
     
     private let walletConnect = WalletConnect.shared
     
@@ -120,7 +120,7 @@ class Agent: NSObject {
         windowController.contentViewController = ErrorViewController.withMessage(message)
     }
     
-    func getWalletSelectionCompletionIfShouldSelect() -> ((EthereumChain?, TokenaryWallet?) -> Void)? {
+    func getWalletSelectionCompletionIfShouldSelect() -> ((EthereumChain?, TokenaryWallet?, Account?) -> Void)? {
         let session = getSessionFromPasteboard()
         return onSelectedWallet(session: session)
     }
@@ -199,7 +199,7 @@ class Agent: NSObject {
     func setupStatusBarItem() {
         let statusBar = NSStatusBar.system
         statusBarItem = statusBar.statusItem(withLength: NSStatusItem.squareLength)
-        statusBarItem.button?.image = statusImage
+        statusBarItem.button?.image = Images.statusBarIcon
         statusBarItem.button?.target = self
         statusBarItem.button?.action = #selector(statusBarButtonClicked(sender:))
         statusBarItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
@@ -216,10 +216,13 @@ class Agent: NSObject {
         }
     }
     
-    private func onSelectedWallet(session: WCSession?) -> ((EthereumChain?, TokenaryWallet?) -> Void)? {
+    private func onSelectedWallet(session: WCSession?) -> ((EthereumChain?, TokenaryWallet?, Account?) -> Void)? {
         guard let session = session else { return nil }
-        return { [weak self] chain, wallet in
-            guard let chain = chain, let wallet = wallet else { return }
+        return { [weak self] chain, wallet, account in
+            guard let chain = chain, let wallet = wallet, account?.coin == .ethereum else {
+                Window.closeAllAndActivateBrowser(force: nil)
+                return
+            }
             self?.connectWallet(session: session, chainId: chain.id, wallet: wallet)
         }
     }
