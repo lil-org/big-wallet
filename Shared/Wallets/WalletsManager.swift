@@ -57,7 +57,7 @@ final class WalletsManager {
     
     func createWallet() throws -> TokenaryWallet {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
-        return try createWallet(name: defaultWalletName, password: password, coin: .ethereum)
+        return try createWallet(name: defaultWalletName, password: password)
     }
     
     func getWallet(id: String) -> TokenaryWallet? {
@@ -71,32 +71,36 @@ final class WalletsManager {
     func addWallet(input: String, inputPassword: String?) throws -> TokenaryWallet {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         let name = defaultWalletName
-        let coin = CoinType.ethereum
+        let defaultCoin = CoinType.ethereum
         if Mnemonic.isValid(mnemonic: input) {
-            return try importMnemonic(input, name: name, encryptPassword: password, coin: coin)
-        } else if let data = Data(hexString: input), PrivateKey.isValid(data: data, curve: coin.curve), let privateKey = PrivateKey(data: data) {
-            return try importPrivateKey(privateKey, name: name, password: password, coin: coin, onlyToKeychain: false)
+            return try importMnemonic(input, name: name, encryptPassword: password)
+        } else if let data = Data(hexString: input), PrivateKey.isValid(data: data, curve: defaultCoin.curve), let privateKey = PrivateKey(data: data) {
+            return try importPrivateKey(privateKey, name: name, password: password, coin: defaultCoin, onlyToKeychain: false)
         } else if input.maybeJSON, let inputPassword = inputPassword, let json = input.data(using: .utf8) {
-            return try importJSON(json, name: name, password: inputPassword, newPassword: password, coin: coin, onlyToKeychain: false)
+            return try importJSON(json, name: name, password: inputPassword, newPassword: password, coin: defaultCoin, onlyToKeychain: false)
         } else {
             throw Error.invalidInput
         }
     }
     
-    private func createWallet(name: String, password: String, coin: CoinType) throws -> TokenaryWallet {
+    private func createWallet(name: String, password: String) throws -> TokenaryWallet {
         let key = StoredKey(name: name, password: Data(password.utf8))
         let id = makeNewWalletId()
         let wallet = TokenaryWallet(id: id, key: key)
-        _ = try wallet.getAccount(password: password, coin: coin)
+        
+        for coinDerivation in CoinDerivation.enabledByDefaultCoinDerivations {
+            _ = try wallet.getAccount(password: password, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
+        }
+        
         wallets.append(wallet)
-        try save(wallet: wallet)
+        try save(wallet: wallet, isUpdate: false)
         return wallet
     }
 
     private func importJSON(_ json: Data, name: String, password: String, newPassword: String, coin: CoinType, onlyToKeychain: Bool) throws -> TokenaryWallet {
         guard let key = StoredKey.importJSON(json: json) else { throw KeyStore.Error.invalidKey }
         guard let data = key.decryptPrivateKey(password: Data(password.utf8)) else { throw KeyStore.Error.invalidPassword }
-        if let mnemonic = checkMnemonic(data) { return try self.importMnemonic(mnemonic, name: name, encryptPassword: newPassword, coin: coin) }
+        if let mnemonic = checkMnemonic(data) { return try self.importMnemonic(mnemonic, name: name, encryptPassword: newPassword) }
         guard let privateKey = PrivateKey(data: data) else { throw KeyStore.Error.invalidKey }
         return try self.importPrivateKey(privateKey, name: name, password: newPassword, coin: coin, onlyToKeychain: onlyToKeychain)
     }
@@ -114,17 +118,22 @@ final class WalletsManager {
         if !onlyToKeychain {
             wallets.append(wallet)
         }
-        try save(wallet: wallet)
+        try save(wallet: wallet, isUpdate: false)
         return wallet
     }
 
-    private func importMnemonic(_ mnemonic: String, name: String, encryptPassword: String, coin: CoinType) throws -> TokenaryWallet {
-        guard let key = StoredKey.importHDWallet(mnemonic: mnemonic, name: name, password: Data(encryptPassword.utf8), coin: coin) else { throw KeyStore.Error.invalidMnemonic }
+    private func importMnemonic(_ mnemonic: String, name: String, encryptPassword: String) throws -> TokenaryWallet {
+        let coinDerivations = CoinDerivation.enabledByDefaultCoinDerivations
+        guard let key = StoredKey.importHDWallet(mnemonic: mnemonic, name: name, password: Data(encryptPassword.utf8), coin: coinDerivations[0].coin) else { throw KeyStore.Error.invalidMnemonic }
         let id = makeNewWalletId()
         let wallet = TokenaryWallet(id: id, key: key)
-        _ = try wallet.getAccount(password: encryptPassword, coin: coin)
+        
+        for coinDerivation in coinDerivations {
+            _ = try wallet.getAccount(password: encryptPassword, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
+        }
+        
         wallets.append(wallet)
-        try save(wallet: wallet)
+        try save(wallet: wallet, isUpdate: false)
         return wallet
     }
 
@@ -140,11 +149,13 @@ final class WalletsManager {
         return mnemonic
     }
 
-    func update(wallet: TokenaryWallet, password: String, newPassword: String) throws {
+    func update(wallet: TokenaryWallet, newPassword: String) throws {
+        guard let password = keychain.password else { throw Error.keychainAccessFailure }
         try update(wallet: wallet, password: password, newPassword: newPassword, newName: wallet.key.name)
     }
 
-    func update(wallet: TokenaryWallet, password: String, newName: String) throws {
+    func update(wallet: TokenaryWallet, newName: String) throws {
+        guard let password = keychain.password else { throw Error.keychainAccessFailure }
         try update(wallet: wallet, password: password, newPassword: password, newName: newName)
     }
 
@@ -172,30 +183,72 @@ final class WalletsManager {
         }
     }
     
+    func update(wallet: TokenaryWallet, coinDerivations: [CoinDerivation]) throws {
+        guard let password = keychain.password else { throw Error.keychainAccessFailure }
+        
+        for account in wallet.accounts {
+            wallet.key.removeAccountForCoin(coin: account.coin)
+        }
+        
+        for coinDerivation in coinDerivations {
+            _ = try wallet.getAccount(password: password, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
+        }
+        
+        try save(wallet: wallet, isUpdate: true)
+    }
+    
+    func update(wallet: TokenaryWallet, removeAccounts toRemove: [Account]) throws {
+        guard let password = keychain.password else { throw Error.keychainAccessFailure }
+        
+        let derivationPathsToRemove = toRemove.map { $0.derivationPath }
+        let coinsToRemove = Set(toRemove.map { $0.coin })
+        
+        let accountsToExpicitlyKeep = wallet.accounts.filter { account in
+            return coinsToRemove.contains(account.coin) && !derivationPathsToRemove.contains(account.derivationPath)
+        }
+        
+        for coin in coinsToRemove {
+            wallet.key.removeAccountForCoin(coin: coin)
+        }
+        
+        for account in accountsToExpicitlyKeep {
+            _ = try wallet.getAccount(password: password, coin: account.coin, derivation: account.derivation)
+        }
+        
+        try save(wallet: wallet, isUpdate: true)
+    }
+    
     private func update(wallet: TokenaryWallet, password: String, newPassword: String, newName: String) throws {
         guard let index = wallets.firstIndex(of: wallet) else { throw KeyStore.Error.accountNotFound }
         guard var privateKeyData = wallet.key.decryptPrivateKey(password: Data(password.utf8)) else { throw KeyStore.Error.invalidPassword }
-        defer { privateKeyData.resetBytes(in: 0 ..< privateKeyData.count) }
-        let coins = wallet.accounts.map({ $0.coin })
-        guard !coins.isEmpty else { throw KeyStore.Error.accountNotFound }
-        
+        defer { privateKeyData.resetBytes(in: 0..<privateKeyData.count) }
+        let coinDerivations = wallet.accounts.map { CoinDerivation(coin: $0.coin, derivation: $0.derivation) }
+        guard !coinDerivations.isEmpty else { throw KeyStore.Error.accountNotFound }
+        let firstCoin = coinDerivations[0].coin
         if let mnemonic = checkMnemonic(privateKeyData),
-            let key = StoredKey.importHDWallet(mnemonic: mnemonic, name: newName, password: Data(newPassword.utf8), coin: coins[0]) {
+           let key = StoredKey.importHDWallet(mnemonic: mnemonic, name: newName, password: Data(newPassword.utf8), coin: firstCoin) {
             wallets[index].key = key
         } else if let key = StoredKey.importPrivateKey(
-                privateKey: privateKeyData, name: newName, password: Data(newPassword.utf8), coin: coins[0]) {
+                privateKey: privateKeyData, name: newName, password: Data(newPassword.utf8), coin: firstCoin) {
             wallets[index].key = key
         } else {
             throw KeyStore.Error.invalidKey
         }
         
-        _ = try wallets[index].getAccounts(password: newPassword, coins: coins)
-        try save(wallet: wallets[index])
+        for coinDerivation in coinDerivations {
+            _ = try wallets[index].getAccount(password: newPassword, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
+        }
+        
+        try save(wallet: wallets[index], isUpdate: true)
     }
 
-    private func save(wallet: TokenaryWallet) throws {
+    private func save(wallet: TokenaryWallet, isUpdate: Bool) throws {
         guard let data = wallet.key.exportJSON() else { throw KeyStore.Error.invalidPassword }
-        try keychain.saveWallet(id: wallet.id, data: data)
+        if isUpdate {
+            try keychain.updateWallet(id: wallet.id, data: data)
+        } else {
+            try keychain.saveWallet(id: wallet.id, data: data)
+        }
         postWalletsChangedNotification()
     }
     

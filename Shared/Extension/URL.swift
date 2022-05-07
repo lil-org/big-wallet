@@ -10,8 +10,4 @@ extension URL {
     static let iosSafariGuide = URL(string: "https://tokenary.io/guide-ios")!
     static let appStore = URL(string: "https://tokenary.io/get")!
     
-    static func etherscan(address: String) -> URL {
-        return URL(string: "https://etherscan.io/address/\(address)")!
-    }
-    
 }

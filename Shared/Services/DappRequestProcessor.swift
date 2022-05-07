@@ -1,6 +1,7 @@
 // Copyright © 2022 Tokenary. All rights reserved.
 
 import Foundation
+import WalletCore
 
 struct DappRequestProcessor {
     
@@ -28,12 +29,15 @@ struct DappRequestProcessor {
                 ExtensionBridge.respond(response: ResponseToExtension(for: request))
                 return .justShowApp
             case .switchAccount:
-                let action = SelectAccountAction(provider: .unknown) { chain, wallet in
-                    // TODO: should work with any chain
-                    if let chain = chain, let address = wallet?.ethereumAddress {
-                        let responseBody = ResponseToExtension.Ethereum(results: [address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
-                        respond(to: request, body: .ethereum(responseBody), completion: completion)
-                        // TODO: response body type should depend on chain of selected account
+                let action = SelectAccountAction(provider: .unknown) { chain, _, account in
+                    if let chain = chain, let account = account {
+                        if account.coin == .ethereum {
+                            let responseBody = ResponseToExtension.Ethereum(results: [account.address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
+                            respond(to: request, body: .ethereum(responseBody), completion: completion)
+                        } else {
+                            let responseBody = ResponseToExtension.Solana(publicKey: account.address)
+                            respond(to: request, body: .solana(responseBody), completion: completion)
+                        }
                     } else {
                         respond(to: request, error: Strings.canceled, completion: completion)
                     }
@@ -45,12 +49,28 @@ struct DappRequestProcessor {
     
     private static func process(request: SafariRequest, solanaRequest body: SafariRequest.Solana, completion: @escaping () -> Void) -> DappRequestAction {
         let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
+        
+        func getPrivateKey() -> WalletCore.PrivateKey? {
+            guard let password = Keychain.shared.password else { return nil }
+            for wallet in walletsManager.wallets {
+                if let account = wallet.accounts.first(where: { $0.address == body.publicKey }) {
+                    return try? wallet.privateKey(password: password, account: account)
+                }
+            }
+            return nil
+        }
+        
         switch body.method {
         case .connect:
-            // TODO: pick an address from the list
-            let responseBody = ResponseToExtension.Solana(publicKey: "")
-            respond(to: request, body: .solana(responseBody), completion: completion)
-            return .none // TODO: replace with .selectAccount
+            let action = SelectAccountAction(provider: .solana) { _, _, account in
+                if let account = account, account.coin == .solana {
+                    let responseBody = ResponseToExtension.Solana(publicKey: account.address)
+                    respond(to: request, body: .solana(responseBody), completion: completion)
+                } else {
+                    respond(to: request, error: Strings.canceled, completion: completion)
+                }
+            }
+            return .selectAccount(action)
         case .signAllTransactions:
             guard let messages = body.messages else {
                 respond(to: request, error: Strings.somethingWentWrong, completion: completion)
@@ -58,10 +78,10 @@ struct DappRequestProcessor {
             }
             let displayMessage = messages.joined(separator: "\n\n")
             let action = SignMessageAction(provider: request.provider, subject: .approveTransaction, address: body.publicKey, meta: displayMessage, peerMeta: peerMeta) { approved in
-                if approved {
+                if approved, let privateKey = getPrivateKey() {
                     var results = [String]()
                     for message in messages {
-                        guard let signed = solana.sign(message: message, asHex: false) else {
+                        guard let signed = solana.sign(message: message, asHex: false, privateKey: privateKey) else {
                             respond(to: request, error: Strings.failedToSign, completion: completion)
                             return
                         }
@@ -90,13 +110,13 @@ struct DappRequestProcessor {
                 subject = .approveTransaction
             }
             let action = SignMessageAction(provider: request.provider, subject: subject, address: body.publicKey, meta: displayMessage, peerMeta: peerMeta) { approved in
-                guard approved else {
+                guard approved, let privateKey = getPrivateKey() else {
                     respond(to: request, error: Strings.failedToSign, completion: completion)
                     return
                 }
                 
                 if body.method == .signAndSendTransaction {
-                    solana.signAndSendTransaction(message: message, options: body.sendOptions) { result in
+                    solana.signAndSendTransaction(message: message, options: body.sendOptions, privateKey: privateKey) { result in
                         switch result {
                         case let .success(signature):
                             let responseBody = ResponseToExtension.Solana(result: signature)
@@ -105,7 +125,7 @@ struct DappRequestProcessor {
                             respond(to: request, error: Strings.failedToSend, completion: completion)
                         }
                     }
-                } else if let signed = solana.sign(message: message, asHex: body.method == .signMessage) {
+                } else if let signed = solana.sign(message: message, asHex: body.method == .signMessage, privateKey: privateKey) {
                     let responseBody = ResponseToExtension.Solana(result: signed)
                     respond(to: request, body: .solana(responseBody), completion: completion)
                 } else {
@@ -121,8 +141,8 @@ struct DappRequestProcessor {
         
         switch ethereumRequest.method {
         case .switchAccount, .requestAccounts:
-            let action = SelectAccountAction(provider: .ethereum) { chain, wallet in
-                if let chain = chain, let address = wallet?.ethereumAddress {
+            let action = SelectAccountAction(provider: .ethereum) { chain, wallet, account in
+                if let chain = chain, let address = wallet?.ethereumAddress, account?.coin == .ethereum {
                     let responseBody = ResponseToExtension.Ethereum(results: [address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
                     respond(to: request, body: .ethereum(responseBody), completion: completion)
                 } else {

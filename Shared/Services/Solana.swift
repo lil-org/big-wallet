@@ -51,25 +51,19 @@ class Solana {
     
     private init() {}
     
-    func sign(message: String, asHex: Bool) -> String? {
+    func sign(message: String, asHex: Bool, privateKey: PrivateKey) -> String? {
         let digest = asHex ? Data(hex: message) : Base58.decodeNoCheck(string: message)
         guard let digest = digest else { return nil }
-        
-        let words = ""
-        let password = ""
-        guard let key = StoredKey.importHDWallet(mnemonic: words, name: "", password: Data(password.utf8), coin: .solana),
-              let phantomPrivateKey = key.wallet(password: Data(password.utf8))?.getKey(coin: .solana, derivationPath: "m/44'/501'/0'/0'") else { return nil }
-        
-        if let data = phantomPrivateKey.sign(digest: digest, curve: CoinType.solana.curve) {
+        if let data = privateKey.sign(digest: digest, curve: CoinType.solana.curve) {
             return Base58.encodeNoCheck(data: data)
         } else {
             return nil
         }
     }
     
-    func signAndSendTransaction(retryCount: Int = 0, message: String, options: [String: Any]?, completion: @escaping (Result<String, SendTransactionError>) -> Void) {
+    func signAndSendTransaction(retryCount: Int = 0, message: String, options: [String: Any]?, privateKey: PrivateKey, completion: @escaping (Result<String, SendTransactionError>) -> Void) {
         guard retryCount < 3,
-              let signed = sign(message: message, asHex: false),
+              let signed = sign(message: message, asHex: false, privateKey: privateKey),
               let raw = compileTransactionData(message: message, signature: signed, simulation: false) else {
             completion(.failure(.unknown))
             return
@@ -86,7 +80,7 @@ class Solana {
                 case .blockhashNotFound:
                     self?.updateBlockhash(message: message) { updatedMessage in
                         if let updatedMessage = updatedMessage {
-                            self?.signAndSendTransaction(retryCount: retryCount + 1, message: updatedMessage, options: options, completion: completion)
+                            self?.signAndSendTransaction(retryCount: retryCount + 1, message: updatedMessage, options: options, privateKey: privateKey, completion: completion)
                         } else {
                             completion(.failure(.unknown))
                         }

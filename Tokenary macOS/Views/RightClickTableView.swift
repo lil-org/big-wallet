@@ -4,19 +4,24 @@ import Cocoa
 
 class RightClickTableView: NSTableView {
     
+    weak var menuSource: TableViewMenuSource?
     var deselectedRow = -1
-    var shouldShowRightClickMenu = true
     
     override func menu(for event: NSEvent) -> NSMenu? {
-        guard shouldShowRightClickMenu else { return nil }
         let point = convert(event.locationInWindow, from: nil)
         let index = row(at: point)
-        if index >= 0 {
+        if index >= 0, let menu = menuSource?.menuForRow(index) {
             selectRowIndexes([index], byExtendingSelection: true)
             return menu
         } else {
             return nil
         }
     }
+    
+}
+
+protocol TableViewMenuSource: AnyObject {
+    
+    func menuForRow(_ row: Int) -> NSMenu?
     
 }

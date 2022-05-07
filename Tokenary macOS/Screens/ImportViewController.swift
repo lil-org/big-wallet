@@ -1,11 +1,12 @@
 // Copyright © 2021 Tokenary. All rights reserved.
 
 import Cocoa
+import WalletCore
 
 class ImportViewController: NSViewController {
     
     private let walletsManager = WalletsManager.shared
-    var onSelectedWallet: ((EthereumChain?, TokenaryWallet?) -> Void)?
+    var onSelectedWallet: ((EthereumChain?, TokenaryWallet?, Account?) -> Void)?
     private var inputValidationResult = WalletsManager.InputValidationResult.invalid
     
     @IBOutlet weak var textField: NSTextField! {
@@ -55,7 +56,7 @@ class ImportViewController: NSViewController {
             let wallet = try walletsManager.addWallet(input: input, inputPassword: password)
             showAccountsList(newWalletId: wallet.id)
         } catch {
-            Alert.showWithMessage(Strings.failedToImportAccount, style: .critical)
+            Alert.showWithMessage(Strings.failedToImportWallet, style: .critical)
         }
     }
     

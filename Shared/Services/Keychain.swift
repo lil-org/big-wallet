@@ -4,6 +4,10 @@ import Foundation
 
 struct Keychain {
     
+    enum KeychainError: Error {
+        case failedToUpdate
+    }
+    
     private init() {}
     
     static let shared = Keychain()
@@ -73,6 +77,10 @@ struct Keychain {
         save(data: data, key: .wallet(id: id))
     }
     
+    func updateWallet(id: String, data: Data) throws {
+        try update(data: data, key: .wallet(id: id))
+    }
+    
     func removeWallet(id: String) throws {
         removeData(forKey: .wallet(id: id))
     }
@@ -99,6 +107,14 @@ struct Keychain {
     
     // MARK: - Private
     
+    private func update(data: Data, key: ItemKey) throws {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                    kSecAttrAccount as String: key.stringValue]
+        let attributes: [String: Any] = [kSecValueData as String: data]
+        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        guard status == errSecSuccess else { throw KeychainError.failedToUpdate }
+    }
+    
     private func save(data: Data, key: ItemKey) {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                                     kSecAttrAccount as String: key.stringValue,
@@ -115,7 +131,8 @@ struct Keychain {
         var items: CFTypeRef?
         let status: OSStatus = SecItemCopyMatching(query as CFDictionary, &items)
         if status == noErr, let items = items as? [[String: Any]], !items.isEmpty {
-            return items.compactMap { $0[kSecAttrAccount as String] as? String }
+            let sorted = items.sorted(by: { ($0[kSecAttrCreationDate as String] as? Date ?? Date()) < ($1[kSecAttrCreationDate as String] as? Date ?? Date()) })
+            return sorted.compactMap { $0[kSecAttrAccount as String] as? String }
         } else {
             return []
         }
