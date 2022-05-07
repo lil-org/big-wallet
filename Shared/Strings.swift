@@ -40,6 +40,7 @@ struct Strings {
     static let enterPassword = "Enter Password"
     static let copyAddress = "Copy address"
     static let viewOnEtherscan = "View on Etherscan"
+    static let viewOnSolanaExplorer = "View on Solana explorer"
     static let testnets = "Testnets"
     static let backUpNewWallet = "Back up new wallet"
     static let youWillSeeSecretWords = "You will see 12 secret words."
@@ -81,5 +82,6 @@ struct Strings {
     static let multicoinWallet = "Multicoin Wallet"
     static let privateKeyWallets = "Private Key Wallets"
     static let editAccounts = "Edit accounts"
+    static let removingTheLastAccount = "Removing the last account removes a wallet as well"
     
 }
