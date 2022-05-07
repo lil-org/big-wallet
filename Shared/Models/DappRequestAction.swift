@@ -1,6 +1,7 @@
 // Copyright © 2022 Tokenary. All rights reserved.
 
 import Foundation
+import WalletCore
 
 enum DappRequestAction {
     case none
@@ -12,7 +13,7 @@ enum DappRequestAction {
 
 struct SelectAccountAction {
     let provider: Web3Provider
-    let completion: (EthereumChain?, TokenaryWallet?) -> Void
+    let completion: (EthereumChain?, TokenaryWallet?, Account?) -> Void
 }
 
 struct SignMessageAction {
