@@ -116,43 +116,50 @@
                             <tableView clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" dataMode="prototypes" style="grouped" separatorStyle="default" rowHeight="-1" estimatedRowHeight="-1" sectionHeaderHeight="18" estimatedSectionHeaderHeight="-1" sectionFooterHeight="18" estimatedSectionFooterHeight="-1" translatesAutoresizingMaskIntoConstraints="NO" id="0xi-7N-lca">
                                 <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                                 <color key="backgroundColor" systemColor="systemBackgroundColor"/>
-                                <view key="tableHeaderView" contentMode="scaleToFill" id="84W-jE-O9Q">
-                                    <rect key="frame" x="0.0" y="0.0" width="414" height="72"/>
-                                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                            </tableView>
+                            <visualEffectView hidden="YES" opaque="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="6UO-mx-4Yr">
+                                <rect key="frame" x="0.0" y="810" width="414" height="86"/>
+                                <view key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" insetsLayoutMarginsFromSafeArea="NO" id="NtO-ha-srb">
+                                    <rect key="frame" x="0.0" y="0.0" width="414" height="86"/>
+                                    <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <subviews>
-                                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Dsw-8H-wZs">
-                                            <rect key="frame" x="20" y="4" width="374" height="52"/>
+                                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="TIH-fa-S55">
+                                            <rect key="frame" x="20" y="12" width="374" height="32"/>
                                             <constraints>
-                                                <constraint firstAttribute="height" constant="52" id="Trz-gO-sBc"/>
+                                                <constraint firstAttribute="height" constant="32" id="gP8-Ui-tkO"/>
                                             </constraints>
                                             <state key="normal" title="Button"/>
-                                            <buttonConfiguration key="configuration" style="gray" image="chevron.down" catalog="system" imagePlacement="trailing" title="Ethereum" imagePadding="4"/>
+                                            <buttonConfiguration key="configuration" style="plain" title="Select network (optionally)"/>
                                             <connections>
-                                                <action selector="chainButtonTapped:" destination="onX-Y1-KVr" eventType="touchUpInside" id="vEp-lO-cld"/>
-                                                <action selector="pasteButtonTapped:" destination="ffW-KB-fbn" eventType="touchUpInside" id="CIq-jN-XXP"/>
+                                                <action selector="selectNetworkButtonTapped:" destination="onX-Y1-KVr" eventType="touchUpInside" id="gmk-ol-giP"/>
                                             </connections>
                                         </button>
                                     </subviews>
                                     <constraints>
-                                        <constraint firstItem="Dsw-8H-wZs" firstAttribute="top" secondItem="84W-jE-O9Q" secondAttribute="top" constant="4" id="Nu7-lm-hRY"/>
-                                        <constraint firstItem="Dsw-8H-wZs" firstAttribute="leading" secondItem="84W-jE-O9Q" secondAttribute="leading" constant="20" id="VRt-JZ-js5"/>
-                                        <constraint firstAttribute="trailing" secondItem="Dsw-8H-wZs" secondAttribute="trailing" constant="20" id="kFn-as-qPr"/>
+                                        <constraint firstAttribute="trailing" secondItem="TIH-fa-S55" secondAttribute="trailing" constant="20" id="FMu-WC-cn6"/>
+                                        <constraint firstItem="TIH-fa-S55" firstAttribute="top" secondItem="NtO-ha-srb" secondAttribute="top" constant="12" id="Ghx-kG-KbT"/>
+                                        <constraint firstItem="TIH-fa-S55" firstAttribute="leading" secondItem="NtO-ha-srb" secondAttribute="leading" constant="20" id="dtw-Y1-e4z"/>
                                     </constraints>
                                 </view>
-                            </tableView>
+                                <blurEffect style="regular"/>
+                            </visualEffectView>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="ydA-69-gGk"/>
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                         <constraints>
                             <constraint firstAttribute="bottom" secondItem="0xi-7N-lca" secondAttribute="bottom" id="6f7-U1-uCe"/>
+                            <constraint firstItem="ydA-69-gGk" firstAttribute="trailing" secondItem="6UO-mx-4Yr" secondAttribute="trailing" id="BD1-vM-rvn"/>
                             <constraint firstAttribute="trailing" secondItem="0xi-7N-lca" secondAttribute="trailing" id="SD0-Nu-rh2"/>
+                            <constraint firstItem="6UO-mx-4Yr" firstAttribute="leading" secondItem="ydA-69-gGk" secondAttribute="leading" id="bia-2e-8ew"/>
                             <constraint firstItem="0xi-7N-lca" firstAttribute="top" secondItem="K92-L8-Bkg" secondAttribute="top" id="hcU-2B-dS3"/>
+                            <constraint firstAttribute="bottom" secondItem="6UO-mx-4Yr" secondAttribute="bottom" id="p6P-i7-BER"/>
+                            <constraint firstItem="ydA-69-gGk" firstAttribute="bottom" secondItem="TIH-fa-S55" secondAttribute="bottom" constant="8" id="y16-ad-e38"/>
                             <constraint firstItem="0xi-7N-lca" firstAttribute="leading" secondItem="K92-L8-Bkg" secondAttribute="leading" id="yMa-WS-nBe"/>
                         </constraints>
                     </view>
                     <connections>
-                        <outlet property="chainButton" destination="Dsw-8H-wZs" id="0bd-pt-X6O"/>
-                        <outlet property="chainSelectionHeader" destination="84W-jE-O9Q" id="lqS-V8-gUs"/>
+                        <outlet property="selectNetworkButton" destination="TIH-fa-S55" id="Nsk-zc-RlI"/>
+                        <outlet property="selectNetworkButtonContainer" destination="6UO-mx-4Yr" id="xzK-Yw-ftE"/>
                         <outlet property="tableView" destination="0xi-7N-lca" id="vc7-HM-CEH"/>
                     </connections>
                 </viewController>
@@ -446,7 +453,6 @@ Label</string>
     </scenes>
     <resources>
         <image name="LaunchLogo" width="100" height="100"/>
-        <image name="chevron.down" catalog="system" width="128" height="72"/>
         <systemColor name="labelColor">
             <color white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>
