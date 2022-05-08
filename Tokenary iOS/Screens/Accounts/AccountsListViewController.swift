@@ -1,6 +1,7 @@
 // Copyright © 2021 Tokenary. All rights reserved.
 
 import UIKit
+import WalletCore
 
 class AccountsListViewController: UIViewController, DataStateContainer {
     
@@ -165,7 +166,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     @objc private func cancelButtonTapped() {
-        onSelectedWallet?(nil, nil)
+        onSelectedWallet?(nil, nil, nil)
     }
     
     @objc private func walletsChanged() {
@@ -234,7 +235,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func createNewAccount() {
-        let alert = UIAlertController(title: Strings.backUpNewAccount, message: Strings.youWillSeeSecretWords, preferredStyle: .alert)
+        let alert = UIAlertController(title: Strings.backUpNewWallet, message: Strings.youWillSeeSecretWords, preferredStyle: .alert)
         let okAction = UIAlertAction(title: Strings.ok, style: .default) { [weak self] _ in
             self?.createNewAccountAndShowSecretWords()
         }
@@ -284,8 +285,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             UIPasteboard.general.string = address
         }
         
-        let etherscanAction = UIAlertAction(title: Strings.viewOnEtherscan, style: .default) { _ in
-            UIApplication.shared.open(URL.etherscan(address: address))
+        let coin = CoinType.ethereum // TODO: use account's coin
+        let explorerAction = UIAlertAction(title: coin.viewOnExplorerTitle, style: .default) { _ in
+            UIApplication.shared.open(coin.explorerURL(address: address))
         }
         
         let title = wallet.isMnemonic ? Strings.showSecretWords : Strings.showPrivateKey
@@ -300,7 +302,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
         
         actionSheet.addAction(copyAddressAction)
-        actionSheet.addAction(etherscanAction)
+        actionSheet.addAction(explorerAction)
         actionSheet.addAction(showKeyAction)
         actionSheet.addAction(removeAction)
         actionSheet.addAction(cancelAction)
@@ -312,7 +314,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func askBeforeRemoving(wallet: TokenaryWallet) {
-        let alert = UIAlertController(title: Strings.removedAccountsCantBeRecovered, message: nil, preferredStyle: .alert)
+        let alert = UIAlertController(title: Strings.removedWalletsCantBeRecovered, message: nil, preferredStyle: .alert)
         let removeAction = UIAlertAction(title: Strings.removeAnyway, style: .destructive) { [weak self] _ in
             LocalAuthentication.attempt(reason: Strings.removeAccount, presentPasswordAlertFrom: self, passwordReason: Strings.toRemoveAccount) { success in
                 if success {
@@ -367,7 +369,8 @@ extension AccountsListViewController: UITableViewDelegate {
         tableView.deselectRow(at: indexPath, animated: true)
         let wallet = wallets[indexPath.row]
         if forWalletSelection {
-            onSelectedWallet?(chain, wallet)
+            // TODO: pass account as well
+            onSelectedWallet?(chain, wallet, nil)
         } else {
             showActionsForWallet(wallet, cell: tableView.cellForRow(at: indexPath))
         }
