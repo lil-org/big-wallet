@@ -22,6 +22,10 @@ class CoinDerivationTableViewCell: UITableViewCell {
         coinSwitch.isOn = isEnabled
     }
     
+    func toggle() {
+        coinSwitch.isOn.toggle()
+    }
+    
     @IBAction func didToggleSwitch(_ sender: Any) {
         cellDelegate?.didToggleSwitch(self)
     }

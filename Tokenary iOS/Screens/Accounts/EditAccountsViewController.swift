@@ -45,10 +45,30 @@ class EditAccountsViewController: UIViewController {
         }
     }
     
+    private func toggleAccountAtIndex(_ index: Int) {
+        cellModels[index].isEnabled.toggle()
+        okButton.isEnabled = cellModels.contains(where: { $0.isEnabled })
+    }
+    
     @IBAction func okButtonTapped(_ sender: Any) {
-        // TODO: implement updating accounts
-        print("yo")
-        dismissAnimated()
+        let newDerivations: [CoinDerivation] = cellModels.compactMap { model in
+            if model.isEnabled {
+                return model.coinDerivation
+            } else {
+                return nil
+            }
+        }
+        
+        if newDerivations != initialDerivations {
+            do {
+                try walletsManager.update(wallet: wallet, coinDerivations: newDerivations)
+                dismissAnimated()
+            } catch {
+                showMessageAlert(text: Strings.somethingWentWrong)
+            }
+        } else {
+            dismissAnimated()
+        }
     }
     
 }
@@ -56,7 +76,9 @@ class EditAccountsViewController: UIViewController {
 extension EditAccountsViewController: UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        
+        tableView.deselectRow(at: indexPath, animated: true)
+        (tableView.cellForRow(at: indexPath) as? CoinDerivationTableViewCell)?.toggle()
+        toggleAccountAtIndex(indexPath.row)
     }
     
 }
@@ -79,7 +101,9 @@ extension EditAccountsViewController: UITableViewDataSource {
 extension EditAccountsViewController: CoinDerivationTableViewCellDelegate {
     
     func didToggleSwitch(_ sender: CoinDerivationTableViewCell) {
-        // TODO: update model
+        if let index = tableView.indexPath(for: sender)?.row {
+            toggleAccountAtIndex(index)
+        }
     }
     
 }
