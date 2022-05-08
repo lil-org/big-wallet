@@ -15,10 +15,10 @@ class AccountTableViewCell: UITableViewCell {
     @IBOutlet weak var avatarImageView: UIImageView!
     @IBOutlet weak var titleLabel: UILabel!
     
-    func setup(address: String, delegate: AccountTableViewCellDelegate) {
+    func setup(title: String, image: UIImage?, delegate: AccountTableViewCellDelegate) {
         cellDelegate = delegate
-        avatarImageView.image = Blockies(seed: address.lowercased()).createImage()
-        titleLabel.text = address.trimmedAddress
+        avatarImageView.image = image
+        titleLabel.text = title
     }
     
     @IBAction func moreButtonTapped(_ sender: Any) {

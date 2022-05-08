@@ -16,16 +16,8 @@ class AccountCellView: NSTableRowView {
     @IBOutlet weak var addressTextField: NSTextField!
     
     func setup(account: Account) {
-        let address = account.address
-        
-        if account.coin == .ethereum {
-            addressImageView.image = Blockies(seed: address.lowercased()).createImage()
-        } else {
-            addressImageView.image = Images.logo(coin: account.coin)
-        }
-        
-        let without0x = account.coin == .ethereum ? String(address.dropFirst(2)) : address
-        addressTextField.stringValue = without0x.prefix(4) + "..." + without0x.suffix(4)
+        addressImageView.image = account.image
+        addressTextField.stringValue = account.croppedAddress
     }
     
     func blink() {

@@ -36,7 +36,6 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-    private weak var testnetsMenuItem: NSMenuItem?
     @IBOutlet weak var addButton: NSButton! {
         didSet {
             let menu = NSMenu()

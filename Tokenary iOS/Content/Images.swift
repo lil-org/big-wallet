@@ -1,6 +1,7 @@
 // Copyright © 2021 Tokenary. All rights reserved.
 
 import UIKit
+import WalletCore
 
 struct Images {
     

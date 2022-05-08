@@ -50,6 +50,10 @@ struct DappRequestProcessor {
     private static func process(request: SafariRequest, solanaRequest body: SafariRequest.Solana, completion: @escaping () -> Void) -> DappRequestAction {
         let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
         
+        func getAccount() -> Account? {
+            return walletsManager.wallets.flatMap { $0.accounts }.first(where: { $0.address == body.publicKey })
+        }
+        
         func getPrivateKey() -> WalletCore.PrivateKey? {
             guard let password = Keychain.shared.password else { return nil }
             for wallet in walletsManager.wallets {
@@ -72,12 +76,12 @@ struct DappRequestProcessor {
             }
             return .selectAccount(action)
         case .signAllTransactions:
-            guard let messages = body.messages else {
+            guard let messages = body.messages, let account = getAccount() else {
                 respond(to: request, error: Strings.somethingWentWrong, completion: completion)
                 return .none
             }
             let displayMessage = messages.joined(separator: "\n\n")
-            let action = SignMessageAction(provider: request.provider, subject: .approveTransaction, address: body.publicKey, meta: displayMessage, peerMeta: peerMeta) { approved in
+            let action = SignMessageAction(provider: request.provider, subject: .approveTransaction, account: account, meta: displayMessage, peerMeta: peerMeta) { approved in
                 if approved, let privateKey = getPrivateKey() {
                     var results = [String]()
                     for message in messages {
@@ -95,7 +99,7 @@ struct DappRequestProcessor {
             }
             return .approveMessage(action)
         case .signMessage, .signTransaction, .signAndSendTransaction:
-            guard let message = body.message else {
+            guard let message = body.message, let account = getAccount() else {
                 respond(to: request, error: Strings.somethingWentWrong, completion: completion)
                 return .none
             }
@@ -109,7 +113,7 @@ struct DappRequestProcessor {
                 displayMessage = message
                 subject = .approveTransaction
             }
-            let action = SignMessageAction(provider: request.provider, subject: subject, address: body.publicKey, meta: displayMessage, peerMeta: peerMeta) { approved in
+            let action = SignMessageAction(provider: request.provider, subject: subject, account: account, meta: displayMessage, peerMeta: peerMeta) { approved in
                 guard approved, let privateKey = getPrivateKey() else {
                     respond(to: request, error: Strings.failedToSign, completion: completion)
                     return
@@ -139,6 +143,10 @@ struct DappRequestProcessor {
     private static func process(request: SafariRequest, ethereumRequest: SafariRequest.Ethereum, completion: @escaping () -> Void) -> DappRequestAction {
         let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
         
+        func getAccount() -> Account? {
+            return walletsManager.wallets.flatMap { $0.accounts }.first(where: { $0.address.lowercased() == ethereumRequest.address.lowercased() })
+        }
+        
         switch ethereumRequest.method {
         case .switchAccount, .requestAccounts:
             let action = SelectAccountAction(provider: .ethereum) { chain, wallet, account in
@@ -153,8 +161,8 @@ struct DappRequestProcessor {
         case .signTypedMessage:
             if let raw = ethereumRequest.raw,
                let wallet = walletsManager.getWallet(address: ethereumRequest.address),
-               let address = wallet.ethereumAddress {
-                let action = SignMessageAction(provider: request.provider, subject: .signTypedData, address: address, meta: raw, peerMeta: peerMeta) { approved in
+               let account = getAccount() {
+                let action = SignMessageAction(provider: request.provider, subject: .signTypedData, account: account, meta: raw, peerMeta: peerMeta) { approved in
                     if approved {
                         signTypedData(wallet: wallet, raw: raw, request: request, completion: completion)
                     } else {
@@ -168,8 +176,8 @@ struct DappRequestProcessor {
         case .signMessage:
             if let data = ethereumRequest.message,
                let wallet = walletsManager.getWallet(address: ethereumRequest.address),
-               let address = wallet.ethereumAddress {
-                let action = SignMessageAction(provider: request.provider, subject: .signMessage, address: address, meta: data.hexString, peerMeta: peerMeta) { approved in
+               let account = getAccount() {
+                let action = SignMessageAction(provider: request.provider, subject: .signMessage, account: account, meta: data.hexString, peerMeta: peerMeta) { approved in
                     if approved {
                         signMessage(wallet: wallet, data: data, request: request, completion: completion)
                     } else {
@@ -183,9 +191,9 @@ struct DappRequestProcessor {
         case .signPersonalMessage:
             if let data = ethereumRequest.message,
                let wallet = walletsManager.getWallet(address: ethereumRequest.address),
-               let address = wallet.ethereumAddress {
+               let account = getAccount() {
                 let text = String(data: data, encoding: .utf8) ?? data.hexString
-                let action = SignMessageAction(provider: request.provider, subject: .signPersonalMessage, address: address, meta: text, peerMeta: peerMeta) { approved in
+                let action = SignMessageAction(provider: request.provider, subject: .signPersonalMessage, account: account, meta: text, peerMeta: peerMeta) { approved in
                     if approved {
                         signPersonalMessage(wallet: wallet, data: data, request: request, completion: completion)
                     } else {
@@ -200,11 +208,11 @@ struct DappRequestProcessor {
             if let transaction = ethereumRequest.transaction,
                let chain = ethereumRequest.chain,
                let wallet = walletsManager.getWallet(address: ethereumRequest.address),
-               let address = wallet.ethereumAddress {
+               let account = getAccount() {
                 let action = SendTransactionAction(provider: request.provider,
                                                    transaction: transaction,
                                                    chain: chain,
-                                                   address: address,
+                                                   account: account,
                                                    peerMeta: peerMeta) { transaction in
                     if let transaction = transaction {
                         sendTransaction(wallet: wallet, transaction: transaction, chain: chain, request: request, completion: completion)

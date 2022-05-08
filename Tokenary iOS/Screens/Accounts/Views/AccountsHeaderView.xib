@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="20037" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+    <device id="retina6_1" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="20020"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="System colors in document resources" minToolsVersion="11.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <objects>
+        <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner"/>
+        <placeholder placeholderIdentifier="IBFirstResponder" id="-2" customClass="UIResponder"/>
+        <view contentMode="scaleToFill" id="iN0-l3-epB" customClass="AccountsHeaderView" customModule="Tokenary_iOS" customModuleProvider="target">
+            <rect key="frame" x="0.0" y="0.0" width="377" height="48"/>
+            <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+            <subviews>
+                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" minimumScaleFactor="0.5" translatesAutoresizingMaskIntoConstraints="NO" id="8QH-Wa-R98">
+                    <rect key="frame" x="16" y="25" width="37.5" height="17"/>
+                    <fontDescription key="fontDescription" type="boldSystem" pointSize="14"/>
+                    <color key="textColor" systemColor="secondaryLabelColor"/>
+                    <nil key="highlightedColor"/>
+                </label>
+                <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="R9l-vB-Ca7">
+                    <rect key="frame" x="53.5" y="18" width="35" height="31"/>
+                    <constraints>
+                        <constraint firstAttribute="width" constant="35" id="bd2-8s-ffc"/>
+                    </constraints>
+                    <color key="tintColor" systemColor="tertiaryLabelColor"/>
+                    <state key="normal" title="Button"/>
+                    <buttonConfiguration key="configuration" style="plain" image="ellipsis.rectangle" catalog="system">
+                        <preferredSymbolConfiguration key="preferredSymbolConfigurationForImage" configurationType="font">
+                            <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="14"/>
+                        </preferredSymbolConfiguration>
+                    </buttonConfiguration>
+                </button>
+                <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="fDD-Mf-WAA">
+                    <rect key="frame" x="0.0" y="8" width="108.5" height="40"/>
+                    <constraints>
+                        <constraint firstAttribute="height" constant="40" id="nDP-oj-vkj"/>
+                    </constraints>
+                    <state key="normal" title="Button"/>
+                    <buttonConfiguration key="configuration" style="plain"/>
+                    <connections>
+                        <action selector="editSectionButtonTapped:" destination="-2" eventType="touchUpInside" id="vgB-A3-uce"/>
+                    </connections>
+                </button>
+            </subviews>
+            <viewLayoutGuide key="safeArea" id="vUN-kp-3ea"/>
+            <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+            <constraints>
+                <constraint firstItem="fDD-Mf-WAA" firstAttribute="trailing" secondItem="R9l-vB-Ca7" secondAttribute="trailing" constant="20" id="4cR-px-kkN"/>
+                <constraint firstItem="8QH-Wa-R98" firstAttribute="leading" secondItem="vUN-kp-3ea" secondAttribute="leading" constant="16" id="5L8-Y4-8Og"/>
+                <constraint firstItem="R9l-vB-Ca7" firstAttribute="leading" secondItem="8QH-Wa-R98" secondAttribute="trailing" id="QaK-Lt-szb"/>
+                <constraint firstItem="vUN-kp-3ea" firstAttribute="bottom" secondItem="8QH-Wa-R98" secondAttribute="bottom" constant="6" id="RlB-H3-rx8"/>
+                <constraint firstItem="fDD-Mf-WAA" firstAttribute="leading" secondItem="vUN-kp-3ea" secondAttribute="leading" id="YI9-8g-z1k"/>
+                <constraint firstItem="vUN-kp-3ea" firstAttribute="bottom" secondItem="fDD-Mf-WAA" secondAttribute="bottom" id="neB-9s-EjA"/>
+                <constraint firstItem="vUN-kp-3ea" firstAttribute="trailing" relation="greaterThanOrEqual" secondItem="8QH-Wa-R98" secondAttribute="trailing" constant="16" id="yzq-sA-Zl7"/>
+                <constraint firstItem="R9l-vB-Ca7" firstAttribute="firstBaseline" secondItem="8QH-Wa-R98" secondAttribute="firstBaseline" id="zvX-8H-bAt"/>
+            </constraints>
+            <nil key="simulatedTopBarMetrics"/>
+            <nil key="simulatedBottomBarMetrics"/>
+            <freeformSimulatedSizeMetrics key="simulatedDestinationMetrics"/>
+            <connections>
+                <outlet property="editSectionButton" destination="R9l-vB-Ca7" id="AJh-k3-uMD"/>
+                <outlet property="invisibleButton" destination="fDD-Mf-WAA" id="bhN-e9-bl5"/>
+                <outlet property="titleLabel" destination="8QH-Wa-R98" id="0pa-e9-lKU"/>
+            </connections>
+            <point key="canvasLocation" x="110.86956521739131" y="-131.25"/>
+        </view>
+    </objects>
+    <resources>
+        <image name="ellipsis.rectangle" catalog="system" width="128" height="81"/>
+        <systemColor name="secondaryLabelColor">
+            <color red="0.23529411764705882" green="0.23529411764705882" blue="0.2627450980392157" alpha="0.59999999999999998" colorSpace="custom" customColorSpace="sRGB"/>
+        </systemColor>
+        <systemColor name="systemBackgroundColor">
+            <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+        </systemColor>
+        <systemColor name="tertiaryLabelColor">
+            <color red="0.23529411764705882" green="0.23529411764705882" blue="0.2627450980392157" alpha="0.29999999999999999" colorSpace="custom" customColorSpace="sRGB"/>
+        </systemColor>
+    </resources>
+</document>

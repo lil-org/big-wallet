@@ -9,7 +9,7 @@ class ImportViewController: UIViewController {
     
     @IBOutlet weak var placeholderLabel: UILabel! {
         didSet {
-            placeholderLabel.text = Strings.importAccountTextFieldPlaceholder
+            placeholderLabel.text = Strings.importWalletTextFieldPlaceholder
         }
     }
     @IBOutlet weak var pasteButton: UIButton!
@@ -31,7 +31,7 @@ class ImportViewController: UIViewController {
         super.viewDidLoad()
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
-        navigationItem.title = Strings.importAccount
+        navigationItem.title = Strings.importWallet
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(dismissAnimated))
         
         okButton.configurationUpdateHandler = { [weak self] button in
@@ -85,7 +85,7 @@ class ImportViewController: UIViewController {
             dismissAnimated()
         } catch {
             setWaiting(false)
-            showMessageAlert(text: Strings.failedToImportAccount)
+            showMessageAlert(text: Strings.failedToImportWallet)
         }
     }
     
