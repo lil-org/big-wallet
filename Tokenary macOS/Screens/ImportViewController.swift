@@ -12,7 +12,7 @@ class ImportViewController: NSViewController {
     @IBOutlet weak var textField: NSTextField! {
         didSet {
             textField.delegate = self
-            textField.placeholderString = Strings.importAccountTextFieldPlaceholder
+            textField.placeholderString = Strings.importWalletTextFieldPlaceholder
         }
     }
     @IBOutlet weak var okButton: NSButton!

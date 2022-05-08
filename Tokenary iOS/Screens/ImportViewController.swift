@@ -9,7 +9,7 @@ class ImportViewController: UIViewController {
     
     @IBOutlet weak var placeholderLabel: UILabel! {
         didSet {
-            placeholderLabel.text = Strings.importAccountTextFieldPlaceholder
+            placeholderLabel.text = Strings.importWalletTextFieldPlaceholder
         }
     }
     @IBOutlet weak var pasteButton: UIButton!
