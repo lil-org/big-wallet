@@ -39,7 +39,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     private var toDismissAfterResponse = [Int: UIViewController]()
     private var preferencesItem: UIBarButtonItem?
-    private var addAccountItem: UIBarButtonItem?
+    private var addWalletItem: UIBarButtonItem?
     
     @IBOutlet weak var chainButton: UIButton!
     @IBOutlet weak var chainSelectionHeader: UIView!
@@ -63,17 +63,17 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
         isModalInPresentation = true
-        let addItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addAccount))
+        let addItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addWallet))
         let preferencesItem = UIBarButtonItem(image: Images.preferences, style: UIBarButtonItem.Style.plain, target: self, action: #selector(preferencesButtonTapped))
         let cancelItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancelButtonTapped))
-        self.addAccountItem = addItem // TODO: update wallet / account terminology
+        self.addWalletItem = addItem
         self.preferencesItem = preferencesItem
         navigationItem.rightBarButtonItems = forWalletSelection ? [addItem] : [addItem, preferencesItem]
         if forWalletSelection {
             navigationItem.leftBarButtonItem = cancelItem
         }
         configureDataState(.noData, description: Strings.tokenaryIsEmpty, buttonTitle: Strings.addWallet) { [weak self] in
-            self?.addAccount()
+            self?.addWallet()
         }
         dataStateShouldMoveWithKeyboard(false)
         updateCellModels()
@@ -283,15 +283,14 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(actionSheet, animated: true)
     }
     
-    // TODO: update wallet / account terminology
-    @objc private func addAccount() {
+    @objc private func addWallet() {
         let actionSheet = UIAlertController(title: Strings.addWallet, message: nil, preferredStyle: .actionSheet)
-        actionSheet.popoverPresentationController?.barButtonItem = addAccountItem
+        actionSheet.popoverPresentationController?.barButtonItem = addWalletItem
         let newAccountAction = UIAlertAction(title: "🌱 " + Strings.createNew, style: .default) { [weak self] _ in
-            self?.createNewAccount()
+            self?.createNewWallet()
         }
         let importAccountAction = UIAlertAction(title: Strings.importExisting, style: .default) { [weak self] _ in
-            self?.importExistingAccount()
+            self?.importExistingWallet()
         }
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
         actionSheet.addAction(newAccountAction)
@@ -300,11 +299,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(actionSheet, animated: true)
     }
     
-    // TODO: update wallet / account terminology
-    private func createNewAccount() {
+    private func createNewWallet() {
         let alert = UIAlertController(title: Strings.backUpNewWallet, message: Strings.youWillSeeSecretWords, preferredStyle: .alert)
         let okAction = UIAlertAction(title: Strings.ok, style: .default) { [weak self] _ in
-            self?.createNewAccountAndShowSecretWords()
+            self?.createNewWalletAndShowSecretWords()
         }
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
         alert.addAction(cancelAction)
@@ -312,8 +310,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(alert, animated: true)
     }
     
-    // TODO: update wallet / account terminology
-    private func createNewAccountAndShowSecretWords() {
+    private func createNewWalletAndShowSecretWords() {
         guard let wallet = try? walletsManager.createWallet() else { return }
         reloadData()
         showKey(wallet: wallet, mnemonic: true)
@@ -339,10 +336,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(alert, animated: true)
     }
     
-    // TODO: update wallet / account terminology
-    private func importExistingAccount() {
-        let importAccountViewController = instantiate(ImportViewController.self, from: .main)
-        present(importAccountViewController.inNavigationController, animated: true)
+    private func importExistingWallet() {
+        let importViewController = instantiate(ImportViewController.self, from: .main)
+        present(importViewController.inNavigationController, animated: true)
     }
     
     // TODO: vary wallet / account
@@ -362,7 +358,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         
         let title = wallet.isMnemonic ? Strings.showSecretWords : Strings.showPrivateKey
         let showKeyAction = UIAlertAction(title: title, style: .default) { [weak self] _ in
-            self?.didTapExportAccount(wallet)
+            self?.didTapExportWallet(wallet)
         }
         
         let removeAction = UIAlertAction(title: Strings.removeAccount, style: .destructive) { [weak self] _ in
@@ -395,6 +391,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private func askBeforeRemoving(wallet: TokenaryWallet) {
         let alert = UIAlertController(title: Strings.removedWalletsCantBeRecovered, message: nil, preferredStyle: .alert)
         let removeAction = UIAlertAction(title: Strings.removeAnyway, style: .destructive) { [weak self] _ in
+            // TODO: fix wallet / account terminology
             LocalAuthentication.attempt(reason: Strings.removeAccount, presentPasswordAlertFrom: self, passwordReason: Strings.toRemoveAccount) { success in
                 if success {
                     self?.removeWallet(wallet)
@@ -412,14 +409,14 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         reloadData()
     }
     
-    private func didTapExportAccount(_ wallet: TokenaryWallet) {
-        // TODO: fix wallet / account terminology
+    private func didTapExportWallet(_ wallet: TokenaryWallet) {
         let isMnemonic = wallet.isMnemonic
         let title = isMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
         let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
         let okAction = UIAlertAction(title: Strings.iUnderstandTheRisks, style: .default) { [weak self] _ in
             let reason = isMnemonic ? Strings.toShowSecretWords : Strings.toShowPrivateKey
-            LocalAuthentication.attempt(reason: Strings.removeAccount, presentPasswordAlertFrom: self, passwordReason: reason) { success in
+            // TODO: validate reason correctness in UI
+            LocalAuthentication.attempt(reason: reason, presentPasswordAlertFrom: self, passwordReason: reason) { success in
                 if success {
                     self?.showKey(wallet: wallet, mnemonic: isMnemonic)
                 }
@@ -482,7 +479,7 @@ extension AccountsListViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCellOfType(AccountTableViewCell.self, for: indexPath)
         let account = accountForIndexPath(indexPath)
-        cell.setup(address: account.address, delegate: self) // TODO: setup better for new accounts
+        cell.setup(title: account.croppedAddress, image: account.image, delegate: self)
         return cell
     }
     
