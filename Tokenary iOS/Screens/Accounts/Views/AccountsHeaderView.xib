@@ -25,7 +25,6 @@
                     <constraints>
                         <constraint firstAttribute="width" constant="32" id="bd2-8s-ffc"/>
                     </constraints>
-                    <color key="tintColor" systemColor="secondaryLabelColor"/>
                     <state key="normal" title="Button"/>
                     <buttonConfiguration key="configuration" style="plain" image="ellipsis.rectangle" catalog="system">
                         <preferredSymbolConfiguration key="preferredSymbolConfigurationForImage" configurationType="font">
