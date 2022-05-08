@@ -341,39 +341,60 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(importViewController.inNavigationController, animated: true)
     }
     
-    // TODO: vary wallet / account
-    private func showActionsForWallet(_ wallet: TokenaryWallet, cell: UITableViewCell?) {
-        let address = wallet.ethereumAddress ?? ""
-        let actionSheet = UIAlertController(title: address, message: nil, preferredStyle: .actionSheet)
-        actionSheet.popoverPresentationController?.sourceView = cell
+    private func showActionsForWallet(wallet: TokenaryWallet, headerView: AccountsHeaderView) {
+        let actionSheet = UIAlertController(title: Strings.multicoinWallet, message: nil, preferredStyle: .actionSheet)
+        actionSheet.popoverPresentationController?.sourceView = headerView
         
-        let copyAddressAction = UIAlertAction(title: Strings.copyAddress, style: .default) { _ in
-            UIPasteboard.general.string = address
-        }
-        
-        let coin = CoinType.ethereum // TODO: use account's coin
-        let explorerAction = UIAlertAction(title: coin.viewOnExplorerTitle, style: .default) { _ in
-            UIApplication.shared.open(coin.explorerURL(address: address))
-        }
-        
-        let title = wallet.isMnemonic ? Strings.showSecretWords : Strings.showPrivateKey
-        let showKeyAction = UIAlertAction(title: title, style: .default) { [weak self] _ in
-            self?.didTapExportWallet(wallet)
-        }
-        
-        let removeAction = UIAlertAction(title: Strings.removeAccount, style: .destructive) { [weak self] _ in
-            self?.didTapRemoveAccount(wallet)
-        }
-        
-        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
-        
-        // TODO: move this action to wallet's header
         let editAction = UIAlertAction(title: Strings.editAccounts, style: .default) { [weak self] _ in
             let editAccountsViewController = instantiate(EditAccountsViewController.self, from: .main)
             editAccountsViewController.wallet = wallet
             self?.present(editAccountsViewController.inNavigationController, animated: true)
         }
+        
+        let showKeyAction = UIAlertAction(title: Strings.showSecretWords, style: .default) { [weak self] _ in
+            self?.didTapExportWallet(wallet)
+        }
+        
+        let removeAction = UIAlertAction(title: Strings.removeWallet, style: .destructive) { [weak self] _ in
+            self?.askBeforeRemoving(wallet: wallet)
+        }
+        
+        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
+        
         actionSheet.addAction(editAction)
+        actionSheet.addAction(showKeyAction)
+        actionSheet.addAction(removeAction)
+        actionSheet.addAction(cancelAction)
+        present(actionSheet, animated: true)
+    }
+    
+    private func showActionsForAccount(_ account: Account, wallet: TokenaryWallet, cell: UITableViewCell?) {
+        let actionSheet = UIAlertController(title: account.coin.name, message: account.address, preferredStyle: .actionSheet)
+        actionSheet.popoverPresentationController?.sourceView = cell
+        
+        let copyAddressAction = UIAlertAction(title: Strings.copyAddress, style: .default) { _ in
+            UIPasteboard.general.string = account.address
+        }
+        
+        let explorerAction = UIAlertAction(title: account.coin.viewOnExplorerTitle, style: .default) { _ in
+            UIApplication.shared.open(account.coin.explorerURL(address: account.address))
+        }
+        
+        let showKeyTitle = wallet.isMnemonic ? Strings.showSecretWords : Strings.showPrivateKey
+        let showKeyAction = UIAlertAction(title: showKeyTitle, style: .default) { [weak self] _ in
+            self?.didTapExportWallet(wallet)
+        }
+        
+        let removeTitle = wallet.isMnemonic ? Strings.removeAccount : Strings.removeWallet
+        let removeAction = UIAlertAction(title: removeTitle, style: .destructive) { [weak self] _ in
+            if wallet.isMnemonic {
+                self?.attemptToRemoveAccount(account, fromWallet: wallet)
+            } else {
+                self?.askBeforeRemoving(wallet: wallet)
+            }
+        }
+        
+        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
         
         actionSheet.addAction(copyAddressAction)
         actionSheet.addAction(explorerAction)
@@ -383,16 +404,37 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(actionSheet, animated: true)
     }
     
-    private func didTapRemoveAccount(_ wallet: TokenaryWallet) {
-        // TODO: fix wallet / account terminology
-        askBeforeRemoving(wallet: wallet)
+    private func attemptToRemoveAccount(_ account: Account, fromWallet wallet: TokenaryWallet) {
+        guard wallet.accounts.count > 1 else {
+            warnOnLastAccountRemovalAttempt(wallet: wallet)
+            return
+        }
+        
+        do {
+            try walletsManager.update(wallet: wallet, removeAccounts: [account])
+        } catch {
+            showMessageAlert(text: Strings.somethingWentWrong)
+        }
+    }
+    
+    private func warnOnLastAccountRemovalAttempt(wallet: TokenaryWallet) {
+        let alert = UIAlertController(title: Strings.removingTheLastAccount, message: nil, preferredStyle: .alert)
+        
+        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
+        let removeAction = UIAlertAction(title: Strings.removeAnyway, style: .destructive) { [weak self] _ in
+            self?.askBeforeRemoving(wallet: wallet)
+        }
+        
+        alert.addAction(cancelAction)
+        alert.addAction(removeAction)
+        
+        present(alert, animated: true)
     }
     
     private func askBeforeRemoving(wallet: TokenaryWallet) {
         let alert = UIAlertController(title: Strings.removedWalletsCantBeRecovered, message: nil, preferredStyle: .alert)
         let removeAction = UIAlertAction(title: Strings.removeAnyway, style: .destructive) { [weak self] _ in
-            // TODO: fix wallet / account terminology
-            LocalAuthentication.attempt(reason: Strings.removeAccount, presentPasswordAlertFrom: self, passwordReason: Strings.toRemoveAccount) { success in
+            LocalAuthentication.attempt(reason: Strings.removeWallet, presentPasswordAlertFrom: self, passwordReason: Strings.toRemoveWallet) { success in
                 if success {
                     self?.removeWallet(wallet)
                 }
@@ -414,9 +456,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let title = isMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
         let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
         let okAction = UIAlertAction(title: Strings.iUnderstandTheRisks, style: .default) { [weak self] _ in
-            let reason = isMnemonic ? Strings.toShowSecretWords : Strings.toShowPrivateKey
-            // TODO: validate reason correctness in UI
-            LocalAuthentication.attempt(reason: reason, presentPasswordAlertFrom: self, passwordReason: reason) { success in
+            let reason = isMnemonic ? Strings.showSecretWords : Strings.showPrivateKey
+            let passwordReason = isMnemonic ? Strings.toShowSecretWords : Strings.toShowPrivateKey
+            LocalAuthentication.attempt(reason: reason, presentPasswordAlertFrom: self, passwordReason: passwordReason) { success in
                 if success {
                     self?.showKey(wallet: wallet, mnemonic: isMnemonic)
                 }
@@ -437,22 +479,25 @@ extension AccountsListViewController: UITableViewDelegate {
     }
     
     func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
-        // TODO: vary for pk wallets and mnemonic accounts
-        if editingStyle == .delete {
-            askBeforeRemoving(wallet: wallets[indexPath.row])
+        guard editingStyle == .delete else { return }
+        let wallet = walletForIndexPath(indexPath)
+        let account = accountForIndexPath(indexPath)
+        
+        if wallet.isMnemonic {
+            attemptToRemoveAccount(account, fromWallet: wallet)
+        } else {
+            askBeforeRemoving(wallet: wallet)
         }
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        
-        return // TODO: implement new mapping
-        let wallet = wallets[indexPath.row]
+        let wallet = walletForIndexPath(indexPath)
+        let account = accountForIndexPath(indexPath)
         if forWalletSelection {
-            // TODO: pass account as well
-            onSelectedWallet?(chain, wallet, nil)
+            onSelectedWallet?(chain, wallet, account)
         } else {
-            showActionsForWallet(wallet, cell: tableView.cellForRow(at: indexPath))
+            showActionsForAccount(account, wallet: wallet, cell: tableView.cellForRow(at: indexPath))
         }
     }
     
@@ -497,7 +542,7 @@ extension AccountsListViewController: UITableViewDataSource {
         }
         
         let headerView = tableView.dequeueReusableHeaderFooterOfType(AccountsHeaderView.self)
-        headerView.set(title: title, showsButton: showsButton, delegate: self)
+        headerView.set(title: title, showsButton: showsButton, sectionIndex: section, delegate: self)
         return headerView
     }
     
@@ -505,9 +550,9 @@ extension AccountsListViewController: UITableViewDataSource {
 
 extension AccountsListViewController: AccountsHeaderViewDelegate {
     
-    func didTapEditButton(_ sender: AccountsHeaderView) {
-        // TODO: implement
-        print("hehe")
+    func didTapEditButton(_ sender: AccountsHeaderView, sectionIndex: Int) {
+        let wallet = walletForIndexPath(IndexPath(row: 0, section: sectionIndex))
+        showActionsForWallet(wallet: wallet, headerView: sender)
     }
     
 }
@@ -515,9 +560,8 @@ extension AccountsListViewController: AccountsHeaderViewDelegate {
 extension AccountsListViewController: AccountTableViewCellDelegate {
     
     func didTapMoreButton(accountCell: AccountTableViewCell) {
-        // TODO: implement new indexing
-        guard let index = tableView.indexPath(for: accountCell)?.row else { return }
-        showActionsForWallet(wallets[index], cell: accountCell)
+        guard let indexPath = tableView.indexPath(for: accountCell) else { return }
+        showActionsForAccount(accountForIndexPath(indexPath), wallet: walletForIndexPath(indexPath), cell: accountCell)
     }
     
 }

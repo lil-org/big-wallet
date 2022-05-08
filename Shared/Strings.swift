@@ -62,7 +62,7 @@ struct Strings {
     static let createNew = "Create New"
     static let importExisting = "💼  Import Existing"
     static let passwordDoesNotMatch = "Password does not match"
-    static let toRemoveAccount = "To remove account"
+    static let toRemoveWallet = "To remove wallet"
     static let secretWordsGiveFullAccess = "Secret words give full access to your funds."
     static let privateKeyGivesFullAccess = "Private key gives full access to your funds."
     static let toShowSecretWords = "To show secret words"
