@@ -5,6 +5,26 @@ import WalletCore
 
 class AccountsListViewController: UIViewController, DataStateContainer {
     
+    enum Section {
+        case privateKeyWallets(cellModels: [CellModel])
+        case mnemonicWallet(cellModels: [CellModel])
+        
+        var items: [CellModel] {
+            switch self {
+            case let .mnemonicWallet(cellModels: cellModels):
+                return cellModels
+            case let .privateKeyWallets(cellModels: cellModels):
+                return cellModels
+            }
+        }
+    }
+    
+    enum CellModel {
+        case mnemonicAccount(walletIndex: Int, accountIndex: Int)
+        case privateKeyAccount(walletIndex: Int)
+    }
+    
+    private var sections = [Section]()
     private let walletsManager = WalletsManager.shared
     
     private var chain = EthereumChain.ethereum
@@ -28,6 +48,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             tableView.delegate = self
             tableView.dataSource = self
             tableView.registerReusableCell(type: AccountTableViewCell.self)
+            tableView.registerReusableHeaderFooter(type: AccountsHeaderView.self)
         }
     }
     
@@ -45,7 +66,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let addItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addAccount))
         let preferencesItem = UIBarButtonItem(image: Images.preferences, style: UIBarButtonItem.Style.plain, target: self, action: #selector(preferencesButtonTapped))
         let cancelItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancelButtonTapped))
-        self.addAccountItem = addItem
+        self.addAccountItem = addItem // TODO: update wallet / account terminology
         self.preferencesItem = preferencesItem
         navigationItem.rightBarButtonItems = forWalletSelection ? [addItem] : [addItem, preferencesItem]
         if forWalletSelection {
@@ -55,6 +76,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             self?.addAccount()
         }
         dataStateShouldMoveWithKeyboard(false)
+        updateCellModels()
         updateDataState()
         NotificationCenter.default.addObserver(self, selector: #selector(processInput), name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: Notification.Name.walletsChanged, object: nil)
@@ -68,6 +90,48 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         processInput()
         DispatchQueue.main.async { [weak self] in
             self?.navigationController?.navigationBar.sizeToFit()
+        }
+    }
+    
+    private func walletForIndexPath(_ indexPath: IndexPath) -> TokenaryWallet {
+        let item = sections[indexPath.section].items[indexPath.row]
+        switch item {
+        case let .mnemonicAccount(walletIndex: walletIndex, accountIndex: _):
+            return wallets[walletIndex]
+        case let .privateKeyAccount(walletIndex: walletIndex):
+            return wallets[walletIndex]
+        }
+    }
+    
+    private func accountForIndexPath(_ indexPath: IndexPath) -> Account {
+        let item = sections[indexPath.section].items[indexPath.row]
+        switch item {
+        case let .mnemonicAccount(walletIndex: walletIndex, accountIndex: accountIndex):
+            return wallets[walletIndex].accounts[accountIndex]
+        case let .privateKeyAccount(walletIndex: walletIndex):
+            return wallets[walletIndex].accounts[0]
+        }
+    }
+    
+    private func updateCellModels() {
+        sections = []
+        var privateKeyAccountCellModels = [CellModel]()
+        
+        for index in 0..<wallets.count {
+            let wallet = wallets[index]
+            
+            guard wallet.isMnemonic else {
+                privateKeyAccountCellModels.append(.privateKeyAccount(walletIndex: index))
+                continue
+            }
+            
+            let accounts = wallet.accounts
+            let cellModels = (0..<accounts.count).map { CellModel.mnemonicAccount(walletIndex: index, accountIndex: $0) }
+            sections.append(.mnemonicWallet(cellModels: cellModels))
+        }
+        
+        if !privateKeyAccountCellModels.isEmpty {
+            sections.append(.privateKeyWallets(cellModels: privateKeyAccountCellModels))
         }
     }
     
@@ -174,7 +238,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func updateDataState() {
-        let isEmpty = wallets.isEmpty
+        let isEmpty = sections.isEmpty
         dataState = isEmpty ? .noData : .hasData
         let canScroll = !isEmpty
         if tableView.isScrollEnabled != canScroll {
@@ -183,6 +247,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func reloadData() {
+        updateCellModels()
         updateDataState()
         tableView.reloadData()
     }
@@ -218,6 +283,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(actionSheet, animated: true)
     }
     
+    // TODO: update wallet / account terminology
     @objc private func addAccount() {
         let actionSheet = UIAlertController(title: Strings.addWallet, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.barButtonItem = addAccountItem
@@ -234,6 +300,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(actionSheet, animated: true)
     }
     
+    // TODO: update wallet / account terminology
     private func createNewAccount() {
         let alert = UIAlertController(title: Strings.backUpNewWallet, message: Strings.youWillSeeSecretWords, preferredStyle: .alert)
         let okAction = UIAlertAction(title: Strings.ok, style: .default) { [weak self] _ in
@@ -245,6 +312,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(alert, animated: true)
     }
     
+    // TODO: update wallet / account terminology
     private func createNewAccountAndShowSecretWords() {
         guard let wallet = try? walletsManager.createWallet() else { return }
         reloadData()
@@ -271,11 +339,13 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(alert, animated: true)
     }
     
+    // TODO: update wallet / account terminology
     private func importExistingAccount() {
         let importAccountViewController = instantiate(ImportViewController.self, from: .main)
         present(importAccountViewController.inNavigationController, animated: true)
     }
     
+    // TODO: vary wallet / account
     private func showActionsForWallet(_ wallet: TokenaryWallet, cell: UITableViewCell?) {
         let address = wallet.ethereumAddress ?? ""
         let actionSheet = UIAlertController(title: address, message: nil, preferredStyle: .actionSheet)
@@ -318,6 +388,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func didTapRemoveAccount(_ wallet: TokenaryWallet) {
+        // TODO: fix wallet / account terminology
         askBeforeRemoving(wallet: wallet)
     }
     
@@ -342,6 +413,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func didTapExportAccount(_ wallet: TokenaryWallet) {
+        // TODO: fix wallet / account terminology
         let isMnemonic = wallet.isMnemonic
         let title = isMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
         let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
@@ -368,6 +440,7 @@ extension AccountsListViewController: UITableViewDelegate {
     }
     
     func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
+        // TODO: vary for pk wallets and mnemonic accounts
         if editingStyle == .delete {
             askBeforeRemoving(wallet: wallets[indexPath.row])
         }
@@ -375,6 +448,8 @@ extension AccountsListViewController: UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        
+        return // TODO: implement new mapping
         let wallet = wallets[indexPath.row]
         if forWalletSelection {
             // TODO: pass account as well
@@ -384,19 +459,58 @@ extension AccountsListViewController: UITableViewDelegate {
         }
     }
     
+    func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
+        return 15
+    }
+    
+    func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
+        return 37
+    }
+    
 }
 
 extension AccountsListViewController: UITableViewDataSource {
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return walletsManager.wallets.count
+        return sections[section].items.count
+    }
+    
+    func numberOfSections(in tableView: UITableView) -> Int {
+        return sections.count
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCellOfType(AccountTableViewCell.self, for: indexPath)
-        let wallet = wallets[indexPath.row]
-        cell.setup(address: wallet.ethereumAddress ?? "", delegate: self)
+        let account = accountForIndexPath(indexPath)
+        cell.setup(address: account.address, delegate: self) // TODO: setup better for new accounts
         return cell
+    }
+    
+    func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
+        let item = sections[section]
+        let title: String
+        let showsButton: Bool
+        switch item {
+        case .privateKeyWallets:
+            title = Strings.privateKeyWallets
+            showsButton = false
+        case .mnemonicWallet:
+            title = Strings.multicoinWallet
+            showsButton = true
+        }
+        
+        let headerView = tableView.dequeueReusableHeaderFooterOfType(AccountsHeaderView.self)
+        headerView.set(title: title, showsButton: showsButton, delegate: self)
+        return headerView
+    }
+    
+}
+
+extension AccountsListViewController: AccountsHeaderViewDelegate {
+    
+    func didTapEditButton(_ sender: AccountsHeaderView) {
+        // TODO: implement
+        print("hehe")
     }
     
 }
@@ -404,6 +518,7 @@ extension AccountsListViewController: UITableViewDataSource {
 extension AccountsListViewController: AccountTableViewCellDelegate {
     
     func didTapMoreButton(accountCell: AccountTableViewCell) {
+        // TODO: implement new indexing
         guard let index = tableView.indexPath(for: accountCell)?.row else { return }
         showActionsForWallet(wallets[index], cell: accountCell)
     }
