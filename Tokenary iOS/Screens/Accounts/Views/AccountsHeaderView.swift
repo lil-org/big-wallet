@@ -15,7 +15,7 @@ class AccountsHeaderView: UITableViewHeaderFooterView {
     private var sectionIndex = 0
     
     func set(title: String, showsButton: Bool, sectionIndex: Int, delegate: AccountsHeaderViewDelegate) {
-        titleLabel.text = title
+        titleLabel.text = title.uppercased()
         editSectionButton.isHidden = !showsButton
         invisibleButton.isHidden = !showsButton
         cellDelegate = delegate
