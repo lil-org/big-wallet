@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="19455" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="g1z-ip-YNf">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="20037" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="g1z-ip-YNf">
     <device id="retina6_1" orientation="portrait" appearance="light"/>
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="19454"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="20020"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="System colors in document resources" minToolsVersion="11.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
@@ -250,7 +250,7 @@ Label</string>
                                 <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                                 <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                                 <view key="tableFooterView" contentMode="scaleToFill" id="6ji-BK-hOm">
-                                    <rect key="frame" x="0.0" y="0.0" width="414" height="52"/>
+                                    <rect key="frame" x="0.0" y="35" width="414" height="52"/>
                                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
                                     <subviews>
                                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="I4B-ul-Hdj">
@@ -334,7 +334,7 @@ Label</string>
                                 <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                                 <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                                 <view key="tableFooterView" contentMode="scaleToFill" id="Frs-ZH-lyb">
-                                    <rect key="frame" x="0.0" y="0.0" width="414" height="52"/>
+                                    <rect key="frame" x="0.0" y="35" width="414" height="52"/>
                                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
                                     <subviews>
                                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="O6a-rK-q8r">
@@ -388,6 +388,60 @@ Label</string>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="s4O-HF-WSZ" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
             </objects>
             <point key="canvasLocation" x="3748" y="124"/>
+        </scene>
+        <!--Edit Accounts View Controller-->
+        <scene sceneID="N4G-eD-7DH">
+            <objects>
+                <viewController storyboardIdentifier="EditAccountsViewController" id="4YK-hI-ui9" customClass="EditAccountsViewController" customModule="Tokenary_iOS" customModuleProvider="target" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="foU-MZ-nbG">
+                        <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <tableView clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" dataMode="prototypes" style="grouped" separatorStyle="default" rowHeight="-1" estimatedRowHeight="-1" sectionHeaderHeight="18" estimatedSectionHeaderHeight="-1" sectionFooterHeight="18" estimatedSectionFooterHeight="-1" translatesAutoresizingMaskIntoConstraints="NO" id="7fw-Si-V5o">
+                                <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
+                                <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                                <view key="tableFooterView" contentMode="scaleToFill" id="T37-mz-sF8">
+                                    <rect key="frame" x="0.0" y="35" width="414" height="52"/>
+                                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                    <subviews>
+                                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="bNn-B2-QHr">
+                                            <rect key="frame" x="20" y="0.0" width="374" height="52"/>
+                                            <constraints>
+                                                <constraint firstAttribute="height" constant="52" id="P8L-gT-ITr"/>
+                                            </constraints>
+                                            <state key="normal" title="Button"/>
+                                            <buttonConfiguration key="configuration" style="filled" title="OK"/>
+                                            <connections>
+                                                <action selector="okButtonTapped:" destination="4YK-hI-ui9" eventType="touchUpInside" id="P3B-zG-BbW"/>
+                                            </connections>
+                                        </button>
+                                    </subviews>
+                                    <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                                    <constraints>
+                                        <constraint firstItem="bNn-B2-QHr" firstAttribute="top" secondItem="T37-mz-sF8" secondAttribute="top" id="6ZS-gk-hAv"/>
+                                        <constraint firstItem="bNn-B2-QHr" firstAttribute="leading" secondItem="T37-mz-sF8" secondAttribute="leading" constant="20" id="Ixn-Gb-RH7"/>
+                                        <constraint firstAttribute="trailing" secondItem="bNn-B2-QHr" secondAttribute="trailing" constant="20" id="eAm-qf-C5i"/>
+                                    </constraints>
+                                </view>
+                            </tableView>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="Zxy-IC-dUj"/>
+                        <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                        <constraints>
+                            <constraint firstItem="7fw-Si-V5o" firstAttribute="leading" secondItem="foU-MZ-nbG" secondAttribute="leading" id="9nz-1W-AHf"/>
+                            <constraint firstAttribute="bottom" secondItem="7fw-Si-V5o" secondAttribute="bottom" id="QfO-OE-x37"/>
+                            <constraint firstItem="7fw-Si-V5o" firstAttribute="top" secondItem="foU-MZ-nbG" secondAttribute="top" id="SOa-fa-vAT"/>
+                            <constraint firstAttribute="trailing" secondItem="7fw-Si-V5o" secondAttribute="trailing" id="kpJ-lH-7eP"/>
+                        </constraints>
+                    </view>
+                    <connections>
+                        <outlet property="okButton" destination="bNn-B2-QHr" id="qEI-ng-rFl"/>
+                        <outlet property="tableView" destination="7fw-Si-V5o" id="ZBb-eq-BrK"/>
+                    </connections>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="rb6-wn-VY9" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="1600" y="806"/>
         </scene>
     </scenes>
     <resources>

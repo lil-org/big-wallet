@@ -301,6 +301,14 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
         
+        // TODO: move this action to wallet's header
+        let editAction = UIAlertAction(title: Strings.editAccounts, style: .default) { [weak self] _ in
+            let editAccountsViewController = instantiate(EditAccountsViewController.self, from: .main)
+            editAccountsViewController.wallet = wallet
+            self?.present(editAccountsViewController.inNavigationController, animated: true)
+        }
+        actionSheet.addAction(editAction)
+        
         actionSheet.addAction(copyAddressAction)
         actionSheet.addAction(explorerAction)
         actionSheet.addAction(showKeyAction)
