@@ -154,7 +154,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             presentForSafariRequest(selectAccountViewController.inNavigationController, id: request.id)
         case .approveMessage(let action):
             let approveViewController = ApproveViewController.with(subject: action.subject,
-                                                                   address: action.address,
+                                                                   account: action.account,
                                                                    meta: action.meta,
                                                                    peerMeta: action.peerMeta,
                                                                    completion: action.completion)
@@ -162,7 +162,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         case .approveTransaction(let action):
             let approveTransactionViewController = ApproveTransactionViewController.with(transaction: action.transaction,
                                                                                          chain: action.chain,
-                                                                                         address: action.address,
+                                                                                         account: action.account,
                                                                                          peerMeta: action.peerMeta,
                                                                                          completion: action.completion)
             presentForSafariRequest(approveTransactionViewController.inNavigationController, id: request.id)

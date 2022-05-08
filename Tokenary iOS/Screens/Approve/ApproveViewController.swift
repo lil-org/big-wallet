@@ -2,6 +2,7 @@
 
 import UIKit
 import BlockiesSwift
+import WalletCore
 
 class ApproveViewController: UIViewController {
     
@@ -22,17 +23,17 @@ class ApproveViewController: UIViewController {
     private var cellModels = [CellModel]()
     
     private var approveTitle: String!
-    private var address: String!
+    private var account: Account!
     private var meta: String!
     private var completion: ((Bool) -> Void)!
     private var peerMeta: PeerMeta?
     
     @IBOutlet weak var okButton: UIButton!
     
-    static func with(subject: ApprovalSubject, address: String, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
+    static func with(subject: ApprovalSubject, account: Account, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
         let new = instantiate(ApproveViewController.self, from: .main)
         new.completion = completion
-        new.address = address
+        new.account = account
         new.meta = meta
         new.approveTitle = subject.title
         new.peerMeta = peerMeta
@@ -46,7 +47,7 @@ class ApproveViewController: UIViewController {
         navigationItem.largeTitleDisplayMode = .always
         isModalInPresentation = true
         cellModels = [.textWithImage(text: peerMeta?.name ?? Strings.unknownWebsite, imageURL: peerMeta?.iconURLString, image: nil),
-                      .textWithImage(text: address.trimmedAddress, imageURL: nil, image: Blockies(seed: address.lowercased()).createImage()),
+                      .textWithImage(text: account.croppedAddress, imageURL: nil, image: account.image),
                       .text(meta)]
     }
     

@@ -2,6 +2,7 @@
 
 import UIKit
 import BlockiesSwift
+import WalletCore
 
 class ApproveTransactionViewController: UIViewController {
     
@@ -29,7 +30,7 @@ class ApproveTransactionViewController: UIViewController {
     private var sectionModels = [[CellModel]]()
     private var didEnableSpeedConfiguration = false
     
-    private var address: String!
+    private var account: Account!
     private var transaction: Transaction!
     private var chain: EthereumChain!
     private var completion: ((Transaction?) -> Void)!
@@ -38,12 +39,12 @@ class ApproveTransactionViewController: UIViewController {
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var cancelButton: UIButton!
     
-    static func with(transaction: Transaction, chain: EthereumChain, address: String, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
+    static func with(transaction: Transaction, chain: EthereumChain, account: Account, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self, from: .main)
         new.transaction = transaction
         new.chain = chain
         new.completion = completion
-        new.address = address
+        new.account = account
         new.peerMeta = peerMeta
         return new
     }
@@ -78,7 +79,7 @@ class ApproveTransactionViewController: UIViewController {
     private func updateDisplayedTransactionInfo(initially: Bool) {
         var cellModels: [CellModel] = [
             .textWithImage(text: peerMeta?.name ?? Strings.unknownWebsite, imageURL: peerMeta?.iconURLString, image: nil),
-            .textWithImage(text: address.trimmedAddress, imageURL: nil, image: Blockies(seed: address.lowercased()).createImage())
+            .textWithImage(text: account.croppedAddress, imageURL: nil, image: account.image)
         ]
         
         if let value = transaction.valueWithSymbol(chain: chain, ethPrice: priceService.currentPrice, withLabel: true) {
