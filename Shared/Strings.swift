@@ -86,5 +86,6 @@ struct Strings {
     static let selectNetworkOptionally = "Select network (optionally)"
     static let isSelected = "Selected"
     static let data = "Data"
+    static let viewOnNearExplorer = "View on Near explorer"
     
 }

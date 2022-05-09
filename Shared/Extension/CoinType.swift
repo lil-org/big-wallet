@@ -8,8 +8,12 @@ extension CoinType {
         switch self {
         case .solana:
             return "Solana"
-        default:
+        case .ethereum:
             return "Ethereum"
+        case .near:
+            return "Near"
+        default:
+            fatalError(Strings.somethingWentWrong)
         }
     }
     
@@ -17,8 +21,12 @@ extension CoinType {
         switch self {
         case .solana:
             return URL(string: "https://explorer.solana.com/address/\(address)")!
-        default:
+        case .ethereum:
             return URL(string: "https://etherscan.io/address/\(address)")!
+        case .near:
+            return URL(string: "https://explorer.near.org/accounts/\(address)")!
+        default:
+            fatalError(Strings.somethingWentWrong)
         }
     }
     
@@ -26,8 +34,12 @@ extension CoinType {
         switch self {
         case .solana:
             return Strings.viewOnSolanaExplorer
-        default:
+        case .ethereum:
             return Strings.viewOnEtherscan
+        case .near:
+            return Strings.viewOnNearExplorer
+        default:
+            fatalError(Strings.somethingWentWrong)
         }
     }
     

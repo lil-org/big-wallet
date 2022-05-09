@@ -18,13 +18,15 @@ struct CoinDerivation: Equatable {
     
     static var enabledByDefaultCoinDerivations = [
         CoinDerivation(coin: .ethereum, derivation: .default),
-        CoinDerivation(coin: .solana, derivation: .solanaSolana)
+        CoinDerivation(coin: .solana, derivation: .solanaSolana),
+        CoinDerivation(coin: .near, derivation: .default)
     ]
     
     static var supportedCoinDerivations = [
         CoinDerivation(coin: .ethereum, derivation: .default),
         CoinDerivation(coin: .solana, derivation: .solanaSolana),
-        CoinDerivation(coin: .solana, derivation: .default)
+        CoinDerivation(coin: .solana, derivation: .default),
+        CoinDerivation(coin: .near, derivation: .default)
     ]
     
 }
