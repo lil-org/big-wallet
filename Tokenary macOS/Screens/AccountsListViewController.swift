@@ -44,6 +44,7 @@ class AccountsListViewController: NSViewController {
         }
     }
     
+    @IBOutlet weak var networkButton: NSButton!
     @IBOutlet weak var titleLabel: NSTextField!
     @IBOutlet weak var tableView: RightClickTableView! {
         didSet {
@@ -89,10 +90,37 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-	private func reloadHeader() {
+    private func reloadHeader() {
         let canSelectAccount = onSelectedWallet != nil && !wallets.isEmpty
         titleLabel.stringValue = canSelectAccount ? Strings.selectAccountTwoLines : Strings.wallets
         addButton.isHidden = wallets.isEmpty
+        
+        if canSelectAccount, networkButton.isHidden {
+            networkButton.isHidden = false
+            let menu = NSMenu()
+            let titleItem = NSMenuItem(title: Strings.selectNetworkOptionally, action: nil, keyEquivalent: "")
+            menu.addItem(titleItem)
+            menu.addItem(.separator())
+            for mainnet in EthereumChain.allMainnets {
+                let item = NSMenuItem(title: mainnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
+                item.tag = mainnet.id
+                menu.addItem(item)
+            }
+            
+            let submenuItem = NSMenuItem()
+            submenuItem.title = Strings.testnets
+            let submenu = NSMenu()
+            for testnet in EthereumChain.allTestnets {
+                let item = NSMenuItem(title: testnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
+                item.tag = testnet.id
+                submenu.addItem(item)
+            }
+            
+            submenuItem.submenu = submenu
+            menu.addItem(.separator())
+            menu.addItem(submenuItem)
+            networkButton.menu = menu
+        }
     }
     
     @objc private func didBecomeActive() {
@@ -120,6 +148,21 @@ class AccountsListViewController: NSViewController {
         menu?.popUp(positioning: nil, at: origin, in: view)
     }
     
+    @IBAction func networkButtonTapped(_ sender: NSButton) {
+        var origin = sender.frame.origin
+        origin.x += sender.frame.width
+        origin.y += sender.frame.height
+        sender.menu?.popUp(positioning: nil, at: origin, in: view)
+    }
+    
+    @objc private func didSelectChain(_ sender: AnyObject) {
+        guard let menuItem = sender as? NSMenuItem,
+              let selectedChain = EthereumChain(rawValue: menuItem.tag) else { return }
+        networkButton.menu?.items[0].title = selectedChain.name + " — " + Strings.isSelected
+        networkButton.contentTintColor = .controlAccentColor
+        chain = selectedChain
+    }
+
     @objc private func didClickCreateAccount() {
         let alert = Alert()
         alert.messageText = Strings.backUpNewWallet
