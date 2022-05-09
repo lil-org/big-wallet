@@ -324,6 +324,7 @@
 		2C6F6D5928273FE500D6E8FB /* EditAccountsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditAccountsViewController.swift; sourceTree = "<group>"; };
 		2C6F6D5B2827434800D6E8FB /* CoinDerivationTableViewCell.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = CoinDerivationTableViewCell.xib; sourceTree = "<group>"; };
 		2C6F6D5C2827434800D6E8FB /* CoinDerivationTableViewCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CoinDerivationTableViewCell.swift; sourceTree = "<group>"; };
+		2C74386E28297DAC00EC9304 /* near.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = near.js; path = "web3-provider/near.js"; sourceTree = "<group>"; };
 		2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionBridge.swift; sourceTree = "<group>"; };
 		2C773F61274523DC007B04E7 /* ResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseToExtension.swift; sourceTree = "<group>"; };
 		2C78F8272683BDCC00C10670 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alert.swift; sourceTree = "<group>"; };
@@ -747,6 +748,7 @@
 				2CB3844527654BF600A189B9 /* id_mapping.js */,
 				2C90E5F527A95B9400C8991E /* ethereum.js */,
 				2C90E5F627A98CB700C8991E /* solana.js */,
+				2C74386E28297DAC00EC9304 /* near.js */,
 				2CB3844727654BF600A189B9 /* index.js */,
 				2CB3844827654BF600A189B9 /* rpc.js */,
 				2CB3844627654BF600A189B9 /* utils.js */,
