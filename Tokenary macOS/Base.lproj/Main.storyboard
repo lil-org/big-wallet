@@ -820,13 +820,13 @@ DQ
                                 </textFieldCell>
                             </textField>
                             <scrollView autohidesScrollers="YES" horizontalLineScroll="40" horizontalPageScroll="0.0" verticalLineScroll="40" verticalPageScroll="10" hasHorizontalScroller="NO" usesPredominantAxisScrolling="NO" horizontalScrollElasticity="none" translatesAutoresizingMaskIntoConstraints="NO" id="7bs-Kr-ija">
-                                <rect key="frame" x="0.0" y="0.0" width="250" height="274"/>
+                                <rect key="frame" x="0.0" y="0.0" width="250" height="280"/>
                                 <clipView key="contentView" id="RjU-hi-SHx">
-                                    <rect key="frame" x="1" y="1" width="248" height="272"/>
+                                    <rect key="frame" x="1" y="1" width="248" height="278"/>
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <subviews>
                                         <tableView verticalHuggingPriority="750" allowsExpansionToolTips="YES" columnAutoresizingStyle="none" tableStyle="plain" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" typeSelect="NO" rowHeight="40" rowSizeStyle="automatic" viewBased="YES" id="glA-FK-Kdd" customClass="RightClickTableView" customModule="Tokenary" customModuleProvider="target">
-                                            <rect key="frame" x="0.0" y="0.0" width="248" height="272"/>
+                                            <rect key="frame" x="0.0" y="0.0" width="248" height="278"/>
                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                             <color key="backgroundColor" name="controlBackgroundColor" catalog="System" colorSpace="catalog"/>
                                             <color key="gridColor" name="gridColor" catalog="System" colorSpace="catalog"/>
@@ -965,6 +965,16 @@ DQ
                                     <action selector="addButtonTapped:" target="29s-Rd-OUf" id="MKz-Ok-RUY"/>
                                 </connections>
                             </button>
+                            <button hidden="YES" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="eNt-GB-Tzb">
+                                <rect key="frame" x="17" y="294.5" width="26" height="26"/>
+                                <buttonCell key="cell" type="inline" bezelStyle="inline" image="globe" catalog="system" imagePosition="overlaps" alignment="center" lineBreakMode="truncatingTail" state="on" imageScaling="proportionallyDown" inset="2" id="tZs-rG-rml">
+                                    <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
+                                    <font key="font" metaFont="systemBold" size="21"/>
+                                </buttonCell>
+                                <connections>
+                                    <action selector="networkButtonTapped:" target="29s-Rd-OUf" id="JUo-sQ-bBT"/>
+                                </connections>
+                            </button>
                         </subviews>
                         <constraints>
                             <constraint firstItem="ngQ-Bn-Kwd" firstAttribute="leading" secondItem="dkh-kG-EFj" secondAttribute="trailing" constant="10" id="2jH-ov-jln"/>
@@ -972,21 +982,25 @@ DQ
                             <constraint firstAttribute="trailing" secondItem="7bs-Kr-ija" secondAttribute="trailing" id="6m3-S7-WJp"/>
                             <constraint firstAttribute="trailing" secondItem="ngQ-Bn-Kwd" secondAttribute="trailing" constant="12" id="Ln4-b5-NfT"/>
                             <constraint firstItem="ngQ-Bn-Kwd" firstAttribute="firstBaseline" secondItem="dkh-kG-EFj" secondAttribute="firstBaseline" id="RDE-f4-Heb"/>
-                            <constraint firstItem="7bs-Kr-ija" firstAttribute="top" secondItem="dkh-kG-EFj" secondAttribute="bottom" constant="18" id="fXb-zL-LLv"/>
+                            <constraint firstItem="eNt-GB-Tzb" firstAttribute="top" secondItem="Yjc-Zm-uZY" secondAttribute="top" constant="35" id="dRD-EV-wsJ"/>
+                            <constraint firstItem="7bs-Kr-ija" firstAttribute="top" secondItem="dkh-kG-EFj" secondAttribute="bottom" constant="12" id="fXb-zL-LLv"/>
+                            <constraint firstItem="dkh-kG-EFj" firstAttribute="leading" relation="greaterThanOrEqual" secondItem="eNt-GB-Tzb" secondAttribute="trailing" constant="3" id="imS-CC-tSQ"/>
                             <constraint firstItem="dkh-kG-EFj" firstAttribute="top" secondItem="Yjc-Zm-uZY" secondAttribute="top" constant="24" id="oaa-yR-g0U"/>
                             <constraint firstItem="dkh-kG-EFj" firstAttribute="centerX" secondItem="Yjc-Zm-uZY" secondAttribute="centerX" id="qoF-Dr-xWA"/>
                             <constraint firstAttribute="bottom" secondItem="7bs-Kr-ija" secondAttribute="bottom" id="zCE-cx-u4r"/>
+                            <constraint firstItem="eNt-GB-Tzb" firstAttribute="leading" secondItem="Yjc-Zm-uZY" secondAttribute="leading" constant="17" id="zcY-Q0-K0f"/>
                         </constraints>
                     </view>
                     <connections>
                         <outlet property="addButton" destination="ngQ-Bn-Kwd" id="FlT-oq-C5e"/>
+                        <outlet property="networkButton" destination="eNt-GB-Tzb" id="cvm-05-aZj"/>
                         <outlet property="tableView" destination="glA-FK-Kdd" id="9aW-Qr-UuF"/>
                         <outlet property="titleLabel" destination="dkh-kG-EFj" id="xDn-bP-HWG"/>
                     </connections>
                 </viewController>
                 <customObject id="JTb-7y-Jwq" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="380" y="740"/>
+            <point key="canvasLocation" x="380" y="741"/>
         </scene>
         <!--Waiting View Controller-->
         <scene sceneID="xkb-7p-mUK">
@@ -1829,5 +1843,6 @@ DQ
     <resources>
         <image name="NSApplicationIcon" width="32" height="32"/>
         <image name="ellipsis.rectangle" catalog="system" width="17" height="11"/>
+        <image name="globe" catalog="system" width="15" height="15"/>
     </resources>
 </document>

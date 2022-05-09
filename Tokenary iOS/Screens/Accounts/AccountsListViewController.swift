@@ -41,8 +41,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private var preferencesItem: UIBarButtonItem?
     private var addWalletItem: UIBarButtonItem?
     
-    @IBOutlet weak var chainButton: UIButton!
-    @IBOutlet weak var chainSelectionHeader: UIView!
+    @IBOutlet weak var selectNetworkButtonContainer: UIVisualEffectView!
+    @IBOutlet weak var selectNetworkButton: UIButton!
     @IBOutlet weak var tableView: UITableView! {
         didSet {
             tableView.delegate = self
@@ -80,8 +80,11 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         updateDataState()
         NotificationCenter.default.addObserver(self, selector: #selector(processInput), name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: Notification.Name.walletsChanged, object: nil)
-        if !forWalletSelection {
-            hideChainSelectionHeader()
+        if forWalletSelection {
+            selectNetworkButtonContainer.isHidden = false
+            let bottomOverlayHeight: CGFloat = 52
+            tableView.contentInset.bottom += bottomOverlayHeight
+            tableView.verticalScrollIndicatorInsets.bottom += bottomOverlayHeight
         }
     }
     
@@ -187,14 +190,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         toDismissAfterResponse.removeValue(forKey: requestId)
     }
     
-    private func hideChainSelectionHeader() {
-        chainSelectionHeader.isHidden = true
-        chainSelectionHeader.frame = CGRect(origin: CGPoint.zero, size: CGSize.zero)
-    }
-    
-    @IBAction func chainButtonTapped(_ sender: Any) {
+    @IBAction func selectNetworkButtonTapped(_ sender: Any) {
         let actionSheet = UIAlertController(title: Strings.selectNetwork, message: nil, preferredStyle: .actionSheet)
-        actionSheet.popoverPresentationController?.sourceView = chainButton
+        actionSheet.popoverPresentationController?.sourceView = selectNetworkButton
         for chain in EthereumChain.allMainnets {
             let action = UIAlertAction(title: chain.name, style: .default) { [weak self] _ in
                 self?.didSelectChain(chain)
@@ -212,7 +210,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     private func showTestnets() {
         let actionSheet = UIAlertController(title: Strings.selectTestnet, message: nil, preferredStyle: .actionSheet)
-        actionSheet.popoverPresentationController?.sourceView = chainButton
+        actionSheet.popoverPresentationController?.sourceView = selectNetworkButton
         for chain in EthereumChain.allTestnets {
             let action = UIAlertAction(title: chain.name, style: .default) { [weak self] _ in
                 self?.didSelectChain(chain)
@@ -225,8 +223,13 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func didSelectChain(_ chain: EthereumChain) {
-        chainButton.configuration?.title = chain.name
+        selectNetworkButton.configuration?.title = chain.name
         self.chain = chain
+        if selectNetworkButton.configuration?.image == nil {
+            selectNetworkButton.configuration?.imagePadding = 4
+            selectNetworkButton.configuration?.imagePlacement = .trailing
+            selectNetworkButton.configuration?.image = Images.chevronDown
+        }
     }
     
     @objc private func cancelButtonTapped() {
