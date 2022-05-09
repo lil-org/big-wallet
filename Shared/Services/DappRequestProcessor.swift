@@ -80,7 +80,7 @@ struct DappRequestProcessor {
                 respond(to: request, error: Strings.somethingWentWrong, completion: completion)
                 return .none
             }
-            let displayMessage = messages.joined(separator: "\n\n")
+            let displayMessage = Strings.data + ":\n\n" + messages.joined(separator: "\n\n")
             let action = SignMessageAction(provider: request.provider, subject: .approveTransaction, account: account, meta: displayMessage, peerMeta: peerMeta) { approved in
                 if approved, let privateKey = getPrivateKey() {
                     var results = [String]()
@@ -110,7 +110,7 @@ struct DappRequestProcessor {
                 displayMessage = body.displayHex ? message : (String(data: Data(hex: message), encoding: .utf8) ?? message)
                 subject = .signMessage
             default:
-                displayMessage = message
+                displayMessage = Strings.data + ":\n\n" + message
                 subject = .approveTransaction
             }
             let action = SignMessageAction(provider: request.provider, subject: subject, account: account, meta: displayMessage, peerMeta: peerMeta) { approved in

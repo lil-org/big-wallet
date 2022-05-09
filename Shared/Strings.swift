@@ -85,5 +85,6 @@ struct Strings {
     static let removingTheLastAccount = "Removing the last account removes a wallet as well"
     static let selectNetworkOptionally = "Select network (optionally)"
     static let isSelected = "Selected"
+    static let data = "Data"
     
 }
