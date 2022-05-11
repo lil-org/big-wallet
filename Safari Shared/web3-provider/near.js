@@ -39,6 +39,10 @@ class TokenaryNear extends EventEmitter {
 //          secretKey: string;
 //        }
 //
+        
+//        !!! accessKey is not actually used, there is only a check that if (accessKey)
+        // top level sign in does not return anything
+        
 //        export interface RequestSignInResponse {
 //          accessKey: AccessKey;
 //          error:
@@ -56,32 +60,8 @@ class TokenaryNear extends EventEmitter {
     
     getAccountId() {
 //        => string | null;
-        
         console.log("yo near getAccountId");
         return ""
-    }
-    
-    getRpc() {
-//        => Promise<GetRpcResponse>;
-        
-//        export interface RpcInfo {
-//          explorerUrl: string;
-//          helperUrl: string;
-//          index: number;
-//          name: string;
-//          network: string;
-//          networkId: string;
-//          nodeUrl: string;
-//          walletUrl: string;
-//          wrapNearContract: string;
-//        }
-//
-//        export interface GetRpcResponse {
-//          method: "getRpc";
-//          notificationId: number;
-//          rpc: RpcInfo;
-//          type: "sender-wallet-result";
-//        }
     }
     
     signOut() {
@@ -90,6 +70,8 @@ class TokenaryNear extends EventEmitter {
     }
 
     isSignedIn() {
+        console.log("yo isSignedIn()");
+        return true;
 //        => boolean;
     }
         
@@ -114,6 +96,7 @@ class TokenaryNear extends EventEmitter {
     
 
     signAndSendTransaction(params) {
+        console.log("yo signAndSendTransaction()");
 //        params: SignAndSendTransactionParams
 //        => Promise<SignAndSendTransactionResponse>;
         
@@ -138,6 +121,8 @@ class TokenaryNear extends EventEmitter {
 //          response?: Array<providers.FinalExecutionOutcome>;
 //          type: "sender-wallet-extensionResult";
 //        }
+        
+        // !!! in fact only response field is necessary and used in provider
 //
 //        export interface SignAndSendTransactionsResponse {
 //          actionType: "DAPP/DAPP_POPUP_RESPONSE";
@@ -150,6 +135,7 @@ class TokenaryNear extends EventEmitter {
     }
         
     requestSignTransactions(params) {
+        console.log("yo requestSignTransactions");
         //    params: RequestSignTransactionsParams
 //        => Promise<SignAndSendTransactionsResponse>;
         
@@ -166,6 +152,7 @@ class TokenaryNear extends EventEmitter {
     
     // TODO: idk if this one is neseccary
     request(method, params) {
+        console.log("yo near request");
         //    method: string, params: Object
         // => Object
         // https://docs.near.org/docs/api/rpc
