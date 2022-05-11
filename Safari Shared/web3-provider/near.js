@@ -22,15 +22,155 @@ class TokenaryNear extends EventEmitter {
     }
     
     requestSignIn(params) {
+//        export interface RequestSignInParams {
+//          contractId: string;
+//          methodNames?: Array<string>;
+//          amount?: string; // in yoctoⓃ
+//        }
+        
+//        => Promise<RequestSignInResponse>;
+        
+        
+//        interface AccessKey {
+//          publicKey: {
+//            data: Uint8Array;
+//            keyType: number;
+//          };
+//          secretKey: string;
+//        }
+//
+//        export interface RequestSignInResponse {
+//          accessKey: AccessKey;
+//          error:
+//            | string
+//            | {
+//                type: string;
+//              };
+//          notificationId: number;
+//          type: "sender-wallet-result";
+//        }
+        
         console.log("yo near requestSignIn");
         return;
     }
     
     getAccountId() {
+//        => string | null;
+        
         console.log("yo near getAccountId");
         return ""
     }
+    
+    getRpc() {
+//        => Promise<GetRpcResponse>;
+        
+//        export interface RpcInfo {
+//          explorerUrl: string;
+//          helperUrl: string;
+//          index: number;
+//          name: string;
+//          network: string;
+//          networkId: string;
+//          nodeUrl: string;
+//          walletUrl: string;
+//          wrapNearContract: string;
+//        }
+//
+//        export interface GetRpcResponse {
+//          method: "getRpc";
+//          notificationId: number;
+//          rpc: RpcInfo;
+//          type: "sender-wallet-result";
+//        }
+    }
+    
+    signOut() {
+//        => Promise<SignOutResponse>;
+//        export type SignOutResponse = boolean | { error: string | { type: string } };
+    }
 
+    isSignedIn() {
+//        => boolean;
+    }
+        
+//    export interface SenderEvents {
+//      signIn: () => void;
+//      signOut: () => void;
+//      accountChanged: (changedAccountId: string) => void;
+//      rpcChanged: (response: RpcChangedResponse) => void;
+//    }
+    
+//    export interface RpcChangedResponse {
+//      method: "rpcChanged";
+//      notificationId: number;
+//      rpc: RpcInfo;
+//      type: "sender-wallet-fromContent";
+//    }
+
+//on: <Event extends keyof SenderEvents>(
+//  event: Event,
+//  callback: SenderEvents[Event]
+//) => void;
+    
+
+    signAndSendTransaction(params) {
+//        params: SignAndSendTransactionParams
+//        => Promise<SignAndSendTransactionResponse>;
+        
+//        export interface Action {
+//          methodName: string;
+//          args: object;
+//          gas: string;
+//          deposit: string;
+//        }
+//
+//        export interface SignAndSendTransactionParams {
+//          receiverId: string;
+//          actions: Array<Action>;
+//        }
+//
+//        // Seems to reuse signAndSendTransactions internally, hence the wrong method name and list of responses.
+//        export interface SignAndSendTransactionResponse {
+//          actionType: "DAPP/DAPP_POPUP_RESPONSE";
+//          method: "signAndSendTransactions";
+//          notificationId: number;
+//          error?: string;
+//          response?: Array<providers.FinalExecutionOutcome>;
+//          type: "sender-wallet-extensionResult";
+//        }
+//
+//        export interface SignAndSendTransactionsResponse {
+//          actionType: "DAPP/DAPP_POPUP_RESPONSE";
+//          method: "signAndSendTransactions";
+//          notificationId: number;
+//          error?: string;
+//          response?: Array<providers.FinalExecutionOutcome>;
+//          type: "sender-wallet-extensionResult";
+//        }
+    }
+        
+    requestSignTransactions(params) {
+        //    params: RequestSignTransactionsParams
+//        => Promise<SignAndSendTransactionsResponse>;
+        
+//        export interface Transaction {
+//          receiverId: string;
+//          actions: Array<Action>;
+//        }
+//
+//        export interface RequestSignTransactionsParams {
+//          transactions: Array<Transaction>;
+//        }
+
+    }
+    
+    // TODO: idk if this one is neseccary
+    request(method, params) {
+        //    method: string, params: Object
+        // => Object
+        // https://docs.near.org/docs/api/rpc
+    }
+    
     processPayload(payload) {
         if (!this.didGetLatestConfiguration) {
             this.pendingPayloads.push(payload);
