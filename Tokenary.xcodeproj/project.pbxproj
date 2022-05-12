@@ -106,6 +106,14 @@
 		2C773F63274523DC007B04E7 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
 		2C78F8282683BDCC00C10670 /* Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C78F8272683BDCC00C10670 /* Alert.swift */; };
 		2C797E7E267BB88800F2CE2D /* WelcomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */; };
+		2C86A262282D1F090028EA11 /* NearSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C86A261282D1F090028EA11 /* NearSafariRequest.swift */; };
+		2C86A263282D1F090028EA11 /* NearSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C86A261282D1F090028EA11 /* NearSafariRequest.swift */; };
+		2C86A264282D1F090028EA11 /* NearSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C86A261282D1F090028EA11 /* NearSafariRequest.swift */; };
+		2C86A265282D1F090028EA11 /* NearSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C86A261282D1F090028EA11 /* NearSafariRequest.swift */; };
+		2C86A267282D1F220028EA11 /* NearResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C86A266282D1F220028EA11 /* NearResponseToExtension.swift */; };
+		2C86A268282D1F220028EA11 /* NearResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C86A266282D1F220028EA11 /* NearResponseToExtension.swift */; };
+		2C86A269282D1F220028EA11 /* NearResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C86A266282D1F220028EA11 /* NearResponseToExtension.swift */; };
+		2C86A26A282D1F220028EA11 /* NearResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C86A266282D1F220028EA11 /* NearResponseToExtension.swift */; };
 		2C89D26827BADCA9006C0C8D /* DappRequestAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */; };
 		2C89D26927BADCA9006C0C8D /* DappRequestAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */; };
 		2C8A09C6267513FC00993638 /* Agent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09C5267513FC00993638 /* Agent.swift */; };
@@ -329,6 +337,8 @@
 		2C773F61274523DC007B04E7 /* ResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseToExtension.swift; sourceTree = "<group>"; };
 		2C78F8272683BDCC00C10670 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alert.swift; sourceTree = "<group>"; };
 		2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeViewController.swift; sourceTree = "<group>"; };
+		2C86A261282D1F090028EA11 /* NearSafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearSafariRequest.swift; sourceTree = "<group>"; };
+		2C86A266282D1F220028EA11 /* NearResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearResponseToExtension.swift; sourceTree = "<group>"; };
 		2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DappRequestAction.swift; sourceTree = "<group>"; };
 		2C89D26A27BAF2A3006C0C8D /* yarn.lock */ = {isa = PBXFileReference; lastKnownFileType = text; name = yarn.lock; path = "web3-provider/yarn.lock"; sourceTree = "<group>"; };
 		2C89D26B27BAF2A3006C0C8D /* package-lock.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "package-lock.json"; path = "web3-provider/package-lock.json"; sourceTree = "<group>"; };
@@ -555,6 +565,7 @@
 				2C773F61274523DC007B04E7 /* ResponseToExtension.swift */,
 				2C264BDB27B5AC5400234393 /* EthereumResponseToExtension.swift */,
 				2C264BE027B5AC6000234393 /* SolanaResponseToExtension.swift */,
+				2C86A266282D1F220028EA11 /* NearResponseToExtension.swift */,
 				2C264BE527B5AC6800234393 /* TezosResponseToExtension.swift */,
 			);
 			path = Responses;
@@ -699,6 +710,7 @@
 				2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */,
 				2C264BBB27B2F25E00234393 /* SafariRequest.swift */,
 				2C264BC027B2F2C100234393 /* EthereumSafariRequest.swift */,
+				2C86A261282D1F090028EA11 /* NearSafariRequest.swift */,
 				2C264BC527B2F2F400234393 /* SolanaSafariRequest.swift */,
 				2C264BCA27B2F2FF00234393 /* TezosSafariRequest.swift */,
 				2C264BCF27B2F30C00234393 /* UnknownSafariRequest.swift */,
@@ -1293,6 +1305,7 @@
 				2C264BD227B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
 				2C264BD727B5806200234393 /* Web3Provider.swift in Sources */,
 				2C90E61D27B2C5C100C8991E /* InternalSafariRequest.swift in Sources */,
+				2C86A269282D1F220028EA11 /* NearResponseToExtension.swift in Sources */,
 				2C264BE327B5AC6000234393 /* SolanaResponseToExtension.swift in Sources */,
 				2C773F5E27450B97007B04E7 /* ExtensionBridge.swift in Sources */,
 				2C264BDE27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */,
@@ -1301,6 +1314,7 @@
 				2C264BBE27B2F25E00234393 /* SafariRequest.swift in Sources */,
 				2C264BE827B5AC6800234393 /* TezosResponseToExtension.swift in Sources */,
 				2C09CBA2273979C1009AD39B /* SafariWebExtensionHandler.swift in Sources */,
+				2C86A264282D1F090028EA11 /* NearSafariRequest.swift in Sources */,
 				2C773F63274523DC007B04E7 /* ResponseToExtension.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1316,6 +1330,7 @@
 				2C8A09C6267513FC00993638 /* Agent.swift in Sources */,
 				2C8A09D42675184700993638 /* Window.swift in Sources */,
 				2C264BD527B5806200234393 /* Web3Provider.swift in Sources */,
+				2C86A267282D1F220028EA11 /* NearResponseToExtension.swift in Sources */,
 				2C264BC627B2F2F400234393 /* SolanaSafariRequest.swift in Sources */,
 				2C4768B42826ED83005E8D4D /* CoinType.swift in Sources */,
 				2C9F0B6526BDC9AF008FA3D6 /* EthereumNetwork.swift in Sources */,
@@ -1324,6 +1339,7 @@
 				2CC8946F269A2E8C00879245 /* SessionStorage.swift in Sources */,
 				0DC850E726B73A5900809E82 /* AuthenticationReason.swift in Sources */,
 				2C4768AB2826CA63005E8D4D /* CoinDerivation.swift in Sources */,
+				2C86A262282D1F090028EA11 /* NearSafariRequest.swift in Sources */,
 				2CAA412526C7CD93009F3535 /* ReviewRequester.swift in Sources */,
 				2CD0669126B5537B00728C20 /* TokenaryWallet.swift in Sources */,
 				2C0EE4022753874D00AC2AFA /* PeerMeta.swift in Sources */,
@@ -1416,6 +1432,7 @@
 				2C96D38F2762317300687301 /* AccountTableViewCell.swift in Sources */,
 				2C264BEC27B6B50700234393 /* DappRequestProcessor.swift in Sources */,
 				2CF255A1275A47DD00AE54B9 /* Notification.swift in Sources */,
+				2C86A263282D1F090028EA11 /* NearSafariRequest.swift in Sources */,
 				2CE059392763F3FF0042D844 /* CGFloat.swift in Sources */,
 				2C264BBD27B2F25E00234393 /* SafariRequest.swift in Sources */,
 				2CF255B4275A744000AE54B9 /* PasswordViewController.swift in Sources */,
@@ -1445,6 +1462,7 @@
 				2C264BC727B2F2F400234393 /* SolanaSafariRequest.swift in Sources */,
 				2C5FF97226C84F7B00B32ACC /* AppDelegate.swift in Sources */,
 				2C4768AC2826CA63005E8D4D /* CoinDerivation.swift in Sources */,
+				2C86A268282D1F220028EA11 /* NearResponseToExtension.swift in Sources */,
 				2C89D26927BADCA9006C0C8D /* DappRequestAction.swift in Sources */,
 				2CF255A8275A48BB00AE54B9 /* NetworkMonitor.swift in Sources */,
 				2C8E88A2275FA596003EB8DB /* ImportViewController.swift in Sources */,
@@ -1473,6 +1491,7 @@
 				2C264BD327B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
 				2C264BD827B5806200234393 /* Web3Provider.swift in Sources */,
 				2C90E61E27B2C5C100C8991E /* InternalSafariRequest.swift in Sources */,
+				2C86A26A282D1F220028EA11 /* NearResponseToExtension.swift in Sources */,
 				2C264BE427B5AC6000234393 /* SolanaResponseToExtension.swift in Sources */,
 				2CE0594327640EAB0042D844 /* ExtensionBridge.swift in Sources */,
 				2C264BDF27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */,
@@ -1481,6 +1500,7 @@
 				2C264BBF27B2F25E00234393 /* SafariRequest.swift in Sources */,
 				2C264BE927B5AC6800234393 /* TezosResponseToExtension.swift in Sources */,
 				2CE0593F27640E300042D844 /* SafariWebExtensionHandler.swift in Sources */,
+				2C86A265282D1F090028EA11 /* NearSafariRequest.swift in Sources */,
 				2CE0594527640EF10042D844 /* ResponseToExtension.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

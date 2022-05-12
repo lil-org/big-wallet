@@ -20,6 +20,8 @@ struct DappRequestProcessor {
             return process(request: request, ethereumRequest: body, completion: completion)
         case let .solana(body):
             return process(request: request, solanaRequest: body, completion: completion)
+        case let .near(body):
+            return process(request: request, nearRequest: body, completion: completion)
         case .tezos:
             respond(to: request, error: "Tezos is not supported yet", completion: completion)
             return .none
@@ -45,6 +47,13 @@ struct DappRequestProcessor {
                 return .selectAccount(action)
             }
         }
+    }
+    
+    private static func process(request: SafariRequest, nearRequest body: SafariRequest.Near, completion: @escaping () -> Void) -> DappRequestAction {
+        let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
+        print(peerMeta)
+        respond(to: request, error: Strings.canceled, completion: completion) // TODO: implement
+        return .justShowApp
     }
     
     private static func process(request: SafariRequest, solanaRequest body: SafariRequest.Solana, completion: @escaping () -> Void) -> DappRequestAction {
