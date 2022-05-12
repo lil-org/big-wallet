@@ -57,10 +57,14 @@ window.addEventListener("message", function(event) {
             case "solana":
                 window.solana.processTokenaryResponse(id, response);
                 break;
+            case "near":
+                window.near.processTokenaryResponse(id, response);
+                break;
             default:
                 // pass unknown provider message to all providers 
                 window.ethereum.processTokenaryResponse(id, response);
                 window.solana.processTokenaryResponse(id, response);
+                window.near.processTokenaryResponse(id, response);
         }
     }
 });

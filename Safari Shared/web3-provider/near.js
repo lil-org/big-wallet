@@ -11,6 +11,7 @@ class TokenaryNear extends EventEmitter {
     constructor() {
         super();
         
+        this.accountId = null;
         this.idMapping = new IdMapping();
         this.callbacks = new Map();
         
@@ -22,6 +23,13 @@ class TokenaryNear extends EventEmitter {
     }
     
     requestSignIn(params) {
+        const payload = {method: "signIn", params: params, id: Utils.genId()};
+        // TODO: clean up
+        console.log("yo requestSignIn");
+        console.log(params);
+        console.log(payload);
+        return this.request(payload);
+        
 //        export interface RequestSignInParams {
 //          contractId: string;
 //          methodNames?: Array<string>;
@@ -151,17 +159,49 @@ class TokenaryNear extends EventEmitter {
     }
     
     // TODO: idk if this one is neseccary
-    request(method, params) {
-        console.log("yo near request");
-        //    method: string, params: Object
-        // => Object
-        // https://docs.near.org/docs/api/rpc
+//    request(method, params) {
+//        console.log("yo near request");
+//        //    method: string, params: Object
+//        // => Object
+//        // https://docs.near.org/docs/api/rpc
+//    }
+    
+    request(payload) {
+        return new Promise((resolve, reject) => {
+            if (!payload.id) {
+                payload.id = Utils.genId();
+            }
+            this.callbacks.set(payload.id, (error, data) => {
+                // Some dapps do not get responses sent without a delay.
+                // e.g., nftx.io does not start with a latest account if response is sent without a delay.
+                setTimeout( function() {
+                    if (error) {
+                        reject(error);
+                    } else {
+                        resolve(data);
+                    }
+                }, 1);
+            });
+            switch (payload.method) {
+                case "signIn": // TODO: add more methods
+                    return this.processPayload(payload);
+                default:
+                    this.callbacks.delete(payload.id);
+                    return;
+            }
+        });
     }
     
     processPayload(payload) {
         if (!this.didGetLatestConfiguration) {
             this.pendingPayloads.push(payload);
             return;
+        }
+        
+        switch (payload.method) {
+            case "signIn":
+                return this.postMessage("signIn", payload.id, payload);
+                // TODO: respond right away if already got sign in info from latest configuration
         }
     }
     
@@ -178,11 +218,20 @@ class TokenaryNear extends EventEmitter {
     }
 
     postMessage(handler, id, data) {
-        // TODO: pass current address as well
+        var account = "";
+        if (this.accountId) {
+            account = this.accountId();
+        }
         
         let object = {
-            object: data
+            object: data,
+            account: account,
         };
+        
+        // TODO: clean up
+        console.log("yo post message");
+        console.log(object);
+        
         window.tokenary.postMessage(handler, id, object, "near");
     }
 
