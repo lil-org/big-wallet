@@ -61,15 +61,13 @@ class TokenaryNear extends EventEmitter {
 //          notificationId: number;
 //          type: "sender-wallet-result";
 //        }
-        
-        console.log("yo near requestSignIn");
         return;
     }
     
     getAccountId() {
-//        => string | null;
         console.log("yo near getAccountId");
-        return ""
+        console.log(this.accountId);
+        return this.accountId;
     }
     
     signOut() {
@@ -79,8 +77,13 @@ class TokenaryNear extends EventEmitter {
 
     isSignedIn() {
         console.log("yo isSignedIn()");
-        return true;
-//        => boolean;
+        if (this.accountId) {
+            console.log("isSignedIn will return true");
+            return true;
+        } else {
+            console.log("isSignedIn will return false");
+            return false;
+        }
     }
         
 //    export interface SenderEvents {
@@ -214,13 +217,18 @@ class TokenaryNear extends EventEmitter {
             }
             
             this.pendingPayloads = [];
+        } else if ("account" in response) {
+            this.accountId = response.account;
+            this.sendResponse(id, {accessKey: true});
+            // TODO: in case of error, near provider expects it here, not like other providers
+            // TODO: implement switch account as well
         }
     }
 
     postMessage(handler, id, data) {
         var account = "";
         if (this.accountId) {
-            account = this.accountId();
+            account = this.accountId;
         }
         
         let object = {

@@ -11,6 +11,7 @@ struct ResponseToExtension {
         case ethereum(Ethereum)
         case solana(Solana)
         case tezos(Tezos)
+        case near(Near)
         
         var json: [String: AnyHashable] {
             let data: Data?
@@ -20,6 +21,8 @@ struct ResponseToExtension {
             case .ethereum(let body):
                 data = try? jsonEncoder.encode(body)
             case .solana(let body):
+                data = try? jsonEncoder.encode(body)
+            case .near(let body):
                 data = try? jsonEncoder.encode(body)
             case .tezos(let body):
                 data = try? jsonEncoder.encode(body)
@@ -38,6 +41,8 @@ struct ResponseToExtension {
                 return .ethereum
             case .solana:
                 return .solana
+            case .near:
+                return .near
             case .tezos:
                 return .tezos
             }

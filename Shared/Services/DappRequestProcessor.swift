@@ -51,10 +51,22 @@ struct DappRequestProcessor {
     
     private static func process(request: SafariRequest, nearRequest body: SafariRequest.Near, completion: @escaping () -> Void) -> DappRequestAction {
         let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
-        print(peerMeta)
-        print(body.signInRequest)
-        respond(to: request, error: Strings.canceled, completion: completion) // TODO: implement
-        return .justShowApp
+        switch body.method {
+        case .signIn:
+            let action = SelectAccountAction(provider: .near) { _, _, account in
+                if let account = account, account.coin == .near {
+                    let responseBody = ResponseToExtension.Near(account: account.address)
+                    // TODO: grant onchain permission
+                    respond(to: request, body: .near(responseBody), completion: completion)
+                } else {
+                    respond(to: request, error: Strings.canceled, completion: completion)
+                }
+            }
+            return .selectAccount(action)
+        case .signTransactions:
+            respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+            return .none
+        }
     }
     
     private static func process(request: SafariRequest, solanaRequest body: SafariRequest.Solana, completion: @escaping () -> Void) -> DappRequestAction {
