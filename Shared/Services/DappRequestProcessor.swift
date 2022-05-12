@@ -52,6 +52,7 @@ struct DappRequestProcessor {
     private static func process(request: SafariRequest, nearRequest body: SafariRequest.Near, completion: @escaping () -> Void) -> DappRequestAction {
         let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
         print(peerMeta)
+        print(body.signInRequest)
         respond(to: request, error: Strings.canceled, completion: completion) // TODO: implement
         return .justShowApp
     }
