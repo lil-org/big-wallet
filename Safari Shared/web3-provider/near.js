@@ -75,7 +75,8 @@ class TokenaryNear extends EventEmitter {
 //        export type SignOutResponse = boolean | { error: string | { type: string } };
     }
 
-    isSignedIn() {
+    isSignedIn(contractId) {
+        // asks for each contractId
         console.log("yo isSignedIn()");
         if (this.accountId) {
             console.log("isSignedIn will return true");
@@ -108,6 +109,7 @@ class TokenaryNear extends EventEmitter {
 
     signAndSendTransaction(params) {
         console.log("yo signAndSendTransaction()");
+        console.log(params);
 //        params: SignAndSendTransactionParams
 //        => Promise<SignAndSendTransactionResponse>;
         
@@ -146,7 +148,14 @@ class TokenaryNear extends EventEmitter {
     }
         
     requestSignTransactions(params) {
+        // TODO: clean up
         console.log("yo requestSignTransactions");
+        console.log(params);
+        
+        const payload = {method: "signAndSendTransactions", params: params, id: Utils.genId()};
+        console.log("payload:");
+        console.log(payload);
+        return this.request(payload);
         //    params: RequestSignTransactionsParams
 //        => Promise<SignAndSendTransactionsResponse>;
         
@@ -186,7 +195,8 @@ class TokenaryNear extends EventEmitter {
                 }, 1);
             });
             switch (payload.method) {
-                case "signIn": // TODO: add more methods
+                case "signIn":
+                case "signAndSendTransactions": // TODO: add more methods
                     return this.processPayload(payload);
                 default:
                     this.callbacks.delete(payload.id);
@@ -201,10 +211,15 @@ class TokenaryNear extends EventEmitter {
             return;
         }
         
+        console.log("yo will process payload");
+        console.log(payload);
+        
         switch (payload.method) {
             case "signIn":
                 return this.postMessage("signIn", payload.id, payload);
                 // TODO: respond right away if already got sign in info from latest configuration
+            case "signAndSendTransactions":
+                return this.postMessage("signAndSendTransactions", payload.id, payload);
         }
     }
     
