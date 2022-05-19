@@ -7,7 +7,7 @@ extension SafariRequest {
     struct Near: SafariRequestBody {
         
         enum Method: String, Decodable, CaseIterable {
-            case signIn, signTransactions
+            case signIn, signAndSendTransactions
         }
         
         struct SignInRequest {
@@ -42,7 +42,7 @@ extension SafariRequest {
             switch method {
             case .signIn:
                 return true
-            case .signTransactions:
+            case .signAndSendTransactions:
                 return false
             }
         }

@@ -78,6 +78,7 @@ class TokenaryNear extends EventEmitter {
     isSignedIn(contractId) {
         // asks for each contractId
         console.log("yo isSignedIn()");
+        console.log(contractId);
         if (this.accountId) {
             console.log("isSignedIn will return true");
             return true;
