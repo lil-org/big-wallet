@@ -24,6 +24,8 @@
 		2C09FC662828331D00DE9C27 /* Image.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09FC652828331D00DE9C27 /* Image.swift */; };
 		2C09FC672828331D00DE9C27 /* Image.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09FC652828331D00DE9C27 /* Image.swift */; };
 		2C0EE4022753874D00AC2AFA /* PeerMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0EE4012753874D00AC2AFA /* PeerMeta.swift */; };
+		2C10DE4528367637001D8694 /* Near.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C10DE4428367637001D8694 /* Near.swift */; };
+		2C10DE4628367637001D8694 /* Near.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C10DE4428367637001D8694 /* Near.swift */; };
 		2C134BA627553EC500DAFBDB /* Browser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C134BA527553EC500DAFBDB /* Browser.swift */; };
 		2C1995402674C4B900A8E370 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C19953F2674C4B900A8E370 /* AppDelegate.swift */; };
 		2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995412674C4B900A8E370 /* ImportViewController.swift */; };
@@ -280,6 +282,7 @@
 		2C09FC6128282D2000DE9C27 /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		2C09FC652828331D00DE9C27 /* Image.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Image.swift; sourceTree = "<group>"; };
 		2C0EE4012753874D00AC2AFA /* PeerMeta.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerMeta.swift; sourceTree = "<group>"; };
+		2C10DE4428367637001D8694 /* Near.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Near.swift; sourceTree = "<group>"; };
 		2C134BA527553EC500DAFBDB /* Browser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Browser.swift; sourceTree = "<group>"; };
 		2C19953C2674C4B900A8E370 /* Tokenary.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tokenary.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C19953F2674C4B900A8E370 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -873,6 +876,7 @@
 				2C03D1D1269B407900EF10EA /* NetworkMonitor.swift */,
 				2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */,
 				2C40379328199110004C7263 /* Solana.swift */,
+				2C10DE4428367637001D8694 /* Near.swift */,
 				2CAA412426C7CD93009F3535 /* ReviewRequester.swift */,
 				2C901C4C268A033100D0926A /* GasService.swift */,
 				2CC0CDBD2692027E0072922A /* PriceService.swift */,
@@ -1382,6 +1386,7 @@
 				2CD0B3F526A0DAA900488D92 /* NSPasteboard.swift in Sources */,
 				2C264BEB27B6B50700234393 /* DappRequestProcessor.swift in Sources */,
 				2C264BE627B5AC6800234393 /* TezosResponseToExtension.swift in Sources */,
+				2C10DE4528367637001D8694 /* Near.swift in Sources */,
 				2CE3D012267F73C00032A62E /* Transaction.swift in Sources */,
 				2C90E62227B2ED2D00C8991E /* SafariRequest+Helpers.swift in Sources */,
 				2C09FC662828331D00DE9C27 /* Image.swift in Sources */,
@@ -1429,6 +1434,7 @@
 				2CF25598275A46D600AE54B9 /* Strings.swift in Sources */,
 				2C4768B52826ED83005E8D4D /* CoinType.swift in Sources */,
 				2CF255AE275A48CF00AE54B9 /* Transaction.swift in Sources */,
+				2C10DE4628367637001D8694 /* Near.swift in Sources */,
 				2C96D38F2762317300687301 /* AccountTableViewCell.swift in Sources */,
 				2C264BEC27B6B50700234393 /* DappRequestProcessor.swift in Sources */,
 				2CF255A1275A47DD00AE54B9 /* Notification.swift in Sources */,
