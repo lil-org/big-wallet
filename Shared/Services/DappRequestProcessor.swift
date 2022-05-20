@@ -8,6 +8,7 @@ struct DappRequestProcessor {
     private static let walletsManager = WalletsManager.shared
     private static let ethereum = Ethereum.shared
     private static let solana = Solana.shared
+    private static let near = Near.shared
     
     static func processSafariRequest(_ request: SafariRequest, completion: @escaping () -> Void) -> DappRequestAction {
         guard ExtensionBridge.hasRequest(id: request.id) else {
@@ -51,21 +52,51 @@ struct DappRequestProcessor {
     
     private static func process(request: SafariRequest, nearRequest body: SafariRequest.Near, completion: @escaping () -> Void) -> DappRequestAction {
         let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
+        
+        func getAccount() -> Account? {
+            return walletsManager.wallets.flatMap { $0.accounts }.first(where: { $0.address == body.account })
+        }
+        
+        // TODO: reuse for all coins
+        func getPrivateKey() -> WalletCore.PrivateKey? {
+            guard let password = Keychain.shared.password else { return nil }
+            for wallet in walletsManager.wallets {
+                if let account = wallet.accounts.first(where: { $0.address == body.account }) {
+                    return try? wallet.privateKey(password: password, account: account)
+                }
+            }
+            return nil
+        }
+        
         switch body.method {
         case .signIn:
             let action = SelectAccountAction(provider: .near) { _, _, account in
                 if let account = account, account.coin == .near {
                     let responseBody = ResponseToExtension.Near(account: account.address)
-                    // TODO: grant onchain permission
+                    // TODO: grant onchain permission?
                     respond(to: request, body: .near(responseBody), completion: completion)
                 } else {
                     respond(to: request, error: Strings.canceled, completion: completion)
                 }
             }
             return .selectAccount(action)
-        case .signTransactions:
-            respond(to: request, error: Strings.somethingWentWrong, completion: completion)
-            return .none
+        case .signAndSendTransactions:
+            guard let account = getAccount(), let privateKey = getPrivateKey() else {
+                respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+                return .none
+            }
+            
+            let params = body.params
+            let meta = params?.description ?? "no description"
+            let action = SignMessageAction(provider: request.provider, subject: .approveTransaction, account: account, meta: meta, peerMeta: peerMeta) { approved in
+                // TODO: sign and send transaction
+                near.signAndSendTransactions(params, account: account, privateKey: privateKey) { result in
+                    respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+                    // TODO: implement successful response as well
+                }
+            }
+            
+            return .approveMessage(action)
         }
     }
     
