@@ -5,9 +5,12 @@ import Foundation
 extension SafariRequest.Ethereum {
     
     var message: Data? {
-        if let hexString = parameters?["data"] as? String,
-           let data = Data(hexString: hexString) {
-            return data
+        if let dataString = parameters?["data"] as? String {
+            if let data = Data(hexString: dataString) {
+                return data
+            } else {
+                return dataString.data(using: .utf8)
+            }
         } else {
             return nil
         }
