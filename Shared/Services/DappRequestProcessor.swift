@@ -63,7 +63,7 @@ struct DappRequestProcessor {
                 }
             }
             return .selectAccount(action)
-        case .signTransactions:
+        case .signAndSendTransactions:
             respond(to: request, error: Strings.somethingWentWrong, completion: completion)
             return .none
         }
