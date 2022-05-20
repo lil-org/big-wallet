@@ -23,6 +23,7 @@ const ethereumHandler = {
 }
 window.web3 = new Proxy(window.ethereum, ethereumHandler);
 window.metamask = new Proxy(window.ethereum, ethereumHandler);
+window.dispatchEvent(new Event('ethereum#initialized'));
 
 // - MARK: Solana
 
@@ -33,6 +34,7 @@ const solanaHandler = {
     }
 }
 window.phantom = new Proxy(window.solana, solanaHandler);
+window.dispatchEvent(new Event("solana#initialized"));
 
 // - MARK: Near
 
@@ -43,6 +45,7 @@ const nearHandler = {
     }
 }
 window.sender = new Proxy(window.near, nearHandler);
+window.dispatchEvent(new Event("near#initialized"));
 
 // - MARK: Process content script messages
 
