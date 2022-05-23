@@ -1,4 +1,4 @@
-// Copyright © 2017-2020 Trust Wallet.
+// Copyright © 2017-2022 Trust Wallet.
 //
 // This file is part of Trust. The full Trust copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
@@ -90,4 +90,6 @@ public enum CoinType: UInt32, CaseIterable {
     case boba = 10000288
     case metis = 1001088
     case aurora = 1323161554
+    case evmos = 10009001
+    case nativeEvmos = 20009001
 }

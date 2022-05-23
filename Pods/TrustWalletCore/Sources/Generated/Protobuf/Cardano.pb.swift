@@ -148,6 +148,7 @@ public struct TW_Cardano_Proto_SigningInput {
   public var utxos: [TW_Cardano_Proto_TxInput] = []
 
   /// Available private keys (double extended keys); every input UTXO adress should be covered
+  /// In case of Plan only, keys should be present, in correct number
   public var privateKey: [Data] = []
 
   /// Later this can be made oneof if more message types are supported
