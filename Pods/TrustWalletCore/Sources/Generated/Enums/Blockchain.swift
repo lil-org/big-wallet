@@ -41,4 +41,11 @@ public enum Blockchain: UInt32, CaseIterable {
     case filecoin = 32
     case elrondNetwork = 33
     case oasisNetwork = 34
+    case decred = 35
+    case zcash = 36
+    case groestlcoin = 37
+    case nativeEvmos = 38
+    case thorchain = 39
+    case ronin = 40
+    case kusama = 41
 }

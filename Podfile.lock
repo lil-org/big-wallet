@@ -2,25 +2,25 @@ PODS:
   - BigInt (5.2.0)
   - BlockiesSwift (0.1.2)
   - CryptoSwift (1.5.1)
-  - Kingfisher (7.2.1)
-  - PromiseKit (6.17.0):
-    - PromiseKit/CorePromise (= 6.17.0)
-    - PromiseKit/Foundation (= 6.17.0)
-    - PromiseKit/UIKit (= 6.17.0)
-  - PromiseKit/CorePromise (6.17.0)
-  - PromiseKit/Foundation (6.17.0):
+  - Kingfisher (7.2.2)
+  - PromiseKit (6.17.1):
+    - PromiseKit/CorePromise (= 6.17.1)
+    - PromiseKit/Foundation (= 6.17.1)
+    - PromiseKit/UIKit (= 6.17.1)
+  - PromiseKit/CorePromise (6.17.1)
+  - PromiseKit/Foundation (6.17.1):
     - PromiseKit/CorePromise
-  - PromiseKit/UIKit (6.17.0):
+  - PromiseKit/UIKit (6.17.1):
     - PromiseKit/CorePromise
   - secp256k1.swift (0.1.4)
   - Starscream (3.1.1)
   - SwiftProtobuf (1.19.0)
   - SwiftyJSON (4.3.0)
-  - TrustWalletCore (2.7.9):
-    - TrustWalletCore/Core (= 2.7.9)
-  - TrustWalletCore/Core (2.7.9):
+  - TrustWalletCore (2.9.0):
+    - TrustWalletCore/Core (= 2.9.0)
+  - TrustWalletCore/Core (2.9.0):
     - TrustWalletCore/Types
-  - TrustWalletCore/Types (2.7.9):
+  - TrustWalletCore/Types (2.9.0):
     - SwiftProtobuf
   - WalletConnect (0.1.0):
     - CryptoSwift
@@ -72,13 +72,13 @@ SPEC CHECKSUMS:
   BigInt: f668a80089607f521586bbe29513d708491ef2f7
   BlockiesSwift: 22d8d56dd187e6bfd16cb8c8fbd4fd4896c3e65d
   CryptoSwift: c4f2debceb38bf44c80659afe009f71e23e4a082
-  Kingfisher: 7c084bebf7d548c623ad41bcf765fb200efed369
-  PromiseKit: 996202d4cae72b7801b312abef4cd2f995b2978a
+  Kingfisher: 184d4d1a8c36666e663caf8e08abe87898595c53
+  PromiseKit: ee485df3d4dc570594d7e7aecae6352697dc6a4c
   secp256k1.swift: a7e7a214f6db6ce5db32cc6b2b45e5c4dd633634
   Starscream: 4bb2f9942274833f7b4d296a55504dcfc7edb7b0
   SwiftProtobuf: 6ef3f0e422ef90d6605ca20b21a94f6c1324d6b3
   SwiftyJSON: 6faa0040f8b59dead0ee07436cbf76b73c08fd08
-  TrustWalletCore: c68dd80a0c75130c28b1583bd39918447ec9fa0a
+  TrustWalletCore: ab3c0ecc39d3c3509b7f0d70e37a85b5922b72b2
   WalletConnect: 1df75d4355b1cacfc27d7ef2416fae43862d0eb4
   Web3Swift.io: 18fd06aed9d56df9c704f9c6f87b06675bb05b53
 
