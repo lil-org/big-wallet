@@ -24,6 +24,7 @@ enum EthereumChain: Int {
     case binanceTestnet = 97
     case avalancheFuji = 43113
     case fantomTestnet = 4002
+    case neonDevnet = 245022926
     
     var id: Int {
         return rawValue
@@ -58,6 +59,7 @@ enum EthereumChain: Int {
         case .binanceTestnet: return "BNB Testnet"
         case .avalancheFuji: return "Avalanche FUJI"
         case .fantomTestnet: return "Fantom Testnet"
+        case .neonDevnet: return "Neon Devnet"
         }
     }
     
@@ -75,6 +77,8 @@ enum EthereumChain: Int {
             return "xDai"
         case .fantomOpera, .fantomTestnet:
             return "FTM"
+        case .neonDevnet:
+            return "NEON"
         }
     }
     
@@ -113,6 +117,7 @@ enum EthereumChain: Int {
         case .avalancheFuji: return "https://api.avax-test.network/ext/bc/C/rpc"
         case .polygonMumbai: return "https://polygon-mumbai.infura.io/v3/" + Secrets.infura
         case .fantomTestnet: return "https://rpc.testnet.fantom.network/"
+        case .neonDevnet: return "https://proxy.devnet.neonlabs.org/solana"
         }
     }
     
