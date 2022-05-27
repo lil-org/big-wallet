@@ -7,7 +7,7 @@ Download on the [App Store](https://tokenary.io/get).
 
 Required
 
-- CocoaPods
+- CocoaPods (`brew install cocoapods`)
 - Node.js (`brew install node`)
 - Yarn (`brew install yarn`)
 
