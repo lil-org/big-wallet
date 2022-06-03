@@ -24,66 +24,24 @@ class TokenaryNear extends EventEmitter {
     
     requestSignIn(params) {
         const payload = {method: "signIn", params: params, id: Utils.genId()};
-        // TODO: clean up
-        console.log("yo requestSignIn");
-        console.log(params);
-        console.log(payload);
         return this.request(payload);
-        
-//        export interface RequestSignInParams {
-//          contractId: string;
-//          methodNames?: Array<string>;
-//          amount?: string; // in yoctoⓃ
-//        }
-        
-//        => Promise<RequestSignInResponse>;
-        
-        
-//        interface AccessKey {
-//          publicKey: {
-//            data: Uint8Array;
-//            keyType: number;
-//          };
-//          secretKey: string;
-//        }
-//
-        
-//        !!! accessKey is not actually used, there is only a check that if (accessKey)
-        // top level sign in does not return anything
-        
-//        export interface RequestSignInResponse {
-//          accessKey: AccessKey;
-//          error:
-//            | string
-//            | {
-//                type: string;
-//              };
-//          notificationId: number;
-//          type: "sender-wallet-result";
-//        }
-        return;
     }
     
     getAccountId() {
-        console.log("yo near getAccountId");
-        console.log(this.accountId);
         return this.accountId;
     }
     
     signOut() {
-//        => Promise<SignOutResponse>;
-//        export type SignOutResponse = boolean | { error: string | { type: string } };
+        // TODO: implement
+        // => Promise<boolean>;
     }
 
+    // TODO: respond async maybe
     isSignedIn(contractId) {
         // asks for each contractId
-        console.log("yo isSignedIn()");
-        console.log(contractId);
         if (this.accountId) {
-            console.log("isSignedIn will return true");
             return true;
         } else {
-            console.log("isSignedIn will return false");
             return false;
         }
     }
@@ -107,77 +65,14 @@ class TokenaryNear extends EventEmitter {
 //  callback: SenderEvents[Event]
 //) => void;
     
-
     signAndSendTransaction(params) {
-        console.log("yo signAndSendTransaction()");
-        console.log(params);
-//        params: SignAndSendTransactionParams
-//        => Promise<SignAndSendTransactionResponse>;
-        
-//        export interface Action {
-//          methodName: string;
-//          args: object;
-//          gas: string;
-//          deposit: string;
-//        }
-//
-//        export interface SignAndSendTransactionParams {
-//          receiverId: string;
-//          actions: Array<Action>;
-//        }
-//
-//        // Seems to reuse signAndSendTransactions internally, hence the wrong method name and list of responses.
-//        export interface SignAndSendTransactionResponse {
-//          actionType: "DAPP/DAPP_POPUP_RESPONSE";
-//          method: "signAndSendTransactions";
-//          notificationId: number;
-//          error?: string;
-//          response?: Array<providers.FinalExecutionOutcome>;
-//          type: "sender-wallet-extensionResult";
-//        }
-        
-        // !!! in fact only response field is necessary and used in provider
-//
-//        export interface SignAndSendTransactionsResponse {
-//          actionType: "DAPP/DAPP_POPUP_RESPONSE";
-//          method: "signAndSendTransactions";
-//          notificationId: number;
-//          error?: string;
-//          response?: Array<providers.FinalExecutionOutcome>;
-//          type: "sender-wallet-extensionResult";
-//        }
+        return this.requestSignTransactions({transactions: [params]});
     }
         
     requestSignTransactions(params) {
-        // TODO: clean up
-        console.log("yo requestSignTransactions");
-        console.log(params);
-        
         const payload = {method: "signAndSendTransactions", params: params, id: Utils.genId()};
-        console.log("payload:");
-        console.log(payload);
         return this.request(payload);
-        //    params: RequestSignTransactionsParams
-//        => Promise<SignAndSendTransactionsResponse>;
-        
-//        export interface Transaction {
-//          receiverId: string;
-//          actions: Array<Action>;
-//        }
-//
-//        export interface RequestSignTransactionsParams {
-//          transactions: Array<Transaction>;
-//        }
-
     }
-    
-    // TODO: idk if this one is neseccary
-//    request(method, params) {
-//        console.log("yo near request");
-//        //    method: string, params: Object
-//        // => Object
-//        // https://docs.near.org/docs/api/rpc
-//    }
     
     request(payload) {
         return new Promise((resolve, reject) => {
@@ -197,7 +92,7 @@ class TokenaryNear extends EventEmitter {
             });
             switch (payload.method) {
                 case "signIn":
-                case "signAndSendTransactions": // TODO: add more methods
+                case "signAndSendTransactions":
                     return this.processPayload(payload);
                 default:
                     this.callbacks.delete(payload.id);
@@ -211,9 +106,6 @@ class TokenaryNear extends EventEmitter {
             this.pendingPayloads.push(payload);
             return;
         }
-        
-        console.log("yo will process payload");
-        console.log(payload);
         
         switch (payload.method) {
             case "signIn":
@@ -238,6 +130,12 @@ class TokenaryNear extends EventEmitter {
             this.sendResponse(id, {accessKey: true});
             // TODO: in case of error, near provider expects it here, not like other providers
             // TODO: implement switch account as well
+        } else {
+            if ("response" in response) {
+                response.response = JSON.parse(response.response);
+            }
+            
+            this.sendResponse(id, response);
         }
     }
 
@@ -252,10 +150,6 @@ class TokenaryNear extends EventEmitter {
             account: account,
         };
         
-        // TODO: clean up
-        console.log("yo post message");
-        console.log(object);
-        
         window.tokenary.postMessage(handler, id, object, "near");
     }
 
@@ -269,15 +163,7 @@ class TokenaryNear extends EventEmitter {
             console.log(`callback id: ${id} not found`);
         }
     }
-
-    sendError(id, error) {
-        console.log(`<== ${id} sendError ${error}`);
-        let callback = this.callbacks.get(id);
-        if (callback) {
-            callback(error instanceof Error ? error : new Error(error), null);
-            this.callbacks.delete(id);
-        }
-    }
+    
 }
 
 module.exports = TokenaryNear;
