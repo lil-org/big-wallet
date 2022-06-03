@@ -119,7 +119,11 @@ class TokenaryNear extends EventEmitter {
     processTokenaryResponse(id, response) {
         if (response.name == "didLoadLatestConfiguration") {
             this.didGetLatestConfiguration = true;
-            // TODO: apply latest configuration
+            
+            if ("account" in response) {
+                this.accountId = response.account;
+            }
+            
             for(let payload of this.pendingPayloads) {
                 this.processPayload(payload);
             }
