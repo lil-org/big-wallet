@@ -149,6 +149,8 @@
 		2C96D3A62763CCA000687301 /* Images.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D3A52763CCA000687301 /* Images.swift */; };
 		2C96D3A92763D13400687301 /* DataStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D3A72763D13400687301 /* DataStateView.swift */; };
 		2C96D3AA2763D13400687301 /* DataStateView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C96D3A82763D13400687301 /* DataStateView.xib */; };
+		2C9B7735283FBA18008C191C /* UInt2x.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B7734283FBA18008C191C /* UInt2x.swift */; };
+		2C9B7736283FBA18008C191C /* UInt2x.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B7734283FBA18008C191C /* UInt2x.swift */; };
 		2C9F0B6526BDC9AF008FA3D6 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */; };
 		2C9F0B6826BDCB2E008FA3D6 /* EthereumChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */; };
 		2CAA412526C7CD93009F3535 /* ReviewRequester.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CAA412426C7CD93009F3535 /* ReviewRequester.swift */; };
@@ -375,6 +377,7 @@
 		2C96D3A52763CCA000687301 /* Images.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Images.swift; sourceTree = "<group>"; };
 		2C96D3A72763D13400687301 /* DataStateView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DataStateView.swift; sourceTree = "<group>"; };
 		2C96D3A82763D13400687301 /* DataStateView.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = DataStateView.xib; sourceTree = "<group>"; };
+		2C9B7734283FBA18008C191C /* UInt2x.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UInt2x.swift; sourceTree = "<group>"; };
 		2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumNetwork.swift; sourceTree = "<group>"; };
 		2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumChain.swift; sourceTree = "<group>"; };
 		2CAA412426C7CD93009F3535 /* ReviewRequester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewRequester.swift; sourceTree = "<group>"; };
@@ -744,6 +747,14 @@
 			path = Library;
 			sourceTree = "<group>";
 		};
+		2C9B7737284A5E52008C191C /* NEAR */ = {
+			isa = PBXGroup;
+			children = (
+				2C9B7734283FBA18008C191C /* UInt2x.swift */,
+			);
+			path = NEAR;
+			sourceTree = "<group>";
+		};
 		2CB3844027654A0D00A189B9 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
@@ -846,6 +857,7 @@
 		2CF25596275A468B00AE54B9 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				2C9B7737284A5E52008C191C /* NEAR */,
 				2C0EE4012753874D00AC2AFA /* PeerMeta.swift */,
 				2C90E62127B2ED2D00C8991E /* SafariRequest+Helpers.swift */,
 				0D059AD126C2796200EE3023 /* ApprovalSubject.swift */,
@@ -1331,6 +1343,7 @@
 				2C901C4A2689F01700D0926A /* Strings.swift in Sources */,
 				2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */,
 				2CC0CDBE2692027E0072922A /* PriceService.swift in Sources */,
+				2C9B7735283FBA18008C191C /* UInt2x.swift in Sources */,
 				2C8A09C6267513FC00993638 /* Agent.swift in Sources */,
 				2C8A09D42675184700993638 /* Window.swift in Sources */,
 				2C264BD527B5806200234393 /* Web3Provider.swift in Sources */,
@@ -1437,6 +1450,7 @@
 				2C10DE4628367637001D8694 /* Near.swift in Sources */,
 				2C96D38F2762317300687301 /* AccountTableViewCell.swift in Sources */,
 				2C264BEC27B6B50700234393 /* DappRequestProcessor.swift in Sources */,
+				2C9B7736283FBA18008C191C /* UInt2x.swift in Sources */,
 				2CF255A1275A47DD00AE54B9 /* Notification.swift in Sources */,
 				2C86A263282D1F090028EA11 /* NearSafariRequest.swift in Sources */,
 				2CE059392763F3FF0042D844 /* CGFloat.swift in Sources */,
