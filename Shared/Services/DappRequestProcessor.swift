@@ -89,7 +89,13 @@ struct DappRequestProcessor {
             let action = SignMessageAction(provider: request.provider, subject: .approveTransaction, account: account, meta: meta, peerMeta: peerMeta) { approved in
                 if approved, let privateKey = getPrivateKey() {
                     near.signAndSendTransactions(params, account: account, privateKey: privateKey) { result in
-                        respond(to: request, error: Strings.failedToSign, completion: completion) // TODO: implement successful response as well
+                        switch result {
+                        case let .success(response):
+                            let body = ResponseToExtension.Near(response: response)
+                            respond(to: request, body: .near(body), completion: completion)
+                        case .failure:
+                            respond(to: request, error: Strings.failedToSend, completion: completion)
+                        }
                     }
                 } else {
                     respond(to: request, error: Strings.failedToSign, completion: completion)
