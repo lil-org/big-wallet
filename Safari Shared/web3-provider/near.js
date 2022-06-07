@@ -32,11 +32,12 @@ class TokenaryNear extends EventEmitter {
     }
     
     signOut() {
-        // TODO: implement
-        // => Promise<boolean>;
+        this.emit("signOut");
+        return new Promise((resolve, reject) => {
+            resolve(true);
+        });
     }
 
-    // TODO: respond async maybe
     isSignedIn(contractId) {
         // asks for each contractId
         if (this.accountId) {
@@ -45,25 +46,6 @@ class TokenaryNear extends EventEmitter {
             return false;
         }
     }
-        
-//    export interface SenderEvents {
-//      signIn: () => void;
-//      signOut: () => void;
-//      accountChanged: (changedAccountId: string) => void;
-//      rpcChanged: (response: RpcChangedResponse) => void;
-//    }
-    
-//    export interface RpcChangedResponse {
-//      method: "rpcChanged";
-//      notificationId: number;
-//      rpc: RpcInfo;
-//      type: "sender-wallet-fromContent";
-//    }
-
-//on: <Event extends keyof SenderEvents>(
-//  event: Event,
-//  callback: SenderEvents[Event]
-//) => void;
     
     signAndSendTransaction(params) {
         return this.requestSignTransactions({transactions: [params]});
@@ -135,7 +117,6 @@ class TokenaryNear extends EventEmitter {
         } else if ("account" in response) {
             this.accountId = response.account;
             this.sendResponse(id, {accessKey: true});
-            // TODO: implement switch account as well
         } else {
             if ("response" in response) {
                 response.response = JSON.parse(response.response);
