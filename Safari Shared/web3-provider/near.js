@@ -109,8 +109,11 @@ class TokenaryNear extends EventEmitter {
         
         switch (payload.method) {
             case "signIn":
-                return this.postMessage("signIn", payload.id, payload);
-                // TODO: respond right away if already got sign in info from latest configuration
+                if (!this.accountId) {
+                    return this.postMessage("signIn", payload.id, payload);
+                } else {
+                    return this.sendResponse(payload.id, {accessKey: true});
+                }
             case "signAndSendTransactions":
                 return this.postMessage("signAndSendTransactions", payload.id, payload);
         }
@@ -132,7 +135,6 @@ class TokenaryNear extends EventEmitter {
         } else if ("account" in response) {
             this.accountId = response.account;
             this.sendResponse(id, {accessKey: true});
-            // TODO: in case of error, near provider expects it here, not like other providers
             // TODO: implement switch account as well
         } else {
             if ("response" in response) {
