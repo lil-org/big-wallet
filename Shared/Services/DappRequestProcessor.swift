@@ -34,12 +34,18 @@ struct DappRequestProcessor {
             case .switchAccount:
                 let action = SelectAccountAction(provider: .unknown) { chain, _, account in
                     if let chain = chain, let account = account {
-                        if account.coin == .ethereum {
+                        switch account.coin {
+                        case .ethereum:
                             let responseBody = ResponseToExtension.Ethereum(results: [account.address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
                             respond(to: request, body: .ethereum(responseBody), completion: completion)
-                        } else {
+                        case .solana:
                             let responseBody = ResponseToExtension.Solana(publicKey: account.address)
                             respond(to: request, body: .solana(responseBody), completion: completion)
+                        case .near:
+                            let responseBody = ResponseToExtension.Near(account: account.address)
+                            respond(to: request, body: .near(responseBody), completion: completion)
+                        default:
+                            fatalError("Can't select that coin")
                         }
                     } else {
                         respond(to: request, error: Strings.canceled, completion: completion)
