@@ -18,8 +18,7 @@ extension SafariRequest {
         let method: Method
         let account: String
         let signInRequest: SignInRequest?
-        
-        let params: [String: Any]?
+        let transactions: [[String: Any]]?
         
         init?(name: String, json: [String: Any]) {
             guard let method = Method(rawValue: name),
@@ -28,7 +27,7 @@ extension SafariRequest {
             self.account = account
             
             let parameters = (json["object"] as? [String: Any])?["params"] as? [String: Any]
-            self.params = parameters
+            self.transactions = parameters?["transactions"] as? [[String: Any]]
             
             if let contractId = parameters?["contractId"] as? String {
                 self.signInRequest = SignInRequest(contractId: contractId, methodNames: parameters?["methodNames"] as? [String])

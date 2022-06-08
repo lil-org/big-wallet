@@ -78,11 +78,19 @@ struct DappRequestProcessor {
                 return .none
             }
             
-            let params = body.params
-            let meta = params?.description ?? "" // TODO: prettify transaction description
+            let meta: String
+            if let transactions = body.transactions,
+               let jsonObject: Any = transactions.count == 1 ? transactions.first : transactions,
+               let data = try? JSONSerialization.data(withJSONObject: jsonObject, options: .prettyPrinted),
+               let string = String(data: data, encoding: .utf8) {
+                meta = string
+            } else {
+                meta = Strings.somethingWentWrong
+            }
+            
             let action = SignMessageAction(provider: request.provider, subject: .approveTransaction, account: account, meta: meta, peerMeta: peerMeta) { approved in
                 if approved, let privateKey = privateKey {
-                    near.signAndSendTransactions(params, account: account, privateKey: privateKey) { result in
+                    near.signAndSendTransactions(body.transactions, account: account, privateKey: privateKey) { result in
                         switch result {
                         case let .success(response):
                             let body = ResponseToExtension.Near(response: response)
