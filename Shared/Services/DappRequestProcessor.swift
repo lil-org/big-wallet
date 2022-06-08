@@ -59,16 +59,7 @@ struct DappRequestProcessor {
     private static func process(request: SafariRequest, nearRequest body: SafariRequest.Near, completion: @escaping () -> Void) -> DappRequestAction {
         let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
         lazy var account = getAccount(coin: .near, address: body.account)
-        
-        func getPrivateKey() -> WalletCore.PrivateKey? {
-            guard let password = Keychain.shared.password else { return nil }
-            for wallet in walletsManager.wallets {
-                if let account = wallet.accounts.first(where: { $0.address == body.account }) {
-                    return try? wallet.privateKey(password: password, account: account)
-                }
-            }
-            return nil
-        }
+        lazy var privateKey = getPrivateKey(coin: .near, address: body.account)
         
         switch body.method {
         case .signIn:
@@ -90,7 +81,7 @@ struct DappRequestProcessor {
             let params = body.params
             let meta = params?.description ?? "" // TODO: prettify transaction description
             let action = SignMessageAction(provider: request.provider, subject: .approveTransaction, account: account, meta: meta, peerMeta: peerMeta) { approved in
-                if approved, let privateKey = getPrivateKey() {
+                if approved, let privateKey = privateKey {
                     near.signAndSendTransactions(params, account: account, privateKey: privateKey) { result in
                         switch result {
                         case let .success(response):
@@ -112,16 +103,7 @@ struct DappRequestProcessor {
     private static func process(request: SafariRequest, solanaRequest body: SafariRequest.Solana, completion: @escaping () -> Void) -> DappRequestAction {
         let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
         lazy var account = getAccount(coin: .solana, address: body.publicKey)
-        
-        func getPrivateKey() -> WalletCore.PrivateKey? {
-            guard let password = Keychain.shared.password else { return nil }
-            for wallet in walletsManager.wallets {
-                if let account = wallet.accounts.first(where: { $0.address == body.publicKey }) {
-                    return try? wallet.privateKey(password: password, account: account)
-                }
-            }
-            return nil
-        }
+        lazy var privateKey = getPrivateKey(coin: .solana, address: body.publicKey)
         
         switch body.method {
         case .connect:
@@ -141,7 +123,7 @@ struct DappRequestProcessor {
             }
             let displayMessage = Strings.data + ":\n\n" + messages.joined(separator: "\n\n")
             let action = SignMessageAction(provider: request.provider, subject: .approveTransaction, account: account, meta: displayMessage, peerMeta: peerMeta) { approved in
-                if approved, let privateKey = getPrivateKey() {
+                if approved, let privateKey = privateKey {
                     var results = [String]()
                     for message in messages {
                         guard let signed = solana.sign(message: message, asHex: false, privateKey: privateKey) else {
@@ -173,7 +155,7 @@ struct DappRequestProcessor {
                 subject = .approveTransaction
             }
             let action = SignMessageAction(provider: request.provider, subject: subject, account: account, meta: displayMessage, peerMeta: peerMeta) { approved in
-                guard approved, let privateKey = getPrivateKey() else {
+                guard approved, let privateKey = privateKey else {
                     respond(to: request, error: Strings.failedToSign, completion: completion)
                     return
                 }
@@ -216,7 +198,7 @@ struct DappRequestProcessor {
             return .selectAccount(action)
         case .signTypedMessage:
             if let raw = ethereumRequest.raw,
-               let wallet = walletsManager.getWallet(address: ethereumRequest.address),
+               let wallet = walletsManager.getWallet(ethereumAddress: ethereumRequest.address),
                let account = account {
                 let action = SignMessageAction(provider: request.provider, subject: .signTypedData, account: account, meta: raw, peerMeta: peerMeta) { approved in
                     if approved {
@@ -231,7 +213,7 @@ struct DappRequestProcessor {
             }
         case .signMessage:
             if let data = ethereumRequest.message,
-               let wallet = walletsManager.getWallet(address: ethereumRequest.address),
+               let wallet = walletsManager.getWallet(ethereumAddress: ethereumRequest.address),
                let account = account {
                 let action = SignMessageAction(provider: request.provider, subject: .signMessage, account: account, meta: data.hexString, peerMeta: peerMeta) { approved in
                     if approved {
@@ -246,7 +228,7 @@ struct DappRequestProcessor {
             }
         case .signPersonalMessage:
             if let data = ethereumRequest.message,
-               let wallet = walletsManager.getWallet(address: ethereumRequest.address),
+               let wallet = walletsManager.getWallet(ethereumAddress: ethereumRequest.address),
                let account = account {
                 let text = String(data: data, encoding: .utf8) ?? data.hexString
                 let action = SignMessageAction(provider: request.provider, subject: .signPersonalMessage, account: account, meta: text, peerMeta: peerMeta) { approved in
@@ -263,7 +245,7 @@ struct DappRequestProcessor {
         case .signTransaction:
             if let transaction = ethereumRequest.transaction,
                let chain = ethereumRequest.chain,
-               let wallet = walletsManager.getWallet(address: ethereumRequest.address),
+               let wallet = walletsManager.getWallet(ethereumAddress: ethereumRequest.address),
                let account = account {
                 let action = SendTransactionAction(provider: request.provider,
                                                    transaction: transaction,
@@ -341,6 +323,19 @@ struct DappRequestProcessor {
     }
     
     private static func getAccount(coin: CoinType, address: String) -> Account? {
+        return getWalletAndAccount(coin: coin, address: address)?.1
+    }
+    
+    private static func getPrivateKey(coin: CoinType, address: String) -> WalletCore.PrivateKey? {
+        guard let password = Keychain.shared.password else { return nil }
+        if let (wallet, account) = getWalletAndAccount(coin: coin, address: address) {
+            return try? wallet.privateKey(password: password, account: account)
+        } else {
+            return nil
+        }
+    }
+    
+    private static func getWalletAndAccount(coin: CoinType, address: String) -> (TokenaryWallet, Account)? {
         let searchLowercase = coin == .ethereum
         let needle = searchLowercase ? address.lowercased() : address
         
@@ -348,7 +343,7 @@ struct DappRequestProcessor {
             for account in wallet.accounts where account.coin == coin {
                 let match = searchLowercase ? account.address.lowercased() == needle : account.address == needle
                 if match {
-                    return account
+                    return (wallet, account)
                 }
             }
         }
