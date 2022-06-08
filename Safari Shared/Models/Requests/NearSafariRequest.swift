@@ -19,7 +19,7 @@ extension SafariRequest {
         let account: String
         let signInRequest: SignInRequest?
         
-        let params: [String: Any]? // TODO: do not keep params, decode right away
+        let params: [String: Any]?
         
         init?(name: String, json: [String: Any]) {
             guard let method = Method(rawValue: name),
@@ -30,7 +30,6 @@ extension SafariRequest {
             let parameters = (json["object"] as? [String: Any])?["params"] as? [String: Any]
             self.params = parameters
             
-            // TODO: what if there is a contractId, but it is not a sign in request
             if let contractId = parameters?["contractId"] as? String {
                 self.signInRequest = SignInRequest(contractId: contractId, methodNames: parameters?["methodNames"] as? [String])
             } else {
