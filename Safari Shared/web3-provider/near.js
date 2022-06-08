@@ -117,6 +117,7 @@ class TokenaryNear extends EventEmitter {
         } else if ("account" in response) {
             this.accountId = response.account;
             this.sendResponse(id, {accessKey: true});
+            this.validateNearAccount(response.account);
         } else {
             if ("response" in response) {
                 response.response = JSON.parse(response.response);
@@ -126,6 +127,31 @@ class TokenaryNear extends EventEmitter {
         }
     }
 
+    async validateNearAccount(account) {
+        const body = {
+            "jsonrpc": "2.0",
+            "id": "dontcare",
+            "method": "query",
+            "params": {
+                "request_type": "view_account",
+                "finality": "final",
+                "account_id": account
+            }
+        };
+        
+        const response = await fetch("https://rpc.mainnet.near.org", {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+
+        response.json().then(data => {
+            if ("error" in data && data.error.cause.name == "UNKNOWN_ACCOUNT") {
+                alert("Please deposit 0.1 NEAR into your account to initialize it.");
+            }
+        }).catch((error) => console.log(error));
+    }
+    
     postMessage(handler, id, data) {
         var account = "";
         if (this.accountId) {
