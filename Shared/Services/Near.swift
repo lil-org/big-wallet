@@ -15,19 +15,128 @@ class Near {
     
     private init() {}
     
-    func signAndSendTransaction(privateKey: PrivateKey, completion: @escaping (Result<String, SendTransactionError>) -> Void) {
-        
+    func signAndSendTransactions(_ transactions: [[String: Any]],
+                                 account: Account,
+                                 privateKey: PrivateKey,
+                                 completion: @escaping (Result<[[String: Any]], SendTransactionError>) -> Void) {
+        signAndSendRemainingTransactions(transactions, receivedResponses: [], account: account, privateKey: privateKey, completion: completion)
     }
     
     // MARK: - Private
     
-    private func getNonceAndBlockhash(account: String, completion: @escaping (((UInt64, String)?) -> Void)) {
-        guard let data = Data(hexString: account) else {
+    private func signAndSendRemainingTransactions(_ transactions: [[String: Any]],
+                                                  receivedResponses: [[String: Any]],
+                                                  account: Account,
+                                                  privateKey: PrivateKey,
+                                                  completion: @escaping (Result<[[String: Any]], SendTransactionError>) -> Void) {
+        let transaction = transactions[0]
+        let remainingTransactions = transactions.dropFirst()
+        guard let receiverId = transaction["receiverId"] as? String,
+              let actionsDicts = transaction["actions"] as? [[String: Any]] else {
+            completion(.failure(.unknown))
+            return
+        }
+        
+        var actions = [NEARAction]()
+        for action in actionsDicts {
+            guard let deposit = action["deposit"] as? String,
+                  let gasString = action["gas"] as? String,
+                  let gas = UInt64(gasString),
+                  let methodName = action["methodName"] as? String,
+                  let args = action["args"] as? [String: Any],
+                  let argsData = try? JSONSerialization.data(withJSONObject: args, options: .fragmentsAllowed),
+                  let uintDeposit = UInt128.fromString(deposit) else {
+                completion(.failure(.unknown))
+                return
+            }
+            
+            let data = Data(withUnsafeBytes(of: uintDeposit.littleEndian) { Array($0) })
+            let functionCall = NEARFunctionCall.with {
+                $0.methodName = methodName
+                $0.gas = gas
+                $0.deposit = data
+                $0.args = args.isEmpty ? Data() : argsData
+            }
+            
+            let functionCallAction = NEARAction.with {
+                $0.functionCall = functionCall
+            }
+            
+            actions.append(functionCallAction)
+        }
+        
+        getNonceAndBlockhash(account: account.address) { [weak self] result in
+            guard let result = result, let blockhash = Base58.decodeNoCheck(string: result.1) else {
+                DispatchQueue.main.async {
+                    completion(.failure(.unknown))
+                }
+                return
+            }
+            
+            let signingInput = NEARSigningInput.with {
+                $0.nonce = result.0 + 1
+                $0.actions = actions
+                $0.signerID = account.address
+                $0.receiverID = receiverId
+                $0.blockHash = blockhash
+                $0.privateKey = privateKey.data
+            }
+            
+            let output: NEARSigningOutput = AnySigner.sign(input: signingInput, coin: .near)
+            let signedTransaction = output.signedTransaction
+            let encoded = signedTransaction.base64EncodedString()
+                        
+            self?.sendTransaction(encoded,
+                                  remainingTransactions: Array(remainingTransactions),
+                                  receivedResponses: receivedResponses,
+                                  account: account,
+                                  privateKey: privateKey,
+                                  completion: completion)
+        }
+    }
+    
+    private func sendTransaction(_ transaction: String,
+                                 remainingTransactions: [[String: Any]],
+                                 receivedResponses: [[String: Any]],
+                                 account: Account,
+                                 privateKey: PrivateKey,
+                                 completion: @escaping (Result<[[String: Any]], SendTransactionError>) -> Void) {
+        let request = createRequest(method: "broadcast_tx_commit", parameters: [transaction])
+        let dataTask = urlSession.dataTask(with: request) { [weak self] data, _, _ in
+            guard let data = data,
+                  let response = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let result = response["result"] as? [String: Any] else {
+                // TODO: process errors here
+                // I mean: try to get transaction status in case of Timeout error, or maybe try to send it again. idk though.
+                DispatchQueue.main.async {
+                    completion(.failure(.unknown))
+                }
+                return
+            }
+                        
+            let responses = receivedResponses + [result]
+            DispatchQueue.main.async {
+                if remainingTransactions.isEmpty {
+                    completion(.success(responses))
+                } else {
+                    self?.signAndSendRemainingTransactions(remainingTransactions,
+                                                           receivedResponses: responses,
+                                                           account: account,
+                                                           privateKey: privateKey,
+                                                           completion: completion)
+                }
+            }
+        }
+        dataTask.resume()
+    }
+    
+    private func getNonceAndBlockhash(account: String, retryCount: Int = 0, completion: @escaping (((UInt64, String)?) -> Void)) {
+        guard let publicKeyData = Data(hexString: account) else {
             completion(nil)
             return
         }
 
-        let publicKey = "ed25519:" + Base58.encodeNoCheck(data: data)
+        let publicKey = "ed25519:" + Base58.encodeNoCheck(data: publicKeyData)
         let params = [
             "request_type": "view_access_key",
             "finality": "optimistic",
@@ -37,20 +146,21 @@ class Near {
         
         let request = createRequest(method: "query", parameters: params)
         let dataTask = urlSession.dataTask(with: request) { data, _, _ in
-            DispatchQueue.main.async {
-                if let data = data,
-                   let response = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["result"] as? [String: Any] {
-                    let nonce = response["nonce"] as! UInt64
-                    let blockhash = response["block_hash"] as! String
-                    // TODO: refactor parsing response
-                    completion((nonce, blockhash))
-                } else {
-                    completion(nil)
+            if let data = data,
+               let result = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["result"] as? [String: Any],
+               let nonce = result["nonce"] as? UInt64,
+               let blockhash = result["block_hash"] as? String {
+                completion((nonce, blockhash))
+            } else if retryCount < 3 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(300)) { [weak self] in
+                    self?.getNonceAndBlockhash(account: account, retryCount: retryCount + 1, completion: completion)
                 }
+            } else {
+                completion(nil)
             }
         }
-        dataTask.resume()
         
+        dataTask.resume()
     }
     
     private func createRequest(method: String, parameters: Any) -> URLRequest {
