@@ -26,6 +26,7 @@
 #import "TWBitcoinScript.h"
 #import "TWBitcoinSigHashType.h"
 #import "TWBlockchain.h"
+#import "TWCardano.h"
 #import "TWCardanoProto.h"
 #import "TWCoinType.h"
 #import "TWCoinTypeConfiguration.h"

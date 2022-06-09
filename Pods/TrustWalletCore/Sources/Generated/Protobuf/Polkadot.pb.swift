@@ -236,6 +236,14 @@ public struct TW_Polkadot_Proto_Staking {
     set {messageOneof = .chill(newValue)}
   }
 
+  public var chillAndUnbond: TW_Polkadot_Proto_Staking.ChillAndUnbond {
+    get {
+      if case .chillAndUnbond(let v)? = messageOneof {return v}
+      return TW_Polkadot_Proto_Staking.ChillAndUnbond()
+    }
+    set {messageOneof = .chillAndUnbond(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public enum OneOf_MessageOneof: Equatable {
@@ -246,6 +254,7 @@ public struct TW_Polkadot_Proto_Staking {
     case withdrawUnbonded(TW_Polkadot_Proto_Staking.WithdrawUnbonded)
     case nominate(TW_Polkadot_Proto_Staking.Nominate)
     case chill(TW_Polkadot_Proto_Staking.Chill)
+    case chillAndUnbond(TW_Polkadot_Proto_Staking.ChillAndUnbond)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_Polkadot_Proto_Staking.OneOf_MessageOneof, rhs: TW_Polkadot_Proto_Staking.OneOf_MessageOneof) -> Bool {
@@ -279,6 +288,10 @@ public struct TW_Polkadot_Proto_Staking {
       }()
       case (.chill, .chill): return {
         guard case .chill(let l) = lhs, case .chill(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.chillAndUnbond, .chillAndUnbond): return {
+        guard case .chillAndUnbond(let l) = lhs, case .chillAndUnbond(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
       default: return false
@@ -363,6 +376,18 @@ public struct TW_Polkadot_Proto_Staking {
     // methods supported on all messages.
 
     public var nominators: [String] = []
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
+  public struct ChillAndUnbond {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    public var value: Data = Data()
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -633,6 +658,7 @@ extension TW_Polkadot_Proto_Staking: SwiftProtobuf.Message, SwiftProtobuf._Messa
     5: .standard(proto: "withdraw_unbonded"),
     6: .same(proto: "nominate"),
     7: .same(proto: "chill"),
+    8: .standard(proto: "chill_and_unbond"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -732,6 +758,19 @@ extension TW_Polkadot_Proto_Staking: SwiftProtobuf.Message, SwiftProtobuf._Messa
           self.messageOneof = .chill(v)
         }
       }()
+      case 8: try {
+        var v: TW_Polkadot_Proto_Staking.ChillAndUnbond?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .chillAndUnbond(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .chillAndUnbond(v)
+        }
+      }()
       default: break
       }
     }
@@ -770,6 +809,10 @@ extension TW_Polkadot_Proto_Staking: SwiftProtobuf.Message, SwiftProtobuf._Messa
     case .chill?: try {
       guard case .chill(let v)? = self.messageOneof else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+    }()
+    case .chillAndUnbond?: try {
+      guard case .chillAndUnbond(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
     }()
     case nil: break
     }
@@ -1000,6 +1043,38 @@ extension TW_Polkadot_Proto_Staking.Nominate: SwiftProtobuf.Message, SwiftProtob
 
   public static func ==(lhs: TW_Polkadot_Proto_Staking.Nominate, rhs: TW_Polkadot_Proto_Staking.Nominate) -> Bool {
     if lhs.nominators != rhs.nominators {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Polkadot_Proto_Staking.ChillAndUnbond: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Polkadot_Proto_Staking.protoMessageName + ".ChillAndUnbond"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "value"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.value) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.value.isEmpty {
+      try visitor.visitSingularBytesField(value: self.value, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Polkadot_Proto_Staking.ChillAndUnbond, rhs: TW_Polkadot_Proto_Staking.ChillAndUnbond) -> Bool {
+    if lhs.value != rhs.value {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

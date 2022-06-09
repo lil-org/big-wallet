@@ -14,6 +14,7 @@ typedef TWData *_Nonnull TW_Cardano_Proto_OutPoint;
 typedef TWData *_Nonnull TW_Cardano_Proto_TokenAmount;
 typedef TWData *_Nonnull TW_Cardano_Proto_TxInput;
 typedef TWData *_Nonnull TW_Cardano_Proto_TxOutput;
+typedef TWData *_Nonnull TW_Cardano_Proto_TokenBundle;
 typedef TWData *_Nonnull TW_Cardano_Proto_Transfer;
 typedef TWData *_Nonnull TW_Cardano_Proto_TransactionPlan;
 typedef TWData *_Nonnull TW_Cardano_Proto_SigningInput;

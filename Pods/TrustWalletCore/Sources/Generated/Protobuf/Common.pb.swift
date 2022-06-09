@@ -79,6 +79,7 @@ public enum TW_Common_Proto_SigningError: SwiftProtobuf.Enum {
 
   /// Incorrect parameters
   case errorInvalidParams // = 22
+  case errorInvalidRequestedTokenAmount // = 23
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -110,6 +111,7 @@ public enum TW_Common_Proto_SigningError: SwiftProtobuf.Enum {
     case 20: self = .errorNoSupportN2N
     case 21: self = .errorSignaturesCount
     case 22: self = .errorInvalidParams
+    case 23: self = .errorInvalidRequestedTokenAmount
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -139,6 +141,7 @@ public enum TW_Common_Proto_SigningError: SwiftProtobuf.Enum {
     case .errorNoSupportN2N: return 20
     case .errorSignaturesCount: return 21
     case .errorInvalidParams: return 22
+    case .errorInvalidRequestedTokenAmount: return 23
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -173,6 +176,7 @@ extension TW_Common_Proto_SigningError: CaseIterable {
     .errorNoSupportN2N,
     .errorSignaturesCount,
     .errorInvalidParams,
+    .errorInvalidRequestedTokenAmount,
   ]
 }
 
@@ -205,5 +209,6 @@ extension TW_Common_Proto_SigningError: SwiftProtobuf._ProtoNameProviding {
     20: .same(proto: "Error_no_support_n2n"),
     21: .same(proto: "Error_signatures_count"),
     22: .same(proto: "Error_invalid_params"),
+    23: .same(proto: "Error_invalid_requested_token_amount"),
   ]
 }

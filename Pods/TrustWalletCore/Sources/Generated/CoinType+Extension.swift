@@ -45,6 +45,10 @@ extension CoinType {
         return TWCoinTypeStaticPrefix(TWCoinType(rawValue: rawValue))
     }
 
+    public var chainId: String {
+        return TWStringNSString(TWCoinTypeChainId(TWCoinType(rawValue: rawValue)))
+    }
+
     public var slip44Id: UInt32 {
         return TWCoinTypeSlip44Id(TWCoinType(rawValue: rawValue))
     }

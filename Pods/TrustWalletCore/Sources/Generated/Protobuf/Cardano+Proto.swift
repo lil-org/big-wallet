@@ -8,6 +8,7 @@ public typealias CardanoOutPoint = TW_Cardano_Proto_OutPoint
 public typealias CardanoTokenAmount = TW_Cardano_Proto_TokenAmount
 public typealias CardanoTxInput = TW_Cardano_Proto_TxInput
 public typealias CardanoTxOutput = TW_Cardano_Proto_TxOutput
+public typealias CardanoTokenBundle = TW_Cardano_Proto_TokenBundle
 public typealias CardanoTransfer = TW_Cardano_Proto_Transfer
 public typealias CardanoTransactionPlan = TW_Cardano_Proto_TransactionPlan
 public typealias CardanoSigningInput = TW_Cardano_Proto_SigningInput
