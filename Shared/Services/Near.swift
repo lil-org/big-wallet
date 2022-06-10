@@ -138,8 +138,8 @@ class Near {
             if let data = data,
                let result = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["result"] as? [String: Any] {
                 completion(.success(result))
-            } else if retryCount < 10 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(300)) { [weak self] in
+            } else if retryCount < 12 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(500)) { [weak self] in
                     self?.getTransactionResult(hash: hash, account: account, retryCount: retryCount + 1, completion: completion)
                 }
             } else {
