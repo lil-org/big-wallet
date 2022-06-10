@@ -303,6 +303,7 @@ Label</string>
                         </constraints>
                     </view>
                     <connections>
+                        <outlet property="cancelButton" destination="v8H-iO-Xlx" id="esx-8p-B1z"/>
                         <outlet property="okButton" destination="I4B-ul-Hdj" id="5d0-w3-VFH"/>
                         <outlet property="tableView" destination="fJC-Mc-BzB" id="Zf6-wd-F2t"/>
                     </connections>

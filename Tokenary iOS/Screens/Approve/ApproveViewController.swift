@@ -23,16 +23,19 @@ class ApproveViewController: UIViewController {
     private var cellModels = [CellModel]()
     
     private var approveTitle: String!
+    private var subject: ApprovalSubject!
     private var account: Account!
     private var meta: String!
     private var completion: ((Bool) -> Void)!
     private var peerMeta: PeerMeta?
     
     @IBOutlet weak var okButton: UIButton!
+    @IBOutlet weak var cancelButton: UIButton!
     
     static func with(subject: ApprovalSubject, account: Account, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
         let new = instantiate(ApproveViewController.self, from: .main)
         new.completion = completion
+        new.subject = subject
         new.account = account
         new.meta = meta
         new.approveTitle = subject.title
@@ -61,6 +64,7 @@ class ApproveViewController: UIViewController {
     @IBAction func okButtonTapped(_ sender: Any) {
         LocalAuthentication.attempt(reason: approveTitle, presentPasswordAlertFrom: self, passwordReason: approveTitle) { [weak self] success in
             if success {
+                self?.enableWaitingIfNeeded()
                 self?.completion(true)
             }
         }
@@ -68,6 +72,14 @@ class ApproveViewController: UIViewController {
     
     @IBAction func cancelButtonTapped(_ sender: Any) {
         completion(false)
+    }
+    
+    private func enableWaitingIfNeeded() {
+        guard subject == .approveTransaction else { return }
+        okButton.configuration?.showsActivityIndicator = true
+        okButton.configuration?.title = ""
+        okButton.isEnabled = false
+        cancelButton.isEnabled = false
     }
     
 }
