@@ -85,8 +85,9 @@ class Near {
             let output: NEARSigningOutput = AnySigner.sign(input: signingInput, coin: .near)
             let signedTransaction = output.signedTransaction
             let encoded = signedTransaction.base64EncodedString()
-                        
+            let hash = Base58.encodeNoCheck(data: output.hash)
             self?.sendTransaction(encoded,
+                                  hash: hash,
                                   remainingTransactions: Array(remainingTransactions),
                                   receivedResponses: receivedResponses,
                                   account: account,
@@ -96,6 +97,7 @@ class Near {
     }
     
     private func sendTransaction(_ transaction: String,
+                                 hash: String,
                                  remainingTransactions: [[String: Any]],
                                  receivedResponses: [[String: Any]],
                                  account: Account,
