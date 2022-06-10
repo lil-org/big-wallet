@@ -132,6 +132,23 @@ class Near {
         dataTask.resume()
     }
     
+    private func getTransactionResult(hash: String, account: Account, retryCount: Int = 0, completion: @escaping (Result<[String: Any], SendTransactionError>) -> Void) {
+        let request = createRequest(method: "tx", parameters: [hash, account.address])
+        let dataTask = urlSession.dataTask(with: request) { data, _, _ in
+            if let data = data,
+               let result = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["result"] as? [String: Any] {
+                completion(.success(result))
+            } else if retryCount < 10 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(300)) { [weak self] in
+                    self?.getTransactionResult(hash: hash, account: account, retryCount: retryCount + 1, completion: completion)
+                }
+            } else {
+                completion(.failure(.unknown))
+            }
+        }
+        dataTask.resume()
+    }
+    
     private func getNonceAndBlockhash(account: String, retryCount: Int = 0, completion: @escaping (((UInt64, String)?) -> Void)) {
         guard let publicKeyData = Data(hexString: account) else {
             completion(nil)
