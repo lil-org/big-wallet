@@ -107,6 +107,7 @@ class Agent: NSObject {
             if result {
                 self?.askAuthentication(on: windowController.window, onStart: false, reason: subject.asAuthenticationReason) { success in
                     completion(success)
+                    (windowController.contentViewController as? ApproveViewController)?.enableWaiting()
                 }
             } else {
                 completion(result)
