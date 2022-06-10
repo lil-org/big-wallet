@@ -106,13 +106,38 @@ class Near {
         let request = createRequest(method: "broadcast_tx_commit", parameters: [transaction])
         let dataTask = urlSession.dataTask(with: request) { [weak self] data, _, _ in
             guard let data = data,
-                  let response = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let result = response["result"] as? [String: Any] else {
-                // TODO: process errors here
-                // I mean: try to get transaction status in case of Timeout error, or maybe try to send it again. idk though.
+                  let response = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 DispatchQueue.main.async {
                     completion(.failure(.unknown))
                 }
+                return
+            }
+            
+            guard let result = response["result"] as? [String: Any] else {
+                if ((response["error"] as? [String: Any])?["cause"] as? [String: Any])?["name"] as? String == "TIMEOUT_ERROR" {
+                    self?.getTransactionResult(hash: hash, account: account) { result in
+                        switch result {
+                        case .failure:
+                            completion(.failure(.unknown))
+                        case let .success(result):
+                            let responses = receivedResponses + [result]
+                            if remainingTransactions.isEmpty {
+                                completion(.success(responses))
+                            } else {
+                                self?.signAndSendRemainingTransactions(remainingTransactions,
+                                                                       receivedResponses: responses,
+                                                                       account: account,
+                                                                       privateKey: privateKey,
+                                                                       completion: completion)
+                            }
+                        }
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        completion(.failure(.unknown))
+                    }
+                }
+                
                 return
             }
                         
@@ -137,13 +162,17 @@ class Near {
         let dataTask = urlSession.dataTask(with: request) { data, _, _ in
             if let data = data,
                let result = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["result"] as? [String: Any] {
-                completion(.success(result))
+                DispatchQueue.main.async {
+                    completion(.success(result))
+                }
             } else if retryCount < 12 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(500)) { [weak self] in
                     self?.getTransactionResult(hash: hash, account: account, retryCount: retryCount + 1, completion: completion)
                 }
             } else {
-                completion(.failure(.unknown))
+                DispatchQueue.main.async {
+                    completion(.failure(.unknown))
+                }
             }
         }
         dataTask.resume()
