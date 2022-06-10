@@ -157,6 +157,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             presentForSafariRequest(selectAccountViewController.inNavigationController, id: request.id)
         case .approveMessage(let action):
             let approveViewController = ApproveViewController.with(subject: action.subject,
+                                                                   provider: action.provider,
                                                                    account: action.account,
                                                                    meta: action.meta,
                                                                    peerMeta: action.peerMeta,
