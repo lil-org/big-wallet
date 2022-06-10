@@ -198,21 +198,8 @@ final class WalletsManager {
     }
     
     func update(wallet: TokenaryWallet, removeAccounts toRemove: [Account]) throws {
-        guard let password = keychain.password else { throw Error.keychainAccessFailure }
-        
-        let derivationPathsToRemove = toRemove.map { $0.derivationPath }
-        let coinsToRemove = Set(toRemove.map { $0.coin })
-        
-        let accountsToExpicitlyKeep = wallet.accounts.filter { account in
-            return coinsToRemove.contains(account.coin) && !derivationPathsToRemove.contains(account.derivationPath)
-        }
-        
-        for coin in coinsToRemove {
-            wallet.key.removeAccountForCoin(coin: coin)
-        }
-        
-        for account in accountsToExpicitlyKeep {
-            _ = try wallet.getAccount(password: password, coin: account.coin, derivation: account.derivation)
+        for account in toRemove {
+            wallet.key.removeAccountForCoinDerivationPath(coin: account.coin, derivationPath: account.derivationPath)
         }
         
         try save(wallet: wallet, isUpdate: true)
