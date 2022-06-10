@@ -1,4 +1,4 @@
-// Copyright © 2017-2020 Trust Wallet.
+// Copyright © 2017-2022 Trust Wallet.
 //
 // This file is part of Trust. The full Trust copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
@@ -9,28 +9,31 @@
 
 public enum EthereumChainID: UInt32, CaseIterable {
     case ethereum = 1
-    case go = 60
+    case classic = 61
     case poa = 99
+    case vechain = 74
     case callisto = 820
-    case ethereumClassic = 61
-    case veChain = 74
-    case thunderToken = 108
-    case tomoChain = 88
-    case binanceSmartChain = 56
+    case tomochain = 88
     case polygon = 137
-    case wanchain = 888
-    case optimism = 10
-    case arbitrum = 42161
-    case heco = 128
-    case avalanche = 43114
-    case xdai = 100
-    case fantom = 250
+    case thundertoken = 108
+    case gochain = 60
     case celo = 42220
-    case ronin = 2020
+    case wanchain = 888
     case cronos = 25
-    case smartBitcoinCash = 10000
-    case kuCoinCommunityChain = 321
+    case optimism = 10
+    case xdai = 100
+    case smartbch = 10000
+    case fantom = 250
     case boba = 288
+    case kcc = 321
+    case heco = 128
     case metis = 1088
+    case moonbeam = 1284
+    case moonriver = 1285
+    case ronin = 2020
+    case avalanchec = 43114
+    case evmos = 9001
+    case arbitrum = 42161
+    case smartchain = 56
     case aurora = 1313161554
 }

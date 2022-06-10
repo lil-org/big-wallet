@@ -1184,9 +1184,13 @@ DQ
                                     <real value="3.4028234663852886e+38"/>
                                 </customSpacing>
                             </stackView>
+                            <progressIndicator hidden="YES" maxValue="100" displayedWhenStopped="NO" indeterminate="YES" style="spinning" translatesAutoresizingMaskIntoConstraints="NO" id="gop-Xs-5xN">
+                                <rect key="frame" x="109" y="30" width="32" height="32"/>
+                            </progressIndicator>
                         </subviews>
                         <constraints>
                             <constraint firstItem="Ra3-Vm-T8F" firstAttribute="centerX" secondItem="xvx-vV-OZe" secondAttribute="centerX" id="6s2-VI-I5u"/>
+                            <constraint firstItem="Oc8-WJ-ABp" firstAttribute="centerY" secondItem="gop-Xs-5xN" secondAttribute="centerY" id="M7e-4B-aft"/>
                             <constraint firstAttribute="bottom" secondItem="Oc8-WJ-ABp" secondAttribute="bottom" constant="32" id="MEF-zm-wO6"/>
                             <constraint firstItem="Oc8-WJ-ABp" firstAttribute="centerX" secondItem="xvx-vV-OZe" secondAttribute="centerX" id="U7h-QO-Jgc"/>
                             <constraint firstItem="PdV-Nr-oOY" firstAttribute="leading" secondItem="xvx-vV-OZe" secondAttribute="leading" constant="16" id="UnE-yA-lAZ"/>
@@ -1195,15 +1199,18 @@ DQ
                             <constraint firstItem="Ra3-Vm-T8F" firstAttribute="top" secondItem="PdV-Nr-oOY" secondAttribute="bottom" constant="18" id="caG-6Y-meY"/>
                             <constraint firstItem="YGo-wh-cCt" firstAttribute="centerX" secondItem="xvx-vV-OZe" secondAttribute="centerX" id="idI-KT-MRM"/>
                             <constraint firstAttribute="trailing" relation="greaterThanOrEqual" secondItem="YGo-wh-cCt" secondAttribute="trailing" constant="16" id="lh5-yf-zHX"/>
+                            <constraint firstItem="Oc8-WJ-ABp" firstAttribute="centerX" secondItem="gop-Xs-5xN" secondAttribute="centerX" id="tEb-CX-0FZ"/>
                             <constraint firstItem="PdV-Nr-oOY" firstAttribute="top" secondItem="xvx-vV-OZe" secondAttribute="top" constant="46" id="tN4-Nf-2iW"/>
                             <constraint firstItem="YGo-wh-cCt" firstAttribute="top" secondItem="xvx-vV-OZe" secondAttribute="top" constant="16" id="uko-0z-EmA"/>
                         </constraints>
                     </view>
                     <connections>
+                        <outlet property="buttonsStackView" destination="Oc8-WJ-ABp" id="lCM-bE-aIl"/>
                         <outlet property="metaTextView" destination="nek-dW-Y7v" id="tX9-hL-ZQD"/>
                         <outlet property="okButton" destination="xdD-3r-3YP" id="f8Z-et-2Th"/>
                         <outlet property="peerLogoImageView" destination="q4c-q5-CsH" id="ndd-hX-A0S"/>
                         <outlet property="peerNameLabel" destination="LKE-ra-fan" id="rdG-Ew-TzR"/>
+                        <outlet property="progressIndicator" destination="gop-Xs-5xN" id="O3h-SK-jct"/>
                         <outlet property="titleLabel" destination="PdV-Nr-oOY" id="AZx-pJ-I7F"/>
                     </connections>
                 </viewController>

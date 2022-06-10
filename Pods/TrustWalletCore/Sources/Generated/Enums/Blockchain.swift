@@ -1,4 +1,4 @@
-// Copyright © 2017-2020 Trust Wallet.
+// Copyright © 2017-2022 Trust Wallet.
 //
 // This file is part of Trust. The full Trust copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
@@ -41,4 +41,10 @@ public enum Blockchain: UInt32, CaseIterable {
     case filecoin = 32
     case elrondNetwork = 33
     case oasisNetwork = 34
+    case decred = 35
+    case zcash = 36
+    case groestlcoin = 37
+    case thorchain = 38
+    case ronin = 39
+    case kusama = 40
 }

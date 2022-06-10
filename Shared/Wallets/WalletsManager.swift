@@ -64,8 +64,8 @@ final class WalletsManager {
         return wallets.first(where: { $0.id == id })
     }
     
-    func getWallet(address: String) -> TokenaryWallet? {
-        return wallets.first(where: { $0.ethereumAddress?.lowercased() == address.lowercased() })
+    func getWallet(ethereumAddress: String) -> TokenaryWallet? {
+        return wallets.first(where: { $0.ethereumAddress?.lowercased() == ethereumAddress.lowercased() })
     }
     
     func addWallet(input: String, inputPassword: String?) throws -> TokenaryWallet {

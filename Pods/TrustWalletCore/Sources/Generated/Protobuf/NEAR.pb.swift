@@ -140,7 +140,7 @@ public struct TW_NEAR_Proto_FunctionCall {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var methodName: Data = Data()
+  public var methodName: String = String()
 
   public var args: Data = Data()
 
@@ -408,6 +408,8 @@ public struct TW_NEAR_Proto_SigningOutput {
   /// Signed transaction blob
   public var signedTransaction: Data = Data()
 
+  public var hash: Data = Data()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -654,7 +656,7 @@ extension TW_NEAR_Proto_FunctionCall: SwiftProtobuf.Message, SwiftProtobuf._Mess
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularBytesField(value: &self.methodName) }()
+      case 1: try { try decoder.decodeSingularStringField(value: &self.methodName) }()
       case 2: try { try decoder.decodeSingularBytesField(value: &self.args) }()
       case 3: try { try decoder.decodeSingularUInt64Field(value: &self.gas) }()
       case 4: try { try decoder.decodeSingularBytesField(value: &self.deposit) }()
@@ -665,7 +667,7 @@ extension TW_NEAR_Proto_FunctionCall: SwiftProtobuf.Message, SwiftProtobuf._Mess
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.methodName.isEmpty {
-      try visitor.visitSingularBytesField(value: self.methodName, fieldNumber: 1)
+      try visitor.visitSingularStringField(value: self.methodName, fieldNumber: 1)
     }
     if !self.args.isEmpty {
       try visitor.visitSingularBytesField(value: self.args, fieldNumber: 2)
@@ -1113,6 +1115,7 @@ extension TW_NEAR_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mes
   public static let protoMessageName: String = _protobuf_package + ".SigningOutput"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .standard(proto: "signed_transaction"),
+    2: .same(proto: "hash"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1122,6 +1125,7 @@ extension TW_NEAR_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mes
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.signedTransaction) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.hash) }()
       default: break
       }
     }
@@ -1131,11 +1135,15 @@ extension TW_NEAR_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     if !self.signedTransaction.isEmpty {
       try visitor.visitSingularBytesField(value: self.signedTransaction, fieldNumber: 1)
     }
+    if !self.hash.isEmpty {
+      try visitor.visitSingularBytesField(value: self.hash, fieldNumber: 2)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_NEAR_Proto_SigningOutput, rhs: TW_NEAR_Proto_SigningOutput) -> Bool {
     if lhs.signedTransaction != rhs.signedTransaction {return false}
+    if lhs.hash != rhs.hash {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

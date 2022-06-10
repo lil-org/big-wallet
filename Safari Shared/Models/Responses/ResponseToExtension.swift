@@ -5,14 +5,15 @@ import Foundation
 struct ResponseToExtension {
     
     let id: Int
-    let json: [String: AnyHashable]
+    let json: [String: Any]
     
     enum Body {
         case ethereum(Ethereum)
         case solana(Solana)
         case tezos(Tezos)
+        case near(Near)
         
-        var json: [String: AnyHashable] {
+        var json: [String: Any] {
             let data: Data?
             let jsonEncoder = JSONEncoder()
             
@@ -21,11 +22,13 @@ struct ResponseToExtension {
                 data = try? jsonEncoder.encode(body)
             case .solana(let body):
                 data = try? jsonEncoder.encode(body)
+            case .near(let body):
+                data = try? jsonEncoder.encode(body)
             case .tezos(let body):
                 data = try? jsonEncoder.encode(body)
             }
             
-            if let data = data, let dict = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: AnyHashable] {
+            if let data = data, let dict = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
                 return dict
             } else {
                 return [:]
@@ -38,6 +41,8 @@ struct ResponseToExtension {
                 return .ethereum
             case .solana:
                 return .solana
+            case .near:
+                return .near
             case .tezos:
                 return .tezos
             }
@@ -48,7 +53,7 @@ struct ResponseToExtension {
         self.id = request.id
         let provider = (body?.provider ?? request.provider).rawValue
         
-        var json: [String: AnyHashable] = [
+        var json: [String: Any] = [
             "id": request.id,
             "provider": provider,
             "name": request.name

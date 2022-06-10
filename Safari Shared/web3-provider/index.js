@@ -5,12 +5,15 @@
 
 import TokenaryEthereum from "./ethereum";
 import TokenarySolana from "./solana";
+import TokenaryNear from "./near";
 
 window.tokenary = {};
 window.tokenary.postMessage = (name, id, body, provider) => {
     const message = {name: name, id: id, provider: provider, body: body};
     window.postMessage({direction: "from-page-script", message: message}, "*");
 };
+
+// - MARK: Ethereum
 
 window.ethereum = new TokenaryEthereum();
 const ethereumHandler = {
@@ -19,6 +22,10 @@ const ethereumHandler = {
     }
 }
 window.web3 = new Proxy(window.ethereum, ethereumHandler);
+window.metamask = new Proxy(window.ethereum, ethereumHandler);
+window.dispatchEvent(new Event('ethereum#initialized'));
+
+// - MARK: Solana
 
 window.solana = new TokenarySolana();
 const solanaHandler = {
@@ -27,6 +34,20 @@ const solanaHandler = {
     }
 }
 window.phantom = new Proxy(window.solana, solanaHandler);
+window.dispatchEvent(new Event("solana#initialized"));
+
+// - MARK: Near
+
+window.near = new TokenaryNear();
+const nearHandler = {
+    get(target, property) {
+        return window.near;
+    }
+}
+window.sender = new Proxy(window.near, nearHandler);
+window.dispatchEvent(new Event("near#initialized"));
+
+// - MARK: Process content script messages
 
 window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "from-content-script") {
@@ -39,10 +60,14 @@ window.addEventListener("message", function(event) {
             case "solana":
                 window.solana.processTokenaryResponse(id, response);
                 break;
+            case "near":
+                window.near.processTokenaryResponse(id, response);
+                break;
             default:
                 // pass unknown provider message to all providers 
                 window.ethereum.processTokenaryResponse(id, response);
                 window.solana.processTokenaryResponse(id, response);
+                window.near.processTokenaryResponse(id, response);
         }
     }
 });

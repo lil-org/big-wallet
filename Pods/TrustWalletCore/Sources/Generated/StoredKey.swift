@@ -1,4 +1,4 @@
-// Copyright © 2017-2020 Trust Wallet.
+// Copyright © 2017-2022 Trust Wallet.
 //
 // This file is part of Trust. The full Trust copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
@@ -152,8 +152,24 @@ public final class StoredKey {
         return Account(rawValue: value)
     }
 
-    public func removeAccountForCoin(coin: CoinType) -> Void {
-        return TWStoredKeyRemoveAccountForCoin(rawValue, TWCoinType(rawValue: coin.rawValue))
+    public func addAccountDerivation(address: String, coin: CoinType, derivation: Derivation, derivationPath: String, publicKey: String, extendedPublicKey: String) -> Void {
+        let addressString = TWStringCreateWithNSString(address)
+        defer {
+            TWStringDelete(addressString)
+        }
+        let derivationPathString = TWStringCreateWithNSString(derivationPath)
+        defer {
+            TWStringDelete(derivationPathString)
+        }
+        let publicKeyString = TWStringCreateWithNSString(publicKey)
+        defer {
+            TWStringDelete(publicKeyString)
+        }
+        let extendedPublicKeyString = TWStringCreateWithNSString(extendedPublicKey)
+        defer {
+            TWStringDelete(extendedPublicKeyString)
+        }
+        return TWStoredKeyAddAccountDerivation(rawValue, addressString, TWCoinType(rawValue: coin.rawValue), TWDerivation(rawValue: derivation.rawValue), derivationPathString, publicKeyString, extendedPublicKeyString)
     }
 
     public func addAccount(address: String, coin: CoinType, derivationPath: String, publicKey: String, extendedPublicKey: String) -> Void {
@@ -174,6 +190,22 @@ public final class StoredKey {
             TWStringDelete(extendedPublicKeyString)
         }
         return TWStoredKeyAddAccount(rawValue, addressString, TWCoinType(rawValue: coin.rawValue), derivationPathString, publicKeyString, extendedPublicKeyString)
+    }
+
+    public func removeAccountForCoin(coin: CoinType) -> Void {
+        return TWStoredKeyRemoveAccountForCoin(rawValue, TWCoinType(rawValue: coin.rawValue))
+    }
+
+    public func removeAccountForCoinDerivation(coin: CoinType, derivation: Derivation) -> Void {
+        return TWStoredKeyRemoveAccountForCoinDerivation(rawValue, TWCoinType(rawValue: coin.rawValue), TWDerivation(rawValue: derivation.rawValue))
+    }
+
+    public func removeAccountForCoinDerivationPath(coin: CoinType, derivationPath: String) -> Void {
+        let derivationPathString = TWStringCreateWithNSString(derivationPath)
+        defer {
+            TWStringDelete(derivationPathString)
+        }
+        return TWStoredKeyRemoveAccountForCoinDerivationPath(rawValue, TWCoinType(rawValue: coin.rawValue), derivationPathString)
     }
 
     public func store(path: String) -> Bool {

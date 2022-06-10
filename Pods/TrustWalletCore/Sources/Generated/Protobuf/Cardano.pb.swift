@@ -39,6 +39,7 @@ public struct TW_Cardano_Proto_TokenAmount {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// as hex string (28x2 digits)
   public var policyID: String = String()
 
   public var assetName: String = String()
@@ -90,6 +91,22 @@ public struct TW_Cardano_Proto_TxOutput {
   /// ADA amount
   public var amount: UInt64 = 0
 
+  /// optional token amounts
+  public var tokenAmount: [TW_Cardano_Proto_TokenAmount] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Collection of tokens with amount
+public struct TW_Cardano_Proto_TokenBundle {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var token: [TW_Cardano_Proto_TokenAmount] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -106,15 +123,33 @@ public struct TW_Cardano_Proto_Transfer {
   /// Change address
   public var changeAddress: String = String()
 
-  /// ADA amount to transfer
+  /// Requested ADA amount to be transferred. Output can be different only in use_max_amount case.
+  /// Note that Cardano has a minimum amount per UTXO, see TWCardanoMinAdaAmount.
   public var amount: UInt64 = 0
 
-  /// Set if max amount is requested (max possible from UTXOs/fee; amount is disregarded in this case)
+  /// Optional token(s) to be transferred
+  /// Currently only one token type to be transferred per transaction is supported
+  public var tokenAmount: TW_Cardano_Proto_TokenBundle {
+    get {return _tokenAmount ?? TW_Cardano_Proto_TokenBundle()}
+    set {_tokenAmount = newValue}
+  }
+  /// Returns true if `tokenAmount` has been explicitly set.
+  public var hasTokenAmount: Bool {return self._tokenAmount != nil}
+  /// Clears the value of `tokenAmount`. Subsequent reads from it will return its default value.
+  public mutating func clearTokenAmount() {self._tokenAmount = nil}
+
+  /// Request max amount option. If set, tx will send all possible amounts from all inputs, including all tokens; there will be no change; requested amount and token_amount is disregarded in this case.
   public var useMaxAmount: Bool = false
+
+  /// Optional fee overriding. If left to 0, optimal fee will be calculated. If set, exactly this value will be used as fee.
+  /// Use it with care, it may result in underfunded or wasteful fee.
+  public var forceFee: UInt64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _tokenAmount: TW_Cardano_Proto_TokenBundle? = nil
 }
 
 public struct TW_Cardano_Proto_TransactionPlan {
@@ -122,13 +157,26 @@ public struct TW_Cardano_Proto_TransactionPlan {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var amount: UInt64 = 0
-
+  /// total coins in the utxos
   public var availableAmount: UInt64 = 0
 
+  /// coins in the output UTXO
+  public var amount: UInt64 = 0
+
+  /// coin amount deducted as fee
   public var fee: UInt64 = 0
 
+  /// coins in the change UTXO
   public var change: UInt64 = 0
+
+  /// total tokens in the utxos (optional)
+  public var availableTokens: [TW_Cardano_Proto_TokenAmount] = []
+
+  /// tokens in the output (optional)
+  public var outputTokens: [TW_Cardano_Proto_TokenAmount] = []
+
+  /// tokens in the change (optional)
+  public var changeTokens: [TW_Cardano_Proto_TokenAmount] = []
 
   public var utxos: [TW_Cardano_Proto_TxInput] = []
 
@@ -145,39 +193,48 @@ public struct TW_Cardano_Proto_SigningInput {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var utxos: [TW_Cardano_Proto_TxInput] = []
+  public var utxos: [TW_Cardano_Proto_TxInput] {
+    get {return _storage._utxos}
+    set {_uniqueStorage()._utxos = newValue}
+  }
 
   /// Available private keys (double extended keys); every input UTXO adress should be covered
-  public var privateKey: [Data] = []
+  /// In case of Plan only, keys should be present, in correct number
+  public var privateKey: [Data] {
+    get {return _storage._privateKey}
+    set {_uniqueStorage()._privateKey = newValue}
+  }
 
   /// Later this can be made oneof if more message types are supported
   public var transferMessage: TW_Cardano_Proto_Transfer {
-    get {return _transferMessage ?? TW_Cardano_Proto_Transfer()}
-    set {_transferMessage = newValue}
+    get {return _storage._transferMessage ?? TW_Cardano_Proto_Transfer()}
+    set {_uniqueStorage()._transferMessage = newValue}
   }
   /// Returns true if `transferMessage` has been explicitly set.
-  public var hasTransferMessage: Bool {return self._transferMessage != nil}
+  public var hasTransferMessage: Bool {return _storage._transferMessage != nil}
   /// Clears the value of `transferMessage`. Subsequent reads from it will return its default value.
-  public mutating func clearTransferMessage() {self._transferMessage = nil}
+  public mutating func clearTransferMessage() {_uniqueStorage()._transferMessage = nil}
 
-  public var ttl: UInt64 = 0
+  public var ttl: UInt64 {
+    get {return _storage._ttl}
+    set {_uniqueStorage()._ttl = newValue}
+  }
 
   /// Optional plan
   public var plan: TW_Cardano_Proto_TransactionPlan {
-    get {return _plan ?? TW_Cardano_Proto_TransactionPlan()}
-    set {_plan = newValue}
+    get {return _storage._plan ?? TW_Cardano_Proto_TransactionPlan()}
+    set {_uniqueStorage()._plan = newValue}
   }
   /// Returns true if `plan` has been explicitly set.
-  public var hasPlan: Bool {return self._plan != nil}
+  public var hasPlan: Bool {return _storage._plan != nil}
   /// Clears the value of `plan`. Subsequent reads from it will return its default value.
-  public mutating func clearPlan() {self._plan = nil}
+  public mutating func clearPlan() {_uniqueStorage()._plan = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _transferMessage: TW_Cardano_Proto_Transfer? = nil
-  fileprivate var _plan: TW_Cardano_Proto_TransactionPlan? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 /// Transaction signing output
@@ -344,6 +401,7 @@ extension TW_Cardano_Proto_TxOutput: SwiftProtobuf.Message, SwiftProtobuf._Messa
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "address"),
     2: .same(proto: "amount"),
+    3: .standard(proto: "token_amount"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -354,6 +412,7 @@ extension TW_Cardano_Proto_TxOutput: SwiftProtobuf.Message, SwiftProtobuf._Messa
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.address) }()
       case 2: try { try decoder.decodeSingularUInt64Field(value: &self.amount) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.tokenAmount) }()
       default: break
       }
     }
@@ -366,12 +425,48 @@ extension TW_Cardano_Proto_TxOutput: SwiftProtobuf.Message, SwiftProtobuf._Messa
     if self.amount != 0 {
       try visitor.visitSingularUInt64Field(value: self.amount, fieldNumber: 2)
     }
+    if !self.tokenAmount.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.tokenAmount, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Cardano_Proto_TxOutput, rhs: TW_Cardano_Proto_TxOutput) -> Bool {
     if lhs.address != rhs.address {return false}
     if lhs.amount != rhs.amount {return false}
+    if lhs.tokenAmount != rhs.tokenAmount {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cardano_Proto_TokenBundle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TokenBundle"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "token"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.token) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.token.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.token, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cardano_Proto_TokenBundle, rhs: TW_Cardano_Proto_TokenBundle) -> Bool {
+    if lhs.token != rhs.token {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -383,7 +478,9 @@ extension TW_Cardano_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf._Messa
     1: .standard(proto: "to_address"),
     2: .standard(proto: "change_address"),
     3: .same(proto: "amount"),
-    4: .standard(proto: "use_max_amount"),
+    4: .standard(proto: "token_amount"),
+    5: .standard(proto: "use_max_amount"),
+    6: .standard(proto: "force_fee"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -395,13 +492,19 @@ extension TW_Cardano_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf._Messa
       case 1: try { try decoder.decodeSingularStringField(value: &self.toAddress) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.changeAddress) }()
       case 3: try { try decoder.decodeSingularUInt64Field(value: &self.amount) }()
-      case 4: try { try decoder.decodeSingularBoolField(value: &self.useMaxAmount) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._tokenAmount) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.useMaxAmount) }()
+      case 6: try { try decoder.decodeSingularUInt64Field(value: &self.forceFee) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.toAddress.isEmpty {
       try visitor.visitSingularStringField(value: self.toAddress, fieldNumber: 1)
     }
@@ -411,8 +514,14 @@ extension TW_Cardano_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf._Messa
     if self.amount != 0 {
       try visitor.visitSingularUInt64Field(value: self.amount, fieldNumber: 3)
     }
+    try { if let v = self._tokenAmount {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
     if self.useMaxAmount != false {
-      try visitor.visitSingularBoolField(value: self.useMaxAmount, fieldNumber: 4)
+      try visitor.visitSingularBoolField(value: self.useMaxAmount, fieldNumber: 5)
+    }
+    if self.forceFee != 0 {
+      try visitor.visitSingularUInt64Field(value: self.forceFee, fieldNumber: 6)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -421,7 +530,9 @@ extension TW_Cardano_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf._Messa
     if lhs.toAddress != rhs.toAddress {return false}
     if lhs.changeAddress != rhs.changeAddress {return false}
     if lhs.amount != rhs.amount {return false}
+    if lhs._tokenAmount != rhs._tokenAmount {return false}
     if lhs.useMaxAmount != rhs.useMaxAmount {return false}
+    if lhs.forceFee != rhs.forceFee {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -430,12 +541,15 @@ extension TW_Cardano_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf._Messa
 extension TW_Cardano_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TransactionPlan"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "amount"),
-    2: .standard(proto: "available_amount"),
+    1: .standard(proto: "available_amount"),
+    2: .same(proto: "amount"),
     3: .same(proto: "fee"),
     4: .same(proto: "change"),
-    5: .same(proto: "utxos"),
-    6: .same(proto: "error"),
+    5: .standard(proto: "available_tokens"),
+    6: .standard(proto: "output_tokens"),
+    7: .standard(proto: "change_tokens"),
+    8: .same(proto: "utxos"),
+    9: .same(proto: "error"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -444,23 +558,26 @@ extension TW_Cardano_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.amount) }()
-      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.availableAmount) }()
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.availableAmount) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.amount) }()
       case 3: try { try decoder.decodeSingularUInt64Field(value: &self.fee) }()
       case 4: try { try decoder.decodeSingularUInt64Field(value: &self.change) }()
-      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.utxos) }()
-      case 6: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.availableTokens) }()
+      case 6: try { try decoder.decodeRepeatedMessageField(value: &self.outputTokens) }()
+      case 7: try { try decoder.decodeRepeatedMessageField(value: &self.changeTokens) }()
+      case 8: try { try decoder.decodeRepeatedMessageField(value: &self.utxos) }()
+      case 9: try { try decoder.decodeSingularEnumField(value: &self.error) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.amount != 0 {
-      try visitor.visitSingularUInt64Field(value: self.amount, fieldNumber: 1)
-    }
     if self.availableAmount != 0 {
-      try visitor.visitSingularUInt64Field(value: self.availableAmount, fieldNumber: 2)
+      try visitor.visitSingularUInt64Field(value: self.availableAmount, fieldNumber: 1)
+    }
+    if self.amount != 0 {
+      try visitor.visitSingularUInt64Field(value: self.amount, fieldNumber: 2)
     }
     if self.fee != 0 {
       try visitor.visitSingularUInt64Field(value: self.fee, fieldNumber: 3)
@@ -468,20 +585,32 @@ extension TW_Cardano_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf
     if self.change != 0 {
       try visitor.visitSingularUInt64Field(value: self.change, fieldNumber: 4)
     }
+    if !self.availableTokens.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.availableTokens, fieldNumber: 5)
+    }
+    if !self.outputTokens.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.outputTokens, fieldNumber: 6)
+    }
+    if !self.changeTokens.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.changeTokens, fieldNumber: 7)
+    }
     if !self.utxos.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.utxos, fieldNumber: 5)
+      try visitor.visitRepeatedMessageField(value: self.utxos, fieldNumber: 8)
     }
     if self.error != .ok {
-      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 6)
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 9)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Cardano_Proto_TransactionPlan, rhs: TW_Cardano_Proto_TransactionPlan) -> Bool {
-    if lhs.amount != rhs.amount {return false}
     if lhs.availableAmount != rhs.availableAmount {return false}
+    if lhs.amount != rhs.amount {return false}
     if lhs.fee != rhs.fee {return false}
     if lhs.change != rhs.change {return false}
+    if lhs.availableTokens != rhs.availableTokens {return false}
+    if lhs.outputTokens != rhs.outputTokens {return false}
+    if lhs.changeTokens != rhs.changeTokens {return false}
     if lhs.utxos != rhs.utxos {return false}
     if lhs.error != rhs.error {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -499,51 +628,91 @@ extension TW_Cardano_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
     5: .same(proto: "plan"),
   ]
 
+  fileprivate class _StorageClass {
+    var _utxos: [TW_Cardano_Proto_TxInput] = []
+    var _privateKey: [Data] = []
+    var _transferMessage: TW_Cardano_Proto_Transfer? = nil
+    var _ttl: UInt64 = 0
+    var _plan: TW_Cardano_Proto_TransactionPlan? = nil
+
+    static let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _utxos = source._utxos
+      _privateKey = source._privateKey
+      _transferMessage = source._transferMessage
+      _ttl = source._ttl
+      _plan = source._plan
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.utxos) }()
-      case 2: try { try decoder.decodeRepeatedBytesField(value: &self.privateKey) }()
-      case 3: try { try decoder.decodeSingularMessageField(value: &self._transferMessage) }()
-      case 4: try { try decoder.decodeSingularUInt64Field(value: &self.ttl) }()
-      case 5: try { try decoder.decodeSingularMessageField(value: &self._plan) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeRepeatedMessageField(value: &_storage._utxos) }()
+        case 2: try { try decoder.decodeRepeatedBytesField(value: &_storage._privateKey) }()
+        case 3: try { try decoder.decodeSingularMessageField(value: &_storage._transferMessage) }()
+        case 4: try { try decoder.decodeSingularUInt64Field(value: &_storage._ttl) }()
+        case 5: try { try decoder.decodeSingularMessageField(value: &_storage._plan) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.utxos.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.utxos, fieldNumber: 1)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if !_storage._utxos.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._utxos, fieldNumber: 1)
+      }
+      if !_storage._privateKey.isEmpty {
+        try visitor.visitRepeatedBytesField(value: _storage._privateKey, fieldNumber: 2)
+      }
+      try { if let v = _storage._transferMessage {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+      } }()
+      if _storage._ttl != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._ttl, fieldNumber: 4)
+      }
+      try { if let v = _storage._plan {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+      } }()
     }
-    if !self.privateKey.isEmpty {
-      try visitor.visitRepeatedBytesField(value: self.privateKey, fieldNumber: 2)
-    }
-    try { if let v = self._transferMessage {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-    } }()
-    if self.ttl != 0 {
-      try visitor.visitSingularUInt64Field(value: self.ttl, fieldNumber: 4)
-    }
-    try { if let v = self._plan {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Cardano_Proto_SigningInput, rhs: TW_Cardano_Proto_SigningInput) -> Bool {
-    if lhs.utxos != rhs.utxos {return false}
-    if lhs.privateKey != rhs.privateKey {return false}
-    if lhs._transferMessage != rhs._transferMessage {return false}
-    if lhs.ttl != rhs.ttl {return false}
-    if lhs._plan != rhs._plan {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._utxos != rhs_storage._utxos {return false}
+        if _storage._privateKey != rhs_storage._privateKey {return false}
+        if _storage._transferMessage != rhs_storage._transferMessage {return false}
+        if _storage._ttl != rhs_storage._ttl {return false}
+        if _storage._plan != rhs_storage._plan {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

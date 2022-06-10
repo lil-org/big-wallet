@@ -68,7 +68,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         }
     }
     
-    private func respond(with response: [String: AnyHashable]) {
+    private func respond(with response: [String: Any]) {
         let item = NSExtensionItem()
         item.userInfo = [SFExtensionMessageKey: response]
         context?.completeRequest(returningItems: [item], completionHandler: nil)
