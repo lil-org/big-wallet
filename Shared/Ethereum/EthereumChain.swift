@@ -4,6 +4,7 @@ import Foundation
 
 enum EthereumChain: Int {
     case ethereum = 1
+    case candle = 534
     case arbitrum = 42161
     case polygon = 137
     case optimism = 10
@@ -11,7 +12,7 @@ enum EthereumChain: Int {
     case avalanche = 43114
     case gnosisChain = 100
     case fantomOpera = 250
-    
+
     // Testnets
     case arbitrumRinkeby = 421611
     case arbitrumKovan = 144545313136048
@@ -25,21 +26,22 @@ enum EthereumChain: Int {
     case avalancheFuji = 43113
     case fantomTestnet = 4002
     case neonDevnet = 245022926
-    
+
     var id: Int {
         return rawValue
     }
-    
+
     var hexStringId: String {
         return "0x" + String(id, radix: 16, uppercase: false)
     }
-    
-    static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum, .avalanche, .gnosisChain, .fantomOpera]
+
+    static let allMainnets: [EthereumChain] = [.ethereum, .candle, .polygon, .optimism, .binance, .arbitrum, .avalanche, .gnosisChain, .fantomOpera]
     static let allTestnets: [EthereumChain] = [.ethereumRopsten, .ethereumKovan, .ethereumRinkeby, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji, .fantomTestnet]
-    
+
     var name: String {
         switch self {
         case .ethereum: return "Ethereum"
+        case .candle: return "Candle"
         case .arbitrum: return "Arbitrum"
         case .optimism: return "Optimism"
         case .polygon: return "Polygon"
@@ -47,7 +49,7 @@ enum EthereumChain: Int {
         case .avalanche: return "Avalanche"
         case .gnosisChain: return "Gnosis Chain"
         case .fantomOpera: return "Fantom Opera"
-            
+
         case .arbitrumRinkeby: return "Arbitrum Rinkeby"
         case .optimisticKovan: return "Optimistic Kovan"
         case .ethereumGoerli: return "Ethereum Görli"
@@ -62,13 +64,15 @@ enum EthereumChain: Int {
         case .neonDevnet: return "Neon Devnet"
         }
     }
-    
+
     var symbol: String {
         switch self {
         case .binance, .binanceTestnet:
             return "BNB"
         case .polygon, .polygonMumbai:
             return "MATIC"
+        case .candle:
+            return "CNDL"
         case .arbitrum, .arbitrumKovan, .arbitrumRinkeby, .ethereum, .ethereumGoerli, .ethereumKovan, .ethereumRinkeby, .optimism, .optimisticKovan, .ethereumRopsten:
             return "ETH"
         case .avalanche, .avalancheFuji:
@@ -81,11 +85,11 @@ enum EthereumChain: Int {
             return "NEON"
         }
     }
-    
+
     var symbolIsETH: Bool {
         return symbol == "ETH"
     }
-    
+
     var hasUSDPrice: Bool {
         switch self {
         case .ethereum, .optimism:
@@ -94,10 +98,11 @@ enum EthereumChain: Int {
             return false
         }
     }
-    
+
     var nodeURLString: String {
         switch self {
         case .ethereum: return "https://mainnet.infura.io/v3/" + Secrets.infura
+        case .candle: return "https://rpc.cndlchain.com/"
         case .arbitrum: return "https://arbitrum-mainnet.infura.io/v3/" + Secrets.infura
         case .optimism: return "https://optimism-mainnet.infura.io/v3/" + Secrets.infura
         case .polygon: return "https://polygon-mainnet.infura.io/v3/" + Secrets.infura
@@ -105,7 +110,7 @@ enum EthereumChain: Int {
         case .avalanche: return "https://api.avax.network/ext/bc/C/rpc"
         case .gnosisChain: return "https://rpc.gnosischain.com/"
         case .fantomOpera: return "https://rpc.ftm.tools/"
-            
+
         case .arbitrumRinkeby: return "https://rinkeby.arbitrum.io/rpc"
         case .arbitrumKovan: return "https://kovan5.arbitrum.io/rpc"
         case .optimisticKovan: return "https://kovan.optimism.io"
@@ -120,5 +125,5 @@ enum EthereumChain: Int {
         case .neonDevnet: return "https://proxy.devnet.neonlabs.org/solana"
         }
     }
-    
+
 }
