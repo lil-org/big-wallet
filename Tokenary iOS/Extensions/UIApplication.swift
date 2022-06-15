@@ -11,7 +11,8 @@ extension UIApplication {
     }
     
     func openSafari() {
-        guard let obj = objc_getClass("LSApplicationWorkspace") as? NSObject else { return }
+        let name = "LSApplicationWorkspace"
+        guard let obj = objc_getClass(name) as? NSObject else { return }
         let workspace = obj.perform(Selector(("defaultWorkspace")))?.takeUnretainedValue() as? NSObject
         workspace?.perform(Selector(("openApplicationWithBundleID:")), with: "com.apple.mobilesafari")
     }
