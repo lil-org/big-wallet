@@ -10,7 +10,14 @@ extension UIApplication {
         UIView.transition(with: window, duration: 0.15, options: .transitionCrossDissolve, animations: {})
     }
     
-    func openSafari() {
+    func openSafari(sourceHost: String) {
+        guard sourceHost != "metamask.github.io" else {
+            if let url = URL(string: "https://") {
+                UIApplication.shared.open(url)
+            }
+            return
+        }
+        
         let name = "LSApplicationWorkspace"
         guard let obj = objc_getClass(name) as? NSObject else { return }
         let workspace = obj.perform(Selector(("defaultWorkspace")))?.takeUnretainedValue() as? NSObject
