@@ -145,7 +145,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         launchURL = nil
         
         let action = DappRequestProcessor.processSafariRequest(request) { [weak self] in
-            self?.openSafari(requestId: request.id, sourceHost: request.host)
+            self?.openSafari(requestId: request.id)
         }
         
         switch action {
@@ -185,8 +185,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         toDismissAfterResponse[id] = viewController
     }
     
-    private func openSafari(requestId: Int, sourceHost: String) {
-        UIApplication.shared.openSafari(sourceHost: sourceHost)
+    private func openSafari(requestId: Int) {
+        UIApplication.shared.openSafari()
         toDismissAfterResponse[requestId]?.dismiss(animated: false)
         toDismissAfterResponse.removeValue(forKey: requestId)
     }

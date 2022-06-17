@@ -10,18 +10,26 @@ extension UIApplication {
         UIView.transition(with: window, duration: 0.15, options: .transitionCrossDissolve, animations: {})
     }
     
-    func openSafari(sourceHost: String) {
-        guard sourceHost != "metamask.github.io" else {
-            if let url = URL(string: "https://") {
-                UIApplication.shared.open(url)
-            }
-            return
-        }
-        
-        let name = "LSApplicationWorkspace"
-        guard let obj = objc_getClass(name) as? NSObject else { return }
-        let workspace = obj.perform(Selector(("defaultWorkspace")))?.takeUnretainedValue() as? NSObject
-        workspace?.perform(Selector(("openApplicationWithBundleID:")), with: "com.apple.mobilesafari")
+    func openSafari() {
+        _ = jumpBackToPreviousApp()
     }
     
+    private func jumpBackToPreviousApp() -> Bool {
+        guard
+            let sysNavIvar = class_getInstanceVariable(UIApplication.self, "_systemNavigationAction"),
+            let action = object_getIvar(UIApplication.shared, sysNavIvar) as? NSObject,
+            let destinations = action.perform(#selector(getter: PrivateSelectors.destinations)).takeUnretainedValue() as? [NSNumber],
+            let firstDestination = destinations.first
+        else {
+            return false
+        }
+        action.perform(#selector(PrivateSelectors.sendResponseForDestination), with: firstDestination)
+        return true
+    }
+    
+}
+
+@objc private protocol PrivateSelectors: NSObjectProtocol {
+    var destinations: [NSNumber] { get }
+    func sendResponseForDestination(_ destination: NSNumber)
 }
