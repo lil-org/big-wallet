@@ -11,10 +11,25 @@ extension UIApplication {
     }
     
     func openSafari() {
-        let name = "LSApplicationWorkspace"
-        guard let obj = objc_getClass(name) as? NSObject else { return }
-        let workspace = obj.perform(Selector(("defaultWorkspace")))?.takeUnretainedValue() as? NSObject
-        workspace?.perform(Selector(("openApplicationWithBundleID:")), with: "com.apple.mobilesafari")
+        _ = jumpBackToPreviousApp()
     }
     
+    private func jumpBackToPreviousApp() -> Bool {
+        guard
+            let sysNavIvar = class_getInstanceVariable(UIApplication.self, "_systemNavigationAction"),
+            let action = object_getIvar(UIApplication.shared, sysNavIvar) as? NSObject,
+            let destinations = action.perform(#selector(getter: PrivateSelectors.destinations)).takeUnretainedValue() as? [NSNumber],
+            let firstDestination = destinations.first
+        else {
+            return false
+        }
+        action.perform(#selector(PrivateSelectors.sendResponseForDestination), with: firstDestination)
+        return true
+    }
+    
+}
+
+@objc private protocol PrivateSelectors: NSObjectProtocol {
+    var destinations: [NSNumber] { get }
+    func sendResponseForDestination(_ destination: NSNumber)
 }
