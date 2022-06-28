@@ -16,35 +16,20 @@ window.tokenary.postMessage = (name, id, body, provider) => {
 // - MARK: Ethereum
 
 window.ethereum = new TokenaryEthereum();
-const ethereumHandler = {
-    get(target, property) {
-        return window.ethereum;
-    }
-}
-window.web3 = new Proxy(window.ethereum, ethereumHandler);
-window.metamask = new Proxy(window.ethereum, ethereumHandler);
+window.web3 = {currentProvider: window.ethereum};
+window.metamask = window.ethereum;
 window.dispatchEvent(new Event('ethereum#initialized'));
 
 // - MARK: Solana
 
 window.solana = new TokenarySolana();
-const solanaHandler = {
-    get(target, property) {
-        return window.solana;
-    }
-}
-window.phantom = new Proxy(window.solana, solanaHandler);
+window.phantom = window.solana;
 window.dispatchEvent(new Event("solana#initialized"));
 
 // - MARK: Near
 
 window.near = new TokenaryNear();
-const nearHandler = {
-    get(target, property) {
-        return window.near;
-    }
-}
-window.sender = new Proxy(window.near, nearHandler);
+window.sender = window.near;
 window.dispatchEvent(new Event("near#initialized"));
 
 // - MARK: Process content script messages
