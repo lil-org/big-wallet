@@ -202,6 +202,7 @@ class TokenaryEthereum extends EventEmitter {
                 case "eth_requestAccounts":
                 case "wallet_addEthereumChain":
                 case "wallet_switchEthereumChain":
+                case "wallet_requestPermissions":
                     return this._processPayload(payload);
                 case "eth_newFilter":
                 case "eth_newBlockFilter":
@@ -260,6 +261,9 @@ class TokenaryEthereum extends EventEmitter {
                 return this.wallet_addEthereumChain(payload);
             case "wallet_switchEthereumChain":
                 return this.wallet_switchEthereumChain(payload);
+            case "wallet_requestPermissions":
+                const permissions = [{"parentCapability": "eth_accounts"}];
+                return this.sendResponse(payload.id, permissions);
         }
     }
     
