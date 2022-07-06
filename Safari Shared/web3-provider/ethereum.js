@@ -33,13 +33,19 @@ class TokenaryEthereum extends EventEmitter {
         this._isUnlocked = true;
         this.isTokenary = true;
         this.emitConnect(config.chainId);
+        this.didEmitConnectAfterSubscription = false;
         this.didGetLatestConfiguration = false;
         this.pendingPayloads = [];
         
         const originalOn = this.on;
         this.on = (...args) => {
             if (args[0] == "connect") {
-                setTimeout( function() { window.ethereum.emitConnect(window.ethereum.chainId); }, 1);
+                setTimeout( function() {
+                    if (!window.ethereum.didEmitConnectAfterSubscription) {
+                        window.ethereum.emitConnect(window.ethereum.chainId);
+                        window.ethereum.didEmitConnectAfterSubscription = true;
+                    }
+                }, 1);
             }
             return originalOn.apply(this, args);
         };
