@@ -39,7 +39,7 @@ class TokenaryEthereum extends EventEmitter {
         const originalOn = this.on;
         this.on = (...args) => {
             if (args[0] == "connect") {
-                setTimeout( function() { window.ethereum.emitConnect(config.chainId); }, 1);
+                setTimeout( function() { window.ethereum.emitConnect(window.ethereum.chainId); }, 1);
             }
             return originalOn.apply(this, args);
         };
