@@ -31,6 +31,7 @@ public enum EthereumChainID: UInt32, CaseIterable {
     case moonbeam = 1284
     case moonriver = 1285
     case ronin = 2020
+    case klaytn = 8217
     case avalanchec = 43114
     case evmos = 9001
     case arbitrum = 42161
