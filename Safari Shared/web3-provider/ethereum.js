@@ -327,6 +327,8 @@ class TokenaryEthereum extends EventEmitter {
     wallet_switchEthereumChain(payload) {
         if (this.chainId != payload.params[0].chainId) {
             this.postMessage("switchEthereumChain", payload.id, payload.params[0]);
+        } else {
+            this.sendResponse(payload.id, [this.address]);
         }
     }
     
