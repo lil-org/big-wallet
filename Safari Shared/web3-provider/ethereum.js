@@ -11,6 +11,15 @@ import { EventEmitter } from "events";
 import isUtf8 from "isutf8";
 
 class TokenaryEthereum extends EventEmitter {
+    
+    _metamask = {
+        isUnlocked: () => {
+            return new Promise((resolve) => {
+                resolve(true);
+            });
+        },
+    };
+    
     constructor() {
         super();
         const config = {address: "", chainId: "0x1", rpcUrl: "https://mainnet.infura.io/v3/3f99b6096fda424bbb26e17866dcddfc"};
@@ -19,7 +28,9 @@ class TokenaryEthereum extends EventEmitter {
         this.callbacks = new Map();
         this.wrapResults = new Map();
         this.isMetaMask = true;
-        this._metamask = true;
+        this._isConnected = true;
+        this._initialized = true;
+        this._isUnlocked = true;
         this.isTokenary = true;
         this.emitConnect(config.chainId);
         this.didGetLatestConfiguration = false;
@@ -32,6 +43,8 @@ class TokenaryEthereum extends EventEmitter {
             }
             return originalOn.apply(this, args);
         };
+        
+        setTimeout( function() { window.ethereum.emit("_initialized"); }, 1);
     }
     
     setAddress(address) {
@@ -54,6 +67,7 @@ class TokenaryEthereum extends EventEmitter {
         
         if (window.ethereum.chainId != chainId) {
             window.ethereum.chainId = chainId;
+            window.ethereum.networkVersion = this.net_version();
             if (eventName != "didLoadLatestConfiguration") {
                 window.ethereum.emit("chainChanged", chainId);
                 window.ethereum.emit("networkChanged", window.ethereum.net_version());
@@ -65,6 +79,7 @@ class TokenaryEthereum extends EventEmitter {
         this.chainId = config.chainId;
         this.rpc = new RPCServer(config.rpcUrl);
         this.setAddress(config.address);
+        this.networkVersion = this.net_version();
     }
     
     request(payload) {
