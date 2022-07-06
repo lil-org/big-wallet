@@ -117,7 +117,7 @@ class TokenaryEthereum extends EventEmitter {
     /**
      * @deprecated Use request() method instead.
      */
-    send(payload) {
+    send(payload, callback) {
         var that = this;
         if (!(this instanceof TokenaryEthereum)) {
             that = window.ethereum;
@@ -128,16 +128,22 @@ class TokenaryEthereum extends EventEmitter {
         } else {
             requestPayload.method = payload;
         }
+        
+        if (typeof payload.params !== "undefined") {
+            requestPayload.params = payload.params;
+        }
 
-        return that._request(requestPayload, false);
+        if (typeof callback !== "undefined") {
+            that.sendAsync(requestPayload, callback);
+        } else {
+            return that._request(requestPayload, false);
+        }
     }
     
     /**
      * @deprecated Use request() method instead.
      */
     sendAsync(payload, callback) {
-        console.log("sendAsync(data, callback) is deprecated, please use window.ethereum.request(data) instead.");
-        // this points to window in methods like web3.eth.getAccounts()
         var that = this;
         if (!(this instanceof TokenaryEthereum)) {
             that = window.ethereum;
