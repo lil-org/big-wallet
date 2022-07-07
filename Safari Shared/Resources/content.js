@@ -1,6 +1,8 @@
 // Copyright © 2022 Tokenary. All rights reserved.
 
-const pendingRequestsIds = new Set();
+if (!("pendingRequestsIds" in document)) {
+    document.pendingRequestsIds = new Set();
+}
 
 function injectScript() {
     try {
@@ -107,8 +109,8 @@ function storeConfigurationIfNeeded(request) {
 }
 
 function sendToInpage(response, id) {
-    if (pendingRequestsIds.has(id)) {
-        pendingRequestsIds.delete(id);
+    if (document.pendingRequestsIds.has(id)) {
+        document.pendingRequestsIds.delete(id);
         window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
         storeConfigurationIfNeeded(response);
     }
@@ -117,7 +119,7 @@ function sendToInpage(response, id) {
 function sendMessageToNativeApp(message) {
     message.favicon = getFavicon();
     message.host = window.location.host;
-    pendingRequestsIds.add(message.id);
+    document.pendingRequestsIds.add(message.id);
     browser.runtime.sendMessage({ subject: "message-to-wallet", message: message }).then((response) => {
         sendToInpage(response, message.id);
     });

@@ -35,7 +35,7 @@ enum EthereumChain: Int {
     }
     
     static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum, .avalanche, .gnosisChain, .fantomOpera]
-    static let allTestnets: [EthereumChain] = [.ethereumRopsten, .ethereumKovan, .ethereumRinkeby, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji, .fantomTestnet]
+    static let allTestnets: [EthereumChain] = [.ethereumRopsten, .ethereumKovan, .ethereumRinkeby, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji, .fantomTestnet, .neonDevnet]
     
     var name: String {
         switch self {
