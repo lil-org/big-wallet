@@ -89,7 +89,6 @@ class TokenaryEthereum extends EventEmitter {
     }
     
     request(payload) {
-        // this points to window in methods like web3.eth.getAccounts()
         var that = this;
         if (!(this instanceof TokenaryEthereum)) {
             that = window.ethereum;
@@ -97,9 +96,6 @@ class TokenaryEthereum extends EventEmitter {
         return that._request(payload, false);
     }
     
-    /**
-     * @deprecated Listen to "connect" event instead.
-     */
     isConnected() {
         return true;
     }
@@ -108,9 +104,6 @@ class TokenaryEthereum extends EventEmitter {
         return Promise.resolve(true);
     }
     
-    /**
-     * @deprecated Use request({method: "eth_requestAccounts"}) instead.
-     */
     enable() {
         console.log('enable() is deprecated, please use window.ethereum.request({method: "eth_requestAccounts"}) instead.');
         if (!window.ethereum.address) { // avoid double accounts request in uniswap
@@ -120,9 +113,6 @@ class TokenaryEthereum extends EventEmitter {
         }
     }
     
-    /**
-     * @deprecated Use request() method instead.
-     */
     send(payload, callback) {
         var that = this;
         if (!(this instanceof TokenaryEthereum)) {
@@ -146,9 +136,6 @@ class TokenaryEthereum extends EventEmitter {
         }
     }
     
-    /**
-     * @deprecated Use request() method instead.
-     */
     sendAsync(payload, callback) {
         var that = this;
         if (!(this instanceof TokenaryEthereum)) {
@@ -166,9 +153,6 @@ class TokenaryEthereum extends EventEmitter {
         }
     }
     
-    /**
-     * @private Internal rpc handler
-     */
     _request(payload, wrapResult = true) {
         this.idMapping.tryIntifyId(payload);
         return new Promise((resolve, reject) => {
@@ -303,7 +287,6 @@ class TokenaryEthereum extends EventEmitter {
         const message = payload.params[0];
         const buffer = Utils.messageToBuffer(message);
         if (buffer.length === 0) {
-            // hex it
             const hex = Utils.bufferToHex(message);
             this.postMessage("signPersonalMessage", payload.id, { data: hex });
         } else {
@@ -388,9 +371,6 @@ class TokenaryEthereum extends EventEmitter {
         }
     }
     
-    /**
-     * @private Internal js -> native message handler
-     */
     postMessage(handler, id, data) {
         if (this.ready || handler === "requestAccounts") {
             let object = {
@@ -400,14 +380,10 @@ class TokenaryEthereum extends EventEmitter {
             };
             window.tokenary.postMessage(handler, id, object, "ethereum");
         } else {
-            // don't forget to verify in the app
             this.sendError(id, new ProviderRpcError(4100, "provider is not ready"));
         }
     }
     
-    /**
-     * @private Internal native result -> js
-     */
     sendResponse(id, result) {
         let originId = this.idMapping.tryPopId(id) || id;
         let callback = this.callbacks.get(id);
@@ -426,9 +402,6 @@ class TokenaryEthereum extends EventEmitter {
         }
     }
     
-    /**
-     * @private Internal native error -> js
-     */
     sendError(id, error) {
         console.log(`<== ${id} sendError ${error}`);
         let callback = this.callbacks.get(id);
