@@ -1575,7 +1575,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Safari macOS/Safari.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 52;
+				CURRENT_PROJECT_VERSION = 53;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1588,7 +1588,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 11.4;
-				MARKETING_VERSION = 2.0.9;
+				MARKETING_VERSION = 2.0.10;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -1609,7 +1609,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Safari macOS/Safari.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 52;
+				CURRENT_PROJECT_VERSION = 53;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1622,7 +1622,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 11.4;
-				MARKETING_VERSION = 2.0.9;
+				MARKETING_VERSION = 2.0.10;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -1762,7 +1762,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 52;
+				CURRENT_PROJECT_VERSION = 53;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "$(SRCROOT)/Tokenary macOS/Supporting Files/Info.plist";
@@ -1771,7 +1771,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 11.4;
-				MARKETING_VERSION = 2.0.9;
+				MARKETING_VERSION = 2.0.10;
 				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1790,7 +1790,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 52;
+				CURRENT_PROJECT_VERSION = 53;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "$(SRCROOT)/Tokenary macOS/Supporting Files/Info.plist";
@@ -1799,7 +1799,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 11.4;
-				MARKETING_VERSION = 2.0.9;
+				MARKETING_VERSION = 2.0.10;
 				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1816,7 +1816,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Tokenary iOS/Tokenary iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 52;
+				CURRENT_PROJECT_VERSION = 53;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				INFOPLIST_FILE = "Tokenary iOS/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -1824,7 +1824,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.0.9;
+				MARKETING_VERSION = 2.0.10;
 				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -1842,7 +1842,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Tokenary iOS/Tokenary iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 52;
+				CURRENT_PROJECT_VERSION = 53;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				INFOPLIST_FILE = "Tokenary iOS/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -1850,7 +1850,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.0.9;
+				MARKETING_VERSION = 2.0.10;
 				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -1865,12 +1865,12 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 52;
+				CURRENT_PROJECT_VERSION = 53;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				INFOPLIST_FILE = Screensaver/Info.plist;
 				INSTALL_PATH = "$(HOME)/Library/Screen Savers";
 				MACOSX_DEPLOYMENT_TARGET = 11.4;
-				MARKETING_VERSION = 2.0.9;
+				MARKETING_VERSION = 2.0.10;
 				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io.Screensaver;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				WRAPPER_EXTENSION = saver;
@@ -1882,12 +1882,12 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 52;
+				CURRENT_PROJECT_VERSION = 53;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				INFOPLIST_FILE = Screensaver/Info.plist;
 				INSTALL_PATH = "$(HOME)/Library/Screen Savers";
 				MACOSX_DEPLOYMENT_TARGET = 11.4;
-				MARKETING_VERSION = 2.0.9;
+				MARKETING_VERSION = 2.0.10;
 				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io.Screensaver;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				WRAPPER_EXTENSION = saver;
@@ -1900,7 +1900,7 @@
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
 				CODE_SIGN_ENTITLEMENTS = "Safari iOS/Safari iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 52;
+				CURRENT_PROJECT_VERSION = 53;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari iOS/Info.plist";
@@ -1912,7 +1912,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.9;
+				MARKETING_VERSION = 2.0.10;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -1934,7 +1934,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Safari iOS/Safari iOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 52;
+				CURRENT_PROJECT_VERSION = 53;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari iOS/Info.plist";
@@ -1946,7 +1946,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.9;
+				MARKETING_VERSION = 2.0.10;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
