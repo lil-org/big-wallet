@@ -5,8 +5,39 @@
 import Utils from "./utils";
 import IdMapping from "./id_mapping";
 import { EventEmitter } from "events";
-import { PublicKey, Transaction } from "@solana/web3.js";
 import bs58 from "bs58";
+
+class PublicKey {
+    
+    constructor(value) {
+        this.stringValue = value;
+    }
+    
+    equals(publicKey) {
+        return this.stringValue == publicKey.toString();
+    }
+    
+    toBase58() {
+        return this.stringValue;
+    }
+    
+    toJSON() {
+        return this.stringValue;
+    }
+    
+    toBytes() {
+        return this.toBuffer();
+    }
+    
+    toBuffer() {
+        return bs58.decode(this.stringValue);
+    }
+    
+    toString() {
+        return this.stringValue;
+    }
+    
+}
 
 class TokenarySolana extends EventEmitter {
     

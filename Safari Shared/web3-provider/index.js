@@ -23,7 +23,7 @@ window.dispatchEvent(new Event('ethereum#initialized'));
 // - MARK: Solana
 
 window.solana = new TokenarySolana();
-window.phantom = window.solana;
+window.phantom = {solana: window.solana};
 window.dispatchEvent(new Event("solana#initialized"));
 
 // - MARK: Near
