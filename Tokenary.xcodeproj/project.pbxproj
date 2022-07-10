@@ -363,7 +363,6 @@
 		2C901C492689F01700D0926A /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		2C901C4C268A033100D0926A /* GasService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GasService.swift; sourceTree = "<group>"; };
 		2C90E5F527A95B9400C8991E /* ethereum.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = ethereum.js; path = "web3-provider/ethereum.js"; sourceTree = "<group>"; };
-		2C90E5F627A98CB700C8991E /* solana.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = solana.js; path = "web3-provider/solana.js"; sourceTree = "<group>"; };
 		2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InternalSafariRequest.swift; sourceTree = "<group>"; };
 		2C90E62127B2ED2D00C8991E /* SafariRequest+Helpers.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "SafariRequest+Helpers.swift"; sourceTree = "<group>"; };
 		2C917428267D2A6E00049075 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
@@ -403,6 +402,7 @@
 		2CCEB82D27594E2A00768473 /* Safari iOS.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Safari iOS.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CCEB83627594E2A00768473 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
 		2CCEB84227594E2A00768473 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		2CCFB900287B4089006C224A /* solana.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = solana.js; path = "web3-provider/solana.js"; sourceTree = "<group>"; };
 		2CD0668926B213E500728C20 /* WalletsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsManager.swift; sourceTree = "<group>"; };
 		2CD0668B26B2142000728C20 /* TokenaryWallet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenaryWallet.swift; sourceTree = "<group>"; };
 		2CD0B3F426A0DAA900488D92 /* NSPasteboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSPasteboard.swift; sourceTree = "<group>"; };
@@ -773,8 +773,8 @@
 				2CB3844327654BF600A189B9 /* error.js */,
 				2CB3844527654BF600A189B9 /* id_mapping.js */,
 				2C90E5F527A95B9400C8991E /* ethereum.js */,
-				2C90E5F627A98CB700C8991E /* solana.js */,
 				2C74386E28297DAC00EC9304 /* near.js */,
+				2CCFB900287B4089006C224A /* solana.js */,
 				2CB3844727654BF600A189B9 /* index.js */,
 				2CB3844827654BF600A189B9 /* rpc.js */,
 				2CB3844627654BF600A189B9 /* utils.js */,
