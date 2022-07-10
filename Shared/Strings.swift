@@ -82,7 +82,7 @@ struct Strings {
     static let multicoinWallet = "Multicoin Wallet"
     static let privateKeyWallets = "Private Key Wallets"
     static let editAccounts = "Edit accounts"
-    static let removingTheLastAccount = "Removing the last account removes a wallet as well"
+    static let removingTheLastAccount = "Removing the last account removes the wallet as well"
     static let selectNetworkOptionally = "Select network (optionally)"
     static let isSelected = "Selected"
     static let data = "Data"
