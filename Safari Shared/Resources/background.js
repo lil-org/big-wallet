@@ -38,13 +38,32 @@ function respondWithLatestConfiguration(host, sendResponse) {
 }
 
 function storeLatestConfiguration(host, configuration) {
-    // TODO: merge with current value if there is a different provider
+    var latestArray = [];
+    if ("provider" in configuration) {
+        const latest = latestConfigurations[host];
+        
+        if (Array.isArray(latest)) {
+            latestArray = latest;
+        } else if (typeof latest !== "undefined" && "provider" in latest) {
+            latestArray = [latest];
+        }
+        
+        var shouldAdd = true;
+        for (var i = 0; i < latestArray.length; i++) {
+            if (latestArray[i].provider == configuration.provider) {
+                latestArray[i] = configuration;
+                shouldAdd = false;
+                break;
+            }
+        }
+        
+        if (shouldAdd) {
+            latestArray.push(configuration);
+        }
+    }
     
-    latestConfigurations[host] = configuration;
-    browser.storage.local.set( {[host]: configuration});
-    
-    console.log("did store new latest configuration", host, configuration);
-    console.log(latestConfigurations);
+    latestConfigurations[host] = latestArray;
+    browser.storage.local.set( {[host]: latestArray});
 }
 
 function getLatestConfiguration(host, sendResponse) {
