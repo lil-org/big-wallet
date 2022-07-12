@@ -86,33 +86,17 @@ if (shouldInjectProvider()) {
 }
 
 function getLatestConfiguration() {
-    const storageItem = browser.storage.local.get(window.location.host);
-    storageItem.then((storage) => {
-        var response = {};
-        
-        const latest = storage[window.location.host];
-        if (typeof latest !== "undefined") {
-            response = latest;
-        }
-        
-        response.name = "didLoadLatestConfiguration";
+    const request = {subject: "getLatestConfiguration", host: window.location.host};
+    browser.runtime.sendMessage(request).then((response) => {
         const id = genId();
         window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
     });
-}
-
-function storeConfigurationIfNeeded(request) {
-    if (window.location.host.length > 0 && "configurationToStore" in request) {
-        const latest = request.configurationToStore;
-        browser.storage.local.set( {[window.location.host]: latest});
-    }
 }
 
 function sendToInpage(response, id) {
     if (document.pendingRequestsIds.has(id)) {
         document.pendingRequestsIds.delete(id);
         window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
-        storeConfigurationIfNeeded(response);
     }
 }
 
@@ -120,7 +104,7 @@ function sendMessageToNativeApp(message) {
     message.favicon = getFavicon();
     message.host = window.location.host;
     document.pendingRequestsIds.add(message.id);
-    browser.runtime.sendMessage({ subject: "message-to-wallet", message: message }).then((response) => {
+    browser.runtime.sendMessage({ subject: "message-to-wallet", message: message, host: window.location.host }).then((response) => {
         sendToInpage(response, message.id);
     });
     platformSpecificProcessMessage(message); // iOS opens app here

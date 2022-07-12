@@ -38,21 +38,41 @@ window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "from-content-script") {
         const response = event.data.response;
         const id = event.data.id;
-        switch (response.provider) {
-            case "ethereum":
-                window.ethereum.processTokenaryResponse(id, response);
-                break;
-            case "solana":
-                window.solana.processTokenaryResponse(id, response);
-                break;
-            case "near":
-                window.near.processTokenaryResponse(id, response);
-                break;
-            default:
-                // pass unknown provider message to all providers 
-                window.ethereum.processTokenaryResponse(id, response);
-                window.solana.processTokenaryResponse(id, response);
-                window.near.processTokenaryResponse(id, response);
+        
+        if ("latestConfigurations" in response) {
+            const name = "didLoadLatestConfiguration";
+            var remainingProviders = new Set(["ethereum", "solana", "near"]);
+            
+            for(let configurationResponse of response.latestConfigurations) {
+                configurationResponse.name = name;
+                deliverResponseToSpecificProvider(id, configurationResponse, configurationResponse.provider);
+                remainingProviders.delete(configurationResponse.provider);
+            }
+            
+            remainingProviders.forEach((provider) => {
+                deliverResponseToSpecificProvider(id, {name: "didLoadLatestConfiguration"}, provider);
+            });
+        } else {
+            deliverResponseToSpecificProvider(id, response, response.provider);
         }
     }
 });
+
+function deliverResponseToSpecificProvider(id, response, provider) {
+    switch (provider) {
+        case "ethereum":
+            window.ethereum.processTokenaryResponse(id, response);
+            break;
+        case "solana":
+            window.solana.processTokenaryResponse(id, response);
+            break;
+        case "near":
+            window.near.processTokenaryResponse(id, response);
+            break;
+        default:
+            // pass unknown provider message to all providers
+            window.ethereum.processTokenaryResponse(id, response);
+            window.solana.processTokenaryResponse(id, response);
+            window.near.processTokenaryResponse(id, response);
+    }
+}

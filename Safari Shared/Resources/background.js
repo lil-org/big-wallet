@@ -6,14 +6,97 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
             sendResponse(response);
             browser.tabs.update(sender.tab.id, { active: true });
             didCompleteRequest(request.message.id);
+            storeConfigurationIfNeeded(request.host, response);
         });
     } else if (request.subject === "getResponse") {
         browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
             sendResponse(response);
+            storeConfigurationIfNeeded(request.host, response);
         });
+    } else if (request.subject === "getLatestConfiguration") {
+        getLatestConfiguration(request.host, sendResponse);
     }
     return true;
 });
+
+var latestConfigurations = {};
+var didReadLatestConfigurations = false;
+
+function respondWithLatestConfiguration(host, sendResponse) {
+    var response = {};
+    const latest = latestConfigurations[host];
+    
+    if (Array.isArray(latest)) {
+        response.latestConfigurations = latest;
+    } else if (typeof latest !== "undefined" && "provider" in latest) {
+        response.latestConfigurations = [latest];
+    } else {
+        response.latestConfigurations = [];
+    }
+    
+    sendResponse(response);
+}
+
+function storeLatestConfiguration(host, configuration) {
+    var latestArray = [];
+    if ("provider" in configuration) {
+        const latest = latestConfigurations[host];
+        
+        if (Array.isArray(latest)) {
+            latestArray = latest;
+        } else if (typeof latest !== "undefined" && "provider" in latest) {
+            latestArray = [latest];
+        }
+        
+        var shouldAdd = true;
+        for (var i = 0; i < latestArray.length; i++) {
+            if (latestArray[i].provider == configuration.provider) {
+                latestArray[i] = configuration;
+                shouldAdd = false;
+                break;
+            }
+        }
+        
+        if (shouldAdd) {
+            latestArray.push(configuration);
+        }
+    }
+    
+    latestConfigurations[host] = latestArray;
+    browser.storage.local.set( {[host]: latestArray});
+}
+
+function getLatestConfiguration(host, sendResponse) {
+    if (didReadLatestConfigurations) {
+        respondWithLatestConfiguration(host, sendResponse);
+        return;
+    }
+    
+    const storageItem = browser.storage.local.get();
+    storageItem.then((storage) => {
+        latestConfigurations = storage;
+        didReadLatestConfigurations = true;
+        respondWithLatestConfiguration(host, sendResponse);
+    });
+}
+
+function storeConfigurationIfNeeded(host, response) {
+    if (host.length > 0 && "configurationToStore" in response) {
+        const configuration = response.configurationToStore;
+        
+        if (didReadLatestConfigurations) {
+            storeLatestConfiguration(host, configuration);
+            return;
+        }
+        
+        const storageItem = browser.storage.local.get();
+        storageItem.then((storage) => {
+            latestConfigurations = storage;
+            didReadLatestConfigurations = true;
+            storeLatestConfiguration(host, configuration);
+        });
+    }
+}
 
 browser.browserAction.onClicked.addListener(function(tab) {
     const message = {didTapExtensionButton: true};

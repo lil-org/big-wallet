@@ -3,7 +3,7 @@
 function didChangeVisibility() {
     if (document.visibilityState === 'visible' && document.pendingRequestsIds.size != 0) {
         document.pendingRequestsIds.forEach(id => {
-            const request = {id: id, subject: "getResponse"};
+            const request = {id: id, subject: "getResponse", host: window.location.host};
             browser.runtime.sendMessage(request).then((response) => {
                 sendToInpage(response, id);
             });
