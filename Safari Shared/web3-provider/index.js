@@ -38,7 +38,23 @@ window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "from-content-script") {
         const response = event.data.response;
         const id = event.data.id;
-        deliverResponseToSpecificProvider(id, response, response.provider);
+        
+        if ("latestConfigurations" in response) {
+            const name = "didLoadLatestConfiguration";
+            var remainingProviders = new Set(["ethereum", "solana", "near"]);
+            
+            for(let configurationResponse of response.latestConfigurations) {
+                configurationResponse.name = name;
+                deliverResponseToSpecificProvider(id, configurationResponse, configurationResponse.provider);
+                remainingProviders.delete(configurationResponse.provider);
+            }
+            
+            remainingProviders.forEach((provider) => {
+                deliverResponseToSpecificProvider(id, {name: "didLoadLatestConfiguration"}, provider);
+            });
+        } else {
+            deliverResponseToSpecificProvider(id, response, response.provider);
+        }
     }
 });
 
