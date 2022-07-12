@@ -38,21 +38,25 @@ window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "from-content-script") {
         const response = event.data.response;
         const id = event.data.id;
-        switch (response.provider) {
-            case "ethereum":
-                window.ethereum.processTokenaryResponse(id, response);
-                break;
-            case "solana":
-                window.solana.processTokenaryResponse(id, response);
-                break;
-            case "near":
-                window.near.processTokenaryResponse(id, response);
-                break;
-            default:
-                // pass unknown provider message to all providers 
-                window.ethereum.processTokenaryResponse(id, response);
-                window.solana.processTokenaryResponse(id, response);
-                window.near.processTokenaryResponse(id, response);
-        }
+        deliverResponseToSpecificProvider(id, response, response.provider);
     }
 });
+
+function deliverResponseToSpecificProvider(id, response, provider) {
+    switch (provider) {
+        case "ethereum":
+            window.ethereum.processTokenaryResponse(id, response);
+            break;
+        case "solana":
+            window.solana.processTokenaryResponse(id, response);
+            break;
+        case "near":
+            window.near.processTokenaryResponse(id, response);
+            break;
+        default:
+            // pass unknown provider message to all providers
+            window.ethereum.processTokenaryResponse(id, response);
+            window.solana.processTokenaryResponse(id, response);
+            window.near.processTokenaryResponse(id, response);
+    }
+}
