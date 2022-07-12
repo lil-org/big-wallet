@@ -24,13 +24,16 @@ var didReadLatestConfigurations = false;
 
 function respondWithLatestConfiguration(host, sendResponse) {
     var response = {};
-    
     const latest = latestConfigurations[host];
-    if (typeof latest !== "undefined") {
-        response = latest;
+    
+    if (Array.isArray(latest)) {
+        response.latestConfigurations = latest;
+    } else if (typeof latest !== "undefined" && "provider" in latest) {
+        response.latestConfigurations = [latest];
+    } else {
+        response.latestConfigurations = [];
     }
     
-    response.name = "didLoadLatestConfiguration";
     sendResponse(response);
 }
 
