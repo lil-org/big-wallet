@@ -306,7 +306,7 @@ class Agent: NSObject {
         switch action {
         case .none:
             break
-        case .selectAccount(let action):
+        case .selectAccount(let action), .switchAccount(let action):
             let windowController = Window.showNew()
             let accountsList = instantiate(AccountsListViewController.self)
             accountsList.onSelectedWallet = action.completion
