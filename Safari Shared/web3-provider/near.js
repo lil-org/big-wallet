@@ -57,6 +57,7 @@ class TokenaryNear extends EventEmitter {
     }
     
     request(payload) {
+        this.idMapping.tryFixId(payload);
         return new Promise((resolve, reject) => {
             if (!payload.id) {
                 payload.id = Utils.genId();
