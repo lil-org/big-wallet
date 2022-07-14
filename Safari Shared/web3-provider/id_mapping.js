@@ -6,26 +6,21 @@
 import Utils from "./utils";
 
 class IdMapping {
+    
     constructor() {
         this.intIds = new Map;
     }
     
-    tryIntifyId(payload) {
+    tryFixId(payload) {
         if (!payload.id) {
             payload.id = Utils.genId();
-            return;
-        }
-        if (typeof payload.id !== "number") {
+            this.intIds.set(payload.id, payload.id);
+        } else if (typeof payload.id !== "number" || this.intIds.has(payload.id) ) {
             let newId = Utils.genId();
             this.intIds.set(newId, payload.id);
             payload.id = newId;
-        }
-    }
-    
-    tryRestoreId(payload) {
-        let id = this.tryPopId(payload.id);
-        if (id) {
-            payload.id = id;
+        } else {
+            this.intIds.set(payload.id, payload.id);
         }
     }
     
