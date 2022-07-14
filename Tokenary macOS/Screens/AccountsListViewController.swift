@@ -67,6 +67,7 @@ class AccountsListViewController: NSViewController {
         reloadHeader()
         updateCellModels()
         NotificationCenter.default.addObserver(self, selector: #selector(didBecomeActive), name: NSApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: Notification.Name.walletsChanged, object: nil)
     }
     
     override func viewDidAppear() {
@@ -120,6 +121,8 @@ class AccountsListViewController: NSViewController {
             menu.addItem(.separator())
             menu.addItem(submenuItem)
             networkButton.menu = menu
+        } else if !canSelectAccount, !networkButton.isHidden {
+            networkButton.isHidden = true
         }
     }
     
@@ -178,9 +181,6 @@ class AccountsListViewController: NSViewController {
     private func createNewAccountAndShowSecretWords() {
         guard let wallet = try? walletsManager.createWallet() else { return }
         newWalletId = wallet.id
-        reloadHeader()
-        updateCellModels()
-        tableView.reloadData()
         blinkNewWalletCellIfNeeded()
         showKey(wallet: wallet)
     }
@@ -280,8 +280,6 @@ class AccountsListViewController: NSViewController {
         
         do {
             try walletsManager.update(wallet: wallet, removeAccounts: [account])
-            updateCellModels()
-            tableView.removeRows(at: [row], withAnimation: .slideUp)
         } catch {
             Alert.showWithMessage(Strings.somethingWentWrong, style: .informational)
         }
@@ -317,6 +315,9 @@ class AccountsListViewController: NSViewController {
     
     private func removeWallet(_ wallet: TokenaryWallet) {
         try? walletsManager.delete(wallet: wallet)
+    }
+    
+    @objc private func walletsChanged() {        
         reloadHeader()
         updateCellModels()
         tableView.reloadData()
