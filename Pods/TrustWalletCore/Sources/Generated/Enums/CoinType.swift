@@ -60,6 +60,7 @@ public enum CoinType: UInt32, CaseIterable {
     case ravencoin = 175
     case waves = 5741564
     case terra = 330
+    case terraV2 = 10000330
     case harmony = 1023
     case algorand = 283
     case kusama = 434
@@ -94,5 +95,7 @@ public enum CoinType: UInt32, CaseIterable {
     case nativeEvmos = 20009001
     case moonriver = 10001285
     case moonbeam = 10001284
+    case kavaEvm = 10002222
     case klaytn = 10008217
+    case meter = 18000
 }

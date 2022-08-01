@@ -34,7 +34,8 @@ public enum HRP: UInt32, CaseIterable, CustomStringConvertible  {
     case cardano = 23
     case qtum = 24
     case osmosis = 25
-    case nativeEvmos = 26
+    case terraV2 = 26
+    case nativeEvmos = 27
 
     public var description: String {
         switch self {
@@ -64,6 +65,7 @@ public enum HRP: UInt32, CaseIterable, CustomStringConvertible  {
         case .cardano: return "addr"
         case .qtum: return "qc"
         case .osmosis: return "osmo"
+        case .terraV2: return "terra"
         case .nativeEvmos: return "evmos"
         }
     }

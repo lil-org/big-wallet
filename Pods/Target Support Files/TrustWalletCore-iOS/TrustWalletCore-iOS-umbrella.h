@@ -19,6 +19,7 @@
 #import "TWAnyAddress.h"
 #import "TWAnySigner.h"
 #import "TWBase.h"
+#import "TWBase32.h"
 #import "TWBase58.h"
 #import "TWBinanceProto.h"
 #import "TWBitcoinAddress.h"

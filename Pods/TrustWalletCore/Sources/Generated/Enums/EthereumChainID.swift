@@ -17,6 +17,7 @@ public enum EthereumChainID: UInt32, CaseIterable {
     case polygon = 137
     case thundertoken = 108
     case gochain = 60
+    case meter = 82
     case celo = 42220
     case wanchain = 888
     case cronos = 25
@@ -31,6 +32,7 @@ public enum EthereumChainID: UInt32, CaseIterable {
     case moonbeam = 1284
     case moonriver = 1285
     case ronin = 2020
+    case kavaevm = 2222
     case klaytn = 8217
     case avalanchec = 43114
     case evmos = 9001

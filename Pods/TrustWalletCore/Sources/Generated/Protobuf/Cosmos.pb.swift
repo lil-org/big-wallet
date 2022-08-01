@@ -255,6 +255,30 @@ public struct TW_Cosmos_Proto_Message {
     set {messageOneof = .wasmTerraExecuteContractGeneric(newValue)}
   }
 
+  public var wasmExecuteContractTransferMessage: TW_Cosmos_Proto_Message.WasmExecuteContractTransfer {
+    get {
+      if case .wasmExecuteContractTransferMessage(let v)? = messageOneof {return v}
+      return TW_Cosmos_Proto_Message.WasmExecuteContractTransfer()
+    }
+    set {messageOneof = .wasmExecuteContractTransferMessage(newValue)}
+  }
+
+  public var wasmExecuteContractSendMessage: TW_Cosmos_Proto_Message.WasmExecuteContractSend {
+    get {
+      if case .wasmExecuteContractSendMessage(let v)? = messageOneof {return v}
+      return TW_Cosmos_Proto_Message.WasmExecuteContractSend()
+    }
+    set {messageOneof = .wasmExecuteContractSendMessage(newValue)}
+  }
+
+  public var wasmExecuteContractGeneric: TW_Cosmos_Proto_Message.WasmExecuteContractGeneric {
+    get {
+      if case .wasmExecuteContractGeneric(let v)? = messageOneof {return v}
+      return TW_Cosmos_Proto_Message.WasmExecuteContractGeneric()
+    }
+    set {messageOneof = .wasmExecuteContractGeneric(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public enum OneOf_MessageOneof: Equatable {
@@ -269,6 +293,9 @@ public struct TW_Cosmos_Proto_Message {
     case wasmTerraExecuteContractSendMessage(TW_Cosmos_Proto_Message.WasmTerraExecuteContractSend)
     case thorchainSendMessage(TW_Cosmos_Proto_Message.THORChainSend)
     case wasmTerraExecuteContractGeneric(TW_Cosmos_Proto_Message.WasmTerraExecuteContractGeneric)
+    case wasmExecuteContractTransferMessage(TW_Cosmos_Proto_Message.WasmExecuteContractTransfer)
+    case wasmExecuteContractSendMessage(TW_Cosmos_Proto_Message.WasmExecuteContractSend)
+    case wasmExecuteContractGeneric(TW_Cosmos_Proto_Message.WasmExecuteContractGeneric)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_Cosmos_Proto_Message.OneOf_MessageOneof, rhs: TW_Cosmos_Proto_Message.OneOf_MessageOneof) -> Bool {
@@ -318,6 +345,18 @@ public struct TW_Cosmos_Proto_Message {
       }()
       case (.wasmTerraExecuteContractGeneric, .wasmTerraExecuteContractGeneric): return {
         guard case .wasmTerraExecuteContractGeneric(let l) = lhs, case .wasmTerraExecuteContractGeneric(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.wasmExecuteContractTransferMessage, .wasmExecuteContractTransferMessage): return {
+        guard case .wasmExecuteContractTransferMessage(let l) = lhs, case .wasmExecuteContractTransferMessage(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.wasmExecuteContractSendMessage, .wasmExecuteContractSendMessage): return {
+        guard case .wasmExecuteContractSendMessage(let l) = lhs, case .wasmExecuteContractSendMessage(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.wasmExecuteContractGeneric, .wasmExecuteContractGeneric): return {
+        guard case .wasmExecuteContractGeneric(let l) = lhs, case .wasmExecuteContractGeneric(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
       default: return false
@@ -495,7 +534,7 @@ public struct TW_Cosmos_Proto_Message {
     public init() {}
   }
 
-  /// transfer within wasm/MsgExecuteContract, used by Terra
+  /// transfer within wasm/MsgExecuteContract, used by Terra Classic
   public struct WasmTerraExecuteContractTransfer {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -517,7 +556,7 @@ public struct TW_Cosmos_Proto_Message {
     public init() {}
   }
 
-  /// send within wasm/MsgExecuteContract, used by Terra
+  /// send within wasm/MsgExecuteContract, used by Terra Classic
   public struct WasmTerraExecuteContractSend {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -562,8 +601,82 @@ public struct TW_Cosmos_Proto_Message {
     public init() {}
   }
 
-  /// send within wasm/MsgExecuteContract, used by Terra
+  /// execute within wasm/MsgExecuteContract, used by Terra Classic
   public struct WasmTerraExecuteContractGeneric {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    /// sender address
+    public var senderAddress: String = String()
+
+    /// token contract address
+    public var contractAddress: String = String()
+
+    /// execute_msg to be executed in the context of recipient contract
+    public var executeMsg: String = String()
+
+    /// used in case you are sending native tokens along with this message
+    /// Gap in field numbering is intentional
+    public var coins: [TW_Cosmos_Proto_Amount] = []
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
+  /// transfer within wasm/MsgExecuteContract
+  public struct WasmExecuteContractTransfer {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    /// sender address
+    public var senderAddress: String = String()
+
+    /// token contract address
+    public var contractAddress: String = String()
+
+    /// size is uint128, as bigint
+    public var amount: Data = Data()
+
+    public var recipientAddress: String = String()
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
+  /// send within wasm/MsgExecuteContract
+  public struct WasmExecuteContractSend {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    /// sender address
+    public var senderAddress: String = String()
+
+    /// token contract address
+    public var contractAddress: String = String()
+
+    /// size is uint128, as bigint
+    public var amount: Data = Data()
+
+    public var recipientContractAddress: String = String()
+
+    /// execute_msg to be executed in the context of recipient contract
+    public var msg: String = String()
+
+    /// used in case you are sending native tokens along with this message
+    public var coin: [String] = []
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
+  /// execute within wasm/MsgExecuteContract
+  public struct WasmExecuteContractGeneric {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
@@ -813,6 +926,9 @@ extension TW_Cosmos_Proto_Message: SwiftProtobuf.Message, SwiftProtobuf._Message
     9: .standard(proto: "wasm_terra_execute_contract_send_message"),
     10: .standard(proto: "thorchain_send_message"),
     11: .standard(proto: "wasm_terra_execute_contract_generic"),
+    12: .standard(proto: "wasm_execute_contract_transfer_message"),
+    13: .standard(proto: "wasm_execute_contract_send_message"),
+    14: .standard(proto: "wasm_execute_contract_generic"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -964,6 +1080,45 @@ extension TW_Cosmos_Proto_Message: SwiftProtobuf.Message, SwiftProtobuf._Message
           self.messageOneof = .wasmTerraExecuteContractGeneric(v)
         }
       }()
+      case 12: try {
+        var v: TW_Cosmos_Proto_Message.WasmExecuteContractTransfer?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .wasmExecuteContractTransferMessage(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .wasmExecuteContractTransferMessage(v)
+        }
+      }()
+      case 13: try {
+        var v: TW_Cosmos_Proto_Message.WasmExecuteContractSend?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .wasmExecuteContractSendMessage(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .wasmExecuteContractSendMessage(v)
+        }
+      }()
+      case 14: try {
+        var v: TW_Cosmos_Proto_Message.WasmExecuteContractGeneric?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .wasmExecuteContractGeneric(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .wasmExecuteContractGeneric(v)
+        }
+      }()
       default: break
       }
     }
@@ -1018,6 +1173,18 @@ extension TW_Cosmos_Proto_Message: SwiftProtobuf.Message, SwiftProtobuf._Message
     case .wasmTerraExecuteContractGeneric?: try {
       guard case .wasmTerraExecuteContractGeneric(let v)? = self.messageOneof else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
+    }()
+    case .wasmExecuteContractTransferMessage?: try {
+      guard case .wasmExecuteContractTransferMessage(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+    }()
+    case .wasmExecuteContractSendMessage?: try {
+      guard case .wasmExecuteContractSendMessage(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
+    }()
+    case .wasmExecuteContractGeneric?: try {
+      guard case .wasmExecuteContractGeneric(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 14)
     }()
     case nil: break
     }
@@ -1562,6 +1729,168 @@ extension TW_Cosmos_Proto_Message.WasmTerraExecuteContractGeneric: SwiftProtobuf
   }
 
   public static func ==(lhs: TW_Cosmos_Proto_Message.WasmTerraExecuteContractGeneric, rhs: TW_Cosmos_Proto_Message.WasmTerraExecuteContractGeneric) -> Bool {
+    if lhs.senderAddress != rhs.senderAddress {return false}
+    if lhs.contractAddress != rhs.contractAddress {return false}
+    if lhs.executeMsg != rhs.executeMsg {return false}
+    if lhs.coins != rhs.coins {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cosmos_Proto_Message.WasmExecuteContractTransfer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Cosmos_Proto_Message.protoMessageName + ".WasmExecuteContractTransfer"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "sender_address"),
+    2: .standard(proto: "contract_address"),
+    3: .same(proto: "amount"),
+    4: .standard(proto: "recipient_address"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.senderAddress) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.contractAddress) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.amount) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.recipientAddress) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.senderAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.senderAddress, fieldNumber: 1)
+    }
+    if !self.contractAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.contractAddress, fieldNumber: 2)
+    }
+    if !self.amount.isEmpty {
+      try visitor.visitSingularBytesField(value: self.amount, fieldNumber: 3)
+    }
+    if !self.recipientAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.recipientAddress, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cosmos_Proto_Message.WasmExecuteContractTransfer, rhs: TW_Cosmos_Proto_Message.WasmExecuteContractTransfer) -> Bool {
+    if lhs.senderAddress != rhs.senderAddress {return false}
+    if lhs.contractAddress != rhs.contractAddress {return false}
+    if lhs.amount != rhs.amount {return false}
+    if lhs.recipientAddress != rhs.recipientAddress {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cosmos_Proto_Message.WasmExecuteContractSend: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Cosmos_Proto_Message.protoMessageName + ".WasmExecuteContractSend"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "sender_address"),
+    2: .standard(proto: "contract_address"),
+    3: .same(proto: "amount"),
+    4: .standard(proto: "recipient_contract_address"),
+    5: .same(proto: "msg"),
+    6: .same(proto: "coin"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.senderAddress) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.contractAddress) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.amount) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.recipientContractAddress) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.msg) }()
+      case 6: try { try decoder.decodeRepeatedStringField(value: &self.coin) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.senderAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.senderAddress, fieldNumber: 1)
+    }
+    if !self.contractAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.contractAddress, fieldNumber: 2)
+    }
+    if !self.amount.isEmpty {
+      try visitor.visitSingularBytesField(value: self.amount, fieldNumber: 3)
+    }
+    if !self.recipientContractAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.recipientContractAddress, fieldNumber: 4)
+    }
+    if !self.msg.isEmpty {
+      try visitor.visitSingularStringField(value: self.msg, fieldNumber: 5)
+    }
+    if !self.coin.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.coin, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cosmos_Proto_Message.WasmExecuteContractSend, rhs: TW_Cosmos_Proto_Message.WasmExecuteContractSend) -> Bool {
+    if lhs.senderAddress != rhs.senderAddress {return false}
+    if lhs.contractAddress != rhs.contractAddress {return false}
+    if lhs.amount != rhs.amount {return false}
+    if lhs.recipientContractAddress != rhs.recipientContractAddress {return false}
+    if lhs.msg != rhs.msg {return false}
+    if lhs.coin != rhs.coin {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cosmos_Proto_Message.WasmExecuteContractGeneric: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Cosmos_Proto_Message.protoMessageName + ".WasmExecuteContractGeneric"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "sender_address"),
+    2: .standard(proto: "contract_address"),
+    3: .standard(proto: "execute_msg"),
+    5: .same(proto: "coins"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.senderAddress) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.contractAddress) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.executeMsg) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.coins) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.senderAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.senderAddress, fieldNumber: 1)
+    }
+    if !self.contractAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.contractAddress, fieldNumber: 2)
+    }
+    if !self.executeMsg.isEmpty {
+      try visitor.visitSingularStringField(value: self.executeMsg, fieldNumber: 3)
+    }
+    if !self.coins.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.coins, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cosmos_Proto_Message.WasmExecuteContractGeneric, rhs: TW_Cosmos_Proto_Message.WasmExecuteContractGeneric) -> Bool {
     if lhs.senderAddress != rhs.senderAddress {return false}
     if lhs.contractAddress != rhs.contractAddress {return false}
     if lhs.executeMsg != rhs.executeMsg {return false}

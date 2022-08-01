@@ -71,6 +71,11 @@ extension CoinType {
     }
 
 
+    public func derivationPathWithDerivation(derivation: Derivation) -> String {
+        return TWStringNSString(TWCoinTypeDerivationPathWithDerivation(TWCoinType(rawValue: rawValue), TWDerivation(rawValue: derivation.rawValue)))
+    }
+
+
     public func deriveAddress(privateKey: PrivateKey) -> String {
         return TWStringNSString(TWCoinTypeDeriveAddress(TWCoinType(rawValue: rawValue), privateKey.rawValue))
     }

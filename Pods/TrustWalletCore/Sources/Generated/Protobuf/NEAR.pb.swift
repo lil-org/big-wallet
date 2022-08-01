@@ -44,6 +44,8 @@ public struct TW_NEAR_Proto_FunctionCallPermission {
 
   public var receiverID: String = String()
 
+  public var methodNames: [String] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -175,11 +177,20 @@ public struct TW_NEAR_Proto_Stake {
   /// uint128 / little endian byte order
   public var stake: Data = Data()
 
-  public var publicKey: String = String()
+  public var publicKey: TW_NEAR_Proto_PublicKey {
+    get {return _publicKey ?? TW_NEAR_Proto_PublicKey()}
+    set {_publicKey = newValue}
+  }
+  /// Returns true if `publicKey` has been explicitly set.
+  public var hasPublicKey: Bool {return self._publicKey != nil}
+  /// Clears the value of `publicKey`. Subsequent reads from it will return its default value.
+  public mutating func clearPublicKey() {self._publicKey = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _publicKey: TW_NEAR_Proto_PublicKey? = nil
 }
 
 public struct TW_NEAR_Proto_AddKey {
@@ -462,6 +473,7 @@ extension TW_NEAR_Proto_FunctionCallPermission: SwiftProtobuf.Message, SwiftProt
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "allowance"),
     2: .standard(proto: "receiver_id"),
+    3: .standard(proto: "method_names"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -472,6 +484,7 @@ extension TW_NEAR_Proto_FunctionCallPermission: SwiftProtobuf.Message, SwiftProt
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.allowance) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.receiverID) }()
+      case 3: try { try decoder.decodeRepeatedStringField(value: &self.methodNames) }()
       default: break
       }
     }
@@ -484,12 +497,16 @@ extension TW_NEAR_Proto_FunctionCallPermission: SwiftProtobuf.Message, SwiftProt
     if !self.receiverID.isEmpty {
       try visitor.visitSingularStringField(value: self.receiverID, fieldNumber: 2)
     }
+    if !self.methodNames.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.methodNames, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_NEAR_Proto_FunctionCallPermission, rhs: TW_NEAR_Proto_FunctionCallPermission) -> Bool {
     if lhs.allowance != rhs.allowance {return false}
     if lhs.receiverID != rhs.receiverID {return false}
+    if lhs.methodNames != rhs.methodNames {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -737,25 +754,29 @@ extension TW_NEAR_Proto_Stake: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.stake) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.publicKey) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._publicKey) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.stake.isEmpty {
       try visitor.visitSingularBytesField(value: self.stake, fieldNumber: 1)
     }
-    if !self.publicKey.isEmpty {
-      try visitor.visitSingularStringField(value: self.publicKey, fieldNumber: 2)
-    }
+    try { if let v = self._publicKey {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_NEAR_Proto_Stake, rhs: TW_NEAR_Proto_Stake) -> Bool {
     if lhs.stake != rhs.stake {return false}
-    if lhs.publicKey != rhs.publicKey {return false}
+    if lhs._publicKey != rhs._publicKey {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

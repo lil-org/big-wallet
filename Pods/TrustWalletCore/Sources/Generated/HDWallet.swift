@@ -136,12 +136,20 @@ public final class HDWallet {
         return TWStringNSString(TWHDWalletGetExtendedPublicKey(rawValue, TWPurpose(rawValue: purpose.rawValue), TWCoinType(rawValue: coin.rawValue), TWHDVersion(rawValue: version.rawValue)))
     }
 
-    public func getExtendedPrivateKeyAccount(purpose: Purpose, coin: CoinType, version: HDVersion, account: UInt32) -> String {
-        return TWStringNSString(TWHDWalletGetExtendedPrivateKeyAccount(rawValue, TWPurpose(rawValue: purpose.rawValue), TWCoinType(rawValue: coin.rawValue), TWHDVersion(rawValue: version.rawValue), account))
+    public func getExtendedPrivateKeyAccount(purpose: Purpose, coin: CoinType, derivation: Derivation, version: HDVersion, account: UInt32) -> String {
+        return TWStringNSString(TWHDWalletGetExtendedPrivateKeyAccount(rawValue, TWPurpose(rawValue: purpose.rawValue), TWCoinType(rawValue: coin.rawValue), TWDerivation(rawValue: derivation.rawValue), TWHDVersion(rawValue: version.rawValue), account))
     }
 
-    public func getExtendedPublicKeyAccount(purpose: Purpose, coin: CoinType, version: HDVersion, account: UInt32) -> String {
-        return TWStringNSString(TWHDWalletGetExtendedPublicKeyAccount(rawValue, TWPurpose(rawValue: purpose.rawValue), TWCoinType(rawValue: coin.rawValue), TWHDVersion(rawValue: version.rawValue), account))
+    public func getExtendedPublicKeyAccount(purpose: Purpose, coin: CoinType, derivation: Derivation, version: HDVersion, account: UInt32) -> String {
+        return TWStringNSString(TWHDWalletGetExtendedPublicKeyAccount(rawValue, TWPurpose(rawValue: purpose.rawValue), TWCoinType(rawValue: coin.rawValue), TWDerivation(rawValue: derivation.rawValue), TWHDVersion(rawValue: version.rawValue), account))
+    }
+
+    public func getExtendedPrivateKeyDerivation(purpose: Purpose, coin: CoinType, derivation: Derivation, version: HDVersion) -> String {
+        return TWStringNSString(TWHDWalletGetExtendedPrivateKeyDerivation(rawValue, TWPurpose(rawValue: purpose.rawValue), TWCoinType(rawValue: coin.rawValue), TWDerivation(rawValue: derivation.rawValue), TWHDVersion(rawValue: version.rawValue)))
+    }
+
+    public func getExtendedPublicKeyDerivation(purpose: Purpose, coin: CoinType, derivation: Derivation, version: HDVersion) -> String {
+        return TWStringNSString(TWHDWalletGetExtendedPublicKeyDerivation(rawValue, TWPurpose(rawValue: purpose.rawValue), TWCoinType(rawValue: coin.rawValue), TWDerivation(rawValue: derivation.rawValue), TWHDVersion(rawValue: version.rawValue)))
     }
 
 }
