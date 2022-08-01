@@ -4,8 +4,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.subject === "message-to-wallet") {
         browser.runtime.sendNativeMessage("mac.tokenary.io", request.message, function(response) {
             sendResponse(response);
-            browser.tabs.update(sender.tab.id, { active: true });
-            didCompleteRequest(request.message.id);
+            didCompleteRequest(request.message.id, sender.tab.id);
             storeConfigurationIfNeeded(request.host, response);
         });
     } else if (request.subject === "getResponse") {

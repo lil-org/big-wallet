@@ -17,7 +17,6 @@ extension SafariRequest {
             case watchAsset
             case addEthereumChain
             case switchEthereumChain
-            case switchAccount
         }
         
         let method: Method
@@ -53,7 +52,7 @@ extension SafariRequest {
         
         var responseUpdatesStoredConfiguration: Bool {
             switch method {
-            case .switchEthereumChain, .addEthereumChain, .requestAccounts, .switchAccount:
+            case .switchEthereumChain, .addEthereumChain, .requestAccounts:
                 return true
             case .ecRecover, .signMessage, .signPersonalMessage, .signTransaction, .signTypedMessage, .watchAsset:
                 return false

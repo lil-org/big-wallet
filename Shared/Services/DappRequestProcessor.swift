@@ -51,7 +51,7 @@ struct DappRequestProcessor {
                         respond(to: request, error: Strings.canceled, completion: completion)
                     }
                 }
-                return .selectAccount(action)
+                return .switchAccount(action)
             }
         }
     }
@@ -193,7 +193,7 @@ struct DappRequestProcessor {
         lazy var account = getAccount(coin: .ethereum, address: ethereumRequest.address)
         
         switch ethereumRequest.method {
-        case .switchAccount, .requestAccounts:
+        case .requestAccounts:
             let action = SelectAccountAction(provider: .ethereum) { chain, wallet, account in
                 if let chain = chain, let address = wallet?.ethereumAddress, account?.coin == .ethereum {
                     let responseBody = ResponseToExtension.Ethereum(results: [address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)

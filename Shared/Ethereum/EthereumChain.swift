@@ -11,6 +11,8 @@ enum EthereumChain: Int {
     case avalanche = 43114
     case gnosisChain = 100
     case fantomOpera = 250
+    case celo = 42220
+    case aurora = 1313161554
     
     // Testnets
     case arbitrumRinkeby = 421611
@@ -34,7 +36,7 @@ enum EthereumChain: Int {
         return "0x" + String(id, radix: 16, uppercase: false)
     }
     
-    static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum, .avalanche, .gnosisChain, .fantomOpera]
+    static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum, .avalanche, .gnosisChain, .fantomOpera, .celo, .aurora]
     static let allTestnets: [EthereumChain] = [.ethereumRopsten, .ethereumKovan, .ethereumRinkeby, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji, .fantomTestnet, .neonDevnet]
     
     var name: String {
@@ -47,6 +49,8 @@ enum EthereumChain: Int {
         case .avalanche: return "Avalanche"
         case .gnosisChain: return "Gnosis Chain"
         case .fantomOpera: return "Fantom Opera"
+        case .celo: return "Celo"
+        case .aurora: return "Aurora"
             
         case .arbitrumRinkeby: return "Arbitrum Rinkeby"
         case .optimisticKovan: return "Optimistic Kovan"
@@ -69,7 +73,7 @@ enum EthereumChain: Int {
             return "BNB"
         case .polygon, .polygonMumbai:
             return "MATIC"
-        case .arbitrum, .arbitrumKovan, .arbitrumRinkeby, .ethereum, .ethereumGoerli, .ethereumKovan, .ethereumRinkeby, .optimism, .optimisticKovan, .ethereumRopsten:
+        case .arbitrum, .arbitrumKovan, .arbitrumRinkeby, .ethereum, .ethereumGoerli, .ethereumKovan, .ethereumRinkeby, .optimism, .optimisticKovan, .ethereumRopsten, .aurora:
             return "ETH"
         case .avalanche, .avalancheFuji:
             return "AVAX"
@@ -77,6 +81,8 @@ enum EthereumChain: Int {
             return "xDai"
         case .fantomOpera, .fantomTestnet:
             return "FTM"
+        case .celo:
+            return "CELO"
         case .neonDevnet:
             return "NEON"
         }
@@ -105,6 +111,8 @@ enum EthereumChain: Int {
         case .avalanche: return "https://api.avax.network/ext/bc/C/rpc"
         case .gnosisChain: return "https://rpc.gnosischain.com/"
         case .fantomOpera: return "https://rpc.ftm.tools/"
+        case .celo: return "https://rpc.ankr.com/celo"
+        case .aurora: return "https://mainnet.aurora.dev"
             
         case .arbitrumRinkeby: return "https://rinkeby.arbitrum.io/rpc"
         case .arbitrumKovan: return "https://kovan5.arbitrum.io/rpc"

@@ -54,13 +54,13 @@ class Agent: NSObject {
                 self?.hasPassword = true
                 self?.showInitialScreen(externalRequest: externalRequest)
             }
-            let windowController = Window.showNew()
+            let windowController = Window.showNew(closeOthers: true)
             windowController.contentViewController = welcomeViewController
             return
         }
         
         guard didEnterPasswordOnStart else {
-            askAuthentication(on: nil, onStart: true, reason: .start) { [weak self] success in
+            askAuthentication(on: nil, browser: nil, onStart: true, reason: .start) { [weak self] success in
                 if success {
                     self?.didEnterPasswordOnStart = true
                     self?.showInitialScreen(externalRequest: externalRequest)
@@ -76,22 +76,22 @@ class Agent: NSObject {
         if case let .safari(request) = request {
             processSafariRequest(request)
         } else {
-            let windowController = Window.showNew()
             let accountsList = instantiate(AccountsListViewController.self)
             
             if case let .wcSession(session) = request {
                 accountsList.onSelectedWallet = onSelectedWallet(session: session)
             }
             
+            let windowController = Window.showNew(closeOthers: accountsList.onSelectedWallet == nil)
             windowController.contentViewController = accountsList
         }
     }
     
-    func showApprove(transaction: Transaction, chain: EthereumChain, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) {
-        let windowController = Window.showNew()
-        let approveViewController = ApproveTransactionViewController.with(transaction: transaction, chain: chain, peerMeta: peerMeta) { [weak self] transaction in
+    func showApprove(windowController: NSWindowController, browser: Browser?, transaction: Transaction, chain: EthereumChain, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) {
+        let window = windowController.window
+        let approveViewController = ApproveTransactionViewController.with(transaction: transaction, chain: chain, peerMeta: peerMeta) { [weak self, weak window] transaction in
             if transaction != nil {
-                self?.askAuthentication(on: windowController.window, onStart: false, reason: .sendTransaction) { success in
+                self?.askAuthentication(on: window, browser: browser, onStart: false, reason: .sendTransaction) { success in
                     completion(success ? transaction : nil)
                 }
             } else {
@@ -101,24 +101,19 @@ class Agent: NSObject {
         windowController.contentViewController = approveViewController
     }
     
-    func showApprove(subject: ApprovalSubject, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) {
-        let windowController = Window.showNew()
-        let approveViewController = ApproveViewController.with(subject: subject, meta: meta, peerMeta: peerMeta) { [weak self] result in
+    func showApprove(windowController: NSWindowController, browser: Browser?, subject: ApprovalSubject, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) {
+        let window = windowController.window
+        let approveViewController = ApproveViewController.with(subject: subject, meta: meta, peerMeta: peerMeta) { [weak self, weak window] result in
             if result {
-                self?.askAuthentication(on: windowController.window, onStart: false, reason: subject.asAuthenticationReason) { success in
+                self?.askAuthentication(on: window, getBackTo: window?.contentViewController, browser: browser, onStart: false, reason: subject.asAuthenticationReason) { success in
                     completion(success)
-                    (windowController.contentViewController as? ApproveViewController)?.enableWaiting()
+                    (window?.contentViewController as? ApproveViewController)?.enableWaiting()
                 }
             } else {
                 completion(result)
             }
         }
         windowController.contentViewController = approveViewController
-    }
-    
-    func showErrorMessage(_ message: String) {
-        let windowController = Window.showNew()
-        windowController.contentViewController = ErrorViewController.withMessage(message)
     }
     
     func getWalletSelectionCompletionIfShouldSelect() -> ((EthereumChain?, TokenaryWallet?, Account?) -> Void)? {
@@ -221,7 +216,7 @@ class Agent: NSObject {
         guard let session = session else { return nil }
         return { [weak self] chain, wallet, account in
             guard let chain = chain, let wallet = wallet, account?.coin == .ethereum else {
-                Window.closeAllAndActivateBrowser(force: nil)
+                Window.closeAllAndActivateBrowser(specific: nil)
                 return
             }
             self?.connectWallet(session: session, chainId: chain.id, wallet: wallet)
@@ -250,19 +245,21 @@ class Agent: NSObject {
         showInitialScreen(externalRequest: request)
     }
     
-    func askAuthentication(on: NSWindow?, getBackTo: NSViewController? = nil, onStart: Bool, reason: AuthenticationReason, completion: @escaping (Bool) -> Void) {
+    func askAuthentication(on: NSWindow?, getBackTo: NSViewController? = nil, browser: Browser?, onStart: Bool, reason: AuthenticationReason, completion: @escaping (Bool) -> Void) {
         let context = LAContext()
         var error: NSError?
         let policy = LAPolicy.deviceOwnerAuthenticationWithBiometrics
         let canDoLocalAuthentication = context.canEvaluatePolicy(policy, error: &error)
         
         func showPasswordScreen() {
-            let window = on ?? Window.showNew().window
+            let window = on ?? Window.showNew(closeOthers: onStart).window
             let passwordViewController = PasswordViewController.with(mode: .enter, reason: reason) { [weak window] success in
                 if let getBackTo = getBackTo {
                     window?.contentViewController = getBackTo
+                } else if let browser = browser {
+                    Window.closeWindowAndActivateNext(idToClose: window?.windowNumber, specificBrowser: browser)
                 } else {
-                    Window.closeAll()
+                    Window.closeWindow(idToClose: window?.windowNumber)
                 }
                 completion(success)
             }
@@ -287,36 +284,50 @@ class Agent: NSObject {
     }
     
     private func connectWallet(session: WCSession, chainId: Int, wallet: TokenaryWallet) {
-        let windowController = Window.showNew()
+        let windowController = Window.showNew(closeOthers: true)
         let window = windowController.window
         windowController.contentViewController = WaitingViewController.withReason(Strings.connecting)
         
         walletConnect.connect(session: session, chainId: chainId, walletId: wallet.id) { [weak window] _ in
             if window?.isVisible == true {
-                Window.closeAllAndActivateBrowser(force: nil)
+                Window.closeAllAndActivateBrowser(specific: nil)
             }
         }
     }
-    
+
     private func processSafariRequest(_ safariRequest: SafariRequest) {
+        var windowNumber: Int?
         let action = DappRequestProcessor.processSafariRequest(safariRequest) {
-            Window.closeAllAndActivateBrowser(force: .safari)
+            Window.closeWindowAndActivateNext(idToClose: windowNumber, specificBrowser: .safari)
         }
 
         switch action {
         case .none:
             break
-        case .selectAccount(let action):
-            let windowController = Window.showNew()
+        case .selectAccount(let accountAction), .switchAccount(let accountAction):
+            let closeOtherWindows: Bool
+            if case .selectAccount = action {
+                closeOtherWindows = false
+            } else {
+                closeOtherWindows = true
+            }
+            
+            let windowController = Window.showNew(closeOthers: closeOtherWindows)
+            windowNumber = windowController.window?.windowNumber
             let accountsList = instantiate(AccountsListViewController.self)
-            accountsList.onSelectedWallet = action.completion
+            accountsList.onSelectedWallet = accountAction.completion
             windowController.contentViewController = accountsList
         case .approveMessage(let action):
-            showApprove(subject: action.subject, meta: action.meta, peerMeta: action.peerMeta, completion: action.completion)
+            let windowController = Window.showNew(closeOthers: false)
+            windowNumber = windowController.window?.windowNumber
+            showApprove(windowController: windowController, browser: .safari, subject: action.subject, meta: action.meta, peerMeta: action.peerMeta, completion: action.completion)
         case .approveTransaction(let action):
-            showApprove(transaction: action.transaction, chain: action.chain, peerMeta: action.peerMeta, completion: action.completion)
+            let windowController = Window.showNew(closeOthers: false)
+            windowNumber = windowController.window?.windowNumber
+            showApprove(windowController: windowController, browser: .safari, transaction: action.transaction, chain: action.chain, peerMeta: action.peerMeta, completion: action.completion)
         case .justShowApp:
-            let windowController = Window.showNew()
+            let windowController = Window.showNew(closeOthers: true)
+            windowNumber = windowController.window?.windowNumber
             let accountsList = instantiate(AccountsListViewController.self)
             windowController.contentViewController = accountsList
         }

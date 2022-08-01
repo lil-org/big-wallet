@@ -105,7 +105,6 @@ class TokenaryEthereum extends EventEmitter {
     }
     
     enable() {
-        console.log('enable() is deprecated, please use window.ethereum.request({method: "eth_requestAccounts"}) instead.');
         if (!window.ethereum.address) { // avoid double accounts request in uniswap
             return this.request({ method: "eth_requestAccounts", params: [] });
         } else {
@@ -154,7 +153,7 @@ class TokenaryEthereum extends EventEmitter {
     }
     
     _request(payload, wrapResult = true) {
-        this.idMapping.tryIntifyId(payload);
+        this.idMapping.tryFixId(payload);
         return new Promise((resolve, reject) => {
             if (!payload.id) {
                 payload.id = Utils.genId();

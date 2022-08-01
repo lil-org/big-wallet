@@ -151,7 +151,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         switch action {
         case .none, .justShowApp:
             break
-        case .selectAccount(let action):
+        case .selectAccount(let action), .switchAccount(let action):
             let selectAccountViewController = instantiate(AccountsListViewController.self, from: .main)
             selectAccountViewController.onSelectedWallet = action.completion
             presentForSafariRequest(selectAccountViewController.inNavigationController, id: request.id)

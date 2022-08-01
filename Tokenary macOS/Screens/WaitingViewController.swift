@@ -22,7 +22,7 @@ class WaitingViewController: NSViewController {
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
-        Window.closeAll()
+        Window.closeWindowAndActivateNext(idToClose: view.window?.windowNumber, specificBrowser: nil)
     }
     
 }

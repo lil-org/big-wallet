@@ -59,8 +59,12 @@ class TokenarySolana extends EventEmitter {
         this.pendingPayloads = [];
     }
 
-    connect() {
-        return this.request({method: "connect"});
+    connect(params) {
+        var payload = {method: "connect"};
+        if (typeof params !== "undefined") {
+            payload.params = params;
+        }
+        return this.request(payload);
     }
 
     disconnect() {
@@ -104,7 +108,7 @@ class TokenarySolana extends EventEmitter {
     }
 
     request(payload) {
-        this.idMapping.tryIntifyId(payload);
+        this.idMapping.tryFixId(payload);
         return new Promise((resolve, reject) => {
             if (!payload.id) {
                 payload.id = Utils.genId();
@@ -143,7 +147,12 @@ class TokenarySolana extends EventEmitter {
         switch (payload.method) {
             case "connect":
                 if (!this.publicKey) {
-                    return this.postMessage("connect", payload.id, {});
+                    if ("params" in payload && "onlyIfTrusted" in payload.params && payload.params.onlyIfTrusted) {
+                        this.sendError(payload.id, "Click a button to connect");
+                        return;
+                    } else {
+                        return this.postMessage("connect", payload.id, {});
+                    }
                 } else {
                     this.isConnected = true;
                     this.emitConnect(this.publicKey);

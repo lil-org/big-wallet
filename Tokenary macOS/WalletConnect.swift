@@ -133,12 +133,14 @@ class WalletConnect {
         
         let peer = PeerMeta(wcPeerMeta: getPeerOfInteractor(interactor))
         let transaction = Transaction(from: wct.from, to: to, nonce: wct.nonce, gasPrice: wct.gasPrice, gas: wct.gas, value: wct.value, data: wct.data)
-        agent.showApprove(transaction: transaction, chain: chain, peerMeta: peer) { [weak self, weak interactor] transaction in
+        let windowController = Window.showNew(closeOthers: false)
+        let windowNumber = windowController.window?.windowNumber
+        agent.showApprove(windowController: windowController, browser: .unknown, transaction: transaction, chain: chain, peerMeta: peer) { [weak self, weak interactor] transaction in
             if let transaction = transaction {
                 self?.sendTransaction(transaction, walletId: walletId, chainId: chainId, requestId: id, interactor: interactor)
-                Window.closeAllAndActivateBrowser(force: nil)
+                Window.closeWindowAndActivateNext(idToClose: windowNumber, specificBrowser: nil)
             } else {
-                Window.closeAllAndActivateBrowser(force: nil)
+                Window.closeWindowAndActivateNext(idToClose: windowNumber, specificBrowser: nil)
                 self?.rejectRequest(id: id, interactor: interactor, message: Strings.canceled)
             }
         }
@@ -162,12 +164,14 @@ class WalletConnect {
         }
 
         let peer = PeerMeta(wcPeerMeta: getPeerOfInteractor(interactor))
-        agent.showApprove(subject: approvalSubject, meta: message ?? "", peerMeta: peer) { [weak self, weak interactor] approved in
+        let windowController = Window.showNew(closeOthers: false)
+        let windowNumber = windowController.window?.windowNumber
+        agent.showApprove(windowController: windowController, browser: .unknown, subject: approvalSubject, meta: message ?? "", peerMeta: peer) { [weak self, weak interactor] approved in
             if approved {
                 self?.sign(id: id, payload: payload, walletId: walletId, interactor: interactor)
-                Window.closeAllAndActivateBrowser(force: nil)
+                Window.closeWindowAndActivateNext(idToClose: windowNumber, specificBrowser: nil)
             } else {
-                Window.closeAllAndActivateBrowser(force: nil)
+                Window.closeWindowAndActivateNext(idToClose: windowNumber, specificBrowser: nil)
                 self?.rejectRequest(id: id, interactor: interactor, message: Strings.canceled)
             }
         }
