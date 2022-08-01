@@ -23,10 +23,14 @@ struct Window {
         window?.makeKeyAndOrderFront(nil)
     }
     
-    static func closeWindowAndActivateNext(idToClose: Int?, specificBrowser: Browser?) {
+    static func closeWindow(idToClose: Int?) {
         if let id = idToClose, let windowToClose = NSApplication.shared.windows.first(where: { $0.windowNumber == id }) {
             windowToClose.close()
         }
+    }
+    
+    static func closeWindowAndActivateNext(idToClose: Int?, specificBrowser: Browser?) {
+        closeWindow(idToClose: idToClose)
         
         if let window = NSApplication.shared.windows.last(where: { $0.windowNumber != idToClose && $0.isOnActiveSpace && $0.contentViewController != nil }) {
             activateWindow(window)
@@ -48,7 +52,7 @@ struct Window {
     }
     
     private static func activateBrowser(specific browser: Browser?) {
-        if let browser = browser {
+        if let browser = browser, browser != .unknown {
             activateBrowser(browser)
             return
         }
