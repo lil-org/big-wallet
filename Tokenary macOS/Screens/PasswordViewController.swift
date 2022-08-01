@@ -21,6 +21,7 @@ class PasswordViewController: NSViewController {
     private var reason: AuthenticationReason?
     private var passwordToRepeat: String?
     private var completion: ((Bool) -> Void)?
+    private var didCallCompletion = false
     
     @IBOutlet weak var reasonLabel: NSTextField!
     @IBOutlet weak var cancelButton: NSButton!
@@ -41,6 +42,11 @@ class PasswordViewController: NSViewController {
         } else {
             reasonLabel.stringValue = ""
         }
+    }
+    
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        view.window?.delegate = self
     }
     
     func switchToMode(_ mode: Mode) {
@@ -67,11 +73,11 @@ class PasswordViewController: NSViewController {
             let repeated = passwordTextField.stringValue
             if repeated == passwordToRepeat {
                 keychain.save(password: repeated)
-                completion?(true)
+                callCompletion(result: true)
             }
         case .enter:
             if keychain.password == passwordTextField.stringValue {
-                completion?(true)
+                callCompletion(result: true)
             }
         }
     }
@@ -83,7 +89,14 @@ class PasswordViewController: NSViewController {
         case .repeatAfterCreate:
             switchToMode(.create)
         case .enter:
-            completion?(false)
+            callCompletion(result: false)
+        }
+    }
+    
+    private func callCompletion(result: Bool) {
+        if !didCallCompletion {
+            didCallCompletion = true
+            completion?(result)
         }
     }
     
@@ -93,6 +106,14 @@ extension PasswordViewController: NSTextFieldDelegate {
     
     func controlTextDidChange(_ obj: Notification) {
         okButton.isEnabled = passwordTextField.stringValue.isOkAsPassword
+    }
+    
+}
+
+extension PasswordViewController: NSWindowDelegate {
+    
+    func windowWillClose(_ notification: Notification) {
+        callCompletion(result: false)
     }
     
 }

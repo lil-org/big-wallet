@@ -679,7 +679,7 @@
                 <customObject id="YLy-65-1bz" customClass="NSFontManager"/>
                 <customObject id="Ady-hI-5gd" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="173" y="-44"/>
+            <point key="canvasLocation" x="158" y="-43"/>
         </scene>
         <!--Window Controller-->
         <scene sceneID="R2V-B0-nI4">
@@ -1218,75 +1218,6 @@ DQ
             </objects>
             <point key="canvasLocation" x="75" y="1188"/>
         </scene>
-        <!--Error View Controller-->
-        <scene sceneID="LSi-74-yAS">
-            <objects>
-                <viewController storyboardIdentifier="ErrorViewController" id="Os3-h2-6sc" customClass="ErrorViewController" customModule="Tokenary" customModuleProvider="target" sceneMemberID="viewController">
-                    <view key="view" id="cFH-jd-zLP">
-                        <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
-                        <autoresizingMask key="autoresizingMask"/>
-                        <subviews>
-                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="T7q-cN-jjc">
-                                <rect key="frame" x="14" y="292" width="222" height="34"/>
-                                <textFieldCell key="cell" controlSize="large" alignment="center" title="Error" id="t7e-cO-oeN">
-                                    <font key="font" metaFont="systemHeavy" size="29"/>
-                                    <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
-                                    <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
-                                </textFieldCell>
-                            </textField>
-                            <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="12" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="owz-dg-x2C">
-                                <rect key="frame" x="106" y="32" width="39" height="28"/>
-                                <subviews>
-                                    <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="bRK-Tb-oKu">
-                                        <rect key="frame" x="-6" y="-6" width="51" height="40"/>
-                                        <buttonCell key="cell" type="push" title="OK" bezelStyle="rounded" alignment="center" controlSize="large" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="xDk-iz-zcw">
-                                            <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
-                                            <font key="font" metaFont="system"/>
-                                            <string key="keyEquivalent" base64-UTF8="YES">
-DQ
-</string>
-                                            <connections>
-                                                <action selector="actionButtonTapped:" target="Os3-h2-6sc" id="1PU-4O-ljb"/>
-                                            </connections>
-                                        </buttonCell>
-                                    </button>
-                                </subviews>
-                                <visibilityPriorities>
-                                    <integer value="1000"/>
-                                </visibilityPriorities>
-                                <customSpacing>
-                                    <real value="3.4028234663852886e+38"/>
-                                </customSpacing>
-                            </stackView>
-                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="M1Q-Iu-4dD">
-                                <rect key="frame" x="34" y="175" width="182" height="25"/>
-                                <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Failed to connect" id="qy3-O0-p56">
-                                    <font key="font" metaFont="systemBold" size="21"/>
-                                    <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
-                                    <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
-                                </textFieldCell>
-                            </textField>
-                        </subviews>
-                        <constraints>
-                            <constraint firstItem="owz-dg-x2C" firstAttribute="centerX" secondItem="cFH-jd-zLP" secondAttribute="centerX" id="0OK-ZZ-1lf"/>
-                            <constraint firstItem="T7q-cN-jjc" firstAttribute="leading" secondItem="cFH-jd-zLP" secondAttribute="leading" constant="16" id="0mu-SM-Kvn"/>
-                            <constraint firstAttribute="trailing" secondItem="T7q-cN-jjc" secondAttribute="trailing" constant="16" id="AOT-En-wYh"/>
-                            <constraint firstItem="M1Q-Iu-4dD" firstAttribute="trailing" secondItem="T7q-cN-jjc" secondAttribute="trailing" constant="-20" id="Gbp-eZ-HHz"/>
-                            <constraint firstAttribute="bottom" secondItem="owz-dg-x2C" secondAttribute="bottom" constant="32" id="O7Z-WD-F1G"/>
-                            <constraint firstItem="M1Q-Iu-4dD" firstAttribute="centerY" secondItem="cFH-jd-zLP" secondAttribute="centerY" constant="-12" id="TQG-iy-bgb"/>
-                            <constraint firstItem="M1Q-Iu-4dD" firstAttribute="leading" secondItem="T7q-cN-jjc" secondAttribute="leading" constant="20" id="XO8-WA-SOb"/>
-                            <constraint firstItem="T7q-cN-jjc" firstAttribute="top" secondItem="cFH-jd-zLP" secondAttribute="top" constant="24" id="qQl-EG-gwj"/>
-                        </constraints>
-                    </view>
-                    <connections>
-                        <outlet property="messageLabel" destination="M1Q-Iu-4dD" id="s4z-1r-zIH"/>
-                        <outlet property="titleLabel" destination="T7q-cN-jjc" id="nXO-3X-Qbu"/>
-                    </connections>
-                </viewController>
-                <customObject id="gpa-4h-EjA" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
-            </objects>
-            <point key="canvasLocation" x="380" y="1177"/>
-        </scene>
         <!--Password View Controller-->
         <scene sceneID="Riu-mP-tQs">
             <objects>
@@ -1671,7 +1602,7 @@ DQ
                 </viewController>
                 <customObject id="E6z-rT-Kks" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="-219" y="1197"/>
+            <point key="canvasLocation" x="380" y="1197"/>
         </scene>
         <!--Edit Accounts View Controller-->
         <scene sceneID="PtW-Bw-c7x">

@@ -123,7 +123,6 @@
 		2C8A09D726751A0C00993638 /* WalletConnect.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09D626751A0C00993638 /* WalletConnect.swift */; };
 		2C8A09DF267579EA00993638 /* AccountsListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09DE267579EA00993638 /* AccountsListViewController.swift */; };
 		2C8A09E326757FC000993638 /* AccountCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09E226757FC000993638 /* AccountCellView.swift */; };
-		2C8A09E82675960D00993638 /* ErrorViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09E72675960D00993638 /* ErrorViewController.swift */; };
 		2C8A09EB2675964700993638 /* ApproveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09EA2675964700993638 /* ApproveViewController.swift */; };
 		2C8A09EE2675965F00993638 /* WaitingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09ED2675965F00993638 /* WaitingViewController.swift */; };
 		2C8E47A326A322E8007B8354 /* RightClickTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8E47A226A322E8007B8354 /* RightClickTableView.swift */; };
@@ -352,7 +351,6 @@
 		2C8A09D626751A0C00993638 /* WalletConnect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletConnect.swift; sourceTree = "<group>"; };
 		2C8A09DE267579EA00993638 /* AccountsListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsListViewController.swift; sourceTree = "<group>"; };
 		2C8A09E226757FC000993638 /* AccountCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountCellView.swift; sourceTree = "<group>"; };
-		2C8A09E72675960D00993638 /* ErrorViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorViewController.swift; sourceTree = "<group>"; };
 		2C8A09EA2675964700993638 /* ApproveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveViewController.swift; sourceTree = "<group>"; };
 		2C8A09ED2675965F00993638 /* WaitingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitingViewController.swift; sourceTree = "<group>"; };
 		2C8E47A226A322E8007B8354 /* RightClickTableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RightClickTableView.swift; sourceTree = "<group>"; };
@@ -678,7 +676,6 @@
 				2C1995412674C4B900A8E370 /* ImportViewController.swift */,
 				2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */,
 				2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */,
-				2C8A09E72675960D00993638 /* ErrorViewController.swift */,
 				2C901C462689E6D400D0926A /* ApproveTransactionViewController.swift */,
 				2C8A09EA2675964700993638 /* ApproveViewController.swift */,
 				2C8A09ED2675965F00993638 /* WaitingViewController.swift */,
@@ -1380,7 +1377,6 @@
 				2C4768A9282598C5005E8D4D /* CoinDerivationCellView.swift in Sources */,
 				2CB4031D281D745D00BAEBEE /* NSTableView.swift in Sources */,
 				2CD0B3F726AC619900488D92 /* AddAccountOptionCellView.swift in Sources */,
-				2C8A09E82675960D00993638 /* ErrorViewController.swift in Sources */,
 				0D059AD226C2796200EE3023 /* ApprovalSubject.swift in Sources */,
 				2C264BCB27B2F2FF00234393 /* TezosSafariRequest.swift in Sources */,
 				2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */,

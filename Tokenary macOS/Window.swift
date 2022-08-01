@@ -4,8 +4,10 @@ import Cocoa
 
 struct Window {
     
-    static func showNew() -> NSWindowController {
-        closeAll()
+    static func showNew(closeOthers: Bool) -> NSWindowController {
+        if closeOthers {
+            closeAll()
+        }
         let windowController = new
         activate(windowController)
         return windowController
@@ -21,19 +23,31 @@ struct Window {
         window?.makeKeyAndOrderFront(nil)
     }
     
-    static func closeAllAndActivateBrowser(force browser: Browser?) {
-        closeAll()
-        activateBrowser(force: browser)
-    }
-    
-    static func closeAll(updateStatusBarItem: Bool = true) {
-        NSApplication.shared.windows.forEach { $0.close() }
-        if updateStatusBarItem {
-            Agent.shared.setupStatusBarItem()
+    static func closeWindowAndActivateNext(idToClose: Int?, specificBrowser: Browser?) {
+        if let id = idToClose, let windowToClose = NSApplication.shared.windows.first(where: { $0.windowNumber == id }) {
+            windowToClose.close()
+        }
+        
+        if let window = NSApplication.shared.windows.last(where: { $0.windowNumber != idToClose && $0.isOnActiveSpace && $0.contentViewController != nil }) {
+            activateWindow(window)
+        } else {
+            activateBrowser(specific: specificBrowser)
         }
     }
     
-    static func activateBrowser(force browser: Browser?) {
+    static func closeAllAndActivateBrowser(specific browser: Browser?) {
+        closeAll()
+        activateBrowser(specific: browser)
+    }
+    
+    // MARK: - Private
+    
+    private static func closeAll() {
+        NSApplication.shared.windows.forEach { $0.close() }
+        Agent.shared.setupStatusBarItem()
+    }
+    
+    private static func activateBrowser(specific browser: Browser?) {
         if let browser = browser {
             activateBrowser(browser)
             return
@@ -64,11 +78,7 @@ struct Window {
         NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == browser.rawValue })?.activate(options: .activateIgnoringOtherApps)
     }
     
-    static var current: NSWindowController? {
-        return NSApplication.shared.windows.first?.windowController
-    }
-    
-    static var new: NSWindowController {
+    private static var new: NSWindowController {
         return NSStoryboard.main.instantiateController(withIdentifier: "initial") as! NSWindowController
     }
     
