@@ -160,11 +160,14 @@ class Agent: NSObject {
         alert.alertStyle = .warning
         alert.addButton(withTitle: Strings.ok)
         alert.addButton(withTitle: Strings.cancel)
-        if alert.runModal() == .alertFirstButtonReturn {
-            NSApp.terminate(nil)
-        }
-        if updateStatusBarAfterwards {
-            setupStatusBarItem()
+        
+        DispatchQueue.main.async { [weak self] in
+            if alert.runModal() == .alertFirstButtonReturn {
+                NSApp.terminate(nil)
+            }
+            if updateStatusBarAfterwards {
+                self?.setupStatusBarItem()
+            }
         }
     }
     
