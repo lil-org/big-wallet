@@ -9,7 +9,7 @@ extension CoinType {
         case .solana:
             return "Solana"
         case .ethereum:
-            return "Ethereum"
+            return "Ethereum & L2s"
         case .near:
             return "Near"
         default:
