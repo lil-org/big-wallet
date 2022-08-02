@@ -66,6 +66,7 @@ class ApproveTransactionViewController: NSViewController {
     override func viewDidAppear() {
         super.viewDidAppear()
         view.window?.delegate = self
+        view.window?.makeFirstResponder(view)
     }
     
     private func callCompletion(result: Transaction?) {

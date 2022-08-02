@@ -59,6 +59,7 @@ class ApproveViewController: NSViewController {
     override func viewDidAppear() {
         super.viewDidAppear()
         view.window?.delegate = self
+        view.window?.makeFirstResponder(view)
     }
     
     func enableWaiting() {
