@@ -134,8 +134,11 @@ window.addEventListener("message", function(event) {
 var getFavicon = function() {
     var nodeList = document.getElementsByTagName("link");
     for (var i = 0; i < nodeList.length; i++) {
-        if ((nodeList[i].getAttribute("rel") == "icon") || (nodeList[i].getAttribute("rel") == "shortcut icon")) {
-            return nodeList[i].getAttribute("href");
+        if ((nodeList[i].getAttribute("rel") == "apple-touch-icon") || (nodeList[i].getAttribute("rel") == "icon") || (nodeList[i].getAttribute("rel") == "shortcut icon")) {
+            const favicon = nodeList[i].getAttribute("href");
+            if (!favicon.endsWith("svg")) {
+                return favicon;
+            }
         }
     }
     return "";
