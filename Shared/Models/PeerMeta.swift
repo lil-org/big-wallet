@@ -23,3 +23,11 @@ struct PeerMeta {
     }
     
 }
+
+extension SafariRequest {
+    
+    var peerMeta: PeerMeta {
+        return PeerMeta(title: host, iconURLString: favicon)
+    }
+    
+}

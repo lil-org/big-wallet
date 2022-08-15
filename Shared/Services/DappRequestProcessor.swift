@@ -57,7 +57,7 @@ struct DappRequestProcessor {
     }
     
     private static func process(request: SafariRequest, nearRequest body: SafariRequest.Near, completion: @escaping () -> Void) -> DappRequestAction {
-        let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
+        let peerMeta = request.peerMeta
         lazy var account = getAccount(coin: .near, address: body.account)
         lazy var privateKey = getPrivateKey(coin: .near, address: body.account)
         
@@ -108,7 +108,7 @@ struct DappRequestProcessor {
     }
     
     private static func process(request: SafariRequest, solanaRequest body: SafariRequest.Solana, completion: @escaping () -> Void) -> DappRequestAction {
-        let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
+        let peerMeta = request.peerMeta
         lazy var account = getAccount(coin: .solana, address: body.publicKey)
         lazy var privateKey = getPrivateKey(coin: .solana, address: body.publicKey)
         
@@ -189,7 +189,7 @@ struct DappRequestProcessor {
     }
     
     private static func process(request: SafariRequest, ethereumRequest: SafariRequest.Ethereum, completion: @escaping () -> Void) -> DappRequestAction {
-        let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
+        let peerMeta = request.peerMeta
         lazy var account = getAccount(coin: .ethereum, address: ethereumRequest.address)
         
         switch ethereumRequest.method {

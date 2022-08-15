@@ -11,7 +11,7 @@ class AccountsListViewController: NSViewController {
     
     private var chain = EthereumChain.ethereum
     private var didCallCompletion = false
-    var onSelectedWallet: ((EthereumChain?, TokenaryWallet?, Account?) -> Void)?
+    var accountSelectionConfiguration: AccountSelectionConfiguration?
     var newWalletId: String?
     var getBackToRect: CGRect?
     
@@ -77,7 +77,6 @@ class AccountsListViewController: NSViewController {
         
         reloadHeader()
         updateCellModels()
-        NotificationCenter.default.addObserver(self, selector: #selector(didBecomeActive), name: NSApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: Notification.Name.walletsChanged, object: nil)
     }
     
@@ -98,17 +97,32 @@ class AccountsListViewController: NSViewController {
     private func callCompletion(wallet: TokenaryWallet?, account: Account?) {
         if !didCallCompletion {
             didCallCompletion = true
-            onSelectedWallet?(chain, wallet, account)
+            accountSelectionConfiguration?.completion(chain, wallet, account)
         }
     }
     
     private func reloadHeader() {
-        let canSelectAccount = onSelectedWallet != nil && !wallets.isEmpty
+        let canSelectAccount = accountSelectionConfiguration != nil && !wallets.isEmpty
         titleLabel.stringValue = canSelectAccount ? Strings.selectAccountTwoLines : Strings.wallets
         addButton.isHidden = wallets.isEmpty
         
-        titleLabelTopConstraint.constant = canSelectAccount ? 14 : 8
-        websiteNameStackView.isHidden = !canSelectAccount
+        if let peer = accountSelectionConfiguration?.peer {
+            websiteNameLabel.stringValue = peer.name
+            titleLabelTopConstraint.constant = 14
+            websiteNameStackView.isHidden = false
+            
+            if websiteLogoImageView.image == nil, let urlString = peer.iconURLString, let url = URL(string: urlString) {
+                websiteLogoImageView.kf.setImage(with: url) { [weak websiteLogoImageView] result in
+                    if case .success = result {
+                        websiteLogoImageView?.layer?.backgroundColor = NSColor.clear.cgColor
+                        websiteLogoImageView?.layer?.cornerRadius = 0
+                    }
+                }
+            }
+        } else {
+            titleLabelTopConstraint.constant = 8
+            websiteNameStackView.isHidden = true
+        }
         
         if canSelectAccount, networkButton.isHidden {
             networkButton.isHidden = false
@@ -138,14 +152,6 @@ class AccountsListViewController: NSViewController {
         } else if !canSelectAccount, !networkButton.isHidden {
             networkButton.isHidden = true
         }
-    }
-    
-    @objc private func didBecomeActive() {
-        guard view.window?.isVisible == true else { return }
-        if let completion = agent.getWalletSelectionCompletionIfShouldSelect() {
-            onSelectedWallet = completion
-        }
-        reloadHeader()
     }
     
     @IBAction func addButtonTapped(_ sender: NSButton) {
@@ -231,7 +237,7 @@ class AccountsListViewController: NSViewController {
     
     @objc private func didClickImportAccount() {
         let importViewController = instantiate(ImportViewController.self)
-        importViewController.onSelectedWallet = onSelectedWallet
+        importViewController.accountSelectionConfiguration = accountSelectionConfiguration
         view.window?.contentViewController = importViewController
     }
     
@@ -466,7 +472,7 @@ extension AccountsListViewController: AccountsHeaderDelegate {
         guard let wallet = walletForRow(row) else { return }
         
         let editAccountsViewController = instantiate(EditAccountsViewController.self)
-        editAccountsViewController.onSelectedWallet = onSelectedWallet
+        editAccountsViewController.accountSelectionConfiguration = accountSelectionConfiguration
         editAccountsViewController.wallet = wallet
         editAccountsViewController.getBackToRect = tableView.visibleRect
         view.window?.contentViewController = editAccountsViewController
@@ -514,7 +520,7 @@ extension AccountsListViewController: NSTableViewDelegate {
             return false
         }
         
-        if onSelectedWallet != nil {
+        if accountSelectionConfiguration != nil {
             callCompletion(wallet: wallet, account: account)
         } else {
             showMenuOnCellSelection(row: row)

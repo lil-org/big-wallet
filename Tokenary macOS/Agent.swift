@@ -78,11 +78,11 @@ class Agent: NSObject {
         } else {
             let accountsList = instantiate(AccountsListViewController.self)
             
-            if case let .wcSession(session) = request {
-                accountsList.onSelectedWallet = onSelectedWallet(session: session)
+            if case let .wcSession(session) = request, let completion = onSelectedWallet(session: session) {
+                accountsList.accountSelectionConfiguration = AccountSelectionConfiguration(peer: nil, completion: completion)
             }
             
-            let windowController = Window.showNew(closeOthers: accountsList.onSelectedWallet == nil)
+            let windowController = Window.showNew(closeOthers: accountsList.accountSelectionConfiguration == nil)
             windowController.contentViewController = accountsList
         }
     }
@@ -318,7 +318,7 @@ class Agent: NSObject {
             let windowController = Window.showNew(closeOthers: closeOtherWindows)
             windowNumber = windowController.window?.windowNumber
             let accountsList = instantiate(AccountsListViewController.self)
-            accountsList.onSelectedWallet = accountAction.completion
+            accountsList.accountSelectionConfiguration = AccountSelectionConfiguration(peer: safariRequest.peerMeta, completion: accountAction.completion)
             windowController.contentViewController = accountsList
         case .approveMessage(let action):
             let windowController = Window.showNew(closeOthers: false)
