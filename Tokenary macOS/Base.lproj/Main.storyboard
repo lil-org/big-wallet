@@ -944,6 +944,7 @@ DQ
                                     </subviews>
                                 </clipView>
                                 <constraints>
+                                    <constraint firstAttribute="height" constant="280" id="wta-1a-4RU"/>
                                     <constraint firstAttribute="width" constant="250" id="zxW-2l-wsU"/>
                                 </constraints>
                                 <scroller key="horizontalScroller" hidden="YES" wantsLayer="YES" verticalHuggingPriority="750" horizontal="YES" id="IT1-B8-OHF">
@@ -975,17 +976,60 @@ DQ
                                     <action selector="networkButtonTapped:" target="29s-Rd-OUf" id="JUo-sQ-bBT"/>
                                 </connections>
                             </button>
+                            <stackView distribution="fill" orientation="vertical" alignment="leading" spacing="0.0" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="1000" verticalHuggingPriority="1000" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="teC-wK-5y1">
+                                <rect key="frame" x="125" y="334" width="0.0" height="0.0"/>
+                                <subviews>
+                                    <stackView hidden="YES" distribution="fill" orientation="horizontal" alignment="top" spacing="6" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="1000" verticalCompressionResistancePriority="1000" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="H9M-qt-ZuF">
+                                        <rect key="frame" x="0.0" y="-16" width="119" height="16"/>
+                                        <subviews>
+                                            <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="25J-Lu-4aq">
+                                                <rect key="frame" x="0.0" y="0.0" width="16" height="16"/>
+                                                <constraints>
+                                                    <constraint firstAttribute="height" constant="16" id="9BR-I3-Qat"/>
+                                                    <constraint firstAttribute="width" constant="16" id="c28-0n-EPd"/>
+                                                </constraints>
+                                                <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyDown" id="9eJ-C5-e6g"/>
+                                            </imageView>
+                                            <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Khi-cn-EGb">
+                                                <rect key="frame" x="20" y="0.0" width="101" height="16"/>
+                                                <textFieldCell key="cell" lineBreakMode="truncatingTail" title="Unknown dapp" id="CM5-MZ-VQq">
+                                                    <font key="font" metaFont="systemBold"/>
+                                                    <color key="textColor" name="secondaryLabelColor" catalog="System" colorSpace="catalog"/>
+                                                    <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                                                </textFieldCell>
+                                            </textField>
+                                        </subviews>
+                                        <visibilityPriorities>
+                                            <integer value="1000"/>
+                                            <integer value="1000"/>
+                                        </visibilityPriorities>
+                                        <customSpacing>
+                                            <real value="3.4028234663852886e+38"/>
+                                            <real value="3.4028234663852886e+38"/>
+                                        </customSpacing>
+                                    </stackView>
+                                </subviews>
+                                <visibilityPriorities>
+                                    <integer value="1000"/>
+                                </visibilityPriorities>
+                                <customSpacing>
+                                    <real value="3.4028234663852886e+38"/>
+                                </customSpacing>
+                            </stackView>
                         </subviews>
                         <constraints>
                             <constraint firstItem="ngQ-Bn-Kwd" firstAttribute="leading" secondItem="dkh-kG-EFj" secondAttribute="trailing" constant="10" id="2jH-ov-jln"/>
                             <constraint firstItem="7bs-Kr-ija" firstAttribute="leading" secondItem="Yjc-Zm-uZY" secondAttribute="leading" id="3n0-jB-KwV"/>
                             <constraint firstAttribute="trailing" secondItem="7bs-Kr-ija" secondAttribute="trailing" id="6m3-S7-WJp"/>
+                            <constraint firstItem="teC-wK-5y1" firstAttribute="top" secondItem="Yjc-Zm-uZY" secondAttribute="top" constant="16" id="D2B-2h-top"/>
                             <constraint firstAttribute="trailing" secondItem="ngQ-Bn-Kwd" secondAttribute="trailing" constant="12" id="Ln4-b5-NfT"/>
+                            <constraint firstItem="teC-wK-5y1" firstAttribute="centerX" secondItem="Yjc-Zm-uZY" secondAttribute="centerX" id="QdA-64-M4F"/>
                             <constraint firstItem="ngQ-Bn-Kwd" firstAttribute="firstBaseline" secondItem="dkh-kG-EFj" secondAttribute="firstBaseline" id="RDE-f4-Heb"/>
-                            <constraint firstItem="eNt-GB-Tzb" firstAttribute="top" secondItem="Yjc-Zm-uZY" secondAttribute="top" constant="35" id="dRD-EV-wsJ"/>
+                            <constraint firstAttribute="trailing" relation="greaterThanOrEqual" secondItem="teC-wK-5y1" secondAttribute="trailing" constant="16" id="c7u-4P-5OL"/>
+                            <constraint firstItem="eNt-GB-Tzb" firstAttribute="centerY" secondItem="ngQ-Bn-Kwd" secondAttribute="centerY" constant="2" id="dq4-lW-ssv"/>
                             <constraint firstItem="7bs-Kr-ija" firstAttribute="top" secondItem="dkh-kG-EFj" secondAttribute="bottom" constant="12" id="fXb-zL-LLv"/>
+                            <constraint firstItem="dkh-kG-EFj" firstAttribute="top" secondItem="teC-wK-5y1" secondAttribute="bottom" constant="8" id="fig-45-iff"/>
                             <constraint firstItem="dkh-kG-EFj" firstAttribute="leading" relation="greaterThanOrEqual" secondItem="eNt-GB-Tzb" secondAttribute="trailing" constant="3" id="imS-CC-tSQ"/>
-                            <constraint firstItem="dkh-kG-EFj" firstAttribute="top" secondItem="Yjc-Zm-uZY" secondAttribute="top" constant="24" id="oaa-yR-g0U"/>
                             <constraint firstItem="dkh-kG-EFj" firstAttribute="centerX" secondItem="Yjc-Zm-uZY" secondAttribute="centerX" id="qoF-Dr-xWA"/>
                             <constraint firstAttribute="bottom" secondItem="7bs-Kr-ija" secondAttribute="bottom" id="zCE-cx-u4r"/>
                             <constraint firstItem="eNt-GB-Tzb" firstAttribute="leading" secondItem="Yjc-Zm-uZY" secondAttribute="leading" constant="17" id="zcY-Q0-K0f"/>
@@ -996,11 +1040,15 @@ DQ
                         <outlet property="networkButton" destination="eNt-GB-Tzb" id="cvm-05-aZj"/>
                         <outlet property="tableView" destination="glA-FK-Kdd" id="9aW-Qr-UuF"/>
                         <outlet property="titleLabel" destination="dkh-kG-EFj" id="xDn-bP-HWG"/>
+                        <outlet property="titleLabelTopConstraint" destination="fig-45-iff" id="oIf-XA-wf5"/>
+                        <outlet property="websiteLogoImageView" destination="25J-Lu-4aq" id="GrB-Xe-SUU"/>
+                        <outlet property="websiteNameLabel" destination="Khi-cn-EGb" id="Qf9-nL-7eP"/>
+                        <outlet property="websiteNameStackView" destination="H9M-qt-ZuF" id="598-jz-EmW"/>
                     </connections>
                 </viewController>
                 <customObject id="JTb-7y-Jwq" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="380" y="741"/>
+            <point key="canvasLocation" x="980" y="315"/>
         </scene>
         <!--Waiting View Controller-->
         <scene sceneID="xkb-7p-mUK">
@@ -1775,7 +1823,7 @@ DQ
                 </viewController>
                 <customObject id="pvA-vl-oOf" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="989" y="1177"/>
+            <point key="canvasLocation" x="380" y="740"/>
         </scene>
     </scenes>
     <resources>

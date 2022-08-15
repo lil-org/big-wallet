@@ -44,6 +44,17 @@ class AccountsListViewController: NSViewController {
         }
     }
     
+    @IBOutlet weak var websiteLogoImageView: NSImageView! {
+        didSet {
+            websiteLogoImageView.wantsLayer = true
+            websiteLogoImageView.layer?.backgroundColor = NSColor.systemGray.withAlphaComponent(0.5).cgColor
+            websiteLogoImageView.layer?.cornerRadius = 5
+        }
+    }
+    
+    @IBOutlet weak var titleLabelTopConstraint: NSLayoutConstraint!
+    @IBOutlet weak var websiteNameStackView: NSStackView!
+    @IBOutlet weak var websiteNameLabel: NSTextField!
     @IBOutlet weak var networkButton: NSButton!
     @IBOutlet weak var titleLabel: NSTextField!
     @IBOutlet weak var tableView: RightClickTableView! {
@@ -95,6 +106,9 @@ class AccountsListViewController: NSViewController {
         let canSelectAccount = onSelectedWallet != nil && !wallets.isEmpty
         titleLabel.stringValue = canSelectAccount ? Strings.selectAccountTwoLines : Strings.wallets
         addButton.isHidden = wallets.isEmpty
+        
+        titleLabelTopConstraint.constant = canSelectAccount ? 14 : 8
+        websiteNameStackView.isHidden = !canSelectAccount
         
         if canSelectAccount, networkButton.isHidden {
             networkButton.isHidden = false
