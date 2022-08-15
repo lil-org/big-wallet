@@ -106,7 +106,7 @@ class AccountsListViewController: NSViewController {
         titleLabel.stringValue = canSelectAccount ? Strings.selectAccountTwoLines : Strings.wallets
         addButton.isHidden = wallets.isEmpty
         
-        if let peer = accountSelectionConfiguration?.peer {
+        if canSelectAccount, let peer = accountSelectionConfiguration?.peer {
             websiteNameLabel.stringValue = peer.name
             titleLabelTopConstraint.constant = 14
             websiteNameStackView.isHidden = false
