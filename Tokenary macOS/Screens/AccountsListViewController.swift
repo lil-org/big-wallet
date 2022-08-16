@@ -52,6 +52,10 @@ class AccountsListViewController: NSViewController {
         }
     }
     
+    @IBOutlet weak var secondaryButton: NSButton!
+    @IBOutlet weak var primaryButton: NSButton!
+    @IBOutlet weak var bottomButtonsStackView: NSStackView!
+    @IBOutlet weak var accountsListBottomConstraint: NSLayoutConstraint!
     @IBOutlet weak var titleLabelTopConstraint: NSLayoutConstraint!
     @IBOutlet weak var websiteNameStackView: NSStackView!
     @IBOutlet weak var websiteNameLabel: NSTextField!
@@ -76,6 +80,7 @@ class AccountsListViewController: NSViewController {
         super.viewDidLoad()
         
         reloadHeader()
+        updateBottomButtons()
         updateCellModels()
         NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: Notification.Name.walletsChanged, object: nil)
     }
@@ -98,6 +103,17 @@ class AccountsListViewController: NSViewController {
         if !didCallCompletion {
             didCallCompletion = true
             accountSelectionConfiguration?.completion(chain, wallet, account)
+        }
+    }
+    
+    private func updateBottomButtons() {
+        if let accountSelectionConfiguration = accountSelectionConfiguration {
+            // TODO: implement buttons logic
+            accountsListBottomConstraint.constant = 62
+            bottomButtonsStackView.isHidden = false
+        } else {
+            accountsListBottomConstraint.constant = 0
+            bottomButtonsStackView.isHidden = true
         }
     }
     
@@ -176,6 +192,14 @@ class AccountsListViewController: NSViewController {
         origin.x += sender.frame.width
         origin.y += sender.frame.height
         sender.menu?.popUp(positioning: nil, at: origin, in: view)
+    }
+    
+    @IBAction func didClickSecondaryButton(_ sender: Any) {
+        
+    }
+    
+    @IBAction func didClickPrimaryButton(_ sender: Any) {
+        
     }
     
     @objc private func didSelectChain(_ sender: AnyObject) {
@@ -339,6 +363,7 @@ class AccountsListViewController: NSViewController {
     
     @objc private func walletsChanged() {        
         reloadHeader()
+        updateBottomButtons()
         updateCellModels()
         tableView.reloadData()
     }
