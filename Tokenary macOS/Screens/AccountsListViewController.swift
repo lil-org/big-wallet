@@ -195,7 +195,10 @@ class AccountsListViewController: NSViewController {
     }
     
     @IBAction func didClickSecondaryButton(_ sender: Any) {
-        
+        callCompletion(wallet: nil, account: nil)
+        // TODO: distinguish cancel and disconnect
+        // when it was dapp's request, we should deliver response anyway
+        // when it was extension action, no need to deliver response to inpage
     }
     
     @IBAction func didClickPrimaryButton(_ sender: Any) {
@@ -619,6 +622,9 @@ extension AccountsListViewController: NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
         callCompletion(wallet: nil, account: nil)
+        // TODO: distinguish cancel and disconnect
+        // when it was dapp's request, we should deliver response anyway
+        // when it was extension action, no need to deliver response to inpage
     }
     
 }
