@@ -15,9 +15,20 @@ class AccountCellView: NSTableRowView {
     }
     @IBOutlet weak var addressTextField: NSTextField!
     
-    func setup(account: Account) {
+    override func awakeFromNib() {
+        super.awakeFromNib()
+        wantsLayer = true
+    }
+    
+    func setup(account: Account, isSelected: Bool) {
         addressImageView.image = account.image
         addressTextField.stringValue = account.croppedAddress
+        setSelected(isSelected)
+    }
+    
+    func setSelected(_ selected: Bool) {
+        layer?.backgroundColor = (selected ? NSColor.selectedContentBackgroundColor : NSColor.clear).cgColor
+        addressTextField.textColor = selected ? NSColor.selectedMenuItemTextColor : NSColor.labelColor
     }
     
     func blink() {

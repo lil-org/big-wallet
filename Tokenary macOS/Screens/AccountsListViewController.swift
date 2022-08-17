@@ -549,11 +549,13 @@ extension AccountsListViewController: NSTableViewDelegate {
         }
         
         if accountSelectionConfiguration != nil {
-            callCompletion(wallet: wallet, account: account)
+            // TODO: add to selected accounts list, but do not call completion right away
+            // callCompletion(wallet: wallet, account: account)
+            return false
         } else {
             showMenuOnCellSelection(row: row)
+            return true
         }
-        return true
     }
     
 }
@@ -566,12 +568,12 @@ extension AccountsListViewController: NSTableViewDataSource {
         case let .privateKeyAccount(walletIndex: walletIndex):
             let wallet = wallets[walletIndex]
             let rowView = tableView.makeViewOfType(AccountCellView.self, owner: self)
-            rowView.setup(account: wallet.accounts[0])
+            rowView.setup(account: wallet.accounts[0], isSelected: false) // TODO: use correct isSelected value
             return rowView
         case let .mnemonicAccount(walletIndex: walletIndex, accountIndex: accountIndex):
             let wallet = wallets[walletIndex]
             let rowView = tableView.makeViewOfType(AccountCellView.self, owner: self)
-            rowView.setup(account: wallet.accounts[accountIndex])
+            rowView.setup(account: wallet.accounts[accountIndex], isSelected: false) // TODO: use correct isSelected value
             return rowView
         case .mnemonicWalletHeader:
             let rowView = tableView.makeViewOfType(AccountsHeaderRowView.self, owner: self)
