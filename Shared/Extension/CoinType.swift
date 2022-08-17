@@ -43,4 +43,19 @@ extension CoinType {
         }
     }
     
+    static func correspondingToWeb3Provider(_ web3Provider: Web3Provider) -> CoinType? {
+        switch web3Provider {
+        case .ethereum:
+            return .ethereum
+        case .solana:
+            return .solana
+        case .tezos:
+            return .tezos
+        case .near:
+            return .near
+        case .unknown:
+            return nil
+        }
+    }
+    
 }

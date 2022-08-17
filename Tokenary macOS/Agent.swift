@@ -79,7 +79,7 @@ class Agent: NSObject {
             let accountsList = instantiate(AccountsListViewController.self)
             
             if case let .wcSession(session) = request, let completion = onSelectedWallet(session: session) {
-                accountsList.accountSelectionConfiguration = AccountSelectionConfiguration(peer: nil, selectedAccounts: Set(), completion: completion)
+                accountsList.accountSelectionConfiguration = AccountSelectionConfiguration(peer: nil, coinType: .ethereum, selectedAccounts: Set(), completion: completion)
             }
             
             let windowController = Window.showNew(closeOthers: accountsList.accountSelectionConfiguration == nil)
@@ -319,7 +319,10 @@ class Agent: NSObject {
             windowNumber = windowController.window?.windowNumber
             let accountsList = instantiate(AccountsListViewController.self)
             // TODO: pass selected accounts when there are some
-            accountsList.accountSelectionConfiguration = AccountSelectionConfiguration(peer: safariRequest.peerMeta, selectedAccounts: Set(), completion: accountAction.completion)
+            accountsList.accountSelectionConfiguration = AccountSelectionConfiguration(peer: safariRequest.peerMeta,
+                                                                                       coinType: CoinType.correspondingToWeb3Provider(accountAction.provider),
+                                                                                       selectedAccounts: Set(),
+                                                                                       completion: accountAction.completion)
             windowController.contentViewController = accountsList
         case .approveMessage(let action):
             let windowController = Window.showNew(closeOthers: false)

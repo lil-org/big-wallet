@@ -5,6 +5,7 @@ import WalletCore
 
 struct AccountSelectionConfiguration {
     let peer: PeerMeta?
+    let coinType: CoinType?
     var selectedAccounts: Set<SpecificWalletAccount>
     let completion: ((EthereumChain?, SpecificWalletAccount?) -> Void)
 }
