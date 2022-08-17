@@ -114,6 +114,11 @@ class AccountsListViewController: NSViewController {
             accountsListBottomConstraint.constant = 0
             bottomButtonsStackView.isHidden = true
         }
+        updatePrimaryButton()
+    }
+    
+    private func updatePrimaryButton() {
+        primaryButton.isEnabled = accountSelectionConfiguration?.selectedAccounts.isEmpty == false
     }
     
     private func reloadHeader() {
@@ -463,6 +468,8 @@ class AccountsListViewController: NSViewController {
         } else {
             accountSelectionConfiguration?.selectedAccounts.insert(specificWalletAccount)
         }
+        
+        updatePrimaryButton()
     }
     
 }
