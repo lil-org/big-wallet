@@ -485,6 +485,10 @@ class AccountsListViewController: NSViewController {
         updatePrimaryButton()
     }
     
+    private func accountCanBeSelected(_ account: Account) -> Bool {
+        return accountSelectionConfiguration?.coinType == nil || accountSelectionConfiguration?.coinType == account.coin
+    }
+    
 }
 
 extension AccountsListViewController: TableViewMenuSource {
@@ -583,9 +587,11 @@ extension AccountsListViewController: NSTableViewDelegate {
         }
         
         if accountSelectionConfiguration != nil {
-            let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
-            didClickAccountInSelectionMode(specificWalletAccount: specificWalletAccount)
-            tableView.reloadData()
+            if accountCanBeSelected(account) {
+                let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
+                didClickAccountInSelectionMode(specificWalletAccount: specificWalletAccount)
+                tableView.reloadData()
+            }
             return false
         } else {
             showMenuOnCellSelection(row: row)
