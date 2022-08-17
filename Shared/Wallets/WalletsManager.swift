@@ -64,6 +64,7 @@ final class WalletsManager {
         return wallets.first(where: { $0.id == id })
     }
     
+    // TODO: deprecate
     func getWallet(ethereumAddress: String) -> TokenaryWallet? {
         return wallets.first(where: { $0.ethereumAddress?.lowercased() == ethereumAddress.lowercased() })
     }

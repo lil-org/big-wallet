@@ -9,6 +9,8 @@ class AccountsListViewController: NSViewController {
     private let walletsManager = WalletsManager.shared
     private var cellModels = [CellModel]()
     
+    private var selectedAccounts = Set([Account]()) // TODO: place inside account selection configuration
+    
     private var chain = EthereumChain.ethereum
     private var didCallCompletion = false
     var accountSelectionConfiguration: AccountSelectionConfiguration?
@@ -202,7 +204,10 @@ class AccountsListViewController: NSViewController {
     }
     
     @IBAction func didClickPrimaryButton(_ sender: Any) {
-        
+        // TODO: call completion
+//        callCompletion(wallet: wallet, account: account)
+        // woah. what do i do about the fact we do not have a wallet here?
+        // maybe wallet is not necessary at all and i should remove it from here?
     }
     
     @objc private func didSelectChain(_ sender: AnyObject) {
@@ -549,8 +554,14 @@ extension AccountsListViewController: NSTableViewDelegate {
         }
         
         if accountSelectionConfiguration != nil {
-            // TODO: add to selected accounts list, but do not call completion right away
-            // callCompletion(wallet: wallet, account: account)
+            let wasSelected = selectedAccounts.contains(account)
+            (tableView.rowView(atRow: row, makeIfNecessary: false) as? AccountCellView)?.setSelected(!wasSelected)
+            if wasSelected {
+                selectedAccounts.remove(account)
+            } else {
+                selectedAccounts.insert(account)
+            }
+            // TODO: select only one account for each network
             return false
         } else {
             showMenuOnCellSelection(row: row)
@@ -568,12 +579,14 @@ extension AccountsListViewController: NSTableViewDataSource {
         case let .privateKeyAccount(walletIndex: walletIndex):
             let wallet = wallets[walletIndex]
             let rowView = tableView.makeViewOfType(AccountCellView.self, owner: self)
-            rowView.setup(account: wallet.accounts[0], isSelected: false) // TODO: use correct isSelected value
+            let account = wallet.accounts[0]
+            rowView.setup(account: account, isSelected: selectedAccounts.contains(account))
             return rowView
         case let .mnemonicAccount(walletIndex: walletIndex, accountIndex: accountIndex):
             let wallet = wallets[walletIndex]
             let rowView = tableView.makeViewOfType(AccountCellView.self, owner: self)
-            rowView.setup(account: wallet.accounts[accountIndex], isSelected: false) // TODO: use correct isSelected value
+            let account = wallet.accounts[accountIndex]
+            rowView.setup(account: account, isSelected: selectedAccounts.contains(account))
             return rowView
         case .mnemonicWalletHeader:
             let rowView = tableView.makeViewOfType(AccountsHeaderRowView.self, owner: self)
