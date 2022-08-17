@@ -369,7 +369,8 @@ class AccountsListViewController: NSViewController {
         try? walletsManager.delete(wallet: wallet)
     }
     
-    @objc private func walletsChanged() {        
+    @objc private func walletsChanged() {
+        validateSelectedAccounts()
         reloadHeader()
         updateBottomButtons()
         updateCellModels()
@@ -453,6 +454,18 @@ class AccountsListViewController: NSViewController {
             var point = NSEvent.mouseLocation
             point.x += 1
             self?.menuForRow(row)?.popUp(positioning: nil, at: point, in: nil)
+        }
+    }
+    
+    private func validateSelectedAccounts() {
+        guard let specificWalletAccounts = accountSelectionConfiguration?.selectedAccounts else { return }
+        for specificWalletAccount in specificWalletAccounts {
+            if let wallet = wallets.first(where: { $0.id == specificWalletAccount.walletId }),
+               wallet.accounts.contains(specificWalletAccount.account) {
+                continue
+            } else {
+                accountSelectionConfiguration?.selectedAccounts.remove(specificWalletAccount)
+            }
         }
     }
     
