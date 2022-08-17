@@ -32,8 +32,9 @@ struct DappRequestProcessor {
                 ExtensionBridge.respond(response: ResponseToExtension(for: request))
                 return .justShowApp
             case .switchAccount:
-                let action = SelectAccountAction(provider: .unknown) { chain, _, account in
-                    if let chain = chain, let account = account {
+                let action = SelectAccountAction(provider: .unknown) { chain, specificWalletAccount in
+                    if let chain = chain, let specificWalletAccount = specificWalletAccount {
+                        let account = specificWalletAccount.account
                         switch account.coin {
                         case .ethereum:
                             let responseBody = ResponseToExtension.Ethereum(results: [account.address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
@@ -63,9 +64,9 @@ struct DappRequestProcessor {
         
         switch body.method {
         case .signIn:
-            let action = SelectAccountAction(provider: .near) { _, _, account in
-                if let account = account, account.coin == .near {
-                    let responseBody = ResponseToExtension.Near(account: account.address)
+            let action = SelectAccountAction(provider: .near) { _, specificWalletAccount in
+                if let specificWalletAccount = specificWalletAccount, specificWalletAccount.account.coin == .near {
+                    let responseBody = ResponseToExtension.Near(account: specificWalletAccount.account.address)
                     respond(to: request, body: .near(responseBody), completion: completion)
                 } else {
                     respond(to: request, error: Strings.canceled, completion: completion)
@@ -114,9 +115,9 @@ struct DappRequestProcessor {
         
         switch body.method {
         case .connect:
-            let action = SelectAccountAction(provider: .solana) { _, _, account in
-                if let account = account, account.coin == .solana {
-                    let responseBody = ResponseToExtension.Solana(publicKey: account.address)
+            let action = SelectAccountAction(provider: .solana) { _, specificWalletAccount in
+                if let specificWalletAccount = specificWalletAccount, specificWalletAccount.account.coin == .solana {
+                    let responseBody = ResponseToExtension.Solana(publicKey: specificWalletAccount.account.address)
                     respond(to: request, body: .solana(responseBody), completion: completion)
                 } else {
                     respond(to: request, error: Strings.canceled, completion: completion)
@@ -194,9 +195,9 @@ struct DappRequestProcessor {
         
         switch ethereumRequest.method {
         case .requestAccounts:
-            let action = SelectAccountAction(provider: .ethereum) { chain, _, account in
-                if let chain = chain, let account = account, account.coin == .ethereum {
-                    let responseBody = ResponseToExtension.Ethereum(results: [account.address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
+            let action = SelectAccountAction(provider: .ethereum) { chain, specificWalletAccount in
+                if let chain = chain, let specificWalletAccount = specificWalletAccount, specificWalletAccount.account.coin == .ethereum {
+                    let responseBody = ResponseToExtension.Ethereum(results: [specificWalletAccount.account.address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
                     respond(to: request, body: .ethereum(responseBody), completion: completion)
                 } else {
                     respond(to: request, error: Strings.canceled, completion: completion)

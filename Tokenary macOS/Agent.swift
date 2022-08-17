@@ -116,7 +116,7 @@ class Agent: NSObject {
         windowController.contentViewController = approveViewController
     }
     
-    func getWalletSelectionCompletionIfShouldSelect() -> ((EthereumChain?, String?, Account?) -> Void)? {
+    func getWalletSelectionCompletionIfShouldSelect() -> ((EthereumChain?, SpecificWalletAccount?) -> Void)? {
         let session = getSessionFromPasteboard()
         return onSelectedWallet(session: session)
     }
@@ -215,14 +215,14 @@ class Agent: NSObject {
         }
     }
     
-    private func onSelectedWallet(session: WCSession?) -> ((EthereumChain?, String?, Account?) -> Void)? {
+    private func onSelectedWallet(session: WCSession?) -> ((EthereumChain?, SpecificWalletAccount?) -> Void)? {
         guard let session = session else { return nil }
-        return { [weak self] chain, walletId, account in
-            guard let chain = chain, let walletId = walletId, account?.coin == .ethereum else {
+        return { [weak self] chain, specificWalletAccount in
+            guard let chain = chain, let specificWalletAccount = specificWalletAccount, specificWalletAccount.account.coin == .ethereum else {
                 Window.closeAllAndActivateBrowser(specific: nil)
                 return
             }
-            self?.connectWallet(session: session, chainId: chain.id, walletId: walletId)
+            self?.connectWallet(session: session, chainId: chain.id, walletId: specificWalletAccount.walletId)
         }
     }
     

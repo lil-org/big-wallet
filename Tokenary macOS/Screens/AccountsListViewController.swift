@@ -9,7 +9,7 @@ class AccountsListViewController: NSViewController {
     private let walletsManager = WalletsManager.shared
     private var cellModels = [CellModel]()
     
-    private var selectedAccounts = Set([Account]()) // TODO: place inside account selection configuration
+    private var selectedAccounts = Set([SpecificWalletAccount]()) // TODO: place inside account selection configuration
     
     private var chain = EthereumChain.ethereum
     private var didCallCompletion = false
@@ -101,10 +101,10 @@ class AccountsListViewController: NSViewController {
         Alert.showSafariPrompt()
     }
     
-    private func callCompletion(walletId: String?, account: Account?) {
+    private func callCompletion(specificWalletAccount: SpecificWalletAccount?) {
         if !didCallCompletion {
             didCallCompletion = true
-            accountSelectionConfiguration?.completion(chain, walletId, account)
+            accountSelectionConfiguration?.completion(chain, specificWalletAccount)
         }
     }
     
@@ -197,17 +197,15 @@ class AccountsListViewController: NSViewController {
     }
     
     @IBAction func didClickSecondaryButton(_ sender: Any) {
-        callCompletion(walletId: nil, account: nil)
+        callCompletion(specificWalletAccount: nil)
         // TODO: distinguish cancel and disconnect
         // when it was dapp's request, we should deliver response anyway
         // when it was extension action, no need to deliver response to inpage
     }
     
     @IBAction func didClickPrimaryButton(_ sender: Any) {
-        // TODO: call completion
-//        callCompletion(walletId: wallet, account: account)
-        // woah. what do i do about the fact we do not have a wallet here?
-        // maybe wallet is not necessary at all and i should remove it from here?
+        callCompletion(specificWalletAccount: selectedAccounts.first)
+        // TODO: respond with all selected accounts, to all providers
     }
     
     @objc private func didSelectChain(_ sender: AnyObject) {
@@ -554,12 +552,13 @@ extension AccountsListViewController: NSTableViewDelegate {
         }
         
         if accountSelectionConfiguration != nil {
-            let wasSelected = selectedAccounts.contains(account)
+            let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
+            let wasSelected = selectedAccounts.contains(specificWalletAccount)
             (tableView.rowView(atRow: row, makeIfNecessary: false) as? AccountCellView)?.setSelected(!wasSelected)
             if wasSelected {
-                selectedAccounts.remove(account)
+                selectedAccounts.remove(specificWalletAccount)
             } else {
-                selectedAccounts.insert(account)
+                selectedAccounts.insert(specificWalletAccount)
             }
             // TODO: select only one account for each network
             return false
@@ -580,13 +579,15 @@ extension AccountsListViewController: NSTableViewDataSource {
             let wallet = wallets[walletIndex]
             let rowView = tableView.makeViewOfType(AccountCellView.self, owner: self)
             let account = wallet.accounts[0]
-            rowView.setup(account: account, isSelected: selectedAccounts.contains(account))
+            let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
+            rowView.setup(account: account, isSelected: selectedAccounts.contains(specificWalletAccount))
             return rowView
         case let .mnemonicAccount(walletIndex: walletIndex, accountIndex: accountIndex):
             let wallet = wallets[walletIndex]
             let rowView = tableView.makeViewOfType(AccountCellView.self, owner: self)
             let account = wallet.accounts[accountIndex]
-            rowView.setup(account: account, isSelected: selectedAccounts.contains(account))
+            let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
+            rowView.setup(account: account, isSelected: selectedAccounts.contains(specificWalletAccount))
             return rowView
         case .mnemonicWalletHeader:
             let rowView = tableView.makeViewOfType(AccountsHeaderRowView.self, owner: self)
@@ -636,7 +637,7 @@ extension AccountsListViewController: NSMenuDelegate {
 extension AccountsListViewController: NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
-        callCompletion(walletId: nil, account: nil)
+        callCompletion(specificWalletAccount: nil)
         // TODO: distinguish cancel and disconnect
         // when it was dapp's request, we should deliver response anyway
         // when it was extension action, no need to deliver response to inpage
