@@ -26,7 +26,7 @@ class AccountCellView: NSTableRowView {
         setSelected(isSelected)
     }
     
-    func setSelected(_ selected: Bool) {
+    private func setSelected(_ selected: Bool) {
         layer?.backgroundColor = (selected ? NSColor.selectedContentBackgroundColor : NSColor.clear).cgColor
         addressTextField.textColor = selected ? NSColor.selectedMenuItemTextColor : NSColor.labelColor
     }

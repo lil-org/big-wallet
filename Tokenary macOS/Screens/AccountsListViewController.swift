@@ -554,13 +554,18 @@ extension AccountsListViewController: NSTableViewDelegate {
         if accountSelectionConfiguration != nil {
             let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
             let wasSelected = selectedAccounts.contains(specificWalletAccount)
-            (tableView.rowView(atRow: row, makeIfNecessary: false) as? AccountCellView)?.setSelected(!wasSelected)
+            
+            if !wasSelected, let toDeselect = selectedAccounts.first(where: { $0.account.coin == account.coin }) {
+                selectedAccounts.remove(toDeselect)
+            }
+            
             if wasSelected {
                 selectedAccounts.remove(specificWalletAccount)
             } else {
                 selectedAccounts.insert(specificWalletAccount)
             }
-            // TODO: select only one account for each network
+            
+            tableView.reloadData()
             return false
         } else {
             showMenuOnCellSelection(row: row)
