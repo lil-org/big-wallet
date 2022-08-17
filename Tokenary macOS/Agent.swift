@@ -79,7 +79,7 @@ class Agent: NSObject {
             let accountsList = instantiate(AccountsListViewController.self)
             
             if case let .wcSession(session) = request, let completion = onSelectedWallet(session: session) {
-                accountsList.accountSelectionConfiguration = AccountSelectionConfiguration(peer: nil, completion: completion)
+                accountsList.accountSelectionConfiguration = AccountSelectionConfiguration(peer: nil, selectedAccounts: Set(), completion: completion)
             }
             
             let windowController = Window.showNew(closeOthers: accountsList.accountSelectionConfiguration == nil)
@@ -318,7 +318,8 @@ class Agent: NSObject {
             let windowController = Window.showNew(closeOthers: closeOtherWindows)
             windowNumber = windowController.window?.windowNumber
             let accountsList = instantiate(AccountsListViewController.self)
-            accountsList.accountSelectionConfiguration = AccountSelectionConfiguration(peer: safariRequest.peerMeta, completion: accountAction.completion)
+            // TODO: pass selected accounts when there are some
+            accountsList.accountSelectionConfiguration = AccountSelectionConfiguration(peer: safariRequest.peerMeta, selectedAccounts: Set(), completion: accountAction.completion)
             windowController.contentViewController = accountsList
         case .approveMessage(let action):
             let windowController = Window.showNew(closeOthers: false)

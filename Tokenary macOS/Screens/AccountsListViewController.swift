@@ -8,9 +8,6 @@ class AccountsListViewController: NSViewController {
     private let agent = Agent.shared
     private let walletsManager = WalletsManager.shared
     private var cellModels = [CellModel]()
-    
-    private var selectedAccounts = Set([SpecificWalletAccount]()) // TODO: place inside account selection configuration
-    
     private var chain = EthereumChain.ethereum
     private var didCallCompletion = false
     var accountSelectionConfiguration: AccountSelectionConfiguration?
@@ -204,7 +201,7 @@ class AccountsListViewController: NSViewController {
     }
     
     @IBAction func didClickPrimaryButton(_ sender: Any) {
-        callCompletion(specificWalletAccount: selectedAccounts.first)
+        callCompletion(specificWalletAccount: accountSelectionConfiguration?.selectedAccounts.first)
         // TODO: respond with all selected accounts, to all providers
     }
     
@@ -454,6 +451,20 @@ class AccountsListViewController: NSViewController {
         }
     }
     
+    private func didClickAccountInSelectionMode(specificWalletAccount: SpecificWalletAccount) {
+        let wasSelected = accountSelectionConfiguration?.selectedAccounts.contains(specificWalletAccount) == true
+        
+        if !wasSelected, let toDeselect = accountSelectionConfiguration?.selectedAccounts.first(where: { $0.account.coin == specificWalletAccount.account.coin }) {
+            accountSelectionConfiguration?.selectedAccounts.remove(toDeselect)
+        }
+        
+        if wasSelected {
+            accountSelectionConfiguration?.selectedAccounts.remove(specificWalletAccount)
+        } else {
+            accountSelectionConfiguration?.selectedAccounts.insert(specificWalletAccount)
+        }
+    }
+    
 }
 
 extension AccountsListViewController: TableViewMenuSource {
@@ -553,18 +564,7 @@ extension AccountsListViewController: NSTableViewDelegate {
         
         if accountSelectionConfiguration != nil {
             let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
-            let wasSelected = selectedAccounts.contains(specificWalletAccount)
-            
-            if !wasSelected, let toDeselect = selectedAccounts.first(where: { $0.account.coin == account.coin }) {
-                selectedAccounts.remove(toDeselect)
-            }
-            
-            if wasSelected {
-                selectedAccounts.remove(specificWalletAccount)
-            } else {
-                selectedAccounts.insert(specificWalletAccount)
-            }
-            
+            didClickAccountInSelectionMode(specificWalletAccount: specificWalletAccount)
             tableView.reloadData()
             return false
         } else {
@@ -585,14 +585,16 @@ extension AccountsListViewController: NSTableViewDataSource {
             let rowView = tableView.makeViewOfType(AccountCellView.self, owner: self)
             let account = wallet.accounts[0]
             let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
-            rowView.setup(account: account, isSelected: selectedAccounts.contains(specificWalletAccount))
+            let isSelected = accountSelectionConfiguration?.selectedAccounts.contains(specificWalletAccount) == true
+            rowView.setup(account: account, isSelected: isSelected)
             return rowView
         case let .mnemonicAccount(walletIndex: walletIndex, accountIndex: accountIndex):
             let wallet = wallets[walletIndex]
             let rowView = tableView.makeViewOfType(AccountCellView.self, owner: self)
             let account = wallet.accounts[accountIndex]
             let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
-            rowView.setup(account: account, isSelected: selectedAccounts.contains(specificWalletAccount))
+            let isSelected = accountSelectionConfiguration?.selectedAccounts.contains(specificWalletAccount) == true
+            rowView.setup(account: account, isSelected: isSelected)
             return rowView
         case .mnemonicWalletHeader:
             let rowView = tableView.makeViewOfType(AccountsHeaderRowView.self, owner: self)
