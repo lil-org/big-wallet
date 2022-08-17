@@ -20,10 +20,16 @@ class AccountCellView: NSTableRowView {
         wantsLayer = true
     }
     
-    func setup(account: Account, isSelected: Bool) {
+    func setup(account: Account, isSelected: Bool, isDisabled: Bool) {
         addressImageView.image = account.image
         addressTextField.stringValue = account.croppedAddress
         setSelected(isSelected)
+        setDisabled(isDisabled)
+    }
+    
+    private func setDisabled(_ disabled: Bool) {
+        addressImageView.alphaValue = disabled ? 0.4 : 1
+        addressTextField.alphaValue = disabled ? 0.4 : 1
     }
     
     private func setSelected(_ selected: Bool) {
