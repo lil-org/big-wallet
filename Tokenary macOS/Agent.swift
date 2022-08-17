@@ -116,7 +116,7 @@ class Agent: NSObject {
         windowController.contentViewController = approveViewController
     }
     
-    func getWalletSelectionCompletionIfShouldSelect() -> ((EthereumChain?, TokenaryWallet?, Account?) -> Void)? {
+    func getWalletSelectionCompletionIfShouldSelect() -> ((EthereumChain?, String?, Account?) -> Void)? {
         let session = getSessionFromPasteboard()
         return onSelectedWallet(session: session)
     }
@@ -215,14 +215,14 @@ class Agent: NSObject {
         }
     }
     
-    private func onSelectedWallet(session: WCSession?) -> ((EthereumChain?, TokenaryWallet?, Account?) -> Void)? {
+    private func onSelectedWallet(session: WCSession?) -> ((EthereumChain?, String?, Account?) -> Void)? {
         guard let session = session else { return nil }
-        return { [weak self] chain, wallet, account in
-            guard let chain = chain, let wallet = wallet, account?.coin == .ethereum else {
+        return { [weak self] chain, walletId, account in
+            guard let chain = chain, let walletId = walletId, account?.coin == .ethereum else {
                 Window.closeAllAndActivateBrowser(specific: nil)
                 return
             }
-            self?.connectWallet(session: session, chainId: chain.id, wallet: wallet)
+            self?.connectWallet(session: session, chainId: chain.id, walletId: walletId)
         }
     }
     
@@ -286,12 +286,12 @@ class Agent: NSObject {
         }
     }
     
-    private func connectWallet(session: WCSession, chainId: Int, wallet: TokenaryWallet) {
+    private func connectWallet(session: WCSession, chainId: Int, walletId: String) {
         let windowController = Window.showNew(closeOthers: true)
         let window = windowController.window
         windowController.contentViewController = WaitingViewController.withReason(Strings.connecting)
         
-        walletConnect.connect(session: session, chainId: chainId, walletId: wallet.id) { [weak window] _ in
+        walletConnect.connect(session: session, chainId: chainId, walletId: walletId) { [weak window] _ in
             if window?.isVisible == true {
                 Window.closeAllAndActivateBrowser(specific: nil)
             }

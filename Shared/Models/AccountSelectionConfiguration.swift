@@ -5,5 +5,5 @@ import WalletCore
 
 struct AccountSelectionConfiguration {
     let peer: PeerMeta?
-    let completion: ((EthereumChain?, TokenaryWallet?, Account?) -> Void)
+    let completion: ((EthereumChain?, String?, Account?) -> Void)
 }

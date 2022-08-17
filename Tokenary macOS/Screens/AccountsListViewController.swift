@@ -101,10 +101,10 @@ class AccountsListViewController: NSViewController {
         Alert.showSafariPrompt()
     }
     
-    private func callCompletion(wallet: TokenaryWallet?, account: Account?) {
+    private func callCompletion(walletId: String?, account: Account?) {
         if !didCallCompletion {
             didCallCompletion = true
-            accountSelectionConfiguration?.completion(chain, wallet, account)
+            accountSelectionConfiguration?.completion(chain, walletId, account)
         }
     }
     
@@ -197,7 +197,7 @@ class AccountsListViewController: NSViewController {
     }
     
     @IBAction func didClickSecondaryButton(_ sender: Any) {
-        callCompletion(wallet: nil, account: nil)
+        callCompletion(walletId: nil, account: nil)
         // TODO: distinguish cancel and disconnect
         // when it was dapp's request, we should deliver response anyway
         // when it was extension action, no need to deliver response to inpage
@@ -205,7 +205,7 @@ class AccountsListViewController: NSViewController {
     
     @IBAction func didClickPrimaryButton(_ sender: Any) {
         // TODO: call completion
-//        callCompletion(wallet: wallet, account: account)
+//        callCompletion(walletId: wallet, account: account)
         // woah. what do i do about the fact we do not have a wallet here?
         // maybe wallet is not necessary at all and i should remove it from here?
     }
@@ -636,7 +636,7 @@ extension AccountsListViewController: NSMenuDelegate {
 extension AccountsListViewController: NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
-        callCompletion(wallet: nil, account: nil)
+        callCompletion(walletId: nil, account: nil)
         // TODO: distinguish cancel and disconnect
         // when it was dapp's request, we should deliver response anyway
         // when it was extension action, no need to deliver response to inpage

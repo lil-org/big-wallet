@@ -194,9 +194,9 @@ struct DappRequestProcessor {
         
         switch ethereumRequest.method {
         case .requestAccounts:
-            let action = SelectAccountAction(provider: .ethereum) { chain, wallet, account in
-                if let chain = chain, let address = wallet?.ethereumAddress, account?.coin == .ethereum {
-                    let responseBody = ResponseToExtension.Ethereum(results: [address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
+            let action = SelectAccountAction(provider: .ethereum) { chain, _, account in
+                if let chain = chain, let account = account, account.coin == .ethereum {
+                    let responseBody = ResponseToExtension.Ethereum(results: [account.address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
                     respond(to: request, body: .ethereum(responseBody), completion: completion)
                 } else {
                     respond(to: request, error: Strings.canceled, completion: completion)
