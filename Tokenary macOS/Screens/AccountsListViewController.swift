@@ -144,7 +144,8 @@ class AccountsListViewController: NSViewController {
             websiteNameStackView.isHidden = true
         }
         
-        if canSelectAccount, networkButton.isHidden {
+        let canSelectNetworkForCurrentProvider = accountSelectionConfiguration?.coinType == .ethereum || accountSelectionConfiguration?.coinType == nil
+        if canSelectAccount, networkButton.isHidden, canSelectNetworkForCurrentProvider {
             networkButton.isHidden = false
             let menu = NSMenu()
             let titleItem = NSMenuItem(title: Strings.selectNetworkOptionally, action: nil, keyEquivalent: "")
@@ -169,7 +170,7 @@ class AccountsListViewController: NSViewController {
             menu.addItem(.separator())
             menu.addItem(submenuItem)
             networkButton.menu = menu
-        } else if !canSelectAccount, !networkButton.isHidden {
+        } else if !(canSelectAccount && canSelectNetworkForCurrentProvider), !networkButton.isHidden {
             networkButton.isHidden = true
         }
     }
