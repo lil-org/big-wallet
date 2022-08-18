@@ -119,6 +119,7 @@ function didTapExtensionButton() {
 // Receive from background
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if ("didTapExtensionButton" in request) {
+        sendResponse(true);
         didTapExtensionButton();
     }
 });

@@ -108,13 +108,22 @@ function storeConfigurationIfNeeded(host, response) {
     }
 }
 
+function justShowApp() {
+    const id = genId();
+    const showAppMessage = {name: "justShowApp", id: id, provider: "unknown", body: {}, host: ""};
+    browser.runtime.sendNativeMessage("mac.tokenary.io", showAppMessage);
+}
+
 browser.browserAction.onClicked.addListener(function(tab) {
     const message = {didTapExtensionButton: true};
-    browser.tabs.sendMessage(tab.id, message);
+    browser.tabs.sendMessage(tab.id, message, function(pong) {
+        if (pong != true) {
+            justShowApp();
+        }
+    });
+    
     if (tab.url == "" && tab.pendingUrl == "") {
-        const id = genId();
-        const showAppMessage = {name: "justShowApp", id: id, provider: "unknown", body: {}, host: ""};
-        browser.runtime.sendNativeMessage("mac.tokenary.io", showAppMessage);
+        justShowApp();
     }
 });
 
