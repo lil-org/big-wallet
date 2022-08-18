@@ -84,6 +84,15 @@ final class WalletsManager {
         }
     }
     
+    func suggestedAccount(coin: CoinType) -> SpecificWalletAccount? {
+        for wallet in wallets {
+            if let account = wallet.accounts.first(where: { $0.coin == coin }) {
+                return SpecificWalletAccount(walletId: wallet.id, account: account)
+            }
+        }
+        return nil
+    }
+    
     private func createWallet(name: String, password: String) throws -> TokenaryWallet {
         let key = StoredKey(name: name, password: Data(password.utf8))
         let id = makeNewWalletId()
