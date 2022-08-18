@@ -32,7 +32,12 @@ struct DappRequestProcessor {
                 ExtensionBridge.respond(response: ResponseToExtension(for: request))
                 return .justShowApp
             case .switchAccount:
-                let action = SelectAccountAction(provider: .unknown) { chain, specificWalletAccount in
+                let preselectedAccounts = body.providerConfigurations.compactMap { (configuration) -> SpecificWalletAccount? in
+                    guard let coin = CoinType.correspondingToWeb3Provider(configuration.provider) else { return nil }
+                    return walletsManager.getSpecificAccount(coin: coin, address: configuration.address)
+                }
+                
+                let action = SelectAccountAction(provider: .unknown, preselectedAccounts: preselectedAccounts) { chain, specificWalletAccount in
                     if let chain = chain, let specificWalletAccount = specificWalletAccount {
                         let account = specificWalletAccount.account
                         switch account.coin {
@@ -64,7 +69,8 @@ struct DappRequestProcessor {
         
         switch body.method {
         case .signIn:
-            let action = SelectAccountAction(provider: .near) { _, specificWalletAccount in
+            let suggestedAccounts = walletsManager.suggestedAccounts(coin: .near)
+            let action = SelectAccountAction(provider: .near, preselectedAccounts: suggestedAccounts) { _, specificWalletAccount in
                 if let specificWalletAccount = specificWalletAccount, specificWalletAccount.account.coin == .near {
                     let responseBody = ResponseToExtension.Near(account: specificWalletAccount.account.address)
                     respond(to: request, body: .near(responseBody), completion: completion)
@@ -115,7 +121,8 @@ struct DappRequestProcessor {
         
         switch body.method {
         case .connect:
-            let action = SelectAccountAction(provider: .solana) { _, specificWalletAccount in
+            let suggestedAccounts = walletsManager.suggestedAccounts(coin: .solana)
+            let action = SelectAccountAction(provider: .solana, preselectedAccounts: suggestedAccounts) { _, specificWalletAccount in
                 if let specificWalletAccount = specificWalletAccount, specificWalletAccount.account.coin == .solana {
                     let responseBody = ResponseToExtension.Solana(publicKey: specificWalletAccount.account.address)
                     respond(to: request, body: .solana(responseBody), completion: completion)
@@ -195,7 +202,8 @@ struct DappRequestProcessor {
         
         switch ethereumRequest.method {
         case .requestAccounts:
-            let action = SelectAccountAction(provider: .ethereum) { chain, specificWalletAccount in
+            let suggestedAccounts = walletsManager.suggestedAccounts(coin: .ethereum)
+            let action = SelectAccountAction(provider: .ethereum, preselectedAccounts: suggestedAccounts) { chain, specificWalletAccount in
                 if let chain = chain, let specificWalletAccount = specificWalletAccount, specificWalletAccount.account.coin == .ethereum {
                     let responseBody = ResponseToExtension.Ethereum(results: [specificWalletAccount.account.address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
                     respond(to: request, body: .ethereum(responseBody), completion: completion)

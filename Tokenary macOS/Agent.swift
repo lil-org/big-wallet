@@ -318,10 +318,10 @@ class Agent: NSObject {
             let windowController = Window.showNew(closeOthers: closeOtherWindows)
             windowNumber = windowController.window?.windowNumber
             let accountsList = instantiate(AccountsListViewController.self)
-            // TODO: pass selected accounts when there are some
+            let coinType = CoinType.correspondingToWeb3Provider(accountAction.provider)
             accountsList.accountSelectionConfiguration = AccountSelectionConfiguration(peer: safariRequest.peerMeta,
-                                                                                       coinType: CoinType.correspondingToWeb3Provider(accountAction.provider),
-                                                                                       selectedAccounts: Set(),
+                                                                                       coinType: coinType,
+                                                                                       selectedAccounts: Set(accountAction.preselectedAccounts),
                                                                                        completion: accountAction.completion)
             windowController.contentViewController = accountsList
         case .approveMessage(let action):

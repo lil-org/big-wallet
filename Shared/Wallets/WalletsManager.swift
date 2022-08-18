@@ -84,13 +84,22 @@ final class WalletsManager {
         }
     }
     
-    func suggestedAccount(coin: CoinType) -> SpecificWalletAccount? {
+    func getSpecificAccount(coin: CoinType, address: String) -> SpecificWalletAccount? {
         for wallet in wallets {
-            if let account = wallet.accounts.first(where: { $0.coin == coin }) {
+            if let account = wallet.accounts.first(where: { $0.coin == coin && $0.address == address }) {
                 return SpecificWalletAccount(walletId: wallet.id, account: account)
             }
         }
         return nil
+    }
+    
+    func suggestedAccounts(coin: CoinType) -> [SpecificWalletAccount] {
+        for wallet in wallets {
+            if let account = wallet.accounts.first(where: { $0.coin == coin }) {
+                return [SpecificWalletAccount(walletId: wallet.id, account: account)]
+            }
+        }
+        return []
     }
     
     private func createWallet(name: String, password: String) throws -> TokenaryWallet {
