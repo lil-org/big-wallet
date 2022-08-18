@@ -113,7 +113,6 @@ function sendMessageToNativeApp(message) {
 function didTapExtensionButton() {
     const id = genId();
     const message = {name: "switchAccount", id: id, provider: "unknown", body: {}};
-    // TODO: pass current network id for ethereum. or maybe just pass latestConfiguration here as well
     sendMessageToNativeApp(message);
 }
 

@@ -2,11 +2,14 @@
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.subject === "message-to-wallet") {
-        browser.runtime.sendNativeMessage("mac.tokenary.io", request.message, function(response) {
-            sendResponse(response);
-            didCompleteRequest(request.message.id, sender.tab.id);
-            storeConfigurationIfNeeded(request.host, response);
-        });
+        if ("name" in request.message, request.message.name == "switchAccount") {
+            getLatestConfiguration(request.host, function(currentConfiguration) {
+                request.message.body = currentConfiguration;
+                sendNativeMessage(request, sender, sendResponse);
+            });
+        } else {
+            sendNativeMessage(request, sender, sendResponse);
+        }
     } else if (request.subject === "getResponse") {
         browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
             sendResponse(response);
@@ -20,6 +23,14 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 var latestConfigurations = {};
 var didReadLatestConfigurations = false;
+
+function sendNativeMessage(request, sender, sendResponse) {
+    browser.runtime.sendNativeMessage("mac.tokenary.io", request.message, function(response) {
+        sendResponse(response);
+        didCompleteRequest(request.message.id, sender.tab.id);
+        storeConfigurationIfNeeded(request.host, response);
+    });
+}
 
 function respondWithLatestConfiguration(host, sendResponse) {
     var response = {};
