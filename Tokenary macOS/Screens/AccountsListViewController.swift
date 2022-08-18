@@ -82,6 +82,10 @@ class AccountsListViewController: NSViewController {
         updateBottomButtons()
         updateCellModels()
         NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: Notification.Name.walletsChanged, object: nil)
+        
+        if let preselectedAccount = accountSelectionConfiguration?.selectedAccounts.first {
+            scrollTo(specificWalletAccount: preselectedAccount)
+        }
     }
     
     override func viewDidAppear() {
@@ -272,6 +276,27 @@ class AccountsListViewController: NSViewController {
         let importViewController = instantiate(ImportViewController.self)
         importViewController.accountSelectionConfiguration = accountSelectionConfiguration
         view.window?.contentViewController = importViewController
+    }
+    
+    private func scrollTo(specificWalletAccount: SpecificWalletAccount) {
+        guard let specificWalletIndex = wallets.firstIndex(where: { $0.id == specificWalletAccount.walletId }),
+              let specificAccountIndex = wallets[specificWalletIndex].accounts.firstIndex(where: { $0 == specificWalletAccount.account })
+        else { return }
+        
+        let row = cellModels.firstIndex { cellModel in
+            switch cellModel {
+            case let .mnemonicAccount(walletIndex, accountIndex):
+                return walletIndex == specificWalletIndex && accountIndex == specificAccountIndex
+            case let .privateKeyAccount(walletIndex):
+                return walletIndex == specificWalletIndex
+            default:
+                return false
+            }
+        }
+        
+        if let row = row {
+            tableView.scrollRowToVisible(row)
+        }
     }
     
     private func walletForRow(_ row: Int) -> TokenaryWallet? {
