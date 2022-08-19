@@ -102,10 +102,11 @@ class AccountsListViewController: NSViewController {
         Alert.showSafariPrompt()
     }
     
-    private func callCompletion(specificWalletAccount: SpecificWalletAccount?) {
+    private func callCompletion(specificWalletAccounts: [SpecificWalletAccount]?) {
         if !didCallCompletion {
             didCallCompletion = true
-            accountSelectionConfiguration?.completion(chain, specificWalletAccount)
+            // TODO: respond with all selected accounts and with providers which are no longer there
+            accountSelectionConfiguration?.completion(chain, specificWalletAccounts)
         }
     }
     
@@ -204,15 +205,14 @@ class AccountsListViewController: NSViewController {
     }
     
     @IBAction func didClickSecondaryButton(_ sender: Any) {
-        callCompletion(specificWalletAccount: nil)
+        callCompletion(specificWalletAccounts: nil)
         // TODO: distinguish cancel and disconnect
         // when it was dapp's request, we should deliver response anyway
         // when it was extension action, no need to deliver response to inpage
     }
     
     @IBAction func didClickPrimaryButton(_ sender: Any) {
-        callCompletion(specificWalletAccount: accountSelectionConfiguration?.selectedAccounts.first)
-        // TODO: respond with all selected accounts, to all providers
+        callCompletion(specificWalletAccounts: accountSelectionConfiguration?.selectedAccounts.map { $0 })
     }
     
     @objc private func didSelectChain(_ sender: AnyObject) {
@@ -696,7 +696,7 @@ extension AccountsListViewController: NSMenuDelegate {
 extension AccountsListViewController: NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
-        callCompletion(specificWalletAccount: nil)
+        callCompletion(specificWalletAccounts: nil)
         // TODO: distinguish cancel and disconnect
         // when it was dapp's request, we should deliver response anyway
         // when it was extension action, no need to deliver response to inpage

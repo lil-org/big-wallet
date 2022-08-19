@@ -16,7 +16,7 @@ struct SelectAccountAction {
     let provider: Web3Provider
     let initiallyConnectedProviders: Set<Web3Provider>
     let preselectedAccounts: [SpecificWalletAccount]
-    let completion: (EthereumChain?, SpecificWalletAccount?) -> Void
+    let completion: (EthereumChain?, [SpecificWalletAccount]?) -> Void
 }
 
 struct SignMessageAction {

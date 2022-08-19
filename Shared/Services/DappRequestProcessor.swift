@@ -39,8 +39,11 @@ struct DappRequestProcessor {
                 let initiallyConnectedProviders = Set(body.providerConfigurations.map { $0.provider })
                 let action = SelectAccountAction(provider: .unknown,
                                                  initiallyConnectedProviders: initiallyConnectedProviders,
-                                                 preselectedAccounts: preselectedAccounts) { chain, specificWalletAccount in
-                    if let chain = chain, let specificWalletAccount = specificWalletAccount {
+                                                 preselectedAccounts: preselectedAccounts) { chain, specificWalletAccounts in
+                    if let chain = chain, let specificWalletAccount = specificWalletAccounts?.first {
+                        // TODO: вот здесь готовить ответ, в котором будут:
+                        // - все выбранные аккаунты
+                        // - список провайдеров, которые нужно отключить
                         let account = specificWalletAccount.account
                         switch account.coin {
                         case .ethereum:
@@ -72,8 +75,8 @@ struct DappRequestProcessor {
         switch body.method {
         case .signIn:
             let suggestedAccounts = walletsManager.suggestedAccounts(coin: .near)
-            let action = SelectAccountAction(provider: .near, initiallyConnectedProviders: Set(), preselectedAccounts: suggestedAccounts) { _, specificWalletAccount in
-                if let specificWalletAccount = specificWalletAccount, specificWalletAccount.account.coin == .near {
+            let action = SelectAccountAction(provider: .near, initiallyConnectedProviders: Set(), preselectedAccounts: suggestedAccounts) { _, specificWalletAccounts in
+                if let specificWalletAccount = specificWalletAccounts?.first, specificWalletAccount.account.coin == .near {
                     let responseBody = ResponseToExtension.Near(account: specificWalletAccount.account.address)
                     respond(to: request, body: .near(responseBody), completion: completion)
                 } else {
@@ -124,8 +127,8 @@ struct DappRequestProcessor {
         switch body.method {
         case .connect:
             let suggestedAccounts = walletsManager.suggestedAccounts(coin: .solana)
-            let action = SelectAccountAction(provider: .solana, initiallyConnectedProviders: Set(), preselectedAccounts: suggestedAccounts) { _, specificWalletAccount in
-                if let specificWalletAccount = specificWalletAccount, specificWalletAccount.account.coin == .solana {
+            let action = SelectAccountAction(provider: .solana, initiallyConnectedProviders: Set(), preselectedAccounts: suggestedAccounts) { _, specificWalletAccounts in
+                if let specificWalletAccount = specificWalletAccounts?.first, specificWalletAccount.account.coin == .solana {
                     let responseBody = ResponseToExtension.Solana(publicKey: specificWalletAccount.account.address)
                     respond(to: request, body: .solana(responseBody), completion: completion)
                 } else {
@@ -205,8 +208,8 @@ struct DappRequestProcessor {
         switch ethereumRequest.method {
         case .requestAccounts:
             let suggestedAccounts = walletsManager.suggestedAccounts(coin: .ethereum)
-            let action = SelectAccountAction(provider: .ethereum, initiallyConnectedProviders: Set(), preselectedAccounts: suggestedAccounts) { chain, specificWalletAccount in
-                if let chain = chain, let specificWalletAccount = specificWalletAccount, specificWalletAccount.account.coin == .ethereum {
+            let action = SelectAccountAction(provider: .ethereum, initiallyConnectedProviders: Set(), preselectedAccounts: suggestedAccounts) { chain, specificWalletAccounts in
+                if let chain = chain, let specificWalletAccount = specificWalletAccounts?.first, specificWalletAccount.account.coin == .ethereum {
                     let responseBody = ResponseToExtension.Ethereum(results: [specificWalletAccount.account.address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
                     respond(to: request, body: .ethereum(responseBody), completion: completion)
                 } else {
