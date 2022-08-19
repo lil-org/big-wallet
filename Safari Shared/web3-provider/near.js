@@ -31,6 +31,10 @@ class TokenaryNear extends EventEmitter {
         return this.accountId;
     }
     
+    externalDisconnect() {
+        console.log("yo implement near disconnect");
+    }
+    
     signOut() {
         this.emit("signOut");
         return new Promise((resolve, reject) => {

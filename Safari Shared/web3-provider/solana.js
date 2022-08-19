@@ -67,6 +67,10 @@ class TokenarySolana extends EventEmitter {
         return this.request(payload);
     }
 
+    externalDisconnect() {
+        console.log("yo implement solana disconnect");
+    }
+    
     disconnect() {
         // TODO: implement
         // support also via request "disconnect" method

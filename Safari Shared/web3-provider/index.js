@@ -76,7 +76,23 @@ function deliverResponseToSpecificProvider(id, response, provider) {
                 body.name = response.name;
                 deliverResponseToSpecificProvider(id, body, body.provider);
             });
-            // TODO: disconnect response.providersToDisconnect
+            
+            response.providersToDisconnect.forEach((provider) => {
+                switch (provider) {
+                    case "ethereum":
+                        window.ethereum.externalDisconnect();
+                        break;
+                    case "solana":
+                        window.solana.externalDisconnect();
+                        break;
+                    case "near":
+                        window.near.externalDisconnect();
+                        break;
+                    default:
+                        break;
+                }
+            });
+            
             break;
         default:
             // pass unknown provider message to all providers
