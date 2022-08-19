@@ -305,6 +305,12 @@ class AccountsListViewController: NSViewController {
         }
     }
     
+    override func cancelOperation(_ sender: Any?) {
+        if accountSelectionConfiguration?.initiallyConnectedProviders.isEmpty == false {
+            callCompletion(specificWalletAccounts: nil)
+        }
+    }
+    
     private func walletForRow(_ row: Int) -> TokenaryWallet? {
         guard row >= 0 else { return nil }
         let item = cellModels[row]
