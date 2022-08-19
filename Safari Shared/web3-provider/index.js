@@ -71,7 +71,12 @@ function deliverResponseToSpecificProvider(id, response, provider) {
             window.near.processTokenaryResponse(id, response);
             break;
         case "multiple":
-            // TODO: go through all bodies, enrich em with name and id, pass to each envolved provider
+            response.bodies.forEach((body) => {
+                body.id = id;
+                body.name = response.name;
+                deliverResponseToSpecificProvider(id, body, body.provider);
+            });
+            // TODO: disconnect response.providersToDisconnect
             break;
         default:
             // pass unknown provider message to all providers
