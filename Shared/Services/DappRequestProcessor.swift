@@ -40,24 +40,28 @@ struct DappRequestProcessor {
                 let action = SelectAccountAction(provider: .unknown,
                                                  initiallyConnectedProviders: initiallyConnectedProviders,
                                                  preselectedAccounts: preselectedAccounts) { chain, specificWalletAccounts in
-                    if let chain = chain, let specificWalletAccount = specificWalletAccounts?.first {
-                        // TODO: вот здесь готовить ответ, в котором будут:
-                        // - все выбранные аккаунты
-                        // - список провайдеров, которые нужно отключить
-                        let account = specificWalletAccount.account
-                        switch account.coin {
-                        case .ethereum:
-                            let responseBody = ResponseToExtension.Ethereum(results: [account.address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
-                            respond(to: request, body: .ethereum(responseBody), completion: completion)
-                        case .solana:
-                            let responseBody = ResponseToExtension.Solana(publicKey: account.address)
-                            respond(to: request, body: .solana(responseBody), completion: completion)
-                        case .near:
-                            let responseBody = ResponseToExtension.Near(account: account.address)
-                            respond(to: request, body: .near(responseBody), completion: completion)
-                        default:
-                            fatalError("Can't select that coin")
+                    if let chain = chain, let specificWalletAccounts = specificWalletAccounts {
+                        var specificProviderBodies = [ResponseToExtension.Body]()
+                        for specificWalletAccount in specificWalletAccounts {
+                            let account = specificWalletAccount.account
+                            switch account.coin {
+                            case .ethereum:
+                                let responseBody = ResponseToExtension.Ethereum(results: [account.address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
+                                specificProviderBodies.append(.ethereum(responseBody))
+                            case .solana:
+                                let responseBody = ResponseToExtension.Solana(publicKey: account.address)
+                                specificProviderBodies.append(.solana(responseBody))
+                            case .near:
+                                let responseBody = ResponseToExtension.Near(account: account.address)
+                                specificProviderBodies.append(.near(responseBody))
+                            default:
+                                fatalError("Can't select that coin")
+                            }
                         }
+                        
+                        // TODO: pass providers to disconnect as well
+                        let body = ResponseToExtension.Multiple(bodies: specificProviderBodies, providersToDisconnect: [])
+                        respond(to: request, body: .multiple(body), completion: completion)
                     } else {
                         respond(to: request, error: Strings.canceled, completion: completion)
                     }

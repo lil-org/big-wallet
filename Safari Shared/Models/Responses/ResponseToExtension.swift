@@ -12,6 +12,7 @@ struct ResponseToExtension {
         case solana(Solana)
         case tezos(Tezos)
         case near(Near)
+        case multiple(Multiple)
         
         var json: [String: Any] {
             let data: Data?
@@ -26,6 +27,8 @@ struct ResponseToExtension {
                 data = try? jsonEncoder.encode(body)
             case .tezos(let body):
                 data = try? jsonEncoder.encode(body)
+            case .multiple(let body):
+                data = Data() // TODO: encode
             }
             
             if let data = data, let dict = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
@@ -45,6 +48,8 @@ struct ResponseToExtension {
                 return .near
             case .tezos:
                 return .tezos
+            case .multiple:
+                return .unknown
             }
         }
     }
