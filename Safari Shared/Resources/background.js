@@ -49,7 +49,10 @@ function respondWithLatestConfiguration(host, sendResponse) {
 
 function storeLatestConfiguration(host, configuration) {
     var latestArray = [];
-    if ("provider" in configuration) {
+    
+    if (Array.isArray(configuration)) {
+        latestArray = configuration;
+    } else if ("provider" in configuration) {
         const latest = latestConfigurations[host];
         
         if (Array.isArray(latest)) {
