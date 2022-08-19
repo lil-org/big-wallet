@@ -66,7 +66,7 @@ struct ResponseToExtension {
         var bodyJSON = body?.json ?? [:]
         json.merge(bodyJSON) { (current, _) in current }
         
-        if request.body.value.responseUpdatesStoredConfiguration {
+        if request.body.value.responseUpdatesStoredConfiguration, error == nil {
             if !bodyJSON.isEmpty {
                 bodyJSON["provider"] = provider
             }
