@@ -105,7 +105,6 @@ class AccountsListViewController: NSViewController {
     private func callCompletion(specificWalletAccounts: [SpecificWalletAccount]?) {
         if !didCallCompletion {
             didCallCompletion = true
-            // TODO: respond with all selected accounts and with providers which are no longer there
             accountSelectionConfiguration?.completion(chain, specificWalletAccounts)
         }
     }

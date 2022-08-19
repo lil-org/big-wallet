@@ -59,8 +59,16 @@ struct DappRequestProcessor {
                             }
                         }
                         
-                        // TODO: pass providers to disconnect as well
-                        let body = ResponseToExtension.Multiple(bodies: specificProviderBodies, providersToDisconnect: [])
+                        let providersToDisconnect = initiallyConnectedProviders.filter { provider in
+                            if let coin = CoinType.correspondingToWeb3Provider(provider),
+                               specificWalletAccounts.contains(where: { $0.account.coin == coin }) {
+                                return false
+                            } else {
+                                return true
+                            }
+                        }
+                        
+                        let body = ResponseToExtension.Multiple(bodies: specificProviderBodies, providersToDisconnect: Array(providersToDisconnect))
                         respond(to: request, body: .multiple(body), completion: completion)
                     } else {
                         respond(to: request, error: Strings.canceled, completion: completion)
