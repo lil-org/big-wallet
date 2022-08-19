@@ -92,7 +92,7 @@ struct SafariRequest {
             if let request = Near(name: name, json: jsonBody) {
                 body = .near(request)
             }
-        case .unknown:
+        case .unknown, .multiple:
             if let request = Unknown(name: name, json: jsonBody) {
                 body = .unknown(request)
             }

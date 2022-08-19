@@ -53,7 +53,7 @@ extension CoinType {
             return .tezos
         case .near:
             return .near
-        case .unknown:
+        case .unknown, .multiple:
             return nil
         }
     }

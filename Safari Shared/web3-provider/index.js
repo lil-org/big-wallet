@@ -70,6 +70,9 @@ function deliverResponseToSpecificProvider(id, response, provider) {
         case "near":
             window.near.processTokenaryResponse(id, response);
             break;
+        case "multiple":
+            // TODO: go through all bodies, enrich em with name and id, pass to each envolved provider
+            break;
         default:
             // pass unknown provider message to all providers
             window.ethereum.processTokenaryResponse(id, response);

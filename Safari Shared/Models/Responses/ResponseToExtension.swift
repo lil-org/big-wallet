@@ -28,10 +28,16 @@ struct ResponseToExtension {
             case .tezos(let body):
                 data = try? jsonEncoder.encode(body)
             case .multiple(let body):
-                data = Data() // TODO: encode
+                let dict: [String: Any] = [
+                    "bodies": body.bodies.map { $0.json },
+                    "providersToDisconnect": body.providersToDisconnect.map { $0.rawValue },
+                    "provider": provider.rawValue
+                ]
+                return dict
             }
             
-            if let data = data, let dict = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
+            if let data = data, var dict = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
+                dict["provider"] = provider.rawValue
                 return dict
             } else {
                 return [:]
@@ -49,18 +55,15 @@ struct ResponseToExtension {
             case .tezos:
                 return .tezos
             case .multiple:
-                return .unknown
+                return .multiple
             }
         }
     }
     
     init(for request: SafariRequest, body: Body? = nil, error: String? = nil) {
         self.id = request.id
-        let provider = (body?.provider ?? request.provider).rawValue
-        
         var json: [String: Any] = [
             "id": request.id,
-            "provider": provider,
             "name": request.name
         ]
         
@@ -68,15 +71,15 @@ struct ResponseToExtension {
             json["error"] = error
         }
         
-        var bodyJSON = body?.json ?? [:]
+        let bodyJSON = body?.json ?? [:]
         json.merge(bodyJSON) { (current, _) in current }
-        
+                
         if request.body.value.responseUpdatesStoredConfiguration, error == nil {
-            if !bodyJSON.isEmpty {
-                bodyJSON["provider"] = provider
+            if let bodies = bodyJSON["bodies"] {
+                json["configurationToStore"] = bodies
+            } else {
+                json["configurationToStore"] = bodyJSON
             }
-            
-            json["configurationToStore"] = bodyJSON
         }
         
         self.json = json

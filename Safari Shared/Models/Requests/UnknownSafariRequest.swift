@@ -45,7 +45,7 @@ extension SafariRequest {
                         guard let response = try? jsonDecoder.decode(ResponseToExtension.Near.self, from: data),
                               let address = response.account else { continue }
                         configurations.append(ProviderConfiguration(provider: provider, address: address))
-                    case .tezos, .unknown:
+                    case .tezos, .unknown, .multiple:
                         continue
                     }
                 }
