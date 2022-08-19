@@ -88,5 +88,6 @@ struct Strings {
     static let data = "Data"
     static let viewOnNearExplorer = "View on Near explorer"
     static let sendingTransaction = "Sending a transaction"
+    static let disconnect = "Disconnect"
     
 }

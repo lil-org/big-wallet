@@ -111,9 +111,15 @@ class AccountsListViewController: NSViewController {
     
     private func updateBottomButtons() {
         if let accountSelectionConfiguration = accountSelectionConfiguration {
-            // TODO: implement buttons logic
             accountsListBottomConstraint.constant = 62
             bottomButtonsStackView.isHidden = false
+            
+            if !accountSelectionConfiguration.initiallyConnectedProviders.isEmpty {
+                primaryButton.title = Strings.ok
+                secondaryButton.title = Strings.disconnect
+                secondaryButton.keyEquivalent = ""
+            }
+            
         } else {
             accountsListBottomConstraint.constant = 0
             bottomButtonsStackView.isHidden = true
@@ -204,10 +210,11 @@ class AccountsListViewController: NSViewController {
     }
     
     @IBAction func didClickSecondaryButton(_ sender: Any) {
-        callCompletion(specificWalletAccounts: nil)
-        // TODO: distinguish cancel and disconnect
-        // when it was dapp's request, we should deliver response anyway
-        // when it was extension action, no need to deliver response to inpage
+        if accountSelectionConfiguration?.initiallyConnectedProviders.isEmpty == false {
+            callCompletion(specificWalletAccounts: [])
+        } else {
+            callCompletion(specificWalletAccounts: nil)
+        }
     }
     
     @IBAction func didClickPrimaryButton(_ sender: Any) {
@@ -696,9 +703,6 @@ extension AccountsListViewController: NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
         callCompletion(specificWalletAccounts: nil)
-        // TODO: distinguish cancel and disconnect
-        // when it was dapp's request, we should deliver response anyway
-        // when it was extension action, no need to deliver response to inpage
     }
     
 }
