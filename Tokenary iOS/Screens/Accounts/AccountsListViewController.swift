@@ -28,9 +28,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private let walletsManager = WalletsManager.shared
     
     private var chain = EthereumChain.ethereum
-    var onSelectedWallet: ((EthereumChain?, TokenaryWallet?, Account?) -> Void)?
+    var selectAccountAction: SelectAccountAction?
     var forWalletSelection: Bool {
-        return onSelectedWallet != nil
+        return selectAccountAction != nil
     }
     
     private var wallets: [TokenaryWallet] {
@@ -153,7 +153,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             break
         case .selectAccount(let action), .switchAccount(let action):
             let selectAccountViewController = instantiate(AccountsListViewController.self, from: .main)
-            selectAccountViewController.onSelectedWallet = action.completion
+            selectAccountViewController.selectAccountAction = action
             presentForSafariRequest(selectAccountViewController.inNavigationController, id: request.id)
         case .approveMessage(let action):
             let approveViewController = ApproveViewController.with(subject: action.subject,
@@ -234,7 +234,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     @objc private func cancelButtonTapped() {
-        onSelectedWallet?(nil, nil, nil)
+        selectAccountAction?.completion(nil, nil)
     }
     
     @objc private func walletsChanged() {
@@ -499,7 +499,8 @@ extension AccountsListViewController: UITableViewDelegate {
         let wallet = walletForIndexPath(indexPath)
         let account = accountForIndexPath(indexPath)
         if forWalletSelection {
-            onSelectedWallet?(chain, wallet, account)
+            // TODO: only highlight cell instead
+            selectAccountAction?.completion(chain, [SpecificWalletAccount(walletId: wallet.id, account: account)])
         } else {
             showActionsForAccount(account, wallet: wallet, cell: tableView.cellForRow(at: indexPath))
         }
