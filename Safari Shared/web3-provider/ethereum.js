@@ -54,7 +54,9 @@ class TokenaryEthereum extends EventEmitter {
     }
     
     externalDisconnect() {
-        console.log("yo implement ethereum disconnect");
+        this.setAddress("");
+        window.ethereum.emit("disconnect");
+        window.ethereum.emit("accountsChanged", []);
     }
     
     setAddress(address) {
