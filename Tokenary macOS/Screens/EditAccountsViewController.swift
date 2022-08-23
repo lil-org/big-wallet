@@ -7,7 +7,7 @@ class EditAccountsViewController: NSViewController {
     
     var wallet: TokenaryWallet!
     var getBackToRect: CGRect?
-    var accountSelectionConfiguration: AccountSelectionConfiguration?
+    var selectAccountAction: SelectAccountAction?
     
     struct CoinDerivationCellModel {
         let coinDerivation: CoinDerivation
@@ -64,7 +64,7 @@ class EditAccountsViewController: NSViewController {
     
     private func showAccountsList() {
         let accountsListViewController = instantiate(AccountsListViewController.self)
-        accountsListViewController.accountSelectionConfiguration = accountSelectionConfiguration
+        accountsListViewController.selectAccountAction = selectAccountAction
         accountsListViewController.getBackToRect = getBackToRect
         view.window?.contentViewController = accountsListViewController
     }

@@ -10,7 +10,7 @@ class AccountsListViewController: NSViewController {
     private var cellModels = [CellModel]()
     private var chain = EthereumChain.ethereum
     private var didCallCompletion = false
-    var accountSelectionConfiguration: AccountSelectionConfiguration?
+    var selectAccountAction: SelectAccountAction?
     var newWalletId: String?
     var getBackToRect: CGRect?
     
@@ -83,7 +83,7 @@ class AccountsListViewController: NSViewController {
         updateCellModels()
         NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: Notification.Name.walletsChanged, object: nil)
         
-        if let preselectedAccount = accountSelectionConfiguration?.selectedAccounts.first {
+        if let preselectedAccount = selectAccountAction?.selectedAccounts.first {
             scrollTo(specificWalletAccount: preselectedAccount)
         }
     }
@@ -105,16 +105,16 @@ class AccountsListViewController: NSViewController {
     private func callCompletion(specificWalletAccounts: [SpecificWalletAccount]?) {
         if !didCallCompletion {
             didCallCompletion = true
-            accountSelectionConfiguration?.completion(chain, specificWalletAccounts)
+            selectAccountAction?.completion(chain, specificWalletAccounts)
         }
     }
     
     private func updateBottomButtons() {
-        if let accountSelectionConfiguration = accountSelectionConfiguration {
+        if let selectAccountAction = selectAccountAction {
             accountsListBottomConstraint.constant = 62
             bottomButtonsStackView.isHidden = false
             
-            if !accountSelectionConfiguration.initiallyConnectedProviders.isEmpty {
+            if !selectAccountAction.initiallyConnectedProviders.isEmpty {
                 primaryButton.title = Strings.ok
                 secondaryButton.title = Strings.disconnect
                 secondaryButton.keyEquivalent = ""
@@ -128,15 +128,15 @@ class AccountsListViewController: NSViewController {
     }
     
     private func updatePrimaryButton() {
-        primaryButton.isEnabled = accountSelectionConfiguration?.selectedAccounts.isEmpty == false
+        primaryButton.isEnabled = selectAccountAction?.selectedAccounts.isEmpty == false
     }
     
     private func reloadHeader() {
-        let canSelectAccount = accountSelectionConfiguration != nil && !wallets.isEmpty
+        let canSelectAccount = selectAccountAction != nil && !wallets.isEmpty
         titleLabel.stringValue = canSelectAccount ? Strings.selectAccountTwoLines : Strings.wallets
         addButton.isHidden = wallets.isEmpty
         
-        if canSelectAccount, let peer = accountSelectionConfiguration?.peer {
+        if canSelectAccount, let peer = selectAccountAction?.peer {
             websiteNameLabel.stringValue = peer.name
             titleLabelTopConstraint.constant = 14
             websiteNameStackView.isHidden = false
@@ -154,7 +154,7 @@ class AccountsListViewController: NSViewController {
             websiteNameStackView.isHidden = true
         }
         
-        let canSelectNetworkForCurrentProvider = accountSelectionConfiguration?.coinType == .ethereum || accountSelectionConfiguration?.coinType == nil
+        let canSelectNetworkForCurrentProvider = selectAccountAction?.coinType == .ethereum || selectAccountAction?.coinType == nil
         if canSelectAccount, networkButton.isHidden, canSelectNetworkForCurrentProvider {
             networkButton.isHidden = false
             let menu = NSMenu()
@@ -210,7 +210,7 @@ class AccountsListViewController: NSViewController {
     }
     
     @IBAction func didClickSecondaryButton(_ sender: Any) {
-        if accountSelectionConfiguration?.initiallyConnectedProviders.isEmpty == false {
+        if selectAccountAction?.initiallyConnectedProviders.isEmpty == false {
             callCompletion(specificWalletAccounts: [])
         } else {
             callCompletion(specificWalletAccounts: nil)
@@ -218,7 +218,7 @@ class AccountsListViewController: NSViewController {
     }
     
     @IBAction func didClickPrimaryButton(_ sender: Any) {
-        callCompletion(specificWalletAccounts: accountSelectionConfiguration?.selectedAccounts.map { $0 })
+        callCompletion(specificWalletAccounts: selectAccountAction?.selectedAccounts.map { $0 })
     }
     
     @objc private func didSelectChain(_ sender: AnyObject) {
@@ -280,7 +280,7 @@ class AccountsListViewController: NSViewController {
     
     @objc private func didClickImportAccount() {
         let importViewController = instantiate(ImportViewController.self)
-        importViewController.accountSelectionConfiguration = accountSelectionConfiguration
+        importViewController.selectAccountAction = selectAccountAction
         view.window?.contentViewController = importViewController
     }
     
@@ -306,7 +306,7 @@ class AccountsListViewController: NSViewController {
     }
     
     override func cancelOperation(_ sender: Any?) {
-        if accountSelectionConfiguration?.initiallyConnectedProviders.isEmpty == false {
+        if selectAccountAction?.initiallyConnectedProviders.isEmpty == false {
             callCompletion(specificWalletAccounts: nil)
         }
     }
@@ -496,35 +496,35 @@ class AccountsListViewController: NSViewController {
     }
     
     private func validateSelectedAccounts() {
-        guard let specificWalletAccounts = accountSelectionConfiguration?.selectedAccounts else { return }
+        guard let specificWalletAccounts = selectAccountAction?.selectedAccounts else { return }
         for specificWalletAccount in specificWalletAccounts {
             if let wallet = wallets.first(where: { $0.id == specificWalletAccount.walletId }),
                wallet.accounts.contains(specificWalletAccount.account) {
                 continue
             } else {
-                accountSelectionConfiguration?.selectedAccounts.remove(specificWalletAccount)
+                selectAccountAction?.selectedAccounts.remove(specificWalletAccount)
             }
         }
     }
     
     private func didClickAccountInSelectionMode(specificWalletAccount: SpecificWalletAccount) {
-        let wasSelected = accountSelectionConfiguration?.selectedAccounts.contains(specificWalletAccount) == true
+        let wasSelected = selectAccountAction?.selectedAccounts.contains(specificWalletAccount) == true
         
-        if !wasSelected, let toDeselect = accountSelectionConfiguration?.selectedAccounts.first(where: { $0.account.coin == specificWalletAccount.account.coin }) {
-            accountSelectionConfiguration?.selectedAccounts.remove(toDeselect)
+        if !wasSelected, let toDeselect = selectAccountAction?.selectedAccounts.first(where: { $0.account.coin == specificWalletAccount.account.coin }) {
+            selectAccountAction?.selectedAccounts.remove(toDeselect)
         }
         
         if wasSelected {
-            accountSelectionConfiguration?.selectedAccounts.remove(specificWalletAccount)
+            selectAccountAction?.selectedAccounts.remove(specificWalletAccount)
         } else {
-            accountSelectionConfiguration?.selectedAccounts.insert(specificWalletAccount)
+            selectAccountAction?.selectedAccounts.insert(specificWalletAccount)
         }
         
         updatePrimaryButton()
     }
     
     private func accountCanBeSelected(_ account: Account) -> Bool {
-        return accountSelectionConfiguration?.coinType == nil || accountSelectionConfiguration?.coinType == account.coin
+        return selectAccountAction?.coinType == nil || selectAccountAction?.coinType == account.coin
     }
     
 }
@@ -576,7 +576,7 @@ extension AccountsListViewController: AccountsHeaderDelegate {
         guard let wallet = walletForRow(row) else { return }
         
         let editAccountsViewController = instantiate(EditAccountsViewController.self)
-        editAccountsViewController.accountSelectionConfiguration = accountSelectionConfiguration
+        editAccountsViewController.selectAccountAction = selectAccountAction
         editAccountsViewController.wallet = wallet
         editAccountsViewController.getBackToRect = tableView.visibleRect
         view.window?.contentViewController = editAccountsViewController
@@ -624,7 +624,7 @@ extension AccountsListViewController: NSTableViewDelegate {
             return false
         }
         
-        if accountSelectionConfiguration != nil {
+        if selectAccountAction != nil {
             if accountCanBeSelected(account) {
                 let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
                 didClickAccountInSelectionMode(specificWalletAccount: specificWalletAccount)
@@ -649,7 +649,7 @@ extension AccountsListViewController: NSTableViewDataSource {
             let rowView = tableView.makeViewOfType(AccountCellView.self, owner: self)
             let account = wallet.accounts[0]
             let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
-            let isSelected = accountSelectionConfiguration?.selectedAccounts.contains(specificWalletAccount) == true
+            let isSelected = selectAccountAction?.selectedAccounts.contains(specificWalletAccount) == true
             rowView.setup(account: account, isSelected: isSelected, isDisabled: !accountCanBeSelected(account))
             return rowView
         case let .mnemonicAccount(walletIndex: walletIndex, accountIndex: accountIndex):
@@ -657,7 +657,7 @@ extension AccountsListViewController: NSTableViewDataSource {
             let rowView = tableView.makeViewOfType(AccountCellView.self, owner: self)
             let account = wallet.accounts[accountIndex]
             let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
-            let isSelected = accountSelectionConfiguration?.selectedAccounts.contains(specificWalletAccount) == true
+            let isSelected = selectAccountAction?.selectedAccounts.contains(specificWalletAccount) == true
             rowView.setup(account: account, isSelected: isSelected, isDisabled: !accountCanBeSelected(account))
             return rowView
         case .mnemonicWalletHeader:

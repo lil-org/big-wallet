@@ -13,9 +13,10 @@ enum DappRequestAction {
 }
 
 struct SelectAccountAction {
-    let provider: Web3Provider
+    let peer: PeerMeta?
+    let coinType: CoinType?
+    var selectedAccounts: Set<SpecificWalletAccount>
     let initiallyConnectedProviders: Set<Web3Provider>
-    let preselectedAccounts: [SpecificWalletAccount]
     let completion: (EthereumChain?, [SpecificWalletAccount]?) -> Void
 }
 

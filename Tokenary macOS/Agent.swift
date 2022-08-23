@@ -16,6 +16,7 @@ class Agent: NSObject {
     static let shared = Agent()
     
     private let walletConnect = WalletConnect.shared
+    private let walletsManager = WalletsManager.shared
     
     private override init() { super.init() }
     private var statusBarItem: NSStatusItem!
@@ -79,14 +80,14 @@ class Agent: NSObject {
             let accountsList = instantiate(AccountsListViewController.self)
             
             if case let .wcSession(session) = request, let completion = onSelectedWallet(session: session) {
-                accountsList.accountSelectionConfiguration = AccountSelectionConfiguration(peer: nil,
-                                                                                           coinType: .ethereum,
-                                                                                           selectedAccounts: Set(),
-                                                                                           initiallyConnectedProviders: Set(),
-                                                                                           completion: completion)
+                accountsList.selectAccountAction = SelectAccountAction(peer: nil,
+                                                                       coinType: .ethereum,
+                                                                       selectedAccounts: Set(walletsManager.suggestedAccounts(coin: .ethereum)),
+                                                                       initiallyConnectedProviders: Set(),
+                                                                       completion: completion)
             }
             
-            let windowController = Window.showNew(closeOthers: accountsList.accountSelectionConfiguration == nil)
+            let windowController = Window.showNew(closeOthers: accountsList.selectAccountAction == nil)
             windowController.contentViewController = accountsList
         }
     }
@@ -322,12 +323,7 @@ class Agent: NSObject {
             let windowController = Window.showNew(closeOthers: closeOtherWindows)
             windowNumber = windowController.window?.windowNumber
             let accountsList = instantiate(AccountsListViewController.self)
-            let coinType = CoinType.correspondingToWeb3Provider(accountAction.provider)
-            accountsList.accountSelectionConfiguration = AccountSelectionConfiguration(peer: safariRequest.peerMeta,
-                                                                                       coinType: coinType,
-                                                                                       selectedAccounts: Set(accountAction.preselectedAccounts),
-                                                                                       initiallyConnectedProviders: accountAction.initiallyConnectedProviders,
-                                                                                       completion: accountAction.completion)
+            accountsList.selectAccountAction = accountAction
             windowController.contentViewController = accountsList
         case .approveMessage(let action):
             let windowController = Window.showNew(closeOthers: false)
