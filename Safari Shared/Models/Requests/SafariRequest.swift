@@ -55,13 +55,17 @@ struct SafariRequest {
         self.name = name
         self.host = host
         
-        if let favicon = json["favicon"] as? String {
-            if favicon.first == "/" {
+        if let favicon = json["favicon"] as? String, !favicon.isEmpty {
+            if favicon.hasPrefix("//") {
+                self.favicon = "https:" + favicon
+            } else if favicon.first == "/" {
                 self.favicon = "https://" + host + favicon
             } else if favicon.first == "." {
                 self.favicon = "https://" + host + favicon.dropFirst()
+            } else if favicon.hasPrefix("http") {
+                self.favicon = favicon
             } else {
-                self.favicon = nil
+                self.favicon = "https://" + host + "/" + favicon
             }
         } else {
             self.favicon = nil
@@ -88,7 +92,7 @@ struct SafariRequest {
             if let request = Near(name: name, json: jsonBody) {
                 body = .near(request)
             }
-        case .unknown:
+        case .unknown, .multiple:
             if let request = Unknown(name: name, json: jsonBody) {
                 body = .unknown(request)
             }

@@ -15,6 +15,7 @@ class ApproveViewController: NSViewController {
         didSet {
             peerLogoImageView.wantsLayer = true
             peerLogoImageView.layer?.backgroundColor = NSColor.systemGray.withAlphaComponent(0.5).cgColor
+            peerLogoImageView.layer?.cornerRadius = 5
         }
     }
     
@@ -50,6 +51,7 @@ class ApproveViewController: NSViewController {
                 peerLogoImageView.kf.setImage(with: url) { [weak peerLogoImageView] result in
                     if case .success = result {
                         peerLogoImageView?.layer?.backgroundColor = NSColor.clear.cgColor
+                        peerLogoImageView?.layer?.cornerRadius = 0
                     }
                 }
             }
@@ -59,6 +61,7 @@ class ApproveViewController: NSViewController {
     override func viewDidAppear() {
         super.viewDidAppear()
         view.window?.delegate = self
+        view.window?.makeFirstResponder(view)
     }
     
     func enableWaiting() {

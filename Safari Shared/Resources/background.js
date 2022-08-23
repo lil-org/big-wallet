@@ -2,11 +2,14 @@
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.subject === "message-to-wallet") {
-        browser.runtime.sendNativeMessage("mac.tokenary.io", request.message, function(response) {
-            sendResponse(response);
-            didCompleteRequest(request.message.id, sender.tab.id);
-            storeConfigurationIfNeeded(request.host, response);
-        });
+        if ("name" in request.message, request.message.name == "switchAccount") {
+            getLatestConfiguration(request.host, function(currentConfiguration) {
+                request.message.body = currentConfiguration;
+                sendNativeMessage(request, sender, sendResponse);
+            });
+        } else {
+            sendNativeMessage(request, sender, sendResponse);
+        }
     } else if (request.subject === "getResponse") {
         browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
             sendResponse(response);
@@ -20,6 +23,14 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 var latestConfigurations = {};
 var didReadLatestConfigurations = false;
+
+function sendNativeMessage(request, sender, sendResponse) {
+    browser.runtime.sendNativeMessage("mac.tokenary.io", request.message, function(response) {
+        sendResponse(response);
+        didCompleteRequest(request.message.id, sender.tab.id);
+        storeConfigurationIfNeeded(request.host, response);
+    });
+}
 
 function respondWithLatestConfiguration(host, sendResponse) {
     var response = {};
@@ -38,7 +49,10 @@ function respondWithLatestConfiguration(host, sendResponse) {
 
 function storeLatestConfiguration(host, configuration) {
     var latestArray = [];
-    if ("provider" in configuration) {
+    
+    if (Array.isArray(configuration)) {
+        latestArray = configuration;
+    } else if ("provider" in configuration) {
         const latest = latestConfigurations[host];
         
         if (Array.isArray(latest)) {
@@ -97,13 +111,22 @@ function storeConfigurationIfNeeded(host, response) {
     }
 }
 
+function justShowApp() {
+    const id = genId();
+    const showAppMessage = {name: "justShowApp", id: id, provider: "unknown", body: {}, host: ""};
+    browser.runtime.sendNativeMessage("mac.tokenary.io", showAppMessage);
+}
+
 browser.browserAction.onClicked.addListener(function(tab) {
     const message = {didTapExtensionButton: true};
-    browser.tabs.sendMessage(tab.id, message);
+    browser.tabs.sendMessage(tab.id, message, function(pong) {
+        if (pong != true) {
+            justShowApp();
+        }
+    });
+    
     if (tab.url == "" && tab.pendingUrl == "") {
-        const id = genId();
-        const showAppMessage = {name: "justShowApp", id: id, provider: "unknown", body: {}, host: ""};
-        browser.runtime.sendNativeMessage("mac.tokenary.io", showAppMessage);
+        justShowApp();
     }
 });
 

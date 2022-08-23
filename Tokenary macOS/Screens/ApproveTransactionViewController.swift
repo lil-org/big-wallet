@@ -21,6 +21,7 @@ class ApproveTransactionViewController: NSViewController {
         didSet {
             peerLogoImageView.wantsLayer = true
             peerLogoImageView.layer?.backgroundColor = NSColor.systemGray.withAlphaComponent(0.5).cgColor
+            peerLogoImageView.layer?.cornerRadius = 5
         }
     }
     
@@ -57,6 +58,7 @@ class ApproveTransactionViewController: NSViewController {
                 peerLogoImageView.kf.setImage(with: url) { [weak peerLogoImageView] result in
                     if case .success = result {
                         peerLogoImageView?.layer?.backgroundColor = NSColor.clear.cgColor
+                        peerLogoImageView?.layer?.cornerRadius = 0
                     }
                 }
             }
@@ -66,6 +68,7 @@ class ApproveTransactionViewController: NSViewController {
     override func viewDidAppear() {
         super.viewDidAppear()
         view.window?.delegate = self
+        view.window?.makeFirstResponder(view)
     }
     
     private func callCompletion(result: Transaction?) {

@@ -70,6 +70,30 @@ function deliverResponseToSpecificProvider(id, response, provider) {
         case "near":
             window.near.processTokenaryResponse(id, response);
             break;
+        case "multiple":
+            response.bodies.forEach((body) => {
+                body.id = id;
+                body.name = response.name;
+                deliverResponseToSpecificProvider(id, body, body.provider);
+            });
+            
+            response.providersToDisconnect.forEach((provider) => {
+                switch (provider) {
+                    case "ethereum":
+                        window.ethereum.externalDisconnect();
+                        break;
+                    case "solana":
+                        window.solana.externalDisconnect();
+                        break;
+                    case "near":
+                        window.near.externalDisconnect();
+                        break;
+                    default:
+                        break;
+                }
+            });
+            
+            break;
         default:
             // pass unknown provider message to all providers
             window.ethereum.processTokenaryResponse(id, response);

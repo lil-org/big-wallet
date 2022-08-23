@@ -9,7 +9,7 @@ extension CoinType {
         case .solana:
             return "Solana"
         case .ethereum:
-            return "Ethereum"
+            return "Ethereum & L2s"
         case .near:
             return "Near"
         default:
@@ -40,6 +40,21 @@ extension CoinType {
             return Strings.viewOnNearExplorer
         default:
             fatalError(Strings.somethingWentWrong)
+        }
+    }
+    
+    static func correspondingToWeb3Provider(_ web3Provider: Web3Provider) -> CoinType? {
+        switch web3Provider {
+        case .ethereum:
+            return .ethereum
+        case .solana:
+            return .solana
+        case .tezos:
+            return .tezos
+        case .near:
+            return .near
+        case .unknown, .multiple:
+            return nil
         }
     }
     

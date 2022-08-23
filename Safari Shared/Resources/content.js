@@ -113,13 +113,13 @@ function sendMessageToNativeApp(message) {
 function didTapExtensionButton() {
     const id = genId();
     const message = {name: "switchAccount", id: id, provider: "unknown", body: {}};
-    // TODO: pass current network id for ethereum. or maybe just pass latestConfiguration here as well
     sendMessageToNativeApp(message);
 }
 
 // Receive from background
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if ("didTapExtensionButton" in request) {
+        sendResponse(true);
         didTapExtensionButton();
     }
 });
@@ -132,10 +132,18 @@ window.addEventListener("message", function(event) {
 });
 
 var getFavicon = function() {
+    if (document.favicon) {
+        return document.favicon;
+    }
+    
     var nodeList = document.getElementsByTagName("link");
     for (var i = 0; i < nodeList.length; i++) {
-        if ((nodeList[i].getAttribute("rel") == "icon") || (nodeList[i].getAttribute("rel") == "shortcut icon")) {
-            return nodeList[i].getAttribute("href");
+        if ((nodeList[i].getAttribute("rel") == "apple-touch-icon") || (nodeList[i].getAttribute("rel") == "icon") || (nodeList[i].getAttribute("rel") == "shortcut icon")) {
+            const favicon = nodeList[i].getAttribute("href");
+            if (!favicon.endsWith("svg")) {
+                document.favicon = favicon;
+                return favicon;
+            }
         }
     }
     return "";

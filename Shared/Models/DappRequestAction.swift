@@ -14,7 +14,9 @@ enum DappRequestAction {
 
 struct SelectAccountAction {
     let provider: Web3Provider
-    let completion: (EthereumChain?, TokenaryWallet?, Account?) -> Void
+    let initiallyConnectedProviders: Set<Web3Provider>
+    let preselectedAccounts: [SpecificWalletAccount]
+    let completion: (EthereumChain?, [SpecificWalletAccount]?) -> Void
 }
 
 struct SignMessageAction {

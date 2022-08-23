@@ -32,21 +32,44 @@ struct DappRequestProcessor {
                 ExtensionBridge.respond(response: ResponseToExtension(for: request))
                 return .justShowApp
             case .switchAccount:
-                let action = SelectAccountAction(provider: .unknown) { chain, _, account in
-                    if let chain = chain, let account = account {
-                        switch account.coin {
-                        case .ethereum:
-                            let responseBody = ResponseToExtension.Ethereum(results: [account.address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
-                            respond(to: request, body: .ethereum(responseBody), completion: completion)
-                        case .solana:
-                            let responseBody = ResponseToExtension.Solana(publicKey: account.address)
-                            respond(to: request, body: .solana(responseBody), completion: completion)
-                        case .near:
-                            let responseBody = ResponseToExtension.Near(account: account.address)
-                            respond(to: request, body: .near(responseBody), completion: completion)
-                        default:
-                            fatalError("Can't select that coin")
+                let preselectedAccounts = body.providerConfigurations.compactMap { (configuration) -> SpecificWalletAccount? in
+                    guard let coin = CoinType.correspondingToWeb3Provider(configuration.provider) else { return nil }
+                    return walletsManager.getSpecificAccount(coin: coin, address: configuration.address)
+                }
+                let initiallyConnectedProviders = Set(body.providerConfigurations.map { $0.provider })
+                let action = SelectAccountAction(provider: .unknown,
+                                                 initiallyConnectedProviders: initiallyConnectedProviders,
+                                                 preselectedAccounts: preselectedAccounts) { chain, specificWalletAccounts in
+                    if let chain = chain, let specificWalletAccounts = specificWalletAccounts {
+                        var specificProviderBodies = [ResponseToExtension.Body]()
+                        for specificWalletAccount in specificWalletAccounts {
+                            let account = specificWalletAccount.account
+                            switch account.coin {
+                            case .ethereum:
+                                let responseBody = ResponseToExtension.Ethereum(results: [account.address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
+                                specificProviderBodies.append(.ethereum(responseBody))
+                            case .solana:
+                                let responseBody = ResponseToExtension.Solana(publicKey: account.address)
+                                specificProviderBodies.append(.solana(responseBody))
+                            case .near:
+                                let responseBody = ResponseToExtension.Near(account: account.address)
+                                specificProviderBodies.append(.near(responseBody))
+                            default:
+                                fatalError("Can't select that coin")
+                            }
                         }
+                        
+                        let providersToDisconnect = initiallyConnectedProviders.filter { provider in
+                            if let coin = CoinType.correspondingToWeb3Provider(provider),
+                               specificWalletAccounts.contains(where: { $0.account.coin == coin }) {
+                                return false
+                            } else {
+                                return true
+                            }
+                        }
+                        
+                        let body = ResponseToExtension.Multiple(bodies: specificProviderBodies, providersToDisconnect: Array(providersToDisconnect))
+                        respond(to: request, body: .multiple(body), completion: completion)
                     } else {
                         respond(to: request, error: Strings.canceled, completion: completion)
                     }
@@ -57,15 +80,16 @@ struct DappRequestProcessor {
     }
     
     private static func process(request: SafariRequest, nearRequest body: SafariRequest.Near, completion: @escaping () -> Void) -> DappRequestAction {
-        let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
+        let peerMeta = request.peerMeta
         lazy var account = getAccount(coin: .near, address: body.account)
         lazy var privateKey = getPrivateKey(coin: .near, address: body.account)
         
         switch body.method {
         case .signIn:
-            let action = SelectAccountAction(provider: .near) { _, _, account in
-                if let account = account, account.coin == .near {
-                    let responseBody = ResponseToExtension.Near(account: account.address)
+            let suggestedAccounts = walletsManager.suggestedAccounts(coin: .near)
+            let action = SelectAccountAction(provider: .near, initiallyConnectedProviders: Set(), preselectedAccounts: suggestedAccounts) { _, specificWalletAccounts in
+                if let specificWalletAccount = specificWalletAccounts?.first, specificWalletAccount.account.coin == .near {
+                    let responseBody = ResponseToExtension.Near(account: specificWalletAccount.account.address)
                     respond(to: request, body: .near(responseBody), completion: completion)
                 } else {
                     respond(to: request, error: Strings.canceled, completion: completion)
@@ -108,15 +132,16 @@ struct DappRequestProcessor {
     }
     
     private static func process(request: SafariRequest, solanaRequest body: SafariRequest.Solana, completion: @escaping () -> Void) -> DappRequestAction {
-        let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
+        let peerMeta = request.peerMeta
         lazy var account = getAccount(coin: .solana, address: body.publicKey)
         lazy var privateKey = getPrivateKey(coin: .solana, address: body.publicKey)
         
         switch body.method {
         case .connect:
-            let action = SelectAccountAction(provider: .solana) { _, _, account in
-                if let account = account, account.coin == .solana {
-                    let responseBody = ResponseToExtension.Solana(publicKey: account.address)
+            let suggestedAccounts = walletsManager.suggestedAccounts(coin: .solana)
+            let action = SelectAccountAction(provider: .solana, initiallyConnectedProviders: Set(), preselectedAccounts: suggestedAccounts) { _, specificWalletAccounts in
+                if let specificWalletAccount = specificWalletAccounts?.first, specificWalletAccount.account.coin == .solana {
+                    let responseBody = ResponseToExtension.Solana(publicKey: specificWalletAccount.account.address)
                     respond(to: request, body: .solana(responseBody), completion: completion)
                 } else {
                     respond(to: request, error: Strings.canceled, completion: completion)
@@ -189,14 +214,15 @@ struct DappRequestProcessor {
     }
     
     private static func process(request: SafariRequest, ethereumRequest: SafariRequest.Ethereum, completion: @escaping () -> Void) -> DappRequestAction {
-        let peerMeta = PeerMeta(title: request.host, iconURLString: request.favicon)
+        let peerMeta = request.peerMeta
         lazy var account = getAccount(coin: .ethereum, address: ethereumRequest.address)
         
         switch ethereumRequest.method {
         case .requestAccounts:
-            let action = SelectAccountAction(provider: .ethereum) { chain, wallet, account in
-                if let chain = chain, let address = wallet?.ethereumAddress, account?.coin == .ethereum {
-                    let responseBody = ResponseToExtension.Ethereum(results: [address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
+            let suggestedAccounts = walletsManager.suggestedAccounts(coin: .ethereum)
+            let action = SelectAccountAction(provider: .ethereum, initiallyConnectedProviders: Set(), preselectedAccounts: suggestedAccounts) { chain, specificWalletAccounts in
+                if let chain = chain, let specificWalletAccount = specificWalletAccounts?.first, specificWalletAccount.account.coin == .ethereum {
+                    let responseBody = ResponseToExtension.Ethereum(results: [specificWalletAccount.account.address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
                     respond(to: request, body: .ethereum(responseBody), completion: completion)
                 } else {
                     respond(to: request, error: Strings.canceled, completion: completion)

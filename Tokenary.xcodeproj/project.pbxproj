@@ -71,6 +71,12 @@
 		2C264BE927B5AC6800234393 /* TezosResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BE527B5AC6800234393 /* TezosResponseToExtension.swift */; };
 		2C264BEB27B6B50700234393 /* DappRequestProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */; };
 		2C264BEC27B6B50700234393 /* DappRequestProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */; };
+		2C2AA1D228AD1DC100E35DBF /* SpecificWalletAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */; };
+		2C2AA1D328AD1DC100E35DBF /* SpecificWalletAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */; };
+		2C2AA1D528AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D428AFB1AD00E35DBF /* MultipleResponseToExtension.swift */; };
+		2C2AA1D628AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D428AFB1AD00E35DBF /* MultipleResponseToExtension.swift */; };
+		2C2AA1D728AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D428AFB1AD00E35DBF /* MultipleResponseToExtension.swift */; };
+		2C2AA1D828AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D428AFB1AD00E35DBF /* MultipleResponseToExtension.swift */; };
 		2C3B7F022756A08600931264 /* Identifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3B7F012756A08600931264 /* Identifiers.swift */; };
 		2C40379428199110004C7263 /* Solana.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C40379328199110004C7263 /* Solana.swift */; };
 		2C40379528199110004C7263 /* Solana.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C40379328199110004C7263 /* Solana.swift */; };
@@ -102,6 +108,8 @@
 		2C6F6D5A28273FE500D6E8FB /* EditAccountsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5928273FE500D6E8FB /* EditAccountsViewController.swift */; };
 		2C6F6D5D2827434800D6E8FB /* CoinDerivationTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5B2827434800D6E8FB /* CoinDerivationTableViewCell.xib */; };
 		2C6F6D5E2827434800D6E8FB /* CoinDerivationTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5C2827434800D6E8FB /* CoinDerivationTableViewCell.swift */; };
+		2C71175328AA62DE00ABBF2C /* AccountSelectionConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C71175228AA62DE00ABBF2C /* AccountSelectionConfiguration.swift */; };
+		2C71175428AA62DE00ABBF2C /* AccountSelectionConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C71175228AA62DE00ABBF2C /* AccountSelectionConfiguration.swift */; };
 		2C773F5E27450B97007B04E7 /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
 		2C773F5F27450FBD007B04E7 /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
 		2C773F62274523DC007B04E7 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
@@ -304,6 +312,8 @@
 		2C264BE027B5AC6000234393 /* SolanaResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolanaResponseToExtension.swift; sourceTree = "<group>"; };
 		2C264BE527B5AC6800234393 /* TezosResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TezosResponseToExtension.swift; sourceTree = "<group>"; };
 		2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DappRequestProcessor.swift; sourceTree = "<group>"; };
+		2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecificWalletAccount.swift; sourceTree = "<group>"; };
+		2C2AA1D428AFB1AD00E35DBF /* MultipleResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipleResponseToExtension.swift; sourceTree = "<group>"; };
 		2C3B7F012756A08600931264 /* Identifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Identifiers.swift; sourceTree = "<group>"; };
 		2C40379328199110004C7263 /* Solana.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Solana.swift; sourceTree = "<group>"; };
 		2C40708E27667A6600AB3D55 /* MultilineLabelTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultilineLabelTableViewCell.swift; sourceTree = "<group>"; };
@@ -336,6 +346,7 @@
 		2C6F6D5928273FE500D6E8FB /* EditAccountsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditAccountsViewController.swift; sourceTree = "<group>"; };
 		2C6F6D5B2827434800D6E8FB /* CoinDerivationTableViewCell.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = CoinDerivationTableViewCell.xib; sourceTree = "<group>"; };
 		2C6F6D5C2827434800D6E8FB /* CoinDerivationTableViewCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CoinDerivationTableViewCell.swift; sourceTree = "<group>"; };
+		2C71175228AA62DE00ABBF2C /* AccountSelectionConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSelectionConfiguration.swift; sourceTree = "<group>"; };
 		2C74386E28297DAC00EC9304 /* near.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = near.js; path = "web3-provider/near.js"; sourceTree = "<group>"; };
 		2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionBridge.swift; sourceTree = "<group>"; };
 		2C773F61274523DC007B04E7 /* ResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseToExtension.swift; sourceTree = "<group>"; };
@@ -567,6 +578,7 @@
 			isa = PBXGroup;
 			children = (
 				2C773F61274523DC007B04E7 /* ResponseToExtension.swift */,
+				2C2AA1D428AFB1AD00E35DBF /* MultipleResponseToExtension.swift */,
 				2C264BDB27B5AC5400234393 /* EthereumResponseToExtension.swift */,
 				2C264BE027B5AC6000234393 /* SolanaResponseToExtension.swift */,
 				2C86A266282D1F220028EA11 /* NearResponseToExtension.swift */,
@@ -860,7 +872,9 @@
 				0D059AD126C2796200EE3023 /* ApprovalSubject.swift */,
 				2C09FC652828331D00DE9C27 /* Image.swift */,
 				2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */,
+				2C71175228AA62DE00ABBF2C /* AccountSelectionConfiguration.swift */,
 				0DC850E626B73A5900809E82 /* AuthenticationReason.swift */,
+				2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -1319,6 +1333,7 @@
 				2C264BD727B5806200234393 /* Web3Provider.swift in Sources */,
 				2C90E61D27B2C5C100C8991E /* InternalSafariRequest.swift in Sources */,
 				2C86A269282D1F220028EA11 /* NearResponseToExtension.swift in Sources */,
+				2C2AA1D728AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
 				2C264BE327B5AC6000234393 /* SolanaResponseToExtension.swift in Sources */,
 				2C773F5E27450B97007B04E7 /* ExtensionBridge.swift in Sources */,
 				2C264BDE27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */,
@@ -1338,6 +1353,7 @@
 			files = (
 				2CB4031B281C99C800BAEBEE /* AccountsHeaderRowView.swift in Sources */,
 				2C901C4A2689F01700D0926A /* Strings.swift in Sources */,
+				2C2AA1D228AD1DC100E35DBF /* SpecificWalletAccount.swift in Sources */,
 				2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */,
 				2CC0CDBE2692027E0072922A /* PriceService.swift in Sources */,
 				2C9B7735283FBA18008C191C /* UInt2x.swift in Sources */,
@@ -1393,6 +1409,7 @@
 				2C264BE127B5AC6000234393 /* SolanaResponseToExtension.swift in Sources */,
 				2C264BBC27B2F25E00234393 /* SafariRequest.swift in Sources */,
 				2CD0B3F526A0DAA900488D92 /* NSPasteboard.swift in Sources */,
+				2C2AA1D528AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
 				2C264BEB27B6B50700234393 /* DappRequestProcessor.swift in Sources */,
 				2C264BE627B5AC6800234393 /* TezosResponseToExtension.swift in Sources */,
 				2C10DE4528367637001D8694 /* Near.swift in Sources */,
@@ -1406,6 +1423,7 @@
 				2C40379428199110004C7263 /* Solana.swift in Sources */,
 				2C8A09DF267579EA00993638 /* AccountsListViewController.swift in Sources */,
 				2C917429267D2A6E00049075 /* Keychain.swift in Sources */,
+				2C71175328AA62DE00ABBF2C /* AccountSelectionConfiguration.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1421,6 +1439,7 @@
 				2CE059372763D60A0042D844 /* KeyboardObserver.swift in Sources */,
 				2CF255A0275A47DD00AE54B9 /* Bundle.swift in Sources */,
 				2CF255AC275A48CF00AE54B9 /* EthereumNetwork.swift in Sources */,
+				2C2AA1D328AD1DC100E35DBF /* SpecificWalletAccount.swift in Sources */,
 				2C40709027667A6600AB3D55 /* MultilineLabelTableViewCell.swift in Sources */,
 				2CF255A6275A48BB00AE54B9 /* GasService.swift in Sources */,
 				2C96D392276232A300687301 /* UITableView.swift in Sources */,
@@ -1428,6 +1447,7 @@
 				2CF255B6275A746000AE54B9 /* AccountsListViewController.swift in Sources */,
 				2C264BCC27B2F2FF00234393 /* TezosSafariRequest.swift in Sources */,
 				2C96D3A42763C6A800687301 /* UIView.swift in Sources */,
+				2C71175428AA62DE00ABBF2C /* AccountSelectionConfiguration.swift in Sources */,
 				2CF25597275A46D300AE54B9 /* Defaults.swift in Sources */,
 				2CF255A2275A47DD00AE54B9 /* String.swift in Sources */,
 				2CF2559D275A479800AE54B9 /* TokenaryWallet.swift in Sources */,
@@ -1485,6 +1505,7 @@
 				2C5FF97426C84F7B00B32ACC /* SceneDelegate.swift in Sources */,
 				2CF2559E275A479800AE54B9 /* WalletsManager.swift in Sources */,
 				2C90E62327B2ED2D00C8991E /* SafariRequest+Helpers.swift in Sources */,
+				2C2AA1D628AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1508,6 +1529,7 @@
 				2C264BD827B5806200234393 /* Web3Provider.swift in Sources */,
 				2C90E61E27B2C5C100C8991E /* InternalSafariRequest.swift in Sources */,
 				2C86A26A282D1F220028EA11 /* NearResponseToExtension.swift in Sources */,
+				2C2AA1D828AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
 				2C264BE427B5AC6000234393 /* SolanaResponseToExtension.swift in Sources */,
 				2CE0594327640EAB0042D844 /* ExtensionBridge.swift in Sources */,
 				2C264BDF27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */,

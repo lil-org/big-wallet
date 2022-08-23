@@ -6,7 +6,7 @@ import WalletCore
 class ImportViewController: NSViewController {
     
     private let walletsManager = WalletsManager.shared
-    var onSelectedWallet: ((EthereumChain?, TokenaryWallet?, Account?) -> Void)?
+    var accountSelectionConfiguration: AccountSelectionConfiguration?
     private var inputValidationResult = WalletsManager.InputValidationResult.invalid
     
     @IBOutlet weak var textField: NSTextField! {
@@ -62,7 +62,7 @@ class ImportViewController: NSViewController {
     
     private func showAccountsList(newWalletId: String?) {
         let accountsListViewController = instantiate(AccountsListViewController.self)
-        accountsListViewController.onSelectedWallet = onSelectedWallet
+        accountsListViewController.accountSelectionConfiguration = accountSelectionConfiguration
         accountsListViewController.newWalletId = newWalletId
         view.window?.contentViewController = accountsListViewController
     }

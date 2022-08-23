@@ -11,11 +11,47 @@ extension SafariRequest {
             case switchAccount
         }
         
+        struct ProviderConfiguration {
+            let provider: Web3Provider
+            let address: String
+        }
+        
         let method: Method
+        let providerConfigurations: [ProviderConfiguration]
         
         init?(name: String, json: [String: Any]) {
             guard let method = Method(rawValue: name) else { return nil }
             self.method = method
+            
+            var configurations = [ProviderConfiguration]()
+            let jsonDecoder = JSONDecoder()
+            if let latestConfigurations = json["latestConfigurations"] as? [[String: Any]] {
+                for configuration in latestConfigurations {
+                    guard let providerString = configuration["provider"] as? String,
+                          let provider = Web3Provider(rawValue: providerString),
+                          let data = try? JSONSerialization.data(withJSONObject: configuration)
+                    else { continue }
+                    
+                    switch provider {
+                    case .ethereum:
+                        guard let response = try? jsonDecoder.decode(ResponseToExtension.Ethereum.self, from: data),
+                              let address = response.results?.first else { continue }
+                        configurations.append(ProviderConfiguration(provider: provider, address: address))
+                    case .solana:
+                        guard let response = try? jsonDecoder.decode(ResponseToExtension.Solana.self, from: data),
+                              let address = response.publicKey else { continue }
+                        configurations.append(ProviderConfiguration(provider: provider, address: address))
+                    case .near:
+                        guard let response = try? jsonDecoder.decode(ResponseToExtension.Near.self, from: data),
+                              let address = response.account else { continue }
+                        configurations.append(ProviderConfiguration(provider: provider, address: address))
+                    case .tezos, .unknown, .multiple:
+                        continue
+                    }
+                }
+            }
+            
+            self.providerConfigurations = configurations
         }
         
         var responseUpdatesStoredConfiguration: Bool {

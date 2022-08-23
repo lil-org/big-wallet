@@ -78,11 +78,15 @@ class Agent: NSObject {
         } else {
             let accountsList = instantiate(AccountsListViewController.self)
             
-            if case let .wcSession(session) = request {
-                accountsList.onSelectedWallet = onSelectedWallet(session: session)
+            if case let .wcSession(session) = request, let completion = onSelectedWallet(session: session) {
+                accountsList.accountSelectionConfiguration = AccountSelectionConfiguration(peer: nil,
+                                                                                           coinType: .ethereum,
+                                                                                           selectedAccounts: Set(),
+                                                                                           initiallyConnectedProviders: Set(),
+                                                                                           completion: completion)
             }
             
-            let windowController = Window.showNew(closeOthers: accountsList.onSelectedWallet == nil)
+            let windowController = Window.showNew(closeOthers: accountsList.accountSelectionConfiguration == nil)
             windowController.contentViewController = accountsList
         }
     }
@@ -116,7 +120,7 @@ class Agent: NSObject {
         windowController.contentViewController = approveViewController
     }
     
-    func getWalletSelectionCompletionIfShouldSelect() -> ((EthereumChain?, TokenaryWallet?, Account?) -> Void)? {
+    func getWalletSelectionCompletionIfShouldSelect() -> ((EthereumChain?, [SpecificWalletAccount]?) -> Void)? {
         let session = getSessionFromPasteboard()
         return onSelectedWallet(session: session)
     }
@@ -160,11 +164,14 @@ class Agent: NSObject {
         alert.alertStyle = .warning
         alert.addButton(withTitle: Strings.ok)
         alert.addButton(withTitle: Strings.cancel)
-        if alert.runModal() == .alertFirstButtonReturn {
-            NSApp.terminate(nil)
-        }
-        if updateStatusBarAfterwards {
-            setupStatusBarItem()
+        
+        DispatchQueue.main.async { [weak self] in
+            if alert.runModal() == .alertFirstButtonReturn {
+                NSApp.terminate(nil)
+            }
+            if updateStatusBarAfterwards {
+                self?.setupStatusBarItem()
+            }
         }
     }
     
@@ -212,14 +219,14 @@ class Agent: NSObject {
         }
     }
     
-    private func onSelectedWallet(session: WCSession?) -> ((EthereumChain?, TokenaryWallet?, Account?) -> Void)? {
+    private func onSelectedWallet(session: WCSession?) -> ((EthereumChain?, [SpecificWalletAccount]?) -> Void)? {
         guard let session = session else { return nil }
-        return { [weak self] chain, wallet, account in
-            guard let chain = chain, let wallet = wallet, account?.coin == .ethereum else {
+        return { [weak self] chain, specificWalletAccounts in
+            guard let chain = chain, let specificWalletAccount = specificWalletAccounts?.first, specificWalletAccount.account.coin == .ethereum else {
                 Window.closeAllAndActivateBrowser(specific: nil)
                 return
             }
-            self?.connectWallet(session: session, chainId: chain.id, wallet: wallet)
+            self?.connectWallet(session: session, chainId: chain.id, walletId: specificWalletAccount.walletId)
         }
     }
     
@@ -283,12 +290,12 @@ class Agent: NSObject {
         }
     }
     
-    private func connectWallet(session: WCSession, chainId: Int, wallet: TokenaryWallet) {
+    private func connectWallet(session: WCSession, chainId: Int, walletId: String) {
         let windowController = Window.showNew(closeOthers: true)
         let window = windowController.window
         windowController.contentViewController = WaitingViewController.withReason(Strings.connecting)
         
-        walletConnect.connect(session: session, chainId: chainId, walletId: wallet.id) { [weak window] _ in
+        walletConnect.connect(session: session, chainId: chainId, walletId: walletId) { [weak window] _ in
             if window?.isVisible == true {
                 Window.closeAllAndActivateBrowser(specific: nil)
             }
@@ -315,7 +322,12 @@ class Agent: NSObject {
             let windowController = Window.showNew(closeOthers: closeOtherWindows)
             windowNumber = windowController.window?.windowNumber
             let accountsList = instantiate(AccountsListViewController.self)
-            accountsList.onSelectedWallet = accountAction.completion
+            let coinType = CoinType.correspondingToWeb3Provider(accountAction.provider)
+            accountsList.accountSelectionConfiguration = AccountSelectionConfiguration(peer: safariRequest.peerMeta,
+                                                                                       coinType: coinType,
+                                                                                       selectedAccounts: Set(accountAction.preselectedAccounts),
+                                                                                       initiallyConnectedProviders: accountAction.initiallyConnectedProviders,
+                                                                                       completion: accountAction.completion)
             windowController.contentViewController = accountsList
         case .approveMessage(let action):
             let windowController = Window.showNew(closeOthers: false)

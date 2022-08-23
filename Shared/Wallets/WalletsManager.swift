@@ -64,6 +64,7 @@ final class WalletsManager {
         return wallets.first(where: { $0.id == id })
     }
     
+    // TODO: deprecate
     func getWallet(ethereumAddress: String) -> TokenaryWallet? {
         return wallets.first(where: { $0.ethereumAddress?.lowercased() == ethereumAddress.lowercased() })
     }
@@ -81,6 +82,24 @@ final class WalletsManager {
         } else {
             throw Error.invalidInput
         }
+    }
+    
+    func getSpecificAccount(coin: CoinType, address: String) -> SpecificWalletAccount? {
+        for wallet in wallets {
+            if let account = wallet.accounts.first(where: { $0.coin == coin && $0.address == address }) {
+                return SpecificWalletAccount(walletId: wallet.id, account: account)
+            }
+        }
+        return nil
+    }
+    
+    func suggestedAccounts(coin: CoinType) -> [SpecificWalletAccount] {
+        for wallet in wallets {
+            if let account = wallet.accounts.first(where: { $0.coin == coin }) {
+                return [SpecificWalletAccount(walletId: wallet.id, account: account)]
+            }
+        }
+        return []
     }
     
     private func createWallet(name: String, password: String) throws -> TokenaryWallet {

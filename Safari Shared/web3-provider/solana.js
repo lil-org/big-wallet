@@ -67,9 +67,14 @@ class TokenarySolana extends EventEmitter {
         return this.request(payload);
     }
 
+    externalDisconnect() {
+        this.disconnect();
+    }
+    
     disconnect() {
-        // TODO: implement
-        // support also via request "disconnect" method
+        this.isConnected = false;
+        this.publicKey = null;
+        this.emit("disconnect");
     }
 
     signTransaction(transaction) {
@@ -108,6 +113,10 @@ class TokenarySolana extends EventEmitter {
     }
 
     request(payload) {
+        if (payload.method == "disconnect") {
+            return this.disconnect();
+        }
+        
         this.idMapping.tryFixId(payload);
         return new Promise((resolve, reject) => {
             if (!payload.id) {

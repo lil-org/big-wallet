@@ -7,7 +7,7 @@ class EditAccountsViewController: NSViewController {
     
     var wallet: TokenaryWallet!
     var getBackToRect: CGRect?
-    var onSelectedWallet: ((EthereumChain?, TokenaryWallet?, Account?) -> Void)?
+    var accountSelectionConfiguration: AccountSelectionConfiguration?
     
     struct CoinDerivationCellModel {
         let coinDerivation: CoinDerivation
@@ -64,7 +64,7 @@ class EditAccountsViewController: NSViewController {
     
     private func showAccountsList() {
         let accountsListViewController = instantiate(AccountsListViewController.self)
-        accountsListViewController.onSelectedWallet = onSelectedWallet
+        accountsListViewController.accountSelectionConfiguration = accountSelectionConfiguration
         accountsListViewController.getBackToRect = getBackToRect
         view.window?.contentViewController = accountsListViewController
     }

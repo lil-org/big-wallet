@@ -53,6 +53,12 @@ class TokenaryEthereum extends EventEmitter {
         setTimeout( function() { window.ethereum.emit("_initialized"); }, 1);
     }
     
+    externalDisconnect() {
+        this.setAddress("");
+        window.ethereum.emit("disconnect");
+        window.ethereum.emit("accountsChanged", []);
+    }
+    
     setAddress(address) {
         const lowerAddress = (address || "").toLowerCase();
         this.address = lowerAddress;
