@@ -113,6 +113,10 @@ class TokenarySolana extends EventEmitter {
     }
 
     request(payload) {
+        if (payload.method == "disconnect") {
+            return this.disconnect();
+        }
+        
         this.idMapping.tryFixId(payload);
         return new Promise((resolve, reject) => {
             if (!payload.id) {
