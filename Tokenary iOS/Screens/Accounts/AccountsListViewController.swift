@@ -96,8 +96,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             tableView.contentInset.top += 70
             tableView.verticalScrollIndicatorInsets.bottom += bottomOverlayHeight
             
-            // TODO: select all correct initiall cells
-//            tableView.selectRow(at: IndexPath(row: 0, section: 0), animated: true, scrollPosition: .none)
+            if let accounts = selectAccountAction?.selectedAccounts {
+                selectRowsForAccounts(accounts)
+            }
+            
             updatePrimaryButton()
             
             if let peer = selectAccountAction?.peer {
@@ -117,6 +119,29 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         DispatchQueue.main.async { [weak self] in
             self?.navigationController?.navigationBar.sizeToFit()
             self?.initialContentOffset = self?.tableView.contentOffset.y
+        }
+    }
+    
+    private func selectRowsForAccounts(_ specificWalletAccounts: Set<SpecificWalletAccount>) {
+        var toSelect = specificWalletAccounts
+        for (sectionIndex, section) in sections.enumerated() {
+            for (row, cellModel) in section.items.enumerated() {
+                let account: SpecificWalletAccount
+                switch cellModel {
+                case let .mnemonicAccount(walletIndex, accountIndex):
+                    account = SpecificWalletAccount(walletId: wallets[walletIndex].id, account: wallets[walletIndex].accounts[accountIndex])
+                case let .privateKeyAccount(walletIndex):
+                    account = SpecificWalletAccount(walletId: wallets[walletIndex].id, account: wallets[walletIndex].accounts[0])
+                }
+                if toSelect.contains(account) {
+                    toSelect.remove(account)
+                    let indexPath = IndexPath(row: row, section: sectionIndex)
+                    tableView.selectRow(at: indexPath, animated: false, scrollPosition: .none)
+                    if toSelect.isEmpty {
+                        return
+                    }
+                }
+            }
         }
     }
     
@@ -539,7 +564,7 @@ extension AccountsListViewController: UITableViewDelegate {
         updatePrimaryButton()
         return
         
-        tableView.deselectRow(at: indexPath, animated: true)
+//        tableView.deselectRow(at: indexPath, animated: true)
         let wallet = walletForIndexPath(indexPath)
         let account = accountForIndexPath(indexPath)
         if forWalletSelection {
