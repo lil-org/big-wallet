@@ -18,17 +18,18 @@ class AccountTableViewCell: UITableViewCell {
     @IBOutlet weak var avatarImageView: UIImageView!
     @IBOutlet weak var titleLabel: UILabel!
     
-    override func awakeFromNib() {
-        super.awakeFromNib()
-        let backgroundView = UIView()
-        backgroundView.backgroundColor = tintColor.withAlphaComponent(0.45)
-        selectedBackgroundView = backgroundView
-    }
-    
-    func setup(title: String, image: UIImage?, isDisabled: Bool, delegate: AccountTableViewCellDelegate) {
+    func setup(title: String, image: UIImage?, isDisabled: Bool, tintedSelectionStyle: Bool, delegate: AccountTableViewCellDelegate) {
         if initialBackgroundColor == nil {
             initialBackgroundColor = backgroundColor
         }
+        
+        if tintedSelectionStyle, backgroundView == nil {
+            let backgroundView = UIView()
+            backgroundView.backgroundColor = tintColor.withAlphaComponent(0.45)
+            selectedBackgroundView = backgroundView
+        }
+        
+        selectionStyle = isDisabled ? .none : .blue
         
         cellDelegate = delegate
         avatarImageView.image = image

@@ -574,6 +574,11 @@ extension AccountsListViewController: UITableViewDelegate {
         let wallet = walletForIndexPath(indexPath)
         let account = accountForIndexPath(indexPath)
         if selectAccountAction != nil {
+            guard accountCanBeSelected(account) else {
+                tableView.deselectRow(at: indexPath, animated: true)
+                return
+            }
+            
             if let toDeselect = selectAccountAction?.selectedAccounts.first(where: { $0.account.coin == account.coin }) {
                 selectAccountAction?.selectedAccounts.remove(toDeselect)
                 for anotherIndexPath in tableView.indexPathsForSelectedRows ?? [] {
@@ -627,7 +632,11 @@ extension AccountsListViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCellOfType(AccountTableViewCell.self, for: indexPath)
         let account = accountForIndexPath(indexPath)
-        cell.setup(title: account.croppedAddress, image: account.image, isDisabled: !accountCanBeSelected(account), delegate: self)
+        cell.setup(title: account.croppedAddress,
+                   image: account.image,
+                   isDisabled: !accountCanBeSelected(account),
+                   tintedSelectionStyle: selectAccountAction != nil,
+                   delegate: self)
         return cell
     }
     
