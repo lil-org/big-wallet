@@ -96,6 +96,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             tableView.contentInset.top += 70
             tableView.verticalScrollIndicatorInsets.bottom += bottomOverlayHeight
             
+            // TODO: select all correct initiall cells
+//            tableView.selectRow(at: IndexPath(row: 0, section: 0), animated: true, scrollPosition: .none)
+            updatePrimaryButton()
+            
             if let peer = selectAccountAction?.peer {
                 websiteNameLabel.text = peer.name
                 if let urlString = peer.iconURLString, let url = URL(string: urlString) {
@@ -134,6 +138,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         case let .privateKeyAccount(walletIndex: walletIndex):
             return wallets[walletIndex].accounts[0]
         }
+    }
+    
+    private func updatePrimaryButton() {
+        primaryButton.isEnabled = selectAccountAction?.selectedAccounts.isEmpty == false
     }
     
     private func updateCellModels() {
@@ -523,10 +531,12 @@ extension AccountsListViewController: UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, didDeselectRowAt indexPath: IndexPath) {
         // TODO: implement deselect
+        updatePrimaryButton()
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         // TODO: implement new account selection logic
+        updatePrimaryButton()
         return
         
         tableView.deselectRow(at: indexPath, animated: true)
