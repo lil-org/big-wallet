@@ -40,9 +40,16 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private var toDismissAfterResponse = [Int: UIViewController]()
     private var preferencesItem: UIBarButtonItem?
     private var addWalletItem: UIBarButtonItem?
+    private var initialContentOffset: CGFloat?
     
-    @IBOutlet weak var selectNetworkButtonContainer: UIVisualEffectView!
-    @IBOutlet weak var selectNetworkButton: UIButton!
+    @IBOutlet weak var bottomOverlayView: UIVisualEffectView!
+    @IBOutlet weak var websiteLogoImageView: UIImageView!
+    @IBOutlet weak var websiteNameLabel: UILabel!
+    @IBOutlet weak var topOverlayView: UIView!
+    @IBOutlet weak var topOverlayTopConstraint: NSLayoutConstraint!
+    @IBOutlet weak var networkButton: UIButton!
+    @IBOutlet weak var secondaryButton: UIButton!
+    @IBOutlet weak var primaryButton: UIButton!
     @IBOutlet weak var tableView: UITableView! {
         didSet {
             tableView.delegate = self
@@ -80,11 +87,23 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         updateDataState()
         NotificationCenter.default.addObserver(self, selector: #selector(processInput), name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: Notification.Name.walletsChanged, object: nil)
+        
+        bottomOverlayView.isHidden = !forWalletSelection
+        topOverlayView.isHidden = !forWalletSelection
         if forWalletSelection {
-            selectNetworkButtonContainer.isHidden = false
-            let bottomOverlayHeight: CGFloat = 52
+            let bottomOverlayHeight: CGFloat = 70
             tableView.contentInset.bottom += bottomOverlayHeight
+            tableView.contentInset.top += 70
             tableView.verticalScrollIndicatorInsets.bottom += bottomOverlayHeight
+            
+            if let peer = selectAccountAction?.peer {
+                websiteNameLabel.text = peer.name
+                if let urlString = peer.iconURLString, let url = URL(string: urlString) {
+                    websiteLogoImageView.kf.setImage(with: url)
+                }
+            } else {
+                websiteNameLabel.text = Strings.unknownWebsite
+            }
         }
     }
     
@@ -93,6 +112,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         processInput()
         DispatchQueue.main.async { [weak self] in
             self?.navigationController?.navigationBar.sizeToFit()
+            self?.initialContentOffset = self?.tableView.contentOffset.y
         }
     }
     
@@ -191,9 +211,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         toDismissAfterResponse.removeValue(forKey: requestId)
     }
     
-    @IBAction func selectNetworkButtonTapped(_ sender: Any) {
+    @IBAction func networkButtonTapped(_ sender: Any) {
         let actionSheet = UIAlertController(title: Strings.selectNetwork, message: nil, preferredStyle: .actionSheet)
-        actionSheet.popoverPresentationController?.sourceView = selectNetworkButton
+        actionSheet.popoverPresentationController?.sourceView = networkButton
         for chain in EthereumChain.allMainnets {
             let action = UIAlertAction(title: chain.name, style: .default) { [weak self] _ in
                 self?.didSelectChain(chain)
@@ -211,7 +231,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     private func showTestnets() {
         let actionSheet = UIAlertController(title: Strings.selectTestnet, message: nil, preferredStyle: .actionSheet)
-        actionSheet.popoverPresentationController?.sourceView = selectNetworkButton
+        actionSheet.popoverPresentationController?.sourceView = networkButton
         for chain in EthereumChain.allTestnets {
             let action = UIAlertAction(title: chain.name, style: .default) { [weak self] _ in
                 self?.didSelectChain(chain)
@@ -224,13 +244,16 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func didSelectChain(_ chain: EthereumChain) {
-        selectNetworkButton.configuration?.title = chain.name
         self.chain = chain
-        if selectNetworkButton.configuration?.image == nil {
-            selectNetworkButton.configuration?.imagePadding = 4
-            selectNetworkButton.configuration?.imagePlacement = .trailing
-            selectNetworkButton.configuration?.image = Images.chevronDown
-        }
+        // TODO: update button highlight state
+    }
+    
+    @IBAction func secondaryButtonTapped(_ sender: Any) {
+        // TODO: implement
+    }
+    
+    @IBAction func primaryButtonTapped(_ sender: Any) {
+        // TODO: implement
     }
     
     @objc private func cancelButtonTapped() {
@@ -517,6 +540,17 @@ extension AccountsListViewController: UITableViewDelegate {
 }
 
 extension AccountsListViewController: UITableViewDataSource {
+    
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        if !topOverlayView.isHidden, let initialContentOffset = initialContentOffset {
+            let delta = scrollView.contentOffset.y - initialContentOffset + 52
+            if delta < 0 {
+                topOverlayTopConstraint.constant = -delta
+            } else {
+                topOverlayTopConstraint.constant = 0
+            }
+        }
+    }
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return sections[section].items.count
