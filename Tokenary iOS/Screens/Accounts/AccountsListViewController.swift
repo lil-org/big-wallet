@@ -98,7 +98,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             if !selectAccountAction.initiallyConnectedProviders.isEmpty {
                 primaryButton.setTitle(Strings.ok, for: .normal)
                 secondaryButton.setTitle(Strings.disconnect, for: .normal)
-                // TODO: make it red
+                secondaryButton.tintColor = .systemRed
             }
             updatePrimaryButton()
             
