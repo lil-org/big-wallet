@@ -301,7 +301,21 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     @objc private func walletsChanged() {
+        validateSelectedAccounts()
+        updatePrimaryButton()
         reloadData()
+    }
+    
+    private func validateSelectedAccounts() {
+        guard let specificWalletAccounts = selectAccountAction?.selectedAccounts else { return }
+        for specificWalletAccount in specificWalletAccounts {
+            if let wallet = wallets.first(where: { $0.id == specificWalletAccount.walletId }),
+               wallet.accounts.contains(specificWalletAccount.account) {
+                continue
+            } else {
+                selectAccountAction?.selectedAccounts.remove(specificWalletAccount)
+            }
+        }
     }
     
     private func updateDataState() {
