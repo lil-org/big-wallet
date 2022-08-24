@@ -2,14 +2,7 @@
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.subject === "message-to-wallet") {
-        if ("name" in request.message, request.message.name == "switchAccount") {
-            getLatestConfiguration(request.host, function(currentConfiguration) {
-                request.message.body = currentConfiguration;
-                sendNativeMessage(request, sender, sendResponse);
-            });
-        } else {
-            sendNativeMessage(request, sender, sendResponse);
-        }
+        sendNativeMessage(request, sender, sendResponse);
     } else if (request.subject === "getResponse") {
         browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
             sendResponse(response);
@@ -119,8 +112,13 @@ function justShowApp() {
 
 browser.browserAction.onClicked.addListener(function(tab) {
     const message = {didTapExtensionButton: true};
-    browser.tabs.sendMessage(tab.id, message, function(pong) {
-        if (pong != true) {
+    browser.tabs.sendMessage(tab.id, message, function(host) {
+        if (typeof host !== "undefined") {
+            getLatestConfiguration(host, function(currentConfiguration) {
+                const switchAccountMessage = {name: "switchAccount", id: genId(), provider: "unknown", body: currentConfiguration};
+                browser.tabs.sendMessage(tab.id, switchAccountMessage);
+            });
+        } else {
             justShowApp();
         }
     });
