@@ -559,23 +559,34 @@ extension AccountsListViewController: UITableViewDelegate {
     }
     
     func tableView(_ tableView: UITableView, didDeselectRowAt indexPath: IndexPath) {
-        // TODO: implement deselect
+        guard selectAccountAction != nil else { return }
+        let wallet = walletForIndexPath(indexPath)
+        let account = accountForIndexPath(indexPath)
+        let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
+        selectAccountAction?.selectedAccounts.remove(specificWalletAccount)
         updatePrimaryButton()
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        // TODO: implement new account selection logic
-        updatePrimaryButton()
-        return
-        
-//        tableView.deselectRow(at: indexPath, animated: true)
         let wallet = walletForIndexPath(indexPath)
         let account = accountForIndexPath(indexPath)
         if selectAccountAction != nil {
-            // TODO: do not call completion here anymore
-            selectAccountAction?.completion(chain, [SpecificWalletAccount(walletId: wallet.id, account: account)])
+            if let toDeselect = selectAccountAction?.selectedAccounts.first(where: { $0.account.coin == account.coin }) {
+                selectAccountAction?.selectedAccounts.remove(toDeselect)
+                for anotherIndexPath in tableView.indexPathsForSelectedRows ?? [] {
+                    guard indexPath != anotherIndexPath else { continue }
+                    if accountForIndexPath(anotherIndexPath) == toDeselect.account && walletForIndexPath(anotherIndexPath).id == toDeselect.walletId {
+                        tableView.deselectRow(at: anotherIndexPath, animated: false)
+                        break
+                    }
+                }
+            }
+            let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
+            selectAccountAction?.selectedAccounts.insert(specificWalletAccount)
+            updatePrimaryButton()
         } else {
             showActionsForAccount(account, wallet: wallet, cell: tableView.cellForRow(at: indexPath))
+            tableView.deselectRow(at: indexPath, animated: true)
         }
     }
     
