@@ -118,7 +118,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         processInput()
         DispatchQueue.main.async { [weak self] in
             self?.navigationController?.navigationBar.sizeToFit()
-            self?.initialContentOffset = self?.tableView.contentOffset.y
+            if self?.initialContentOffset == nil {
+                self?.initialContentOffset = self?.tableView.contentOffset.y
+                self?.tableView.scrollToNearestSelectedRow(at: .none, animated: false)
+            }
         }
     }
     
