@@ -29,9 +29,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     private var chain = EthereumChain.ethereum
     var selectAccountAction: SelectAccountAction?
-    var forWalletSelection: Bool {
-        return selectAccountAction != nil
-    }
     
     private var wallets: [TokenaryWallet] {
         return walletsManager.wallets
@@ -66,6 +63,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             walletsManager.start()
         }
         
+        let forWalletSelection = selectAccountAction != nil
         navigationItem.title = forWalletSelection ? Strings.selectAccount : Strings.wallets
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
@@ -90,19 +88,21 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         
         bottomOverlayView.isHidden = !forWalletSelection
         topOverlayView.isHidden = !forWalletSelection
-        if forWalletSelection {
+        if let selectAccountAction = selectAccountAction {
             let bottomOverlayHeight: CGFloat = 70
             tableView.contentInset.bottom += bottomOverlayHeight
             tableView.contentInset.top += 70
             tableView.verticalScrollIndicatorInsets.bottom += bottomOverlayHeight
             
-            if let accounts = selectAccountAction?.selectedAccounts {
-                selectRowsForAccounts(accounts)
+            selectRowsForAccounts(selectAccountAction.selectedAccounts)
+            if !selectAccountAction.initiallyConnectedProviders.isEmpty {
+                primaryButton.setTitle(Strings.ok, for: .normal)
+                secondaryButton.setTitle(Strings.disconnect, for: .normal)
+                // TODO: make it red
             }
-            
             updatePrimaryButton()
             
-            if let peer = selectAccountAction?.peer {
+            if let peer = selectAccountAction.peer {
                 websiteNameLabel.text = peer.name
                 if let urlString = peer.iconURLString, let url = URL(string: urlString) {
                     websiteLogoImageView.kf.setImage(with: url)
@@ -282,15 +282,19 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     @IBAction func secondaryButtonTapped(_ sender: Any) {
-        // TODO: implement
+        if selectAccountAction?.initiallyConnectedProviders.isEmpty == false {
+            selectAccountAction?.completion(chain, [])
+        } else {
+            selectAccountAction?.completion(chain, nil)
+        }
     }
     
     @IBAction func primaryButtonTapped(_ sender: Any) {
-        // TODO: implement
+        selectAccountAction?.completion(chain, selectAccountAction?.selectedAccounts.map { $0 })
     }
     
     @objc private func cancelButtonTapped() {
-        selectAccountAction?.completion(nil, nil)
+        selectAccountAction?.completion(chain, nil)
     }
     
     @objc private func walletsChanged() {
@@ -567,7 +571,8 @@ extension AccountsListViewController: UITableViewDelegate {
 //        tableView.deselectRow(at: indexPath, animated: true)
         let wallet = walletForIndexPath(indexPath)
         let account = accountForIndexPath(indexPath)
-        if forWalletSelection {
+        if selectAccountAction != nil {
+            // TODO: do not call completion here anymore
             selectAccountAction?.completion(chain, [SpecificWalletAccount(walletId: wallet.id, account: account)])
         } else {
             showActionsForAccount(account, wallet: wallet, cell: tableView.cellForRow(at: indexPath))
