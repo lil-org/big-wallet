@@ -497,6 +497,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(alert, animated: true)
     }
     
+    private func accountCanBeSelected(_ account: Account) -> Bool {
+        return selectAccountAction?.coinType == nil || selectAccountAction?.coinType == account.coin
+    }
+    
 }
 
 extension AccountsListViewController: UITableViewDelegate {
@@ -517,12 +521,18 @@ extension AccountsListViewController: UITableViewDelegate {
         }
     }
     
+    func tableView(_ tableView: UITableView, didDeselectRowAt indexPath: IndexPath) {
+        // TODO: implement deselect
+    }
+    
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        // TODO: implement new account selection logic
+        return
+        
         tableView.deselectRow(at: indexPath, animated: true)
         let wallet = walletForIndexPath(indexPath)
         let account = accountForIndexPath(indexPath)
         if forWalletSelection {
-            // TODO: only highlight cell instead
             selectAccountAction?.completion(chain, [SpecificWalletAccount(walletId: wallet.id, account: account)])
         } else {
             showActionsForAccount(account, wallet: wallet, cell: tableView.cellForRow(at: indexPath))
@@ -563,7 +573,7 @@ extension AccountsListViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCellOfType(AccountTableViewCell.self, for: indexPath)
         let account = accountForIndexPath(indexPath)
-        cell.setup(title: account.croppedAddress, image: account.image, delegate: self)
+        cell.setup(title: account.croppedAddress, image: account.image, isDisabled: !accountCanBeSelected(account), delegate: self)
         return cell
     }
     
