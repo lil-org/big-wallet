@@ -10,6 +10,7 @@ class AccountsListViewController: NSViewController {
     private var cellModels = [CellModel]()
     private var network = EthereumChain.ethereum
     private var didCallCompletion = false
+    private var didAppear = false
     var selectAccountAction: SelectAccountAction?
     var newWalletId: String?
     var getBackToRect: CGRect?
@@ -95,6 +96,13 @@ class AccountsListViewController: NSViewController {
         blinkNewWalletCellIfNeeded()
         view.window?.delegate = self
         promptSafariForLegacyUsersIfNeeded()
+        
+        if !didAppear {
+            didAppear = true
+            if let coin = selectAccountAction?.coinType, walletsManager.suggestedAccounts(coin: coin).isEmpty, !wallets.isEmpty {
+                Alert.showWithMessage(String(format: Strings.addAccountToConnect, arguments: [coin.name]), style: .informational)
+            }
+        }
     }
     
     private func promptSafariForLegacyUsersIfNeeded() {
