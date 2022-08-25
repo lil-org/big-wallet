@@ -102,7 +102,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             tableView.contentInset.bottom += bottomOverlayHeight
             tableView.contentInset.top += 70
             tableView.verticalScrollIndicatorInsets.bottom += bottomOverlayHeight
-            // TODO: scroll to the first selected account in a list
             if !selectAccountAction.initiallyConnectedProviders.isEmpty {
                 primaryButton.setTitle(Strings.ok, for: .normal)
                 secondaryButton.setTitle(Strings.disconnect, for: .normal)
@@ -128,7 +127,28 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             self?.navigationController?.navigationBar.sizeToFit()
             if self?.initialContentOffset == nil {
                 self?.initialContentOffset = self?.tableView.contentOffset.y
-                self?.tableView.scrollToNearestSelectedRow(at: .none, animated: false)
+                if let selectedAccounts = self?.selectAccountAction?.selectedAccounts {
+                    self?.scrollToTheFirst(selectedAccounts)
+                }
+            }
+        }
+    }
+    
+    private func scrollToTheFirst(_ specificWalletAccounts: Set<SpecificWalletAccount>) {
+        for (sectionIndex, section) in sections.enumerated() {
+            for (row, cellModel) in section.items.enumerated() {
+                let account: SpecificWalletAccount
+                switch cellModel {
+                case let .mnemonicAccount(walletIndex, accountIndex):
+                    account = SpecificWalletAccount(walletId: wallets[walletIndex].id, account: wallets[walletIndex].accounts[accountIndex])
+                case let .privateKeyAccount(walletIndex):
+                    account = SpecificWalletAccount(walletId: wallets[walletIndex].id, account: wallets[walletIndex].accounts[0])
+                }
+                if specificWalletAccounts.contains(account) {
+                    let indexPath = IndexPath(row: row, section: sectionIndex)
+                    tableView.scrollToRow(at: indexPath, at: .none, animated: false)
+                    return
+                }
             }
         }
     }
