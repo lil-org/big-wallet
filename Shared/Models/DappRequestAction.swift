@@ -17,6 +17,7 @@ struct SelectAccountAction {
     let coinType: CoinType?
     var selectedAccounts: Set<SpecificWalletAccount>
     let initiallyConnectedProviders: Set<Web3Provider>
+    let network: EthereumChain?
     let completion: (EthereumChain?, [SpecificWalletAccount]?) -> Void
 }
 

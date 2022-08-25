@@ -27,7 +27,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private var sections = [Section]()
     private let walletsManager = WalletsManager.shared
     
-    private var chain = EthereumChain.ethereum
+    private var network = EthereumChain.ethereum
     var selectAccountAction: SelectAccountAction?
     
     private var wallets: [TokenaryWallet] {
@@ -109,6 +109,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                 secondaryButton.tintColor = .systemRed
             }
             updatePrimaryButton()
+            
+            if let network = selectAccountAction.network, self.network != network {
+                selectNetwork(network)
+            }
             
             if let peer = selectAccountAction.peer {
                 websiteNameLabel.text = peer.name
@@ -259,9 +263,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     @IBAction func networkButtonTapped(_ sender: Any) {
         let actionSheet = UIAlertController(title: Strings.selectNetwork, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.sourceView = networkButton
-        for chain in EthereumChain.allMainnets {
-            let action = UIAlertAction(title: chain.name, style: .default) { [weak self] _ in
-                self?.didSelectChain(chain)
+        for network in EthereumChain.allMainnets {
+            let action = UIAlertAction(title: network.name, style: .default) { [weak self] _ in
+                self?.selectNetwork(network)
             }
             actionSheet.addAction(action)
         }
@@ -277,9 +281,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private func showTestnets() {
         let actionSheet = UIAlertController(title: Strings.selectTestnet, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.sourceView = networkButton
-        for chain in EthereumChain.allTestnets {
-            let action = UIAlertAction(title: chain.name, style: .default) { [weak self] _ in
-                self?.didSelectChain(chain)
+        for network in EthereumChain.allTestnets {
+            let action = UIAlertAction(title: network.name, style: .default) { [weak self] _ in
+                self?.selectNetwork(network)
             }
             actionSheet.addAction(action)
         }
@@ -288,25 +292,27 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(actionSheet, animated: true)
     }
     
-    private func didSelectChain(_ chain: EthereumChain) {
-        self.chain = chain
-        // TODO: update button highlight state
+    private func selectNetwork(_ network: EthereumChain) {
+        self.network = network
+        var tintedConfiguration = UIButton.Configuration.tinted()
+        tintedConfiguration.image = networkButton.configuration?.image
+        networkButton.configuration = tintedConfiguration
     }
     
     @IBAction func secondaryButtonTapped(_ sender: Any) {
         if selectAccountAction?.initiallyConnectedProviders.isEmpty == false {
-            selectAccountAction?.completion(chain, [])
+            selectAccountAction?.completion(network, [])
         } else {
-            selectAccountAction?.completion(chain, nil)
+            selectAccountAction?.completion(network, nil)
         }
     }
     
     @IBAction func primaryButtonTapped(_ sender: Any) {
-        selectAccountAction?.completion(chain, selectAccountAction?.selectedAccounts.map { $0 })
+        selectAccountAction?.completion(network, selectAccountAction?.selectedAccounts.map { $0 })
     }
     
     @objc private func cancelButtonTapped() {
-        selectAccountAction?.completion(chain, nil)
+        selectAccountAction?.completion(network, nil)
     }
     
     @objc private func walletsChanged() {

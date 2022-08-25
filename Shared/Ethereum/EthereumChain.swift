@@ -36,6 +36,15 @@ enum EthereumChain: Int {
         return "0x" + String(id, radix: 16, uppercase: false)
     }
     
+    static func withChainId(_ chainId: String?) -> EthereumChain? {
+        guard let chainId = chainId else { return nil }
+        if let rawValue = Int(chainId.dropFirst(2), radix: 16) {
+            return EthereumChain(rawValue: rawValue)
+        } else {
+            return nil
+        }
+    }
+    
     static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum, .avalanche, .gnosisChain, .fantomOpera, .celo, .aurora]
     static let allTestnets: [EthereumChain] = [.ethereumRopsten, .ethereumKovan, .ethereumRinkeby, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji, .fantomTestnet, .neonDevnet]
     
