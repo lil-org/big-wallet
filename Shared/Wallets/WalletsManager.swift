@@ -86,7 +86,7 @@ final class WalletsManager {
     
     func getSpecificAccount(coin: CoinType, address: String) -> SpecificWalletAccount? {
         for wallet in wallets {
-            if let account = wallet.accounts.first(where: { $0.coin == coin && $0.address == address }) {
+            if let account = wallet.accounts.first(where: { $0.coin == coin && $0.address.lowercased() == address.lowercased() }) {
                 return SpecificWalletAccount(walletId: wallet.id, account: account)
             }
         }

@@ -6,7 +6,7 @@ import WalletCore
 class ImportViewController: NSViewController {
     
     private let walletsManager = WalletsManager.shared
-    var accountSelectionConfiguration: AccountSelectionConfiguration?
+    var selectAccountAction: SelectAccountAction?
     private var inputValidationResult = WalletsManager.InputValidationResult.invalid
     
     @IBOutlet weak var textField: NSTextField! {
@@ -62,7 +62,7 @@ class ImportViewController: NSViewController {
     
     private func showAccountsList(newWalletId: String?) {
         let accountsListViewController = instantiate(AccountsListViewController.self)
-        accountsListViewController.accountSelectionConfiguration = accountSelectionConfiguration
+        accountsListViewController.selectAccountAction = selectAccountAction
         accountsListViewController.newWalletId = newWalletId
         view.window?.contentViewController = accountsListViewController
     }

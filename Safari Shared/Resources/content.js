@@ -110,17 +110,12 @@ function sendMessageToNativeApp(message) {
     platformSpecificProcessMessage(message); // iOS opens app here
 }
 
-function didTapExtensionButton() {
-    const id = genId();
-    const message = {name: "switchAccount", id: id, provider: "unknown", body: {}};
-    sendMessageToNativeApp(message);
-}
-
 // Receive from background
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if ("didTapExtensionButton" in request) {
-        sendResponse(true);
-        didTapExtensionButton();
+        sendResponse(window.location.host);
+    } else if ("name" in request && request.name == "switchAccount") {
+        sendMessageToNativeApp(request);
     }
 });
 
