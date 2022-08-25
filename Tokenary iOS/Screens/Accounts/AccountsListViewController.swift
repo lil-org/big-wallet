@@ -126,13 +126,13 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         processInput()
         didAppear = true
         DispatchQueue.main.async { [weak self] in
+            let heightBefore = self?.navigationController?.navigationBar.frame.height ?? 0
             self?.navigationController?.navigationBar.sizeToFit()
-            DispatchQueue.main.async {
-                if self?.initialContentOffset == nil && self?.sections.isEmpty == false {
-                    self?.initialContentOffset = self?.tableView.contentOffset.y
-                    if let selectedAccounts = self?.selectAccountAction?.selectedAccounts {
-                        self?.scrollToTheFirst(selectedAccounts)
-                    }
+            let heightAfter = self?.navigationController?.navigationBar.frame.height ?? 0
+            if self?.initialContentOffset == nil && self?.sections.isEmpty == false {
+                self?.initialContentOffset = (self?.tableView.contentOffset.y ?? 0) + heightBefore - heightAfter
+                if let selectedAccounts = self?.selectAccountAction?.selectedAccounts {
+                    self?.scrollToTheFirst(selectedAccounts)
                 }
             }
         }
