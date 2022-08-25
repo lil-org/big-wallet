@@ -163,8 +163,7 @@ class AccountsListViewController: NSViewController {
             websiteNameStackView.isHidden = true
         }
         
-        let canSelectNetworkForCurrentProvider = selectAccountAction?.coinType == .ethereum || selectAccountAction?.coinType == nil
-        if canSelectAccount, networkButton.isHidden, canSelectNetworkForCurrentProvider {
+        if canSelectAccount, networkButton.isHidden {
             networkButton.isHidden = false
             let menu = NSMenu()
             let titleItem = NSMenuItem(title: Strings.selectNetworkOptionally, action: nil, keyEquivalent: "")
@@ -193,7 +192,7 @@ class AccountsListViewController: NSViewController {
             if let network = selectAccountAction?.initialNetwork, network != self.network {
                 selectNetwork(network)
             }
-        } else if !(canSelectAccount && canSelectNetworkForCurrentProvider), !networkButton.isHidden {
+        } else if !canSelectAccount, !networkButton.isHidden {
             networkButton.isHidden = true
         }
     }
@@ -216,6 +215,11 @@ class AccountsListViewController: NSViewController {
     }
     
     @IBAction func networkButtonTapped(_ sender: NSButton) {
+        guard selectAccountAction?.coinType == nil || selectAccountAction?.coinType == .ethereum else {
+            Alert.showWithMessage(selectAccountAction?.coinType?.name ?? Strings.unknownNetwork, style: .informational)
+            return
+        }
+        
         var origin = sender.frame.origin
         origin.x += sender.frame.width
         origin.y += sender.frame.height
