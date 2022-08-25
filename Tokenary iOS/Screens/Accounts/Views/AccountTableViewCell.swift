@@ -32,6 +32,9 @@ class AccountTableViewCell: UITableViewCell {
         } else {
             backgroundColor = .secondarySystemGroupedBackground
         }
+        
+        titleLabel.textColor = isSelected ? .white : .label
+        moreButton.tintColor = isSelected ? .white : .tintColor
     }
     
     private func setDisabled(_ disabled: Bool) {
