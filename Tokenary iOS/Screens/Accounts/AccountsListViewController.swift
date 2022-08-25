@@ -264,7 +264,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let actionSheet = UIAlertController(title: Strings.selectNetwork, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.sourceView = networkButton
         for network in EthereumChain.allMainnets {
-            let action = UIAlertAction(title: network.name, style: .default) { [weak self] _ in
+            let prefix = network == self.network ? "✅ " : ""
+            let action = UIAlertAction(title: prefix + network.name, style: .default) { [weak self] _ in
                 self?.selectNetwork(network)
             }
             actionSheet.addAction(action)
@@ -282,7 +283,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let actionSheet = UIAlertController(title: Strings.selectTestnet, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.sourceView = networkButton
         for network in EthereumChain.allTestnets {
-            let action = UIAlertAction(title: network.name, style: .default) { [weak self] _ in
+            let prefix = network == self.network ? "✅ " : ""
+            let action = UIAlertAction(title: prefix + network.name, style: .default) { [weak self] _ in
                 self?.selectNetwork(network)
             }
             actionSheet.addAction(action)
