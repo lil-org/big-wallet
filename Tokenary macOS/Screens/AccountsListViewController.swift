@@ -78,6 +78,7 @@ class AccountsListViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        validateSelectedAccounts()
         reloadHeader()
         updateBottomButtons()
         updateCellModels()
