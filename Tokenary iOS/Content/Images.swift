@@ -9,7 +9,6 @@ struct Images {
     static var failedToLoad: UIImage { systemName("xmark.octagon") }
     static var preferences: UIImage { systemName("gearshape") }
     static var circleFill: UIImage { systemName("circle.fill") }
-    static var chevronDown: UIImage { systemName("chevron.down") }
  
     static func logo(coin: CoinType) -> UIImage {
         return named("Logo" + coin.name)

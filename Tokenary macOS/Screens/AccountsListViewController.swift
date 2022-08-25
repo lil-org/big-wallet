@@ -8,8 +8,9 @@ class AccountsListViewController: NSViewController {
     private let agent = Agent.shared
     private let walletsManager = WalletsManager.shared
     private var cellModels = [CellModel]()
-    private var chain = EthereumChain.ethereum
+    private var network = EthereumChain.ethereum
     private var didCallCompletion = false
+    private var didAppear = false
     var selectAccountAction: SelectAccountAction?
     var newWalletId: String?
     var getBackToRect: CGRect?
@@ -78,6 +79,7 @@ class AccountsListViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        validateSelectedAccounts()
         reloadHeader()
         updateBottomButtons()
         updateCellModels()
@@ -94,6 +96,13 @@ class AccountsListViewController: NSViewController {
         blinkNewWalletCellIfNeeded()
         view.window?.delegate = self
         promptSafariForLegacyUsersIfNeeded()
+        
+        if !didAppear {
+            didAppear = true
+            if let coin = selectAccountAction?.coinType, walletsManager.suggestedAccounts(coin: coin).isEmpty, !wallets.isEmpty {
+                Alert.showWithMessage(String(format: Strings.addAccountToConnect, arguments: [coin.name]), style: .informational)
+            }
+        }
     }
     
     private func promptSafariForLegacyUsersIfNeeded() {
@@ -105,7 +114,7 @@ class AccountsListViewController: NSViewController {
     private func callCompletion(specificWalletAccounts: [SpecificWalletAccount]?) {
         if !didCallCompletion {
             didCallCompletion = true
-            selectAccountAction?.completion(chain, specificWalletAccounts)
+            selectAccountAction?.completion(network, specificWalletAccounts)
         }
     }
     
@@ -163,8 +172,7 @@ class AccountsListViewController: NSViewController {
             websiteNameStackView.isHidden = true
         }
         
-        let canSelectNetworkForCurrentProvider = selectAccountAction?.coinType == .ethereum || selectAccountAction?.coinType == nil
-        if canSelectAccount, networkButton.isHidden, canSelectNetworkForCurrentProvider {
+        if canSelectAccount, networkButton.isHidden {
             networkButton.isHidden = false
             let menu = NSMenu()
             let titleItem = NSMenuItem(title: Strings.selectNetworkOptionally, action: nil, keyEquivalent: "")
@@ -189,7 +197,11 @@ class AccountsListViewController: NSViewController {
             menu.addItem(.separator())
             menu.addItem(submenuItem)
             networkButton.menu = menu
-        } else if !(canSelectAccount && canSelectNetworkForCurrentProvider), !networkButton.isHidden {
+            
+            if let network = selectAccountAction?.initialNetwork, network != self.network {
+                selectNetwork(network)
+            }
+        } else if !canSelectAccount, !networkButton.isHidden {
             networkButton.isHidden = true
         }
     }
@@ -212,6 +224,11 @@ class AccountsListViewController: NSViewController {
     }
     
     @IBAction func networkButtonTapped(_ sender: NSButton) {
+        guard selectAccountAction?.coinType == nil || selectAccountAction?.coinType == .ethereum else {
+            Alert.showWithMessage(selectAccountAction?.coinType?.name ?? Strings.unknownNetwork, style: .informational)
+            return
+        }
+        
         var origin = sender.frame.origin
         origin.x += sender.frame.width
         origin.y += sender.frame.height
@@ -232,10 +249,14 @@ class AccountsListViewController: NSViewController {
     
     @objc private func didSelectChain(_ sender: AnyObject) {
         guard let menuItem = sender as? NSMenuItem,
-              let selectedChain = EthereumChain(rawValue: menuItem.tag) else { return }
-        networkButton.menu?.items[0].title = selectedChain.name + " — " + Strings.isSelected
+              let selectedNetwork = EthereumChain(rawValue: menuItem.tag) else { return }
+        selectNetwork(selectedNetwork)
+    }
+    
+    private func selectNetwork(_ network: EthereumChain) {
+        networkButton.menu?.items[0].title = network.name + " — " + Strings.isSelected
         networkButton.contentTintColor = .controlAccentColor
-        chain = selectedChain
+        self.network = network
     }
 
     @objc private func didClickCreateAccount() {

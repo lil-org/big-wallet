@@ -11,7 +11,7 @@ extension CoinType {
         case .ethereum:
             return "Ethereum & L2s"
         case .near:
-            return "Near"
+            return "NEAR"
         default:
             fatalError(Strings.somethingWentWrong)
         }
