@@ -8,7 +8,7 @@ class AccountsListViewController: NSViewController {
     private let agent = Agent.shared
     private let walletsManager = WalletsManager.shared
     private var cellModels = [CellModel]()
-    private var chain = EthereumChain.ethereum
+    private var network = EthereumChain.ethereum
     private var didCallCompletion = false
     var selectAccountAction: SelectAccountAction?
     var newWalletId: String?
@@ -105,7 +105,7 @@ class AccountsListViewController: NSViewController {
     private func callCompletion(specificWalletAccounts: [SpecificWalletAccount]?) {
         if !didCallCompletion {
             didCallCompletion = true
-            selectAccountAction?.completion(chain, specificWalletAccounts)
+            selectAccountAction?.completion(network, specificWalletAccounts)
         }
     }
     
@@ -189,6 +189,10 @@ class AccountsListViewController: NSViewController {
             menu.addItem(.separator())
             menu.addItem(submenuItem)
             networkButton.menu = menu
+            
+            if let network = selectAccountAction?.initialNetwork, network != self.network {
+                selectNetwork(network)
+            }
         } else if !(canSelectAccount && canSelectNetworkForCurrentProvider), !networkButton.isHidden {
             networkButton.isHidden = true
         }
@@ -232,10 +236,14 @@ class AccountsListViewController: NSViewController {
     
     @objc private func didSelectChain(_ sender: AnyObject) {
         guard let menuItem = sender as? NSMenuItem,
-              let selectedChain = EthereumChain(rawValue: menuItem.tag) else { return }
-        networkButton.menu?.items[0].title = selectedChain.name + " — " + Strings.isSelected
+              let selectedNetwork = EthereumChain(rawValue: menuItem.tag) else { return }
+        selectNetwork(selectedNetwork)
+    }
+    
+    private func selectNetwork(_ network: EthereumChain) {
+        networkButton.menu?.items[0].title = network.name + " — " + Strings.isSelected
         networkButton.contentTintColor = .controlAccentColor
-        chain = selectedChain
+        self.network = network
     }
 
     @objc private func didClickCreateAccount() {
