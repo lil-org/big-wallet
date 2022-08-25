@@ -102,8 +102,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             tableView.contentInset.bottom += bottomOverlayHeight
             tableView.contentInset.top += 70
             tableView.verticalScrollIndicatorInsets.bottom += bottomOverlayHeight
-            
-            selectRowsForAccounts(selectAccountAction.selectedAccounts)
+            // TODO: scroll to the first selected account in a list
             if !selectAccountAction.initiallyConnectedProviders.isEmpty {
                 primaryButton.setTitle(Strings.ok, for: .normal)
                 secondaryButton.setTitle(Strings.disconnect, for: .normal)
@@ -130,29 +129,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             if self?.initialContentOffset == nil {
                 self?.initialContentOffset = self?.tableView.contentOffset.y
                 self?.tableView.scrollToNearestSelectedRow(at: .none, animated: false)
-            }
-        }
-    }
-    
-    private func selectRowsForAccounts(_ specificWalletAccounts: Set<SpecificWalletAccount>) {
-        var toSelect = specificWalletAccounts
-        for (sectionIndex, section) in sections.enumerated() {
-            for (row, cellModel) in section.items.enumerated() {
-                let account: SpecificWalletAccount
-                switch cellModel {
-                case let .mnemonicAccount(walletIndex, accountIndex):
-                    account = SpecificWalletAccount(walletId: wallets[walletIndex].id, account: wallets[walletIndex].accounts[accountIndex])
-                case let .privateKeyAccount(walletIndex):
-                    account = SpecificWalletAccount(walletId: wallets[walletIndex].id, account: wallets[walletIndex].accounts[0])
-                }
-                if toSelect.contains(account) {
-                    toSelect.remove(account)
-                    let indexPath = IndexPath(row: row, section: sectionIndex)
-                    tableView.selectRow(at: indexPath, animated: false, scrollPosition: .none)
-                    if toSelect.isEmpty {
-                        return
-                    }
-                }
             }
         }
     }
@@ -560,6 +536,23 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(alert, animated: true)
     }
     
+    private func didClickAccountInSelectionMode(specificWalletAccount: SpecificWalletAccount) {
+        let wasSelected = selectAccountAction?.selectedAccounts.contains(specificWalletAccount) == true
+        
+        if !wasSelected, let toDeselect = selectAccountAction?.selectedAccounts.first(where: { $0.account.coin == specificWalletAccount.account.coin }) {
+            selectAccountAction?.selectedAccounts.remove(toDeselect)
+        }
+        
+        if wasSelected {
+            selectAccountAction?.selectedAccounts.remove(specificWalletAccount)
+        } else {
+            selectAccountAction?.selectedAccounts.insert(specificWalletAccount)
+        }
+        
+        updatePrimaryButton()
+        tableView.reloadData()
+    }
+    
     private func accountCanBeSelected(_ account: Account) -> Bool {
         return selectAccountAction?.coinType == nil || selectAccountAction?.coinType == account.coin
     }
@@ -584,40 +577,17 @@ extension AccountsListViewController: UITableViewDelegate {
         }
     }
     
-    func tableView(_ tableView: UITableView, didDeselectRowAt indexPath: IndexPath) {
-        guard selectAccountAction != nil else { return }
-        let wallet = walletForIndexPath(indexPath)
-        let account = accountForIndexPath(indexPath)
-        let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
-        selectAccountAction?.selectedAccounts.remove(specificWalletAccount)
-        updatePrimaryButton()
-    }
-    
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
         let wallet = walletForIndexPath(indexPath)
         let account = accountForIndexPath(indexPath)
         if selectAccountAction != nil {
-            guard accountCanBeSelected(account) else {
-                tableView.deselectRow(at: indexPath, animated: true)
-                return
+            if accountCanBeSelected(account) {
+                let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
+                didClickAccountInSelectionMode(specificWalletAccount: specificWalletAccount)
             }
-            
-            if let toDeselect = selectAccountAction?.selectedAccounts.first(where: { $0.account.coin == account.coin }) {
-                selectAccountAction?.selectedAccounts.remove(toDeselect)
-                for anotherIndexPath in tableView.indexPathsForSelectedRows ?? [] {
-                    guard indexPath != anotherIndexPath else { continue }
-                    if accountForIndexPath(anotherIndexPath) == toDeselect.account && walletForIndexPath(anotherIndexPath).id == toDeselect.walletId {
-                        tableView.deselectRow(at: anotherIndexPath, animated: false)
-                        break
-                    }
-                }
-            }
-            let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
-            selectAccountAction?.selectedAccounts.insert(specificWalletAccount)
-            updatePrimaryButton()
         } else {
             showActionsForAccount(account, wallet: wallet, cell: tableView.cellForRow(at: indexPath))
-            tableView.deselectRow(at: indexPath, animated: true)
         }
     }
     
@@ -655,11 +625,16 @@ extension AccountsListViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCellOfType(AccountTableViewCell.self, for: indexPath)
         let account = accountForIndexPath(indexPath)
+        let wallet = walletForIndexPath(indexPath)
+        let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
+        let isSelected = selectAccountAction?.selectedAccounts.contains(specificWalletAccount) == true
         cell.setup(title: account.croppedAddress,
                    image: account.image,
                    isDisabled: !accountCanBeSelected(account),
-                   tintedSelectionStyle: selectAccountAction != nil,
+                   customSelectionStyle: selectAccountAction != nil,
+                   isSelected: isSelected,
                    delegate: self)
+        
         return cell
     }
     

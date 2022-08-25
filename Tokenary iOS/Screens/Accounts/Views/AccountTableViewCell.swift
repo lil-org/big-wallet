@@ -12,34 +12,30 @@ protocol AccountTableViewCellDelegate: AnyObject {
 class AccountTableViewCell: UITableViewCell {
 
     private weak var cellDelegate: AccountTableViewCellDelegate?
-    private var initialBackgroundColor: UIColor?
     
     @IBOutlet weak var moreButton: UIButton!
     @IBOutlet weak var avatarImageView: UIImageView!
     @IBOutlet weak var titleLabel: UILabel!
     
-    func setup(title: String, image: UIImage?, isDisabled: Bool, tintedSelectionStyle: Bool, delegate: AccountTableViewCellDelegate) {
-        if initialBackgroundColor == nil {
-            initialBackgroundColor = backgroundColor
-        }
-        
-        if tintedSelectionStyle, backgroundView == nil {
-            let backgroundView = UIView()
-            backgroundView.backgroundColor = tintColor.withAlphaComponent(0.45)
-            selectedBackgroundView = backgroundView
-        }
-        
-        selectionStyle = isDisabled ? .none : .blue
+    func setup(title: String, image: UIImage?, isDisabled: Bool, customSelectionStyle: Bool, isSelected: Bool, delegate: AccountTableViewCellDelegate) {
+        selectionStyle = customSelectionStyle ? .none : .blue
         
         cellDelegate = delegate
         avatarImageView.image = image
         titleLabel.text = title
         setDisabled(isDisabled)
+        
+        if isDisabled {
+            backgroundColor = .secondarySystemGroupedBackground.withAlphaComponent(alpha)
+        } else if isSelected {
+            backgroundColor = .tintColor
+        } else {
+            backgroundColor = .secondarySystemGroupedBackground
+        }
     }
     
     private func setDisabled(_ disabled: Bool) {
         let alpha: CGFloat = disabled ? 0.35 : 1
-        backgroundColor = disabled ? initialBackgroundColor?.withAlphaComponent(alpha) : initialBackgroundColor
         contentView.alpha = alpha
     }
     
