@@ -34,6 +34,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         return walletsManager.wallets
     }
     
+    private var didAppear = false
     private var toDismissAfterResponse = [Int: UIViewController]()
     private var preferencesItem: UIBarButtonItem?
     private var addWalletItem: UIBarButtonItem?
@@ -123,12 +124,15 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         processInput()
+        didAppear = true
         DispatchQueue.main.async { [weak self] in
             self?.navigationController?.navigationBar.sizeToFit()
-            if self?.initialContentOffset == nil {
-                self?.initialContentOffset = self?.tableView.contentOffset.y
-                if let selectedAccounts = self?.selectAccountAction?.selectedAccounts {
-                    self?.scrollToTheFirst(selectedAccounts)
+            DispatchQueue.main.async {
+                if self?.initialContentOffset == nil && self?.sections.isEmpty == false {
+                    self?.initialContentOffset = self?.tableView.contentOffset.y
+                    if let selectedAccounts = self?.selectAccountAction?.selectedAccounts {
+                        self?.scrollToTheFirst(selectedAccounts)
+                    }
                 }
             }
         }
@@ -329,6 +333,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let canScroll = !isEmpty
         if tableView.isScrollEnabled != canScroll {
             tableView.isScrollEnabled = canScroll
+        }
+        
+        if didAppear, !isEmpty, initialContentOffset == nil {
+            initialContentOffset = tableView.contentOffset.y
         }
     }
     
@@ -625,7 +633,7 @@ extension AccountsListViewController: UITableViewDataSource {
     
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         if !topOverlayView.isHidden, let initialContentOffset = initialContentOffset {
-            let delta = scrollView.contentOffset.y - initialContentOffset + 52
+            let delta = scrollView.contentOffset.y - initialContentOffset
             if delta < 0 {
                 topOverlayTopConstraint.constant = -delta
             } else {
