@@ -133,7 +133,16 @@ class AccountsListViewController: NSViewController {
     
     private func reloadHeader() {
         let canSelectAccount = selectAccountAction != nil && !wallets.isEmpty
-        titleLabel.stringValue = canSelectAccount ? Strings.selectAccountTwoLines : Strings.wallets
+        if canSelectAccount {
+            if selectAccountAction?.initiallyConnectedProviders.isEmpty ?? true {
+                titleLabel.stringValue = Strings.selectAccountTwoLines
+            } else {
+                titleLabel.stringValue = Strings.switchAccountTwoLines
+            }
+        } else {
+            titleLabel.stringValue = Strings.wallets
+        }
+        
         addButton.isHidden = wallets.isEmpty
         
         if canSelectAccount, let peer = selectAccountAction?.peer {

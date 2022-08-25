@@ -64,7 +64,16 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
         
         let forWalletSelection = selectAccountAction != nil
-        navigationItem.title = forWalletSelection ? Strings.selectAccount : Strings.wallets
+        if forWalletSelection {
+            if selectAccountAction?.initiallyConnectedProviders.isEmpty ?? true {
+                navigationItem.title = Strings.selectAccount
+            } else {
+                navigationItem.title = Strings.switchAccount
+            }
+        } else {
+            navigationItem.title = Strings.wallets
+        }
+        
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
         isModalInPresentation = true
