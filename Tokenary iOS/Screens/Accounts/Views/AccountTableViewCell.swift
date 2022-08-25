@@ -12,6 +12,7 @@ protocol AccountTableViewCellDelegate: AnyObject {
 class AccountTableViewCell: UITableViewCell {
 
     private weak var cellDelegate: AccountTableViewCellDelegate?
+    private let disabledAlpha: CGFloat = 0.35
     
     @IBOutlet weak var moreButton: UIButton!
     @IBOutlet weak var avatarImageView: UIImageView!
@@ -26,7 +27,7 @@ class AccountTableViewCell: UITableViewCell {
         setDisabled(isDisabled)
         
         if isDisabled {
-            backgroundColor = .secondarySystemGroupedBackground.withAlphaComponent(alpha)
+            backgroundColor = .secondarySystemGroupedBackground.withAlphaComponent(disabledAlpha)
         } else if isSelected {
             backgroundColor = .tintColor
         } else {
@@ -38,8 +39,7 @@ class AccountTableViewCell: UITableViewCell {
     }
     
     private func setDisabled(_ disabled: Bool) {
-        let alpha: CGFloat = disabled ? 0.35 : 1
-        contentView.alpha = alpha
+        contentView.alpha = disabled ? disabledAlpha : 1
     }
     
     @IBAction func moreButtonTapped(_ sender: Any) {
