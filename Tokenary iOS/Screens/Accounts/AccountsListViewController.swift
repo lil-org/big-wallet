@@ -110,7 +110,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             }
             updatePrimaryButton()
             
-            if let network = selectAccountAction.network, self.network != network {
+            if let network = selectAccountAction.initialNetwork, self.network != network {
                 selectNetwork(network)
             }
             
@@ -261,6 +261,15 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     @IBAction func networkButtonTapped(_ sender: Any) {
+        guard selectAccountAction?.coinType == nil || selectAccountAction?.coinType == .ethereum else {
+            let networkName = selectAccountAction?.coinType?.name ?? Strings.unknownNetwork
+            let alert = UIAlertController(title: networkName, message: nil, preferredStyle: .alert)
+            let okAction = UIAlertAction(title: Strings.ok, style: .default)
+            alert.addAction(okAction)
+            present(alert, animated: true)
+            return
+        }
+        
         let actionSheet = UIAlertController(title: Strings.selectNetwork, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.sourceView = networkButton
         for network in EthereumChain.allMainnets {
