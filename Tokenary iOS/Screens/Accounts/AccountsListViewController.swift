@@ -122,6 +122,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             } else {
                 websiteNameLabel.text = Strings.unknownWebsite
             }
+            
+            if let name = selectAccountAction.coinType?.name, selectAccountAction.selectedAccounts.isEmpty, !wallets.isEmpty {
+                showMessageAlert(text: String(format: Strings.addAccountToConnect, arguments: [name]))
+            }
         }
     }
     
@@ -262,11 +266,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     @IBAction func networkButtonTapped(_ sender: Any) {
         guard selectAccountAction?.coinType == nil || selectAccountAction?.coinType == .ethereum else {
-            let networkName = selectAccountAction?.coinType?.name ?? Strings.unknownNetwork
-            let alert = UIAlertController(title: networkName, message: nil, preferredStyle: .alert)
-            let okAction = UIAlertAction(title: Strings.ok, style: .default)
-            alert.addAction(okAction)
-            present(alert, animated: true)
+            showMessageAlert(text: selectAccountAction?.coinType?.name ?? Strings.unknownNetwork)
             return
         }
         

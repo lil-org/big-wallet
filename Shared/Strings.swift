@@ -92,5 +92,6 @@ struct Strings {
     static let switchAccount = "Switch Account"
     static let switchAccountTwoLines = "Switch\nAccount"
     static let unknownNetwork = "Unknown network ⚠️"
+    static let addAccountToConnect = "Add %@ account to connect"
     
 }
