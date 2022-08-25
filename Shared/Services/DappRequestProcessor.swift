@@ -42,7 +42,7 @@ struct DappRequestProcessor {
                                                  coinType: nil,
                                                  selectedAccounts: Set(preselectedAccounts),
                                                  initiallyConnectedProviders: initiallyConnectedProviders,
-                                                 network: network) { chain, specificWalletAccounts in
+                                                 initialNetwork: network) { chain, specificWalletAccounts in
                     if let chain = chain, let specificWalletAccounts = specificWalletAccounts {
                         var specificProviderBodies = [ResponseToExtension.Body]()
                         for specificWalletAccount in specificWalletAccounts {
@@ -93,7 +93,7 @@ struct DappRequestProcessor {
                                              coinType: .near,
                                              selectedAccounts: Set(walletsManager.suggestedAccounts(coin: .near)),
                                              initiallyConnectedProviders: Set(),
-                                             network: nil) { _, specificWalletAccounts in
+                                             initialNetwork: nil) { _, specificWalletAccounts in
                 if let specificWalletAccount = specificWalletAccounts?.first, specificWalletAccount.account.coin == .near {
                     let responseBody = ResponseToExtension.Near(account: specificWalletAccount.account.address)
                     respond(to: request, body: .near(responseBody), completion: completion)
@@ -148,7 +148,7 @@ struct DappRequestProcessor {
                                              coinType: .solana,
                                              selectedAccounts: Set(walletsManager.suggestedAccounts(coin: .solana)),
                                              initiallyConnectedProviders: Set(),
-                                             network: nil) { _, specificWalletAccounts in
+                                             initialNetwork: nil) { _, specificWalletAccounts in
                 if let specificWalletAccount = specificWalletAccounts?.first, specificWalletAccount.account.coin == .solana {
                     let responseBody = ResponseToExtension.Solana(publicKey: specificWalletAccount.account.address)
                     respond(to: request, body: .solana(responseBody), completion: completion)
@@ -232,7 +232,7 @@ struct DappRequestProcessor {
                                              coinType: .ethereum,
                                              selectedAccounts: Set(walletsManager.suggestedAccounts(coin: .ethereum)),
                                              initiallyConnectedProviders: Set(),
-                                             network: nil) { chain, specificWalletAccounts in
+                                             initialNetwork: nil) { chain, specificWalletAccounts in
                 if let chain = chain, let specificWalletAccount = specificWalletAccounts?.first, specificWalletAccount.account.coin == .ethereum {
                     let responseBody = ResponseToExtension.Ethereum(results: [specificWalletAccount.account.address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
                     respond(to: request, body: .ethereum(responseBody), completion: completion)
