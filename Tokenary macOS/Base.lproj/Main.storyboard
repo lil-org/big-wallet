@@ -966,16 +966,6 @@ DQ
                                     <action selector="addButtonTapped:" target="29s-Rd-OUf" id="MKz-Ok-RUY"/>
                                 </connections>
                             </button>
-                            <button hidden="YES" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="eNt-GB-Tzb">
-                                <rect key="frame" x="17" y="356.5" width="26" height="26"/>
-                                <buttonCell key="cell" type="inline" bezelStyle="inline" image="globe" catalog="system" imagePosition="overlaps" alignment="center" lineBreakMode="truncatingTail" state="on" imageScaling="proportionallyDown" inset="2" id="tZs-rG-rml">
-                                    <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
-                                    <font key="font" metaFont="systemBold" size="21"/>
-                                </buttonCell>
-                                <connections>
-                                    <action selector="networkButtonTapped:" target="29s-Rd-OUf" id="JUo-sQ-bBT"/>
-                                </connections>
-                            </button>
                             <stackView distribution="fill" orientation="vertical" alignment="leading" spacing="0.0" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="1000" verticalHuggingPriority="1000" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="teC-wK-5y1">
                                 <rect key="frame" x="125" y="396" width="0.0" height="0.0"/>
                                 <subviews>
@@ -1016,8 +1006,8 @@ DQ
                                     <real value="3.4028234663852886e+38"/>
                                 </customSpacing>
                             </stackView>
-                            <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="12" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="CWc-Db-L0d">
-                                <rect key="frame" x="52" y="20" width="146" height="28"/>
+                            <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="10" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="CWc-Db-L0d">
+                                <rect key="frame" x="33" y="20" width="185" height="28"/>
                                 <subviews>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="x8R-fO-ffb">
                                         <rect key="frame" x="-6" y="-6" width="74" height="40"/>
@@ -1032,8 +1022,18 @@ Gw
                                             <action selector="didClickSecondaryButton:" target="29s-Rd-OUf" id="kaH-C7-Dx1"/>
                                         </connections>
                                     </button>
+                                    <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="9Zg-Xa-E1f">
+                                        <rect key="frame" x="66" y="-6" width="43" height="40"/>
+                                        <buttonCell key="cell" type="push" bezelStyle="rounded" image="network" catalog="system" imagePosition="only" alignment="center" controlSize="large" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="GSi-6A-TgZ">
+                                            <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
+                                            <font key="font" metaFont="system"/>
+                                        </buttonCell>
+                                        <connections>
+                                            <action selector="networkButtonTapped:" target="29s-Rd-OUf" id="PUx-de-9je"/>
+                                        </connections>
+                                    </button>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="sfH-TT-fxb">
-                                        <rect key="frame" x="68" y="-6" width="84" height="40"/>
+                                        <rect key="frame" x="107" y="-6" width="84" height="40"/>
                                         <buttonCell key="cell" type="push" title="Connect" bezelStyle="rounded" alignment="center" controlSize="large" enabled="NO" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="A0m-eU-I2u">
                                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="system"/>
@@ -1049,8 +1049,10 @@ DQ
                                 <visibilityPriorities>
                                     <integer value="1000"/>
                                     <integer value="1000"/>
+                                    <integer value="1000"/>
                                 </visibilityPriorities>
                                 <customSpacing>
+                                    <real value="3.4028234663852886e+38"/>
                                     <real value="3.4028234663852886e+38"/>
                                     <real value="3.4028234663852886e+38"/>
                                 </customSpacing>
@@ -1069,19 +1071,16 @@ DQ
                             <constraint firstItem="ngQ-Bn-Kwd" firstAttribute="firstBaseline" secondItem="dkh-kG-EFj" secondAttribute="firstBaseline" id="RDE-f4-Heb"/>
                             <constraint firstAttribute="trailing" relation="greaterThanOrEqual" secondItem="teC-wK-5y1" secondAttribute="trailing" constant="16" id="c7u-4P-5OL"/>
                             <constraint firstAttribute="bottom" secondItem="7bs-Kr-ija" secondAttribute="bottom" constant="62" id="cFH-vX-gKa"/>
-                            <constraint firstItem="eNt-GB-Tzb" firstAttribute="centerY" secondItem="ngQ-Bn-Kwd" secondAttribute="centerY" constant="2" id="dq4-lW-ssv"/>
                             <constraint firstItem="7bs-Kr-ija" firstAttribute="top" secondItem="dkh-kG-EFj" secondAttribute="bottom" constant="12" id="fXb-zL-LLv"/>
                             <constraint firstItem="dkh-kG-EFj" firstAttribute="top" secondItem="teC-wK-5y1" secondAttribute="bottom" constant="8" id="fig-45-iff"/>
-                            <constraint firstItem="dkh-kG-EFj" firstAttribute="leading" relation="greaterThanOrEqual" secondItem="eNt-GB-Tzb" secondAttribute="trailing" constant="3" id="imS-CC-tSQ"/>
                             <constraint firstItem="dkh-kG-EFj" firstAttribute="centerX" secondItem="Yjc-Zm-uZY" secondAttribute="centerX" id="qoF-Dr-xWA"/>
-                            <constraint firstItem="eNt-GB-Tzb" firstAttribute="leading" secondItem="Yjc-Zm-uZY" secondAttribute="leading" constant="17" id="zcY-Q0-K0f"/>
                         </constraints>
                     </view>
                     <connections>
                         <outlet property="accountsListBottomConstraint" destination="cFH-vX-gKa" id="vbK-Ea-dro"/>
                         <outlet property="addButton" destination="ngQ-Bn-Kwd" id="FlT-oq-C5e"/>
                         <outlet property="bottomButtonsStackView" destination="CWc-Db-L0d" id="RH4-Z6-Fs8"/>
-                        <outlet property="networkButton" destination="eNt-GB-Tzb" id="cvm-05-aZj"/>
+                        <outlet property="networkButton" destination="9Zg-Xa-E1f" id="QUX-UV-sLo"/>
                         <outlet property="primaryButton" destination="sfH-TT-fxb" id="OJf-Ua-1SW"/>
                         <outlet property="secondaryButton" destination="x8R-fO-ffb" id="F9u-nW-BbM"/>
                         <outlet property="tableView" destination="glA-FK-Kdd" id="9aW-Qr-UuF"/>
@@ -1875,6 +1874,6 @@ DQ
     <resources>
         <image name="NSApplicationIcon" width="32" height="32"/>
         <image name="ellipsis.rectangle" catalog="system" width="17" height="11"/>
-        <image name="globe" catalog="system" width="15" height="15"/>
+        <image name="network" catalog="system" width="15" height="15"/>
     </resources>
 </document>

@@ -193,7 +193,7 @@
                                                         <constraint firstAttribute="width" constant="60" id="tFd-lR-ks4"/>
                                                     </constraints>
                                                     <state key="normal" title="Button"/>
-                                                    <buttonConfiguration key="configuration" style="gray" image="globe" catalog="system"/>
+                                                    <buttonConfiguration key="configuration" style="gray" image="network" catalog="system"/>
                                                     <connections>
                                                         <action selector="networkButtonTapped:" destination="onX-Y1-KVr" eventType="touchUpInside" id="hHr-81-bYL"/>
                                                     </connections>
@@ -546,7 +546,7 @@ Label</string>
     <resources>
         <image name="LaunchLogo" width="100" height="100"/>
         <image name="circle.fill" catalog="system" width="128" height="121"/>
-        <image name="globe" catalog="system" width="128" height="121"/>
+        <image name="network" catalog="system" width="128" height="121"/>
         <systemColor name="labelColor">
             <color white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>
