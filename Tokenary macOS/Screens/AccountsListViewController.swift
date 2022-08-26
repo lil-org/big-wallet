@@ -129,6 +129,36 @@ class AccountsListViewController: NSViewController {
                 secondaryButton.keyEquivalent = ""
             }
             
+            if networkButton.menu == nil {
+                let menu = NSMenu()
+                for mainnet in EthereumChain.allMainnets {
+                    let item = NSMenuItem(title: mainnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
+                    item.tag = mainnet.id
+                    menu.addItem(item)
+                }
+                
+                let submenuItem = NSMenuItem()
+                submenuItem.title = Strings.testnets
+                let submenu = NSMenu()
+                for testnet in EthereumChain.allTestnets {
+                    let item = NSMenuItem(title: testnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
+                    item.tag = testnet.id
+                    submenu.addItem(item)
+                }
+                
+                submenuItem.submenu = submenu
+                menu.addItem(.separator())
+                menu.addItem(submenuItem)
+                networkButton.menu = menu
+                
+                menu.addItem(.separator())
+                let titleItem = NSMenuItem(title: Strings.selectNetworkOptionally, action: nil, keyEquivalent: "")
+                menu.addItem(titleItem)
+                
+                if let network = selectAccountAction.initialNetwork, network != self.network {
+                    selectNetwork(network)
+                }
+            }
         } else {
             accountsListBottomConstraint.constant = 0
             bottomButtonsStackView.isHidden = true
@@ -171,39 +201,6 @@ class AccountsListViewController: NSViewController {
             titleLabelTopConstraint.constant = 8
             websiteNameStackView.isHidden = true
         }
-        
-        if canSelectAccount, networkButton.isHidden {
-            networkButton.isHidden = false
-            let menu = NSMenu()
-            let titleItem = NSMenuItem(title: Strings.selectNetworkOptionally, action: nil, keyEquivalent: "")
-            menu.addItem(titleItem)
-            menu.addItem(.separator())
-            for mainnet in EthereumChain.allMainnets {
-                let item = NSMenuItem(title: mainnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
-                item.tag = mainnet.id
-                menu.addItem(item)
-            }
-            
-            let submenuItem = NSMenuItem()
-            submenuItem.title = Strings.testnets
-            let submenu = NSMenu()
-            for testnet in EthereumChain.allTestnets {
-                let item = NSMenuItem(title: testnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
-                item.tag = testnet.id
-                submenu.addItem(item)
-            }
-            
-            submenuItem.submenu = submenu
-            menu.addItem(.separator())
-            menu.addItem(submenuItem)
-            networkButton.menu = menu
-            
-            if let network = selectAccountAction?.initialNetwork, network != self.network {
-                selectNetwork(network)
-            }
-        } else if !canSelectAccount, !networkButton.isHidden {
-            networkButton.isHidden = true
-        }
     }
     
     @IBAction func addButtonTapped(_ sender: NSButton) {
@@ -229,10 +226,7 @@ class AccountsListViewController: NSViewController {
             return
         }
         
-        var origin = sender.frame.origin
-        origin.x += sender.frame.width
-        origin.y += sender.frame.height
-        sender.menu?.popUp(positioning: nil, at: origin, in: view)
+        sender.menu?.popUp(positioning: sender.menu?.items.last, at: CGPoint(x: 12, y: 90), in: view)
     }
     
     @IBAction func didClickSecondaryButton(_ sender: Any) {
@@ -254,8 +248,11 @@ class AccountsListViewController: NSViewController {
     }
     
     private func selectNetwork(_ network: EthereumChain) {
-        networkButton.menu?.items[0].title = network.name + " — " + Strings.isSelected
-        networkButton.contentTintColor = .controlAccentColor
+        let title = network.name + " — " + Strings.isSelected
+        let attributedTitle = NSAttributedString(string: title,
+                                                 attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
+        networkButton.menu?.items.last?.attributedTitle = attributedTitle
+        networkButton.bezelColor = .selectedControlColor
         self.network = network
     }
 
