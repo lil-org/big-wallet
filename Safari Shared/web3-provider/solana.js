@@ -75,6 +75,9 @@ class TokenarySolana extends EventEmitter {
         this.isConnected = false;
         this.publicKey = null;
         this.emit("disconnect");
+        return new Promise((resolve, reject) => {
+            resolve(true);
+        });
     }
 
     signTransaction(transaction) {
