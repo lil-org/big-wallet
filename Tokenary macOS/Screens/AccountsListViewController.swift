@@ -252,8 +252,7 @@ class AccountsListViewController: NSViewController {
         let attributedTitle = NSAttributedString(string: title,
                                                  attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
         networkButton.menu?.items.last?.attributedTitle = attributedTitle
-        networkButton.contentTintColor = .controlAccentColor
-        // TODO: tune better
+        networkButton.bezelColor = .selectedControlColor
         self.network = network
     }
 
