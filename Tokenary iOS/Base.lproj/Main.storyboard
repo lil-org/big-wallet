@@ -347,55 +347,68 @@ Label</string>
                             <tableView clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" dataMode="prototypes" style="grouped" separatorStyle="default" allowsSelection="NO" rowHeight="-1" estimatedRowHeight="-1" sectionHeaderHeight="18" estimatedSectionHeaderHeight="-1" sectionFooterHeight="18" estimatedSectionFooterHeight="-1" translatesAutoresizingMaskIntoConstraints="NO" id="fJC-Mc-BzB">
                                 <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                                 <color key="backgroundColor" systemColor="systemBackgroundColor"/>
-                                <view key="tableFooterView" contentMode="scaleToFill" id="6ji-BK-hOm">
-                                    <rect key="frame" x="0.0" y="35" width="414" height="52"/>
-                                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                            </tableView>
+                            <visualEffectView opaque="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="qCt-i2-cQc">
+                                <rect key="frame" x="0.0" y="800" width="414" height="96"/>
+                                <view key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" insetsLayoutMarginsFromSafeArea="NO" id="uYE-E1-q9x">
+                                    <rect key="frame" x="0.0" y="0.0" width="414" height="96"/>
+                                    <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <subviews>
-                                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="I4B-ul-Hdj">
-                                            <rect key="frame" x="213" y="0.0" width="181" height="52"/>
+                                        <stackView opaque="NO" contentMode="scaleToFill" spacing="12" translatesAutoresizingMaskIntoConstraints="NO" id="gED-tR-fFR">
+                                            <rect key="frame" x="20" y="8" width="374" height="52"/>
+                                            <subviews>
+                                                <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="aN2-HV-QcX">
+                                                    <rect key="frame" x="0.0" y="0.0" width="181" height="52"/>
+                                                    <state key="normal" title="Button"/>
+                                                    <buttonConfiguration key="configuration" style="gray" title="Cancel"/>
+                                                    <connections>
+                                                        <action selector="cancelButtonTapped:" destination="bCJ-7J-W3b" eventType="touchUpInside" id="P9o-pI-ccV"/>
+                                                    </connections>
+                                                </button>
+                                                <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="zHi-9T-6WI">
+                                                    <rect key="frame" x="193" y="0.0" width="181" height="52"/>
+                                                    <constraints>
+                                                        <constraint firstAttribute="height" constant="52" id="6Vd-bC-TuE"/>
+                                                    </constraints>
+                                                    <state key="normal" title="Button"/>
+                                                    <buttonConfiguration key="configuration" style="filled" title="OK"/>
+                                                    <connections>
+                                                        <action selector="okButtonTapped:" destination="bCJ-7J-W3b" eventType="touchUpInside" id="f3R-zH-HtZ"/>
+                                                    </connections>
+                                                </button>
+                                            </subviews>
                                             <constraints>
-                                                <constraint firstAttribute="height" constant="52" id="m51-jE-4yt"/>
+                                                <constraint firstItem="aN2-HV-QcX" firstAttribute="width" secondItem="zHi-9T-6WI" secondAttribute="width" id="b2X-Ax-H2o"/>
+                                                <constraint firstItem="zHi-9T-6WI" firstAttribute="height" secondItem="aN2-HV-QcX" secondAttribute="height" id="z3G-rS-1bt"/>
                                             </constraints>
-                                            <state key="normal" title="Button"/>
-                                            <buttonConfiguration key="configuration" style="filled" title="OK"/>
-                                            <connections>
-                                                <action selector="okButtonTapped:" destination="bCJ-7J-W3b" eventType="touchUpInside" id="yPn-Ty-tDM"/>
-                                            </connections>
-                                        </button>
-                                        <button contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="v8H-iO-Xlx">
-                                            <rect key="frame" x="20" y="0.0" width="181" height="52"/>
-                                            <state key="normal" title="Button"/>
-                                            <buttonConfiguration key="configuration" style="gray" title="Cancel"/>
-                                            <connections>
-                                                <action selector="cancelButtonTapped:" destination="bCJ-7J-W3b" eventType="touchUpInside" id="Bde-sm-pr6"/>
-                                            </connections>
-                                        </button>
+                                        </stackView>
                                     </subviews>
-                                    <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                                     <constraints>
-                                        <constraint firstItem="I4B-ul-Hdj" firstAttribute="leading" secondItem="v8H-iO-Xlx" secondAttribute="trailing" constant="12" id="7i0-jf-vAH"/>
-                                        <constraint firstItem="v8H-iO-Xlx" firstAttribute="leading" secondItem="6ji-BK-hOm" secondAttribute="leading" constant="20" id="Y9u-c2-eKE"/>
-                                        <constraint firstAttribute="trailing" secondItem="I4B-ul-Hdj" secondAttribute="trailing" constant="20" id="YvM-eG-oX3"/>
-                                        <constraint firstItem="I4B-ul-Hdj" firstAttribute="width" secondItem="v8H-iO-Xlx" secondAttribute="width" id="YzB-WX-nRt"/>
-                                        <constraint firstItem="v8H-iO-Xlx" firstAttribute="top" secondItem="6ji-BK-hOm" secondAttribute="top" id="c0x-qs-vYd"/>
-                                        <constraint firstItem="v8H-iO-Xlx" firstAttribute="height" secondItem="I4B-ul-Hdj" secondAttribute="height" id="cYv-3X-mKp"/>
-                                        <constraint firstItem="v8H-iO-Xlx" firstAttribute="top" secondItem="I4B-ul-Hdj" secondAttribute="top" id="fnP-lE-N3z"/>
+                                        <constraint firstItem="gED-tR-fFR" firstAttribute="top" secondItem="uYE-E1-q9x" secondAttribute="top" constant="8" id="5AC-97-5ks"/>
+                                        <constraint firstItem="gED-tR-fFR" firstAttribute="leading" secondItem="uYE-E1-q9x" secondAttribute="leading" constant="20" id="8ZH-TY-gDU"/>
+                                        <constraint firstAttribute="trailing" secondItem="gED-tR-fFR" secondAttribute="trailing" constant="20" id="xlG-Xd-fGC"/>
                                     </constraints>
                                 </view>
-                            </tableView>
+                                <blurEffect style="regular"/>
+                            </visualEffectView>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="iMU-ib-JoS"/>
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                         <constraints>
+                            <constraint firstAttribute="bottom" relation="greaterThanOrEqual" secondItem="gED-tR-fFR" secondAttribute="bottom" constant="12" id="3nf-Bh-SgC"/>
                             <constraint firstAttribute="bottom" secondItem="fJC-Mc-BzB" secondAttribute="bottom" id="Bgp-8p-M46"/>
+                            <constraint firstItem="qCt-i2-cQc" firstAttribute="trailing" secondItem="iMU-ib-JoS" secondAttribute="trailing" id="Mpl-YH-BSQ"/>
                             <constraint firstAttribute="trailing" secondItem="fJC-Mc-BzB" secondAttribute="trailing" id="VKC-SU-ExA"/>
                             <constraint firstItem="fJC-Mc-BzB" firstAttribute="top" secondItem="mif-5d-Da0" secondAttribute="top" id="VYj-Hb-vSn"/>
+                            <constraint firstItem="qCt-i2-cQc" firstAttribute="leading" secondItem="iMU-ib-JoS" secondAttribute="leading" id="iBA-y5-k0g"/>
+                            <constraint firstItem="iMU-ib-JoS" firstAttribute="bottom" secondItem="gED-tR-fFR" secondAttribute="bottom" priority="750" constant="2" id="lOQ-Es-g6w"/>
+                            <constraint firstAttribute="bottom" secondItem="qCt-i2-cQc" secondAttribute="bottom" id="n5K-8Z-sI2"/>
                             <constraint firstItem="fJC-Mc-BzB" firstAttribute="leading" secondItem="mif-5d-Da0" secondAttribute="leading" id="vCM-yE-Yh1"/>
                         </constraints>
                     </view>
                     <connections>
-                        <outlet property="cancelButton" destination="v8H-iO-Xlx" id="esx-8p-B1z"/>
-                        <outlet property="okButton" destination="I4B-ul-Hdj" id="5d0-w3-VFH"/>
+                        <outlet property="cancelButton" destination="aN2-HV-QcX" id="f67-Vj-2HF"/>
+                        <outlet property="okButton" destination="zHi-9T-6WI" id="2dk-p8-BpE"/>
                         <outlet property="tableView" destination="fJC-Mc-BzB" id="Zf6-wd-F2t"/>
                     </connections>
                 </viewController>
@@ -432,55 +445,68 @@ Label</string>
                             <tableView clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" dataMode="prototypes" style="grouped" separatorStyle="default" allowsSelection="NO" rowHeight="-1" estimatedRowHeight="-1" sectionHeaderHeight="18" estimatedSectionHeaderHeight="-1" sectionFooterHeight="18" estimatedSectionFooterHeight="-1" translatesAutoresizingMaskIntoConstraints="NO" id="F62-4S-kIF">
                                 <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                                 <color key="backgroundColor" systemColor="systemBackgroundColor"/>
-                                <view key="tableFooterView" contentMode="scaleToFill" id="Frs-ZH-lyb">
-                                    <rect key="frame" x="0.0" y="35" width="414" height="52"/>
-                                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                            </tableView>
+                            <visualEffectView opaque="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="SYE-uZ-NGW">
+                                <rect key="frame" x="0.0" y="800" width="414" height="96"/>
+                                <view key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" insetsLayoutMarginsFromSafeArea="NO" id="437-SV-qEl">
+                                    <rect key="frame" x="0.0" y="0.0" width="414" height="96"/>
+                                    <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <subviews>
-                                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="O6a-rK-q8r">
-                                            <rect key="frame" x="213" y="0.0" width="181" height="52"/>
+                                        <stackView opaque="NO" contentMode="scaleToFill" spacing="12" translatesAutoresizingMaskIntoConstraints="NO" id="EYg-01-VDj">
+                                            <rect key="frame" x="20" y="8" width="374" height="52"/>
+                                            <subviews>
+                                                <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Et1-Ry-8qe">
+                                                    <rect key="frame" x="0.0" y="0.0" width="181" height="52"/>
+                                                    <state key="normal" title="Button"/>
+                                                    <buttonConfiguration key="configuration" style="gray" title="Cancel"/>
+                                                    <connections>
+                                                        <action selector="cancelButtonTapped:" destination="rpE-yl-N9f" eventType="touchUpInside" id="1lL-YQ-uhy"/>
+                                                    </connections>
+                                                </button>
+                                                <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="9L8-wf-ZsT">
+                                                    <rect key="frame" x="193" y="0.0" width="181" height="52"/>
+                                                    <constraints>
+                                                        <constraint firstAttribute="height" constant="52" id="6E3-uE-78g"/>
+                                                    </constraints>
+                                                    <state key="normal" title="Button"/>
+                                                    <buttonConfiguration key="configuration" style="filled" title="OK"/>
+                                                    <connections>
+                                                        <action selector="okButtonTapped:" destination="rpE-yl-N9f" eventType="touchUpInside" id="HQh-dn-EcK"/>
+                                                    </connections>
+                                                </button>
+                                            </subviews>
                                             <constraints>
-                                                <constraint firstAttribute="height" constant="52" id="2eS-Qg-jxM"/>
+                                                <constraint firstItem="Et1-Ry-8qe" firstAttribute="width" secondItem="9L8-wf-ZsT" secondAttribute="width" id="DMf-DS-MJw"/>
+                                                <constraint firstItem="9L8-wf-ZsT" firstAttribute="height" secondItem="Et1-Ry-8qe" secondAttribute="height" id="ySW-gV-wOE"/>
                                             </constraints>
-                                            <state key="normal" title="Button"/>
-                                            <buttonConfiguration key="configuration" style="filled" title="OK"/>
-                                            <connections>
-                                                <action selector="okButtonTapped:" destination="rpE-yl-N9f" eventType="touchUpInside" id="XjQ-k7-emb"/>
-                                            </connections>
-                                        </button>
-                                        <button contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="t6r-FC-Exh">
-                                            <rect key="frame" x="20" y="0.0" width="181" height="52"/>
-                                            <state key="normal" title="Button"/>
-                                            <buttonConfiguration key="configuration" style="gray" title="Cancel"/>
-                                            <connections>
-                                                <action selector="cancelButtonTapped:" destination="rpE-yl-N9f" eventType="touchUpInside" id="zID-h0-a0T"/>
-                                            </connections>
-                                        </button>
+                                        </stackView>
                                     </subviews>
-                                    <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                                     <constraints>
-                                        <constraint firstAttribute="trailing" secondItem="O6a-rK-q8r" secondAttribute="trailing" constant="20" id="2hf-lI-c49"/>
-                                        <constraint firstItem="O6a-rK-q8r" firstAttribute="leading" secondItem="t6r-FC-Exh" secondAttribute="trailing" constant="12" id="HcX-ng-mae"/>
-                                        <constraint firstItem="O6a-rK-q8r" firstAttribute="width" secondItem="t6r-FC-Exh" secondAttribute="width" id="SX4-Q7-QPI"/>
-                                        <constraint firstItem="t6r-FC-Exh" firstAttribute="top" secondItem="Frs-ZH-lyb" secondAttribute="top" id="Xgj-W0-7h5"/>
-                                        <constraint firstItem="t6r-FC-Exh" firstAttribute="top" secondItem="O6a-rK-q8r" secondAttribute="top" id="pid-Oc-Plx"/>
-                                        <constraint firstItem="t6r-FC-Exh" firstAttribute="height" secondItem="O6a-rK-q8r" secondAttribute="height" id="sBs-8H-MtS"/>
-                                        <constraint firstItem="t6r-FC-Exh" firstAttribute="leading" secondItem="Frs-ZH-lyb" secondAttribute="leading" constant="20" id="t8o-PU-4fm"/>
+                                        <constraint firstItem="EYg-01-VDj" firstAttribute="leading" secondItem="437-SV-qEl" secondAttribute="leading" constant="20" id="HNX-9F-PwV"/>
+                                        <constraint firstAttribute="trailing" secondItem="EYg-01-VDj" secondAttribute="trailing" constant="20" id="JeF-Qz-kzx"/>
+                                        <constraint firstItem="EYg-01-VDj" firstAttribute="top" secondItem="437-SV-qEl" secondAttribute="top" constant="8" id="TwT-Bf-XNl"/>
                                     </constraints>
                                 </view>
-                            </tableView>
+                                <blurEffect style="regular"/>
+                            </visualEffectView>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="TCv-ss-qEm"/>
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                         <constraints>
+                            <constraint firstItem="TCv-ss-qEm" firstAttribute="bottom" secondItem="EYg-01-VDj" secondAttribute="bottom" priority="750" constant="2" id="0Q7-w0-FjY"/>
                             <constraint firstItem="F62-4S-kIF" firstAttribute="top" secondItem="df0-YO-SS0" secondAttribute="top" id="5oY-0j-9yx"/>
+                            <constraint firstAttribute="bottom" secondItem="SYE-uZ-NGW" secondAttribute="bottom" id="F5W-ly-yPx"/>
+                            <constraint firstItem="SYE-uZ-NGW" firstAttribute="trailing" secondItem="TCv-ss-qEm" secondAttribute="trailing" id="QMV-Y6-tak"/>
                             <constraint firstAttribute="bottom" secondItem="F62-4S-kIF" secondAttribute="bottom" id="Sx3-QU-sU0"/>
+                            <constraint firstItem="SYE-uZ-NGW" firstAttribute="leading" secondItem="TCv-ss-qEm" secondAttribute="leading" id="e2R-I1-FAK"/>
+                            <constraint firstAttribute="bottom" relation="greaterThanOrEqual" secondItem="EYg-01-VDj" secondAttribute="bottom" constant="12" id="g8Z-NP-ywe"/>
                             <constraint firstItem="F62-4S-kIF" firstAttribute="leading" secondItem="df0-YO-SS0" secondAttribute="leading" id="sB9-hI-ZmI"/>
                             <constraint firstAttribute="trailing" secondItem="F62-4S-kIF" secondAttribute="trailing" id="zMA-Hk-snq"/>
                         </constraints>
                     </view>
                     <connections>
-                        <outlet property="cancelButton" destination="t6r-FC-Exh" id="s72-Sf-UCT"/>
-                        <outlet property="okButton" destination="O6a-rK-q8r" id="dHU-TP-mF7"/>
+                        <outlet property="cancelButton" destination="Et1-Ry-8qe" id="WSt-7F-eMH"/>
+                        <outlet property="okButton" destination="9L8-wf-ZsT" id="WRh-OX-71Z"/>
                         <outlet property="tableView" destination="F62-4S-kIF" id="hHg-UW-xfB"/>
                     </connections>
                 </viewController>

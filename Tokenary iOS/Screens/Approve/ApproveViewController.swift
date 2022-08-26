@@ -16,7 +16,9 @@ class ApproveViewController: UIViewController {
             tableView.dataSource = self
             tableView.registerReusableCell(type: MultilineLabelTableViewCell.self)
             tableView.registerReusableCell(type: ImageWithLabelTableViewCell.self)
-            tableView.contentInset.bottom = 20
+            let bottomOverlayHeight: CGFloat = 70
+            tableView.contentInset.bottom += bottomOverlayHeight
+            tableView.verticalScrollIndicatorInsets.bottom += bottomOverlayHeight
         }
     }
     

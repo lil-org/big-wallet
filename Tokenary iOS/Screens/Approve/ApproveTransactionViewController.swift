@@ -19,7 +19,9 @@ class ApproveTransactionViewController: UIViewController {
             tableView.registerReusableCell(type: MultilineLabelTableViewCell.self)
             tableView.registerReusableCell(type: ImageWithLabelTableViewCell.self)
             tableView.registerReusableCell(type: GasPriceSliderTableViewCell.self)
-            tableView.contentInset.bottom = 20
+            let bottomOverlayHeight: CGFloat = 70
+            tableView.contentInset.bottom += bottomOverlayHeight
+            tableView.verticalScrollIndicatorInsets.bottom += bottomOverlayHeight
         }
     }
     
