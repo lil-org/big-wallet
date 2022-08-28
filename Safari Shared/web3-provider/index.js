@@ -40,7 +40,11 @@ window.addEventListener("message", function(event) {
         const response = event.data.response;
         const id = event.data.id;
         
-        if ("latestConfigurations" in response) {
+        if ("overlayLink" in response) {
+            window.tokenary.overlayLink = response.overlayLink;
+            // TODO: use queue or map instead;
+            window.tokenary.showOverlay();
+        } else if ("latestConfigurations" in response) {
             const name = "didLoadLatestConfiguration";
             var remainingProviders = new Set(["ethereum", "solana", "near"]);
             
@@ -101,3 +105,45 @@ function deliverResponseToSpecificProvider(id, response, provider) {
             window.near.processTokenaryResponse(id, response);
     }
 }
+
+// MARK: - Tokenary overlay for iOS
+
+window.tokenary.overlayTapped = () => {
+    window.tokenary.hideOverlay();
+};
+
+window.tokenary.hideOverlay = () => {
+    document.getElementById("tokenary-overlay").style.display = "none";
+    // TODO: hide animated when button is tapped
+};
+
+window.tokenary.showOverlay = () => {
+    // TODO: show with animation
+    const overlay = document.getElementById("tokenary-overlay");
+    if (overlay) {
+        overlay.style.display = "block";
+    } else {
+        window.tokenary.createOverlay();
+    }
+};
+
+window.tokenary.createOverlay = () => {
+    const overlay = document.createElement("div");
+    overlay.setAttribute("id", "tokenary-overlay");
+    overlay.setAttribute("ontouchstart", `
+        event.stopPropagation();
+        if (event.target === event.currentTarget) {
+            window.tokenary.overlayTapped();
+            return false;
+        }
+    `);
+    
+    overlay.innerHTML = `<button id="tokenary-button" onclick="window.tokenary.overlayButtonTapped();">Proceed in Tokenary</button>`;
+    document.body.appendChild(overlay);
+    overlay.style.display = "block";
+};
+
+window.tokenary.overlayButtonTapped = () => {
+    window.location.href = window.tokenary.overlayLink;
+    window.tokenary.hideOverlay();
+};
