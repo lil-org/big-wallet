@@ -27,7 +27,7 @@ function platformSpecificProcessMessage(message) {
         // + если он inpage будет отвечать на запрос ошибкой, то мне нужно будет как-то подчищать тот запрос, который ушел extension handler-у
         // или на iOS сделать так, чтобы запрос extension handler-у не уходил до того момента, пока он не нажал на overlay кнопку
         
-        const response = {overlayConfiguration: message};
+        const response = {overlayConfiguration: {request: message}};
         window.postMessage({direction: "from-content-script", response: response, id: message.id}, "*");
         
     }

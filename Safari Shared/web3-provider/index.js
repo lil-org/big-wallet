@@ -110,6 +110,11 @@ function deliverResponseToSpecificProvider(id, response, provider) {
 
 window.tokenary.overlayTapped = () => {
     window.tokenary.hideOverlay();
+    const request = window.tokenary.overlayConfiguration.request;
+    deliverResponseToSpecificProvider(request.id, {id: request.id, error: "Canceled", name: request.name}, request.provider);
+    
+    // TODO: cancel pending request in extension pipeline
+    // window.tokenary.postMessage(name, id, body, provider)
 };
 
 window.tokenary.hideOverlay = () => {
@@ -144,7 +149,7 @@ window.tokenary.createOverlay = () => {
 };
 
 window.tokenary.overlayButtonTapped = () => {
-    const overlayConfiguration = window.tokenary.overlayConfiguration;
-    window.location.href = "https://tokenary.io/extension?query=" + encodeURIComponent(JSON.stringify(overlayConfiguration));
+    const request = window.tokenary.overlayConfiguration.request;
+    window.location.href = "https://tokenary.io/extension?query=" + encodeURIComponent(JSON.stringify(request));
     window.tokenary.hideOverlay();
 };
