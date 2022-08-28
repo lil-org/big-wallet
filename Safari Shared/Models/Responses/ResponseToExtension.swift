@@ -69,6 +69,7 @@ struct ResponseToExtension {
         
         if let error = error {
             json["error"] = error
+            json["provider"] = request.provider.rawValue
         }
         
         let bodyJSON = body?.json ?? [:]
