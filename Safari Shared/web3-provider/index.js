@@ -40,8 +40,8 @@ window.addEventListener("message", function(event) {
         const response = event.data.response;
         const id = event.data.id;
         
-        if ("overlayLink" in response) {
-            window.tokenary.overlayLink = response.overlayLink;
+        if ("overlayConfiguration" in response) {
+            window.tokenary.overlayConfiguration = response.overlayConfiguration;
             // TODO: use queue or map instead;
             window.tokenary.showOverlay();
         } else if ("latestConfigurations" in response) {
@@ -144,6 +144,7 @@ window.tokenary.createOverlay = () => {
 };
 
 window.tokenary.overlayButtonTapped = () => {
-    window.location.href = window.tokenary.overlayLink;
+    const overlayConfiguration = window.tokenary.overlayConfiguration;
+    window.location.href = "https://tokenary.io/extension?query=" + encodeURIComponent(JSON.stringify(overlayConfiguration));
     window.tokenary.hideOverlay();
 };
