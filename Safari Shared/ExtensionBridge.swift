@@ -25,7 +25,7 @@ struct ExtensionBridge {
     
     static func hasRequest(id: Int) -> Bool {
         if initiatedRequests.contains(id) {
-            initiatedRequests.remove(id)
+            removeRequest(id: id)
             return true
         } else {
             return false
@@ -34,6 +34,10 @@ struct ExtensionBridge {
     
     static func respond(response: ResponseToExtension) {
         defaults?.set(response.json, forKey: key(id: response.id))
+    }
+    
+    static func removeRequest(id: Int) {
+        initiatedRequests.remove(id)
     }
     
     static func removeResponse(id: Int) {
