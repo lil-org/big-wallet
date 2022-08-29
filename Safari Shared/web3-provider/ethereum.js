@@ -377,7 +377,7 @@ class TokenaryEthereum extends EventEmitter {
     }
     
     postMessage(handler, id, data) {
-        if (this.ready || handler === "requestAccounts") {
+        if (this.ready || handler === "requestAccounts" || handler === "switchEthereumChain" || handler === "addEthereumChain") {
             let object = {
                 object: data,
                 address: this.address,
