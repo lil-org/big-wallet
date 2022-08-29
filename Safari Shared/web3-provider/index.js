@@ -127,7 +127,7 @@ window.tokenary.showOverlay = () => {
     // TODO: show with animation
     const overlay = document.getElementById("tokenary-overlay");
     if (overlay) {
-        overlay.style.display = "block";
+        window.tokenary.unhideOverlay(overlay);
     } else {
         window.tokenary.createOverlay();
     }
@@ -146,8 +146,13 @@ window.tokenary.createOverlay = () => {
     
     overlay.innerHTML = `<button id="tokenary-button" onclick="window.tokenary.overlayButtonTapped();">Proceed in Tokenary</button>`;
     document.body.appendChild(overlay);
-    overlay.style.display = "block";
+    window.tokenary.unhideOverlay(overlay);
 };
+
+window.tokenary.unhideOverlay = (overlay) => {
+    overlay.style.display = "block";
+    overlay.firstChild.innerHTML = window.tokenary.overlayConfiguration.title;
+}
 
 window.tokenary.overlayButtonTapped = () => {
     const request = window.tokenary.overlayConfiguration.request;

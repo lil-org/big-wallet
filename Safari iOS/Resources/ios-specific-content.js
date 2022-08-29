@@ -17,17 +17,35 @@ function platformSpecificProcessMessage(message) {
     if (message.provider == "ethereum" && (message.name == "switchEthereumChain" || message.name == "addEthereumChain")) {
         return;
     } else {
-        // TODO: вот тут, где раньше переходили по диплинку, теперь будем показывать оверлей
+        var title = "Proceed in Tokenary";
+        switch (message.name) {
+            case "signPersonalMessage":
+            case "signMessage":
+            case "signTypedMessage":
+                title = "Sign Message in Tokenary";
+                break;
+            case "signTransaction":
+            case "signAndSendTransactions":
+            case "signAllTransactions":
+            case "signAndSendTransaction":
+                title = "Approve Transaction in Tokenary";
+                break;
+            case "requestAccounts":
+            case "signIn":
+            case "connect":
+                title = "Connect Wallet";
+                break;
+            case "switchAccount":
+                const latestConfigurations = message.body.latestConfigurations;
+                if (Array.isArray(latestConfigurations) && latestConfigurations.length) {
+                    title = "Switch Account or Disconnect";
+                } else {
+                    title = "Connect Wallet";
+                }
+                break;
+        }
         
-        // передавать в inpage данные для оверлея:
-        // - universal link, который будем открывать
-        // - текст для кнопки
-        // - данные, достаточные для того, чтобы ответить на запрос ошибкой
-        
-        // + если он inpage будет отвечать на запрос ошибкой, то мне нужно будет как-то подчищать тот запрос, который ушел extension handler-у
-        // или на iOS сделать так, чтобы запрос extension handler-у не уходил до того момента, пока он не нажал на overlay кнопку
-        
-        const response = {overlayConfiguration: {request: message}};
+        const response = {overlayConfiguration: {request: message, title: title}};
         window.postMessage({direction: "from-content-script", response: response, id: message.id}, "*");
         
     }
