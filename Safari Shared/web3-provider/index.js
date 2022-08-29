@@ -109,7 +109,7 @@ function deliverResponseToSpecificProvider(id, response, provider) {
 // MARK: - Tokenary overlay for iOS
 
 window.tokenary.overlayTapped = () => {
-    window.tokenary.hideOverlay();
+    window.tokenary.hideOverlayImmediately(true);
     
     const request = window.tokenary.overlayConfiguration.request;
     deliverResponseToSpecificProvider(request.id, {id: request.id, error: "Canceled", name: request.name}, request.provider);
@@ -118,9 +118,12 @@ window.tokenary.overlayTapped = () => {
     window.postMessage(cancelRequest, "*");
 };
 
-window.tokenary.hideOverlay = () => {
-    document.getElementById("tokenary-overlay").style.display = "none";
-    // TODO: hide animated when button is tapped
+window.tokenary.hideOverlayImmediately = (immediately) => {
+    if (immediately) {
+        document.getElementById("tokenary-overlay").style.display = "none";
+    } else {
+        setTimeout( function() { window.tokenary.hideOverlayImmediately(true); }, 200);
+    }
 };
 
 window.tokenary.showOverlay = () => {
@@ -157,5 +160,5 @@ window.tokenary.unhideOverlay = (overlay) => {
 window.tokenary.overlayButtonTapped = () => {
     const request = window.tokenary.overlayConfiguration.request;
     window.location.href = "https://tokenary.io/extension?query=" + encodeURIComponent(JSON.stringify(request));
-    window.tokenary.hideOverlay();
+    window.tokenary.hideOverlayImmediately(false);
 };
