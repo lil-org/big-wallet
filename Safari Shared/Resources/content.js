@@ -43,7 +43,8 @@ function injectScript() {
                 left: 0;
                 right: 0;
                 bottom: 0;
-                background-color: rgba(0, 0, 0, 0.5);
+                background-color: rgba(0, 0, 0, 0.15);
+                -webkit-backdrop-filter: blur(2pt);
                 z-index: 2147483647;
                 cursor: pointer;
                 align-content: center;
