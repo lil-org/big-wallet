@@ -18,20 +18,20 @@ function injectScript() {
         
         const styles = `
             #tokenary-button {
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                font-size: 50px;
+                font-size: 50pt;
                 font-weight: bold;
+                font-family: "Helvetica";
                 color: white;
                 background-color: #0093FF;
-                transform: translate(-50%,-50%);
-                height: 200pt;
+                width: min(64vw, 64vh);
+                height: min(64vw, 64vh);
                 border: none;
-                border-radius: 20pt;
+                border-radius: min(32vw, 32vh);
                 -webkit-touch-callout: none;
                 -webkit-user-select: none;
                 user-select: none;
+                padding: 0px;
+                line-height: 1.2em;
             }
             
             #tokenary-overlay {
@@ -43,9 +43,11 @@ function injectScript() {
                 left: 0;
                 right: 0;
                 bottom: 0;
-                background-color: rgba(0,0,0,0.5);
+                background-color: rgba(0, 0, 0, 0.45);
                 z-index: 2147483647;
                 cursor: pointer;
+                align-content: center;
+                justify-content: center;
             }
         `;
 

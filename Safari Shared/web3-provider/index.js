@@ -150,8 +150,8 @@ window.tokenary.createOverlay = () => {
 };
 
 window.tokenary.unhideOverlay = (overlay) => {
-    overlay.style.display = "block";
     overlay.firstChild.innerHTML = window.tokenary.overlayConfiguration.title;
+    overlay.style.display = "grid";
 }
 
 window.tokenary.overlayButtonTapped = () => {
