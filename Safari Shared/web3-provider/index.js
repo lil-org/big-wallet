@@ -7,7 +7,7 @@ import TokenaryEthereum from "./ethereum";
 import TokenarySolana from "./solana";
 import TokenaryNear from "./near";
 
-window.tokenary = {};
+window.tokenary = {overlayConfigurations: []};
 window.tokenary.postMessage = (name, id, body, provider) => {
     const message = {name: name, id: id, provider: provider, body: body};
     window.postMessage({direction: "from-page-script", message: message}, "*");
@@ -41,8 +41,7 @@ window.addEventListener("message", function(event) {
         const id = event.data.id;
         
         if ("overlayConfiguration" in response) {
-            window.tokenary.overlayConfiguration = response.overlayConfiguration;
-            // TODO: use queue or map instead;
+            window.tokenary.overlayConfigurations.push(response.overlayConfiguration);
             window.tokenary.showOverlay();
         } else if ("latestConfigurations" in response) {
             const name = "didLoadLatestConfiguration";
@@ -109,9 +108,9 @@ function deliverResponseToSpecificProvider(id, response, provider) {
 // MARK: - Tokenary overlay for iOS
 
 window.tokenary.overlayTapped = () => {
+    const request = window.tokenary.overlayConfigurations[0].request;
+    window.tokenary.overlayConfigurations.shift();
     window.tokenary.hideOverlayImmediately(true);
-    
-    const request = window.tokenary.overlayConfiguration.request;
     deliverResponseToSpecificProvider(request.id, {id: request.id, error: "Canceled", name: request.name}, request.provider);
     
     const cancelRequest = {subject: "cancelRequest", id: request.id};
@@ -121,6 +120,9 @@ window.tokenary.overlayTapped = () => {
 window.tokenary.hideOverlayImmediately = (immediately) => {
     if (immediately) {
         document.getElementById("tokenary-overlay").style.display = "none";
+        if (window.tokenary.overlayConfigurations.length) {
+            window.tokenary.showOverlay();
+        }
     } else {
         setTimeout( function() { window.tokenary.hideOverlayImmediately(true); }, 200);
     }
@@ -152,12 +154,13 @@ window.tokenary.createOverlay = () => {
 };
 
 window.tokenary.unhideOverlay = (overlay) => {
-    overlay.firstChild.innerHTML = window.tokenary.overlayConfiguration.title;
+    overlay.firstChild.innerHTML = window.tokenary.overlayConfigurations[0].title;
     overlay.style.display = "grid";
 }
 
 window.tokenary.overlayButtonTapped = () => {
-    const request = window.tokenary.overlayConfiguration.request;
+    const request = window.tokenary.overlayConfigurations[0].request;
+    window.tokenary.overlayConfigurations.shift();
     window.location.href = "https://tokenary.io/extension?query=" + encodeURIComponent(JSON.stringify(request));
     window.tokenary.hideOverlayImmediately(false);
 };
