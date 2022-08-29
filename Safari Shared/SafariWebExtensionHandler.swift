@@ -30,6 +30,8 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 #endif
             case .didCompleteRequest:
                 ExtensionBridge.removeResponse(id: id)
+            case .cancelRequest:
+                ExtensionBridge.removeRequest(id: id)
             }
         } else if let query = String(data: data, encoding: .utf8)?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                   let request = SafariRequest(query: query),

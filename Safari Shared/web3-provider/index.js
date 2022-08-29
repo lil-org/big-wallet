@@ -110,11 +110,12 @@ function deliverResponseToSpecificProvider(id, response, provider) {
 
 window.tokenary.overlayTapped = () => {
     window.tokenary.hideOverlay();
+    
     const request = window.tokenary.overlayConfiguration.request;
     deliverResponseToSpecificProvider(request.id, {id: request.id, error: "Canceled", name: request.name}, request.provider);
     
-    // TODO: cancel pending request in extension pipeline
-    // window.tokenary.postMessage(name, id, body, provider)
+    const cancelRequest = {subject: "cancelRequest", id: request.id};
+    window.postMessage(cancelRequest, "*");
 };
 
 window.tokenary.hideOverlay = () => {
