@@ -23,10 +23,10 @@ function injectScript() {
                 font-weight: bold;
                 color: white;
                 background-color: #0093FF;
-                width: min(64vw, 64vh);
-                height: min(64vw, 64vh);
+                width: min(78vw, 78vh);
+                height: min(34vw, 34vh);
                 border: none;
-                border-radius: min(32vw, 32vh);
+                border-radius: min(17vw, 17vh);
                 -webkit-touch-callout: none;
                 -webkit-user-select: none;
                 user-select: none;
@@ -43,7 +43,7 @@ function injectScript() {
                 left: 0;
                 right: 0;
                 bottom: 0;
-                background-color: rgba(0, 0, 0, 0.45);
+                background-color: rgba(0, 0, 0, 0.5);
                 z-index: 2147483647;
                 cursor: pointer;
                 align-content: center;

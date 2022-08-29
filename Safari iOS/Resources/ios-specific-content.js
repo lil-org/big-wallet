@@ -28,7 +28,7 @@ function platformSpecificProcessMessage(message) {
             case "signAndSendTransactions":
             case "signAllTransactions":
             case "signAndSendTransaction":
-                title = "Send Transaction<br>in Tokenary";
+                title = "Approve Transaction<br>in Tokenary";
                 break;
             case "requestAccounts":
             case "signIn":
