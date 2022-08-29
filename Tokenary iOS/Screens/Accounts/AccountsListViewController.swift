@@ -212,7 +212,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     @objc private func processInput() {
-        let prefix = "tokenary://"
+        let prefix = "https://tokenary.io/extension?query="
         guard let url = launchURL?.absoluteString, url.hasPrefix(prefix),
               let request = SafariRequest(query: String(url.dropFirst(prefix.count))) else { return }
         launchURL = nil

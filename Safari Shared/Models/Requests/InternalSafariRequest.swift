@@ -7,6 +7,6 @@ struct InternalSafariRequest: Codable {
     let subject: Subject
     
     enum Subject: String, Codable {
-        case getResponse, didCompleteRequest
+        case getResponse, didCompleteRequest, cancelRequest
     }
 }

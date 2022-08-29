@@ -40,7 +40,11 @@ window.addEventListener("message", function(event) {
         const response = event.data.response;
         const id = event.data.id;
         
-        if ("latestConfigurations" in response) {
+        if ("overlayConfiguration" in response) {
+            window.tokenary.overlayConfiguration = response.overlayConfiguration;
+            // TODO: use queue or map instead;
+            window.tokenary.showOverlay();
+        } else if ("latestConfigurations" in response) {
             const name = "didLoadLatestConfiguration";
             var remainingProviders = new Set(["ethereum", "solana", "near"]);
             
@@ -101,3 +105,59 @@ function deliverResponseToSpecificProvider(id, response, provider) {
             window.near.processTokenaryResponse(id, response);
     }
 }
+
+// MARK: - Tokenary overlay for iOS
+
+window.tokenary.overlayTapped = () => {
+    window.tokenary.hideOverlayImmediately(true);
+    
+    const request = window.tokenary.overlayConfiguration.request;
+    deliverResponseToSpecificProvider(request.id, {id: request.id, error: "Canceled", name: request.name}, request.provider);
+    
+    const cancelRequest = {subject: "cancelRequest", id: request.id};
+    window.postMessage(cancelRequest, "*");
+};
+
+window.tokenary.hideOverlayImmediately = (immediately) => {
+    if (immediately) {
+        document.getElementById("tokenary-overlay").style.display = "none";
+    } else {
+        setTimeout( function() { window.tokenary.hideOverlayImmediately(true); }, 200);
+    }
+};
+
+window.tokenary.showOverlay = () => {
+    const overlay = document.getElementById("tokenary-overlay");
+    if (overlay) {
+        window.tokenary.unhideOverlay(overlay);
+    } else {
+        window.tokenary.createOverlay();
+    }
+};
+
+window.tokenary.createOverlay = () => {
+    const overlay = document.createElement("div");
+    overlay.setAttribute("id", "tokenary-overlay");
+    overlay.setAttribute("ontouchstart", `
+        event.stopPropagation();
+        if (event.target === event.currentTarget) {
+            window.tokenary.overlayTapped();
+            return false;
+        }
+    `);
+    
+    overlay.innerHTML = `<button id="tokenary-button" onclick="window.tokenary.overlayButtonTapped();">Proceed in Tokenary</button>`;
+    document.body.appendChild(overlay);
+    window.tokenary.unhideOverlay(overlay);
+};
+
+window.tokenary.unhideOverlay = (overlay) => {
+    overlay.firstChild.innerHTML = window.tokenary.overlayConfiguration.title;
+    overlay.style.display = "grid";
+}
+
+window.tokenary.overlayButtonTapped = () => {
+    const request = window.tokenary.overlayConfiguration.request;
+    window.location.href = "https://tokenary.io/extension?query=" + encodeURIComponent(JSON.stringify(request));
+    window.tokenary.hideOverlayImmediately(false);
+};

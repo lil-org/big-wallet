@@ -10,6 +10,8 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
     } else if (request.subject === "getLatestConfiguration") {
         getLatestConfiguration(request.host, sendResponse);
+    } else if (request.subject === "cancelRequest") {
+        browser.runtime.sendNativeMessage("mac.tokenary.io", request);
     }
     return true;
 });
