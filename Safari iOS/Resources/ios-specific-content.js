@@ -17,30 +17,30 @@ function platformSpecificProcessMessage(message) {
     if (message.provider == "ethereum" && (message.name == "switchEthereumChain" || message.name == "addEthereumChain")) {
         return;
     } else {
-        var title = "Proceed in Tokenary";
+        var title = "Proceed<br>in Tokenary";
         switch (message.name) {
             case "signPersonalMessage":
             case "signMessage":
             case "signTypedMessage":
-                title = "Sign Message in Tokenary";
+                title = "Sign Message<br>in Tokenary";
                 break;
             case "signTransaction":
             case "signAndSendTransactions":
             case "signAllTransactions":
             case "signAndSendTransaction":
-                title = "Approve Transaction in Tokenary";
+                title = "Send Transaction<br>in Tokenary";
                 break;
             case "requestAccounts":
             case "signIn":
             case "connect":
-                title = "Connect Wallet";
+                title = "Connect<br>Tokenary";
                 break;
             case "switchAccount":
                 const latestConfigurations = message.body.latestConfigurations;
                 if (Array.isArray(latestConfigurations) && latestConfigurations.length) {
-                    title = "Switch Account or Disconnect";
+                    title = "Switch<br>Account";
                 } else {
-                    title = "Connect Wallet";
+                    title = "Connect<br>Tokenary";
                 }
                 break;
         }
