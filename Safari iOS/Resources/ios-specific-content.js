@@ -47,6 +47,5 @@ function platformSpecificProcessMessage(message) {
         
         const response = {overlayConfiguration: {request: message, title: title}};
         window.postMessage({direction: "from-content-script", response: response, id: message.id}, "*");
-        
     }
 }
