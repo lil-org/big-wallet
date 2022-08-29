@@ -18,9 +18,9 @@ function injectScript() {
         
         const styles = `
             #tokenary-button {
-                font-size: 50pt;
-                font-weight: bold;
                 font-family: "Helvetica";
+                font-size: min(6vw, 6vh);
+                font-weight: bold;
                 color: white;
                 background-color: #0093FF;
                 width: min(64vw, 64vh);
