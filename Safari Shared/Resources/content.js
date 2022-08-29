@@ -33,6 +33,15 @@ function injectScript() {
                 padding: 0px;
                 line-height: 1.2em;
             }
+        
+            @keyframes fadeInOpacity {
+                0% {
+                    opacity: 0;
+                }
+                100% {
+                    opacity: 1;
+                }
+            }
             
             #tokenary-overlay {
                 position: fixed;
@@ -49,6 +58,10 @@ function injectScript() {
                 cursor: pointer;
                 align-content: center;
                 justify-content: center;
+                animation-name: fadeInOpacity;
+                animation-iteration-count: 1;
+                animation-timing-function: ease;
+                animation-duration: 0.2s;
             }
         `;
 
