@@ -127,7 +127,6 @@ window.tokenary.hideOverlayImmediately = (immediately) => {
 };
 
 window.tokenary.showOverlay = () => {
-    // TODO: show with animation
     const overlay = document.getElementById("tokenary-overlay");
     if (overlay) {
         window.tokenary.unhideOverlay(overlay);
