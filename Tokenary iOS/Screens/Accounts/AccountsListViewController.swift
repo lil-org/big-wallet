@@ -110,7 +110,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             }
             updatePrimaryButton()
             
-            if let network = selectAccountAction.initialNetwork, self.network != network {
+            if let network = selectAccountAction.network, self.network != network {
                 selectNetwork(network)
             }
             
