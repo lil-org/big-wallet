@@ -59,7 +59,11 @@ class AccountsListViewController: NSViewController {
     @IBOutlet weak var titleLabelTopConstraint: NSLayoutConstraint!
     @IBOutlet weak var websiteNameStackView: NSStackView!
     @IBOutlet weak var websiteNameLabel: NSTextField!
-    @IBOutlet weak var networkButton: NSButton!
+    @IBOutlet weak var networkButton: NSButton! {
+        didSet {
+            networkButton.image = Images.network.with(pointSize: 14, weight: .regular)
+        }
+    }
     @IBOutlet weak var titleLabel: NSTextField!
     @IBOutlet weak var tableView: RightClickTableView! {
         didSet {
@@ -252,7 +256,7 @@ class AccountsListViewController: NSViewController {
         let attributedTitle = NSAttributedString(string: title,
                                                  attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
         networkButton.menu?.items.last?.attributedTitle = attributedTitle
-        networkButton.bezelColor = .selectedControlColor
+        networkButton.image = networkButton.image?.with(pointSize: 14, weight: .semibold, color: NSColor.controlAccentColor.withSystemEffect(.pressed))
         self.network = network
     }
 

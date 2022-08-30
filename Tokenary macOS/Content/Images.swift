@@ -7,6 +7,7 @@ struct Images {
     
     static var statusBarIcon: NSImage { named("Status") }
     static var multicoinWalletPreferences: NSImage { systemName("ellipsis.rectangle") }
+    static var network: NSImage { systemName("network") }
  
     static func logo(coin: CoinType) -> NSImage {
         return named("Logo" + coin.name)

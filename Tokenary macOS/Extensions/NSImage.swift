@@ -14,4 +14,13 @@ extension NSImage {
         return self
     }
     
+    func with(pointSize: CGFloat, weight: NSFont.Weight, color: NSColor? = nil) -> NSImage? {
+        let configuration = NSImage.SymbolConfiguration(pointSize: pointSize, weight: weight)
+        if let color = color {
+            return withSymbolConfiguration(configuration)?.tinted(color)
+        } else {
+            return withSymbolConfiguration(configuration)
+        }
+    }
+    
 }

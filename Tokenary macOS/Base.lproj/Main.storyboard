@@ -1007,7 +1007,7 @@ DQ
                                 </customSpacing>
                             </stackView>
                             <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="10" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="CWc-Db-L0d">
-                                <rect key="frame" x="33" y="20" width="185" height="28"/>
+                                <rect key="frame" x="32" y="20" width="186" height="28"/>
                                 <subviews>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="x8R-fO-ffb">
                                         <rect key="frame" x="-6" y="-6" width="74" height="40"/>
@@ -1023,8 +1023,11 @@ Gw
                                         </connections>
                                     </button>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="9Zg-Xa-E1f">
-                                        <rect key="frame" x="66" y="-6" width="43" height="40"/>
-                                        <buttonCell key="cell" type="push" bezelStyle="rounded" image="network" catalog="system" imagePosition="only" alignment="center" controlSize="large" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="GSi-6A-TgZ">
+                                        <rect key="frame" x="66" y="-6" width="44" height="40"/>
+                                        <constraints>
+                                            <constraint firstAttribute="width" constant="32" id="0Hv-9C-tmD"/>
+                                        </constraints>
+                                        <buttonCell key="cell" type="push" bezelStyle="rounded" image="network" catalog="system" imagePosition="only" alignment="center" controlSize="large" borderStyle="border" inset="2" id="GSi-6A-TgZ">
                                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="system"/>
                                         </buttonCell>
@@ -1033,7 +1036,7 @@ Gw
                                         </connections>
                                     </button>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="sfH-TT-fxb">
-                                        <rect key="frame" x="107" y="-6" width="84" height="40"/>
+                                        <rect key="frame" x="108" y="-6" width="84" height="40"/>
                                         <buttonCell key="cell" type="push" title="Connect" bezelStyle="rounded" alignment="center" controlSize="large" enabled="NO" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="A0m-eU-I2u">
                                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="system"/>
@@ -1046,6 +1049,9 @@ DQ
                                         </connections>
                                     </button>
                                 </subviews>
+                                <constraints>
+                                    <constraint firstItem="9Zg-Xa-E1f" firstAttribute="height" secondItem="x8R-fO-ffb" secondAttribute="height" id="BLA-Yy-hPD"/>
+                                </constraints>
                                 <visibilityPriorities>
                                     <integer value="1000"/>
                                     <integer value="1000"/>
