@@ -6,6 +6,7 @@
 import TokenaryEthereum from "./ethereum";
 import TokenarySolana from "./solana";
 import TokenaryNear from "./near";
+import ProviderRpcError from "./error";
 
 window.tokenary = {overlayConfigurations: []};
 window.tokenary.postMessage = (name, id, body, provider) => {
@@ -113,7 +114,7 @@ window.tokenary.overlayTapped = () => {
     const request = window.tokenary.overlayConfigurations[0].request;
     window.tokenary.overlayConfigurations.shift();
     window.tokenary.hideOverlayImmediately(true);
-    deliverResponseToSpecificProvider(request.id, {id: request.id, error: "Canceled", name: request.name}, request.provider);
+    deliverResponseToSpecificProvider(request.id, {id: request.id, error: new ProviderRpcError(4001, "Canceled"), name: request.name}, request.provider);
     
     const cancelRequest = {subject: "cancelRequest", id: request.id};
     window.postMessage(cancelRequest, "*");
