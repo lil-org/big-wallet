@@ -12,6 +12,36 @@ struct Window {
         }
         let windowController = new
         activate(windowController)
+        
+        if let frame = windowController.window?.frame {
+            let stepX: CGFloat = 30
+            let stepY: CGFloat = 30
+            
+            let topLeft = CGPoint(x: frame.minX, y: frame.maxY)
+            var validCascadeIndexes = [Int]()
+            
+            for otherWindow in NSApplication.shared.windows where otherWindow !== windowController.window {
+                let otherTopLeft = CGPoint(x: otherWindow.frame.minX, y: otherWindow.frame.maxY)
+                
+                let deltaX = otherTopLeft.x - topLeft.x
+                let deltaY = otherTopLeft.y - topLeft.y
+                
+                if deltaX.truncatingRemainder(dividingBy: stepX).isZero, deltaY.truncatingRemainder(dividingBy: stepY).isZero {
+                    let xIndex = deltaX / stepX
+                    let yIndex = deltaY / stepY
+                    if xIndex == yIndex {
+                        validCascadeIndexes.append(Int(xIndex))
+                    }
+                }
+            }
+            
+            if let previousCascadeIndex = validCascadeIndexes.max() {
+                let cascadeIndex = CGFloat(previousCascadeIndex + 1)
+                let newTopLeft = CGPoint(x: topLeft.x + stepX * cascadeIndex, y: topLeft.y + stepY * cascadeIndex)
+                windowController.window?.setFrameTopLeftPoint(newTopLeft)
+            }
+        }
+        
         return windowController
     }
     
@@ -89,6 +119,7 @@ struct Window {
     }
     
     private static var new: NSWindowController {
+        // ⚠️ windows cascading relies on consistent initial window size
         return NSStoryboard.main.instantiateController(withIdentifier: "initial") as! NSWindowController
     }
     
