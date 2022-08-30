@@ -107,6 +107,8 @@ function deliverResponseToSpecificProvider(id, response, provider) {
 
 // MARK: - Tokenary overlay for iOS
 
+window.postMessage({inpageAvailable: true}, "*");
+
 window.tokenary.overlayTapped = () => {
     const request = window.tokenary.overlayConfigurations[0].request;
     window.tokenary.overlayConfigurations.shift();
