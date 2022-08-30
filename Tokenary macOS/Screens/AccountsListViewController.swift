@@ -8,7 +8,6 @@ class AccountsListViewController: NSViewController {
     private let agent = Agent.shared
     private let walletsManager = WalletsManager.shared
     private var cellModels = [CellModel]()
-    private var network = EthereumChain.ethereum
     private var didCallCompletion = false
     private var didAppear = false
     var selectAccountAction: SelectAccountAction?
@@ -118,6 +117,7 @@ class AccountsListViewController: NSViewController {
     private func callCompletion(specificWalletAccounts: [SpecificWalletAccount]?) {
         if !didCallCompletion {
             didCallCompletion = true
+            let network = selectAccountAction?.network ?? .ethereum
             selectAccountAction?.completion(network, specificWalletAccounts)
         }
     }
@@ -159,7 +159,7 @@ class AccountsListViewController: NSViewController {
                 let titleItem = NSMenuItem(title: Strings.selectNetworkOptionally, action: nil, keyEquivalent: "")
                 menu.addItem(titleItem)
                 
-                if let network = selectAccountAction.initialNetwork, network != self.network {
+                if let network = selectAccountAction.network, network != .ethereum {
                     selectNetwork(network)
                 }
             }
@@ -256,8 +256,8 @@ class AccountsListViewController: NSViewController {
         let attributedTitle = NSAttributedString(string: title,
                                                  attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
         networkButton.menu?.items.last?.attributedTitle = attributedTitle
-        networkButton.image = networkButton.image?.with(pointSize: 14, weight: .semibold, color: NSColor.controlAccentColor.withSystemEffect(.pressed))
-        self.network = network
+        networkButton.image = networkButton.image?.with(pointSize: 14, weight: .semibold, color: .controlAccentColor.withSystemEffect(.pressed))
+        selectAccountAction?.network = network
     }
 
     @objc private func didClickCreateAccount() {
