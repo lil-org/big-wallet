@@ -32,6 +32,7 @@ function injectScript() {
                 user-select: none;
                 padding: 0px;
                 line-height: 1.2em;
+                text-align: center;
             }
         
             @keyframes fadeInOpacity {
