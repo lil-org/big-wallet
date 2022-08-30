@@ -4,6 +4,8 @@ import Cocoa
 
 struct Window {
     
+    private static var isClosingAllWindows = false
+    
     static func showNew(closeOthers: Bool) -> NSWindowController {
         if closeOthers {
             closeAll()
@@ -13,7 +15,7 @@ struct Window {
         return windowController
     }
     
-    static func activate(_ windowController: NSWindowController) {
+    static private func activate(_ windowController: NSWindowController) {
         windowController.showWindow(nil)
         activateWindow(windowController.window)
     }
@@ -24,12 +26,14 @@ struct Window {
     }
     
     static func closeWindow(idToClose: Int?) {
+        guard !isClosingAllWindows else { return }
         if let id = idToClose, let windowToClose = NSApplication.shared.windows.first(where: { $0.windowNumber == id }) {
             windowToClose.close()
         }
     }
     
     static func closeWindowAndActivateNext(idToClose: Int?, specificBrowser: Browser?) {
+        guard !isClosingAllWindows else { return }
         closeWindow(idToClose: idToClose)
         
         if let window = NSApplication.shared.windows.last(where: { $0.windowNumber != idToClose && $0.isOnActiveSpace && $0.contentViewController != nil }) {
@@ -47,7 +51,9 @@ struct Window {
     // MARK: - Private
     
     private static func closeAll() {
+        isClosingAllWindows = true
         NSApplication.shared.windows.forEach { $0.close() }
+        isClosingAllWindows = false
         Agent.shared.setupStatusBarItem()
     }
     
