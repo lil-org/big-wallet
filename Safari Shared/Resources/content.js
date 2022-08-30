@@ -33,6 +33,7 @@ function injectScript() {
                 padding: 0px;
                 line-height: 1.2em;
                 text-align: center;
+                margin: 0;
             }
         
             @keyframes fadeInOpacity {
