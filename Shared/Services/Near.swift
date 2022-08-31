@@ -22,7 +22,25 @@ class Near {
         signAndSendRemainingTransactions(transactions, receivedResponses: [], account: account, privateKey: privateKey, completion: completion)
     }
     
+    // Does not return implicit accountId if it is not initialized.
+    func getAccountIds(implicitAccountId: String) {
+        guard let publicKey = publicKey(implicitAccountId: implicitAccountId),
+              let url = URL(string: "https://api.kitwallet.app/publicKey/\(publicKey)/accounts") else { return }
+        let dataTask = urlSession.dataTask(with: url) { data, _, _ in
+            if let data = data, let result = try? JSONSerialization.jsonObject(with: data) as? [String] {
+                print(result)
+            }
+        }
+        dataTask.resume()
+    }
+    
     // MARK: - Private
+    
+    private func publicKey(implicitAccountId: String) -> String? {
+        guard let publicKeyData = Data(hexString: implicitAccountId) else { return nil }
+        let publicKey = "ed25519:" + Base58.encodeNoCheck(data: publicKeyData)
+        return publicKey
+    }
     
     private func signAndSendRemainingTransactions(_ transactions: [[String: Any]],
                                                   receivedResponses: [[String: Any]],
@@ -179,12 +197,11 @@ class Near {
     }
     
     private func getNonceAndBlockhash(account: String, retryCount: Int = 0, completion: @escaping (((UInt64, String)?) -> Void)) {
-        guard let publicKeyData = Data(hexString: account) else {
+        guard let publicKey = publicKey(implicitAccountId: account) else {
             completion(nil)
             return
         }
 
-        let publicKey = "ed25519:" + Base58.encodeNoCheck(data: publicKeyData)
         let params = [
             "request_type": "view_access_key",
             "finality": "optimistic",
