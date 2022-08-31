@@ -85,6 +85,7 @@ class Agent: NSObject {
                                                                        selectedAccounts: Set(walletsManager.suggestedAccounts(coin: .ethereum)),
                                                                        initiallyConnectedProviders: Set(),
                                                                        network: nil,
+                                                                       source: .walletConnect,
                                                                        completion: completion)
             }
             
