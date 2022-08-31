@@ -133,7 +133,9 @@ class AccountsListViewController: NSViewController {
                 secondaryButton.keyEquivalent = ""
             }
             
-            if networkButton.menu == nil {
+            if selectAccountAction.source == .walletConnect {
+                networkButton.isHidden = true
+            } else if networkButton.menu == nil {
                 let menu = NSMenu()
                 for mainnet in EthereumChain.allMainnets {
                     let item = NSMenuItem(title: mainnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")

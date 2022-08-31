@@ -87,11 +87,16 @@ class WalletConnect {
     private func configure(interactor: WCInteractor, chainId: Int, walletId: String) {
         guard let address = walletsManager.getWallet(id: walletId)?.ethereumAddress else { return }
         let accounts = [address]
+        var chainId = chainId
         
         interactor.onError = { _ in }
 
         interactor.onSessionRequest = { [weak self, weak interactor] (_, peerParam) in
             guard let interactor = interactor else { return }
+            if let requestedChainId = peerParam.chainId {
+                chainId = requestedChainId
+            }
+            
             self?.peers[interactor.clientId] = peerParam.peerMeta
             self?.sessionStorage.add(interactor: interactor, chainId: chainId, walletId: walletId, sessionDetails: peerParam)
             interactor.approveSession(accounts: accounts, chainId: chainId).cauterize()
