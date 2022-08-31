@@ -12,6 +12,26 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         getLatestConfiguration(request.host, sendResponse);
     } else if (request.subject === "cancelRequest") {
         browser.runtime.sendNativeMessage("mac.tokenary.io", request);
+    } else if (request.subject === "disconnect") {
+        const provider = request.provider;
+        const host = request.host;
+        
+        getLatestConfiguration(host, function(currentConfiguration) {
+            const configurations = currentConfiguration.latestConfigurations;
+            
+            var indexToRemove = -1;
+            for (var i = 0; i < configurations.length; i++) {
+                if (configurations[i].provider == provider) {
+                    indexToRemove = i;
+                    break;
+                }
+            }
+            if (indexToRemove > -1) {
+                configurations.splice(indexToRemove, 1);
+            }
+            
+            storeLatestConfiguration(host, configurations);
+        });
     }
     return true;
 });
