@@ -14,13 +14,15 @@ struct Window {
         activate(windowController)
         
         if let frame = windowController.window?.frame {
-            let stepX: CGFloat = 30
-            let stepY: CGFloat = 30
+            let stepX: CGFloat = 18
+            let stepY: CGFloat = 16
             
             let topLeft = CGPoint(x: frame.minX, y: frame.maxY)
             var validCascadeIndexes = [Int]()
             
+            let validateActiveSpace = windowController.window?.isOnActiveSpace == true
             for otherWindow in NSApplication.shared.windows where otherWindow !== windowController.window {
+                if validateActiveSpace, !otherWindow.isOnActiveSpace { continue }
                 let otherTopLeft = CGPoint(x: otherWindow.frame.minX, y: otherWindow.frame.maxY)
                 
                 let deltaX = otherTopLeft.x - topLeft.x
