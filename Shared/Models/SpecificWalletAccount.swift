@@ -5,5 +5,5 @@ import WalletCore
 
 struct SpecificWalletAccount: Hashable {
     let walletId: String
-    let account: Account
+    let account: TokenaryAccount
 }

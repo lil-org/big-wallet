@@ -29,7 +29,7 @@ struct SelectAccountAction {
 struct SignMessageAction {
     let provider: Web3Provider
     let subject: ApprovalSubject
-    let account: Account
+    let account: TokenaryAccount
     let meta: String
     let peerMeta: PeerMeta
     let completion: (Bool) -> Void
@@ -39,7 +39,7 @@ struct SendTransactionAction {
     let provider: Web3Provider
     let transaction: Transaction
     let chain: EthereumChain
-    let account: Account
+    let account: TokenaryAccount
     let peerMeta: PeerMeta
     let completion: (Transaction?) -> Void
 }

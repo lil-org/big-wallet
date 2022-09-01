@@ -359,7 +359,7 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-    private func accountForRow(_ row: Int) -> Account? {
+    private func accountForRow(_ row: Int) -> TokenaryAccount? {
         guard row >= 0 else { return nil }
         let item = cellModels[row]
         switch item {
@@ -556,7 +556,7 @@ class AccountsListViewController: NSViewController {
         updatePrimaryButton()
     }
     
-    private func accountCanBeSelected(_ account: Account) -> Bool {
+    private func accountCanBeSelected(_ account: TokenaryAccount) -> Bool {
         return selectAccountAction?.coinType == nil || selectAccountAction?.coinType == account.coin
     }
     
@@ -568,7 +568,7 @@ extension AccountsListViewController: TableViewMenuSource {
         guard let menu = tableView.menu else { return nil }
 
         let item = cellModels[row]
-        let account: Account
+        let account: TokenaryAccount
         let wallet: TokenaryWallet
         
         switch item {
@@ -636,7 +636,7 @@ extension AccountsListViewController: NSTableViewDelegate {
         let model = cellModels[row]
         
         let wallet: TokenaryWallet
-        let account: Account
+        let account: TokenaryAccount
         
         switch model {
         case let .mnemonicAccount(walletIndex: walletIndex, accountIndex: accountIndex):

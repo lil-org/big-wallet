@@ -20,7 +20,7 @@ class AccountCellView: NSTableRowView {
         wantsLayer = true
     }
     
-    func setup(account: Account, isSelected: Bool, isDisabled: Bool) {
+    func setup(account: TokenaryAccount, isSelected: Bool, isDisabled: Bool) {
         addressImageView.image = account.image
         addressTextField.stringValue = account.shortAddress
         setSelected(isSelected)

@@ -16,7 +16,7 @@ class Near {
     private init() {}
     
     func signAndSendTransactions(_ transactions: [[String: Any]],
-                                 account: Account,
+                                 account: TokenaryAccount,
                                  privateKey: PrivateKey,
                                  completion: @escaping (Result<[[String: Any]], SendTransactionError>) -> Void) {
         signAndSendRemainingTransactions(transactions, receivedResponses: [], account: account, privateKey: privateKey, completion: completion)
@@ -44,7 +44,7 @@ class Near {
     
     private func signAndSendRemainingTransactions(_ transactions: [[String: Any]],
                                                   receivedResponses: [[String: Any]],
-                                                  account: Account,
+                                                  account: TokenaryAccount,
                                                   privateKey: PrivateKey,
                                                   completion: @escaping (Result<[[String: Any]], SendTransactionError>) -> Void) {
         let transaction = transactions[0]
@@ -118,7 +118,7 @@ class Near {
                                  hash: String,
                                  remainingTransactions: [[String: Any]],
                                  receivedResponses: [[String: Any]],
-                                 account: Account,
+                                 account: TokenaryAccount,
                                  privateKey: PrivateKey,
                                  completion: @escaping (Result<[[String: Any]], SendTransactionError>) -> Void) {
         let request = createRequest(method: "broadcast_tx_commit", parameters: [transaction])
@@ -175,7 +175,7 @@ class Near {
         dataTask.resume()
     }
     
-    private func getTransactionResult(hash: String, account: Account, retryCount: Int = 0, completion: @escaping (Result<[String: Any], SendTransactionError>) -> Void) {
+    private func getTransactionResult(hash: String, account: TokenaryAccount, retryCount: Int = 0, completion: @escaping (Result<[String: Any], SendTransactionError>) -> Void) {
         let request = createRequest(method: "tx", parameters: [hash, account.address])
         let dataTask = urlSession.dataTask(with: request) { data, _, _ in
             if let data = data,
