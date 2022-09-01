@@ -10,6 +10,7 @@ class SessionStorage {
         let chainId: Int?
         let walletId: String
         let clientId: String
+        let address: String?
         let sessionDetails: WCSessionRequestParam
     }
     
@@ -52,8 +53,13 @@ class SessionStorage {
         }
     }
     
-    func add(interactor: WCInteractor, chainId: Int, walletId: String, sessionDetails: WCSessionRequestParam) {
-        let item = Item(session: interactor.session, chainId: chainId, walletId: walletId, clientId: interactor.clientId, sessionDetails: sessionDetails)
+    func add(interactor: WCInteractor, chainId: Int, walletId: String, address: String, sessionDetails: WCSessionRequestParam) {
+        let item = Item(session: interactor.session,
+                        chainId: chainId,
+                        walletId: walletId,
+                        clientId: interactor.clientId,
+                        address: address,
+                        sessionDetails: sessionDetails)
         WCSessionStore.store(interactor.session, peerId: sessionDetails.peerId, peerMeta: sessionDetails.peerMeta)
         Defaults.storedSessions[interactor.clientId] = item
         didInteractWith(clientId: interactor.clientId)

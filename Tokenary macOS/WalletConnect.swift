@@ -25,10 +25,10 @@ class WalletConnect {
         return WCSession.from(string: link)
     }
     
-    func connect(session: WCSession, chainId: Int, walletId: String, uuid: UUID = UUID(), completion: @escaping ((Bool) -> Void)) {
+    func connect(session: WCSession, chainId: Int, walletId: String, address: String, uuid: UUID = UUID(), completion: @escaping ((Bool) -> Void)) {
         let clientMeta = WCPeerMeta(name: Strings.tokenary, url: "https://tokenary.io", description: Strings.walletConnectClientDescription, icons: ["https://tokenary.io/icon.png"])
         let interactor = WCInteractor(session: session, meta: clientMeta, uuid: uuid)
-        configure(interactor: interactor, chainId: chainId, walletId: walletId)
+        configure(interactor: interactor, chainId: chainId, walletId: walletId, address: address)
 
         interactor.connect().done { connected in
             completion(connected)
@@ -45,8 +45,10 @@ class WalletConnect {
         let items = sessionStorage.loadAll()
         
         for item in items {
-            guard let uuid = UUID(uuidString: item.clientId) else { continue }
-            connect(session: item.session, chainId: item.chainId ?? 1, walletId: item.walletId, uuid: uuid) { _ in }
+            guard let uuid = UUID(uuidString: item.clientId),
+                  let address = item.address ?? walletsManager.getWallet(id: item.walletId)?.accounts.first(where: { $0.coin == .ethereum })?.address
+            else { continue }
+            connect(session: item.session, chainId: item.chainId ?? 1, walletId: item.walletId, address: address, uuid: uuid) { _ in }
             peers[item.clientId] = item.sessionDetails.peerMeta
         }
     }
@@ -84,8 +86,7 @@ class WalletConnect {
         return peers[id]
     }
     
-    private func configure(interactor: WCInteractor, chainId: Int, walletId: String) {
-        guard let address = walletsManager.getWallet(id: walletId)?.ethereumAddress else { return }
+    private func configure(interactor: WCInteractor, chainId: Int, walletId: String, address: String) {
         let accounts = [address]
         var chainId = chainId
         
@@ -98,7 +99,7 @@ class WalletConnect {
             }
             
             self?.peers[interactor.clientId] = peerParam.peerMeta
-            self?.sessionStorage.add(interactor: interactor, chainId: chainId, walletId: walletId, sessionDetails: peerParam)
+            self?.sessionStorage.add(interactor: interactor, chainId: chainId, walletId: walletId, address: address, sessionDetails: peerParam)
             interactor.approveSession(accounts: accounts, chainId: chainId).cauterize()
         }
 
@@ -109,12 +110,12 @@ class WalletConnect {
         }
 
         interactor.eth.onSign = { [weak self, weak interactor] (id, payload) in
-            self?.approveSign(id: id, payload: payload, walletId: walletId, interactor: interactor)
+            self?.approveSign(id: id, payload: payload, address: address, interactor: interactor)
             self?.sessionStorage.didInteractWith(clientId: interactor?.clientId)
         }
 
         interactor.eth.onTransaction = { [weak self, weak interactor] (id, _, transaction) in
-            self?.approveTransaction(id: id, wct: transaction, walletId: walletId, chainId: chainId, interactor: interactor)
+            self?.approveTransaction(id: id, wct: transaction, address: address, chainId: chainId, interactor: interactor)
             self?.sessionStorage.didInteractWith(clientId: interactor?.clientId)
         }
     }
@@ -130,7 +131,7 @@ class WalletConnect {
         }
     }
     
-    private func approveTransaction(id: Int64, wct: WCEthereumTransaction, walletId: String, chainId: Int, interactor: WCInteractor?) {
+    private func approveTransaction(id: Int64, wct: WCEthereumTransaction, address: String, chainId: Int, interactor: WCInteractor?) {
         guard let to = wct.to, let chain = EthereumChain(rawValue: chainId) else {
             rejectRequest(id: id, interactor: interactor, message: Strings.somethingWentWrong)
             return
@@ -142,7 +143,7 @@ class WalletConnect {
         let windowNumber = windowController.window?.windowNumber
         agent.showApprove(windowController: windowController, browser: .unknown, transaction: transaction, chain: chain, peerMeta: peer) { [weak self, weak interactor] transaction in
             if let transaction = transaction {
-                self?.sendTransaction(transaction, walletId: walletId, chainId: chainId, requestId: id, interactor: interactor)
+                self?.sendTransaction(transaction, address: address, chainId: chainId, requestId: id, interactor: interactor)
                 Window.closeWindowAndActivateNext(idToClose: windowNumber, specificBrowser: nil)
             } else {
                 Window.closeWindowAndActivateNext(idToClose: windowNumber, specificBrowser: nil)
@@ -151,7 +152,7 @@ class WalletConnect {
         }
     }
 
-    private func approveSign(id: Int64, payload: WCEthereumSignPayload, walletId: String, interactor: WCInteractor?) {
+    private func approveSign(id: Int64, payload: WCEthereumSignPayload, address: String, interactor: WCInteractor?) {
         var message: String?
         let approvalSubject: ApprovalSubject
         switch payload {
@@ -173,7 +174,7 @@ class WalletConnect {
         let windowNumber = windowController.window?.windowNumber
         agent.showApprove(windowController: windowController, browser: .unknown, subject: approvalSubject, meta: message ?? "", peerMeta: peer) { [weak self, weak interactor] approved in
             if approved {
-                self?.sign(id: id, payload: payload, walletId: walletId, interactor: interactor)
+                self?.sign(id: id, payload: payload, address: address, interactor: interactor)
                 Window.closeWindowAndActivateNext(idToClose: windowNumber, specificBrowser: nil)
             } else {
                 Window.closeWindowAndActivateNext(idToClose: windowNumber, specificBrowser: nil)
@@ -186,12 +187,13 @@ class WalletConnect {
         interactor?.rejectRequest(id: id, message: message).cauterize()
     }
 
-    private func sendTransaction(_ transaction: Transaction, walletId: String, chainId: Int, requestId: Int64, interactor: WCInteractor?) {
-        guard let wallet = walletsManager.getWallet(id: walletId), let chain = EthereumChain(rawValue: chainId) else {
+    private func sendTransaction(_ transaction: Transaction, address: String, chainId: Int, requestId: Int64, interactor: WCInteractor?) {
+        guard let privateKey = walletsManager.getPrivateKey(coin: .ethereum, address: address),
+              let chain = EthereumChain(rawValue: chainId) else {
             rejectRequest(id: requestId, interactor: interactor, message: Strings.somethingWentWrong)
             return
         }
-        guard let hash = try? ethereum.send(transaction: transaction, wallet: wallet, chain: chain) else {
+        guard let hash = try? ethereum.send(transaction: transaction, privateKey: privateKey, chain: chain) else {
             rejectRequest(id: requestId, interactor: interactor, message: Strings.failedToSend)
             return
         }
@@ -199,20 +201,20 @@ class WalletConnect {
         ReviewRequster.requestReviewIfNeeded()
     }
 
-    private func sign(id: Int64, payload: WCEthereumSignPayload, walletId: String, interactor: WCInteractor?) {
-        guard let wallet = walletsManager.getWallet(id: walletId) else {
+    private func sign(id: Int64, payload: WCEthereumSignPayload, address: String, interactor: WCInteractor?) {
+        guard let privateKey = walletsManager.getPrivateKey(coin: .ethereum, address: address) else {
             rejectRequest(id: id, interactor: interactor, message: Strings.somethingWentWrong)
             return
         }
         var signed: String?
         switch payload {
         case let .personalSign(data: data, raw: _):
-            signed = try? ethereum.signPersonalMessage(data: data, wallet: wallet)
+            signed = try? ethereum.signPersonalMessage(data: data, privateKey: privateKey)
         case let .signTypeData(id: _, data: _, raw: raw):
             let typedData = raw.count >= 2 ? raw[1] : ""
-            signed = try? ethereum.sign(typedData: typedData, wallet: wallet)
+            signed = try? ethereum.sign(typedData: typedData, privateKey: privateKey)
         case let .sign(data: data, raw: _):
-            signed = try? ethereum.sign(data: data, wallet: wallet)
+            signed = try? ethereum.sign(data: data, privateKey: privateKey)
         }
         guard let result = signed else {
             rejectRequest(id: id, interactor: interactor, message: Strings.somethingWentWrong)
