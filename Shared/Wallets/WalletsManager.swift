@@ -22,6 +22,7 @@ final class WalletsManager {
     private init() {}
 
     func start() {
+        // TODO: load additional info
         try? loadWalletsFromKeychain()
     }
     
@@ -101,11 +102,11 @@ final class WalletsManager {
         let key = StoredKey(name: name, password: Data(password.utf8))
         let id = makeNewWalletId()
         let wallet = TokenaryWallet(id: id, key: key)
-        
         for coinDerivation in CoinDerivation.enabledByDefaultCoinDerivations {
-            _ = try wallet.getAccount(password: password, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
+            try wallet.createAccount(password: password, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
         }
         
+        wallet.updateAccounts()
         wallets.append(wallet)
         try save(wallet: wallet, isUpdate: false)
         return wallet
@@ -128,7 +129,8 @@ final class WalletsManager {
         guard let newKey = StoredKey.importPrivateKey(privateKey: privateKey.data, name: name, password: Data(password.utf8), coin: coin) else { throw KeyStore.Error.invalidKey }
         let id = makeNewWalletId()
         let wallet = TokenaryWallet(id: id, key: newKey)
-        _ = try wallet.getAccount(password: password, coin: coin)
+        try wallet.createAccount(password: password, coin: coin)
+        wallet.updateAccounts()
         if !onlyToKeychain {
             wallets.append(wallet)
         }
@@ -143,9 +145,10 @@ final class WalletsManager {
         let wallet = TokenaryWallet(id: id, key: key)
         
         for coinDerivation in coinDerivations {
-            _ = try wallet.getAccount(password: encryptPassword, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
+            try wallet.createAccount(password: encryptPassword, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
         }
         
+        wallet.updateAccounts()
         wallets.append(wallet)
         try save(wallet: wallet, isUpdate: false)
         return wallet
@@ -174,6 +177,7 @@ final class WalletsManager {
     }
 
     func delete(wallet: TokenaryWallet) throws {
+        // TODO: delete additional wallet info
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         guard let index = wallets.firstIndex(of: wallet) else { throw KeyStore.Error.accountNotFound }
         guard var privateKey = wallet.key.decryptPrivateKey(password: Data(password.utf8)) else { throw KeyStore.Error.invalidKey }
@@ -184,6 +188,7 @@ final class WalletsManager {
     }
 
     func destroy() throws {
+        // TODO: delete additional info
         wallets.removeAll(keepingCapacity: false)
         try keychain.removeAllWallets()
     }
@@ -197,6 +202,7 @@ final class WalletsManager {
         }
     }
     
+    // TODO: support updating not only coin derivations, but additional accounts as well
     func update(wallet: TokenaryWallet, coinDerivations: [CoinDerivation]) throws {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         
@@ -205,17 +211,20 @@ final class WalletsManager {
         }
         
         for coinDerivation in coinDerivations {
-            _ = try wallet.getAccount(password: password, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
+            try wallet.createAccount(password: password, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
         }
         
+        wallet.updateAccounts()
         try save(wallet: wallet, isUpdate: true)
     }
     
-    func update(wallet: TokenaryWallet, removeAccounts toRemove: [Account]) throws {
+    // TODO: support removing additional accounts
+    func update(wallet: TokenaryWallet, removeAccounts toRemove: [TokenaryAccount]) throws {
         for account in toRemove {
             wallet.key.removeAccountForCoinDerivationPath(coin: account.coin, derivationPath: account.derivationPath)
         }
         
+        wallet.updateAccounts()
         try save(wallet: wallet, isUpdate: true)
     }
     
@@ -223,6 +232,8 @@ final class WalletsManager {
         guard let index = wallets.firstIndex(of: wallet) else { throw KeyStore.Error.accountNotFound }
         guard var privateKeyData = wallet.key.decryptPrivateKey(password: Data(password.utf8)) else { throw KeyStore.Error.invalidPassword }
         defer { privateKeyData.resetBytes(in: 0..<privateKeyData.count) }
+        
+        // TODO: важно, чтобы здесь не вывалился некорректный CoinDerivation кастомного аккаунта, чтобы не пытались импортнуть то, чего не было.
         let coinDerivations = wallet.accounts.map { CoinDerivation(coin: $0.coin, derivation: $0.derivation) }
         guard !coinDerivations.isEmpty else { throw KeyStore.Error.accountNotFound }
         let firstCoin = coinDerivations[0].coin
@@ -237,13 +248,15 @@ final class WalletsManager {
         }
         
         for coinDerivation in coinDerivations {
-            _ = try wallets[index].getAccount(password: newPassword, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
+            try wallets[index].createAccount(password: newPassword, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
         }
         
+        wallets[index].updateAccounts()
         try save(wallet: wallets[index], isUpdate: true)
     }
 
     private func save(wallet: TokenaryWallet, isUpdate: Bool) throws {
+        // TODO: should save additional wallet info as well (additional accounts)
         guard let data = wallet.key.exportJSON() else { throw KeyStore.Error.invalidPassword }
         if isUpdate {
             try keychain.updateWallet(id: wallet.id, data: data)
@@ -270,7 +283,7 @@ final class WalletsManager {
 
 extension WalletsManager {
     
-    func getAccount(coin: CoinType, address: String) -> Account? {
+    func getAccount(coin: CoinType, address: String) -> TokenaryAccount? {
         return getWalletAndAccount(coin: coin, address: address)?.1
     }
     
@@ -283,7 +296,7 @@ extension WalletsManager {
         }
     }
     
-    func getWalletAndAccount(coin: CoinType, address: String) -> (TokenaryWallet, Account)? {
+    func getWalletAndAccount(coin: CoinType, address: String) -> (TokenaryWallet, TokenaryAccount)? {
         let searchLowercase = coin == .ethereum
         let needle = searchLowercase ? address.lowercased() : address
         

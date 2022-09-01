@@ -3,8 +3,60 @@
 import WalletCore
 import BlockiesSwift
 
-extension Account {
-
+final class TokenaryAccount {
+    
+    private let derivedAccount: Account?
+    
+    init(derivedAccount: Account?) {
+        // TODO: be able to create non derived account as well
+        self.derivedAccount = derivedAccount
+    }
+    
+    var address: String {
+        if let account = derivedAccount {
+            return account.address
+        } else {
+            // TODO: return additionally stored value
+            return ""
+        }
+    }
+    
+    var coin: CoinType {
+        if let account = derivedAccount {
+            return account.coin
+        } else {
+            // TODO: return additionally stored value
+            return CoinType.near
+        }
+    }
+    
+    var derivationPath: String {
+        if let account = derivedAccount {
+            return account.derivationPath
+        } else {
+            // TODO: return additionally stored value
+            return ""
+        }
+    }
+    
+    var derivation: Derivation {
+        if let account = derivedAccount {
+            return account.derivation
+        } else {
+            // TODO: return additionally stored value
+            return .custom
+        }
+    }
+    
+    var publicKey: String {
+        if let account = derivedAccount {
+            return account.publicKey
+        } else {
+            // TODO: return additionally stored value
+            return ""
+        }
+    }
+    
     var shortAddress: String {
         let dropFirstCount: Int
         switch coin {
@@ -25,6 +77,30 @@ extension Account {
         } else {
             return Images.logo(coin: coin)
         }
+    }
+    
+}
+
+extension TokenaryAccount: Equatable {
+    
+    public static func == (lhs: TokenaryAccount, rhs: TokenaryAccount) -> Bool {
+        return lhs.coin == rhs.coin &&
+        lhs.address == rhs.address &&
+        lhs.derivation == rhs.derivation &&
+        lhs.derivationPath == rhs.derivationPath &&
+        lhs.publicKey == rhs.publicKey
+    }
+    
+}
+
+extension TokenaryAccount: Hashable {
+    
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(coin)
+        hasher.combine(address)
+        hasher.combine(derivation)
+        hasher.combine(derivationPath)
+        hasher.combine(publicKey)
     }
     
 }
