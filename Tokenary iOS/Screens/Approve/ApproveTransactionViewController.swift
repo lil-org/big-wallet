@@ -81,7 +81,7 @@ class ApproveTransactionViewController: UIViewController {
     private func updateDisplayedTransactionInfo(initially: Bool) {
         var cellModels: [CellModel] = [
             .textWithImage(text: peerMeta?.name ?? Strings.unknownWebsite, imageURL: peerMeta?.iconURLString, image: nil),
-            .textWithImage(text: account.croppedAddress, imageURL: nil, image: account.image)
+            .textWithImage(text: account.shortAddress, imageURL: nil, image: account.image)
         ]
         
         if let value = transaction.valueWithSymbol(chain: chain, ethPrice: priceService.currentPrice, withLabel: true) {

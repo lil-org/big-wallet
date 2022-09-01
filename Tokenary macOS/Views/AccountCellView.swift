@@ -22,7 +22,7 @@ class AccountCellView: NSTableRowView {
     
     func setup(account: Account, isSelected: Bool, isDisabled: Bool) {
         addressImageView.image = account.image
-        addressTextField.stringValue = account.croppedAddress
+        addressTextField.stringValue = account.shortAddress
         setSelected(isSelected)
         setDisabled(isDisabled)
     }

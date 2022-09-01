@@ -675,7 +675,7 @@ extension AccountsListViewController: UITableViewDataSource {
         let wallet = walletForIndexPath(indexPath)
         let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
         let isSelected = selectAccountAction?.selectedAccounts.contains(specificWalletAccount) == true
-        cell.setup(title: account.croppedAddress,
+        cell.setup(title: account.shortAddress,
                    image: account.image,
                    isDisabled: !accountCanBeSelected(account),
                    customSelectionStyle: selectAccountAction != nil,

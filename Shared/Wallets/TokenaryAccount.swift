@@ -5,7 +5,7 @@ import BlockiesSwift
 
 extension Account {
 
-    var croppedAddress: String {
+    var shortAddress: String {
         let dropFirstCount: Int
         switch coin {
         case .ethereum:
