@@ -175,7 +175,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
     }
     
-    private func accountForIndexPath(_ indexPath: IndexPath) -> Account {
+    private func accountForIndexPath(_ indexPath: IndexPath) -> TokenaryAccount {
         let item = sections[indexPath.section].items[indexPath.row]
         switch item {
         case let .mnemonicAccount(walletIndex: walletIndex, accountIndex: accountIndex):
@@ -481,7 +481,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(actionSheet, animated: true)
     }
     
-    private func showActionsForAccount(_ account: Account, wallet: TokenaryWallet, cell: UITableViewCell?) {
+    private func showActionsForAccount(_ account: TokenaryAccount, wallet: TokenaryWallet, cell: UITableViewCell?) {
         let actionSheet = UIAlertController(title: account.coin.name, message: account.address, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.sourceView = cell
         
@@ -517,7 +517,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(actionSheet, animated: true)
     }
     
-    private func attemptToRemoveAccount(_ account: Account, fromWallet wallet: TokenaryWallet) {
+    private func attemptToRemoveAccount(_ account: TokenaryAccount, fromWallet wallet: TokenaryWallet) {
         guard wallet.accounts.count > 1 else {
             warnOnLastAccountRemovalAttempt(wallet: wallet)
             return
@@ -600,7 +600,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         tableView.reloadData()
     }
     
-    private func accountCanBeSelected(_ account: Account) -> Bool {
+    private func accountCanBeSelected(_ account: TokenaryAccount) -> Bool {
         return selectAccountAction?.coinType == nil || selectAccountAction?.coinType == account.coin
     }
     

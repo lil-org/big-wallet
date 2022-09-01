@@ -32,7 +32,7 @@ class ApproveTransactionViewController: UIViewController {
     private var sectionModels = [[CellModel]]()
     private var didEnableSpeedConfiguration = false
     
-    private var account: Account!
+    private var account: TokenaryAccount!
     private var transaction: Transaction!
     private var chain: EthereumChain!
     private var completion: ((Transaction?) -> Void)!
@@ -41,7 +41,7 @@ class ApproveTransactionViewController: UIViewController {
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var cancelButton: UIButton!
     
-    static func with(transaction: Transaction, chain: EthereumChain, account: Account, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
+    static func with(transaction: Transaction, chain: EthereumChain, account: TokenaryAccount, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self, from: .main)
         new.transaction = transaction
         new.chain = chain

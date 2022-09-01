@@ -26,7 +26,7 @@ class ApproveViewController: UIViewController {
     
     private var approveTitle: String!
     private var shouldEnableWaiting = false
-    private var account: Account!
+    private var account: TokenaryAccount!
     private var meta: String!
     private var completion: ((Bool) -> Void)!
     private var peerMeta: PeerMeta?
@@ -34,7 +34,7 @@ class ApproveViewController: UIViewController {
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var cancelButton: UIButton!
     
-    static func with(subject: ApprovalSubject, provider: Web3Provider, account: Account, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
+    static func with(subject: ApprovalSubject, provider: Web3Provider, account: TokenaryAccount, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
         let new = instantiate(ApproveViewController.self, from: .main)
         new.completion = completion
         new.shouldEnableWaiting = provider == .near && subject == .approveTransaction
