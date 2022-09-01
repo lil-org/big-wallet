@@ -64,11 +64,6 @@ final class WalletsManager {
         return wallets.first(where: { $0.id == id })
     }
     
-    // TODO: deprecate
-    func getWallet(ethereumAddress: String) -> TokenaryWallet? {
-        return wallets.first(where: { $0.ethereumAddress?.lowercased() == ethereumAddress.lowercased() })
-    }
-    
     func addWallet(input: String, inputPassword: String?) throws -> TokenaryWallet {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         let name = defaultWalletName
@@ -269,6 +264,39 @@ final class WalletsManager {
         let date = Date().timeIntervalSince1970
         let walletId = "\(uuid)-\(date)"
         return walletId
+    }
+    
+}
+
+extension WalletsManager {
+    
+    func getAccount(coin: CoinType, address: String) -> Account? {
+        return getWalletAndAccount(coin: coin, address: address)?.1
+    }
+    
+    func getPrivateKey(coin: CoinType, address: String) -> PrivateKey? {
+        guard let password = Keychain.shared.password else { return nil }
+        if let (wallet, account) = getWalletAndAccount(coin: coin, address: address) {
+            return try? wallet.privateKey(password: password, account: account)
+        } else {
+            return nil
+        }
+    }
+    
+    func getWalletAndAccount(coin: CoinType, address: String) -> (TokenaryWallet, Account)? {
+        let searchLowercase = coin == .ethereum
+        let needle = searchLowercase ? address.lowercased() : address
+        
+        for wallet in wallets {
+            for account in wallet.accounts where account.coin == coin {
+                let match = searchLowercase ? account.address.lowercased() == needle : account.address == needle
+                if match {
+                    return (wallet, account)
+                }
+            }
+        }
+        
+        return nil
     }
     
 }
