@@ -183,6 +183,10 @@ window.addEventListener("message", function(event) {
             const cancelRequest = event.data;
             document.pendingRequestsIds.delete(cancelRequest.id);
             browser.runtime.sendMessage(cancelRequest);
+        } else if (event.data.subject == "disconnect") {
+            const disconnectRequest = event.data;
+            disconnectRequest.host = window.location.host;
+            browser.runtime.sendMessage(disconnectRequest);
         } else if (event.data.inpageAvailable) {
             document.inpageAvailable = true;
         }

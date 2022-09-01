@@ -14,6 +14,11 @@ window.tokenary.postMessage = (name, id, body, provider) => {
     window.postMessage({direction: "from-page-script", message: message}, "*");
 };
 
+window.tokenary.disconnect = (provider) => {
+    const disconnectRequest = {subject: "disconnect", provider: provider};
+    window.postMessage(disconnectRequest, "*");
+};
+
 // - MARK: Ethereum
 
 window.ethereum = new TokenaryEthereum();
