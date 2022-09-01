@@ -22,7 +22,7 @@ final class WalletsManager {
     private init() {}
 
     func start() {
-        try? load()
+        try? loadWalletsFromKeychain()
     }
     
     #if os(macOS)
@@ -193,7 +193,7 @@ final class WalletsManager {
         try keychain.removeAllWallets()
     }
     
-    private func load() throws {
+    private func loadWalletsFromKeychain() throws {
         let ids = keychain.getAllWalletsIds()
         for id in ids {
             guard let data = keychain.getWalletData(id: id), let key = StoredKey.importJSON(json: data) else { continue }
