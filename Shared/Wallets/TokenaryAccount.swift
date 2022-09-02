@@ -34,7 +34,7 @@ final class TokenaryAccount {
         if let account = derivedAccount {
             return account.coin
         } else {
-            return externalAccount.coin
+            return externalAccount.parentCoin
         }
     }
     
@@ -105,7 +105,8 @@ extension TokenaryAccount: Equatable {
         lhs.address == rhs.address &&
         lhs.derivation == rhs.derivation &&
         lhs.derivationPath == rhs.derivationPath &&
-        lhs.publicKey == rhs.publicKey
+        lhs.publicKey == rhs.publicKey &&
+        lhs.extendedPublicKey == rhs.extendedPublicKey
     }
     
 }
@@ -118,6 +119,7 @@ extension TokenaryAccount: Hashable {
         hasher.combine(derivation)
         hasher.combine(derivationPath)
         hasher.combine(publicKey)
+        hasher.combine(extendedPublicKey)
     }
     
 }

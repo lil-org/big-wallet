@@ -4,8 +4,10 @@ import WalletCore
 
 struct ExternalAccount {
     
+    // TODO: let's have some kind of enum that would allow to keep different kind of data for StarkNet
+    
     let address: String
-    let coin: CoinType
+    let parentCoin: CoinType
     let parentDerivation: Derivation
     let parentDerivationPath: String
     let parentPublicKey: String
@@ -17,7 +19,7 @@ struct ExternalAccount {
 
 extension ExternalAccount: Codable {
     private enum CodingKeys: String, CodingKey {
-        case coin
+        case parentCoin
         case address
         case parentDerivation
         case parentDerivationPath
@@ -28,7 +30,7 @@ extension ExternalAccount: Codable {
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(coin.rawValue, forKey: .coin)
+        try container.encode(parentCoin.rawValue, forKey: .parentCoin)
         try container.encode(address, forKey: .address)
         try container.encode(parentDerivation.rawValue, forKey: .parentDerivation)
         try container.encode(parentDerivationPath, forKey: .parentDerivationPath)
@@ -39,7 +41,7 @@ extension ExternalAccount: Codable {
     
     public init(from decoder: Decoder) throws {
         let container               = try decoder.container(keyedBy: CodingKeys.self)
-        let rawCoin                 = try container.decode(UInt32.self, forKey: .coin)
+        let rawCoin                 = try container.decode(UInt32.self, forKey: .parentCoin)
         let address                 = try container.decode(String.self, forKey: .address)
         let rawParentDerivation     = try container.decode(UInt32.self, forKey: .parentDerivation)
         let parentDerivationPath    = try container.decode(String.self, forKey: .parentDerivationPath)
@@ -49,7 +51,7 @@ extension ExternalAccount: Codable {
         
         self.init(
             address: address,
-            coin: CoinType(rawValue: rawCoin)!,
+            parentCoin: CoinType(rawValue: rawCoin)!,
             parentDerivation: Derivation(rawValue: rawParentDerivation)!,
             parentDerivationPath: parentDerivationPath,
             parentPublicKey: parentPublicKey,
