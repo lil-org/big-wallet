@@ -5,7 +5,7 @@ import BlockiesSwift
 
 final class TokenaryAccount {
     
-    private let derivedAccount: Account?
+    let derivedAccount: Account?
     private let externalAccount: ExternalAccount!
     
     init(derivedAccount: Account) {

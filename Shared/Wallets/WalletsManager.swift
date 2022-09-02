@@ -19,16 +19,53 @@ final class WalletsManager {
     private let keychain = Keychain.shared
     private(set) var wallets = [TokenaryWallet]()
     
-    // TODO: read from disc and write
-    private lazy var walletsMetadata: WalletsMetadata = {
-        return WalletsMetadata(externalAccounts: [:])
-    }()
+    private let fileManager = FileManager.default
+    private let walletsMetadataURL: URL
+    private var walletsMetadata: WalletsMetadata
 
-    private init() {}
+    private init() {
+        let baseURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: "")
+        let walletsMetadataURL = baseURL.appendingPathComponent("wallets_metadata.json")
+        self.walletsMetadataURL = walletsMetadataURL
+        if fileManager.fileExists(atPath: walletsMetadataURL.path),
+           let data = try? Data(contentsOf: walletsMetadataURL),
+           let walletsMetadata = try? JSONDecoder().decode(WalletsMetadata.self, from: data) {
+            self.walletsMetadata = walletsMetadata
+        } else {
+            self.walletsMetadata = WalletsMetadata()
+        }
+    }
 
     func start() {
-        // TODO: load additional info
-        try? loadWalletsFromKeychain()
+        try? loadWallets()
+        updateWalletsMetadata()
+    }
+    
+    private func updateWalletsMetadata() {
+        for wallet in wallets {
+            // TODO: explicitly check if successfully received external accounts before
+            guard wallet.metadata?.externalAccounts.isEmpty != false else { continue }
+            let nearAccounts = wallet.accounts.compactMap { ($0.isDerived && $0.coin == .near) ? $0 : nil }
+            for account in nearAccounts {
+                guard let derivedAccount = account.derivedAccount else { continue }
+                Near.shared.getAccountIds(implicitAccountId: account.address) { [weak self] names in
+                    guard let names = names, !names.isEmpty else { return }
+                    let externalAccounts = names.map { ExternalAccount(parentAccount: derivedAccount, nearName: $0, isHidden: false) }
+                    var metadata = self?.walletsMetadata.forWallet[wallet.id] ?? WalletMetadata()
+                    metadata.externalAccounts = externalAccounts // TODO: should not override external accounts for other networks
+                    wallet.updateMetadata(metadata)
+                    wallet.updateAccounts()
+                    self?.walletsMetadata.forWallet[wallet.id] = metadata
+                    try? self?.saveWalletsMetadata()
+                    self?.postWalletsChangedNotification()
+                }
+            }
+        }
+    }
+    
+    private func saveWalletsMetadata() throws {
+        let data = try JSONEncoder().encode(walletsMetadata)
+        try data.write(to: walletsMetadataURL)
     }
     
     #if os(macOS)
@@ -106,7 +143,7 @@ final class WalletsManager {
     private func createWallet(name: String, password: String) throws -> TokenaryWallet {
         let key = StoredKey(name: name, password: Data(password.utf8))
         let id = makeNewWalletId()
-        let wallet = TokenaryWallet(id: id, key: key)
+        let wallet = TokenaryWallet(id: id, key: key, metadata: nil)
         for coinDerivation in CoinDerivation.enabledByDefaultCoinDerivations {
             try wallet.createAccount(password: password, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
         }
@@ -133,7 +170,7 @@ final class WalletsManager {
     private func importPrivateKey(_ privateKey: PrivateKey, name: String, password: String, coin: CoinType, onlyToKeychain: Bool) throws -> TokenaryWallet {
         guard let newKey = StoredKey.importPrivateKey(privateKey: privateKey.data, name: name, password: Data(password.utf8), coin: coin) else { throw KeyStore.Error.invalidKey }
         let id = makeNewWalletId()
-        let wallet = TokenaryWallet(id: id, key: newKey)
+        let wallet = TokenaryWallet(id: id, key: newKey, metadata: nil)
         try wallet.createAccount(password: password, coin: coin)
         wallet.updateAccounts()
         if !onlyToKeychain {
@@ -147,7 +184,7 @@ final class WalletsManager {
         let coinDerivations = CoinDerivation.enabledByDefaultCoinDerivations
         guard let key = StoredKey.importHDWallet(mnemonic: mnemonic, name: name, password: Data(encryptPassword.utf8), coin: coinDerivations[0].coin) else { throw KeyStore.Error.invalidMnemonic }
         let id = makeNewWalletId()
-        let wallet = TokenaryWallet(id: id, key: key)
+        let wallet = TokenaryWallet(id: id, key: key, metadata: nil)
         
         for coinDerivation in coinDerivations {
             try wallet.createAccount(password: encryptPassword, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
@@ -198,11 +235,11 @@ final class WalletsManager {
         try keychain.removeAllWallets()
     }
     
-    private func loadWalletsFromKeychain() throws {
+    private func loadWallets() throws {
         let ids = keychain.getAllWalletsIds()
         for id in ids {
             guard let data = keychain.getWalletData(id: id), let key = StoredKey.importJSON(json: data) else { continue }
-            let wallet = TokenaryWallet(id: id, key: key)
+            let wallet = TokenaryWallet(id: id, key: key, metadata: walletsMetadata.forWallet[id])
             wallets.append(wallet)
         }
     }

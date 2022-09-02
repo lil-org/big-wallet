@@ -4,16 +4,43 @@ import WalletCore
 
 struct ExternalAccount {
     
-    // TODO: let's have some kind of enum that would allow to keep different kind of data for StarkNet
+    // TODO: enum that would allow to keep different kinds of data for StarkNet / NEAR / etc.
+    // TODO: keep parent account itself here
     
-    let address: String
+    let address: String // TODO: keep parent address as well
     let parentCoin: CoinType
     let parentDerivation: Derivation
     let parentDerivationPath: String
     let parentPublicKey: String
     let parentExtendedPublicKey: String
     
-    let isHidden: Bool
+    var isHidden: Bool
+    
+    init(parentAccount: Account, nearName: String, isHidden: Bool) {
+        self.address = nearName
+        self.parentCoin = parentAccount.coin
+        self.parentDerivation = parentAccount.derivation
+        self.parentDerivationPath = parentAccount.derivationPath
+        self.parentPublicKey = parentAccount.publicKey
+        self.parentExtendedPublicKey = parentAccount.extendedPublicKey
+        self.isHidden = isHidden
+    }
+    
+    init(address: String,
+         parentCoin: CoinType,
+         parentDerivation: Derivation,
+         parentDerivationPath: String,
+         parentPublicKey: String,
+         parentExtendedPublicKey: String,
+         isHidden: Bool) {
+        self.address = address
+        self.parentCoin = parentCoin
+        self.parentDerivation = parentDerivation
+        self.parentDerivationPath = parentDerivationPath
+        self.parentPublicKey = parentPublicKey
+        self.parentExtendedPublicKey = parentExtendedPublicKey
+        self.isHidden = isHidden
+    }
     
 }
 

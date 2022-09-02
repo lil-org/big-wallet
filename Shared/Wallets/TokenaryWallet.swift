@@ -8,21 +8,30 @@ final class TokenaryWallet {
 
     let id: String
     var key: StoredKey
+    private(set) var metadata: WalletMetadata?
     
     var isMnemonic: Bool {
         return key.isMnemonic
     }
 
-    var accounts = [TokenaryAccount]()
+    private(set) var accounts = [TokenaryAccount]()
     
-    init(id: String, key: StoredKey) {
+    init(id: String, key: StoredKey, metadata: WalletMetadata?) {
         self.id = id
         self.key = key
+        self.metadata = metadata
         updateAccounts()
     }
 
+    func updateMetadata(_ metadata: WalletMetadata) {
+        self.metadata = metadata
+    }
+    
     func updateAccounts() {
         accounts = (0..<key.accountCount).compactMap({ key.account(index: $0) }).map { TokenaryAccount(derivedAccount: $0) }
+        if let externalAccounts = metadata?.externalAccounts {
+            accounts.append(contentsOf: externalAccounts.map { TokenaryAccount(externalAccount: $0) })
+        }
     }
     
     func createAccount(password: String, coin: CoinType) throws {

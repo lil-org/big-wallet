@@ -13,6 +13,12 @@ struct WalletsMetadata: Codable {
 }
 
 struct WalletMetadata: Codable {
+    // TODO: keep ens / custom accounts names here as well
+    
     var externalAccounts: [ExternalAccount]
-    // TODO: how are we gona keep ens / custom account names here?
+    
+    init() {
+        self.externalAccounts = []
+    }
+    
 }
