@@ -12,6 +12,10 @@ final class TokenaryAccount {
         self.derivedAccount = derivedAccount
     }
     
+    var isDerived: Bool {
+        return derivedAccount != nil
+    }
+    
     var address: String {
         if let account = derivedAccount {
             return account.address
@@ -44,6 +48,7 @@ final class TokenaryAccount {
             return account.derivation
         } else {
             // TODO: return additionally stored value
+            // for now it should just copy Derivation of parent Account
             return .custom
         }
     }

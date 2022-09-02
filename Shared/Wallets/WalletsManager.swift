@@ -233,22 +233,24 @@ final class WalletsManager {
         guard var privateKeyData = wallet.key.decryptPrivateKey(password: Data(password.utf8)) else { throw KeyStore.Error.invalidPassword }
         defer { privateKeyData.resetBytes(in: 0..<privateKeyData.count) }
         
-        // TODO: важно, чтобы здесь не вывалился некорректный CoinDerivation кастомного аккаунта, чтобы не пытались импортнуть то, чего не было.
-        let coinDerivations = wallet.accounts.map { CoinDerivation(coin: $0.coin, derivation: $0.derivation) }
-        guard !coinDerivations.isEmpty else { throw KeyStore.Error.accountNotFound }
-        let firstCoin = coinDerivations[0].coin
+        let coinDerivations = wallet.accounts.compactMap { $0.isDerived ? CoinDerivation(coin: $0.coin, derivation: $0.derivation) : nil }
+        let initialCoin = coinDerivations.first?.coin ?? .ethereum
+        
         if let mnemonic = checkMnemonic(privateKeyData),
-           let key = StoredKey.importHDWallet(mnemonic: mnemonic, name: newName, password: Data(newPassword.utf8), coin: firstCoin) {
+           let key = StoredKey.importHDWallet(mnemonic: mnemonic, name: newName, password: Data(newPassword.utf8), coin: initialCoin) {
             wallets[index].key = key
-        } else if let key = StoredKey.importPrivateKey(
-                privateKey: privateKeyData, name: newName, password: Data(newPassword.utf8), coin: firstCoin) {
+        } else if let key = StoredKey.importPrivateKey(privateKey: privateKeyData, name: newName, password: Data(newPassword.utf8), coin: initialCoin) {
             wallets[index].key = key
         } else {
             throw KeyStore.Error.invalidKey
         }
         
-        for coinDerivation in coinDerivations {
-            try wallets[index].createAccount(password: newPassword, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
+        if coinDerivations.isEmpty {
+            wallets[index].key.removeAccountForCoin(coin: initialCoin)
+        } else {
+            for coinDerivation in coinDerivations {
+                try wallets[index].createAccount(password: newPassword, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
+            }
         }
         
         wallets[index].updateAccounts()
