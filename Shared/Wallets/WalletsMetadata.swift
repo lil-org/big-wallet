@@ -4,6 +4,15 @@ import Foundation
 
 struct WalletsMetadata: Codable {
     
-    var externalAccounts: [String: [ExternalAccount]]
+    var forWallet: [String: WalletMetadata]
     
+    init() {
+        self.forWallet = [:]
+    }
+    
+}
+
+struct WalletMetadata: Codable {
+    var externalAccounts: [ExternalAccount]
+    // TODO: how are we gona keep ens / custom account names here?
 }
