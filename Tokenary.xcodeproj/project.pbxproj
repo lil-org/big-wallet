@@ -77,6 +77,10 @@
 		2C2AA1D828AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D428AFB1AD00E35DBF /* MultipleResponseToExtension.swift */; };
 		2C3024FC28C1193100C304ED /* TokenaryAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3024FB28C1193100C304ED /* TokenaryAccount.swift */; };
 		2C3024FD28C1193100C304ED /* TokenaryAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3024FB28C1193100C304ED /* TokenaryAccount.swift */; };
+		2C3024FF28C2355500C304ED /* ExternalAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3024FE28C2355500C304ED /* ExternalAccount.swift */; };
+		2C30250028C2355500C304ED /* ExternalAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3024FE28C2355500C304ED /* ExternalAccount.swift */; };
+		2C30250228C2377A00C304ED /* WalletsMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C30250128C2377A00C304ED /* WalletsMetadata.swift */; };
+		2C30250328C2377A00C304ED /* WalletsMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C30250128C2377A00C304ED /* WalletsMetadata.swift */; };
 		2C3B7F022756A08600931264 /* Identifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3B7F012756A08600931264 /* Identifiers.swift */; };
 		2C40379428199110004C7263 /* Solana.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C40379328199110004C7263 /* Solana.swift */; };
 		2C40379528199110004C7263 /* Solana.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C40379328199110004C7263 /* Solana.swift */; };
@@ -313,6 +317,8 @@
 		2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecificWalletAccount.swift; sourceTree = "<group>"; };
 		2C2AA1D428AFB1AD00E35DBF /* MultipleResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipleResponseToExtension.swift; sourceTree = "<group>"; };
 		2C3024FB28C1193100C304ED /* TokenaryAccount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenaryAccount.swift; sourceTree = "<group>"; };
+		2C3024FE28C2355500C304ED /* ExternalAccount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalAccount.swift; sourceTree = "<group>"; };
+		2C30250128C2377A00C304ED /* WalletsMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsMetadata.swift; sourceTree = "<group>"; };
 		2C3B7F012756A08600931264 /* Identifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Identifiers.swift; sourceTree = "<group>"; };
 		2C40379328199110004C7263 /* Solana.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Solana.swift; sourceTree = "<group>"; };
 		2C40708E27667A6600AB3D55 /* MultilineLabelTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultilineLabelTableViewCell.swift; sourceTree = "<group>"; };
@@ -859,6 +865,8 @@
 				2CD0668926B213E500728C20 /* WalletsManager.swift */,
 				2CD0668B26B2142000728C20 /* TokenaryWallet.swift */,
 				2C3024FB28C1193100C304ED /* TokenaryAccount.swift */,
+				2C30250128C2377A00C304ED /* WalletsMetadata.swift */,
+				2C3024FE28C2355500C304ED /* ExternalAccount.swift */,
 				2C4768AA2826CA63005E8D4D /* CoinDerivation.swift */,
 			);
 			path = Wallets;
@@ -1359,6 +1367,7 @@
 				2C9B7735283FBA18008C191C /* UInt2x.swift in Sources */,
 				2C8A09C6267513FC00993638 /* Agent.swift in Sources */,
 				2C8A09D42675184700993638 /* Window.swift in Sources */,
+				2C30250228C2377A00C304ED /* WalletsMetadata.swift in Sources */,
 				2C264BD527B5806200234393 /* Web3Provider.swift in Sources */,
 				2C86A267282D1F220028EA11 /* NearResponseToExtension.swift in Sources */,
 				2C264BC627B2F2F400234393 /* SolanaSafariRequest.swift in Sources */,
@@ -1366,6 +1375,7 @@
 				2C9F0B6526BDC9AF008FA3D6 /* EthereumNetwork.swift in Sources */,
 				2C773F62274523DC007B04E7 /* ResponseToExtension.swift in Sources */,
 				2C208A9F26813408005BA500 /* Secrets.swift in Sources */,
+				2C3024FF28C2355500C304ED /* ExternalAccount.swift in Sources */,
 				2CC8946F269A2E8C00879245 /* SessionStorage.swift in Sources */,
 				0DC850E726B73A5900809E82 /* AuthenticationReason.swift in Sources */,
 				2C4768AB2826CA63005E8D4D /* CoinDerivation.swift in Sources */,
@@ -1455,10 +1465,12 @@
 				2CF255B0275A492100AE54B9 /* Secrets.swift in Sources */,
 				2CC8C5A22767D3B30083FB1B /* GasPriceSliderTableViewCell.swift in Sources */,
 				2CC6EF0D275E64810040CC62 /* UIViewController.swift in Sources */,
+				2C30250328C2377A00C304ED /* WalletsMetadata.swift in Sources */,
 				2C264BE227B5AC6000234393 /* SolanaResponseToExtension.swift in Sources */,
 				2C264BDD27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */,
 				2CF255A9275A48BB00AE54B9 /* Keychain.swift in Sources */,
 				2CF255A7275A48BB00AE54B9 /* PriceService.swift in Sources */,
+				2C30250028C2355500C304ED /* ExternalAccount.swift in Sources */,
 				2CF25598275A46D600AE54B9 /* Strings.swift in Sources */,
 				2C4768B52826ED83005E8D4D /* CoinType.swift in Sources */,
 				2CF255AE275A48CF00AE54B9 /* Transaction.swift in Sources */,

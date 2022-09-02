@@ -18,6 +18,11 @@ final class WalletsManager {
     static let shared = WalletsManager()
     private let keychain = Keychain.shared
     private(set) var wallets = [TokenaryWallet]()
+    
+    // TODO: read from disc and write
+    private lazy var walletsMetadata: WalletsMetadata = {
+        return WalletsMetadata(externalAccounts: [:])
+    }()
 
     private init() {}
 

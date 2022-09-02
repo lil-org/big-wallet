@@ -6,10 +6,16 @@ import BlockiesSwift
 final class TokenaryAccount {
     
     private let derivedAccount: Account?
+    private let externalAccount: ExternalAccount!
     
-    init(derivedAccount: Account?) {
-        // TODO: be able to create non derived account as well
+    init(derivedAccount: Account) {
         self.derivedAccount = derivedAccount
+        self.externalAccount = nil
+    }
+    
+    init(externalAccount: ExternalAccount) {
+        self.derivedAccount = nil
+        self.externalAccount = externalAccount
     }
     
     var isDerived: Bool {
@@ -20,8 +26,7 @@ final class TokenaryAccount {
         if let account = derivedAccount {
             return account.address
         } else {
-            // TODO: return additionally stored value
-            return ""
+            return externalAccount.address
         }
     }
     
@@ -29,8 +34,7 @@ final class TokenaryAccount {
         if let account = derivedAccount {
             return account.coin
         } else {
-            // TODO: return additionally stored value
-            return CoinType.near
+            return externalAccount.coin
         }
     }
     
@@ -38,8 +42,7 @@ final class TokenaryAccount {
         if let account = derivedAccount {
             return account.derivationPath
         } else {
-            // TODO: return additionally stored value
-            return ""
+            return externalAccount.parentDerivationPath
         }
     }
     
@@ -47,9 +50,7 @@ final class TokenaryAccount {
         if let account = derivedAccount {
             return account.derivation
         } else {
-            // TODO: return additionally stored value
-            // for now it should just copy Derivation of parent Account
-            return .custom
+            return externalAccount.parentDerivation
         }
     }
     
@@ -57,12 +58,23 @@ final class TokenaryAccount {
         if let account = derivedAccount {
             return account.publicKey
         } else {
-            // TODO: return additionally stored value
-            return ""
+            return externalAccount.parentPublicKey
+        }
+    }
+    
+    var extendedPublicKey: String {
+        if let account = derivedAccount {
+            return account.extendedPublicKey
+        } else {
+            return externalAccount.parentExtendedPublicKey
         }
     }
     
     var shortAddress: String {
+        guard isDerived else {
+            return address
+        }
+        
         let dropFirstCount: Int
         switch coin {
         case .ethereum:
