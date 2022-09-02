@@ -124,9 +124,13 @@ class TokenaryNear extends EventEmitter {
             
             this.pendingPayloads = [];
         } else if ("account" in response) {
+            const changingAccount = this.accountId != null && this.accountId != response.account;
             this.accountId = response.account;
             this.sendResponse(id, {accessKey: true});
             this.validateNearAccount(response.account);
+            if (changingAccount) {
+                this.emit("accountsChanged", [this.accountId]);
+            }
         } else {
             if ("response" in response) {
                 response.response = JSON.parse(response.response);
