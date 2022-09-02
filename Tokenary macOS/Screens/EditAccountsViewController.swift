@@ -30,6 +30,7 @@ class EditAccountsViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        // TODO: this list will include additional named accounts
         initialDerivations = wallet.accounts.map { CoinDerivation(coin: $0.coin, derivation: $0.derivation) }
         cellModels = CoinDerivation.supportedCoinDerivations.map { coinDerivation in
             let isEnabled = initialDerivations.contains(coinDerivation)

@@ -31,6 +31,7 @@ class EditAccountsViewController: UIViewController {
         navigationItem.largeTitleDisplayMode = .always
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(dismissAnimated))
         
+        // TODO: this list will include additional named accounts
         initialDerivations = wallet.accounts.map { CoinDerivation(coin: $0.coin, derivation: $0.derivation) }
         cellModels = CoinDerivation.supportedCoinDerivations.map { coinDerivation in
             let isEnabled = initialDerivations.contains(coinDerivation)
