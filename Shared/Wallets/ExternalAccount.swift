@@ -11,6 +11,8 @@ struct ExternalAccount {
     let parentPublicKey: String
     let parentExtendedPublicKey: String
     
+    let isHidden: Bool
+    
 }
 
 extension ExternalAccount: Codable {
@@ -21,6 +23,7 @@ extension ExternalAccount: Codable {
         case parentDerivationPath
         case parentPublicKey
         case parentExtendedPublicKey
+        case isHidden
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -31,6 +34,7 @@ extension ExternalAccount: Codable {
         try container.encode(parentDerivationPath, forKey: .parentDerivationPath)
         try container.encode(parentPublicKey, forKey: .parentPublicKey)
         try container.encode(parentExtendedPublicKey, forKey: .parentExtendedPublicKey)
+        try container.encode(isHidden, forKey: .isHidden)
     }
     
     public init(from decoder: Decoder) throws {
@@ -41,6 +45,7 @@ extension ExternalAccount: Codable {
         let parentDerivationPath    = try container.decode(String.self, forKey: .parentDerivationPath)
         let parentPublicKey         = try container.decode(String.self, forKey: .parentPublicKey)
         let parentExtendedPublicKey = try container.decode(String.self, forKey: .parentExtendedPublicKey)
+        let isHidden                = try container.decode(Bool.self, forKey: .isHidden)
         
         self.init(
             address: address,
@@ -48,7 +53,8 @@ extension ExternalAccount: Codable {
             parentDerivation: Derivation(rawValue: rawParentDerivation)!,
             parentDerivationPath: parentDerivationPath,
             parentPublicKey: parentPublicKey,
-            parentExtendedPublicKey: parentExtendedPublicKey
+            parentExtendedPublicKey: parentExtendedPublicKey,
+            isHidden: isHidden
         )
     }
 }
