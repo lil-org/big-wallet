@@ -23,12 +23,16 @@ class Near {
     }
     
     // Does not return implicit accountId if it is not initialized.
-    func getAccountIds(implicitAccountId: String) {
+    func getAccountIds(implicitAccountId: String, completion: @escaping ([String]?) -> Void) {
         guard let publicKey = publicKey(implicitAccountId: implicitAccountId),
               let url = URL(string: "https://api.kitwallet.app/publicKey/\(publicKey)/accounts") else { return }
         let dataTask = urlSession.dataTask(with: url) { data, _, _ in
             if let data = data, let result = try? JSONSerialization.jsonObject(with: data) as? [String] {
-                print(result)
+                DispatchQueue.main.async {
+                    completion(result.filter { $0 != implicitAccountId })
+                }
+            } else {
+                completion(nil)
             }
         }
         dataTask.resume()
