@@ -30,7 +30,7 @@ final class TokenaryWallet {
     func updateAccounts() {
         accounts = (0..<key.accountCount).compactMap({ key.account(index: $0) }).map { TokenaryAccount(derivedAccount: $0) }
         if let externalAccounts = metadata?.externalAccounts {
-            accounts.append(contentsOf: externalAccounts.map { TokenaryAccount(externalAccount: $0) })
+            accounts.append(contentsOf: externalAccounts.compactMap { $0.isHidden ? nil : TokenaryAccount(externalAccount: $0) })
         }
     }
     

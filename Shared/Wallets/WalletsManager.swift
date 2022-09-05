@@ -264,11 +264,19 @@ final class WalletsManager {
     
     func update(wallet: TokenaryWallet, removeAccounts toRemove: [TokenaryAccount]) throws {
         for account in toRemove {
-            wallet.key.removeAccountForCoinDerivationPath(coin: account.coin, derivationPath: account.derivationPath)
+            if account.isDerived {
+                wallet.key.removeAccountForCoinDerivationPath(coin: account.coin, derivationPath: account.derivationPath)
+            } else if var metadata = walletsMetadata.forWallet[wallet.id],
+                      let index = metadata.externalAccounts.firstIndex(where: { $0.address == account.address }) {
+                metadata.externalAccounts[index].isHidden = true
+                walletsMetadata.forWallet[wallet.id] = metadata
+                wallet.updateMetadata(metadata)
+            }
         }
         
         wallet.updateAccounts()
         try save(wallet: wallet, isUpdate: true)
+        try saveWalletsMetadata()
     }
     
     private func update(wallet: TokenaryWallet, password: String, newPassword: String, newName: String) throws {
