@@ -219,20 +219,22 @@ final class WalletsManager {
     }
 
     func delete(wallet: TokenaryWallet) throws {
-        // TODO: delete additional wallet info
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         guard let index = wallets.firstIndex(of: wallet) else { throw KeyStore.Error.accountNotFound }
         guard var privateKey = wallet.key.decryptPrivateKey(password: Data(password.utf8)) else { throw KeyStore.Error.invalidKey }
         defer { privateKey.resetBytes(in: 0..<privateKey.count) }
         wallets.remove(at: index)
         try keychain.removeWallet(id: wallet.id)
+        walletsMetadata.forWallet.removeValue(forKey: wallet.id)
         postWalletsChangedNotification()
+        try saveWalletsMetadata()
     }
 
     func destroy() throws {
-        // TODO: delete additional info
+        walletsMetadata = WalletsMetadata()
         wallets.removeAll(keepingCapacity: false)
         try keychain.removeAllWallets()
+        try saveWalletsMetadata()
     }
     
     private func loadWallets() throws {
@@ -260,7 +262,6 @@ final class WalletsManager {
         try save(wallet: wallet, isUpdate: true)
     }
     
-    // TODO: support removing additional accounts
     func update(wallet: TokenaryWallet, removeAccounts toRemove: [TokenaryAccount]) throws {
         for account in toRemove {
             wallet.key.removeAccountForCoinDerivationPath(coin: account.coin, derivationPath: account.derivationPath)
@@ -300,7 +301,6 @@ final class WalletsManager {
     }
 
     private func save(wallet: TokenaryWallet, isUpdate: Bool) throws {
-        // TODO: should save additional wallet info as well (additional accounts)
         guard let data = wallet.key.exportJSON() else { throw KeyStore.Error.invalidPassword }
         if isUpdate {
             try keychain.updateWallet(id: wallet.id, data: data)
