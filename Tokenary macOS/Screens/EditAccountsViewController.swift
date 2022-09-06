@@ -51,6 +51,8 @@ class EditAccountsViewController: NSViewController {
             }
         }
         
+        // TODO: update named accounts as well
+        
         if newDerivations != initialDerivations {
             do {
                 try walletsManager.update(wallet: wallet, coinDerivations: newDerivations)
