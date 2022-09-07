@@ -247,7 +247,7 @@ final class WalletsManager {
     }
     
     // TODO: support updating not only coin derivations, but additional accounts as well
-    func update(wallet: TokenaryWallet, coinDerivations: [CoinDerivation]) throws {
+    func update(wallet: TokenaryWallet, coinDerivations: [CoinDerivation], externalAccounts: [ExternalAccount]) throws {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         
         for account in wallet.accounts {
