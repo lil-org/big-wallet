@@ -98,4 +98,5 @@ public enum CoinType: UInt32, CaseIterable {
     case kavaEvm = 10002222
     case klaytn = 10008217
     case meter = 18000
+    case okxchain = 996
 }

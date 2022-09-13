@@ -15,6 +15,7 @@ public enum EthereumChainID: UInt32, CaseIterable {
     case callisto = 820
     case tomochain = 88
     case polygon = 137
+    case okc = 66
     case thundertoken = 108
     case gochain = 60
     case meter = 82

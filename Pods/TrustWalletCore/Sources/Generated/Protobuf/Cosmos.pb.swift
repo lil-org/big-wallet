@@ -279,6 +279,14 @@ public struct TW_Cosmos_Proto_Message {
     set {messageOneof = .wasmExecuteContractGeneric(newValue)}
   }
 
+  public var signDirectMessage: TW_Cosmos_Proto_Message.SignDirect {
+    get {
+      if case .signDirectMessage(let v)? = messageOneof {return v}
+      return TW_Cosmos_Proto_Message.SignDirect()
+    }
+    set {messageOneof = .signDirectMessage(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public enum OneOf_MessageOneof: Equatable {
@@ -296,6 +304,7 @@ public struct TW_Cosmos_Proto_Message {
     case wasmExecuteContractTransferMessage(TW_Cosmos_Proto_Message.WasmExecuteContractTransfer)
     case wasmExecuteContractSendMessage(TW_Cosmos_Proto_Message.WasmExecuteContractSend)
     case wasmExecuteContractGeneric(TW_Cosmos_Proto_Message.WasmExecuteContractGeneric)
+    case signDirectMessage(TW_Cosmos_Proto_Message.SignDirect)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_Cosmos_Proto_Message.OneOf_MessageOneof, rhs: TW_Cosmos_Proto_Message.OneOf_MessageOneof) -> Bool {
@@ -357,6 +366,10 @@ public struct TW_Cosmos_Proto_Message {
       }()
       case (.wasmExecuteContractGeneric, .wasmExecuteContractGeneric): return {
         guard case .wasmExecuteContractGeneric(let l) = lhs, case .wasmExecuteContractGeneric(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.signDirectMessage, .signDirectMessage): return {
+        guard case .signDirectMessage(let l) = lhs, case .signDirectMessage(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
       default: return false
@@ -713,6 +726,23 @@ public struct TW_Cosmos_Proto_Message {
     public init() {}
   }
 
+  /// For signing an already serialized transaction. Account number and chain ID must be set outside.
+  public struct SignDirect {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    /// The prepared serialized TxBody
+    public var bodyBytes: Data = Data()
+
+    /// The prepared serialized AuthInfo
+    public var authInfoBytes: Data = Data()
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
   public init() {}
 }
 
@@ -929,6 +959,7 @@ extension TW_Cosmos_Proto_Message: SwiftProtobuf.Message, SwiftProtobuf._Message
     12: .standard(proto: "wasm_execute_contract_transfer_message"),
     13: .standard(proto: "wasm_execute_contract_send_message"),
     14: .standard(proto: "wasm_execute_contract_generic"),
+    15: .standard(proto: "sign_direct_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1119,6 +1150,19 @@ extension TW_Cosmos_Proto_Message: SwiftProtobuf.Message, SwiftProtobuf._Message
           self.messageOneof = .wasmExecuteContractGeneric(v)
         }
       }()
+      case 15: try {
+        var v: TW_Cosmos_Proto_Message.SignDirect?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .signDirectMessage(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .signDirectMessage(v)
+        }
+      }()
       default: break
       }
     }
@@ -1185,6 +1229,10 @@ extension TW_Cosmos_Proto_Message: SwiftProtobuf.Message, SwiftProtobuf._Message
     case .wasmExecuteContractGeneric?: try {
       guard case .wasmExecuteContractGeneric(let v)? = self.messageOneof else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 14)
+    }()
+    case .signDirectMessage?: try {
+      guard case .signDirectMessage(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 15)
     }()
     case nil: break
     }
@@ -1933,6 +1981,44 @@ extension TW_Cosmos_Proto_Message.RawJSON: SwiftProtobuf.Message, SwiftProtobuf.
   public static func ==(lhs: TW_Cosmos_Proto_Message.RawJSON, rhs: TW_Cosmos_Proto_Message.RawJSON) -> Bool {
     if lhs.type != rhs.type {return false}
     if lhs.value != rhs.value {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cosmos_Proto_Message.SignDirect: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Cosmos_Proto_Message.protoMessageName + ".SignDirect"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "body_bytes"),
+    2: .standard(proto: "auth_info_bytes"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.bodyBytes) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.authInfoBytes) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.bodyBytes.isEmpty {
+      try visitor.visitSingularBytesField(value: self.bodyBytes, fieldNumber: 1)
+    }
+    if !self.authInfoBytes.isEmpty {
+      try visitor.visitSingularBytesField(value: self.authInfoBytes, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cosmos_Proto_Message.SignDirect, rhs: TW_Cosmos_Proto_Message.SignDirect) -> Bool {
+    if lhs.bodyBytes != rhs.bodyBytes {return false}
+    if lhs.authInfoBytes != rhs.authInfoBytes {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

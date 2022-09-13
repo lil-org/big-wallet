@@ -103,7 +103,7 @@ public final class PublicKey {
         return TWPublicKeyVerifyAsDER(rawValue, signatureData, messageData)
     }
 
-    public func verifySchnorr(signature: Data, message: Data) -> Bool {
+    public func verifyZilliqaSchnorr(signature: Data, message: Data) -> Bool {
         let signatureData = TWDataCreateWithNSData(signature)
         defer {
             TWDataDelete(signatureData)
@@ -112,7 +112,7 @@ public final class PublicKey {
         defer {
             TWDataDelete(messageData)
         }
-        return TWPublicKeyVerifySchnorr(rawValue, signatureData, messageData)
+        return TWPublicKeyVerifyZilliqaSchnorr(rawValue, signatureData, messageData)
     }
 
 }

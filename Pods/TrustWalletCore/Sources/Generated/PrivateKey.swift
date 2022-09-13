@@ -71,8 +71,8 @@ public final class PrivateKey {
         return PublicKey(rawValue: TWPrivateKeyGetPublicKeyEd25519Blake2b(rawValue))
     }
 
-    public func getPublicKeyEd25519Extended() -> PublicKey {
-        return PublicKey(rawValue: TWPrivateKeyGetPublicKeyEd25519Extended(rawValue))
+    public func getPublicKeyEd25519Cardano() -> PublicKey {
+        return PublicKey(rawValue: TWPrivateKeyGetPublicKeyEd25519Cardano(rawValue))
     }
 
     public func getPublicKeyCurve25519() -> PublicKey {
@@ -97,23 +97,23 @@ public final class PrivateKey {
         return TWDataNSData(result)
     }
 
-    public func signAsDER(digest: Data, curve: Curve) -> Data? {
+    public func signAsDER(digest: Data) -> Data? {
         let digestData = TWDataCreateWithNSData(digest)
         defer {
             TWDataDelete(digestData)
         }
-        guard let result = TWPrivateKeySignAsDER(rawValue, digestData, TWCurve(rawValue: curve.rawValue)) else {
+        guard let result = TWPrivateKeySignAsDER(rawValue, digestData) else {
             return nil
         }
         return TWDataNSData(result)
     }
 
-    public func signSchnorr(message: Data, curve: Curve) -> Data? {
+    public func signZilliqaSchnorr(message: Data) -> Data? {
         let messageData = TWDataCreateWithNSData(message)
         defer {
             TWDataDelete(messageData)
         }
-        guard let result = TWPrivateKeySignSchnorr(rawValue, messageData, TWCurve(rawValue: curve.rawValue)) else {
+        guard let result = TWPrivateKeySignZilliqaSchnorr(rawValue, messageData) else {
             return nil
         }
         return TWDataNSData(result)

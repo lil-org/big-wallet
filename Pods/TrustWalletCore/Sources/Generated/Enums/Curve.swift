@@ -13,7 +13,7 @@ public enum Curve: UInt32, CaseIterable, CustomStringConvertible  {
     case ed25519Blake2bNano = 2
     case curve25519 = 3
     case nist256p1 = 4
-    case ed25519Extended = 5
+    case ed25519ExtendedCardano = 5
 
     public var description: String {
         switch self {
@@ -22,7 +22,7 @@ public enum Curve: UInt32, CaseIterable, CustomStringConvertible  {
         case .ed25519Blake2bNano: return "ed25519-blake2b-nano"
         case .curve25519: return "curve25519"
         case .nist256p1: return "nist256p1"
-        case .ed25519Extended: return "ed25519-cardano-seed"
+        case .ed25519ExtendedCardano: return "ed25519-cardano-seed"
         }
     }
 }

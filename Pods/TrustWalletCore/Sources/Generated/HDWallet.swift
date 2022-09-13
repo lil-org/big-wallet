@@ -124,6 +124,14 @@ public final class HDWallet {
         return PrivateKey(rawValue: TWHDWalletGetKey(rawValue, TWCoinType(rawValue: coin.rawValue), derivationPathString))
     }
 
+    public func getKeyByCurve(curve: Curve, derivationPath: String) -> PrivateKey {
+        let derivationPathString = TWStringCreateWithNSString(derivationPath)
+        defer {
+            TWStringDelete(derivationPathString)
+        }
+        return PrivateKey(rawValue: TWHDWalletGetKeyByCurve(rawValue, TWCurve(rawValue: curve.rawValue), derivationPathString))
+    }
+
     public func getDerivedKey(coin: CoinType, account: UInt32, change: UInt32, address: UInt32) -> PrivateKey {
         return PrivateKey(rawValue: TWHDWalletGetDerivedKey(rawValue, TWCoinType(rawValue: coin.rawValue), account, change, address))
     }
