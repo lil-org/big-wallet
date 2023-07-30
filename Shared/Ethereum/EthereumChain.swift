@@ -134,7 +134,7 @@ enum EthereumChain: Int {
         case .avalancheFuji: return "https://api.avax-test.network/ext/bc/C/rpc"
         case .polygonMumbai: return "https://polygon-mumbai.infura.io/v3/" + Secrets.infura
         case .fantomTestnet: return "https://rpc.testnet.fantom.network/"
-        case .neonDevnet: return "https://proxy.devnet.neonlabs.org/solana"
+        case .neonDevnet: return "https://devnet.neonevm.org/"
         }
     }
     
