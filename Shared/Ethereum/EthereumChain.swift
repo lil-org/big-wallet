@@ -13,6 +13,7 @@ enum EthereumChain: Int {
     case fantomOpera = 250
     case celo = 42220
     case aurora = 1313161554
+    case neon = 245022934
     
     // Testnets
     case arbitrumRinkeby = 421611
@@ -45,7 +46,7 @@ enum EthereumChain: Int {
         }
     }
     
-    static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum, .avalanche, .gnosisChain, .fantomOpera, .celo, .aurora]
+    static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum, .avalanche, .gnosisChain, .fantomOpera, .celo, .aurora, .neon]
     static let allTestnets: [EthereumChain] = [.ethereumRopsten, .ethereumKovan, .ethereumRinkeby, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji, .fantomTestnet, .neonDevnet]
     
     var name: String {
@@ -60,6 +61,7 @@ enum EthereumChain: Int {
         case .fantomOpera: return "Fantom Opera"
         case .celo: return "Celo"
         case .aurora: return "Aurora"
+        case .neon return "Neon"
             
         case .arbitrumRinkeby: return "Arbitrum Rinkeby"
         case .optimisticKovan: return "Optimistic Kovan"
@@ -92,7 +94,7 @@ enum EthereumChain: Int {
             return "FTM"
         case .celo:
             return "CELO"
-        case .neonDevnet:
+        case .neonDevnet, .neon:
             return "NEON"
         }
     }
@@ -122,6 +124,7 @@ enum EthereumChain: Int {
         case .fantomOpera: return "https://rpc.ftm.tools/"
         case .celo: return "https://rpc.ankr.com/celo"
         case .aurora: return "https://mainnet.aurora.dev"
+        case .neon return "https://neon-proxy-mainnet.solana.p2p.org/"
             
         case .arbitrumRinkeby: return "https://rinkeby.arbitrum.io/rpc"
         case .arbitrumKovan: return "https://kovan5.arbitrum.io/rpc"
