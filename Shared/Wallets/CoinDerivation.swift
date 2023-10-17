@@ -8,25 +8,15 @@ struct CoinDerivation: Equatable {
     let derivation: Derivation
     
     var title: String {
-        switch coin {
-        case .solana:
-            return coin.name + (derivation == .default ? " (Trust Wallet)" : "")
-        default:
-            return coin.name
-        }
+        return coin.name
     }
     
     static var enabledByDefaultCoinDerivations = [
-        CoinDerivation(coin: .ethereum, derivation: .default),
-        CoinDerivation(coin: .solana, derivation: .solanaSolana),
-        CoinDerivation(coin: .near, derivation: .default)
+        CoinDerivation(coin: .ethereum, derivation: .default)
     ]
     
     static var supportedCoinDerivations = [
-        CoinDerivation(coin: .ethereum, derivation: .default),
-        CoinDerivation(coin: .solana, derivation: .solanaSolana),
-        CoinDerivation(coin: .solana, derivation: .default),
-        CoinDerivation(coin: .near, derivation: .default)
+        CoinDerivation(coin: .ethereum, derivation: .default)
     ]
     
 }
