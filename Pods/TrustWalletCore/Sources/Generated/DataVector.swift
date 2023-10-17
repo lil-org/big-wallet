@@ -1,4 +1,4 @@
-// Copyright © 2017-2022 Trust Wallet.
+// Copyright © 2017-2023 Trust Wallet.
 //
 // This file is part of Trust. The full Trust copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
@@ -9,8 +9,13 @@
 
 import Foundation
 
+/// A vector of TWData byte arrays
 public final class DataVector {
 
+    /// Retrieve the number of elements
+    ///
+    /// - Parameter dataVector: A non-null Vector of data
+    /// - Returns: the size of the given vector.
     public var size: Int {
         return TWDataVectorSize(rawValue)
     }
@@ -37,6 +42,11 @@ public final class DataVector {
         TWDataVectorDelete(rawValue)
     }
 
+    /// Add an element to a Vector of Data. Element is cloned
+    ///
+    /// - Parameter dataVector: A non-null Vector of data
+    /// - Parameter data: A non-null valid block of data
+    /// - Note: data input parameter must be deleted on its own
     public func add(data: Data) -> Void {
         let dataData = TWDataCreateWithNSData(data)
         defer {
@@ -45,6 +55,12 @@ public final class DataVector {
         return TWDataVectorAdd(rawValue, dataData)
     }
 
+    /// Retrieve the n-th element.
+    ///
+    /// - Parameter dataVector: A non-null Vector of data
+    /// - Parameter index: index element of the vector to be retrieved, need to be < TWDataVectorSize
+    /// - Note: Returned element must be freed with \TWDataDelete
+    /// - Returns: A non-null block of data
     public func get(index: Int) -> Data? {
         guard let result = TWDataVectorGet(rawValue, index) else {
             return nil

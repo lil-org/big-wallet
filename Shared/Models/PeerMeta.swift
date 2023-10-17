@@ -1,7 +1,6 @@
 // Copyright © 2021 Tokenary. All rights reserved.
 
 import Foundation
-import WalletConnect
 
 struct PeerMeta {
     
@@ -10,11 +9,6 @@ struct PeerMeta {
     
     var name: String {
         return title ?? Strings.unknownWebsite
-    }
- 
-    init(wcPeerMeta: WCPeerMeta?) {
-        self.title = wcPeerMeta?.name
-        self.iconURLString = wcPeerMeta?.icons.first
     }
     
     init(title: String?, iconURLString: String?) {

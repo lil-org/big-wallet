@@ -11,5 +11,7 @@
 #include "TWData.h"
 
 typedef TWData *_Nonnull TW_Oasis_Proto_TransferMessage;
+typedef TWData *_Nonnull TW_Oasis_Proto_EscrowMessage;
+typedef TWData *_Nonnull TW_Oasis_Proto_ReclaimEscrowMessage;
 typedef TWData *_Nonnull TW_Oasis_Proto_SigningInput;
 typedef TWData *_Nonnull TW_Oasis_Proto_SigningOutput;

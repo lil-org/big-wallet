@@ -72,6 +72,7 @@ public struct TW_FIO_Proto_Action {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Payload message
   public var messageOneof: TW_FIO_Proto_Action.OneOf_MessageOneof? = nil
 
   public var registerFioAddressMessage: TW_FIO_Proto_Action.RegisterFioAddress {
@@ -116,6 +117,7 @@ public struct TW_FIO_Proto_Action {
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
+  /// Payload message
   public enum OneOf_MessageOneof: Equatable {
     case registerFioAddressMessage(TW_FIO_Proto_Action.RegisterFioAddress)
     case addPubAddressMessage(TW_FIO_Proto_Action.AddPubAddress)
@@ -176,6 +178,7 @@ public struct TW_FIO_Proto_Action {
   }
 
   /// Acion for adding public chain addresses to a FIO name; add_pub_address
+  /// Note: actor is not needed, computed from private key
   public struct AddPubAddress {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -195,7 +198,8 @@ public struct TW_FIO_Proto_Action {
     public init() {}
   }
 
-  /// Action for transfering FIO coins; transfer_tokens_pub_key
+  /// Action for transferring FIO coins; transfer_tokens_pub_key
+  /// Note: actor is not needed, computed from private key
   public struct Transfer {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -216,6 +220,7 @@ public struct TW_FIO_Proto_Action {
   }
 
   /// Action for renewing a FIO name; renew_fio_address
+  /// Note: actor is not needed, computed from private key
   public struct RenewFioAddress {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -236,6 +241,7 @@ public struct TW_FIO_Proto_Action {
   }
 
   /// Action for creating a new payment request; new_funds_request
+  /// Note: actor is not needed, computed from private key
   public struct NewFundsRequest {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -293,50 +299,64 @@ public struct TW_FIO_Proto_ChainParams {
   public init() {}
 }
 
-/// Transaction signing input
+/// Input data necessary to create a signed transaction.
 public struct TW_FIO_Proto_SigningInput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Expiry for this message, in unix time. Can be 0, then it is taken from current time with default expiry
-  public var expiry: UInt32 = 0
+  public var expiry: UInt32 {
+    get {return _storage._expiry}
+    set {_uniqueStorage()._expiry = newValue}
+  }
 
   /// Current parameters of the FIO blockchain
   public var chainParams: TW_FIO_Proto_ChainParams {
-    get {return _chainParams ?? TW_FIO_Proto_ChainParams()}
-    set {_chainParams = newValue}
+    get {return _storage._chainParams ?? TW_FIO_Proto_ChainParams()}
+    set {_uniqueStorage()._chainParams = newValue}
   }
   /// Returns true if `chainParams` has been explicitly set.
-  public var hasChainParams: Bool {return self._chainParams != nil}
+  public var hasChainParams: Bool {return _storage._chainParams != nil}
   /// Clears the value of `chainParams`. Subsequent reads from it will return its default value.
-  public mutating func clearChainParams() {self._chainParams = nil}
+  public mutating func clearChainParams() {_uniqueStorage()._chainParams = nil}
 
-  /// The private key matching the address, needed for signing
-  public var privateKey: Data = Data()
+  /// The secret private key matching the address, used for signing (32 bytes).
+  public var privateKey: Data {
+    get {return _storage._privateKey}
+    set {_uniqueStorage()._privateKey = newValue}
+  }
 
   /// The FIO name of the originating wallet (project-wide constant)
-  public var tpid: String = String()
+  public var tpid: String {
+    get {return _storage._tpid}
+    set {_uniqueStorage()._tpid = newValue}
+  }
 
   /// Context-specific action data
   public var action: TW_FIO_Proto_Action {
-    get {return _action ?? TW_FIO_Proto_Action()}
-    set {_action = newValue}
+    get {return _storage._action ?? TW_FIO_Proto_Action()}
+    set {_uniqueStorage()._action = newValue}
   }
   /// Returns true if `action` has been explicitly set.
-  public var hasAction: Bool {return self._action != nil}
+  public var hasAction: Bool {return _storage._action != nil}
   /// Clears the value of `action`. Subsequent reads from it will return its default value.
-  public mutating func clearAction() {self._action = nil}
+  public mutating func clearAction() {_uniqueStorage()._action = nil}
+
+  /// FIO address of the owner. Ex.: "FIO6m1fMdTpRkRBnedvYshXCxLFiC5suRU8KDfx8xxtXp2hntxpnf"
+  public var ownerPublicKey: String {
+    get {return _storage._ownerPublicKey}
+    set {_uniqueStorage()._ownerPublicKey = newValue}
+  }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _chainParams: TW_FIO_Proto_ChainParams? = nil
-  fileprivate var _action: TW_FIO_Proto_Action? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-/// Transaction signing output
+/// Result containing the signed and encoded transaction.
 public struct TW_FIO_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -347,6 +367,9 @@ public struct TW_FIO_Proto_SigningOutput {
 
   /// Optional error
   public var error: TW_Common_Proto_SigningError = .ok
+
+  /// error code description
+  public var errorMessage: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -869,53 +892,101 @@ extension TW_FIO_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Messa
     3: .standard(proto: "private_key"),
     4: .same(proto: "tpid"),
     5: .same(proto: "action"),
+    6: .standard(proto: "owner_public_key"),
   ]
 
+  fileprivate class _StorageClass {
+    var _expiry: UInt32 = 0
+    var _chainParams: TW_FIO_Proto_ChainParams? = nil
+    var _privateKey: Data = Data()
+    var _tpid: String = String()
+    var _action: TW_FIO_Proto_Action? = nil
+    var _ownerPublicKey: String = String()
+
+    static let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _expiry = source._expiry
+      _chainParams = source._chainParams
+      _privateKey = source._privateKey
+      _tpid = source._tpid
+      _action = source._action
+      _ownerPublicKey = source._ownerPublicKey
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.expiry) }()
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._chainParams) }()
-      case 3: try { try decoder.decodeSingularBytesField(value: &self.privateKey) }()
-      case 4: try { try decoder.decodeSingularStringField(value: &self.tpid) }()
-      case 5: try { try decoder.decodeSingularMessageField(value: &self._action) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularUInt32Field(value: &_storage._expiry) }()
+        case 2: try { try decoder.decodeSingularMessageField(value: &_storage._chainParams) }()
+        case 3: try { try decoder.decodeSingularBytesField(value: &_storage._privateKey) }()
+        case 4: try { try decoder.decodeSingularStringField(value: &_storage._tpid) }()
+        case 5: try { try decoder.decodeSingularMessageField(value: &_storage._action) }()
+        case 6: try { try decoder.decodeSingularStringField(value: &_storage._ownerPublicKey) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if self.expiry != 0 {
-      try visitor.visitSingularUInt32Field(value: self.expiry, fieldNumber: 1)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if _storage._expiry != 0 {
+        try visitor.visitSingularUInt32Field(value: _storage._expiry, fieldNumber: 1)
+      }
+      try { if let v = _storage._chainParams {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+      } }()
+      if !_storage._privateKey.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._privateKey, fieldNumber: 3)
+      }
+      if !_storage._tpid.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._tpid, fieldNumber: 4)
+      }
+      try { if let v = _storage._action {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+      } }()
+      if !_storage._ownerPublicKey.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._ownerPublicKey, fieldNumber: 6)
+      }
     }
-    try { if let v = self._chainParams {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-    } }()
-    if !self.privateKey.isEmpty {
-      try visitor.visitSingularBytesField(value: self.privateKey, fieldNumber: 3)
-    }
-    if !self.tpid.isEmpty {
-      try visitor.visitSingularStringField(value: self.tpid, fieldNumber: 4)
-    }
-    try { if let v = self._action {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_FIO_Proto_SigningInput, rhs: TW_FIO_Proto_SigningInput) -> Bool {
-    if lhs.expiry != rhs.expiry {return false}
-    if lhs._chainParams != rhs._chainParams {return false}
-    if lhs.privateKey != rhs.privateKey {return false}
-    if lhs.tpid != rhs.tpid {return false}
-    if lhs._action != rhs._action {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._expiry != rhs_storage._expiry {return false}
+        if _storage._chainParams != rhs_storage._chainParams {return false}
+        if _storage._privateKey != rhs_storage._privateKey {return false}
+        if _storage._tpid != rhs_storage._tpid {return false}
+        if _storage._action != rhs_storage._action {return false}
+        if _storage._ownerPublicKey != rhs_storage._ownerPublicKey {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -926,6 +997,7 @@ extension TW_FIO_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mess
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "json"),
     2: .same(proto: "error"),
+    3: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -936,6 +1008,7 @@ extension TW_FIO_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mess
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.json) }()
       case 2: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -948,12 +1021,16 @@ extension TW_FIO_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mess
     if self.error != .ok {
       try visitor.visitSingularEnumField(value: self.error, fieldNumber: 2)
     }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_FIO_Proto_SigningOutput, rhs: TW_FIO_Proto_SigningOutput) -> Bool {
     if lhs.json != rhs.json {return false}
     if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

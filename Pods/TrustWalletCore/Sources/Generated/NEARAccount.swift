@@ -1,4 +1,4 @@
-// Copyright © 2017-2022 Trust Wallet.
+// Copyright © 2017-2023 Trust Wallet.
 //
 // This file is part of Trust. The full Trust copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
@@ -9,8 +9,13 @@
 
 import Foundation
 
+/// Represents a NEAR Account name
 public final class NEARAccount {
 
+    /// Returns the user friendly string representation.
+    ///
+    /// - Parameter account: Pointer to a non-null NEAR Account
+    /// - Returns: Non-null string account description
     public var description: String {
         return TWStringNSString(TWNEARAccountDescription(rawValue))
     }

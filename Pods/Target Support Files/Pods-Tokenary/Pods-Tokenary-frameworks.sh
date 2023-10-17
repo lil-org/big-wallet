@@ -18,7 +18,7 @@ echo "mkdir -p ${CONFIGURATION_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}"
 mkdir -p "${CONFIGURATION_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}"
 
 COCOAPODS_PARALLEL_CODE_SIGN="${COCOAPODS_PARALLEL_CODE_SIGN:-false}"
-SWIFT_STDLIB_PATH="${DT_TOOLCHAIN_DIR}/usr/lib/swift/${PLATFORM_NAME}"
+SWIFT_STDLIB_PATH="${TOOLCHAIN_DIR}/usr/lib/swift/${PLATFORM_NAME}"
 BCSYMBOLMAP_DIR="BCSymbolMaps"
 
 
@@ -41,7 +41,7 @@ install_framework()
 
   if [ -L "${source}" ]; then
     echo "Symlinked..."
-    source="$(readlink "${source}")"
+    source="$(readlink -f "${source}")"
   fi
 
   if [ -d "${source}/${BCSYMBOLMAP_DIR}" ]; then
@@ -180,12 +180,9 @@ if [[ "$CONFIGURATION" == "Debug" ]]; then
   install_framework "${BUILT_PRODUCTS_DIR}/BlockiesSwift-macOS/BlockiesSwift.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/CryptoSwift-macOS/CryptoSwift.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/Kingfisher-macOS/Kingfisher.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/PromiseKit.root-CorePromise-Foundation/PromiseKit.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/Starscream-macOS/Starscream.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/SwiftProtobuf-macOS/SwiftProtobuf.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/SwiftyJSON-macOS/SwiftyJSON.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/TrustWalletCore-macOS/WalletCore.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/WalletConnect-macOS/WalletConnect.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/Web3Swift.io-macOS/Web3Swift.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/secp256k1.swift-macOS/secp256k1.framework"
 fi
@@ -194,12 +191,9 @@ if [[ "$CONFIGURATION" == "Release" ]]; then
   install_framework "${BUILT_PRODUCTS_DIR}/BlockiesSwift-macOS/BlockiesSwift.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/CryptoSwift-macOS/CryptoSwift.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/Kingfisher-macOS/Kingfisher.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/PromiseKit.root-CorePromise-Foundation/PromiseKit.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/Starscream-macOS/Starscream.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/SwiftProtobuf-macOS/SwiftProtobuf.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/SwiftyJSON-macOS/SwiftyJSON.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/TrustWalletCore-macOS/WalletCore.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/WalletConnect-macOS/WalletConnect.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/Web3Swift.io-macOS/Web3Swift.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/secp256k1.swift-macOS/secp256k1.framework"
 fi

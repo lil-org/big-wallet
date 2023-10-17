@@ -20,66 +20,91 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+/// Error codes, used in multiple blockchains.
 public enum TW_Common_Proto_SigningError: SwiftProtobuf.Enum {
   public typealias RawValue = Int
 
-  /// OK
+  /// This is the OK case, with value=0
   case ok // = 0
 
-  /// chain-generic, generic
+  /// Chain-generic codes:
+  /// Generic error (used if there is no suitable specific error is adequate)
   case errorGeneral // = 1
+
+  /// Internal error, indicates some very unusual, unexpected case
   case errorInternal // = 2
 
-  /// chain-generic, input
+  /// Chain-generic codes, input related:
+  /// Low balance: the sender balance is not enough to cover the send and other auxiliary amount such as fee, deposit, or minimal balance.
   case errorLowBalance // = 3
 
-  /// Requested amount is zero
+  /// Requested amount is zero, send of 0 makes no sense
   case errorZeroAmountRequested // = 4
+
+  /// One required key is missing (too few or wrong keys are provided)
   case errorMissingPrivateKey // = 5
+
+  /// A private key provided is invalid (e.g. wrong size, usually should be 32 bytes)
   case errorInvalidPrivateKey // = 15
+
+  /// A provided address (e.g. destination address) is invalid
   case errorInvalidAddress // = 16
+
+  /// A provided input UTXO is invalid
   case errorInvalidUtxo // = 17
+
+  /// The amount of an input UTXO is invalid
   case errorInvalidUtxoAmount // = 18
 
-  /// chain-generic, fee
+  /// Chain-generic, fee related:
+  /// Wrong fee is given, probably it is too low to cover minimal fee for the transaction
   case errorWrongFee // = 6
 
-  /// chain-generic, signing
+  /// Chain-generic, signing related:
+  /// General signing error
   case errorSigning // = 7
 
+  /// Resulting transaction is too large
   /// [NEO] Transaction too big, fee in GAS needed or try send by parts
   case errorTxTooBig // = 8
 
-  /// UTXO-chain specific, inputs
+  /// UTXO-chain specific, input related:
+  /// No input UTXOs provided [BTC]
   case errorMissingInputUtxos // = 9
 
   /// Not enough non-dust input UTXOs to cover requested amount (dust UTXOs are filtered out) [BTC]
   case errorNotEnoughUtxos // = 10
 
-  /// UTXO-chain specific, script
+  /// UTXO-chain specific, script related:
+  /// [BTC] Missing required redeem script
   case errorScriptRedeem // = 11
 
-  /// [BTC] Invalid output script
+  /// [BTC] Invalid required output script 
   case errorScriptOutput // = 12
 
   /// [BTC] Unrecognized witness program
   case errorScriptWitnessProgram // = 13
 
-  /// e.g. [XRP] Invalid tag
+  /// Invalid memo, e.g. [XRP] Invalid tag
   case errorInvalidMemo // = 14
 
-  /// e.g. Invalid input data
+  /// Some input field cannot be parsed
   case errorInputParse // = 19
 
-  /// e.g. Not support multi-input and multi-output transaction
+  /// Multi-input and multi-output transaction not supported
   case errorNoSupportN2N // = 20
 
   /// Incorrect count of signatures passed to compile
   case errorSignaturesCount // = 21
 
-  /// Incorrect parameters
+  /// Incorrect input parameter
   case errorInvalidParams // = 22
+
+  /// Invalid input token amount
   case errorInvalidRequestedTokenAmount // = 23
+
+  /// Operation not supported for the chain.
+  case errorNotSupported // = 24
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -112,6 +137,7 @@ public enum TW_Common_Proto_SigningError: SwiftProtobuf.Enum {
     case 21: self = .errorSignaturesCount
     case 22: self = .errorInvalidParams
     case 23: self = .errorInvalidRequestedTokenAmount
+    case 24: self = .errorNotSupported
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -142,6 +168,7 @@ public enum TW_Common_Proto_SigningError: SwiftProtobuf.Enum {
     case .errorSignaturesCount: return 21
     case .errorInvalidParams: return 22
     case .errorInvalidRequestedTokenAmount: return 23
+    case .errorNotSupported: return 24
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -177,6 +204,7 @@ extension TW_Common_Proto_SigningError: CaseIterable {
     .errorSignaturesCount,
     .errorInvalidParams,
     .errorInvalidRequestedTokenAmount,
+    .errorNotSupported,
   ]
 }
 
@@ -210,5 +238,6 @@ extension TW_Common_Proto_SigningError: SwiftProtobuf._ProtoNameProviding {
     21: .same(proto: "Error_signatures_count"),
     22: .same(proto: "Error_invalid_params"),
     23: .same(proto: "Error_invalid_requested_token_amount"),
+    24: .same(proto: "Error_not_supported"),
   ]
 }

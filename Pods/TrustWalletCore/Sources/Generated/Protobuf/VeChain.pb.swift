@@ -20,6 +20,7 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+/// A clause, between a sender and destination
 public struct TW_VeChain_Proto_Clause {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -28,7 +29,7 @@ public struct TW_VeChain_Proto_Clause {
   //// Recipient address.
   public var to: String = String()
 
-  //// Transaction amount.
+  //// Transaction amount (uint256, serialized little endian)
   public var value: Data = Data()
 
   //// Payload data.
@@ -72,7 +73,7 @@ public struct TW_VeChain_Proto_SigningInput {
   //// Number set by user.
   public var nonce: UInt64 = 0
 
-  /// Private key.
+  //// The secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -80,7 +81,7 @@ public struct TW_VeChain_Proto_SigningInput {
   public init() {}
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_VeChain_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -91,6 +92,12 @@ public struct TW_VeChain_Proto_SigningOutput {
 
   /// Signature.
   public var signature: Data = Data()
+
+  /// error code, 0 is ok, other codes will be treated as errors
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  /// error code description
+  public var errorMessage: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -230,6 +237,8 @@ extension TW_VeChain_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "encoded"),
     2: .same(proto: "signature"),
+    3: .same(proto: "error"),
+    4: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -240,6 +249,8 @@ extension TW_VeChain_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.encoded) }()
       case 2: try { try decoder.decodeSingularBytesField(value: &self.signature) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -252,12 +263,20 @@ extension TW_VeChain_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
     if !self.signature.isEmpty {
       try visitor.visitSingularBytesField(value: self.signature, fieldNumber: 2)
     }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 3)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_VeChain_Proto_SigningOutput, rhs: TW_VeChain_Proto_SigningOutput) -> Bool {
     if lhs.encoded != rhs.encoded {return false}
     if lhs.signature != rhs.signature {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

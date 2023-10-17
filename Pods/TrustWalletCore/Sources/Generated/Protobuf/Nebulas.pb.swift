@@ -29,31 +29,31 @@ public struct TW_Nebulas_Proto_SigningInput {
   /// sender's address.
   public var fromAddress: String = String()
 
-  /// Chain identifier (256-bit number)
+  /// Chain identifier (uint256, serialized little endian)
   public var chainID: Data = Data()
 
-  /// Nonce (256-bit number)
+  /// Nonce (uint256, serialized little endian)
   public var nonce: Data = Data()
 
-  /// Gas price (256-bit number)
+  /// Gas price (uint256, serialized little endian)
   public var gasPrice: Data = Data()
 
-  /// Gas limit (256-bit number)
+  /// Gas limit (uint256, serialized little endian)
   public var gasLimit: Data = Data()
 
   /// Recipient's address.
   public var toAddress: String = String()
 
-  /// Amount to send in wei, 1 NAS = 10^18 Wei (256-bit number)
+  /// Amount to send in wei, 1 NAS = 10^18 Wei (uint256, serialized little endian)
   public var amount: Data = Data()
 
-  /// Timestamp to create transaction (256-bit number)
+  /// Timestamp to create transaction (uint256, serialized little endian)
   public var timestamp: Data = Data()
 
   /// Optional payload
   public var payload: String = String()
 
-  /// Private key.
+  /// The secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -61,16 +61,19 @@ public struct TW_Nebulas_Proto_SigningInput {
   public init() {}
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_Nebulas_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Algorithm code
   public var algorithm: UInt32 = 0
 
+  /// The signature
   public var signature: Data = Data()
 
+  /// Encoded transaction
   public var raw: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -78,6 +81,7 @@ public struct TW_Nebulas_Proto_SigningOutput {
   public init() {}
 }
 
+/// Generic data
 public struct TW_Nebulas_Proto_Data {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -98,18 +102,25 @@ public struct TW_Nebulas_Proto_RawTransaction {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// tx hash
   public var hash: Data = Data()
 
+  /// source address
   public var from: Data = Data()
 
+  /// destination address
   public var to: Data = Data()
 
+  /// amount (uint256, serialized little endian)
   public var value: Data = Data()
 
+  /// Nonce (should be larger than in the last transaction of the account)
   public var nonce: UInt64 = 0
 
+  /// transaction timestamp
   public var timestamp: Int64 = 0
 
+  /// generic data
   public var data: TW_Nebulas_Proto_Data {
     get {return _data ?? TW_Nebulas_Proto_Data()}
     set {_data = newValue}
@@ -119,14 +130,19 @@ public struct TW_Nebulas_Proto_RawTransaction {
   /// Clears the value of `data`. Subsequent reads from it will return its default value.
   public mutating func clearData() {self._data = nil}
 
+  /// chain ID (4 bytes)
   public var chainID: UInt32 = 0
 
+  /// gas price (uint256, serialized little endian)
   public var gasPrice: Data = Data()
 
+  /// gas limit (uint256, serialized little endian)
   public var gasLimit: Data = Data()
 
+  /// algorithm
   public var alg: UInt32 = 0
 
+  /// signature
   public var sign: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()

@@ -7,6 +7,8 @@
 public typealias CosmosAmount = TW_Cosmos_Proto_Amount
 public typealias CosmosFee = TW_Cosmos_Proto_Fee
 public typealias CosmosHeight = TW_Cosmos_Proto_Height
+public typealias CosmosTHORChainAsset = TW_Cosmos_Proto_THORChainAsset
+public typealias CosmosTHORChainCoin = TW_Cosmos_Proto_THORChainCoin
 public typealias CosmosMessage = TW_Cosmos_Proto_Message
 public typealias CosmosSigningInput = TW_Cosmos_Proto_SigningInput
 public typealias CosmosSigningOutput = TW_Cosmos_Proto_SigningOutput

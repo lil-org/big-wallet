@@ -20,13 +20,16 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+/// Simple transfer message, transfer an amount to an address
 public struct TW_Algorand_Proto_Transfer {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Destination address (string)
   public var toAddress: String = String()
 
+  /// Amount
   public var amount: UInt64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -34,15 +37,19 @@ public struct TW_Algorand_Proto_Transfer {
   public init() {}
 }
 
+/// Asset Transfer message, with assetID
 public struct TW_Algorand_Proto_AssetTransfer {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Destination address (string)
   public var toAddress: String = String()
 
+  /// Amount
   public var amount: UInt64 = 0
 
+  /// ID of the asset being transferred
   public var assetID: UInt64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -50,11 +57,13 @@ public struct TW_Algorand_Proto_AssetTransfer {
   public init() {}
 }
 
+/// Opt-in message for an asset
 public struct TW_Algorand_Proto_AssetOptIn {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// ID of the asset
   public var assetID: UInt64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -77,7 +86,7 @@ public struct TW_Algorand_Proto_SigningInput {
   /// binary note data
   public var note: Data = Data()
 
-  /// private key
+  /// The secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
 
   /// network / first round
@@ -86,9 +95,13 @@ public struct TW_Algorand_Proto_SigningInput {
   /// network / last round
   public var lastRound: UInt64 = 0
 
-  /// fee
+  /// fee amount
   public var fee: UInt64 = 0
 
+  /// public key
+  public var publicKey: Data = Data()
+
+  /// message payload
   public var messageOneof: TW_Algorand_Proto_SigningInput.OneOf_MessageOneof? = nil
 
   public var transfer: TW_Algorand_Proto_Transfer {
@@ -117,6 +130,7 @@ public struct TW_Algorand_Proto_SigningInput {
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
+  /// message payload
   public enum OneOf_MessageOneof: Equatable {
     case transfer(TW_Algorand_Proto_Transfer)
     case assetTransfer(TW_Algorand_Proto_AssetTransfer)
@@ -149,7 +163,7 @@ public struct TW_Algorand_Proto_SigningInput {
   public init() {}
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_Algorand_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -157,6 +171,15 @@ public struct TW_Algorand_Proto_SigningOutput {
 
   /// Signed and encoded transaction bytes.
   public var encoded: Data = Data()
+
+  /// Signature in base64.
+  public var signature: String = String()
+
+  /// Error code, 0 is ok, other codes will be treated as errors.
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  /// Error description.
+  public var errorMessage: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -291,6 +314,7 @@ extension TW_Algorand_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
     5: .standard(proto: "first_round"),
     6: .standard(proto: "last_round"),
     7: .same(proto: "fee"),
+    8: .standard(proto: "public_key"),
     10: .same(proto: "transfer"),
     11: .standard(proto: "asset_transfer"),
     12: .standard(proto: "asset_opt_in"),
@@ -309,6 +333,7 @@ extension TW_Algorand_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
       case 5: try { try decoder.decodeSingularUInt64Field(value: &self.firstRound) }()
       case 6: try { try decoder.decodeSingularUInt64Field(value: &self.lastRound) }()
       case 7: try { try decoder.decodeSingularUInt64Field(value: &self.fee) }()
+      case 8: try { try decoder.decodeSingularBytesField(value: &self.publicKey) }()
       case 10: try {
         var v: TW_Algorand_Proto_Transfer?
         var hadOneofValue = false
@@ -379,6 +404,9 @@ extension TW_Algorand_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
     if self.fee != 0 {
       try visitor.visitSingularUInt64Field(value: self.fee, fieldNumber: 7)
     }
+    if !self.publicKey.isEmpty {
+      try visitor.visitSingularBytesField(value: self.publicKey, fieldNumber: 8)
+    }
     switch self.messageOneof {
     case .transfer?: try {
       guard case .transfer(let v)? = self.messageOneof else { preconditionFailure() }
@@ -405,6 +433,7 @@ extension TW_Algorand_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
     if lhs.firstRound != rhs.firstRound {return false}
     if lhs.lastRound != rhs.lastRound {return false}
     if lhs.fee != rhs.fee {return false}
+    if lhs.publicKey != rhs.publicKey {return false}
     if lhs.messageOneof != rhs.messageOneof {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -415,6 +444,9 @@ extension TW_Algorand_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf.
   public static let protoMessageName: String = _protobuf_package + ".SigningOutput"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "encoded"),
+    2: .same(proto: "signature"),
+    3: .same(proto: "error"),
+    4: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -424,6 +456,9 @@ extension TW_Algorand_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf.
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.encoded) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.signature) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -433,11 +468,23 @@ extension TW_Algorand_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf.
     if !self.encoded.isEmpty {
       try visitor.visitSingularBytesField(value: self.encoded, fieldNumber: 1)
     }
+    if !self.signature.isEmpty {
+      try visitor.visitSingularStringField(value: self.signature, fieldNumber: 2)
+    }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 3)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Algorand_Proto_SigningOutput, rhs: TW_Algorand_Proto_SigningOutput) -> Bool {
     if lhs.encoded != rhs.encoded {return false}
+    if lhs.signature != rhs.signature {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -20,13 +20,13 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+/// Transaction structure, used internally
 public struct TW_Binance_Proto_Transaction {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// int64 SIZE-OF-ENCODED      // varint encoded length of the structure after encoding
-  /// 0xF0625DEE                  // prefix
+  /// array of size 1, containing the transaction message, which are one of the transaction type below
   public var msgs: [Data] = []
 
   /// array of size 1, containing the standard signature structure of the transaction sender
@@ -35,7 +35,7 @@ public struct TW_Binance_Proto_Transaction {
   /// a short sentence of remark for the transaction, only for `Transfer` transactions.
   public var memo: String = String()
 
-  /// an identifier for tools triggerring this transaction, set to zero if unwilling to disclose.
+  /// an identifier for tools triggering this transaction, set to zero if unwilling to disclose.
   public var source: Int64 = 0
 
   /// reserved for future use
@@ -46,6 +46,7 @@ public struct TW_Binance_Proto_Transaction {
   public init() {}
 }
 
+/// Signature structure, used internally
 public struct TW_Binance_Proto_Signature {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -65,27 +66,16 @@ public struct TW_Binance_Proto_Signature {
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  /// 0xEB5AE987          // prefix
-  /// bytes               // public key bytes
-  public struct PubKey {
-    // SwiftProtobuf.Message conformance is added in an extension below. See the
-    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-    // methods supported on all messages.
-
-    public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-    public init() {}
-  }
-
   public init() {}
 }
 
+/// Message for Trade order
 public struct TW_Binance_Proto_TradeOrder {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// 0xCE6DC043           // prefix
+  /// originating address
   public var sender: Data = Data()
 
   /// order id, optional
@@ -97,7 +87,7 @@ public struct TW_Binance_Proto_TradeOrder {
   /// only accept 2 for now, meaning limit order
   public var ordertype: Int64 = 0
 
-  /// 1 for buy and 2 fory sell
+  /// 1 for buy and 2 for sell
   public var side: Int64 = 0
 
   /// price of the order, which is the real price multiplied by 1e8 (10^8) and rounded to integer
@@ -114,12 +104,13 @@ public struct TW_Binance_Proto_TradeOrder {
   public init() {}
 }
 
+/// Message for CancelTrade order
 public struct TW_Binance_Proto_CancelTradeOrder {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// 0x166E681B      // prefix
+  /// originating address
   public var sender: Data = Data()
 
   /// symbol for trading pair in full name of the tokens
@@ -133,26 +124,30 @@ public struct TW_Binance_Proto_CancelTradeOrder {
   public init() {}
 }
 
+/// Message for Send order
 public struct TW_Binance_Proto_SendOrder {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Send inputs
   public var inputs: [TW_Binance_Proto_SendOrder.Input] = []
 
+  /// Send outputs
   public var outputs: [TW_Binance_Proto_SendOrder.Output] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  /// 0x2A2C87FA
-  /// A symbol-amount pair.  Could be moved out of SendOrder; kept here for backward compatibility.
+  /// A token amount, symbol-amount pair.  Could be moved out of SendOrder; kept here for backward compatibility.
   public struct Token {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
+    /// Token ID
     public var denom: String = String()
 
+    /// Amount
     public var amount: Int64 = 0
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -160,13 +155,16 @@ public struct TW_Binance_Proto_SendOrder {
     public init() {}
   }
 
+  /// Transaction input
   public struct Input {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
+    /// source address
     public var address: Data = Data()
 
+    /// input coin amounts
     public var coins: [TW_Binance_Proto_SendOrder.Token] = []
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -174,13 +172,16 @@ public struct TW_Binance_Proto_SendOrder {
     public init() {}
   }
 
+  /// Transaction output
   public struct Output {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
+    /// destination address
     public var address: Data = Data()
 
+    /// output coin amounts
     public var coins: [TW_Binance_Proto_SendOrder.Token] = []
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -191,12 +192,13 @@ public struct TW_Binance_Proto_SendOrder {
   public init() {}
 }
 
+/// Message for TokenIssue order
 public struct TW_Binance_Proto_TokenIssueOrder {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// 0x17EFAB80      // prefix
+  /// owner address
   public var from: Data = Data()
 
   /// token name
@@ -216,12 +218,13 @@ public struct TW_Binance_Proto_TokenIssueOrder {
   public init() {}
 }
 
+/// Message for TokenMint order
 public struct TW_Binance_Proto_TokenMintOrder {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// 0x467E0829      // prefix
+  /// owner address
   public var from: Data = Data()
 
   /// token symbol, in full name with "-" suffix
@@ -235,12 +238,13 @@ public struct TW_Binance_Proto_TokenMintOrder {
   public init() {}
 }
 
+/// Message for TokenBurn order
 public struct TW_Binance_Proto_TokenBurnOrder {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// 0x7ED2D2A0      // prefix
+  /// owner address
   public var from: Data = Data()
 
   /// token symbol, in full name with "-" suffix
@@ -254,12 +258,13 @@ public struct TW_Binance_Proto_TokenBurnOrder {
   public init() {}
 }
 
+/// Message for TokenFreeze order
 public struct TW_Binance_Proto_TokenFreezeOrder {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// 0xE774B32D      // prefix
+  /// owner address
   public var from: Data = Data()
 
   /// token symbol, in full name with "-" suffix
@@ -273,12 +278,13 @@ public struct TW_Binance_Proto_TokenFreezeOrder {
   public init() {}
 }
 
+/// Message for TokenUnfreeze order
 public struct TW_Binance_Proto_TokenUnfreezeOrder {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// 0x6515FF0D      // prefix
+  /// owner address
   public var from: Data = Data()
 
   /// token symbol, in full name with "-" suffix
@@ -292,33 +298,40 @@ public struct TW_Binance_Proto_TokenUnfreezeOrder {
   public init() {}
 }
 
+/// Message for HashTimeLock order
 public struct TW_Binance_Proto_HTLTOrder {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// 0xB33F9A24      // prefix
+  /// signer address
   public var from: Data = Data()
 
   /// recipient address
   public var to: Data = Data()
 
+  /// source on other chain, optional
   public var recipientOtherChain: String = String()
 
+  /// recipient on other chain, optional
   public var senderOtherChain: String = String()
 
-  ///hash of a random number and timestamp, based on SHA256
+  /// hash of a random number and timestamp, based on SHA256
   public var randomNumberHash: Data = Data()
 
+  /// timestamp
   public var timestamp: Int64 = 0
 
+  /// amounts
   public var amount: [TW_Binance_Proto_SendOrder.Token] = []
 
   /// expected gained token on the other chain
   public var expectedIncome: String = String()
 
+  /// period expressed in block heights
   public var heightSpan: Int64 = 0
 
+  /// set for cross-chain send
   public var crossChain: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -326,16 +339,19 @@ public struct TW_Binance_Proto_HTLTOrder {
   public init() {}
 }
 
+/// Message for Deposit HTLT order
 public struct TW_Binance_Proto_DepositHTLTOrder {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// 0xB33F9A24      // prefix
+  /// signer address
   public var from: Data = Data()
 
+  /// amounts
   public var amount: [TW_Binance_Proto_SendOrder.Token] = []
 
+  /// swap ID
   public var swapID: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -343,16 +359,19 @@ public struct TW_Binance_Proto_DepositHTLTOrder {
   public init() {}
 }
 
+/// Message for Claim HTLT order
 public struct TW_Binance_Proto_ClaimHTLOrder {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// 0xC1665300      // prefix
+  /// signer address
   public var from: Data = Data()
 
+  /// swap ID
   public var swapID: Data = Data()
 
+  /// random number input
   public var randomNumber: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -360,14 +379,16 @@ public struct TW_Binance_Proto_ClaimHTLOrder {
   public init() {}
 }
 
+/// Message for Refund HTLT order
 public struct TW_Binance_Proto_RefundHTLTOrder {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// 0x3454A27C      // prefix
+  /// signer address
   public var from: Data = Data()
 
+  /// swap ID
   public var swapID: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -375,15 +396,19 @@ public struct TW_Binance_Proto_RefundHTLTOrder {
   public init() {}
 }
 
+/// Transfer
 public struct TW_Binance_Proto_TransferOut {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// source address
   public var from: Data = Data()
 
+  /// recipient address
   public var to: Data = Data()
 
+  /// transfer amount
   public var amount: TW_Binance_Proto_SendOrder.Token {
     get {return _amount ?? TW_Binance_Proto_SendOrder.Token()}
     set {_amount = newValue}
@@ -393,6 +418,7 @@ public struct TW_Binance_Proto_TransferOut {
   /// Clears the value of `amount`. Subsequent reads from it will return its default value.
   public mutating func clearAmount() {self._amount = nil}
 
+  /// expiration time
   public var expireTime: Int64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -485,6 +511,7 @@ public struct TW_Binance_Proto_SideChainUndelegate {
   fileprivate var _amount: TW_Binance_Proto_SendOrder.Token? = nil
 }
 
+/// Message for TimeLock order
 public struct TW_Binance_Proto_TimeLockOrder {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -493,11 +520,13 @@ public struct TW_Binance_Proto_TimeLockOrder {
   /// owner address
   public var fromAddress: Data = Data()
 
+  /// Description (optional)
   public var description_p: String = String()
 
   /// Array of symbol/amount pairs. see SDK https://github.com/binance-chain/javascript-sdk/blob/master/docs/api-docs/classes/tokenmanagement.md#timelock
   public var amount: [TW_Binance_Proto_SendOrder.Token] = []
 
+  /// lock time
   public var lockTime: Int64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -505,6 +534,7 @@ public struct TW_Binance_Proto_TimeLockOrder {
   public init() {}
 }
 
+/// Message for TimeRelock order
 public struct TW_Binance_Proto_TimeRelockOrder {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -516,11 +546,13 @@ public struct TW_Binance_Proto_TimeRelockOrder {
   /// order ID
   public var id: Int64 = 0
 
+  /// Description (optional)
   public var description_p: String = String()
 
   /// Array of symbol/amount pairs.
   public var amount: [TW_Binance_Proto_SendOrder.Token] = []
 
+  /// lock time
   public var lockTime: Int64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -528,6 +560,7 @@ public struct TW_Binance_Proto_TimeRelockOrder {
   public init() {}
 }
 
+/// Message for TimeUnlock order
 public struct TW_Binance_Proto_TimeUnlockOrder {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -544,24 +577,35 @@ public struct TW_Binance_Proto_TimeUnlockOrder {
   public init() {}
 }
 
-/// Input data necessary to create a signed order.
+/// Input data necessary to create a signed transaction.
 public struct TW_Binance_Proto_SigningInput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Chain ID
   public var chainID: String = String()
 
+  /// Source account number
   public var accountNumber: Int64 = 0
 
+  /// Sequence number (account specific)
   public var sequence: Int64 = 0
 
+  /// Transaction source, see https://github.com/bnb-chain/BEPs/blob/master/BEP10.md
+  /// Some important values:
+  ///  0: Default source value (e.g. for Binance Chain Command Line, or SDKs)
+  ///  1: Binance DEX Web Wallet
+  ///  2: Trust Wallet
   public var source: Int64 = 0
 
+  /// Optional memo
   public var memo: String = String()
 
+  /// The secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
 
+  /// Payload message
   public var orderOneof: TW_Binance_Proto_SigningInput.OneOf_OrderOneof? = nil
 
   public var tradeOrder: TW_Binance_Proto_TradeOrder {
@@ -718,6 +762,7 @@ public struct TW_Binance_Proto_SigningInput {
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
+  /// Payload message
   public enum OneOf_OrderOneof: Equatable {
     case tradeOrder(TW_Binance_Proto_TradeOrder)
     case cancelTradeOrder(TW_Binance_Proto_CancelTradeOrder)
@@ -830,7 +875,7 @@ public struct TW_Binance_Proto_SigningInput {
   public init() {}
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_Binance_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -839,10 +884,10 @@ public struct TW_Binance_Proto_SigningOutput {
   /// Signed and encoded transaction bytes.
   public var encoded: Data = Data()
 
-  //// error code, 0 is ok, other codes will be treated as errors
+  /// OK (=0) or other codes in case of error
   public var error: TW_Common_Proto_SigningError = .ok
 
-  //// error description
+  /// error description in case of error
   public var errorMessage: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -955,25 +1000,6 @@ extension TW_Binance_Proto_Signature: SwiftProtobuf.Message, SwiftProtobuf._Mess
     if lhs.signature != rhs.signature {return false}
     if lhs.accountNumber != rhs.accountNumber {return false}
     if lhs.sequence != rhs.sequence {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-extension TW_Binance_Proto_Signature.PubKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = TW_Binance_Proto_Signature.protoMessageName + ".PubKey"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let _ = try decoder.nextFieldNumber() {
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: TW_Binance_Proto_Signature.PubKey, rhs: TW_Binance_Proto_Signature.PubKey) -> Bool {
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

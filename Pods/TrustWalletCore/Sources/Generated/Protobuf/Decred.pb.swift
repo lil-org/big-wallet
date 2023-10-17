@@ -20,15 +20,16 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+/// A transfer transaction
 public struct TW_Decred_Proto_Transaction {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  //// Serialization format
+  /// Serialization format
   public var serializeType: UInt32 = 0
 
-  //// Transaction data format version
+  /// Transaction data format version
   public var version: UInt32 = 0
 
   /// A list of 1 or more transaction inputs or sources for coins.
@@ -37,10 +38,10 @@ public struct TW_Decred_Proto_Transaction {
   /// A list of 1 or more transaction outputs or destinations for coins
   public var outputs: [TW_Decred_Proto_TransactionOutput] = []
 
-  //// The time when a transaction can be spent (usually zero, in which case it has no effect).
+  /// The time when a transaction can be spent (usually zero, in which case it has no effect).
   public var lockTime: UInt32 = 0
 
-  //// The block height at which the transaction expires and is no longer valid.
+  /// The block height at which the transaction expires and is no longer valid.
   public var expiry: UInt32 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -67,10 +68,13 @@ public struct TW_Decred_Proto_TransactionInput {
   /// Transaction version as defined by the sender.
   public var sequence: UInt32 = 0
 
+  /// The amount of the input
   public var valueIn: Int64 = 0
 
+  /// Creation block height
   public var blockHeight: UInt32 = 0
 
+  /// Index within the block
   public var blockIndex: UInt32 = 0
 
   /// Computational script for confirming transaction authorization.
@@ -92,7 +96,7 @@ public struct TW_Decred_Proto_TransactionOutput {
   /// Transaction amount.
   public var value: Int64 = 0
 
-  //// Transaction output version.
+  /// Transaction output version.
   public var version: UInt32 = 0
 
   /// Usually contains the public key as a Decred script setting up conditions to claim this output.
@@ -103,7 +107,7 @@ public struct TW_Decred_Proto_TransactionOutput {
   public init() {}
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_Decred_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -127,6 +131,8 @@ public struct TW_Decred_Proto_SigningOutput {
 
   /// Optional error
   public var error: TW_Common_Proto_SigningError = .ok
+
+  public var errorMessage: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -318,6 +324,7 @@ extension TW_Decred_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._M
     2: .same(proto: "encoded"),
     3: .standard(proto: "transaction_id"),
     4: .same(proto: "error"),
+    5: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -330,6 +337,7 @@ extension TW_Decred_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._M
       case 2: try { try decoder.decodeSingularBytesField(value: &self.encoded) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.transactionID) }()
       case 4: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -352,6 +360,9 @@ extension TW_Decred_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._M
     if self.error != .ok {
       try visitor.visitSingularEnumField(value: self.error, fieldNumber: 4)
     }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -360,6 +371,7 @@ extension TW_Decred_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._M
     if lhs.encoded != rhs.encoded {return false}
     if lhs.transactionID != rhs.transactionID {return false}
     if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

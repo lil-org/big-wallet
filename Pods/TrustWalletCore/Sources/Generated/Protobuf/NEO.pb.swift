@@ -20,18 +20,22 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+/// Input for a transaction (output of a prev tx)
 public struct TW_NEO_Proto_TransactionInput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Previous tx hash
   public var prevHash: Data = Data()
 
+  /// Output index
   public var prevIndex: UInt32 = 0
 
   /// unspent value of UTXO
   public var value: Int64 = 0
 
+  /// Asset
   public var assetID: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -39,20 +43,138 @@ public struct TW_NEO_Proto_TransactionInput {
   public init() {}
 }
 
+/// extra address of Output
+public struct TW_NEO_Proto_OutputAddress {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Amount (as string)
+  public var amount: Int64 = 0
+
+  /// destination address
+  public var toAddress: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Output of a transaction
 public struct TW_NEO_Proto_TransactionOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Asset
   public var assetID: String = String()
 
+  /// Amount (as string)
   public var amount: Int64 = 0
 
+  /// destination address
   public var toAddress: String = String()
 
+  /// change address
   public var changeAddress: String = String()
 
+  /// extra output
+  public var extraOutputs: [TW_NEO_Proto_OutputAddress] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Transaction
+public struct TW_NEO_Proto_Transaction {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var transactionOneof: TW_NEO_Proto_Transaction.OneOf_TransactionOneof? = nil
+
+  public var nep5Transfer: TW_NEO_Proto_Transaction.Nep5Transfer {
+    get {
+      if case .nep5Transfer(let v)? = transactionOneof {return v}
+      return TW_NEO_Proto_Transaction.Nep5Transfer()
+    }
+    set {transactionOneof = .nep5Transfer(newValue)}
+  }
+
+  public var invocationGeneric: TW_NEO_Proto_Transaction.InvocationGeneric {
+    get {
+      if case .invocationGeneric(let v)? = transactionOneof {return v}
+      return TW_NEO_Proto_Transaction.InvocationGeneric()
+    }
+    set {transactionOneof = .invocationGeneric(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public enum OneOf_TransactionOneof: Equatable {
+    case nep5Transfer(TW_NEO_Proto_Transaction.Nep5Transfer)
+    case invocationGeneric(TW_NEO_Proto_Transaction.InvocationGeneric)
+
+  #if !swift(>=4.1)
+    public static func ==(lhs: TW_NEO_Proto_Transaction.OneOf_TransactionOneof, rhs: TW_NEO_Proto_Transaction.OneOf_TransactionOneof) -> Bool {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch (lhs, rhs) {
+      case (.nep5Transfer, .nep5Transfer): return {
+        guard case .nep5Transfer(let l) = lhs, case .nep5Transfer(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.invocationGeneric, .invocationGeneric): return {
+        guard case .invocationGeneric(let l) = lhs, case .invocationGeneric(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      default: return false
+      }
+    }
+  #endif
+  }
+
+  /// nep5 token transfer transaction
+  public struct Nep5Transfer {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    public var assetID: String = String()
+
+    public var from: String = String()
+
+    public var to: String = String()
+
+    /// Amount to send (256-bit number)
+    public var amount: Data = Data()
+
+    /// determine if putting THROWIFNOT & RET instructions
+    public var scriptWithRet: Bool = false
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
+  /// Generic invocation transaction
+  public struct InvocationGeneric {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    /// gas to use
+    public var gas: UInt64 = 0
+
+    /// Contract call payload data
+    public var script: Data = Data()
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
 
   public init() {}
 }
@@ -63,18 +185,25 @@ public struct TW_NEO_Proto_SigningInput {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Available transaction inputs
   public var inputs: [TW_NEO_Proto_TransactionInput] = []
 
+  /// Transaction outputs
   public var outputs: [TW_NEO_Proto_TransactionOutput] = []
 
+  /// The secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
 
+  /// Fee
   public var fee: Int64 = 0
 
+  /// Asset ID for gas
   public var gasAssetID: String = String()
 
+  /// Address for the change
   public var gasChangeAddress: String = String()
 
+  /// Optional transaction plan (if missing it will be computed)
   public var plan: TW_NEO_Proto_TransactionPlan {
     get {return _plan ?? TW_NEO_Proto_TransactionPlan()}
     set {_plan = newValue}
@@ -84,14 +213,24 @@ public struct TW_NEO_Proto_SigningInput {
   /// Clears the value of `plan`. Subsequent reads from it will return its default value.
   public mutating func clearPlan() {self._plan = nil}
 
+  public var transaction: TW_NEO_Proto_Transaction {
+    get {return _transaction ?? TW_NEO_Proto_Transaction()}
+    set {_transaction = newValue}
+  }
+  /// Returns true if `transaction` has been explicitly set.
+  public var hasTransaction: Bool {return self._transaction != nil}
+  /// Clears the value of `transaction`. Subsequent reads from it will return its default value.
+  public mutating func clearTransaction() {self._transaction = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _plan: TW_NEO_Proto_TransactionPlan? = nil
+  fileprivate var _transaction: TW_NEO_Proto_Transaction? = nil
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_NEO_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -102,6 +241,9 @@ public struct TW_NEO_Proto_SigningOutput {
 
   /// Optional error
   public var error: TW_Common_Proto_SigningError = .ok
+
+  /// error code description
+  public var errorMessage: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -120,13 +262,34 @@ public struct TW_NEO_Proto_TransactionOutputPlan {
   /// Maximum available amount.
   public var availableAmount: Int64 = 0
 
+  /// Amount that is left as change
   public var change: Int64 = 0
 
+  /// Asset
   public var assetID: String = String()
 
+  /// Destination address
   public var toAddress: String = String()
 
+  /// Address for the change
   public var changeAddress: String = String()
+
+  /// extra output
+  public var extraOutputs: [TW_NEO_Proto_OutputAddress] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct TW_NEO_Proto_TransactionAttributePlan {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var usage: Int32 = 0
+
+  public var data: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -150,6 +313,9 @@ public struct TW_NEO_Proto_TransactionPlan {
 
   /// Optional error
   public var error: TW_Common_Proto_SigningError = .ok
+
+  /// Attribute
+  public var attributes: [TW_NEO_Proto_TransactionAttributePlan] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -210,6 +376,44 @@ extension TW_NEO_Proto_TransactionInput: SwiftProtobuf.Message, SwiftProtobuf._M
   }
 }
 
+extension TW_NEO_Proto_OutputAddress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".OutputAddress"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "amount"),
+    2: .standard(proto: "to_address"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularSInt64Field(value: &self.amount) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.toAddress) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.amount != 0 {
+      try visitor.visitSingularSInt64Field(value: self.amount, fieldNumber: 1)
+    }
+    if !self.toAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.toAddress, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_NEO_Proto_OutputAddress, rhs: TW_NEO_Proto_OutputAddress) -> Bool {
+    if lhs.amount != rhs.amount {return false}
+    if lhs.toAddress != rhs.toAddress {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension TW_NEO_Proto_TransactionOutput: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TransactionOutput"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -217,6 +421,7 @@ extension TW_NEO_Proto_TransactionOutput: SwiftProtobuf.Message, SwiftProtobuf._
     2: .same(proto: "amount"),
     3: .standard(proto: "to_address"),
     4: .standard(proto: "change_address"),
+    5: .standard(proto: "extra_outputs"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -229,6 +434,7 @@ extension TW_NEO_Proto_TransactionOutput: SwiftProtobuf.Message, SwiftProtobuf._
       case 2: try { try decoder.decodeSingularSInt64Field(value: &self.amount) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.toAddress) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.changeAddress) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.extraOutputs) }()
       default: break
       }
     }
@@ -247,6 +453,9 @@ extension TW_NEO_Proto_TransactionOutput: SwiftProtobuf.Message, SwiftProtobuf._
     if !self.changeAddress.isEmpty {
       try visitor.visitSingularStringField(value: self.changeAddress, fieldNumber: 4)
     }
+    if !self.extraOutputs.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.extraOutputs, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -255,6 +464,171 @@ extension TW_NEO_Proto_TransactionOutput: SwiftProtobuf.Message, SwiftProtobuf._
     if lhs.amount != rhs.amount {return false}
     if lhs.toAddress != rhs.toAddress {return false}
     if lhs.changeAddress != rhs.changeAddress {return false}
+    if lhs.extraOutputs != rhs.extraOutputs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_NEO_Proto_Transaction: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Transaction"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "nep5_transfer"),
+    2: .standard(proto: "invocation_generic"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try {
+        var v: TW_NEO_Proto_Transaction.Nep5Transfer?
+        var hadOneofValue = false
+        if let current = self.transactionOneof {
+          hadOneofValue = true
+          if case .nep5Transfer(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.transactionOneof = .nep5Transfer(v)
+        }
+      }()
+      case 2: try {
+        var v: TW_NEO_Proto_Transaction.InvocationGeneric?
+        var hadOneofValue = false
+        if let current = self.transactionOneof {
+          hadOneofValue = true
+          if case .invocationGeneric(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.transactionOneof = .invocationGeneric(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    switch self.transactionOneof {
+    case .nep5Transfer?: try {
+      guard case .nep5Transfer(let v)? = self.transactionOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    }()
+    case .invocationGeneric?: try {
+      guard case .invocationGeneric(let v)? = self.transactionOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_NEO_Proto_Transaction, rhs: TW_NEO_Proto_Transaction) -> Bool {
+    if lhs.transactionOneof != rhs.transactionOneof {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_NEO_Proto_Transaction.Nep5Transfer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_NEO_Proto_Transaction.protoMessageName + ".Nep5Transfer"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "asset_id"),
+    2: .same(proto: "from"),
+    3: .same(proto: "to"),
+    4: .same(proto: "amount"),
+    5: .standard(proto: "script_with_ret"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.assetID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.from) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.to) }()
+      case 4: try { try decoder.decodeSingularBytesField(value: &self.amount) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.scriptWithRet) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.assetID.isEmpty {
+      try visitor.visitSingularStringField(value: self.assetID, fieldNumber: 1)
+    }
+    if !self.from.isEmpty {
+      try visitor.visitSingularStringField(value: self.from, fieldNumber: 2)
+    }
+    if !self.to.isEmpty {
+      try visitor.visitSingularStringField(value: self.to, fieldNumber: 3)
+    }
+    if !self.amount.isEmpty {
+      try visitor.visitSingularBytesField(value: self.amount, fieldNumber: 4)
+    }
+    if self.scriptWithRet != false {
+      try visitor.visitSingularBoolField(value: self.scriptWithRet, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_NEO_Proto_Transaction.Nep5Transfer, rhs: TW_NEO_Proto_Transaction.Nep5Transfer) -> Bool {
+    if lhs.assetID != rhs.assetID {return false}
+    if lhs.from != rhs.from {return false}
+    if lhs.to != rhs.to {return false}
+    if lhs.amount != rhs.amount {return false}
+    if lhs.scriptWithRet != rhs.scriptWithRet {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_NEO_Proto_Transaction.InvocationGeneric: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_NEO_Proto_Transaction.protoMessageName + ".InvocationGeneric"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "gas"),
+    2: .same(proto: "script"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.gas) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.script) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.gas != 0 {
+      try visitor.visitSingularUInt64Field(value: self.gas, fieldNumber: 1)
+    }
+    if !self.script.isEmpty {
+      try visitor.visitSingularBytesField(value: self.script, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_NEO_Proto_Transaction.InvocationGeneric, rhs: TW_NEO_Proto_Transaction.InvocationGeneric) -> Bool {
+    if lhs.gas != rhs.gas {return false}
+    if lhs.script != rhs.script {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -270,6 +644,7 @@ extension TW_NEO_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Messa
     5: .standard(proto: "gas_asset_id"),
     6: .standard(proto: "gas_change_address"),
     7: .same(proto: "plan"),
+    8: .same(proto: "transaction"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -285,6 +660,7 @@ extension TW_NEO_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Messa
       case 5: try { try decoder.decodeSingularStringField(value: &self.gasAssetID) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.gasChangeAddress) }()
       case 7: try { try decoder.decodeSingularMessageField(value: &self._plan) }()
+      case 8: try { try decoder.decodeSingularMessageField(value: &self._transaction) }()
       default: break
       }
     }
@@ -316,6 +692,9 @@ extension TW_NEO_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Messa
     try { if let v = self._plan {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
     } }()
+    try { if let v = self._transaction {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -327,6 +706,7 @@ extension TW_NEO_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Messa
     if lhs.gasAssetID != rhs.gasAssetID {return false}
     if lhs.gasChangeAddress != rhs.gasChangeAddress {return false}
     if lhs._plan != rhs._plan {return false}
+    if lhs._transaction != rhs._transaction {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -337,6 +717,7 @@ extension TW_NEO_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mess
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "encoded"),
     2: .same(proto: "error"),
+    3: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -347,6 +728,7 @@ extension TW_NEO_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mess
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.encoded) }()
       case 2: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -359,12 +741,16 @@ extension TW_NEO_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mess
     if self.error != .ok {
       try visitor.visitSingularEnumField(value: self.error, fieldNumber: 2)
     }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_NEO_Proto_SigningOutput, rhs: TW_NEO_Proto_SigningOutput) -> Bool {
     if lhs.encoded != rhs.encoded {return false}
     if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -379,6 +765,7 @@ extension TW_NEO_Proto_TransactionOutputPlan: SwiftProtobuf.Message, SwiftProtob
     4: .standard(proto: "asset_id"),
     5: .standard(proto: "to_address"),
     6: .standard(proto: "change_address"),
+    7: .standard(proto: "extra_outputs"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -393,6 +780,7 @@ extension TW_NEO_Proto_TransactionOutputPlan: SwiftProtobuf.Message, SwiftProtob
       case 4: try { try decoder.decodeSingularStringField(value: &self.assetID) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.toAddress) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.changeAddress) }()
+      case 7: try { try decoder.decodeRepeatedMessageField(value: &self.extraOutputs) }()
       default: break
       }
     }
@@ -417,6 +805,9 @@ extension TW_NEO_Proto_TransactionOutputPlan: SwiftProtobuf.Message, SwiftProtob
     if !self.changeAddress.isEmpty {
       try visitor.visitSingularStringField(value: self.changeAddress, fieldNumber: 6)
     }
+    if !self.extraOutputs.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.extraOutputs, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -427,6 +818,45 @@ extension TW_NEO_Proto_TransactionOutputPlan: SwiftProtobuf.Message, SwiftProtob
     if lhs.assetID != rhs.assetID {return false}
     if lhs.toAddress != rhs.toAddress {return false}
     if lhs.changeAddress != rhs.changeAddress {return false}
+    if lhs.extraOutputs != rhs.extraOutputs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_NEO_Proto_TransactionAttributePlan: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TransactionAttributePlan"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "usage"),
+    2: .same(proto: "data"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self.usage) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.data) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.usage != 0 {
+      try visitor.visitSingularInt32Field(value: self.usage, fieldNumber: 1)
+    }
+    if !self.data.isEmpty {
+      try visitor.visitSingularBytesField(value: self.data, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_NEO_Proto_TransactionAttributePlan, rhs: TW_NEO_Proto_TransactionAttributePlan) -> Bool {
+    if lhs.usage != rhs.usage {return false}
+    if lhs.data != rhs.data {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -439,6 +869,7 @@ extension TW_NEO_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf._Me
     2: .same(proto: "inputs"),
     3: .same(proto: "fee"),
     4: .same(proto: "error"),
+    5: .same(proto: "attributes"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -451,6 +882,7 @@ extension TW_NEO_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf._Me
       case 2: try { try decoder.decodeRepeatedMessageField(value: &self.inputs) }()
       case 3: try { try decoder.decodeSingularInt64Field(value: &self.fee) }()
       case 4: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.attributes) }()
       default: break
       }
     }
@@ -469,6 +901,9 @@ extension TW_NEO_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf._Me
     if self.error != .ok {
       try visitor.visitSingularEnumField(value: self.error, fieldNumber: 4)
     }
+    if !self.attributes.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.attributes, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -477,6 +912,7 @@ extension TW_NEO_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf._Me
     if lhs.inputs != rhs.inputs {return false}
     if lhs.fee != rhs.fee {return false}
     if lhs.error != rhs.error {return false}
+    if lhs.attributes != rhs.attributes {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

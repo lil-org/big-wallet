@@ -20,6 +20,59 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+public enum TW_Bitcoin_Proto_TransactionVariant: SwiftProtobuf.Enum {
+  public typealias RawValue = Int
+  case p2Pkh // = 0
+  case p2Wpkh // = 1
+  case p2Trkeypath // = 2
+  case brc20Transfer // = 3
+  case nftinscription // = 4
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .p2Pkh
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .p2Pkh
+    case 1: self = .p2Wpkh
+    case 2: self = .p2Trkeypath
+    case 3: self = .brc20Transfer
+    case 4: self = .nftinscription
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .p2Pkh: return 0
+    case .p2Wpkh: return 1
+    case .p2Trkeypath: return 2
+    case .brc20Transfer: return 3
+    case .nftinscription: return 4
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+}
+
+#if swift(>=4.2)
+
+extension TW_Bitcoin_Proto_TransactionVariant: CaseIterable {
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static var allCases: [TW_Bitcoin_Proto_TransactionVariant] = [
+    .p2Pkh,
+    .p2Wpkh,
+    .p2Trkeypath,
+    .brc20Transfer,
+    .nftinscription,
+  ]
+}
+
+#endif  // swift(>=4.2)
+
+/// A transaction, with its inputs and outputs
 public struct TW_Bitcoin_Proto_Transaction {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -34,7 +87,7 @@ public struct TW_Bitcoin_Proto_Transaction {
   /// A list of 1 or more transaction inputs or sources for coins.
   public var inputs: [TW_Bitcoin_Proto_TransactionInput] = []
 
-  /// A list of 1 or more transaction outputs or destinations for coins
+  /// A list of 1 or more transaction outputs or destinations for coins.
   public var outputs: [TW_Bitcoin_Proto_TransactionOutput] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -77,7 +130,7 @@ public struct TW_Bitcoin_Proto_OutPoint {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// The hash of the referenced transaction.
+  /// The hash of the referenced transaction (network byte order, usually needs to be reversed).
   public var hash: Data = Data()
 
   /// The index of the specific output in the transaction.
@@ -85,6 +138,9 @@ public struct TW_Bitcoin_Proto_OutPoint {
 
   /// Transaction version as defined by the sender.
   public var sequence: UInt32 = 0
+
+  /// The tree in utxo, only works for DCR
+  public var tree: Int32 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -102,6 +158,9 @@ public struct TW_Bitcoin_Proto_TransactionOutput {
 
   /// Usually contains the public key as a Bitcoin script setting up conditions to claim this output.
   public var script: Data = Data()
+
+  /// Optional spending script for P2TR script-path transactions.
+  public var spendingScript: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -130,11 +189,34 @@ public struct TW_Bitcoin_Proto_UnspentTransaction {
   /// Amount of the UTXO
   public var amount: Int64 = 0
 
+  /// The transaction variant
+  public var variant: TW_Bitcoin_Proto_TransactionVariant = .p2Pkh
+
+  /// Optional spending script for P2TR script-path transactions.
+  public var spendingScript: Data = Data()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _outPoint: TW_Bitcoin_Proto_OutPoint? = nil
+}
+
+/// Pair of destination address and amount, used for extra outputs
+public struct TW_Bitcoin_Proto_OutputAddress {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Destination address
+  public var toAddress: String = String()
+
+  /// Amount to be paid to this output
+  public var amount: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
 }
 
 /// Input data necessary to create a signed transaction.
@@ -157,25 +239,25 @@ public struct TW_Bitcoin_Proto_SigningInput {
     set {_uniqueStorage()._amount = newValue}
   }
 
-  /// Transaction fee per byte.
+  /// Transaction fee rate, satoshis per byte, used to compute required fee (when planning)
   public var byteFee: Int64 {
     get {return _storage._byteFee}
     set {_uniqueStorage()._byteFee = newValue}
   }
 
-  /// Recipient's address.
+  /// Recipient's address, as string.
   public var toAddress: String {
     get {return _storage._toAddress}
     set {_uniqueStorage()._toAddress = newValue}
   }
 
-  /// Change address.
+  /// Change address, as string.
   public var changeAddress: String {
     get {return _storage._changeAddress}
     set {_uniqueStorage()._changeAddress = newValue}
   }
 
-  /// Available private keys.
+  /// The available secret private key or keys required for signing (32 bytes each).
   public var privateKey: [Data] {
     get {return _storage._privateKey}
     set {_uniqueStorage()._privateKey = newValue}
@@ -187,25 +269,25 @@ public struct TW_Bitcoin_Proto_SigningInput {
     set {_uniqueStorage()._scripts = newValue}
   }
 
-  /// Available unspent transaction outputs.
+  /// Available input unspent transaction outputs.
   public var utxo: [TW_Bitcoin_Proto_UnspentTransaction] {
     get {return _storage._utxo}
     set {_uniqueStorage()._utxo = newValue}
   }
 
-  /// If sending max amount.
+  /// Set if sending max amount is requested.
   public var useMaxAmount: Bool {
     get {return _storage._useMaxAmount}
     set {_uniqueStorage()._useMaxAmount = newValue}
   }
 
-  /// Coin type (forks).
+  /// Coin type (used by forks).
   public var coinType: UInt32 {
     get {return _storage._coinType}
     set {_uniqueStorage()._coinType = newValue}
   }
 
-  /// Optional transaction plan
+  /// Optional transaction plan. If missing, plan will be computed.
   public var plan: TW_Bitcoin_Proto_TransactionPlan {
     get {return _storage._plan ?? TW_Bitcoin_Proto_TransactionPlan()}
     set {_uniqueStorage()._plan = newValue}
@@ -231,6 +313,35 @@ public struct TW_Bitcoin_Proto_SigningInput {
     set {_uniqueStorage()._outputOpReturn = newValue}
   }
 
+  /// Optional additional destination addresses, additional to first to_address output
+  public var extraOutputs: [TW_Bitcoin_Proto_OutputAddress] {
+    get {return _storage._extraOutputs}
+    set {_uniqueStorage()._extraOutputs = newValue}
+  }
+
+  /// If use max utxo.
+  public var useMaxUtxo: Bool {
+    get {return _storage._useMaxUtxo}
+    set {_uniqueStorage()._useMaxUtxo = newValue}
+  }
+
+  /// If disable dust filter.
+  public var disableDustFilter: Bool {
+    get {return _storage._disableDustFilter}
+    set {_uniqueStorage()._disableDustFilter = newValue}
+  }
+
+  /// transaction creation time that will be used for verge(xvg)
+  public var time: UInt32 {
+    get {return _storage._time}
+    set {_uniqueStorage()._time = newValue}
+  }
+
+  public var isItBrcOperation: Bool {
+    get {return _storage._isItBrcOperation}
+    set {_uniqueStorage()._isItBrcOperation = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -247,16 +358,16 @@ public struct TW_Bitcoin_Proto_TransactionPlan {
   /// Amount to be received at the other end.
   public var amount: Int64 = 0
 
-  /// Maximum available amount.
+  /// Maximum available amount in all the input UTXOs.
   public var availableAmount: Int64 = 0
 
   /// Estimated transaction fee.
   public var fee: Int64 = 0
 
-  /// Change.
+  /// Remaining change
   public var change: Int64 = 0
 
-  /// Selected unspent transaction outputs.
+  /// Selected unspent transaction outputs (subset of all input UTXOs)
   public var utxos: [TW_Bitcoin_Proto_UnspentTransaction] = []
 
   /// Zcash branch id
@@ -268,18 +379,25 @@ public struct TW_Bitcoin_Proto_TransactionPlan {
   /// Optional zero-amount, OP_RETURN output
   public var outputOpReturn: Data = Data()
 
+  /// zen & bitcoin diamond preblockhash
+  public var preblockhash: Data = Data()
+
+  /// zen preblockheight
+  public var preblockheight: Int64 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
+/// Note that the amount may be different than the requested amount to account for fees and available funds.
 public struct TW_Bitcoin_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Resulting transaction. Note that the amount may be different than the requested amount to account for fees and available funds.
+  /// Resulting transaction.
   public var transaction: TW_Bitcoin_Proto_Transaction {
     get {return _transaction ?? TW_Bitcoin_Proto_Transaction()}
     set {_transaction = newValue}
@@ -292,7 +410,7 @@ public struct TW_Bitcoin_Proto_SigningOutput {
   /// Signed and encoded transaction bytes.
   public var encoded: Data = Data()
 
-  /// Transaction id
+  /// Transaction ID (hash)
   public var transactionID: String = String()
 
   /// Optional error
@@ -308,6 +426,7 @@ public struct TW_Bitcoin_Proto_SigningOutput {
   fileprivate var _transaction: TW_Bitcoin_Proto_Transaction? = nil
 }
 
+//// Pre-image hash to be used for signing
 public struct TW_Bitcoin_Proto_HashPublicKey {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -347,6 +466,16 @@ public struct TW_Bitcoin_Proto_PreSigningOutput {
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate let _protobuf_package = "TW.Bitcoin.Proto"
+
+extension TW_Bitcoin_Proto_TransactionVariant: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "P2PKH"),
+    1: .same(proto: "P2WPKH"),
+    2: .same(proto: "P2TRKEYPATH"),
+    3: .same(proto: "BRC20TRANSFER"),
+    4: .same(proto: "NFTINSCRIPTION"),
+  ]
+}
 
 extension TW_Bitcoin_Proto_Transaction: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Transaction"
@@ -452,6 +581,7 @@ extension TW_Bitcoin_Proto_OutPoint: SwiftProtobuf.Message, SwiftProtobuf._Messa
     1: .same(proto: "hash"),
     2: .same(proto: "index"),
     3: .same(proto: "sequence"),
+    4: .same(proto: "tree"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -463,6 +593,7 @@ extension TW_Bitcoin_Proto_OutPoint: SwiftProtobuf.Message, SwiftProtobuf._Messa
       case 1: try { try decoder.decodeSingularBytesField(value: &self.hash) }()
       case 2: try { try decoder.decodeSingularUInt32Field(value: &self.index) }()
       case 3: try { try decoder.decodeSingularUInt32Field(value: &self.sequence) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.tree) }()
       default: break
       }
     }
@@ -478,6 +609,9 @@ extension TW_Bitcoin_Proto_OutPoint: SwiftProtobuf.Message, SwiftProtobuf._Messa
     if self.sequence != 0 {
       try visitor.visitSingularUInt32Field(value: self.sequence, fieldNumber: 3)
     }
+    if self.tree != 0 {
+      try visitor.visitSingularInt32Field(value: self.tree, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -485,6 +619,7 @@ extension TW_Bitcoin_Proto_OutPoint: SwiftProtobuf.Message, SwiftProtobuf._Messa
     if lhs.hash != rhs.hash {return false}
     if lhs.index != rhs.index {return false}
     if lhs.sequence != rhs.sequence {return false}
+    if lhs.tree != rhs.tree {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -495,6 +630,7 @@ extension TW_Bitcoin_Proto_TransactionOutput: SwiftProtobuf.Message, SwiftProtob
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "value"),
     2: .same(proto: "script"),
+    5: .same(proto: "spendingScript"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -505,6 +641,7 @@ extension TW_Bitcoin_Proto_TransactionOutput: SwiftProtobuf.Message, SwiftProtob
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularInt64Field(value: &self.value) }()
       case 2: try { try decoder.decodeSingularBytesField(value: &self.script) }()
+      case 5: try { try decoder.decodeSingularBytesField(value: &self.spendingScript) }()
       default: break
       }
     }
@@ -517,12 +654,16 @@ extension TW_Bitcoin_Proto_TransactionOutput: SwiftProtobuf.Message, SwiftProtob
     if !self.script.isEmpty {
       try visitor.visitSingularBytesField(value: self.script, fieldNumber: 2)
     }
+    if !self.spendingScript.isEmpty {
+      try visitor.visitSingularBytesField(value: self.spendingScript, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Bitcoin_Proto_TransactionOutput, rhs: TW_Bitcoin_Proto_TransactionOutput) -> Bool {
     if lhs.value != rhs.value {return false}
     if lhs.script != rhs.script {return false}
+    if lhs.spendingScript != rhs.spendingScript {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -534,6 +675,8 @@ extension TW_Bitcoin_Proto_UnspentTransaction: SwiftProtobuf.Message, SwiftProto
     1: .standard(proto: "out_point"),
     2: .same(proto: "script"),
     3: .same(proto: "amount"),
+    4: .same(proto: "variant"),
+    5: .same(proto: "spendingScript"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -545,6 +688,8 @@ extension TW_Bitcoin_Proto_UnspentTransaction: SwiftProtobuf.Message, SwiftProto
       case 1: try { try decoder.decodeSingularMessageField(value: &self._outPoint) }()
       case 2: try { try decoder.decodeSingularBytesField(value: &self.script) }()
       case 3: try { try decoder.decodeSingularInt64Field(value: &self.amount) }()
+      case 4: try { try decoder.decodeSingularEnumField(value: &self.variant) }()
+      case 5: try { try decoder.decodeSingularBytesField(value: &self.spendingScript) }()
       default: break
       }
     }
@@ -564,12 +709,58 @@ extension TW_Bitcoin_Proto_UnspentTransaction: SwiftProtobuf.Message, SwiftProto
     if self.amount != 0 {
       try visitor.visitSingularInt64Field(value: self.amount, fieldNumber: 3)
     }
+    if self.variant != .p2Pkh {
+      try visitor.visitSingularEnumField(value: self.variant, fieldNumber: 4)
+    }
+    if !self.spendingScript.isEmpty {
+      try visitor.visitSingularBytesField(value: self.spendingScript, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Bitcoin_Proto_UnspentTransaction, rhs: TW_Bitcoin_Proto_UnspentTransaction) -> Bool {
     if lhs._outPoint != rhs._outPoint {return false}
     if lhs.script != rhs.script {return false}
+    if lhs.amount != rhs.amount {return false}
+    if lhs.variant != rhs.variant {return false}
+    if lhs.spendingScript != rhs.spendingScript {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Bitcoin_Proto_OutputAddress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".OutputAddress"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "to_address"),
+    2: .same(proto: "amount"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.toAddress) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.amount) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.toAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.toAddress, fieldNumber: 1)
+    }
+    if self.amount != 0 {
+      try visitor.visitSingularInt64Field(value: self.amount, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Bitcoin_Proto_OutputAddress, rhs: TW_Bitcoin_Proto_OutputAddress) -> Bool {
+    if lhs.toAddress != rhs.toAddress {return false}
     if lhs.amount != rhs.amount {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -592,6 +783,11 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
     11: .same(proto: "plan"),
     12: .standard(proto: "lock_time"),
     13: .standard(proto: "output_op_return"),
+    14: .standard(proto: "extra_outputs"),
+    15: .standard(proto: "use_max_utxo"),
+    16: .standard(proto: "disable_dust_filter"),
+    17: .same(proto: "time"),
+    18: .standard(proto: "is_it_brc_operation"),
   ]
 
   fileprivate class _StorageClass {
@@ -608,6 +804,11 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
     var _plan: TW_Bitcoin_Proto_TransactionPlan? = nil
     var _lockTime: UInt32 = 0
     var _outputOpReturn: Data = Data()
+    var _extraOutputs: [TW_Bitcoin_Proto_OutputAddress] = []
+    var _useMaxUtxo: Bool = false
+    var _disableDustFilter: Bool = false
+    var _time: UInt32 = 0
+    var _isItBrcOperation: Bool = false
 
     static let defaultInstance = _StorageClass()
 
@@ -627,6 +828,11 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
       _plan = source._plan
       _lockTime = source._lockTime
       _outputOpReturn = source._outputOpReturn
+      _extraOutputs = source._extraOutputs
+      _useMaxUtxo = source._useMaxUtxo
+      _disableDustFilter = source._disableDustFilter
+      _time = source._time
+      _isItBrcOperation = source._isItBrcOperation
     }
   }
 
@@ -658,6 +864,11 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
         case 11: try { try decoder.decodeSingularMessageField(value: &_storage._plan) }()
         case 12: try { try decoder.decodeSingularUInt32Field(value: &_storage._lockTime) }()
         case 13: try { try decoder.decodeSingularBytesField(value: &_storage._outputOpReturn) }()
+        case 14: try { try decoder.decodeRepeatedMessageField(value: &_storage._extraOutputs) }()
+        case 15: try { try decoder.decodeSingularBoolField(value: &_storage._useMaxUtxo) }()
+        case 16: try { try decoder.decodeSingularBoolField(value: &_storage._disableDustFilter) }()
+        case 17: try { try decoder.decodeSingularUInt32Field(value: &_storage._time) }()
+        case 18: try { try decoder.decodeSingularBoolField(value: &_storage._isItBrcOperation) }()
         default: break
         }
       }
@@ -709,6 +920,21 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
       if !_storage._outputOpReturn.isEmpty {
         try visitor.visitSingularBytesField(value: _storage._outputOpReturn, fieldNumber: 13)
       }
+      if !_storage._extraOutputs.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._extraOutputs, fieldNumber: 14)
+      }
+      if _storage._useMaxUtxo != false {
+        try visitor.visitSingularBoolField(value: _storage._useMaxUtxo, fieldNumber: 15)
+      }
+      if _storage._disableDustFilter != false {
+        try visitor.visitSingularBoolField(value: _storage._disableDustFilter, fieldNumber: 16)
+      }
+      if _storage._time != 0 {
+        try visitor.visitSingularUInt32Field(value: _storage._time, fieldNumber: 17)
+      }
+      if _storage._isItBrcOperation != false {
+        try visitor.visitSingularBoolField(value: _storage._isItBrcOperation, fieldNumber: 18)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -731,6 +957,11 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
         if _storage._plan != rhs_storage._plan {return false}
         if _storage._lockTime != rhs_storage._lockTime {return false}
         if _storage._outputOpReturn != rhs_storage._outputOpReturn {return false}
+        if _storage._extraOutputs != rhs_storage._extraOutputs {return false}
+        if _storage._useMaxUtxo != rhs_storage._useMaxUtxo {return false}
+        if _storage._disableDustFilter != rhs_storage._disableDustFilter {return false}
+        if _storage._time != rhs_storage._time {return false}
+        if _storage._isItBrcOperation != rhs_storage._isItBrcOperation {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -751,6 +982,8 @@ extension TW_Bitcoin_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf
     6: .standard(proto: "branch_id"),
     7: .same(proto: "error"),
     8: .standard(proto: "output_op_return"),
+    9: .same(proto: "preblockhash"),
+    10: .same(proto: "preblockheight"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -767,6 +1000,8 @@ extension TW_Bitcoin_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf
       case 6: try { try decoder.decodeSingularBytesField(value: &self.branchID) }()
       case 7: try { try decoder.decodeSingularEnumField(value: &self.error) }()
       case 8: try { try decoder.decodeSingularBytesField(value: &self.outputOpReturn) }()
+      case 9: try { try decoder.decodeSingularBytesField(value: &self.preblockhash) }()
+      case 10: try { try decoder.decodeSingularInt64Field(value: &self.preblockheight) }()
       default: break
       }
     }
@@ -797,6 +1032,12 @@ extension TW_Bitcoin_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf
     if !self.outputOpReturn.isEmpty {
       try visitor.visitSingularBytesField(value: self.outputOpReturn, fieldNumber: 8)
     }
+    if !self.preblockhash.isEmpty {
+      try visitor.visitSingularBytesField(value: self.preblockhash, fieldNumber: 9)
+    }
+    if self.preblockheight != 0 {
+      try visitor.visitSingularInt64Field(value: self.preblockheight, fieldNumber: 10)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -809,6 +1050,8 @@ extension TW_Bitcoin_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf
     if lhs.branchID != rhs.branchID {return false}
     if lhs.error != rhs.error {return false}
     if lhs.outputOpReturn != rhs.outputOpReturn {return false}
+    if lhs.preblockhash != rhs.preblockhash {return false}
+    if lhs.preblockheight != rhs.preblockheight {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

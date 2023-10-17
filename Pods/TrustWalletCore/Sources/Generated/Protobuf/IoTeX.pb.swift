@@ -20,15 +20,19 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+/// A transfer
 public struct TW_IoTeX_Proto_Transfer {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Amount (as string)
   public var amount: String = String()
 
+  /// Destination address
   public var recipient: String = String()
 
+  /// Payload data
   public var payload: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -36,11 +40,13 @@ public struct TW_IoTeX_Proto_Transfer {
   public init() {}
 }
 
+/// A Staking message
 public struct TW_IoTeX_Proto_Staking {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// the payload message
   public var message: TW_IoTeX_Proto_Staking.OneOf_Message? = nil
 
   public var stakeCreate: TW_IoTeX_Proto_Staking.Create {
@@ -117,6 +123,7 @@ public struct TW_IoTeX_Proto_Staking {
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
+  /// the payload message
   public enum OneOf_Message: Equatable {
     case stakeCreate(TW_IoTeX_Proto_Staking.Create)
     case stakeUnstake(TW_IoTeX_Proto_Staking.Reclaim)
@@ -182,14 +189,19 @@ public struct TW_IoTeX_Proto_Staking {
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
+    /// validator name
     public var candidateName: String = String()
 
+    /// amount to be staked
     public var stakedAmount: String = String()
 
+    /// duration
     public var stakedDuration: UInt32 = 0
 
+    /// auto-restake
     public var autoStake: Bool = false
 
+    /// payload data
     public var payload: Data = Data()
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -203,8 +215,10 @@ public struct TW_IoTeX_Proto_Staking {
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
+    /// index to claim
     public var bucketIndex: UInt64 = 0
 
+    /// payload data
     public var payload: Data = Data()
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -218,10 +232,13 @@ public struct TW_IoTeX_Proto_Staking {
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
+    /// index
     public var bucketIndex: UInt64 = 0
 
+    /// amount to add
     public var amount: String = String()
 
+    /// payload data
     public var payload: Data = Data()
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -235,12 +252,16 @@ public struct TW_IoTeX_Proto_Staking {
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
+    /// index
     public var bucketIndex: UInt64 = 0
 
+    /// stake duration
     public var stakedDuration: UInt32 = 0
 
+    /// auto re-stake
     public var autoStake: Bool = false
 
+    /// payload data
     public var payload: Data = Data()
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -254,10 +275,13 @@ public struct TW_IoTeX_Proto_Staking {
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
+    /// index
     public var bucketIndex: UInt64 = 0
 
+    /// validator name
     public var candidateName: String = String()
 
+    /// payload data
     public var payload: Data = Data()
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -265,15 +289,19 @@ public struct TW_IoTeX_Proto_Staking {
     public init() {}
   }
 
+  /// transfer ownserhip of stake
   public struct TransferOwnership {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
+    /// index
     public var bucketIndex: UInt64 = 0
 
+    /// address of voter
     public var voterAddress: String = String()
 
+    /// payload data
     public var payload: Data = Data()
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -281,6 +309,7 @@ public struct TW_IoTeX_Proto_Staking {
     public init() {}
   }
 
+  /// Candidate (validator) info
   public struct CandidateBasicInfo {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -297,6 +326,7 @@ public struct TW_IoTeX_Proto_Staking {
     public init() {}
   }
 
+  /// Register a Candidate
   public struct CandidateRegister {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -332,15 +362,19 @@ public struct TW_IoTeX_Proto_Staking {
   public init() {}
 }
 
+/// Arbitrary contract call
 public struct TW_IoTeX_Proto_ContractCall {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// amount
   public var amount: String = String()
 
+  /// contract address
   public var contract: String = String()
 
+  /// payload data
   public var data: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -348,22 +382,31 @@ public struct TW_IoTeX_Proto_ContractCall {
   public init() {}
 }
 
-/// transaction signing input
+/// Input data necessary to create a signed transaction.
 public struct TW_IoTeX_Proto_SigningInput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Transaction version
   public var version: UInt32 = 0
 
+  /// Nonce (should be larger than in the last transaction of the account)
   public var nonce: UInt64 = 0
 
+  /// Limit for the gas used
   public var gasLimit: UInt64 = 0
 
+  /// Gas price
   public var gasPrice: String = String()
 
+  /// The chain id of blockchain
+  public var chainID: UInt32 = 0
+
+  /// The secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
 
+  /// Payload transfer
   public var action: TW_IoTeX_Proto_SigningInput.OneOf_Action? = nil
 
   public var transfer: TW_IoTeX_Proto_Transfer {
@@ -457,6 +500,7 @@ public struct TW_IoTeX_Proto_SigningInput {
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
+  /// Payload transfer
   public enum OneOf_Action: Equatable {
     case transfer(TW_IoTeX_Proto_Transfer)
     case call(TW_IoTeX_Proto_ContractCall)
@@ -530,7 +574,7 @@ public struct TW_IoTeX_Proto_SigningInput {
   public init() {}
 }
 
-/// transaction signing output
+/// Result containing the signed and encoded transaction.
 public struct TW_IoTeX_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -542,24 +586,40 @@ public struct TW_IoTeX_Proto_SigningOutput {
   /// Signed Action hash
   public var hash: Data = Data()
 
+  /// error code, 0 is ok, other codes will be treated as errors
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  /// error code description
+  public var errorMessage: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
+/// An Action structure
+/// Used internally
 public struct TW_IoTeX_Proto_ActionCore {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// version number
   public var version: UInt32 = 0
 
+  /// Nonce (should be larger than in the last transaction of the account)
   public var nonce: UInt64 = 0
 
+  /// Gas limit
   public var gasLimit: UInt64 = 0
 
+  /// Gas price
   public var gasPrice: String = String()
 
+  /// Chain ID
+  public var chainID: UInt32 = 0
+
+  /// action payload
   public var action: TW_IoTeX_Proto_ActionCore.OneOf_Action? = nil
 
   public var transfer: TW_IoTeX_Proto_Transfer {
@@ -653,6 +713,7 @@ public struct TW_IoTeX_Proto_ActionCore {
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
+  /// action payload
   public enum OneOf_Action: Equatable {
     case transfer(TW_IoTeX_Proto_Transfer)
     case execution(TW_IoTeX_Proto_ContractCall)
@@ -726,11 +787,14 @@ public struct TW_IoTeX_Proto_ActionCore {
   public init() {}
 }
 
+/// Signed Action
+/// Used internally
 public struct TW_IoTeX_Proto_Action {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Action details
   public var core: TW_IoTeX_Proto_ActionCore {
     get {return _core ?? TW_IoTeX_Proto_ActionCore()}
     set {_core = newValue}
@@ -740,8 +804,10 @@ public struct TW_IoTeX_Proto_Action {
   /// Clears the value of `core`. Subsequent reads from it will return its default value.
   public mutating func clearCore() {self._core = nil}
 
+  /// public key
   public var senderPubKey: Data = Data()
 
+  /// the signature
   public var signature: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -1432,7 +1498,8 @@ extension TW_IoTeX_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     2: .same(proto: "nonce"),
     3: .same(proto: "gasLimit"),
     4: .same(proto: "gasPrice"),
-    5: .same(proto: "privateKey"),
+    5: .same(proto: "chainID"),
+    6: .same(proto: "privateKey"),
     10: .same(proto: "transfer"),
     12: .same(proto: "call"),
     40: .same(proto: "stakeCreate"),
@@ -1456,7 +1523,8 @@ extension TW_IoTeX_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mes
       case 2: try { try decoder.decodeSingularUInt64Field(value: &self.nonce) }()
       case 3: try { try decoder.decodeSingularUInt64Field(value: &self.gasLimit) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.gasPrice) }()
-      case 5: try { try decoder.decodeSingularBytesField(value: &self.privateKey) }()
+      case 5: try { try decoder.decodeSingularUInt32Field(value: &self.chainID) }()
+      case 6: try { try decoder.decodeSingularBytesField(value: &self.privateKey) }()
       case 10: try {
         var v: TW_IoTeX_Proto_Transfer?
         var hadOneofValue = false
@@ -1622,8 +1690,11 @@ extension TW_IoTeX_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     if !self.gasPrice.isEmpty {
       try visitor.visitSingularStringField(value: self.gasPrice, fieldNumber: 4)
     }
+    if self.chainID != 0 {
+      try visitor.visitSingularUInt32Field(value: self.chainID, fieldNumber: 5)
+    }
     if !self.privateKey.isEmpty {
-      try visitor.visitSingularBytesField(value: self.privateKey, fieldNumber: 5)
+      try visitor.visitSingularBytesField(value: self.privateKey, fieldNumber: 6)
     }
     switch self.action {
     case .transfer?: try {
@@ -1680,6 +1751,7 @@ extension TW_IoTeX_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     if lhs.nonce != rhs.nonce {return false}
     if lhs.gasLimit != rhs.gasLimit {return false}
     if lhs.gasPrice != rhs.gasPrice {return false}
+    if lhs.chainID != rhs.chainID {return false}
     if lhs.privateKey != rhs.privateKey {return false}
     if lhs.action != rhs.action {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -1692,6 +1764,8 @@ extension TW_IoTeX_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Me
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "encoded"),
     2: .same(proto: "hash"),
+    3: .same(proto: "error"),
+    4: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1702,6 +1776,8 @@ extension TW_IoTeX_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Me
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.encoded) }()
       case 2: try { try decoder.decodeSingularBytesField(value: &self.hash) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -1714,12 +1790,20 @@ extension TW_IoTeX_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Me
     if !self.hash.isEmpty {
       try visitor.visitSingularBytesField(value: self.hash, fieldNumber: 2)
     }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 3)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_IoTeX_Proto_SigningOutput, rhs: TW_IoTeX_Proto_SigningOutput) -> Bool {
     if lhs.encoded != rhs.encoded {return false}
     if lhs.hash != rhs.hash {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1732,6 +1816,7 @@ extension TW_IoTeX_Proto_ActionCore: SwiftProtobuf.Message, SwiftProtobuf._Messa
     2: .same(proto: "nonce"),
     3: .same(proto: "gasLimit"),
     4: .same(proto: "gasPrice"),
+    5: .same(proto: "chainID"),
     10: .same(proto: "transfer"),
     12: .same(proto: "execution"),
     40: .same(proto: "stakeCreate"),
@@ -1755,6 +1840,7 @@ extension TW_IoTeX_Proto_ActionCore: SwiftProtobuf.Message, SwiftProtobuf._Messa
       case 2: try { try decoder.decodeSingularUInt64Field(value: &self.nonce) }()
       case 3: try { try decoder.decodeSingularUInt64Field(value: &self.gasLimit) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.gasPrice) }()
+      case 5: try { try decoder.decodeSingularUInt32Field(value: &self.chainID) }()
       case 10: try {
         var v: TW_IoTeX_Proto_Transfer?
         var hadOneofValue = false
@@ -1920,6 +2006,9 @@ extension TW_IoTeX_Proto_ActionCore: SwiftProtobuf.Message, SwiftProtobuf._Messa
     if !self.gasPrice.isEmpty {
       try visitor.visitSingularStringField(value: self.gasPrice, fieldNumber: 4)
     }
+    if self.chainID != 0 {
+      try visitor.visitSingularUInt32Field(value: self.chainID, fieldNumber: 5)
+    }
     switch self.action {
     case .transfer?: try {
       guard case .transfer(let v)? = self.action else { preconditionFailure() }
@@ -1975,6 +2064,7 @@ extension TW_IoTeX_Proto_ActionCore: SwiftProtobuf.Message, SwiftProtobuf._Messa
     if lhs.nonce != rhs.nonce {return false}
     if lhs.gasLimit != rhs.gasLimit {return false}
     if lhs.gasPrice != rhs.gasPrice {return false}
+    if lhs.chainID != rhs.chainID {return false}
     if lhs.action != rhs.action {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

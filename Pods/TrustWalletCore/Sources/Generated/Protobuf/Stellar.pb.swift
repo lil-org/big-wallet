@@ -20,11 +20,11 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+/// A predicate (used in claim)
+/// Rest of predicates not currently supported
+/// See https://github.com/stellar/stellar-protocol/blob/master/core/cap-0023.md
 public enum TW_Stellar_Proto_ClaimPredicate: SwiftProtobuf.Enum {
   public typealias RawValue = Int
-
-  /// Rest of predicates not currently supported
-  /// See https://github.com/stellar/stellar-protocol/blob/master/core/cap-0023.md
   case predicateUnconditional // = 0
   case UNRECOGNIZED(Int)
 
@@ -59,6 +59,8 @@ extension TW_Stellar_Proto_ClaimPredicate: CaseIterable {
 
 #endif  // swift(>=4.2)
 
+/// Represents an asset
+/// Note: alphanum12 currently not supported
 public struct TW_Stellar_Proto_Asset {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -75,11 +77,13 @@ public struct TW_Stellar_Proto_Asset {
   public init() {}
 }
 
+/// Create a new account
 public struct TW_Stellar_Proto_OperationCreateAccount {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// address
   public var destination: String = String()
 
   /// Amount (*10^7)
@@ -90,11 +94,13 @@ public struct TW_Stellar_Proto_OperationCreateAccount {
   public init() {}
 }
 
+/// Perform payment
 public struct TW_Stellar_Proto_OperationPayment {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Destination address
   public var destination: String = String()
 
   /// Optional, can be left empty for native asset
@@ -117,11 +123,13 @@ public struct TW_Stellar_Proto_OperationPayment {
   fileprivate var _asset: TW_Stellar_Proto_Asset? = nil
 }
 
+/// Change trust
 public struct TW_Stellar_Proto_OperationChangeTrust {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// The asset
   public var asset: TW_Stellar_Proto_Asset {
     get {return _asset ?? TW_Stellar_Proto_Asset()}
     set {_asset = newValue}
@@ -141,13 +149,16 @@ public struct TW_Stellar_Proto_OperationChangeTrust {
   fileprivate var _asset: TW_Stellar_Proto_Asset? = nil
 }
 
+/// Claimant: account & predicate
 public struct TW_Stellar_Proto_Claimant {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Claimant account
   public var account: String = String()
 
+  /// predicate
   public var predicate: TW_Stellar_Proto_ClaimPredicate = .predicateUnconditional
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -155,6 +166,7 @@ public struct TW_Stellar_Proto_Claimant {
   public init() {}
 }
 
+/// Create a claimable balance (2-phase transfer)
 public struct TW_Stellar_Proto_OperationCreateClaimableBalance {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -173,6 +185,7 @@ public struct TW_Stellar_Proto_OperationCreateClaimableBalance {
   /// Amount (*10^7)
   public var amount: Int64 = 0
 
+  /// One or more claimants
   public var claimants: [TW_Stellar_Proto_Claimant] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -182,6 +195,7 @@ public struct TW_Stellar_Proto_OperationCreateClaimableBalance {
   fileprivate var _asset: TW_Stellar_Proto_Asset? = nil
 }
 
+/// Claim a claimable balance
 public struct TW_Stellar_Proto_OperationClaimClaimableBalance {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -195,6 +209,7 @@ public struct TW_Stellar_Proto_OperationClaimClaimableBalance {
   public init() {}
 }
 
+/// Empty memo (placeholder)
 public struct TW_Stellar_Proto_MemoVoid {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -205,6 +220,7 @@ public struct TW_Stellar_Proto_MemoVoid {
   public init() {}
 }
 
+/// Memo with text
 public struct TW_Stellar_Proto_MemoText {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -217,6 +233,7 @@ public struct TW_Stellar_Proto_MemoText {
   public init() {}
 }
 
+/// Memo with an ID
 public struct TW_Stellar_Proto_MemoId {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -229,6 +246,7 @@ public struct TW_Stellar_Proto_MemoId {
   public init() {}
 }
 
+/// Memo with a hash
 public struct TW_Stellar_Proto_MemoHash {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -247,17 +265,22 @@ public struct TW_Stellar_Proto_SigningInput {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Transaction fee
   public var fee: Int32 = 0
 
+  /// Account sequence
   public var sequence: Int64 = 0
 
+  /// Source account
   public var account: String = String()
 
-  /// Private key.
+  /// The secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
 
+  /// Wellknown passphrase, specific to the chain
   public var passphrase: String = String()
 
+  /// Payload message
   public var operationOneof: TW_Stellar_Proto_SigningInput.OneOf_OperationOneof? = nil
 
   public var opCreateAccount: TW_Stellar_Proto_OperationCreateAccount {
@@ -300,6 +323,7 @@ public struct TW_Stellar_Proto_SigningInput {
     set {operationOneof = .opClaimClaimableBalance(newValue)}
   }
 
+  /// Memo
   public var memoTypeOneof: TW_Stellar_Proto_SigningInput.OneOf_MemoTypeOneof? = nil
 
   public var memoVoid: TW_Stellar_Proto_MemoVoid {
@@ -342,8 +366,11 @@ public struct TW_Stellar_Proto_SigningInput {
     set {memoTypeOneof = .memoReturnHash(newValue)}
   }
 
+  public var timeBounds: Int64 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
+  /// Payload message
   public enum OneOf_OperationOneof: Equatable {
     case opCreateAccount(TW_Stellar_Proto_OperationCreateAccount)
     case opPayment(TW_Stellar_Proto_OperationPayment)
@@ -383,6 +410,7 @@ public struct TW_Stellar_Proto_SigningInput {
   #endif
   }
 
+  /// Memo
   public enum OneOf_MemoTypeOneof: Equatable {
     case memoVoid(TW_Stellar_Proto_MemoVoid)
     case memoText(TW_Stellar_Proto_MemoText)
@@ -425,7 +453,7 @@ public struct TW_Stellar_Proto_SigningInput {
   public init() {}
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_Stellar_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -433,6 +461,12 @@ public struct TW_Stellar_Proto_SigningOutput {
 
   /// Signature.
   public var signature: String = String()
+
+  /// error code, 0 is ok, other codes will be treated as errors
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  /// error code description
+  public var errorMessage: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -866,6 +900,7 @@ extension TW_Stellar_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
     11: .standard(proto: "memo_id"),
     12: .standard(proto: "memo_hash"),
     13: .standard(proto: "memo_return_hash"),
+    16: .standard(proto: "time_bounds"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1009,6 +1044,7 @@ extension TW_Stellar_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
           self.operationOneof = .opClaimClaimableBalance(v)
         }
       }()
+      case 16: try { try decoder.decodeSingularInt64Field(value: &self.timeBounds) }()
       default: break
       }
     }
@@ -1083,6 +1119,9 @@ extension TW_Stellar_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
     }()
     default: break
     }
+    if self.timeBounds != 0 {
+      try visitor.visitSingularInt64Field(value: self.timeBounds, fieldNumber: 16)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1094,6 +1133,7 @@ extension TW_Stellar_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
     if lhs.passphrase != rhs.passphrase {return false}
     if lhs.operationOneof != rhs.operationOneof {return false}
     if lhs.memoTypeOneof != rhs.memoTypeOneof {return false}
+    if lhs.timeBounds != rhs.timeBounds {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1103,6 +1143,8 @@ extension TW_Stellar_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
   public static let protoMessageName: String = _protobuf_package + ".SigningOutput"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "signature"),
+    2: .same(proto: "error"),
+    3: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1112,6 +1154,8 @@ extension TW_Stellar_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.signature) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -1121,11 +1165,19 @@ extension TW_Stellar_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
     if !self.signature.isEmpty {
       try visitor.visitSingularStringField(value: self.signature, fieldNumber: 1)
     }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 2)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Stellar_Proto_SigningOutput, rhs: TW_Stellar_Proto_SigningOutput) -> Bool {
     if lhs.signature != rhs.signature {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

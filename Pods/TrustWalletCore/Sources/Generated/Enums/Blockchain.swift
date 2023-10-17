@@ -1,4 +1,4 @@
-// Copyright © 2017-2022 Trust Wallet.
+// Copyright © 2017-2023 Trust Wallet.
 //
 // This file is part of Trust. The full Trust copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
@@ -7,6 +7,7 @@
 // This is a GENERATED FILE, changes made here WILL BE LOST.
 //
 
+/// Blockchain enum type
 public enum Blockchain: UInt32, CaseIterable {
     case bitcoin = 0
     case ethereum = 1
@@ -35,11 +36,12 @@ public enum Blockchain: UInt32, CaseIterable {
     case harmony = 25
     case near = 26
     case algorand = 27
+    case iost = 28
     case polkadot = 29
     case cardano = 30
     case neo = 31
     case filecoin = 32
-    case elrondNetwork = 33
+    case multiversX = 33
     case oasisNetwork = 34
     case decred = 35
     case zcash = 36
@@ -47,4 +49,15 @@ public enum Blockchain: UInt32, CaseIterable {
     case thorchain = 38
     case ronin = 39
     case kusama = 40
+    case zen = 41
+    case bitcoinDiamond = 42
+    case verge = 43
+    case nervos = 44
+    case everscale = 45
+    case aptos = 46
+    case nebl = 47
+    case hedera = 48
+    case theOpenNetwork = 49
+    case sui = 50
+    case greenfield = 51
 }

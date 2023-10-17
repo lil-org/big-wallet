@@ -20,13 +20,16 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+/// A transaction output that can be used as input
 public struct TW_Cardano_Proto_OutPoint {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// The transaction ID
   public var txHash: Data = Data()
 
+  /// The index of this output within the transaction
   public var outputIndex: UInt64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -34,29 +37,36 @@ public struct TW_Cardano_Proto_OutPoint {
   public init() {}
 }
 
+/// Represents a token and an amount. Token is identified by PolicyID and name.
 public struct TW_Cardano_Proto_TokenAmount {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// as hex string (28x2 digits)
+  /// Policy ID of the token, as hex string (28x2 digits)
   public var policyID: String = String()
 
+  /// The name of the asset (within the policy)
   public var assetName: String = String()
 
-  /// 256-bit number
+  /// The amount (uint256, serialized little endian)
   public var amount: Data = Data()
+
+  /// The name of the asset (hex encoded). Ignored if `asset_name` is set
+  public var assetNameHex: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
+/// One input for a transaction
 public struct TW_Cardano_Proto_TxInput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// The UTXO
   public var outPoint: TW_Cardano_Proto_OutPoint {
     get {return _outPoint ?? TW_Cardano_Proto_OutPoint()}
     set {_outPoint = newValue}
@@ -66,12 +76,13 @@ public struct TW_Cardano_Proto_TxInput {
   /// Clears the value of `outPoint`. Subsequent reads from it will return its default value.
   public mutating func clearOutPoint() {self._outPoint = nil}
 
+  /// The owner address (string)
   public var address: String = String()
 
-  /// ADA amount
+  /// ADA amount in the UTXO
   public var amount: UInt64 = 0
 
-  /// optional token amounts
+  /// optional token amounts in the UTXO
   public var tokenAmount: [TW_Cardano_Proto_TokenAmount] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -81,11 +92,13 @@ public struct TW_Cardano_Proto_TxInput {
   fileprivate var _outPoint: TW_Cardano_Proto_OutPoint? = nil
 }
 
+/// One output for a transaction
 public struct TW_Cardano_Proto_TxOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Destination address (string)
   public var address: String = String()
 
   /// ADA amount
@@ -112,6 +125,7 @@ public struct TW_Cardano_Proto_TokenBundle {
   public init() {}
 }
 
+/// Message for simple Transfer tx
 public struct TW_Cardano_Proto_Transfer {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -152,6 +166,79 @@ public struct TW_Cardano_Proto_Transfer {
   fileprivate var _tokenAmount: TW_Cardano_Proto_TokenBundle? = nil
 }
 
+/// Register a staking key for the account, prerequisite for Staking.
+/// Note: staking messages are typically used with a 1-output-to-self transaction.
+public struct TW_Cardano_Proto_RegisterStakingKey {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Staking address (as string)
+  public var stakingAddress: String = String()
+
+  /// Amount deposited in this TX. Should be 2 ADA (2000000). If not set correctly, TX will be rejected. See also Delegate.deposit_amount.
+  public var depositAmount: UInt64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Deregister staking key. can be done when staking is stopped completely. The Staking deposit is returned at this time.
+public struct TW_Cardano_Proto_DeregisterStakingKey {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Staking address (as string)
+  public var stakingAddress: String = String()
+
+  /// Amount undeposited in this TX. Should be 2 ADA (2000000). If not set correctly, TX will be rejected. See also RegisterStakingKey.deposit_amount.
+  public var undepositAmount: UInt64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Delegate funds in this account to a specified staking pool.
+public struct TW_Cardano_Proto_Delegate {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Staking address (as string)
+  public var stakingAddress: String = String()
+
+  /// PoolID of staking pool
+  public var poolID: Data = Data()
+
+  /// Amount deposited in this TX. Should be 0. If not set correctly, TX will be rejected. See also RegisterStakingKey.deposit_amount.
+  public var depositAmount: UInt64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Withdraw earned staking reward.
+public struct TW_Cardano_Proto_Withdraw {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Staking address (as string)
+  public var stakingAddress: String = String()
+
+  /// Withdrawal amount. Should match the real value of the earned reward.
+  public var withdrawAmount: UInt64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Describes a preliminary transaction plan.
 public struct TW_Cardano_Proto_TransactionPlan {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -169,6 +256,12 @@ public struct TW_Cardano_Proto_TransactionPlan {
   /// coins in the change UTXO
   public var change: UInt64 = 0
 
+  /// coins deposited (going to deposit) in this TX
+  public var deposit: UInt64 = 0
+
+  /// coins undeposited (coming from deposit) in this TX
+  public var undeposit: UInt64 = 0
+
   /// total tokens in the utxos (optional)
   public var availableTokens: [TW_Cardano_Proto_TokenAmount] = []
 
@@ -178,27 +271,33 @@ public struct TW_Cardano_Proto_TransactionPlan {
   /// tokens in the change (optional)
   public var changeTokens: [TW_Cardano_Proto_TokenAmount] = []
 
+  /// The selected UTXOs, subset ot the input UTXOs
   public var utxos: [TW_Cardano_Proto_TxInput] = []
 
+  /// Optional error
   public var error: TW_Common_Proto_SigningError = .ok
+
+  /// Optional additional destination addresses, additional to first to_address output
+  public var extraOutputs: [TW_Cardano_Proto_TxOutput] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
-/// Input data necessary to create a signed transaction
+/// Input data necessary to create a signed transaction.
 public struct TW_Cardano_Proto_SigningInput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Available input UTXOs
   public var utxos: [TW_Cardano_Proto_TxInput] {
     get {return _storage._utxos}
     set {_uniqueStorage()._utxos = newValue}
   }
 
-  /// Available private keys (double extended keys); every input UTXO adress should be covered
+  /// Available private keys (double extended keys); every input UTXO address should be covered
   /// In case of Plan only, keys should be present, in correct number
   public var privateKey: [Data] {
     get {return _storage._privateKey}
@@ -215,12 +314,53 @@ public struct TW_Cardano_Proto_SigningInput {
   /// Clears the value of `transferMessage`. Subsequent reads from it will return its default value.
   public mutating func clearTransferMessage() {_uniqueStorage()._transferMessage = nil}
 
+  /// Optional, used in case of Staking Key registration (prerequisite for Staking)
+  public var registerStakingKey: TW_Cardano_Proto_RegisterStakingKey {
+    get {return _storage._registerStakingKey ?? TW_Cardano_Proto_RegisterStakingKey()}
+    set {_uniqueStorage()._registerStakingKey = newValue}
+  }
+  /// Returns true if `registerStakingKey` has been explicitly set.
+  public var hasRegisterStakingKey: Bool {return _storage._registerStakingKey != nil}
+  /// Clears the value of `registerStakingKey`. Subsequent reads from it will return its default value.
+  public mutating func clearRegisterStakingKey() {_uniqueStorage()._registerStakingKey = nil}
+
+  /// Optional, used in case of (re)delegation
+  public var delegate: TW_Cardano_Proto_Delegate {
+    get {return _storage._delegate ?? TW_Cardano_Proto_Delegate()}
+    set {_uniqueStorage()._delegate = newValue}
+  }
+  /// Returns true if `delegate` has been explicitly set.
+  public var hasDelegate: Bool {return _storage._delegate != nil}
+  /// Clears the value of `delegate`. Subsequent reads from it will return its default value.
+  public mutating func clearDelegate() {_uniqueStorage()._delegate = nil}
+
+  /// Optional, used in case of withdraw
+  public var withdraw: TW_Cardano_Proto_Withdraw {
+    get {return _storage._withdraw ?? TW_Cardano_Proto_Withdraw()}
+    set {_uniqueStorage()._withdraw = newValue}
+  }
+  /// Returns true if `withdraw` has been explicitly set.
+  public var hasWithdraw: Bool {return _storage._withdraw != nil}
+  /// Clears the value of `withdraw`. Subsequent reads from it will return its default value.
+  public mutating func clearWithdraw() {_uniqueStorage()._withdraw = nil}
+
+  /// Optional
+  public var deregisterStakingKey: TW_Cardano_Proto_DeregisterStakingKey {
+    get {return _storage._deregisterStakingKey ?? TW_Cardano_Proto_DeregisterStakingKey()}
+    set {_uniqueStorage()._deregisterStakingKey = newValue}
+  }
+  /// Returns true if `deregisterStakingKey` has been explicitly set.
+  public var hasDeregisterStakingKey: Bool {return _storage._deregisterStakingKey != nil}
+  /// Clears the value of `deregisterStakingKey`. Subsequent reads from it will return its default value.
+  public mutating func clearDeregisterStakingKey() {_uniqueStorage()._deregisterStakingKey = nil}
+
+  /// Time-to-live time of the TX
   public var ttl: UInt64 {
     get {return _storage._ttl}
     set {_uniqueStorage()._ttl = newValue}
   }
 
-  /// Optional plan
+  /// Optional plan, if missing it will be computed
   public var plan: TW_Cardano_Proto_TransactionPlan {
     get {return _storage._plan ?? TW_Cardano_Proto_TransactionPlan()}
     set {_uniqueStorage()._plan = newValue}
@@ -230,6 +370,12 @@ public struct TW_Cardano_Proto_SigningInput {
   /// Clears the value of `plan`. Subsequent reads from it will return its default value.
   public mutating func clearPlan() {_uniqueStorage()._plan = nil}
 
+  /// extra output UTXOs
+  public var extraOutputs: [TW_Cardano_Proto_TxOutput] {
+    get {return _storage._extraOutputs}
+    set {_uniqueStorage()._extraOutputs = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -237,12 +383,13 @@ public struct TW_Cardano_Proto_SigningInput {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-/// Transaction signing output
+/// Result containing the signed and encoded transaction.
 public struct TW_Cardano_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Encoded transaction bytes
   public var encoded: Data = Data()
 
   /// TxID, derived from transaction data, also needed for submission
@@ -250,6 +397,9 @@ public struct TW_Cardano_Proto_SigningOutput {
 
   /// Optional error
   public var error: TW_Common_Proto_SigningError = .ok
+
+  /// error code description
+  public var errorMessage: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -304,6 +454,7 @@ extension TW_Cardano_Proto_TokenAmount: SwiftProtobuf.Message, SwiftProtobuf._Me
     1: .standard(proto: "policy_id"),
     2: .standard(proto: "asset_name"),
     3: .same(proto: "amount"),
+    4: .standard(proto: "asset_name_hex"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -315,6 +466,7 @@ extension TW_Cardano_Proto_TokenAmount: SwiftProtobuf.Message, SwiftProtobuf._Me
       case 1: try { try decoder.decodeSingularStringField(value: &self.policyID) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.assetName) }()
       case 3: try { try decoder.decodeSingularBytesField(value: &self.amount) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.assetNameHex) }()
       default: break
       }
     }
@@ -330,6 +482,9 @@ extension TW_Cardano_Proto_TokenAmount: SwiftProtobuf.Message, SwiftProtobuf._Me
     if !self.amount.isEmpty {
       try visitor.visitSingularBytesField(value: self.amount, fieldNumber: 3)
     }
+    if !self.assetNameHex.isEmpty {
+      try visitor.visitSingularStringField(value: self.assetNameHex, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -337,6 +492,7 @@ extension TW_Cardano_Proto_TokenAmount: SwiftProtobuf.Message, SwiftProtobuf._Me
     if lhs.policyID != rhs.policyID {return false}
     if lhs.assetName != rhs.assetName {return false}
     if lhs.amount != rhs.amount {return false}
+    if lhs.assetNameHex != rhs.assetNameHex {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -538,6 +694,164 @@ extension TW_Cardano_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf._Messa
   }
 }
 
+extension TW_Cardano_Proto_RegisterStakingKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RegisterStakingKey"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "staking_address"),
+    2: .standard(proto: "deposit_amount"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.stakingAddress) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.depositAmount) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.stakingAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.stakingAddress, fieldNumber: 1)
+    }
+    if self.depositAmount != 0 {
+      try visitor.visitSingularUInt64Field(value: self.depositAmount, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cardano_Proto_RegisterStakingKey, rhs: TW_Cardano_Proto_RegisterStakingKey) -> Bool {
+    if lhs.stakingAddress != rhs.stakingAddress {return false}
+    if lhs.depositAmount != rhs.depositAmount {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cardano_Proto_DeregisterStakingKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DeregisterStakingKey"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "staking_address"),
+    2: .standard(proto: "undeposit_amount"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.stakingAddress) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.undepositAmount) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.stakingAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.stakingAddress, fieldNumber: 1)
+    }
+    if self.undepositAmount != 0 {
+      try visitor.visitSingularUInt64Field(value: self.undepositAmount, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cardano_Proto_DeregisterStakingKey, rhs: TW_Cardano_Proto_DeregisterStakingKey) -> Bool {
+    if lhs.stakingAddress != rhs.stakingAddress {return false}
+    if lhs.undepositAmount != rhs.undepositAmount {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cardano_Proto_Delegate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Delegate"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "staking_address"),
+    2: .standard(proto: "pool_id"),
+    3: .standard(proto: "deposit_amount"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.stakingAddress) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.poolID) }()
+      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.depositAmount) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.stakingAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.stakingAddress, fieldNumber: 1)
+    }
+    if !self.poolID.isEmpty {
+      try visitor.visitSingularBytesField(value: self.poolID, fieldNumber: 2)
+    }
+    if self.depositAmount != 0 {
+      try visitor.visitSingularUInt64Field(value: self.depositAmount, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cardano_Proto_Delegate, rhs: TW_Cardano_Proto_Delegate) -> Bool {
+    if lhs.stakingAddress != rhs.stakingAddress {return false}
+    if lhs.poolID != rhs.poolID {return false}
+    if lhs.depositAmount != rhs.depositAmount {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cardano_Proto_Withdraw: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Withdraw"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "staking_address"),
+    2: .standard(proto: "withdraw_amount"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.stakingAddress) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.withdrawAmount) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.stakingAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.stakingAddress, fieldNumber: 1)
+    }
+    if self.withdrawAmount != 0 {
+      try visitor.visitSingularUInt64Field(value: self.withdrawAmount, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cardano_Proto_Withdraw, rhs: TW_Cardano_Proto_Withdraw) -> Bool {
+    if lhs.stakingAddress != rhs.stakingAddress {return false}
+    if lhs.withdrawAmount != rhs.withdrawAmount {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension TW_Cardano_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TransactionPlan"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -545,11 +859,14 @@ extension TW_Cardano_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf
     2: .same(proto: "amount"),
     3: .same(proto: "fee"),
     4: .same(proto: "change"),
+    10: .same(proto: "deposit"),
+    11: .same(proto: "undeposit"),
     5: .standard(proto: "available_tokens"),
     6: .standard(proto: "output_tokens"),
     7: .standard(proto: "change_tokens"),
     8: .same(proto: "utxos"),
     9: .same(proto: "error"),
+    12: .standard(proto: "extra_outputs"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -567,6 +884,9 @@ extension TW_Cardano_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf
       case 7: try { try decoder.decodeRepeatedMessageField(value: &self.changeTokens) }()
       case 8: try { try decoder.decodeRepeatedMessageField(value: &self.utxos) }()
       case 9: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 10: try { try decoder.decodeSingularUInt64Field(value: &self.deposit) }()
+      case 11: try { try decoder.decodeSingularUInt64Field(value: &self.undeposit) }()
+      case 12: try { try decoder.decodeRepeatedMessageField(value: &self.extraOutputs) }()
       default: break
       }
     }
@@ -600,6 +920,15 @@ extension TW_Cardano_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf
     if self.error != .ok {
       try visitor.visitSingularEnumField(value: self.error, fieldNumber: 9)
     }
+    if self.deposit != 0 {
+      try visitor.visitSingularUInt64Field(value: self.deposit, fieldNumber: 10)
+    }
+    if self.undeposit != 0 {
+      try visitor.visitSingularUInt64Field(value: self.undeposit, fieldNumber: 11)
+    }
+    if !self.extraOutputs.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.extraOutputs, fieldNumber: 12)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -608,11 +937,14 @@ extension TW_Cardano_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf
     if lhs.amount != rhs.amount {return false}
     if lhs.fee != rhs.fee {return false}
     if lhs.change != rhs.change {return false}
+    if lhs.deposit != rhs.deposit {return false}
+    if lhs.undeposit != rhs.undeposit {return false}
     if lhs.availableTokens != rhs.availableTokens {return false}
     if lhs.outputTokens != rhs.outputTokens {return false}
     if lhs.changeTokens != rhs.changeTokens {return false}
     if lhs.utxos != rhs.utxos {return false}
     if lhs.error != rhs.error {return false}
+    if lhs.extraOutputs != rhs.extraOutputs {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -624,16 +956,26 @@ extension TW_Cardano_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
     1: .same(proto: "utxos"),
     2: .standard(proto: "private_key"),
     3: .standard(proto: "transfer_message"),
+    6: .standard(proto: "register_staking_key"),
+    7: .same(proto: "delegate"),
+    8: .same(proto: "withdraw"),
+    9: .standard(proto: "deregister_staking_key"),
     4: .same(proto: "ttl"),
     5: .same(proto: "plan"),
+    10: .standard(proto: "extra_outputs"),
   ]
 
   fileprivate class _StorageClass {
     var _utxos: [TW_Cardano_Proto_TxInput] = []
     var _privateKey: [Data] = []
     var _transferMessage: TW_Cardano_Proto_Transfer? = nil
+    var _registerStakingKey: TW_Cardano_Proto_RegisterStakingKey? = nil
+    var _delegate: TW_Cardano_Proto_Delegate? = nil
+    var _withdraw: TW_Cardano_Proto_Withdraw? = nil
+    var _deregisterStakingKey: TW_Cardano_Proto_DeregisterStakingKey? = nil
     var _ttl: UInt64 = 0
     var _plan: TW_Cardano_Proto_TransactionPlan? = nil
+    var _extraOutputs: [TW_Cardano_Proto_TxOutput] = []
 
     static let defaultInstance = _StorageClass()
 
@@ -643,8 +985,13 @@ extension TW_Cardano_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
       _utxos = source._utxos
       _privateKey = source._privateKey
       _transferMessage = source._transferMessage
+      _registerStakingKey = source._registerStakingKey
+      _delegate = source._delegate
+      _withdraw = source._withdraw
+      _deregisterStakingKey = source._deregisterStakingKey
       _ttl = source._ttl
       _plan = source._plan
+      _extraOutputs = source._extraOutputs
     }
   }
 
@@ -668,6 +1015,11 @@ extension TW_Cardano_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
         case 3: try { try decoder.decodeSingularMessageField(value: &_storage._transferMessage) }()
         case 4: try { try decoder.decodeSingularUInt64Field(value: &_storage._ttl) }()
         case 5: try { try decoder.decodeSingularMessageField(value: &_storage._plan) }()
+        case 6: try { try decoder.decodeSingularMessageField(value: &_storage._registerStakingKey) }()
+        case 7: try { try decoder.decodeSingularMessageField(value: &_storage._delegate) }()
+        case 8: try { try decoder.decodeSingularMessageField(value: &_storage._withdraw) }()
+        case 9: try { try decoder.decodeSingularMessageField(value: &_storage._deregisterStakingKey) }()
+        case 10: try { try decoder.decodeRepeatedMessageField(value: &_storage._extraOutputs) }()
         default: break
         }
       }
@@ -695,6 +1047,21 @@ extension TW_Cardano_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
       try { if let v = _storage._plan {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
       } }()
+      try { if let v = _storage._registerStakingKey {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+      } }()
+      try { if let v = _storage._delegate {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+      } }()
+      try { if let v = _storage._withdraw {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+      } }()
+      try { if let v = _storage._deregisterStakingKey {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+      } }()
+      if !_storage._extraOutputs.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._extraOutputs, fieldNumber: 10)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -707,8 +1074,13 @@ extension TW_Cardano_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
         if _storage._utxos != rhs_storage._utxos {return false}
         if _storage._privateKey != rhs_storage._privateKey {return false}
         if _storage._transferMessage != rhs_storage._transferMessage {return false}
+        if _storage._registerStakingKey != rhs_storage._registerStakingKey {return false}
+        if _storage._delegate != rhs_storage._delegate {return false}
+        if _storage._withdraw != rhs_storage._withdraw {return false}
+        if _storage._deregisterStakingKey != rhs_storage._deregisterStakingKey {return false}
         if _storage._ttl != rhs_storage._ttl {return false}
         if _storage._plan != rhs_storage._plan {return false}
+        if _storage._extraOutputs != rhs_storage._extraOutputs {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -724,6 +1096,7 @@ extension TW_Cardano_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
     1: .same(proto: "encoded"),
     2: .standard(proto: "tx_id"),
     3: .same(proto: "error"),
+    4: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -735,6 +1108,7 @@ extension TW_Cardano_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
       case 1: try { try decoder.decodeSingularBytesField(value: &self.encoded) }()
       case 2: try { try decoder.decodeSingularBytesField(value: &self.txID) }()
       case 3: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -750,6 +1124,9 @@ extension TW_Cardano_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
     if self.error != .ok {
       try visitor.visitSingularEnumField(value: self.error, fieldNumber: 3)
     }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -757,6 +1134,7 @@ extension TW_Cardano_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
     if lhs.encoded != rhs.encoded {return false}
     if lhs.txID != rhs.txID {return false}
     if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

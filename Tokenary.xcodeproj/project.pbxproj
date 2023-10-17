@@ -21,9 +21,6 @@
 		2C09FC602828078C00DE9C27 /* AccountsHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09FC5E2828078C00DE9C27 /* AccountsHeaderView.swift */; };
 		2C09FC662828331D00DE9C27 /* Image.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09FC652828331D00DE9C27 /* Image.swift */; };
 		2C09FC672828331D00DE9C27 /* Image.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09FC652828331D00DE9C27 /* Image.swift */; };
-		2C0EE4022753874D00AC2AFA /* PeerMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0EE4012753874D00AC2AFA /* PeerMeta.swift */; };
-		2C10DE4528367637001D8694 /* Near.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C10DE4428367637001D8694 /* Near.swift */; };
-		2C10DE4628367637001D8694 /* Near.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C10DE4428367637001D8694 /* Near.swift */; };
 		2C134BA627553EC500DAFBDB /* Browser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C134BA527553EC500DAFBDB /* Browser.swift */; };
 		2C1995402674C4B900A8E370 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C19953F2674C4B900A8E370 /* AppDelegate.swift */; };
 		2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995412674C4B900A8E370 /* ImportViewController.swift */; };
@@ -78,12 +75,12 @@
 		2C3024FC28C1193100C304ED /* TokenaryAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3024FB28C1193100C304ED /* TokenaryAccount.swift */; };
 		2C3024FD28C1193100C304ED /* TokenaryAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3024FB28C1193100C304ED /* TokenaryAccount.swift */; };
 		2C3B7F022756A08600931264 /* Identifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3B7F012756A08600931264 /* Identifiers.swift */; };
-		2C40379428199110004C7263 /* Solana.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C40379328199110004C7263 /* Solana.swift */; };
-		2C40379528199110004C7263 /* Solana.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C40379328199110004C7263 /* Solana.swift */; };
 		2C40709027667A6600AB3D55 /* MultilineLabelTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C40708E27667A6600AB3D55 /* MultilineLabelTableViewCell.swift */; };
 		2C40709127667A6600AB3D55 /* MultilineLabelTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C40708F27667A6600AB3D55 /* MultilineLabelTableViewCell.xib */; };
 		2C40709427667A8600AB3D55 /* ImageWithLabelTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C40709227667A8600AB3D55 /* ImageWithLabelTableViewCell.swift */; };
 		2C40709527667A8600AB3D55 /* ImageWithLabelTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C40709327667A8600AB3D55 /* ImageWithLabelTableViewCell.xib */; };
+		2C4297282ADEDCBD0044357A /* PeerMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4297272ADEDCBD0044357A /* PeerMeta.swift */; };
+		2C4297292ADEDCBD0044357A /* PeerMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4297272ADEDCBD0044357A /* PeerMeta.swift */; };
 		2C4768A728258627005E8D4D /* EditAccountsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4768A628258627005E8D4D /* EditAccountsViewController.swift */; };
 		2C4768A9282598C5005E8D4D /* CoinDerivationCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4768A8282598C5005E8D4D /* CoinDerivationCellView.swift */; };
 		2C4768AB2826CA63005E8D4D /* CoinDerivation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4768AA2826CA63005E8D4D /* CoinDerivation.swift */; };
@@ -126,7 +123,6 @@
 		2C89D26927BADCA9006C0C8D /* DappRequestAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */; };
 		2C8A09C6267513FC00993638 /* Agent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09C5267513FC00993638 /* Agent.swift */; };
 		2C8A09D42675184700993638 /* Window.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09D32675184700993638 /* Window.swift */; };
-		2C8A09D726751A0C00993638 /* WalletConnect.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09D626751A0C00993638 /* WalletConnect.swift */; };
 		2C8A09DF267579EA00993638 /* AccountsListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09DE267579EA00993638 /* AccountsListViewController.swift */; };
 		2C8A09E326757FC000993638 /* AccountCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09E226757FC000993638 /* AccountCellView.swift */; };
 		2C8A09EB2675964700993638 /* ApproveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09EA2675964700993638 /* ApproveViewController.swift */; };
@@ -154,8 +150,6 @@
 		2C96D3A62763CCA000687301 /* Images.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D3A52763CCA000687301 /* Images.swift */; };
 		2C96D3A92763D13400687301 /* DataStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D3A72763D13400687301 /* DataStateView.swift */; };
 		2C96D3AA2763D13400687301 /* DataStateView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C96D3A82763D13400687301 /* DataStateView.xib */; };
-		2C9B7735283FBA18008C191C /* UInt2x.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B7734283FBA18008C191C /* UInt2x.swift */; };
-		2C9B7736283FBA18008C191C /* UInt2x.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B7734283FBA18008C191C /* UInt2x.swift */; };
 		2C9F0B6526BDC9AF008FA3D6 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */; };
 		2C9F0B6826BDCB2E008FA3D6 /* EthereumChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */; };
 		2CAA412526C7CD93009F3535 /* ReviewRequester.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CAA412426C7CD93009F3535 /* ReviewRequester.swift */; };
@@ -167,7 +161,6 @@
 		2CB4031D281D745D00BAEBEE /* NSTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB4031C281D745D00BAEBEE /* NSTableView.swift */; };
 		2CC0CDBE2692027E0072922A /* PriceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC0CDBD2692027E0072922A /* PriceService.swift */; };
 		2CC6EF0D275E64810040CC62 /* UIViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC6EF0C275E64810040CC62 /* UIViewController.swift */; };
-		2CC8946F269A2E8C00879245 /* SessionStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8946E269A2E8C00879245 /* SessionStorage.swift */; };
 		2CC89471269A334A00879245 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC89470269A334A00879245 /* UserDefaults.swift */; };
 		2CC8C5A22767D3B30083FB1B /* GasPriceSliderTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8C5A02767D3B30083FB1B /* GasPriceSliderTableViewCell.swift */; };
 		2CC8C5A32767D3B30083FB1B /* GasPriceSliderTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2CC8C5A12767D3B30083FB1B /* GasPriceSliderTableViewCell.xib */; };
@@ -199,7 +192,6 @@
 		2CEFEB16274D5DCA00CE23BD /* inpage.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CEFEB15274D5DC900CE23BD /* inpage.js */; };
 		2CF25597275A46D300AE54B9 /* Defaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C528A15267FA8EB00CA3ADD /* Defaults.swift */; };
 		2CF25598275A46D600AE54B9 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C492689F01700D0926A /* Strings.swift */; };
-		2CF25599275A46E200AE54B9 /* PeerMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0EE4012753874D00AC2AFA /* PeerMeta.swift */; };
 		2CF2559B275A46E700AE54B9 /* AuthenticationReason.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC850E626B73A5900809E82 /* AuthenticationReason.swift */; };
 		2CF2559C275A477F00AE54B9 /* ApprovalSubject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D059AD126C2796200EE3023 /* ApprovalSubject.swift */; };
 		2CF2559D275A479800AE54B9 /* TokenaryWallet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668B26B2142000728C20 /* TokenaryWallet.swift */; };
@@ -213,7 +205,6 @@
 		2CF255A7275A48BB00AE54B9 /* PriceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC0CDBD2692027E0072922A /* PriceService.swift */; };
 		2CF255A8275A48BB00AE54B9 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03D1D1269B407900EF10EA /* NetworkMonitor.swift */; };
 		2CF255A9275A48BB00AE54B9 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C917428267D2A6E00049075 /* Keychain.swift */; };
-		2CF255AA275A48BB00AE54B9 /* SessionStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8946E269A2E8C00879245 /* SessionStorage.swift */; };
 		2CF255AB275A48CF00AE54B9 /* Ethereum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995552674D0F300A8E370 /* Ethereum.swift */; };
 		2CF255AC275A48CF00AE54B9 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */; };
 		2CF255AD275A48CF00AE54B9 /* EthereumChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */; };
@@ -288,8 +279,6 @@
 		2C09FC5D2828078C00DE9C27 /* AccountsHeaderView.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = AccountsHeaderView.xib; sourceTree = "<group>"; };
 		2C09FC5E2828078C00DE9C27 /* AccountsHeaderView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AccountsHeaderView.swift; sourceTree = "<group>"; };
 		2C09FC652828331D00DE9C27 /* Image.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Image.swift; sourceTree = "<group>"; };
-		2C0EE4012753874D00AC2AFA /* PeerMeta.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerMeta.swift; sourceTree = "<group>"; };
-		2C10DE4428367637001D8694 /* Near.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Near.swift; sourceTree = "<group>"; };
 		2C134BA527553EC500DAFBDB /* Browser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Browser.swift; sourceTree = "<group>"; };
 		2C19953C2674C4B900A8E370 /* Tokenary.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tokenary.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C19953F2674C4B900A8E370 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -314,11 +303,11 @@
 		2C2AA1D428AFB1AD00E35DBF /* MultipleResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipleResponseToExtension.swift; sourceTree = "<group>"; };
 		2C3024FB28C1193100C304ED /* TokenaryAccount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenaryAccount.swift; sourceTree = "<group>"; };
 		2C3B7F012756A08600931264 /* Identifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Identifiers.swift; sourceTree = "<group>"; };
-		2C40379328199110004C7263 /* Solana.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Solana.swift; sourceTree = "<group>"; };
 		2C40708E27667A6600AB3D55 /* MultilineLabelTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultilineLabelTableViewCell.swift; sourceTree = "<group>"; };
 		2C40708F27667A6600AB3D55 /* MultilineLabelTableViewCell.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = MultilineLabelTableViewCell.xib; sourceTree = "<group>"; };
 		2C40709227667A8600AB3D55 /* ImageWithLabelTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageWithLabelTableViewCell.swift; sourceTree = "<group>"; };
 		2C40709327667A8600AB3D55 /* ImageWithLabelTableViewCell.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = ImageWithLabelTableViewCell.xib; sourceTree = "<group>"; };
+		2C4297272ADEDCBD0044357A /* PeerMeta.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PeerMeta.swift; sourceTree = "<group>"; };
 		2C4768A628258627005E8D4D /* EditAccountsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditAccountsViewController.swift; sourceTree = "<group>"; };
 		2C4768A8282598C5005E8D4D /* CoinDerivationCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoinDerivationCellView.swift; sourceTree = "<group>"; };
 		2C4768AA2826CA63005E8D4D /* CoinDerivation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoinDerivation.swift; sourceTree = "<group>"; };
@@ -357,7 +346,6 @@
 		2C89D26B27BAF2A3006C0C8D /* package-lock.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "package-lock.json"; path = "web3-provider/package-lock.json"; sourceTree = "<group>"; };
 		2C8A09C5267513FC00993638 /* Agent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent.swift; sourceTree = "<group>"; };
 		2C8A09D32675184700993638 /* Window.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Window.swift; sourceTree = "<group>"; };
-		2C8A09D626751A0C00993638 /* WalletConnect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletConnect.swift; sourceTree = "<group>"; };
 		2C8A09DE267579EA00993638 /* AccountsListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsListViewController.swift; sourceTree = "<group>"; };
 		2C8A09E226757FC000993638 /* AccountCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountCellView.swift; sourceTree = "<group>"; };
 		2C8A09EA2675964700993638 /* ApproveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveViewController.swift; sourceTree = "<group>"; };
@@ -383,7 +371,6 @@
 		2C96D3A52763CCA000687301 /* Images.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Images.swift; sourceTree = "<group>"; };
 		2C96D3A72763D13400687301 /* DataStateView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DataStateView.swift; sourceTree = "<group>"; };
 		2C96D3A82763D13400687301 /* DataStateView.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = DataStateView.xib; sourceTree = "<group>"; };
-		2C9B7734283FBA18008C191C /* UInt2x.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UInt2x.swift; sourceTree = "<group>"; };
 		2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumNetwork.swift; sourceTree = "<group>"; };
 		2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumChain.swift; sourceTree = "<group>"; };
 		2CAA412426C7CD93009F3535 /* ReviewRequester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewRequester.swift; sourceTree = "<group>"; };
@@ -399,7 +386,6 @@
 		2CB4031C281D745D00BAEBEE /* NSTableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSTableView.swift; sourceTree = "<group>"; };
 		2CC0CDBD2692027E0072922A /* PriceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceService.swift; sourceTree = "<group>"; };
 		2CC6EF0C275E64810040CC62 /* UIViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIViewController.swift; sourceTree = "<group>"; };
-		2CC8946E269A2E8C00879245 /* SessionStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStorage.swift; sourceTree = "<group>"; };
 		2CC89470269A334A00879245 /* UserDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaults.swift; sourceTree = "<group>"; };
 		2CC8C5A02767D3B30083FB1B /* GasPriceSliderTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GasPriceSliderTableViewCell.swift; sourceTree = "<group>"; };
 		2CC8C5A12767D3B30083FB1B /* GasPriceSliderTableViewCell.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = GasPriceSliderTableViewCell.xib; sourceTree = "<group>"; };
@@ -547,7 +533,6 @@
 			children = (
 				2C19953F2674C4B900A8E370 /* AppDelegate.swift */,
 				2C8A09C5267513FC00993638 /* Agent.swift */,
-				2C8A09D626751A0C00993638 /* WalletConnect.swift */,
 				2C8A09D32675184700993638 /* Window.swift */,
 				2C3B7F012756A08600931264 /* Identifiers.swift */,
 				0DC850E926B73A8200809E82 /* Models */,
@@ -756,14 +741,6 @@
 			path = Library;
 			sourceTree = "<group>";
 		};
-		2C9B7737284A5E52008C191C /* NEAR */ = {
-			isa = PBXGroup;
-			children = (
-				2C9B7734283FBA18008C191C /* UInt2x.swift */,
-			);
-			path = NEAR;
-			sourceTree = "<group>";
-		};
 		2CB3844027654A0D00A189B9 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
@@ -867,11 +844,10 @@
 		2CF25596275A468B00AE54B9 /* Models */ = {
 			isa = PBXGroup;
 			children = (
-				2C9B7737284A5E52008C191C /* NEAR */,
-				2C0EE4012753874D00AC2AFA /* PeerMeta.swift */,
 				2C90E62127B2ED2D00C8991E /* SafariRequest+Helpers.swift */,
 				0D059AD126C2796200EE3023 /* ApprovalSubject.swift */,
 				2C09FC652828331D00DE9C27 /* Image.swift */,
+				2C4297272ADEDCBD0044357A /* PeerMeta.swift */,
 				2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */,
 				0DC850E626B73A5900809E82 /* AuthenticationReason.swift */,
 				2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */,
@@ -897,12 +873,9 @@
 			children = (
 				2C03D1D1269B407900EF10EA /* NetworkMonitor.swift */,
 				2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */,
-				2C40379328199110004C7263 /* Solana.swift */,
-				2C10DE4428367637001D8694 /* Near.swift */,
 				2CAA412426C7CD93009F3535 /* ReviewRequester.swift */,
 				2C901C4C268A033100D0926A /* GasService.swift */,
 				2CC0CDBD2692027E0072922A /* PriceService.swift */,
-				2CC8946E269A2E8C00879245 /* SessionStorage.swift */,
 				2C917428267D2A6E00049075 /* Keychain.swift */,
 			);
 			path = Services;
@@ -979,7 +952,6 @@
 				2C1995382674C4B900A8E370 /* Sources */,
 				2C1995392674C4B900A8E370 /* Frameworks */,
 				2C19953A2674C4B900A8E370 /* Resources */,
-				2C1995512674C6A100A8E370 /* ShellScript */,
 				2C09CBB8273979C1009AD39B /* Embed App Extensions */,
 				2B67825D537A2599798098F3 /* [CP] Embed Pods Frameworks */,
 			);
@@ -1001,7 +973,6 @@
 				2C5FF96B26C84F7B00B32ACC /* Sources */,
 				2C5FF96C26C84F7B00B32ACC /* Frameworks */,
 				2C5FF96D26C84F7B00B32ACC /* Resources */,
-				2CC8C59D27678D4B0083FB1B /* ShellScript */,
 				2CCEB84627594E2A00768473 /* Embed App Extensions */,
 				68842E1F5932B8E151C67B04 /* [CP] Embed Pods Frameworks */,
 			);
@@ -1208,23 +1179,6 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Tokenary/Pods-Tokenary-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		2C1995512674C6A100A8E370 /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "export PATH=\"$PATH:/opt/homebrew/bin\"\n\nif which swiftlint; then\n    swiftlint\nelse\n  echo \"warning: SwiftLint not installed, download from https://github.com/realm/SwiftLint\"\nfi\n";
-		};
 		2C85D99C274E531100160AD5 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -1260,23 +1214,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "FILE=/usr/lib/bin/yarn\nif [ -f \"$FILE\" ]; then\n    export PATH=/usr/lib/bin:$PATH\nelse\n    export PATH=/opt/homebrew/bin:$PATH\nfi\n\ncd \"$PROJECT_DIR\"/Safari\\ Shared/web3-provider\nyarn run build\n";
-		};
-		2CC8C59D27678D4B0083FB1B /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "export PATH=\"$PATH:/opt/homebrew/bin\"\n\nif which swiftlint; then\n    swiftlint\nelse\n  echo \"warning: SwiftLint not installed, download from https://github.com/realm/SwiftLint\"\nfi\n";
 		};
 		5ED94A042948552AFC0B9216 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -1356,7 +1293,6 @@
 				2C2AA1D228AD1DC100E35DBF /* SpecificWalletAccount.swift in Sources */,
 				2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */,
 				2CC0CDBE2692027E0072922A /* PriceService.swift in Sources */,
-				2C9B7735283FBA18008C191C /* UInt2x.swift in Sources */,
 				2C8A09C6267513FC00993638 /* Agent.swift in Sources */,
 				2C8A09D42675184700993638 /* Window.swift in Sources */,
 				2C264BD527B5806200234393 /* Web3Provider.swift in Sources */,
@@ -1366,16 +1302,13 @@
 				2C9F0B6526BDC9AF008FA3D6 /* EthereumNetwork.swift in Sources */,
 				2C773F62274523DC007B04E7 /* ResponseToExtension.swift in Sources */,
 				2C208A9F26813408005BA500 /* Secrets.swift in Sources */,
-				2CC8946F269A2E8C00879245 /* SessionStorage.swift in Sources */,
 				0DC850E726B73A5900809E82 /* AuthenticationReason.swift in Sources */,
 				2C4768AB2826CA63005E8D4D /* CoinDerivation.swift in Sources */,
 				2C86A262282D1F090028EA11 /* NearSafariRequest.swift in Sources */,
 				2CAA412526C7CD93009F3535 /* ReviewRequester.swift in Sources */,
 				2CD0669126B5537B00728C20 /* TokenaryWallet.swift in Sources */,
-				2C0EE4022753874D00AC2AFA /* PeerMeta.swift in Sources */,
 				2C89D26827BADCA9006C0C8D /* DappRequestAction.swift in Sources */,
 				2C3B7F022756A08600931264 /* Identifiers.swift in Sources */,
-				2C8A09D726751A0C00993638 /* WalletConnect.swift in Sources */,
 				2C9F0B6826BDCB2E008FA3D6 /* EthereumChain.swift in Sources */,
 				2C03D1D2269B407900EF10EA /* NetworkMonitor.swift in Sources */,
 				2C8A09E326757FC000993638 /* AccountCellView.swift in Sources */,
@@ -1404,6 +1337,7 @@
 				2C901C4D268A033100D0926A /* GasService.swift in Sources */,
 				2C4768A728258627005E8D4D /* EditAccountsViewController.swift in Sources */,
 				2C5C829F2822B9DF007D9488 /* Images.swift in Sources */,
+				2C4297282ADEDCBD0044357A /* PeerMeta.swift in Sources */,
 				2C528A16267FA8EB00CA3ADD /* Defaults.swift in Sources */,
 				2C264BE127B5AC6000234393 /* SolanaResponseToExtension.swift in Sources */,
 				2C264BBC27B2F25E00234393 /* SafariRequest.swift in Sources */,
@@ -1412,7 +1346,6 @@
 				2C2AA1D528AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
 				2C264BEB27B6B50700234393 /* DappRequestProcessor.swift in Sources */,
 				2C264BE627B5AC6800234393 /* TezosResponseToExtension.swift in Sources */,
-				2C10DE4528367637001D8694 /* Near.swift in Sources */,
 				2CE3D012267F73C00032A62E /* Transaction.swift in Sources */,
 				2C90E62227B2ED2D00C8991E /* SafariRequest+Helpers.swift in Sources */,
 				2C09FC662828331D00DE9C27 /* Image.swift in Sources */,
@@ -1420,7 +1353,6 @@
 				2C264BDC27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */,
 				2C03D1D5269B428C00EF10EA /* Notification.swift in Sources */,
 				2C1995562674D0F300A8E370 /* Ethereum.swift in Sources */,
-				2C40379428199110004C7263 /* Solana.swift in Sources */,
 				2C8A09DF267579EA00993638 /* AccountsListViewController.swift in Sources */,
 				2C917429267D2A6E00049075 /* Keychain.swift in Sources */,
 			);
@@ -1435,7 +1367,6 @@
 				2C3024FD28C1193100C304ED /* TokenaryAccount.swift in Sources */,
 				2C96D3962762380400687301 /* ButtonWithExtendedArea.swift in Sources */,
 				2C264BC227B2F2C100234393 /* EthereumSafariRequest.swift in Sources */,
-				2CF25599275A46E200AE54B9 /* PeerMeta.swift in Sources */,
 				2CE059372763D60A0042D844 /* KeyboardObserver.swift in Sources */,
 				2CF255A0275A47DD00AE54B9 /* Bundle.swift in Sources */,
 				2CF255AC275A48CF00AE54B9 /* EthereumNetwork.swift in Sources */,
@@ -1462,12 +1393,11 @@
 				2CF25598275A46D600AE54B9 /* Strings.swift in Sources */,
 				2C4768B52826ED83005E8D4D /* CoinType.swift in Sources */,
 				2CF255AE275A48CF00AE54B9 /* Transaction.swift in Sources */,
-				2C10DE4628367637001D8694 /* Near.swift in Sources */,
 				2C96D38F2762317300687301 /* AccountTableViewCell.swift in Sources */,
 				2C264BEC27B6B50700234393 /* DappRequestProcessor.swift in Sources */,
-				2C9B7736283FBA18008C191C /* UInt2x.swift in Sources */,
 				2CF255A1275A47DD00AE54B9 /* Notification.swift in Sources */,
 				2C86A263282D1F090028EA11 /* NearSafariRequest.swift in Sources */,
+				2C4297292ADEDCBD0044357A /* PeerMeta.swift in Sources */,
 				2CE059392763F3FF0042D844 /* CGFloat.swift in Sources */,
 				2C264BBD27B2F25E00234393 /* SafariRequest.swift in Sources */,
 				2CF255B4275A744000AE54B9 /* PasswordViewController.swift in Sources */,
@@ -1475,14 +1405,12 @@
 				2C96D39C2763ADE100687301 /* LocalAuthentication.swift in Sources */,
 				2C96D3A62763CCA000687301 /* Images.swift in Sources */,
 				2C264BD127B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
-				2CF255AA275A48BB00AE54B9 /* SessionStorage.swift in Sources */,
 				2C96D39827623EC600687301 /* URL.swift in Sources */,
 				2CF255AD275A48CF00AE54B9 /* EthereumChain.swift in Sources */,
 				2CF2559C275A477F00AE54B9 /* ApprovalSubject.swift in Sources */,
 				2C09FC672828331D00DE9C27 /* Image.swift in Sources */,
 				2C264BE727B5AC6800234393 /* TezosResponseToExtension.swift in Sources */,
 				2C264BD627B5806200234393 /* Web3Provider.swift in Sources */,
-				2C40379528199110004C7263 /* Solana.swift in Sources */,
 				2CE0594427640EB40042D844 /* ExtensionBridge.swift in Sources */,
 				2CF255B1275A4A1800AE54B9 /* ResponseToExtension.swift in Sources */,
 				2C09FC602828078C00DE9C27 /* AccountsHeaderView.swift in Sources */,
@@ -1591,7 +1519,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Safari macOS/Safari.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 57;
+				CURRENT_PROJECT_VERSION = 58;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1604,7 +1532,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 11.4;
-				MARKETING_VERSION = 2.0.14;
+				MARKETING_VERSION = 2.0.15;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -1625,7 +1553,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Safari macOS/Safari.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 57;
+				CURRENT_PROJECT_VERSION = 58;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1638,7 +1566,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 11.4;
-				MARKETING_VERSION = 2.0.14;
+				MARKETING_VERSION = 2.0.15;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -1916,7 +1844,7 @@
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
 				CODE_SIGN_ENTITLEMENTS = "Safari iOS/Safari iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 57;
+				CURRENT_PROJECT_VERSION = 58;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari iOS/Info.plist";
@@ -1928,7 +1856,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.14;
+				MARKETING_VERSION = 2.0.15;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -1950,7 +1878,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Safari iOS/Safari iOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 57;
+				CURRENT_PROJECT_VERSION = 58;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari iOS/Info.plist";
@@ -1962,7 +1890,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.14;
+				MARKETING_VERSION = 2.0.15;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,

@@ -20,13 +20,16 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+/// Public key with type
 public struct TW_NEAR_Proto_PublicKey {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Key type
   public var keyType: UInt32 = 0
 
+  /// The public key data
   public var data: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -34,12 +37,13 @@ public struct TW_NEAR_Proto_PublicKey {
   public init() {}
 }
 
+/// Permissions for a function call
 public struct TW_NEAR_Proto_FunctionCallPermission {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// uint128 / little endian byte order
+  /// uint128 / big endian byte order
   public var allowance: Data = Data()
 
   public var receiverID: String = String()
@@ -51,6 +55,7 @@ public struct TW_NEAR_Proto_FunctionCallPermission {
   public init() {}
 }
 
+/// Full access
 public struct TW_NEAR_Proto_FullAccessPermission {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -61,13 +66,16 @@ public struct TW_NEAR_Proto_FullAccessPermission {
   public init() {}
 }
 
+/// Access key: nonce + permission
 public struct TW_NEAR_Proto_AccessKey {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Nonce
   public var nonce: UInt64 = 0
 
+  /// Permission
   public var permission: TW_NEAR_Proto_AccessKey.OneOf_Permission? = nil
 
   public var functionCall: TW_NEAR_Proto_FunctionCallPermission {
@@ -88,6 +96,7 @@ public struct TW_NEAR_Proto_AccessKey {
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
+  /// Permission
   public enum OneOf_Permission: Equatable {
     case functionCall(TW_NEAR_Proto_FunctionCallPermission)
     case fullAccess(TW_NEAR_Proto_FullAccessPermission)
@@ -115,6 +124,7 @@ public struct TW_NEAR_Proto_AccessKey {
   public init() {}
 }
 
+/// Create Account
 public struct TW_NEAR_Proto_CreateAccount {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -125,6 +135,7 @@ public struct TW_NEAR_Proto_CreateAccount {
   public init() {}
 }
 
+/// Deploying a contract
 public struct TW_NEAR_Proto_DeployContract {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -137,18 +148,22 @@ public struct TW_NEAR_Proto_DeployContract {
   public init() {}
 }
 
+/// A method/function call
 public struct TW_NEAR_Proto_FunctionCall {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Method/function name
   public var methodName: String = String()
 
+  /// input arguments
   public var args: Data = Data()
 
+  /// gas
   public var gas: UInt64 = 0
 
-  /// uint128 / little endian byte order
+  /// uint128 / big endian byte order
   public var deposit: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -156,12 +171,13 @@ public struct TW_NEAR_Proto_FunctionCall {
   public init() {}
 }
 
+/// Transfer
 public struct TW_NEAR_Proto_Transfer {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// uint128 / little endian byte order
+  /// amount; uint128 / big endian byte order
   public var deposit: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -169,14 +185,16 @@ public struct TW_NEAR_Proto_Transfer {
   public init() {}
 }
 
+/// Stake
 public struct TW_NEAR_Proto_Stake {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// uint128 / little endian byte order
+  /// amount; uint128 / big endian byte order
   public var stake: Data = Data()
 
+  /// owner public key
   public var publicKey: TW_NEAR_Proto_PublicKey {
     get {return _publicKey ?? TW_NEAR_Proto_PublicKey()}
     set {_publicKey = newValue}
@@ -193,6 +211,7 @@ public struct TW_NEAR_Proto_Stake {
   fileprivate var _publicKey: TW_NEAR_Proto_PublicKey? = nil
 }
 
+/// Add a key
 public struct TW_NEAR_Proto_AddKey {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -224,6 +243,7 @@ public struct TW_NEAR_Proto_AddKey {
   fileprivate var _accessKey: TW_NEAR_Proto_AccessKey? = nil
 }
 
+/// Delete a key
 public struct TW_NEAR_Proto_DeleteKey {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -245,6 +265,7 @@ public struct TW_NEAR_Proto_DeleteKey {
   fileprivate var _publicKey: TW_NEAR_Proto_PublicKey? = nil
 }
 
+/// Delete account
 public struct TW_NEAR_Proto_DeleteAccount {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -257,6 +278,30 @@ public struct TW_NEAR_Proto_DeleteAccount {
   public init() {}
 }
 
+/// Fungible token transfer
+public struct TW_NEAR_Proto_TokenTransfer {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Token amount. Base-10 decimal string.
+  public var tokenAmount: String = String()
+
+  /// ID of the receiver.
+  public var receiverID: String = String()
+
+  /// Gas.
+  public var gas: UInt64 = 0
+
+  /// NEAR deposit amount; uint128 / big endian byte order.
+  public var deposit: Data = Data()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Represents an action
 public struct TW_NEAR_Proto_Action {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -328,6 +373,15 @@ public struct TW_NEAR_Proto_Action {
     set {payload = .deleteAccount(newValue)}
   }
 
+  /// Gap in field numbering is intentional as it's not a standard NEAR action.
+  public var tokenTransfer: TW_NEAR_Proto_TokenTransfer {
+    get {
+      if case .tokenTransfer(let v)? = payload {return v}
+      return TW_NEAR_Proto_TokenTransfer()
+    }
+    set {payload = .tokenTransfer(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public enum OneOf_Payload: Equatable {
@@ -339,6 +393,8 @@ public struct TW_NEAR_Proto_Action {
     case addKey(TW_NEAR_Proto_AddKey)
     case deleteKey(TW_NEAR_Proto_DeleteKey)
     case deleteAccount(TW_NEAR_Proto_DeleteAccount)
+    /// Gap in field numbering is intentional as it's not a standard NEAR action.
+    case tokenTransfer(TW_NEAR_Proto_TokenTransfer)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_NEAR_Proto_Action.OneOf_Payload, rhs: TW_NEAR_Proto_Action.OneOf_Payload) -> Bool {
@@ -378,6 +434,10 @@ public struct TW_NEAR_Proto_Action {
         guard case .deleteAccount(let l) = lhs, case .deleteAccount(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
+      case (.tokenTransfer, .tokenTransfer): return {
+        guard case .tokenTransfer(let l) = lhs, case .tokenTransfer(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
       default: return false
       }
     }
@@ -393,24 +453,33 @@ public struct TW_NEAR_Proto_SigningInput {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// ID of the sender
   public var signerID: String = String()
 
+  /// Nonce (should be larger than in the last transaction of the account)
   public var nonce: UInt64 = 0
 
+  /// ID of the receiver
   public var receiverID: String = String()
 
+  /// Recent block hash
   public var blockHash: Data = Data()
 
+  /// Payload action(s)
   public var actions: [TW_NEAR_Proto_Action] = []
 
+  /// The secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
+
+  /// The public key used for compiling a transaction with a signature.
+  public var publicKey: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_NEAR_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -419,6 +488,13 @@ public struct TW_NEAR_Proto_SigningOutput {
   /// Signed transaction blob
   public var signedTransaction: Data = Data()
 
+  /// error code, 0 is ok, other codes will be treated as errors
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  /// error code description
+  public var errorMessage: String = String()
+
+  /// Hash of the transaction
   public var hash: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -892,6 +968,56 @@ extension TW_NEAR_Proto_DeleteAccount: SwiftProtobuf.Message, SwiftProtobuf._Mes
   }
 }
 
+extension TW_NEAR_Proto_TokenTransfer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TokenTransfer"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "token_amount"),
+    2: .standard(proto: "receiver_id"),
+    3: .same(proto: "gas"),
+    4: .same(proto: "deposit"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.tokenAmount) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.receiverID) }()
+      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.gas) }()
+      case 4: try { try decoder.decodeSingularBytesField(value: &self.deposit) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.tokenAmount.isEmpty {
+      try visitor.visitSingularStringField(value: self.tokenAmount, fieldNumber: 1)
+    }
+    if !self.receiverID.isEmpty {
+      try visitor.visitSingularStringField(value: self.receiverID, fieldNumber: 2)
+    }
+    if self.gas != 0 {
+      try visitor.visitSingularUInt64Field(value: self.gas, fieldNumber: 3)
+    }
+    if !self.deposit.isEmpty {
+      try visitor.visitSingularBytesField(value: self.deposit, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_NEAR_Proto_TokenTransfer, rhs: TW_NEAR_Proto_TokenTransfer) -> Bool {
+    if lhs.tokenAmount != rhs.tokenAmount {return false}
+    if lhs.receiverID != rhs.receiverID {return false}
+    if lhs.gas != rhs.gas {return false}
+    if lhs.deposit != rhs.deposit {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension TW_NEAR_Proto_Action: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Action"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -903,6 +1029,7 @@ extension TW_NEAR_Proto_Action: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
     6: .standard(proto: "add_key"),
     7: .standard(proto: "delete_key"),
     8: .standard(proto: "delete_account"),
+    13: .standard(proto: "token_transfer"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1015,6 +1142,19 @@ extension TW_NEAR_Proto_Action: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
           self.payload = .deleteAccount(v)
         }
       }()
+      case 13: try {
+        var v: TW_NEAR_Proto_TokenTransfer?
+        var hadOneofValue = false
+        if let current = self.payload {
+          hadOneofValue = true
+          if case .tokenTransfer(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.payload = .tokenTransfer(v)
+        }
+      }()
       default: break
       }
     }
@@ -1058,6 +1198,10 @@ extension TW_NEAR_Proto_Action: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
       guard case .deleteAccount(let v)? = self.payload else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
     }()
+    case .tokenTransfer?: try {
+      guard case .tokenTransfer(let v)? = self.payload else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
+    }()
     case nil: break
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -1079,6 +1223,7 @@ extension TW_NEAR_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mess
     4: .standard(proto: "block_hash"),
     5: .same(proto: "actions"),
     6: .standard(proto: "private_key"),
+    7: .standard(proto: "public_key"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1093,6 +1238,7 @@ extension TW_NEAR_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mess
       case 4: try { try decoder.decodeSingularBytesField(value: &self.blockHash) }()
       case 5: try { try decoder.decodeRepeatedMessageField(value: &self.actions) }()
       case 6: try { try decoder.decodeSingularBytesField(value: &self.privateKey) }()
+      case 7: try { try decoder.decodeSingularBytesField(value: &self.publicKey) }()
       default: break
       }
     }
@@ -1117,6 +1263,9 @@ extension TW_NEAR_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mess
     if !self.privateKey.isEmpty {
       try visitor.visitSingularBytesField(value: self.privateKey, fieldNumber: 6)
     }
+    if !self.publicKey.isEmpty {
+      try visitor.visitSingularBytesField(value: self.publicKey, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1127,6 +1276,7 @@ extension TW_NEAR_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mess
     if lhs.blockHash != rhs.blockHash {return false}
     if lhs.actions != rhs.actions {return false}
     if lhs.privateKey != rhs.privateKey {return false}
+    if lhs.publicKey != rhs.publicKey {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1136,7 +1286,9 @@ extension TW_NEAR_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mes
   public static let protoMessageName: String = _protobuf_package + ".SigningOutput"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .standard(proto: "signed_transaction"),
-    2: .same(proto: "hash"),
+    2: .same(proto: "error"),
+    3: .standard(proto: "error_message"),
+    4: .same(proto: "hash"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1146,7 +1298,9 @@ extension TW_NEAR_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mes
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.signedTransaction) }()
-      case 2: try { try decoder.decodeSingularBytesField(value: &self.hash) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
+      case 4: try { try decoder.decodeSingularBytesField(value: &self.hash) }()
       default: break
       }
     }
@@ -1156,14 +1310,22 @@ extension TW_NEAR_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     if !self.signedTransaction.isEmpty {
       try visitor.visitSingularBytesField(value: self.signedTransaction, fieldNumber: 1)
     }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 2)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 3)
+    }
     if !self.hash.isEmpty {
-      try visitor.visitSingularBytesField(value: self.hash, fieldNumber: 2)
+      try visitor.visitSingularBytesField(value: self.hash, fieldNumber: 4)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_NEAR_Proto_SigningOutput, rhs: TW_NEAR_Proto_SigningOutput) -> Bool {
     if lhs.signedTransaction != rhs.signedTransaction {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.hash != rhs.hash {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

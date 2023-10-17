@@ -20,6 +20,7 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+/// A transfer transaction
 public struct TW_Tron_Proto_TransferContract {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -39,6 +40,7 @@ public struct TW_Tron_Proto_TransferContract {
   public init() {}
 }
 
+/// Asset transfer
 public struct TW_Tron_Proto_TransferAssetContract {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -61,6 +63,7 @@ public struct TW_Tron_Proto_TransferAssetContract {
   public init() {}
 }
 
+/// TRC20 token transfer
 public struct TW_Tron_Proto_TransferTRC20Contract {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -75,7 +78,7 @@ public struct TW_Tron_Proto_TransferTRC20Contract {
   /// Recipient address.
   public var toAddress: String = String()
 
-  /// Amount to send, uint256, big-endian.
+  /// Amount to send, (uint256, serialized big endian)
   public var amount: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -83,6 +86,7 @@ public struct TW_Tron_Proto_TransferTRC20Contract {
   public init() {}
 }
 
+/// Freeze balance
 public struct TW_Tron_Proto_FreezeBalanceContract {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -108,6 +112,112 @@ public struct TW_Tron_Proto_FreezeBalanceContract {
   public init() {}
 }
 
+/// stake TRX to obtain TRON Power (voting rights) and bandwidth or energy.
+public struct TW_Tron_Proto_FreezeBalanceV2Contract {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Address of transaction initiator, data type is string
+  public var ownerAddress: String = String()
+
+  /// Amount of TRX to be staked, unit is sun, data type is uint256
+  public var frozenBalance: Int64 = 0
+
+  /// Resource type, "BANDWIDTH" or "ENERGY", data type is string
+  public var resource: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Unstake TRX to release bandwidth and energy and at the same time TRON Power will be reduced and all corresponding votes will be canceled.
+public struct TW_Tron_Proto_UnfreezeBalanceV2Contract {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Address of transaction initiator, data type is string
+  public var ownerAddress: String = String()
+
+  /// Amount of TRX to be unstaked, unit is sun, data type is uint256
+  public var unfreezeBalance: Int64 = 0
+
+  /// Resource type, "BANDWIDTH" or "ENERGY", data type is string
+  public var resource: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// withdraw unfrozen balance
+public struct TW_Tron_Proto_WithdrawExpireUnfreezeContract {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Address of transaction initiator, data type is string
+  public var ownerAddress: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// delegate resource
+public struct TW_Tron_Proto_DelegateResourceContract {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Address of transaction initiator, data type is string
+  public var ownerAddress: String = String()
+
+  /// Resource type, "BANDWIDTH" or "ENERGY", data type is string
+  public var resource: String = String()
+
+  /// Amount of TRX staked for resource to be delegated, unit is sun, data type is uint256
+  public var balance: Int64 = 0
+
+  /// Receiver address of resource to be delegated to
+  public var receiverAddress: String = String()
+
+  /// Whether it is locked, if it is set to true, the delegated resources cannot be undelegated within 3 days.
+  /// When the lock time is not over, if the owner delegates the same resources using the lock to the same address,
+  /// the lock time will be reset to 3 days
+  public var lock: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// undelegate resource
+public struct TW_Tron_Proto_UnDelegateResourceContract {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Address of transaction initiator, data type is string
+  public var ownerAddress: String = String()
+
+  /// Resource type, "BANDWIDTH" or "ENERGY", data type is string
+  public var resource: String = String()
+
+  /// Amount of TRX staked for resource to be undelegated, unit is sun, data type is uint256
+  public var balance: Int64 = 0
+
+  /// Receiver address of resource to be delegated to, data type is string
+  public var receiverAddress: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Unfreeze balance
 public struct TW_Tron_Proto_UnfreezeBalanceContract {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -127,6 +237,7 @@ public struct TW_Tron_Proto_UnfreezeBalanceContract {
   public init() {}
 }
 
+/// Unfreeze asset
 public struct TW_Tron_Proto_UnfreezeAssetContract {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -140,6 +251,7 @@ public struct TW_Tron_Proto_UnfreezeAssetContract {
   public init() {}
 }
 
+/// Vote asset
 public struct TW_Tron_Proto_VoteAssetContract {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -160,26 +272,32 @@ public struct TW_Tron_Proto_VoteAssetContract {
   public init() {}
 }
 
+/// Vote witness
 public struct TW_Tron_Proto_VoteWitnessContract {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Owner
   public var ownerAddress: String = String()
 
+  /// The votes
   public var votes: [TW_Tron_Proto_VoteWitnessContract.Vote] = []
 
   public var support: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
+  /// A vote
   public struct Vote {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
+    /// address
     public var voteAddress: String = String()
 
+    /// vote count
     public var voteCount: Int64 = 0
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -190,6 +308,7 @@ public struct TW_Tron_Proto_VoteWitnessContract {
   public init() {}
 }
 
+/// Withdraw balance
 public struct TW_Tron_Proto_WithdrawBalanceContract {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -203,21 +322,28 @@ public struct TW_Tron_Proto_WithdrawBalanceContract {
   public init() {}
 }
 
+/// Smart contract call
 public struct TW_Tron_Proto_TriggerSmartContract {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Owner
   public var ownerAddress: String = String()
 
+  /// Contract address
   public var contractAddress: String = String()
 
+  /// amount
   public var callValue: Int64 = 0
 
+  /// call data
   public var data: Data = Data()
 
+  /// token value
   public var callTokenValue: Int64 = 0
 
+  /// ID of the token
   public var tokenID: Int64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -225,15 +351,19 @@ public struct TW_Tron_Proto_TriggerSmartContract {
   public init() {}
 }
 
+/// Info from block header
 public struct TW_Tron_Proto_BlockHeader {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// creation timestamp
   public var timestamp: Int64 = 0
 
+  /// root
   public var txTrieRoot: Data = Data()
 
+  /// hash of the parent
   public var parentHash: Data = Data()
 
   public var number: Int64 = 0
@@ -247,6 +377,7 @@ public struct TW_Tron_Proto_BlockHeader {
   public init() {}
 }
 
+/// Transaction
 public struct TW_Tron_Proto_Transaction {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -354,6 +485,46 @@ public struct TW_Tron_Proto_Transaction {
     set {contractOneof = .transferTrc20Contract(newValue)}
   }
 
+  public var freezeBalanceV2: TW_Tron_Proto_FreezeBalanceV2Contract {
+    get {
+      if case .freezeBalanceV2(let v)? = contractOneof {return v}
+      return TW_Tron_Proto_FreezeBalanceV2Contract()
+    }
+    set {contractOneof = .freezeBalanceV2(newValue)}
+  }
+
+  public var unfreezeBalanceV2: TW_Tron_Proto_UnfreezeBalanceV2Contract {
+    get {
+      if case .unfreezeBalanceV2(let v)? = contractOneof {return v}
+      return TW_Tron_Proto_UnfreezeBalanceV2Contract()
+    }
+    set {contractOneof = .unfreezeBalanceV2(newValue)}
+  }
+
+  public var withdrawExpireUnfreeze: TW_Tron_Proto_WithdrawExpireUnfreezeContract {
+    get {
+      if case .withdrawExpireUnfreeze(let v)? = contractOneof {return v}
+      return TW_Tron_Proto_WithdrawExpireUnfreezeContract()
+    }
+    set {contractOneof = .withdrawExpireUnfreeze(newValue)}
+  }
+
+  public var delegateResource: TW_Tron_Proto_DelegateResourceContract {
+    get {
+      if case .delegateResource(let v)? = contractOneof {return v}
+      return TW_Tron_Proto_DelegateResourceContract()
+    }
+    set {contractOneof = .delegateResource(newValue)}
+  }
+
+  public var undelegateResource: TW_Tron_Proto_UnDelegateResourceContract {
+    get {
+      if case .undelegateResource(let v)? = contractOneof {return v}
+      return TW_Tron_Proto_UnDelegateResourceContract()
+    }
+    set {contractOneof = .undelegateResource(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// Contract.
@@ -368,6 +539,11 @@ public struct TW_Tron_Proto_Transaction {
     case voteWitness(TW_Tron_Proto_VoteWitnessContract)
     case triggerSmartContract(TW_Tron_Proto_TriggerSmartContract)
     case transferTrc20Contract(TW_Tron_Proto_TransferTRC20Contract)
+    case freezeBalanceV2(TW_Tron_Proto_FreezeBalanceV2Contract)
+    case unfreezeBalanceV2(TW_Tron_Proto_UnfreezeBalanceV2Contract)
+    case withdrawExpireUnfreeze(TW_Tron_Proto_WithdrawExpireUnfreezeContract)
+    case delegateResource(TW_Tron_Proto_DelegateResourceContract)
+    case undelegateResource(TW_Tron_Proto_UnDelegateResourceContract)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_Tron_Proto_Transaction.OneOf_ContractOneof, rhs: TW_Tron_Proto_Transaction.OneOf_ContractOneof) -> Bool {
@@ -415,6 +591,26 @@ public struct TW_Tron_Proto_Transaction {
         guard case .transferTrc20Contract(let l) = lhs, case .transferTrc20Contract(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
+      case (.freezeBalanceV2, .freezeBalanceV2): return {
+        guard case .freezeBalanceV2(let l) = lhs, case .freezeBalanceV2(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.unfreezeBalanceV2, .unfreezeBalanceV2): return {
+        guard case .unfreezeBalanceV2(let l) = lhs, case .unfreezeBalanceV2(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.withdrawExpireUnfreeze, .withdrawExpireUnfreeze): return {
+        guard case .withdrawExpireUnfreeze(let l) = lhs, case .withdrawExpireUnfreeze(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.delegateResource, .delegateResource): return {
+        guard case .delegateResource(let l) = lhs, case .delegateResource(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.undelegateResource, .undelegateResource): return {
+        guard case .undelegateResource(let l) = lhs, case .undelegateResource(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
       default: return false
       }
     }
@@ -426,6 +622,7 @@ public struct TW_Tron_Proto_Transaction {
   fileprivate var _blockHeader: TW_Tron_Proto_BlockHeader? = nil
 }
 
+/// Input data necessary to create a signed transaction.
 public struct TW_Tron_Proto_SigningInput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -433,25 +630,34 @@ public struct TW_Tron_Proto_SigningInput {
 
   /// Transaction.
   public var transaction: TW_Tron_Proto_Transaction {
-    get {return _transaction ?? TW_Tron_Proto_Transaction()}
-    set {_transaction = newValue}
+    get {return _storage._transaction ?? TW_Tron_Proto_Transaction()}
+    set {_uniqueStorage()._transaction = newValue}
   }
   /// Returns true if `transaction` has been explicitly set.
-  public var hasTransaction: Bool {return self._transaction != nil}
+  public var hasTransaction: Bool {return _storage._transaction != nil}
   /// Clears the value of `transaction`. Subsequent reads from it will return its default value.
-  public mutating func clearTransaction() {self._transaction = nil}
+  public mutating func clearTransaction() {_uniqueStorage()._transaction = nil}
 
-  /// Private key.
-  public var privateKey: Data = Data()
+  /// The secret private key used for signing (32 bytes).
+  public var privateKey: Data {
+    get {return _storage._privateKey}
+    set {_uniqueStorage()._privateKey = newValue}
+  }
+
+  /// For direct sign in Tron, we just have to sign the txId returned by the DApp json payload.
+  public var txID: String {
+    get {return _storage._txID}
+    set {_uniqueStorage()._txID = newValue}
+  }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _transaction: TW_Tron_Proto_Transaction? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_Tron_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -467,7 +673,14 @@ public struct TW_Tron_Proto_SigningOutput {
 
   public var refBlockHash: Data = Data()
 
+  /// Result in JSON
   public var json: String = String()
+
+  /// error code, 0 is ok, other codes will be treated as errors
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  /// error code description
+  public var errorMessage: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -672,6 +885,232 @@ extension TW_Tron_Proto_FreezeBalanceContract: SwiftProtobuf.Message, SwiftProto
     if lhs.frozenBalance != rhs.frozenBalance {return false}
     if lhs.frozenDuration != rhs.frozenDuration {return false}
     if lhs.resource != rhs.resource {return false}
+    if lhs.receiverAddress != rhs.receiverAddress {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Tron_Proto_FreezeBalanceV2Contract: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".FreezeBalanceV2Contract"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "owner_address"),
+    2: .standard(proto: "frozen_balance"),
+    3: .same(proto: "resource"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.ownerAddress) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.frozenBalance) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.resource) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.ownerAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.ownerAddress, fieldNumber: 1)
+    }
+    if self.frozenBalance != 0 {
+      try visitor.visitSingularInt64Field(value: self.frozenBalance, fieldNumber: 2)
+    }
+    if !self.resource.isEmpty {
+      try visitor.visitSingularStringField(value: self.resource, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Tron_Proto_FreezeBalanceV2Contract, rhs: TW_Tron_Proto_FreezeBalanceV2Contract) -> Bool {
+    if lhs.ownerAddress != rhs.ownerAddress {return false}
+    if lhs.frozenBalance != rhs.frozenBalance {return false}
+    if lhs.resource != rhs.resource {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Tron_Proto_UnfreezeBalanceV2Contract: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".UnfreezeBalanceV2Contract"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "owner_address"),
+    2: .standard(proto: "unfreeze_balance"),
+    3: .same(proto: "resource"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.ownerAddress) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.unfreezeBalance) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.resource) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.ownerAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.ownerAddress, fieldNumber: 1)
+    }
+    if self.unfreezeBalance != 0 {
+      try visitor.visitSingularInt64Field(value: self.unfreezeBalance, fieldNumber: 2)
+    }
+    if !self.resource.isEmpty {
+      try visitor.visitSingularStringField(value: self.resource, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Tron_Proto_UnfreezeBalanceV2Contract, rhs: TW_Tron_Proto_UnfreezeBalanceV2Contract) -> Bool {
+    if lhs.ownerAddress != rhs.ownerAddress {return false}
+    if lhs.unfreezeBalance != rhs.unfreezeBalance {return false}
+    if lhs.resource != rhs.resource {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Tron_Proto_WithdrawExpireUnfreezeContract: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WithdrawExpireUnfreezeContract"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "owner_address"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.ownerAddress) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.ownerAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.ownerAddress, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Tron_Proto_WithdrawExpireUnfreezeContract, rhs: TW_Tron_Proto_WithdrawExpireUnfreezeContract) -> Bool {
+    if lhs.ownerAddress != rhs.ownerAddress {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Tron_Proto_DelegateResourceContract: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DelegateResourceContract"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "owner_address"),
+    2: .same(proto: "resource"),
+    3: .same(proto: "balance"),
+    4: .standard(proto: "receiver_address"),
+    5: .same(proto: "lock"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.ownerAddress) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.resource) }()
+      case 3: try { try decoder.decodeSingularInt64Field(value: &self.balance) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.receiverAddress) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.lock) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.ownerAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.ownerAddress, fieldNumber: 1)
+    }
+    if !self.resource.isEmpty {
+      try visitor.visitSingularStringField(value: self.resource, fieldNumber: 2)
+    }
+    if self.balance != 0 {
+      try visitor.visitSingularInt64Field(value: self.balance, fieldNumber: 3)
+    }
+    if !self.receiverAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.receiverAddress, fieldNumber: 4)
+    }
+    if self.lock != false {
+      try visitor.visitSingularBoolField(value: self.lock, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Tron_Proto_DelegateResourceContract, rhs: TW_Tron_Proto_DelegateResourceContract) -> Bool {
+    if lhs.ownerAddress != rhs.ownerAddress {return false}
+    if lhs.resource != rhs.resource {return false}
+    if lhs.balance != rhs.balance {return false}
+    if lhs.receiverAddress != rhs.receiverAddress {return false}
+    if lhs.lock != rhs.lock {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Tron_Proto_UnDelegateResourceContract: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".UnDelegateResourceContract"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "owner_address"),
+    2: .same(proto: "resource"),
+    3: .same(proto: "balance"),
+    4: .standard(proto: "receiver_address"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.ownerAddress) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.resource) }()
+      case 3: try { try decoder.decodeSingularInt64Field(value: &self.balance) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.receiverAddress) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.ownerAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.ownerAddress, fieldNumber: 1)
+    }
+    if !self.resource.isEmpty {
+      try visitor.visitSingularStringField(value: self.resource, fieldNumber: 2)
+    }
+    if self.balance != 0 {
+      try visitor.visitSingularInt64Field(value: self.balance, fieldNumber: 3)
+    }
+    if !self.receiverAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.receiverAddress, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Tron_Proto_UnDelegateResourceContract, rhs: TW_Tron_Proto_UnDelegateResourceContract) -> Bool {
+    if lhs.ownerAddress != rhs.ownerAddress {return false}
+    if lhs.resource != rhs.resource {return false}
+    if lhs.balance != rhs.balance {return false}
     if lhs.receiverAddress != rhs.receiverAddress {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1059,6 +1498,11 @@ extension TW_Tron_Proto_Transaction: SwiftProtobuf.Message, SwiftProtobuf._Messa
     17: .standard(proto: "vote_witness"),
     18: .standard(proto: "trigger_smart_contract"),
     19: .standard(proto: "transfer_trc20_contract"),
+    20: .standard(proto: "freeze_balance_v2"),
+    21: .standard(proto: "unfreeze_balance_v2"),
+    23: .standard(proto: "withdraw_expire_unfreeze"),
+    24: .standard(proto: "delegate_resource"),
+    25: .standard(proto: "undelegate_resource"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1201,6 +1645,71 @@ extension TW_Tron_Proto_Transaction: SwiftProtobuf.Message, SwiftProtobuf._Messa
           self.contractOneof = .transferTrc20Contract(v)
         }
       }()
+      case 20: try {
+        var v: TW_Tron_Proto_FreezeBalanceV2Contract?
+        var hadOneofValue = false
+        if let current = self.contractOneof {
+          hadOneofValue = true
+          if case .freezeBalanceV2(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.contractOneof = .freezeBalanceV2(v)
+        }
+      }()
+      case 21: try {
+        var v: TW_Tron_Proto_UnfreezeBalanceV2Contract?
+        var hadOneofValue = false
+        if let current = self.contractOneof {
+          hadOneofValue = true
+          if case .unfreezeBalanceV2(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.contractOneof = .unfreezeBalanceV2(v)
+        }
+      }()
+      case 23: try {
+        var v: TW_Tron_Proto_WithdrawExpireUnfreezeContract?
+        var hadOneofValue = false
+        if let current = self.contractOneof {
+          hadOneofValue = true
+          if case .withdrawExpireUnfreeze(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.contractOneof = .withdrawExpireUnfreeze(v)
+        }
+      }()
+      case 24: try {
+        var v: TW_Tron_Proto_DelegateResourceContract?
+        var hadOneofValue = false
+        if let current = self.contractOneof {
+          hadOneofValue = true
+          if case .delegateResource(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.contractOneof = .delegateResource(v)
+        }
+      }()
+      case 25: try {
+        var v: TW_Tron_Proto_UnDelegateResourceContract?
+        var hadOneofValue = false
+        if let current = self.contractOneof {
+          hadOneofValue = true
+          if case .undelegateResource(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.contractOneof = .undelegateResource(v)
+        }
+      }()
       default: break
       }
     }
@@ -1264,6 +1773,26 @@ extension TW_Tron_Proto_Transaction: SwiftProtobuf.Message, SwiftProtobuf._Messa
       guard case .transferTrc20Contract(let v)? = self.contractOneof else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 19)
     }()
+    case .freezeBalanceV2?: try {
+      guard case .freezeBalanceV2(let v)? = self.contractOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 20)
+    }()
+    case .unfreezeBalanceV2?: try {
+      guard case .unfreezeBalanceV2(let v)? = self.contractOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 21)
+    }()
+    case .withdrawExpireUnfreeze?: try {
+      guard case .withdrawExpireUnfreeze(let v)? = self.contractOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 23)
+    }()
+    case .delegateResource?: try {
+      guard case .delegateResource(let v)? = self.contractOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 24)
+    }()
+    case .undelegateResource?: try {
+      guard case .undelegateResource(let v)? = self.contractOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 25)
+    }()
     case nil: break
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -1285,38 +1814,80 @@ extension TW_Tron_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mess
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "transaction"),
     2: .standard(proto: "private_key"),
+    3: .same(proto: "txId"),
   ]
 
+  fileprivate class _StorageClass {
+    var _transaction: TW_Tron_Proto_Transaction? = nil
+    var _privateKey: Data = Data()
+    var _txID: String = String()
+
+    static let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _transaction = source._transaction
+      _privateKey = source._privateKey
+      _txID = source._txID
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._transaction) }()
-      case 2: try { try decoder.decodeSingularBytesField(value: &self.privateKey) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._transaction) }()
+        case 2: try { try decoder.decodeSingularBytesField(value: &_storage._privateKey) }()
+        case 3: try { try decoder.decodeSingularStringField(value: &_storage._txID) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._transaction {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    if !self.privateKey.isEmpty {
-      try visitor.visitSingularBytesField(value: self.privateKey, fieldNumber: 2)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._transaction {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      if !_storage._privateKey.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._privateKey, fieldNumber: 2)
+      }
+      if !_storage._txID.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._txID, fieldNumber: 3)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Tron_Proto_SigningInput, rhs: TW_Tron_Proto_SigningInput) -> Bool {
-    if lhs._transaction != rhs._transaction {return false}
-    if lhs.privateKey != rhs.privateKey {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._transaction != rhs_storage._transaction {return false}
+        if _storage._privateKey != rhs_storage._privateKey {return false}
+        if _storage._txID != rhs_storage._txID {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1330,6 +1901,8 @@ extension TW_Tron_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     3: .standard(proto: "ref_block_bytes"),
     4: .standard(proto: "ref_block_hash"),
     5: .same(proto: "json"),
+    6: .same(proto: "error"),
+    7: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1343,6 +1916,8 @@ extension TW_Tron_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mes
       case 3: try { try decoder.decodeSingularBytesField(value: &self.refBlockBytes) }()
       case 4: try { try decoder.decodeSingularBytesField(value: &self.refBlockHash) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.json) }()
+      case 6: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -1364,6 +1939,12 @@ extension TW_Tron_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     if !self.json.isEmpty {
       try visitor.visitSingularStringField(value: self.json, fieldNumber: 5)
     }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 6)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1373,6 +1954,8 @@ extension TW_Tron_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     if lhs.refBlockBytes != rhs.refBlockBytes {return false}
     if lhs.refBlockHash != rhs.refBlockHash {return false}
     if lhs.json != rhs.json {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

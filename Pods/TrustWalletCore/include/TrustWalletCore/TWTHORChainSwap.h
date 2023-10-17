@@ -1,4 +1,4 @@
-// Copyright © 2017-2021 Trust Wallet.
+// Copyright © 2017-2023 Trust Wallet.
 //
 // This file is part of Trust. The full Trust copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
@@ -11,10 +11,14 @@
 
 TW_EXTERN_C_BEGIN
 
+/// THORChain swap functions
 TW_EXPORT_STRUCT
 struct TWTHORChainSwap;
 
-/// Build a THORChainSwap transaction input. Input is SwapInput protobuf, return is SwapOutput.
+/// Builds a THORChainSwap transaction input.
+///
+/// \param input The serialized data of SwapInput.
+/// \return The serialized data of SwapOutput.
 TW_EXPORT_STATIC_METHOD
 TWData *_Nonnull TWTHORChainSwapBuildSwap(TWData *_Nonnull input);
 
