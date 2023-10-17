@@ -40,9 +40,14 @@ final class TokenaryWallet: Hashable, Equatable {
     }
 
     func privateKey(password: String, account: Account) throws -> PrivateKey {
-        let wallet = key.wallet(password: Data(password.utf8))
-        guard let privateKey = wallet?.getKey(coin: account.coin, derivationPath: account.derivationPath) else { throw KeyStore.Error.invalidPassword }
-        return privateKey
+        if isMnemonic {
+            let wallet = key.wallet(password: Data(password.utf8))
+            guard let privateKey = wallet?.getKey(coin: account.coin, derivationPath: account.derivationPath) else { throw KeyStore.Error.invalidPassword }
+            return privateKey
+        } else {
+            guard let privateKey = key.privateKey(coin: account.coin, password: Data(password.utf8)) else { throw KeyStore.Error.invalidPassword }
+            return privateKey
+        }
     }
     
     func hash(into hasher: inout Hasher) {
