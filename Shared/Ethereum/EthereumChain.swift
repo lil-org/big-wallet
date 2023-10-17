@@ -14,6 +14,9 @@ enum EthereumChain: Int {
     case celo = 42220
     case aurora = 1313161554
     case neon = 245022934
+    case base = 8453
+    case zora = 7777777
+    case klaytn = 8217
     
     // Testnets
     case arbitrumRinkeby = 421611
@@ -43,12 +46,15 @@ enum EthereumChain: Int {
         }
     }
     
-    static let allMainnets: [EthereumChain] = [.ethereum, .polygon, .optimism, .binance, .arbitrum, .avalanche, .gnosisChain, .fantomOpera, .celo, .aurora, .neon]
+    static let allMainnets: [EthereumChain] = [.ethereum, .zora, .base, .klaytn, .polygon, .optimism, .binance, .arbitrum, .avalanche, .gnosisChain, .fantomOpera, .celo, .aurora, .neon]
     static let allTestnets: [EthereumChain] = [.ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji, .fantomTestnet, .neonDevnet]
     
     var name: String {
         switch self {
         case .ethereum: return "Ethereum"
+        case .zora: return "Zora"
+        case .klaytn: return "Klaytn"
+        case .base: return "Base"
         case .arbitrum: return "Arbitrum"
         case .optimism: return "Optimism"
         case .polygon: return "Polygon"
@@ -78,7 +84,7 @@ enum EthereumChain: Int {
             return "BNB"
         case .polygon, .polygonMumbai:
             return "MATIC"
-        case .arbitrum, .arbitrumKovan, .arbitrumRinkeby, .ethereum, .ethereumGoerli, .optimism, .optimisticKovan, .aurora:
+        case .arbitrum, .arbitrumKovan, .arbitrumRinkeby, .ethereum, .ethereumGoerli, .optimism, .optimisticKovan, .aurora, .zora, .base:
             return "ETH"
         case .avalanche, .avalancheFuji:
             return "AVAX"
@@ -90,6 +96,8 @@ enum EthereumChain: Int {
             return "CELO"
         case .neonDevnet, .neon:
             return "NEON"
+        case .klaytn:
+            return "KLAY"
         }
     }
     
@@ -119,6 +127,9 @@ enum EthereumChain: Int {
         case .celo: return "https://rpc.ankr.com/celo"
         case .aurora: return "https://mainnet.aurora.dev"
         case .neon: return "https://neon-proxy-mainnet.solana.p2p.org/"
+        case .zora: return "https://rpc.zora.energy"
+        case .base: return "https://mainnet.base.org"
+        case .klaytn: return "https://1rpc.io/klay"
             
         case .arbitrumRinkeby: return "https://rinkeby.arbitrum.io/rpc"
         case .arbitrumKovan: return "https://kovan5.arbitrum.io/rpc"
