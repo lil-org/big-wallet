@@ -110,6 +110,9 @@
 		2C773F63274523DC007B04E7 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
 		2C78F8282683BDCC00C10670 /* Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C78F8272683BDCC00C10670 /* Alert.swift */; };
 		2C797E7E267BB88800F2CE2D /* WelcomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */; };
+		2C8155682ADFC7A700F4559B /* popup.css in Resources */ = {isa = PBXBuildFile; fileRef = 2C8155662ADFC7A700F4559B /* popup.css */; };
+		2C81556B2ADFC7B900F4559B /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C8155692ADFC7B900F4559B /* popup.js */; };
+		2C81556E2ADFC7C400F4559B /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = 2C81556C2ADFC7C400F4559B /* popup.html */; };
 		2C86A262282D1F090028EA11 /* NearSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C86A261282D1F090028EA11 /* NearSafariRequest.swift */; };
 		2C86A263282D1F090028EA11 /* NearSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C86A261282D1F090028EA11 /* NearSafariRequest.swift */; };
 		2C86A264282D1F090028EA11 /* NearSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C86A261282D1F090028EA11 /* NearSafariRequest.swift */; };
@@ -334,6 +337,9 @@
 		2C773F61274523DC007B04E7 /* ResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseToExtension.swift; sourceTree = "<group>"; };
 		2C78F8272683BDCC00C10670 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alert.swift; sourceTree = "<group>"; };
 		2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeViewController.swift; sourceTree = "<group>"; };
+		2C8155662ADFC7A700F4559B /* popup.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = popup.css; sourceTree = "<group>"; };
+		2C8155692ADFC7B900F4559B /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = popup.js; sourceTree = "<group>"; };
+		2C81556C2ADFC7C400F4559B /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = popup.html; sourceTree = "<group>"; };
 		2C86A261282D1F090028EA11 /* NearSafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearSafariRequest.swift; sourceTree = "<group>"; };
 		2C86A266282D1F220028EA11 /* NearResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearResponseToExtension.swift; sourceTree = "<group>"; };
 		2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DappRequestAction.swift; sourceTree = "<group>"; };
@@ -819,6 +825,9 @@
 			isa = PBXGroup;
 			children = (
 				2CCEB83627594E2A00768473 /* manifest.json */,
+				2C8155662ADFC7A700F4559B /* popup.css */,
+				2C8155692ADFC7B900F4559B /* popup.js */,
+				2C81556C2ADFC7C400F4559B /* popup.html */,
 				2CFDDF4D2765417D00F89019 /* ios-specific-content.js */,
 				2CC8C5A4276A52670083FB1B /* ios-specific-background.js */,
 			);
@@ -1125,7 +1134,10 @@
 				2CB3845B27654EA900A189B9 /* images in Resources */,
 				2CE0594027640E8E0042D844 /* background.js in Resources */,
 				2CE0594227640E8E0042D844 /* inpage.js in Resources */,
+				2C81556E2ADFC7C400F4559B /* popup.html in Resources */,
+				2C8155682ADFC7A700F4559B /* popup.css in Resources */,
 				2CCEB83727594E2A00768473 /* manifest.json in Resources */,
+				2C81556B2ADFC7B900F4559B /* popup.js in Resources */,
 				2CE0594127640E8E0042D844 /* content.js in Resources */,
 				2CFDDF4E2765417E00F89019 /* ios-specific-content.js in Resources */,
 			);
