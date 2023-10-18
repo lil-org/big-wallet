@@ -34,7 +34,7 @@ struct Strings {
     static let enterKeystorePassword = "Enter keystore password"
     static let importWalletTextFieldPlaceholder = "Options:\n\n• Private Key\n• Secret Words\n• Keystore"
     static let failedToImportWallet = "Failed to import wallet"
-    static let welcomeScreenText = "Sign crypto transactions.\n\nIn any browser.\n\nOn any website."
+    static let welcomeScreenText = "Sign crypto transactions.\n\nIn Safari.\n\nOn any website."
     static let createPassword = "Create Password"
     static let repeatPassword = "Repeat Password"
     static let enterPassword = "Enter Password"

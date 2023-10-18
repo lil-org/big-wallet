@@ -26,12 +26,13 @@ public struct TW_Harmony_Proto_SigningInput {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Chain identifier (256-bit number)
+  /// Chain identifier (uint256, serialized little endian)
   public var chainID: Data = Data()
 
-  /// Private key.
+  /// The secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
 
+  /// The payload message
   public var messageOneof: TW_Harmony_Proto_SigningInput.OneOf_MessageOneof? = nil
 
   public var transactionMessage: TW_Harmony_Proto_TransactionMessage {
@@ -52,6 +53,7 @@ public struct TW_Harmony_Proto_SigningInput {
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
+  /// The payload message
   public enum OneOf_MessageOneof: Equatable {
     case transactionMessage(TW_Harmony_Proto_TransactionMessage)
     case stakingMessage(TW_Harmony_Proto_StakingMessage)
@@ -79,7 +81,7 @@ public struct TW_Harmony_Proto_SigningInput {
   public init() {}
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_Harmony_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -88,44 +90,52 @@ public struct TW_Harmony_Proto_SigningOutput {
   /// Signed and encoded transaction bytes.
   public var encoded: Data = Data()
 
+  /// THE V,R,S components of the signature
   public var v: Data = Data()
 
   public var r: Data = Data()
 
   public var s: Data = Data()
 
+  /// error code, 0 is ok, other codes will be treated as errors
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  /// error code description
+  public var errorMessage: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
+/// A Transfer message
 public struct TW_Harmony_Proto_TransactionMessage {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Nonce (256-bit number)
+  /// Nonce (uint256, serialized little endian)
   public var nonce: Data = Data()
 
-  /// Gas price (256-bit number)
+  /// Gas price (uint256, serialized little endian)
   public var gasPrice: Data = Data()
 
-  /// Gas limit (256-bit number)
+  /// Gas limit (uint256, serialized little endian)
   public var gasLimit: Data = Data()
 
   /// Recipient's address.
   public var toAddress: String = String()
 
-  /// Amount to send in wei (256-bit number)
+  /// Amount to send in wei (uint256, serialized little endian)
   public var amount: Data = Data()
 
   /// Optional payload
   public var payload: Data = Data()
 
-  /// From shard ID (256-bit number)
+  /// From shard ID (uint256, serialized little endian)
   public var fromShardID: Data = Data()
 
-  /// To Shard ID (256-bit number)
+  /// To Shard ID (uint256, serialized little endian)
   public var toShardID: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -133,6 +143,7 @@ public struct TW_Harmony_Proto_TransactionMessage {
   public init() {}
 }
 
+/// A Staking message.
 public struct TW_Harmony_Proto_StakingMessage {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -184,19 +195,19 @@ public struct TW_Harmony_Proto_StakingMessage {
     set {_uniqueStorage()._stakeMsg = .collectRewards(newValue)}
   }
 
-  /// Nonce (256-bit number)
+  /// Nonce (uint256, serialized little endian)
   public var nonce: Data {
     get {return _storage._nonce}
     set {_uniqueStorage()._nonce = newValue}
   }
 
-  /// Gas price (256-bit number)
+  /// Gas price (uint256, serialized little endian)
   public var gasPrice: Data {
     get {return _storage._gasPrice}
     set {_uniqueStorage()._gasPrice = newValue}
   }
 
-  /// Gas limit (256-bit number)
+  /// Gas limit (uint256, serialized little endian)
   public var gasLimit: Data {
     get {return _storage._gasLimit}
     set {_uniqueStorage()._gasLimit = newValue}
@@ -249,6 +260,7 @@ public struct TW_Harmony_Proto_StakingMessage {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
+/// Description for a validator
 public struct TW_Harmony_Proto_Description {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -269,13 +281,16 @@ public struct TW_Harmony_Proto_Description {
   public init() {}
 }
 
+/// A variable precision number
 public struct TW_Harmony_Proto_Decimal {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// The 'raw' value
   public var value: Data = Data()
 
+  /// The precision (number of decimals)
   public var precision: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -283,11 +298,13 @@ public struct TW_Harmony_Proto_Decimal {
   public init() {}
 }
 
+/// Represents validator commission rule
 public struct TW_Harmony_Proto_CommissionRate {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// The rate
   public var rate: TW_Harmony_Proto_Decimal {
     get {return _rate ?? TW_Harmony_Proto_Decimal()}
     set {_rate = newValue}
@@ -297,6 +314,7 @@ public struct TW_Harmony_Proto_CommissionRate {
   /// Clears the value of `rate`. Subsequent reads from it will return its default value.
   public mutating func clearRate() {self._rate = nil}
 
+  /// Maximum rate
   public var maxRate: TW_Harmony_Proto_Decimal {
     get {return _maxRate ?? TW_Harmony_Proto_Decimal()}
     set {_maxRate = newValue}
@@ -306,6 +324,7 @@ public struct TW_Harmony_Proto_CommissionRate {
   /// Clears the value of `maxRate`. Subsequent reads from it will return its default value.
   public mutating func clearMaxRate() {self._maxRate = nil}
 
+  /// Maximum of rate change
   public var maxChangeRate: TW_Harmony_Proto_Decimal {
     get {return _maxChangeRate ?? TW_Harmony_Proto_Decimal()}
     set {_maxChangeRate = newValue}
@@ -324,16 +343,19 @@ public struct TW_Harmony_Proto_CommissionRate {
   fileprivate var _maxChangeRate: TW_Harmony_Proto_Decimal? = nil
 }
 
+/// Create Validator directive
 public struct TW_Harmony_Proto_DirectiveCreateValidator {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Address of validator
   public var validatorAddress: String {
     get {return _storage._validatorAddress}
     set {_uniqueStorage()._validatorAddress = newValue}
   }
 
+  /// Description, name etc.
   public var description_p: TW_Harmony_Proto_Description {
     get {return _storage._description_p ?? TW_Harmony_Proto_Description()}
     set {_uniqueStorage()._description_p = newValue}
@@ -343,6 +365,7 @@ public struct TW_Harmony_Proto_DirectiveCreateValidator {
   /// Clears the value of `description_p`. Subsequent reads from it will return its default value.
   public mutating func clearDescription_p() {_uniqueStorage()._description_p = nil}
 
+  /// Rates
   public var commissionRates: TW_Harmony_Proto_CommissionRate {
     get {return _storage._commissionRates ?? TW_Harmony_Proto_CommissionRate()}
     set {_uniqueStorage()._commissionRates = newValue}
@@ -384,11 +407,13 @@ public struct TW_Harmony_Proto_DirectiveCreateValidator {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
+/// Edit Validator directive
 public struct TW_Harmony_Proto_DirectiveEditValidator {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Validator address
   public var validatorAddress: String = String()
 
   public var description_p: TW_Harmony_Proto_Description {
@@ -429,15 +454,19 @@ public struct TW_Harmony_Proto_DirectiveEditValidator {
   fileprivate var _commissionRate: TW_Harmony_Proto_Decimal? = nil
 }
 
+/// Delegate directive
 public struct TW_Harmony_Proto_DirectiveDelegate {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Delegator address
   public var delegatorAddress: String = String()
 
+  /// Validator address
   public var validatorAddress: String = String()
 
+  /// Delegate amount (uint256, serialized little endian)
   public var amount: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -445,15 +474,19 @@ public struct TW_Harmony_Proto_DirectiveDelegate {
   public init() {}
 }
 
+/// Undelegate directive
 public struct TW_Harmony_Proto_DirectiveUndelegate {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Delegator address
   public var delegatorAddress: String = String()
 
+  /// Validator address
   public var validatorAddress: String = String()
 
+  /// Undelegate amount (uint256, serialized little endian)
   public var amount: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -461,11 +494,13 @@ public struct TW_Harmony_Proto_DirectiveUndelegate {
   public init() {}
 }
 
+/// Collect reward
 public struct TW_Harmony_Proto_DirectiveCollectRewards {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Delegator address
   public var delegatorAddress: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -566,6 +601,8 @@ extension TW_Harmony_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
     2: .same(proto: "v"),
     3: .same(proto: "r"),
     4: .same(proto: "s"),
+    5: .same(proto: "error"),
+    6: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -578,6 +615,8 @@ extension TW_Harmony_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
       case 2: try { try decoder.decodeSingularBytesField(value: &self.v) }()
       case 3: try { try decoder.decodeSingularBytesField(value: &self.r) }()
       case 4: try { try decoder.decodeSingularBytesField(value: &self.s) }()
+      case 5: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -596,6 +635,12 @@ extension TW_Harmony_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
     if !self.s.isEmpty {
       try visitor.visitSingularBytesField(value: self.s, fieldNumber: 4)
     }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 5)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -604,6 +649,8 @@ extension TW_Harmony_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
     if lhs.v != rhs.v {return false}
     if lhs.r != rhs.r {return false}
     if lhs.s != rhs.s {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

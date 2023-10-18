@@ -32,27 +32,30 @@ public struct TW_Theta_Proto_SigningInput {
   //// Recipient address
   public var toAddress: String = String()
 
-  //// Theta token amount to send in wei (256-bit number)
+  //// Theta token amount to send in wei (uint256, serialized little endian)
   public var thetaAmount: Data = Data()
 
-  //// TFuel token amount to send in wei (256-bit number)
+  //// TFuel token amount to send in wei (uint256, serialized little endian)
   public var tfuelAmount: Data = Data()
 
   //// Sequence number of the transaction for the sender address
   public var sequence: UInt64 = 0
 
-  //// Fee amount in TFuel wei for the transaction (256-bit number)
+  //// Fee amount in TFuel wei for the transaction (uint256, serialized little endian)
   public var fee: Data = Data()
 
-  //// Private key
+  //// The secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
+
+  //// Public key
+  public var publicKey: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
-//// Transaction signing output
+/// Result containing the signed and encoded transaction.
 public struct TW_Theta_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -63,6 +66,12 @@ public struct TW_Theta_Proto_SigningOutput {
 
   //// Signature
   public var signature: Data = Data()
+
+  /// error code, 0 is ok, other codes will be treated as errors
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  /// error code description
+  public var errorMessage: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -83,6 +92,7 @@ extension TW_Theta_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     5: .same(proto: "sequence"),
     6: .same(proto: "fee"),
     7: .standard(proto: "private_key"),
+    8: .standard(proto: "public_key"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -98,6 +108,7 @@ extension TW_Theta_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mes
       case 5: try { try decoder.decodeSingularUInt64Field(value: &self.sequence) }()
       case 6: try { try decoder.decodeSingularBytesField(value: &self.fee) }()
       case 7: try { try decoder.decodeSingularBytesField(value: &self.privateKey) }()
+      case 8: try { try decoder.decodeSingularBytesField(value: &self.publicKey) }()
       default: break
       }
     }
@@ -125,6 +136,9 @@ extension TW_Theta_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     if !self.privateKey.isEmpty {
       try visitor.visitSingularBytesField(value: self.privateKey, fieldNumber: 7)
     }
+    if !self.publicKey.isEmpty {
+      try visitor.visitSingularBytesField(value: self.publicKey, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -136,6 +150,7 @@ extension TW_Theta_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     if lhs.sequence != rhs.sequence {return false}
     if lhs.fee != rhs.fee {return false}
     if lhs.privateKey != rhs.privateKey {return false}
+    if lhs.publicKey != rhs.publicKey {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -146,6 +161,8 @@ extension TW_Theta_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Me
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "encoded"),
     2: .same(proto: "signature"),
+    3: .same(proto: "error"),
+    4: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -156,6 +173,8 @@ extension TW_Theta_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Me
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.encoded) }()
       case 2: try { try decoder.decodeSingularBytesField(value: &self.signature) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -168,12 +187,20 @@ extension TW_Theta_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Me
     if !self.signature.isEmpty {
       try visitor.visitSingularBytesField(value: self.signature, fieldNumber: 2)
     }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 3)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Theta_Proto_SigningOutput, rhs: TW_Theta_Proto_SigningOutput) -> Bool {
     if lhs.encoded != rhs.encoded {return false}
     if lhs.signature != rhs.signature {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

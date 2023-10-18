@@ -20,46 +20,7 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
-public enum TW_Polkadot_Proto_Network: SwiftProtobuf.Enum {
-  public typealias RawValue = Int
-  case polkadot // = 0
-  case kusama // = 2
-  case UNRECOGNIZED(Int)
-
-  public init() {
-    self = .polkadot
-  }
-
-  public init?(rawValue: Int) {
-    switch rawValue {
-    case 0: self = .polkadot
-    case 2: self = .kusama
-    default: self = .UNRECOGNIZED(rawValue)
-    }
-  }
-
-  public var rawValue: Int {
-    switch self {
-    case .polkadot: return 0
-    case .kusama: return 2
-    case .UNRECOGNIZED(let i): return i
-    }
-  }
-
-}
-
-#if swift(>=4.2)
-
-extension TW_Polkadot_Proto_Network: CaseIterable {
-  // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static var allCases: [TW_Polkadot_Proto_Network] = [
-    .polkadot,
-    .kusama,
-  ]
-}
-
-#endif  // swift(>=4.2)
-
+/// Destination options for reward
 public enum TW_Polkadot_Proto_RewardDestination: SwiftProtobuf.Enum {
   public typealias RawValue = Int
   case staked // = 0
@@ -104,6 +65,7 @@ extension TW_Polkadot_Proto_RewardDestination: CaseIterable {
 
 #endif  // swift(>=4.2)
 
+/// An era, a period defined by a starting block and length
 public struct TW_Polkadot_Proto_Era {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -120,6 +82,64 @@ public struct TW_Polkadot_Proto_Era {
   public init() {}
 }
 
+/// Readable decoded call indices can be found at https://www.subscan.io/
+public struct TW_Polkadot_Proto_CustomCallIndices {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Module index.
+  public var moduleIndex: Int32 = 0
+
+  /// Method index.
+  public var methodIndex: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Optional call indices.
+/// Must be set if `SigningInput::network` is different from `Polkadot` and `Kusama`.
+public struct TW_Polkadot_Proto_CallIndices {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var variant: TW_Polkadot_Proto_CallIndices.OneOf_Variant? = nil
+
+  public var custom: TW_Polkadot_Proto_CustomCallIndices {
+    get {
+      if case .custom(let v)? = variant {return v}
+      return TW_Polkadot_Proto_CustomCallIndices()
+    }
+    set {variant = .custom(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public enum OneOf_Variant: Equatable {
+    case custom(TW_Polkadot_Proto_CustomCallIndices)
+
+  #if !swift(>=4.1)
+    public static func ==(lhs: TW_Polkadot_Proto_CallIndices.OneOf_Variant, rhs: TW_Polkadot_Proto_CallIndices.OneOf_Variant) -> Bool {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch (lhs, rhs) {
+      case (.custom, .custom): return {
+        guard case .custom(let l) = lhs, case .custom(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      }
+    }
+  #endif
+  }
+
+  public init() {}
+}
+
+/// Balance transfer transaction
 public struct TW_Polkadot_Proto_Balance {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -135,10 +155,37 @@ public struct TW_Polkadot_Proto_Balance {
     set {messageOneof = .transfer(newValue)}
   }
 
+  public var batchTransfer: TW_Polkadot_Proto_Balance.BatchTransfer {
+    get {
+      if case .batchTransfer(let v)? = messageOneof {return v}
+      return TW_Polkadot_Proto_Balance.BatchTransfer()
+    }
+    set {messageOneof = .batchTransfer(newValue)}
+  }
+
+  public var assetTransfer: TW_Polkadot_Proto_Balance.AssetTransfer {
+    get {
+      if case .assetTransfer(let v)? = messageOneof {return v}
+      return TW_Polkadot_Proto_Balance.AssetTransfer()
+    }
+    set {messageOneof = .assetTransfer(newValue)}
+  }
+
+  public var batchAssetTransfer: TW_Polkadot_Proto_Balance.BatchAssetTransfer {
+    get {
+      if case .batchAssetTransfer(let v)? = messageOneof {return v}
+      return TW_Polkadot_Proto_Balance.BatchAssetTransfer()
+    }
+    set {messageOneof = .batchAssetTransfer(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public enum OneOf_MessageOneof: Equatable {
     case transfer(TW_Polkadot_Proto_Balance.Transfer)
+    case batchTransfer(TW_Polkadot_Proto_Balance.BatchTransfer)
+    case assetTransfer(TW_Polkadot_Proto_Balance.AssetTransfer)
+    case batchAssetTransfer(TW_Polkadot_Proto_Balance.BatchAssetTransfer)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_Polkadot_Proto_Balance.OneOf_MessageOneof, rhs: TW_Polkadot_Proto_Balance.OneOf_MessageOneof) -> Bool {
@@ -150,34 +197,154 @@ public struct TW_Polkadot_Proto_Balance {
         guard case .transfer(let l) = lhs, case .transfer(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
+      case (.batchTransfer, .batchTransfer): return {
+        guard case .batchTransfer(let l) = lhs, case .batchTransfer(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.assetTransfer, .assetTransfer): return {
+        guard case .assetTransfer(let l) = lhs, case .assetTransfer(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.batchAssetTransfer, .batchAssetTransfer): return {
+        guard case .batchAssetTransfer(let l) = lhs, case .batchAssetTransfer(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      default: return false
       }
     }
   #endif
   }
 
+  /// transfer
   public struct Transfer {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
+    /// destination address
     public var toAddress: String = String()
 
-    /// big integer
+    /// amount (uint256, serialized little endian)
     public var value: Data = Data()
+
+    /// max 32 chars
+    public var memo: String = String()
+
+    /// call indices
+    public var callIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _callIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_callIndices = newValue}
+    }
+    /// Returns true if `callIndices` has been explicitly set.
+    public var hasCallIndices: Bool {return self._callIndices != nil}
+    /// Clears the value of `callIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearCallIndices() {self._callIndices = nil}
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
 
     public init() {}
+
+    fileprivate var _callIndices: TW_Polkadot_Proto_CallIndices? = nil
+  }
+
+  /// batch tranfer
+  public struct BatchTransfer {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    /// call indices
+    public var callIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _callIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_callIndices = newValue}
+    }
+    /// Returns true if `callIndices` has been explicitly set.
+    public var hasCallIndices: Bool {return self._callIndices != nil}
+    /// Clears the value of `callIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearCallIndices() {self._callIndices = nil}
+
+    public var transfers: [TW_Polkadot_Proto_Balance.Transfer] = []
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+
+    fileprivate var _callIndices: TW_Polkadot_Proto_CallIndices? = nil
+  }
+
+  /// asset transfer
+  public struct AssetTransfer {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    /// call indices
+    public var callIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _callIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_callIndices = newValue}
+    }
+    /// Returns true if `callIndices` has been explicitly set.
+    public var hasCallIndices: Bool {return self._callIndices != nil}
+    /// Clears the value of `callIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearCallIndices() {self._callIndices = nil}
+
+    /// destination
+    public var toAddress: String = String()
+
+    /// value - BigInteger
+    public var value: Data = Data()
+
+    /// asset identifier
+    public var assetID: UInt32 = 0
+
+    /// fee asset identifier
+    public var feeAssetID: UInt32 = 0
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+
+    fileprivate var _callIndices: TW_Polkadot_Proto_CallIndices? = nil
+  }
+
+  /// batch asset transfer
+  public struct BatchAssetTransfer {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    /// call indices
+    public var callIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _callIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_callIndices = newValue}
+    }
+    /// Returns true if `callIndices` has been explicitly set.
+    public var hasCallIndices: Bool {return self._callIndices != nil}
+    /// Clears the value of `callIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearCallIndices() {self._callIndices = nil}
+
+    /// fee asset identifier
+    public var feeAssetID: UInt32 = 0
+
+    public var transfers: [TW_Polkadot_Proto_Balance.AssetTransfer] = []
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+
+    fileprivate var _callIndices: TW_Polkadot_Proto_CallIndices? = nil
   }
 
   public init() {}
 }
 
+/// Staking transaction
 public struct TW_Polkadot_Proto_Staking {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Payload messsage
   public var messageOneof: TW_Polkadot_Proto_Staking.OneOf_MessageOneof? = nil
 
   public var bond: TW_Polkadot_Proto_Staking.Bond {
@@ -244,8 +411,17 @@ public struct TW_Polkadot_Proto_Staking {
     set {messageOneof = .chillAndUnbond(newValue)}
   }
 
+  public var rebond: TW_Polkadot_Proto_Staking.Rebond {
+    get {
+      if case .rebond(let v)? = messageOneof {return v}
+      return TW_Polkadot_Proto_Staking.Rebond()
+    }
+    set {messageOneof = .rebond(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
+  /// Payload messsage
   public enum OneOf_MessageOneof: Equatable {
     case bond(TW_Polkadot_Proto_Staking.Bond)
     case bondAndNominate(TW_Polkadot_Proto_Staking.BondAndNominate)
@@ -255,6 +431,7 @@ public struct TW_Polkadot_Proto_Staking {
     case nominate(TW_Polkadot_Proto_Staking.Nominate)
     case chill(TW_Polkadot_Proto_Staking.Chill)
     case chillAndUnbond(TW_Polkadot_Proto_Staking.ChillAndUnbond)
+    case rebond(TW_Polkadot_Proto_Staking.Rebond)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_Polkadot_Proto_Staking.OneOf_MessageOneof, rhs: TW_Polkadot_Proto_Staking.OneOf_MessageOneof) -> Bool {
@@ -294,70 +471,162 @@ public struct TW_Polkadot_Proto_Staking {
         guard case .chillAndUnbond(let l) = lhs, case .chillAndUnbond(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
+      case (.rebond, .rebond): return {
+        guard case .rebond(let l) = lhs, case .rebond(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
       default: return false
       }
     }
   #endif
   }
 
+  /// Bond to a controller
   public struct Bond {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
+    /// controller ID (optional)
     public var controller: String = String()
 
+    /// amount (uint256, serialized little endian)
     public var value: Data = Data()
 
+    /// destination for rewards
     public var rewardDestination: TW_Polkadot_Proto_RewardDestination = .staked
+
+    /// call indices
+    public var callIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _callIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_callIndices = newValue}
+    }
+    /// Returns true if `callIndices` has been explicitly set.
+    public var hasCallIndices: Bool {return self._callIndices != nil}
+    /// Clears the value of `callIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearCallIndices() {self._callIndices = nil}
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
 
     public init() {}
+
+    fileprivate var _callIndices: TW_Polkadot_Proto_CallIndices? = nil
   }
 
+  /// Bond to a controller, with nominators
   public struct BondAndNominate {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
+    /// controller ID (optional)
     public var controller: String = String()
 
+    /// amount (uint256, serialized little endian)
     public var value: Data = Data()
 
+    /// destination for rewards
     public var rewardDestination: TW_Polkadot_Proto_RewardDestination = .staked
 
+    /// list of nominators
     public var nominators: [String] = []
+
+    /// call indices
+    public var callIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _callIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_callIndices = newValue}
+    }
+    /// Returns true if `callIndices` has been explicitly set.
+    public var hasCallIndices: Bool {return self._callIndices != nil}
+    /// Clears the value of `callIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearCallIndices() {self._callIndices = nil}
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
 
     public init() {}
+
+    fileprivate var _callIndices: TW_Polkadot_Proto_CallIndices? = nil
   }
 
+  /// Bond extra amount
   public struct BondExtra {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
+    /// amount (uint256, serialized little endian)
     public var value: Data = Data()
+
+    /// call indices
+    public var callIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _callIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_callIndices = newValue}
+    }
+    /// Returns true if `callIndices` has been explicitly set.
+    public var hasCallIndices: Bool {return self._callIndices != nil}
+    /// Clears the value of `callIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearCallIndices() {self._callIndices = nil}
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
 
     public init() {}
+
+    fileprivate var _callIndices: TW_Polkadot_Proto_CallIndices? = nil
   }
 
+  /// Unbond
   public struct Unbond {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
+    /// amount (uint256, serialized little endian)
     public var value: Data = Data()
+
+    /// call indices
+    public var callIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _callIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_callIndices = newValue}
+    }
+    /// Returns true if `callIndices` has been explicitly set.
+    public var hasCallIndices: Bool {return self._callIndices != nil}
+    /// Clears the value of `callIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearCallIndices() {self._callIndices = nil}
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
 
     public init() {}
+
+    fileprivate var _callIndices: TW_Polkadot_Proto_CallIndices? = nil
   }
 
+  /// Rebond
+  public struct Rebond {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    /// amount (uint256, serialized little endian)
+    public var value: Data = Data()
+
+    /// call indices
+    public var callIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _callIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_callIndices = newValue}
+    }
+    /// Returns true if `callIndices` has been explicitly set.
+    public var hasCallIndices: Bool {return self._callIndices != nil}
+    /// Clears the value of `callIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearCallIndices() {self._callIndices = nil}
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+
+    fileprivate var _callIndices: TW_Polkadot_Proto_CallIndices? = nil
+  }
+
+  /// Withdraw unbonded amounts
   public struct WithdrawUnbonded {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -365,43 +634,310 @@ public struct TW_Polkadot_Proto_Staking {
 
     public var slashingSpans: Int32 = 0
 
+    /// call indices
+    public var callIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _callIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_callIndices = newValue}
+    }
+    /// Returns true if `callIndices` has been explicitly set.
+    public var hasCallIndices: Bool {return self._callIndices != nil}
+    /// Clears the value of `callIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearCallIndices() {self._callIndices = nil}
+
     public var unknownFields = SwiftProtobuf.UnknownStorage()
 
     public init() {}
+
+    fileprivate var _callIndices: TW_Polkadot_Proto_CallIndices? = nil
   }
 
+  /// Nominate
   public struct Nominate {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
+    /// list of nominators
     public var nominators: [String] = []
+
+    /// call indices
+    public var callIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _callIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_callIndices = newValue}
+    }
+    /// Returns true if `callIndices` has been explicitly set.
+    public var hasCallIndices: Bool {return self._callIndices != nil}
+    /// Clears the value of `callIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearCallIndices() {self._callIndices = nil}
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
 
     public init() {}
+
+    fileprivate var _callIndices: TW_Polkadot_Proto_CallIndices? = nil
   }
 
+  /// Chill and unbound
   public struct ChillAndUnbond {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
+    /// amount (uint256, serialized little endian)
     public var value: Data = Data()
+
+    /// call indices
+    public var callIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _callIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_callIndices = newValue}
+    }
+    /// Returns true if `callIndices` has been explicitly set.
+    public var hasCallIndices: Bool {return self._callIndices != nil}
+    /// Clears the value of `callIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearCallIndices() {self._callIndices = nil}
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
 
     public init() {}
+
+    fileprivate var _callIndices: TW_Polkadot_Proto_CallIndices? = nil
   }
 
+  /// Chill
   public struct Chill {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
+    /// call indices
+    public var callIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _callIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_callIndices = newValue}
+    }
+    /// Returns true if `callIndices` has been explicitly set.
+    public var hasCallIndices: Bool {return self._callIndices != nil}
+    /// Clears the value of `callIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearCallIndices() {self._callIndices = nil}
+
     public var unknownFields = SwiftProtobuf.UnknownStorage()
 
     public init() {}
+
+    fileprivate var _callIndices: TW_Polkadot_Proto_CallIndices? = nil
+  }
+
+  public init() {}
+}
+
+/// Identity module
+public struct TW_Polkadot_Proto_Identity {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var messageOneof: TW_Polkadot_Proto_Identity.OneOf_MessageOneof? = nil
+
+  public var joinIdentityAsKey: TW_Polkadot_Proto_Identity.JoinIdentityAsKey {
+    get {
+      if case .joinIdentityAsKey(let v)? = messageOneof {return v}
+      return TW_Polkadot_Proto_Identity.JoinIdentityAsKey()
+    }
+    set {messageOneof = .joinIdentityAsKey(newValue)}
+  }
+
+  public var addAuthorization: TW_Polkadot_Proto_Identity.AddAuthorization {
+    get {
+      if case .addAuthorization(let v)? = messageOneof {return v}
+      return TW_Polkadot_Proto_Identity.AddAuthorization()
+    }
+    set {messageOneof = .addAuthorization(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public enum OneOf_MessageOneof: Equatable {
+    case joinIdentityAsKey(TW_Polkadot_Proto_Identity.JoinIdentityAsKey)
+    case addAuthorization(TW_Polkadot_Proto_Identity.AddAuthorization)
+
+  #if !swift(>=4.1)
+    public static func ==(lhs: TW_Polkadot_Proto_Identity.OneOf_MessageOneof, rhs: TW_Polkadot_Proto_Identity.OneOf_MessageOneof) -> Bool {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch (lhs, rhs) {
+      case (.joinIdentityAsKey, .joinIdentityAsKey): return {
+        guard case .joinIdentityAsKey(let l) = lhs, case .joinIdentityAsKey(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.addAuthorization, .addAuthorization): return {
+        guard case .addAuthorization(let l) = lhs, case .addAuthorization(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      default: return false
+      }
+    }
+  #endif
+  }
+
+  /// Identity::join_identity_as_key call
+  public struct JoinIdentityAsKey {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    /// call indices
+    public var callIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _callIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_callIndices = newValue}
+    }
+    /// Returns true if `callIndices` has been explicitly set.
+    public var hasCallIndices: Bool {return self._callIndices != nil}
+    /// Clears the value of `callIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearCallIndices() {self._callIndices = nil}
+
+    /// auth id
+    public var authID: UInt64 = 0
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+
+    fileprivate var _callIndices: TW_Polkadot_Proto_CallIndices? = nil
+  }
+
+  /// Identity::add_authorization call
+  public struct AddAuthorization {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    /// call indices
+    public var callIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _callIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_callIndices = newValue}
+    }
+    /// Returns true if `callIndices` has been explicitly set.
+    public var hasCallIndices: Bool {return self._callIndices != nil}
+    /// Clears the value of `callIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearCallIndices() {self._callIndices = nil}
+
+    /// address that will be added to the Identity
+    public var target: String = String()
+
+    /// authorization data, null means all permissions
+    public var data: TW_Polkadot_Proto_Identity.AddAuthorization.AuthData {
+      get {return _data ?? TW_Polkadot_Proto_Identity.AddAuthorization.AuthData()}
+      set {_data = newValue}
+    }
+    /// Returns true if `data` has been explicitly set.
+    public var hasData: Bool {return self._data != nil}
+    /// Clears the value of `data`. Subsequent reads from it will return its default value.
+    public mutating func clearData() {self._data = nil}
+
+    /// expire time, unix seconds
+    public var expiry: UInt64 = 0
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public struct DataMessage {
+      // SwiftProtobuf.Message conformance is added in an extension below. See the
+      // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+      // methods supported on all messages.
+
+      public var data: Data = Data()
+
+      public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+      public init() {}
+    }
+
+    public struct AuthData {
+      // SwiftProtobuf.Message conformance is added in an extension below. See the
+      // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+      // methods supported on all messages.
+
+      /// authorization data, empty means all permissions, null means no permissions
+      public var asset: TW_Polkadot_Proto_Identity.AddAuthorization.DataMessage {
+        get {return _asset ?? TW_Polkadot_Proto_Identity.AddAuthorization.DataMessage()}
+        set {_asset = newValue}
+      }
+      /// Returns true if `asset` has been explicitly set.
+      public var hasAsset: Bool {return self._asset != nil}
+      /// Clears the value of `asset`. Subsequent reads from it will return its default value.
+      public mutating func clearAsset() {self._asset = nil}
+
+      /// authorization data, empty means all permissions, null means no permissions
+      public var extrinsic: TW_Polkadot_Proto_Identity.AddAuthorization.DataMessage {
+        get {return _extrinsic ?? TW_Polkadot_Proto_Identity.AddAuthorization.DataMessage()}
+        set {_extrinsic = newValue}
+      }
+      /// Returns true if `extrinsic` has been explicitly set.
+      public var hasExtrinsic: Bool {return self._extrinsic != nil}
+      /// Clears the value of `extrinsic`. Subsequent reads from it will return its default value.
+      public mutating func clearExtrinsic() {self._extrinsic = nil}
+
+      /// authorization data, empty means all permissions, null means no permissions
+      public var portfolio: TW_Polkadot_Proto_Identity.AddAuthorization.DataMessage {
+        get {return _portfolio ?? TW_Polkadot_Proto_Identity.AddAuthorization.DataMessage()}
+        set {_portfolio = newValue}
+      }
+      /// Returns true if `portfolio` has been explicitly set.
+      public var hasPortfolio: Bool {return self._portfolio != nil}
+      /// Clears the value of `portfolio`. Subsequent reads from it will return its default value.
+      public mutating func clearPortfolio() {self._portfolio = nil}
+
+      public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+      public init() {}
+
+      fileprivate var _asset: TW_Polkadot_Proto_Identity.AddAuthorization.DataMessage? = nil
+      fileprivate var _extrinsic: TW_Polkadot_Proto_Identity.AddAuthorization.DataMessage? = nil
+      fileprivate var _portfolio: TW_Polkadot_Proto_Identity.AddAuthorization.DataMessage? = nil
+    }
+
+    public init() {}
+
+    fileprivate var _callIndices: TW_Polkadot_Proto_CallIndices? = nil
+    fileprivate var _data: TW_Polkadot_Proto_Identity.AddAuthorization.AuthData? = nil
+  }
+
+  public init() {}
+}
+
+/// Polymesh call
+public struct TW_Polkadot_Proto_PolymeshCall {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var messageOneof: TW_Polkadot_Proto_PolymeshCall.OneOf_MessageOneof? = nil
+
+  public var identityCall: TW_Polkadot_Proto_Identity {
+    get {
+      if case .identityCall(let v)? = messageOneof {return v}
+      return TW_Polkadot_Proto_Identity()
+    }
+    set {messageOneof = .identityCall(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public enum OneOf_MessageOneof: Equatable {
+    case identityCall(TW_Polkadot_Proto_Identity)
+
+  #if !swift(>=4.1)
+    public static func ==(lhs: TW_Polkadot_Proto_PolymeshCall.OneOf_MessageOneof, rhs: TW_Polkadot_Proto_PolymeshCall.OneOf_MessageOneof) -> Bool {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch (lhs, rhs) {
+      case (.identityCall, .identityCall): return {
+        guard case .identityCall(let l) = lhs, case .identityCall(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      }
+    }
+  #endif
   }
 
   public init() {}
@@ -414,57 +950,106 @@ public struct TW_Polkadot_Proto_SigningInput {
   // methods supported on all messages.
 
   /// Recent block hash, or genesis hash if era is not set
-  public var blockHash: Data = Data()
+  public var blockHash: Data {
+    get {return _storage._blockHash}
+    set {_uniqueStorage()._blockHash = newValue}
+  }
 
-  public var genesisHash: Data = Data()
+  /// Genesis block hash (identifies the chain)
+  public var genesisHash: Data {
+    get {return _storage._genesisHash}
+    set {_uniqueStorage()._genesisHash = newValue}
+  }
 
   /// Current account nonce
-  public var nonce: UInt64 = 0
+  public var nonce: UInt64 {
+    get {return _storage._nonce}
+    set {_uniqueStorage()._nonce = newValue}
+  }
 
-  public var specVersion: UInt32 = 0
+  /// Specification version, e.g. 26.
+  public var specVersion: UInt32 {
+    get {return _storage._specVersion}
+    set {_uniqueStorage()._specVersion = newValue}
+  }
 
-  public var transactionVersion: UInt32 = 0
+  /// Transaction version, e.g. 5.
+  public var transactionVersion: UInt32 {
+    get {return _storage._transactionVersion}
+    set {_uniqueStorage()._transactionVersion = newValue}
+  }
 
-  /// big integer
-  public var tip: Data = Data()
+  /// Optional tip to pay, big integer
+  public var tip: Data {
+    get {return _storage._tip}
+    set {_uniqueStorage()._tip = newValue}
+  }
 
   /// Optional time validity limit, recommended, for replay-protection.  Empty means Immortal.
   public var era: TW_Polkadot_Proto_Era {
-    get {return _era ?? TW_Polkadot_Proto_Era()}
-    set {_era = newValue}
+    get {return _storage._era ?? TW_Polkadot_Proto_Era()}
+    set {_uniqueStorage()._era = newValue}
   }
   /// Returns true if `era` has been explicitly set.
-  public var hasEra: Bool {return self._era != nil}
+  public var hasEra: Bool {return _storage._era != nil}
   /// Clears the value of `era`. Subsequent reads from it will return its default value.
-  public mutating func clearEra() {self._era = nil}
+  public mutating func clearEra() {_uniqueStorage()._era = nil}
 
-  public var privateKey: Data = Data()
+  /// The secret private key used for signing (32 bytes).
+  public var privateKey: Data {
+    get {return _storage._privateKey}
+    set {_uniqueStorage()._privateKey = newValue}
+  }
 
-  public var network: TW_Polkadot_Proto_Network = .polkadot
+  /// Network type
+  public var network: UInt32 {
+    get {return _storage._network}
+    set {_uniqueStorage()._network = newValue}
+  }
 
-  public var messageOneof: TW_Polkadot_Proto_SigningInput.OneOf_MessageOneof? = nil
+  /// Whether enable MultiAddress
+  public var multiAddress: Bool {
+    get {return _storage._multiAddress}
+    set {_uniqueStorage()._multiAddress = newValue}
+  }
+
+  /// Payload message
+  public var messageOneof: OneOf_MessageOneof? {
+    get {return _storage._messageOneof}
+    set {_uniqueStorage()._messageOneof = newValue}
+  }
 
   public var balanceCall: TW_Polkadot_Proto_Balance {
     get {
-      if case .balanceCall(let v)? = messageOneof {return v}
+      if case .balanceCall(let v)? = _storage._messageOneof {return v}
       return TW_Polkadot_Proto_Balance()
     }
-    set {messageOneof = .balanceCall(newValue)}
+    set {_uniqueStorage()._messageOneof = .balanceCall(newValue)}
   }
 
   public var stakingCall: TW_Polkadot_Proto_Staking {
     get {
-      if case .stakingCall(let v)? = messageOneof {return v}
+      if case .stakingCall(let v)? = _storage._messageOneof {return v}
       return TW_Polkadot_Proto_Staking()
     }
-    set {messageOneof = .stakingCall(newValue)}
+    set {_uniqueStorage()._messageOneof = .stakingCall(newValue)}
+  }
+
+  public var polymeshCall: TW_Polkadot_Proto_PolymeshCall {
+    get {
+      if case .polymeshCall(let v)? = _storage._messageOneof {return v}
+      return TW_Polkadot_Proto_PolymeshCall()
+    }
+    set {_uniqueStorage()._messageOneof = .polymeshCall(newValue)}
   }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
+  /// Payload message
   public enum OneOf_MessageOneof: Equatable {
     case balanceCall(TW_Polkadot_Proto_Balance)
     case stakingCall(TW_Polkadot_Proto_Staking)
+    case polymeshCall(TW_Polkadot_Proto_PolymeshCall)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_Polkadot_Proto_SigningInput.OneOf_MessageOneof, rhs: TW_Polkadot_Proto_SigningInput.OneOf_MessageOneof) -> Bool {
@@ -480,6 +1065,10 @@ public struct TW_Polkadot_Proto_SigningInput {
         guard case .stakingCall(let l) = lhs, case .stakingCall(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
+      case (.polymeshCall, .polymeshCall): return {
+        guard case .polymeshCall(let l) = lhs, case .polymeshCall(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
       default: return false
       }
     }
@@ -488,10 +1077,10 @@ public struct TW_Polkadot_Proto_SigningInput {
 
   public init() {}
 
-  fileprivate var _era: TW_Polkadot_Proto_Era? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_Polkadot_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -499,6 +1088,12 @@ public struct TW_Polkadot_Proto_SigningOutput {
 
   /// Signed and encoded transaction bytes.
   public var encoded: Data = Data()
+
+  /// error code, 0 is ok, other codes will be treated as errors
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  /// error code description
+  public var errorMessage: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -508,13 +1103,6 @@ public struct TW_Polkadot_Proto_SigningOutput {
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate let _protobuf_package = "TW.Polkadot.Proto"
-
-extension TW_Polkadot_Proto_Network: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    0: .same(proto: "POLKADOT"),
-    2: .same(proto: "KUSAMA"),
-  ]
-}
 
 extension TW_Polkadot_Proto_RewardDestination: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -562,10 +1150,99 @@ extension TW_Polkadot_Proto_Era: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
   }
 }
 
+extension TW_Polkadot_Proto_CustomCallIndices: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CustomCallIndices"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    4: .standard(proto: "module_index"),
+    5: .standard(proto: "method_index"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.moduleIndex) }()
+      case 5: try { try decoder.decodeSingularInt32Field(value: &self.methodIndex) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.moduleIndex != 0 {
+      try visitor.visitSingularInt32Field(value: self.moduleIndex, fieldNumber: 4)
+    }
+    if self.methodIndex != 0 {
+      try visitor.visitSingularInt32Field(value: self.methodIndex, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Polkadot_Proto_CustomCallIndices, rhs: TW_Polkadot_Proto_CustomCallIndices) -> Bool {
+    if lhs.moduleIndex != rhs.moduleIndex {return false}
+    if lhs.methodIndex != rhs.methodIndex {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Polkadot_Proto_CallIndices: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CallIndices"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "custom"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try {
+        var v: TW_Polkadot_Proto_CustomCallIndices?
+        var hadOneofValue = false
+        if let current = self.variant {
+          hadOneofValue = true
+          if case .custom(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.variant = .custom(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if case .custom(let v)? = self.variant {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Polkadot_Proto_CallIndices, rhs: TW_Polkadot_Proto_CallIndices) -> Bool {
+    if lhs.variant != rhs.variant {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension TW_Polkadot_Proto_Balance: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Balance"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "transfer"),
+    2: .same(proto: "batchTransfer"),
+    3: .standard(proto: "asset_transfer"),
+    4: .standard(proto: "batch_asset_transfer"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -587,6 +1264,45 @@ extension TW_Polkadot_Proto_Balance: SwiftProtobuf.Message, SwiftProtobuf._Messa
           self.messageOneof = .transfer(v)
         }
       }()
+      case 2: try {
+        var v: TW_Polkadot_Proto_Balance.BatchTransfer?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .batchTransfer(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .batchTransfer(v)
+        }
+      }()
+      case 3: try {
+        var v: TW_Polkadot_Proto_Balance.AssetTransfer?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .assetTransfer(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .assetTransfer(v)
+        }
+      }()
+      case 4: try {
+        var v: TW_Polkadot_Proto_Balance.BatchAssetTransfer?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .batchAssetTransfer(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .batchAssetTransfer(v)
+        }
+      }()
       default: break
       }
     }
@@ -597,9 +1313,25 @@ extension TW_Polkadot_Proto_Balance: SwiftProtobuf.Message, SwiftProtobuf._Messa
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    try { if case .transfer(let v)? = self.messageOneof {
+    switch self.messageOneof {
+    case .transfer?: try {
+      guard case .transfer(let v)? = self.messageOneof else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
+    }()
+    case .batchTransfer?: try {
+      guard case .batchTransfer(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case .assetTransfer?: try {
+      guard case .assetTransfer(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    }()
+    case .batchAssetTransfer?: try {
+      guard case .batchAssetTransfer(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    }()
+    case nil: break
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -615,6 +1347,8 @@ extension TW_Polkadot_Proto_Balance.Transfer: SwiftProtobuf.Message, SwiftProtob
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .standard(proto: "to_address"),
     2: .same(proto: "value"),
+    3: .same(proto: "memo"),
+    4: .standard(proto: "call_indices"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -625,24 +1359,188 @@ extension TW_Polkadot_Proto_Balance.Transfer: SwiftProtobuf.Message, SwiftProtob
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.toAddress) }()
       case 2: try { try decoder.decodeSingularBytesField(value: &self.value) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.memo) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._callIndices) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.toAddress.isEmpty {
       try visitor.visitSingularStringField(value: self.toAddress, fieldNumber: 1)
     }
     if !self.value.isEmpty {
       try visitor.visitSingularBytesField(value: self.value, fieldNumber: 2)
     }
+    if !self.memo.isEmpty {
+      try visitor.visitSingularStringField(value: self.memo, fieldNumber: 3)
+    }
+    try { if let v = self._callIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Polkadot_Proto_Balance.Transfer, rhs: TW_Polkadot_Proto_Balance.Transfer) -> Bool {
     if lhs.toAddress != rhs.toAddress {return false}
     if lhs.value != rhs.value {return false}
+    if lhs.memo != rhs.memo {return false}
+    if lhs._callIndices != rhs._callIndices {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Polkadot_Proto_Balance.BatchTransfer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Polkadot_Proto_Balance.protoMessageName + ".BatchTransfer"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "call_indices"),
+    2: .same(proto: "transfers"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._callIndices) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.transfers) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._callIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if !self.transfers.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.transfers, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Polkadot_Proto_Balance.BatchTransfer, rhs: TW_Polkadot_Proto_Balance.BatchTransfer) -> Bool {
+    if lhs._callIndices != rhs._callIndices {return false}
+    if lhs.transfers != rhs.transfers {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Polkadot_Proto_Balance.AssetTransfer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Polkadot_Proto_Balance.protoMessageName + ".AssetTransfer"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "call_indices"),
+    2: .standard(proto: "to_address"),
+    3: .same(proto: "value"),
+    4: .standard(proto: "asset_id"),
+    5: .standard(proto: "fee_asset_id"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._callIndices) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.toAddress) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.value) }()
+      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.assetID) }()
+      case 5: try { try decoder.decodeSingularUInt32Field(value: &self.feeAssetID) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._callIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if !self.toAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.toAddress, fieldNumber: 2)
+    }
+    if !self.value.isEmpty {
+      try visitor.visitSingularBytesField(value: self.value, fieldNumber: 3)
+    }
+    if self.assetID != 0 {
+      try visitor.visitSingularUInt32Field(value: self.assetID, fieldNumber: 4)
+    }
+    if self.feeAssetID != 0 {
+      try visitor.visitSingularUInt32Field(value: self.feeAssetID, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Polkadot_Proto_Balance.AssetTransfer, rhs: TW_Polkadot_Proto_Balance.AssetTransfer) -> Bool {
+    if lhs._callIndices != rhs._callIndices {return false}
+    if lhs.toAddress != rhs.toAddress {return false}
+    if lhs.value != rhs.value {return false}
+    if lhs.assetID != rhs.assetID {return false}
+    if lhs.feeAssetID != rhs.feeAssetID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Polkadot_Proto_Balance.BatchAssetTransfer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Polkadot_Proto_Balance.protoMessageName + ".BatchAssetTransfer"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "call_indices"),
+    2: .standard(proto: "fee_asset_id"),
+    3: .same(proto: "transfers"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._callIndices) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.feeAssetID) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.transfers) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._callIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if self.feeAssetID != 0 {
+      try visitor.visitSingularUInt32Field(value: self.feeAssetID, fieldNumber: 2)
+    }
+    if !self.transfers.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.transfers, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Polkadot_Proto_Balance.BatchAssetTransfer, rhs: TW_Polkadot_Proto_Balance.BatchAssetTransfer) -> Bool {
+    if lhs._callIndices != rhs._callIndices {return false}
+    if lhs.feeAssetID != rhs.feeAssetID {return false}
+    if lhs.transfers != rhs.transfers {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -659,6 +1557,7 @@ extension TW_Polkadot_Proto_Staking: SwiftProtobuf.Message, SwiftProtobuf._Messa
     6: .same(proto: "nominate"),
     7: .same(proto: "chill"),
     8: .standard(proto: "chill_and_unbond"),
+    9: .same(proto: "rebond"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -771,6 +1670,19 @@ extension TW_Polkadot_Proto_Staking: SwiftProtobuf.Message, SwiftProtobuf._Messa
           self.messageOneof = .chillAndUnbond(v)
         }
       }()
+      case 9: try {
+        var v: TW_Polkadot_Proto_Staking.Rebond?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .rebond(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .rebond(v)
+        }
+      }()
       default: break
       }
     }
@@ -814,6 +1726,10 @@ extension TW_Polkadot_Proto_Staking: SwiftProtobuf.Message, SwiftProtobuf._Messa
       guard case .chillAndUnbond(let v)? = self.messageOneof else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
     }()
+    case .rebond?: try {
+      guard case .rebond(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+    }()
     case nil: break
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -832,6 +1748,7 @@ extension TW_Polkadot_Proto_Staking.Bond: SwiftProtobuf.Message, SwiftProtobuf._
     1: .same(proto: "controller"),
     2: .same(proto: "value"),
     3: .standard(proto: "reward_destination"),
+    4: .standard(proto: "call_indices"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -843,12 +1760,17 @@ extension TW_Polkadot_Proto_Staking.Bond: SwiftProtobuf.Message, SwiftProtobuf._
       case 1: try { try decoder.decodeSingularStringField(value: &self.controller) }()
       case 2: try { try decoder.decodeSingularBytesField(value: &self.value) }()
       case 3: try { try decoder.decodeSingularEnumField(value: &self.rewardDestination) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._callIndices) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.controller.isEmpty {
       try visitor.visitSingularStringField(value: self.controller, fieldNumber: 1)
     }
@@ -858,6 +1780,9 @@ extension TW_Polkadot_Proto_Staking.Bond: SwiftProtobuf.Message, SwiftProtobuf._
     if self.rewardDestination != .staked {
       try visitor.visitSingularEnumField(value: self.rewardDestination, fieldNumber: 3)
     }
+    try { if let v = self._callIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -865,6 +1790,7 @@ extension TW_Polkadot_Proto_Staking.Bond: SwiftProtobuf.Message, SwiftProtobuf._
     if lhs.controller != rhs.controller {return false}
     if lhs.value != rhs.value {return false}
     if lhs.rewardDestination != rhs.rewardDestination {return false}
+    if lhs._callIndices != rhs._callIndices {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -877,6 +1803,7 @@ extension TW_Polkadot_Proto_Staking.BondAndNominate: SwiftProtobuf.Message, Swif
     2: .same(proto: "value"),
     3: .standard(proto: "reward_destination"),
     4: .same(proto: "nominators"),
+    5: .standard(proto: "call_indices"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -889,12 +1816,17 @@ extension TW_Polkadot_Proto_Staking.BondAndNominate: SwiftProtobuf.Message, Swif
       case 2: try { try decoder.decodeSingularBytesField(value: &self.value) }()
       case 3: try { try decoder.decodeSingularEnumField(value: &self.rewardDestination) }()
       case 4: try { try decoder.decodeRepeatedStringField(value: &self.nominators) }()
+      case 5: try { try decoder.decodeSingularMessageField(value: &self._callIndices) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.controller.isEmpty {
       try visitor.visitSingularStringField(value: self.controller, fieldNumber: 1)
     }
@@ -907,6 +1839,9 @@ extension TW_Polkadot_Proto_Staking.BondAndNominate: SwiftProtobuf.Message, Swif
     if !self.nominators.isEmpty {
       try visitor.visitRepeatedStringField(value: self.nominators, fieldNumber: 4)
     }
+    try { if let v = self._callIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -915,6 +1850,7 @@ extension TW_Polkadot_Proto_Staking.BondAndNominate: SwiftProtobuf.Message, Swif
     if lhs.value != rhs.value {return false}
     if lhs.rewardDestination != rhs.rewardDestination {return false}
     if lhs.nominators != rhs.nominators {return false}
+    if lhs._callIndices != rhs._callIndices {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -924,6 +1860,7 @@ extension TW_Polkadot_Proto_Staking.BondExtra: SwiftProtobuf.Message, SwiftProto
   public static let protoMessageName: String = TW_Polkadot_Proto_Staking.protoMessageName + ".BondExtra"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "value"),
+    2: .standard(proto: "call_indices"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -933,20 +1870,29 @@ extension TW_Polkadot_Proto_Staking.BondExtra: SwiftProtobuf.Message, SwiftProto
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.value) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._callIndices) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.value.isEmpty {
       try visitor.visitSingularBytesField(value: self.value, fieldNumber: 1)
     }
+    try { if let v = self._callIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Polkadot_Proto_Staking.BondExtra, rhs: TW_Polkadot_Proto_Staking.BondExtra) -> Bool {
     if lhs.value != rhs.value {return false}
+    if lhs._callIndices != rhs._callIndices {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -956,6 +1902,7 @@ extension TW_Polkadot_Proto_Staking.Unbond: SwiftProtobuf.Message, SwiftProtobuf
   public static let protoMessageName: String = TW_Polkadot_Proto_Staking.protoMessageName + ".Unbond"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "value"),
+    2: .standard(proto: "call_indices"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -965,20 +1912,71 @@ extension TW_Polkadot_Proto_Staking.Unbond: SwiftProtobuf.Message, SwiftProtobuf
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.value) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._callIndices) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.value.isEmpty {
       try visitor.visitSingularBytesField(value: self.value, fieldNumber: 1)
     }
+    try { if let v = self._callIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Polkadot_Proto_Staking.Unbond, rhs: TW_Polkadot_Proto_Staking.Unbond) -> Bool {
     if lhs.value != rhs.value {return false}
+    if lhs._callIndices != rhs._callIndices {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Polkadot_Proto_Staking.Rebond: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Polkadot_Proto_Staking.protoMessageName + ".Rebond"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "value"),
+    2: .standard(proto: "call_indices"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.value) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._callIndices) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.value.isEmpty {
+      try visitor.visitSingularBytesField(value: self.value, fieldNumber: 1)
+    }
+    try { if let v = self._callIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Polkadot_Proto_Staking.Rebond, rhs: TW_Polkadot_Proto_Staking.Rebond) -> Bool {
+    if lhs.value != rhs.value {return false}
+    if lhs._callIndices != rhs._callIndices {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -988,6 +1986,7 @@ extension TW_Polkadot_Proto_Staking.WithdrawUnbonded: SwiftProtobuf.Message, Swi
   public static let protoMessageName: String = TW_Polkadot_Proto_Staking.protoMessageName + ".WithdrawUnbonded"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .standard(proto: "slashing_spans"),
+    2: .standard(proto: "call_indices"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -997,20 +1996,29 @@ extension TW_Polkadot_Proto_Staking.WithdrawUnbonded: SwiftProtobuf.Message, Swi
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularInt32Field(value: &self.slashingSpans) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._callIndices) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if self.slashingSpans != 0 {
       try visitor.visitSingularInt32Field(value: self.slashingSpans, fieldNumber: 1)
     }
+    try { if let v = self._callIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Polkadot_Proto_Staking.WithdrawUnbonded, rhs: TW_Polkadot_Proto_Staking.WithdrawUnbonded) -> Bool {
     if lhs.slashingSpans != rhs.slashingSpans {return false}
+    if lhs._callIndices != rhs._callIndices {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1020,6 +2028,7 @@ extension TW_Polkadot_Proto_Staking.Nominate: SwiftProtobuf.Message, SwiftProtob
   public static let protoMessageName: String = TW_Polkadot_Proto_Staking.protoMessageName + ".Nominate"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "nominators"),
+    2: .standard(proto: "call_indices"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1029,20 +2038,29 @@ extension TW_Polkadot_Proto_Staking.Nominate: SwiftProtobuf.Message, SwiftProtob
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedStringField(value: &self.nominators) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._callIndices) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.nominators.isEmpty {
       try visitor.visitRepeatedStringField(value: self.nominators, fieldNumber: 1)
     }
+    try { if let v = self._callIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Polkadot_Proto_Staking.Nominate, rhs: TW_Polkadot_Proto_Staking.Nominate) -> Bool {
     if lhs.nominators != rhs.nominators {return false}
+    if lhs._callIndices != rhs._callIndices {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1052,6 +2070,7 @@ extension TW_Polkadot_Proto_Staking.ChillAndUnbond: SwiftProtobuf.Message, Swift
   public static let protoMessageName: String = TW_Polkadot_Proto_Staking.protoMessageName + ".ChillAndUnbond"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "value"),
+    2: .standard(proto: "call_indices"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1061,20 +2080,29 @@ extension TW_Polkadot_Proto_Staking.ChillAndUnbond: SwiftProtobuf.Message, Swift
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.value) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._callIndices) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.value.isEmpty {
       try visitor.visitSingularBytesField(value: self.value, fieldNumber: 1)
     }
+    try { if let v = self._callIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Polkadot_Proto_Staking.ChillAndUnbond, rhs: TW_Polkadot_Proto_Staking.ChillAndUnbond) -> Bool {
     if lhs.value != rhs.value {return false}
+    if lhs._callIndices != rhs._callIndices {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1082,18 +2110,329 @@ extension TW_Polkadot_Proto_Staking.ChillAndUnbond: SwiftProtobuf.Message, Swift
 
 extension TW_Polkadot_Proto_Staking.Chill: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = TW_Polkadot_Proto_Staking.protoMessageName + ".Chill"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "call_indices"),
+  ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let _ = try decoder.nextFieldNumber() {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._callIndices) }()
+      default: break
+      }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._callIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Polkadot_Proto_Staking.Chill, rhs: TW_Polkadot_Proto_Staking.Chill) -> Bool {
+    if lhs._callIndices != rhs._callIndices {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Polkadot_Proto_Identity: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Identity"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "join_identity_as_key"),
+    2: .standard(proto: "add_authorization"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try {
+        var v: TW_Polkadot_Proto_Identity.JoinIdentityAsKey?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .joinIdentityAsKey(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .joinIdentityAsKey(v)
+        }
+      }()
+      case 2: try {
+        var v: TW_Polkadot_Proto_Identity.AddAuthorization?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .addAuthorization(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .addAuthorization(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    switch self.messageOneof {
+    case .joinIdentityAsKey?: try {
+      guard case .joinIdentityAsKey(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    }()
+    case .addAuthorization?: try {
+      guard case .addAuthorization(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Polkadot_Proto_Identity, rhs: TW_Polkadot_Proto_Identity) -> Bool {
+    if lhs.messageOneof != rhs.messageOneof {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Polkadot_Proto_Identity.JoinIdentityAsKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Polkadot_Proto_Identity.protoMessageName + ".JoinIdentityAsKey"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "call_indices"),
+    2: .standard(proto: "auth_id"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._callIndices) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.authID) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._callIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if self.authID != 0 {
+      try visitor.visitSingularUInt64Field(value: self.authID, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Polkadot_Proto_Identity.JoinIdentityAsKey, rhs: TW_Polkadot_Proto_Identity.JoinIdentityAsKey) -> Bool {
+    if lhs._callIndices != rhs._callIndices {return false}
+    if lhs.authID != rhs.authID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Polkadot_Proto_Identity.AddAuthorization: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Polkadot_Proto_Identity.protoMessageName + ".AddAuthorization"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "call_indices"),
+    2: .same(proto: "target"),
+    3: .same(proto: "data"),
+    4: .same(proto: "expiry"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._callIndices) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.target) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._data) }()
+      case 4: try { try decoder.decodeSingularUInt64Field(value: &self.expiry) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._callIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if !self.target.isEmpty {
+      try visitor.visitSingularStringField(value: self.target, fieldNumber: 2)
+    }
+    try { if let v = self._data {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    if self.expiry != 0 {
+      try visitor.visitSingularUInt64Field(value: self.expiry, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Polkadot_Proto_Identity.AddAuthorization, rhs: TW_Polkadot_Proto_Identity.AddAuthorization) -> Bool {
+    if lhs._callIndices != rhs._callIndices {return false}
+    if lhs.target != rhs.target {return false}
+    if lhs._data != rhs._data {return false}
+    if lhs.expiry != rhs.expiry {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Polkadot_Proto_Identity.AddAuthorization.DataMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Polkadot_Proto_Identity.AddAuthorization.protoMessageName + ".Data"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "data"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.data) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.data.isEmpty {
+      try visitor.visitSingularBytesField(value: self.data, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Polkadot_Proto_Identity.AddAuthorization.DataMessage, rhs: TW_Polkadot_Proto_Identity.AddAuthorization.DataMessage) -> Bool {
+    if lhs.data != rhs.data {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Polkadot_Proto_Identity.AddAuthorization.AuthData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Polkadot_Proto_Identity.AddAuthorization.protoMessageName + ".AuthData"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "asset"),
+    2: .same(proto: "extrinsic"),
+    3: .same(proto: "portfolio"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._asset) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._extrinsic) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._portfolio) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._asset {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._extrinsic {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._portfolio {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Polkadot_Proto_Identity.AddAuthorization.AuthData, rhs: TW_Polkadot_Proto_Identity.AddAuthorization.AuthData) -> Bool {
+    if lhs._asset != rhs._asset {return false}
+    if lhs._extrinsic != rhs._extrinsic {return false}
+    if lhs._portfolio != rhs._portfolio {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Polkadot_Proto_PolymeshCall: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PolymeshCall"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    2: .standard(proto: "identity_call"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 2: try {
+        var v: TW_Polkadot_Proto_Identity?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .identityCall(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .identityCall(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if case .identityCall(let v)? = self.messageOneof {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Polkadot_Proto_PolymeshCall, rhs: TW_Polkadot_Proto_PolymeshCall) -> Bool {
+    if lhs.messageOneof != rhs.messageOneof {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1111,113 +2450,189 @@ extension TW_Polkadot_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
     7: .same(proto: "era"),
     8: .standard(proto: "private_key"),
     9: .same(proto: "network"),
-    10: .standard(proto: "balance_call"),
-    11: .standard(proto: "staking_call"),
+    10: .standard(proto: "multi_address"),
+    11: .standard(proto: "balance_call"),
+    12: .standard(proto: "staking_call"),
+    13: .standard(proto: "polymesh_call"),
   ]
 
+  fileprivate class _StorageClass {
+    var _blockHash: Data = Data()
+    var _genesisHash: Data = Data()
+    var _nonce: UInt64 = 0
+    var _specVersion: UInt32 = 0
+    var _transactionVersion: UInt32 = 0
+    var _tip: Data = Data()
+    var _era: TW_Polkadot_Proto_Era? = nil
+    var _privateKey: Data = Data()
+    var _network: UInt32 = 0
+    var _multiAddress: Bool = false
+    var _messageOneof: TW_Polkadot_Proto_SigningInput.OneOf_MessageOneof?
+
+    static let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _blockHash = source._blockHash
+      _genesisHash = source._genesisHash
+      _nonce = source._nonce
+      _specVersion = source._specVersion
+      _transactionVersion = source._transactionVersion
+      _tip = source._tip
+      _era = source._era
+      _privateKey = source._privateKey
+      _network = source._network
+      _multiAddress = source._multiAddress
+      _messageOneof = source._messageOneof
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularBytesField(value: &self.blockHash) }()
-      case 2: try { try decoder.decodeSingularBytesField(value: &self.genesisHash) }()
-      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.nonce) }()
-      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.specVersion) }()
-      case 5: try { try decoder.decodeSingularUInt32Field(value: &self.transactionVersion) }()
-      case 6: try { try decoder.decodeSingularBytesField(value: &self.tip) }()
-      case 7: try { try decoder.decodeSingularMessageField(value: &self._era) }()
-      case 8: try { try decoder.decodeSingularBytesField(value: &self.privateKey) }()
-      case 9: try { try decoder.decodeSingularEnumField(value: &self.network) }()
-      case 10: try {
-        var v: TW_Polkadot_Proto_Balance?
-        var hadOneofValue = false
-        if let current = self.messageOneof {
-          hadOneofValue = true
-          if case .balanceCall(let m) = current {v = m}
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularBytesField(value: &_storage._blockHash) }()
+        case 2: try { try decoder.decodeSingularBytesField(value: &_storage._genesisHash) }()
+        case 3: try { try decoder.decodeSingularUInt64Field(value: &_storage._nonce) }()
+        case 4: try { try decoder.decodeSingularUInt32Field(value: &_storage._specVersion) }()
+        case 5: try { try decoder.decodeSingularUInt32Field(value: &_storage._transactionVersion) }()
+        case 6: try { try decoder.decodeSingularBytesField(value: &_storage._tip) }()
+        case 7: try { try decoder.decodeSingularMessageField(value: &_storage._era) }()
+        case 8: try { try decoder.decodeSingularBytesField(value: &_storage._privateKey) }()
+        case 9: try { try decoder.decodeSingularUInt32Field(value: &_storage._network) }()
+        case 10: try { try decoder.decodeSingularBoolField(value: &_storage._multiAddress) }()
+        case 11: try {
+          var v: TW_Polkadot_Proto_Balance?
+          var hadOneofValue = false
+          if let current = _storage._messageOneof {
+            hadOneofValue = true
+            if case .balanceCall(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._messageOneof = .balanceCall(v)
+          }
+        }()
+        case 12: try {
+          var v: TW_Polkadot_Proto_Staking?
+          var hadOneofValue = false
+          if let current = _storage._messageOneof {
+            hadOneofValue = true
+            if case .stakingCall(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._messageOneof = .stakingCall(v)
+          }
+        }()
+        case 13: try {
+          var v: TW_Polkadot_Proto_PolymeshCall?
+          var hadOneofValue = false
+          if let current = _storage._messageOneof {
+            hadOneofValue = true
+            if case .polymeshCall(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._messageOneof = .polymeshCall(v)
+          }
+        }()
+        default: break
         }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.messageOneof = .balanceCall(v)
-        }
-      }()
-      case 11: try {
-        var v: TW_Polkadot_Proto_Staking?
-        var hadOneofValue = false
-        if let current = self.messageOneof {
-          hadOneofValue = true
-          if case .stakingCall(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.messageOneof = .stakingCall(v)
-        }
-      }()
-      default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.blockHash.isEmpty {
-      try visitor.visitSingularBytesField(value: self.blockHash, fieldNumber: 1)
-    }
-    if !self.genesisHash.isEmpty {
-      try visitor.visitSingularBytesField(value: self.genesisHash, fieldNumber: 2)
-    }
-    if self.nonce != 0 {
-      try visitor.visitSingularUInt64Field(value: self.nonce, fieldNumber: 3)
-    }
-    if self.specVersion != 0 {
-      try visitor.visitSingularUInt32Field(value: self.specVersion, fieldNumber: 4)
-    }
-    if self.transactionVersion != 0 {
-      try visitor.visitSingularUInt32Field(value: self.transactionVersion, fieldNumber: 5)
-    }
-    if !self.tip.isEmpty {
-      try visitor.visitSingularBytesField(value: self.tip, fieldNumber: 6)
-    }
-    try { if let v = self._era {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
-    } }()
-    if !self.privateKey.isEmpty {
-      try visitor.visitSingularBytesField(value: self.privateKey, fieldNumber: 8)
-    }
-    if self.network != .polkadot {
-      try visitor.visitSingularEnumField(value: self.network, fieldNumber: 9)
-    }
-    switch self.messageOneof {
-    case .balanceCall?: try {
-      guard case .balanceCall(let v)? = self.messageOneof else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
-    }()
-    case .stakingCall?: try {
-      guard case .stakingCall(let v)? = self.messageOneof else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
-    }()
-    case nil: break
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if !_storage._blockHash.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._blockHash, fieldNumber: 1)
+      }
+      if !_storage._genesisHash.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._genesisHash, fieldNumber: 2)
+      }
+      if _storage._nonce != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._nonce, fieldNumber: 3)
+      }
+      if _storage._specVersion != 0 {
+        try visitor.visitSingularUInt32Field(value: _storage._specVersion, fieldNumber: 4)
+      }
+      if _storage._transactionVersion != 0 {
+        try visitor.visitSingularUInt32Field(value: _storage._transactionVersion, fieldNumber: 5)
+      }
+      if !_storage._tip.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._tip, fieldNumber: 6)
+      }
+      try { if let v = _storage._era {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+      } }()
+      if !_storage._privateKey.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._privateKey, fieldNumber: 8)
+      }
+      if _storage._network != 0 {
+        try visitor.visitSingularUInt32Field(value: _storage._network, fieldNumber: 9)
+      }
+      if _storage._multiAddress != false {
+        try visitor.visitSingularBoolField(value: _storage._multiAddress, fieldNumber: 10)
+      }
+      switch _storage._messageOneof {
+      case .balanceCall?: try {
+        guard case .balanceCall(let v)? = _storage._messageOneof else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
+      }()
+      case .stakingCall?: try {
+        guard case .stakingCall(let v)? = _storage._messageOneof else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+      }()
+      case .polymeshCall?: try {
+        guard case .polymeshCall(let v)? = _storage._messageOneof else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
+      }()
+      case nil: break
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Polkadot_Proto_SigningInput, rhs: TW_Polkadot_Proto_SigningInput) -> Bool {
-    if lhs.blockHash != rhs.blockHash {return false}
-    if lhs.genesisHash != rhs.genesisHash {return false}
-    if lhs.nonce != rhs.nonce {return false}
-    if lhs.specVersion != rhs.specVersion {return false}
-    if lhs.transactionVersion != rhs.transactionVersion {return false}
-    if lhs.tip != rhs.tip {return false}
-    if lhs._era != rhs._era {return false}
-    if lhs.privateKey != rhs.privateKey {return false}
-    if lhs.network != rhs.network {return false}
-    if lhs.messageOneof != rhs.messageOneof {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._blockHash != rhs_storage._blockHash {return false}
+        if _storage._genesisHash != rhs_storage._genesisHash {return false}
+        if _storage._nonce != rhs_storage._nonce {return false}
+        if _storage._specVersion != rhs_storage._specVersion {return false}
+        if _storage._transactionVersion != rhs_storage._transactionVersion {return false}
+        if _storage._tip != rhs_storage._tip {return false}
+        if _storage._era != rhs_storage._era {return false}
+        if _storage._privateKey != rhs_storage._privateKey {return false}
+        if _storage._network != rhs_storage._network {return false}
+        if _storage._multiAddress != rhs_storage._multiAddress {return false}
+        if _storage._messageOneof != rhs_storage._messageOneof {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1227,6 +2642,8 @@ extension TW_Polkadot_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf.
   public static let protoMessageName: String = _protobuf_package + ".SigningOutput"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "encoded"),
+    2: .same(proto: "error"),
+    3: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1236,6 +2653,8 @@ extension TW_Polkadot_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf.
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.encoded) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -1245,11 +2664,19 @@ extension TW_Polkadot_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf.
     if !self.encoded.isEmpty {
       try visitor.visitSingularBytesField(value: self.encoded, fieldNumber: 1)
     }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 2)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Polkadot_Proto_SigningOutput, rhs: TW_Polkadot_Proto_SigningOutput) -> Bool {
     if lhs.encoded != rhs.encoded {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

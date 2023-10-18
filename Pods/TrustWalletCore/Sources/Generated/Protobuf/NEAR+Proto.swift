@@ -16,6 +16,7 @@ public typealias NEARStake = TW_NEAR_Proto_Stake
 public typealias NEARAddKey = TW_NEAR_Proto_AddKey
 public typealias NEARDeleteKey = TW_NEAR_Proto_DeleteKey
 public typealias NEARDeleteAccount = TW_NEAR_Proto_DeleteAccount
+public typealias NEARTokenTransfer = TW_NEAR_Proto_TokenTransfer
 public typealias NEARAction = TW_NEAR_Proto_Action
 public typealias NEARSigningInput = TW_NEAR_Proto_SigningInput
 public typealias NEARSigningOutput = TW_NEAR_Proto_SigningOutput

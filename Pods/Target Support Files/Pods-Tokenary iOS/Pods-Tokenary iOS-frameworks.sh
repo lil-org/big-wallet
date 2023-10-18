@@ -18,7 +18,7 @@ echo "mkdir -p ${CONFIGURATION_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}"
 mkdir -p "${CONFIGURATION_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}"
 
 COCOAPODS_PARALLEL_CODE_SIGN="${COCOAPODS_PARALLEL_CODE_SIGN:-false}"
-SWIFT_STDLIB_PATH="${DT_TOOLCHAIN_DIR}/usr/lib/swift/${PLATFORM_NAME}"
+SWIFT_STDLIB_PATH="${TOOLCHAIN_DIR}/usr/lib/swift/${PLATFORM_NAME}"
 BCSYMBOLMAP_DIR="BCSymbolMaps"
 
 
@@ -41,7 +41,7 @@ install_framework()
 
   if [ -L "${source}" ]; then
     echo "Symlinked..."
-    source="$(readlink "${source}")"
+    source="$(readlink -f "${source}")"
   fi
 
   if [ -d "${source}/${BCSYMBOLMAP_DIR}" ]; then
@@ -180,12 +180,9 @@ if [[ "$CONFIGURATION" == "Debug" ]]; then
   install_framework "${BUILT_PRODUCTS_DIR}/BlockiesSwift-iOS/BlockiesSwift.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/CryptoSwift-iOS/CryptoSwift.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/Kingfisher-iOS/Kingfisher.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/PromiseKit/PromiseKit.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/Starscream-iOS/Starscream.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/SwiftProtobuf-iOS/SwiftProtobuf.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/SwiftyJSON-iOS/SwiftyJSON.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/TrustWalletCore-iOS/WalletCore.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/WalletConnect-iOS/WalletConnect.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/Web3Swift.io-iOS/Web3Swift.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/secp256k1.swift-iOS/secp256k1.framework"
 fi
@@ -194,12 +191,9 @@ if [[ "$CONFIGURATION" == "Release" ]]; then
   install_framework "${BUILT_PRODUCTS_DIR}/BlockiesSwift-iOS/BlockiesSwift.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/CryptoSwift-iOS/CryptoSwift.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/Kingfisher-iOS/Kingfisher.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/PromiseKit/PromiseKit.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/Starscream-iOS/Starscream.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/SwiftProtobuf-iOS/SwiftProtobuf.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/SwiftyJSON-iOS/SwiftyJSON.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/TrustWalletCore-iOS/WalletCore.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/WalletConnect-iOS/WalletConnect.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/Web3Swift.io-iOS/Web3Swift.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/secp256k1.swift-iOS/secp256k1.framework"
 fi

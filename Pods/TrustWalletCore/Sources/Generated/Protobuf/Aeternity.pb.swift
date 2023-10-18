@@ -32,8 +32,10 @@ public struct TW_Aeternity_Proto_SigningInput {
   /// Address of the recipient with "ak_" prefix
   public var toAddress: String = String()
 
+  /// Amount (uint256, serialized little endian)
   public var amount: Data = Data()
 
+  /// Fee amount (uint256, serialized little endian)
   public var fee: Data = Data()
 
   /// Message, optional
@@ -42,8 +44,10 @@ public struct TW_Aeternity_Proto_SigningInput {
   /// Time to live until block height
   public var ttl: UInt64 = 0
 
+  /// Nonce (should be larger than in the last transaction of the account)
   public var nonce: UInt64 = 0
 
+  /// The secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -51,7 +55,7 @@ public struct TW_Aeternity_Proto_SigningInput {
   public init() {}
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_Aeternity_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for

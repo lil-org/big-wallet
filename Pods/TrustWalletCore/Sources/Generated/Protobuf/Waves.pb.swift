@@ -20,21 +20,25 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
-///Transfer transaction
+/// Transfer transaction
 public struct TW_Waves_Proto_TransferMessage {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// amount
   public var amount: Int64 = 0
 
+  /// asset ID
   public var asset: String = String()
 
   /// minimum 0.001 Waves (100000 Wavelets) for now
   public var fee: Int64 = 0
 
+  /// asset of the fee
   public var feeAsset: String = String()
 
+  /// destination address
   public var to: String = String()
 
   /// any 140 bytes payload, will be displayed to the client as utf-8 string
@@ -45,14 +49,16 @@ public struct TW_Waves_Proto_TransferMessage {
   public init() {}
 }
 
-///Lease transaction
+/// Lease transaction
 public struct TW_Waves_Proto_LeaseMessage {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// amount
   public var amount: Int64 = 0
 
+  /// destination
   public var to: String = String()
 
   /// minimum 0.001 Waves (100000 Wavelets) for now
@@ -63,14 +69,16 @@ public struct TW_Waves_Proto_LeaseMessage {
   public init() {}
 }
 
-///Lease transaction
+/// Cancel Lease transaction
 public struct TW_Waves_Proto_CancelLeaseMessage {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Lease ID to cancel
   public var leaseID: String = String()
 
+  /// Fee used
   public var fee: Int64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -87,8 +95,10 @@ public struct TW_Waves_Proto_SigningInput {
   /// in millis
   public var timestamp: Int64 = 0
 
+  /// The secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
 
+  /// Payload message
   public var messageOneof: TW_Waves_Proto_SigningInput.OneOf_MessageOneof? = nil
 
   public var transferMessage: TW_Waves_Proto_TransferMessage {
@@ -117,6 +127,7 @@ public struct TW_Waves_Proto_SigningInput {
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
+  /// Payload message
   public enum OneOf_MessageOneof: Equatable {
     case transferMessage(TW_Waves_Proto_TransferMessage)
     case leaseMessage(TW_Waves_Proto_LeaseMessage)
@@ -149,14 +160,16 @@ public struct TW_Waves_Proto_SigningInput {
   public init() {}
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_Waves_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// signature data
   public var signature: Data = Data()
 
+  /// transaction in JSON format
   public var json: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()

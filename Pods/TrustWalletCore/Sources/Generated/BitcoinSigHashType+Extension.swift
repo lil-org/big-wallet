@@ -1,4 +1,4 @@
-// Copyright © 2017-2022 Trust Wallet.
+// Copyright © 2017-2023 Trust Wallet.
 //
 // This file is part of Trust. The full Trust copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
@@ -9,11 +9,19 @@
 
 extension BitcoinSigHashType {
 
+    /// Determines if the given sig hash is single
+    ///
+    /// - Parameter type: sig hash type
+    /// - Returns: true if the sigh hash type is single, false otherwise
     public func isSingle() -> Bool {
         return TWBitcoinSigHashTypeIsSingle(TWBitcoinSigHashType(rawValue: rawValue))
     }
 
 
+    /// Determines if the given sig hash is none
+    ///
+    /// - Parameter type: sig hash type
+    /// - Returns: true if the sigh hash type is none, false otherwise
     public func isNone() -> Bool {
         return TWBitcoinSigHashTypeIsNone(TWBitcoinSigHashType(rawValue: rawValue))
     }

@@ -1,4 +1,4 @@
-// Copyright © 2017-2020 Trust Wallet.
+// Copyright © 2017-2023 Trust Wallet.
 //
 // This file is part of Trust. The full Trust copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
@@ -12,9 +12,9 @@ TW_EXTERN_C_BEGIN
 
 /// HD wallet purpose
 ///
-/// See https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki
-/// See https://github.com/bitcoin/bips/blob/master/bip-0049.mediawiki
-/// See https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki
+/// \see https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki
+/// \see https://github.com/bitcoin/bips/blob/master/bip-0049.mediawiki
+/// \see https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki
 TW_EXPORT_ENUM(uint32_t)
 enum TWPurpose {
     TWPurposeBIP44 = 44,

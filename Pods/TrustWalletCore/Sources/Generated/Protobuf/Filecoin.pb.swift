@@ -20,13 +20,59 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+/// Defines the type of `from` address derivation.
+public enum TW_Filecoin_Proto_DerivationType: SwiftProtobuf.Enum {
+  public typealias RawValue = Int
+
+  /// Defines a Secp256k1 (`f1`) derivation for the sender address.
+  /// Default derivation type.
+  case secp256K1 // = 0
+
+  /// Defines a Delegated (`f4`) derivation for the sender address.
+  case delegated // = 1
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .secp256K1
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .secp256K1
+    case 1: self = .delegated
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .secp256K1: return 0
+    case .delegated: return 1
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+}
+
+#if swift(>=4.2)
+
+extension TW_Filecoin_Proto_DerivationType: CaseIterable {
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static var allCases: [TW_Filecoin_Proto_DerivationType] = [
+    .secp256K1,
+    .delegated,
+  ]
+}
+
+#endif  // swift(>=4.2)
+
 /// Input data necessary to create a signed transaction.
 public struct TW_Filecoin_Proto_SigningInput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Private key of sender account.
+  /// The secret private key of the sender account, used for signing (32 bytes).
   public var privateKey: Data = Data()
 
   /// Recipient's address.
@@ -35,30 +81,46 @@ public struct TW_Filecoin_Proto_SigningInput {
   /// Transaction nonce.
   public var nonce: UInt64 = 0
 
-  /// Transfer value.
+  /// Transfer value (uint256, serialized little endian)
   public var value: Data = Data()
 
   /// Gas limit.
   public var gasLimit: Int64 = 0
 
-  /// Gas fee cap.
+  /// Gas fee cap (uint256, serialized little endian)
   public var gasFeeCap: Data = Data()
 
-  /// Gas premium.
+  /// Gas premium (uint256, serialized little endian)
   public var gasPremium: Data = Data()
+
+  /// Message params.
+  public var params: Data = Data()
+
+  /// Sender address derivation type.
+  public var derivation: TW_Filecoin_Proto_DerivationType = .secp256K1
+
+  /// Public key secp256k1 extended
+  public var publicKey: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_Filecoin_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Resulting transaction, in JSON.
   public var json: String = String()
+
+  /// Error code, 0 is ok, other codes will be treated as errors
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  /// Error description
+  public var errorMessage: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -68,6 +130,13 @@ public struct TW_Filecoin_Proto_SigningOutput {
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate let _protobuf_package = "TW.Filecoin.Proto"
+
+extension TW_Filecoin_Proto_DerivationType: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "SECP256K1"),
+    1: .same(proto: "DELEGATED"),
+  ]
+}
 
 extension TW_Filecoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SigningInput"
@@ -79,6 +148,9 @@ extension TW_Filecoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
     5: .standard(proto: "gas_limit"),
     6: .standard(proto: "gas_fee_cap"),
     7: .standard(proto: "gas_premium"),
+    8: .same(proto: "params"),
+    9: .same(proto: "derivation"),
+    10: .standard(proto: "public_key"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -94,6 +166,9 @@ extension TW_Filecoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
       case 5: try { try decoder.decodeSingularInt64Field(value: &self.gasLimit) }()
       case 6: try { try decoder.decodeSingularBytesField(value: &self.gasFeeCap) }()
       case 7: try { try decoder.decodeSingularBytesField(value: &self.gasPremium) }()
+      case 8: try { try decoder.decodeSingularBytesField(value: &self.params) }()
+      case 9: try { try decoder.decodeSingularEnumField(value: &self.derivation) }()
+      case 10: try { try decoder.decodeSingularBytesField(value: &self.publicKey) }()
       default: break
       }
     }
@@ -121,6 +196,15 @@ extension TW_Filecoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
     if !self.gasPremium.isEmpty {
       try visitor.visitSingularBytesField(value: self.gasPremium, fieldNumber: 7)
     }
+    if !self.params.isEmpty {
+      try visitor.visitSingularBytesField(value: self.params, fieldNumber: 8)
+    }
+    if self.derivation != .secp256K1 {
+      try visitor.visitSingularEnumField(value: self.derivation, fieldNumber: 9)
+    }
+    if !self.publicKey.isEmpty {
+      try visitor.visitSingularBytesField(value: self.publicKey, fieldNumber: 10)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -132,6 +216,9 @@ extension TW_Filecoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
     if lhs.gasLimit != rhs.gasLimit {return false}
     if lhs.gasFeeCap != rhs.gasFeeCap {return false}
     if lhs.gasPremium != rhs.gasPremium {return false}
+    if lhs.params != rhs.params {return false}
+    if lhs.derivation != rhs.derivation {return false}
+    if lhs.publicKey != rhs.publicKey {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -141,6 +228,8 @@ extension TW_Filecoin_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf.
   public static let protoMessageName: String = _protobuf_package + ".SigningOutput"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "json"),
+    2: .same(proto: "error"),
+    3: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -150,6 +239,8 @@ extension TW_Filecoin_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf.
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.json) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -159,11 +250,19 @@ extension TW_Filecoin_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf.
     if !self.json.isEmpty {
       try visitor.visitSingularStringField(value: self.json, fieldNumber: 1)
     }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 2)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Filecoin_Proto_SigningOutput, rhs: TW_Filecoin_Proto_SigningOutput) -> Bool {
     if lhs.json != rhs.json {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

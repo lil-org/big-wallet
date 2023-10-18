@@ -27,6 +27,7 @@ public struct TW_Tezos_Proto_SigningInput {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// One or more operations
   public var operationList: TW_Tezos_Proto_OperationList {
     get {return _operationList ?? TW_Tezos_Proto_OperationList()}
     set {_operationList = newValue}
@@ -36,6 +37,10 @@ public struct TW_Tezos_Proto_SigningInput {
   /// Clears the value of `operationList`. Subsequent reads from it will return its default value.
   public mutating func clearOperationList() {self._operationList = nil}
 
+  /// Encoded operation bytes obtained with $RPC_URL/chains/main/blocks/head/helpers/forge/operations, operation_list will be ignored.
+  public var encodedOperations: Data = Data()
+
+  /// The secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -45,14 +50,21 @@ public struct TW_Tezos_Proto_SigningInput {
   fileprivate var _operationList: TW_Tezos_Proto_OperationList? = nil
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 /// Next field: 2
 public struct TW_Tezos_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// The encoded transaction
   public var encoded: Data = Data()
+
+  /// error code, 0 is ok, other codes will be treated as errors
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  /// error code description
+  public var errorMessage: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -66,8 +78,10 @@ public struct TW_Tezos_Proto_OperationList {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// branch
   public var branch: String = String()
 
+  /// list of operations
   public var operations: [TW_Tezos_Proto_Operation] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -82,16 +96,22 @@ public struct TW_Tezos_Proto_Operation {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// counter
   public var counter: Int64 = 0
 
+  /// source account
   public var source: String = String()
 
+  /// fee
   public var fee: Int64 = 0
 
+  /// gas limit
   public var gasLimit: Int64 = 0
 
+  /// storage limit
   public var storageLimit: Int64 = 0
 
+  /// Operation type
   public var kind: TW_Tezos_Proto_Operation.OperationKind = .endorsement
 
   /// Operation specific data depending on the type of the operation.
@@ -153,6 +173,7 @@ public struct TW_Tezos_Proto_Operation {
   #endif
   }
 
+  /// Operation types
   public enum OperationKind: SwiftProtobuf.Enum {
     public typealias RawValue = Int
 
@@ -206,6 +227,121 @@ extension TW_Tezos_Proto_Operation.OperationKind: CaseIterable {
 
 #endif  // swift(>=4.2)
 
+public struct TW_Tezos_Proto_FA12Parameters {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var entrypoint: String = String()
+
+  public var from: String = String()
+
+  public var to: String = String()
+
+  public var value: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct TW_Tezos_Proto_Txs {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var to: String = String()
+
+  public var tokenID: String = String()
+
+  public var amount: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct TW_Tezos_Proto_TxObject {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var from: String = String()
+
+  public var txs: [TW_Tezos_Proto_Txs] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct TW_Tezos_Proto_FA2Parameters {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var entrypoint: String = String()
+
+  public var txsObject: [TW_Tezos_Proto_TxObject] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Generic operation parameters
+public struct TW_Tezos_Proto_OperationParameters {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var parameters: TW_Tezos_Proto_OperationParameters.OneOf_Parameters? = nil
+
+  public var fa12Parameters: TW_Tezos_Proto_FA12Parameters {
+    get {
+      if case .fa12Parameters(let v)? = parameters {return v}
+      return TW_Tezos_Proto_FA12Parameters()
+    }
+    set {parameters = .fa12Parameters(newValue)}
+  }
+
+  public var fa2Parameters: TW_Tezos_Proto_FA2Parameters {
+    get {
+      if case .fa2Parameters(let v)? = parameters {return v}
+      return TW_Tezos_Proto_FA2Parameters()
+    }
+    set {parameters = .fa2Parameters(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public enum OneOf_Parameters: Equatable {
+    case fa12Parameters(TW_Tezos_Proto_FA12Parameters)
+    case fa2Parameters(TW_Tezos_Proto_FA2Parameters)
+
+  #if !swift(>=4.1)
+    public static func ==(lhs: TW_Tezos_Proto_OperationParameters.OneOf_Parameters, rhs: TW_Tezos_Proto_OperationParameters.OneOf_Parameters) -> Bool {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch (lhs, rhs) {
+      case (.fa12Parameters, .fa12Parameters): return {
+        guard case .fa12Parameters(let l) = lhs, case .fa12Parameters(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.fa2Parameters, .fa2Parameters): return {
+        guard case .fa2Parameters(let l) = lhs, case .fa2Parameters(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      default: return false
+      }
+    }
+  #endif
+  }
+
+  public init() {}
+}
+
 /// Transaction operation specific data.
 /// Next field: 3
 public struct TW_Tezos_Proto_TransactionOperationData {
@@ -217,9 +353,22 @@ public struct TW_Tezos_Proto_TransactionOperationData {
 
   public var amount: Int64 = 0
 
+  public var encodedParameter: Data = Data()
+
+  public var parameters: TW_Tezos_Proto_OperationParameters {
+    get {return _parameters ?? TW_Tezos_Proto_OperationParameters()}
+    set {_parameters = newValue}
+  }
+  /// Returns true if `parameters` has been explicitly set.
+  public var hasParameters: Bool {return self._parameters != nil}
+  /// Clears the value of `parameters`. Subsequent reads from it will return its default value.
+  public mutating func clearParameters() {self._parameters = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _parameters: TW_Tezos_Proto_OperationParameters? = nil
 }
 
 /// Reveal operation specific data.
@@ -258,7 +407,8 @@ extension TW_Tezos_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mes
   public static let protoMessageName: String = _protobuf_package + ".SigningInput"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .standard(proto: "operation_list"),
-    2: .standard(proto: "private_key"),
+    2: .standard(proto: "encoded_operations"),
+    3: .standard(proto: "private_key"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -268,7 +418,8 @@ extension TW_Tezos_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mes
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularMessageField(value: &self._operationList) }()
-      case 2: try { try decoder.decodeSingularBytesField(value: &self.privateKey) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.encodedOperations) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.privateKey) }()
       default: break
       }
     }
@@ -282,14 +433,18 @@ extension TW_Tezos_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     try { if let v = self._operationList {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     } }()
+    if !self.encodedOperations.isEmpty {
+      try visitor.visitSingularBytesField(value: self.encodedOperations, fieldNumber: 2)
+    }
     if !self.privateKey.isEmpty {
-      try visitor.visitSingularBytesField(value: self.privateKey, fieldNumber: 2)
+      try visitor.visitSingularBytesField(value: self.privateKey, fieldNumber: 3)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Tezos_Proto_SigningInput, rhs: TW_Tezos_Proto_SigningInput) -> Bool {
     if lhs._operationList != rhs._operationList {return false}
+    if lhs.encodedOperations != rhs.encodedOperations {return false}
     if lhs.privateKey != rhs.privateKey {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -300,6 +455,8 @@ extension TW_Tezos_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Me
   public static let protoMessageName: String = _protobuf_package + ".SigningOutput"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "encoded"),
+    2: .same(proto: "error"),
+    3: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -309,6 +466,8 @@ extension TW_Tezos_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Me
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.encoded) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -318,11 +477,19 @@ extension TW_Tezos_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Me
     if !self.encoded.isEmpty {
       try visitor.visitSingularBytesField(value: self.encoded, fieldNumber: 1)
     }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 2)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Tezos_Proto_SigningOutput, rhs: TW_Tezos_Proto_SigningOutput) -> Bool {
     if lhs.encoded != rhs.encoded {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -499,11 +666,253 @@ extension TW_Tezos_Proto_Operation.OperationKind: SwiftProtobuf._ProtoNameProvid
   ]
 }
 
+extension TW_Tezos_Proto_FA12Parameters: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".FA12Parameters"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "entrypoint"),
+    2: .same(proto: "from"),
+    3: .same(proto: "to"),
+    4: .same(proto: "value"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.entrypoint) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.from) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.to) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.value) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.entrypoint.isEmpty {
+      try visitor.visitSingularStringField(value: self.entrypoint, fieldNumber: 1)
+    }
+    if !self.from.isEmpty {
+      try visitor.visitSingularStringField(value: self.from, fieldNumber: 2)
+    }
+    if !self.to.isEmpty {
+      try visitor.visitSingularStringField(value: self.to, fieldNumber: 3)
+    }
+    if !self.value.isEmpty {
+      try visitor.visitSingularStringField(value: self.value, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Tezos_Proto_FA12Parameters, rhs: TW_Tezos_Proto_FA12Parameters) -> Bool {
+    if lhs.entrypoint != rhs.entrypoint {return false}
+    if lhs.from != rhs.from {return false}
+    if lhs.to != rhs.to {return false}
+    if lhs.value != rhs.value {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Tezos_Proto_Txs: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Txs"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "to"),
+    2: .standard(proto: "token_id"),
+    3: .same(proto: "amount"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.to) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.tokenID) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.amount) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.to.isEmpty {
+      try visitor.visitSingularStringField(value: self.to, fieldNumber: 1)
+    }
+    if !self.tokenID.isEmpty {
+      try visitor.visitSingularStringField(value: self.tokenID, fieldNumber: 2)
+    }
+    if !self.amount.isEmpty {
+      try visitor.visitSingularStringField(value: self.amount, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Tezos_Proto_Txs, rhs: TW_Tezos_Proto_Txs) -> Bool {
+    if lhs.to != rhs.to {return false}
+    if lhs.tokenID != rhs.tokenID {return false}
+    if lhs.amount != rhs.amount {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Tezos_Proto_TxObject: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TxObject"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "from"),
+    2: .same(proto: "txs"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.from) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.txs) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.from.isEmpty {
+      try visitor.visitSingularStringField(value: self.from, fieldNumber: 1)
+    }
+    if !self.txs.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.txs, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Tezos_Proto_TxObject, rhs: TW_Tezos_Proto_TxObject) -> Bool {
+    if lhs.from != rhs.from {return false}
+    if lhs.txs != rhs.txs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Tezos_Proto_FA2Parameters: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".FA2Parameters"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "entrypoint"),
+    2: .standard(proto: "txs_object"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.entrypoint) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.txsObject) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.entrypoint.isEmpty {
+      try visitor.visitSingularStringField(value: self.entrypoint, fieldNumber: 1)
+    }
+    if !self.txsObject.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.txsObject, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Tezos_Proto_FA2Parameters, rhs: TW_Tezos_Proto_FA2Parameters) -> Bool {
+    if lhs.entrypoint != rhs.entrypoint {return false}
+    if lhs.txsObject != rhs.txsObject {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Tezos_Proto_OperationParameters: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".OperationParameters"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "fa12_parameters"),
+    2: .standard(proto: "fa2_parameters"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try {
+        var v: TW_Tezos_Proto_FA12Parameters?
+        var hadOneofValue = false
+        if let current = self.parameters {
+          hadOneofValue = true
+          if case .fa12Parameters(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.parameters = .fa12Parameters(v)
+        }
+      }()
+      case 2: try {
+        var v: TW_Tezos_Proto_FA2Parameters?
+        var hadOneofValue = false
+        if let current = self.parameters {
+          hadOneofValue = true
+          if case .fa2Parameters(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.parameters = .fa2Parameters(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    switch self.parameters {
+    case .fa12Parameters?: try {
+      guard case .fa12Parameters(let v)? = self.parameters else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    }()
+    case .fa2Parameters?: try {
+      guard case .fa2Parameters(let v)? = self.parameters else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Tezos_Proto_OperationParameters, rhs: TW_Tezos_Proto_OperationParameters) -> Bool {
+    if lhs.parameters != rhs.parameters {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension TW_Tezos_Proto_TransactionOperationData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TransactionOperationData"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "destination"),
     2: .same(proto: "amount"),
+    3: .standard(proto: "encoded_parameter"),
+    4: .same(proto: "parameters"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -514,24 +923,38 @@ extension TW_Tezos_Proto_TransactionOperationData: SwiftProtobuf.Message, SwiftP
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.destination) }()
       case 2: try { try decoder.decodeSingularInt64Field(value: &self.amount) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.encodedParameter) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._parameters) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.destination.isEmpty {
       try visitor.visitSingularStringField(value: self.destination, fieldNumber: 1)
     }
     if self.amount != 0 {
       try visitor.visitSingularInt64Field(value: self.amount, fieldNumber: 2)
     }
+    if !self.encodedParameter.isEmpty {
+      try visitor.visitSingularBytesField(value: self.encodedParameter, fieldNumber: 3)
+    }
+    try { if let v = self._parameters {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Tezos_Proto_TransactionOperationData, rhs: TW_Tezos_Proto_TransactionOperationData) -> Bool {
     if lhs.destination != rhs.destination {return false}
     if lhs.amount != rhs.amount {return false}
+    if lhs.encodedParameter != rhs.encodedParameter {return false}
+    if lhs._parameters != rhs._parameters {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

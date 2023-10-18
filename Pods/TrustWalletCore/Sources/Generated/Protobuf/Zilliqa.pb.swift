@@ -20,6 +20,7 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+/// Generic transaction
 public struct TW_Zilliqa_Proto_Transaction {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -69,12 +70,13 @@ public struct TW_Zilliqa_Proto_Transaction {
   #endif
   }
 
+  /// Transfer transaction
   public struct Transfer {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
-    /// Amount to send (256-bit number)
+    /// Amount to send (uint256, serialized little endian)
     public var amount: Data = Data()
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -82,12 +84,13 @@ public struct TW_Zilliqa_Proto_Transaction {
     public init() {}
   }
 
+  /// Generic contract call
   public struct Raw {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
-    /// Amount to send (256-bit number)
+    /// Amount to send (uint256, serialized little endian)
     public var amount: Data = Data()
 
     /// Smart contract code
@@ -125,9 +128,10 @@ public struct TW_Zilliqa_Proto_SigningInput {
   /// GasLimit
   public var gasLimit: UInt64 = 0
 
-  /// Private Key
+  /// The secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
 
+  /// The payload transaction
   public var transaction: TW_Zilliqa_Proto_Transaction {
     get {return _transaction ?? TW_Zilliqa_Proto_Transaction()}
     set {_transaction = newValue}
@@ -144,7 +148,7 @@ public struct TW_Zilliqa_Proto_SigningInput {
   fileprivate var _transaction: TW_Zilliqa_Proto_Transaction? = nil
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_Zilliqa_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for

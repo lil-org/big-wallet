@@ -26,14 +26,19 @@ public struct TW_Nimiq_Proto_SigningInput {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// The secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
 
+  /// Destination address
   public var destination: String = String()
 
+  /// Amount of the transfer
   public var value: UInt64 = 0
 
+  /// Fee amount
   public var fee: UInt64 = 0
 
+  /// Validity start, in block height
   public var validityStartHeight: UInt32 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -41,12 +46,13 @@ public struct TW_Nimiq_Proto_SigningInput {
   public init() {}
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_Nimiq_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// The encoded transaction
   public var encoded: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()

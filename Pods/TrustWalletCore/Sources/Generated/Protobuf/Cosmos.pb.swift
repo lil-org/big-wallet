@@ -20,6 +20,7 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+/// Transaction broadcast mode
 public enum TW_Cosmos_Proto_BroadcastMode: SwiftProtobuf.Enum {
   public typealias RawValue = Int
 
@@ -70,6 +71,7 @@ extension TW_Cosmos_Proto_BroadcastMode: CaseIterable {
 
 #endif  // swift(>=4.2)
 
+/// Options for transaction encoding: JSON (Amino, older) or Protobuf.
 public enum TW_Cosmos_Proto_SigningMode: SwiftProtobuf.Enum {
   public typealias RawValue = Int
 
@@ -114,13 +116,16 @@ extension TW_Cosmos_Proto_SigningMode: CaseIterable {
 
 #endif  // swift(>=4.2)
 
+/// A denomination and an amount
 public struct TW_Cosmos_Proto_Amount {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// name of the denomination
   public var denom: String = String()
 
+  /// amount, number as string
   public var amount: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -128,13 +133,16 @@ public struct TW_Cosmos_Proto_Amount {
   public init() {}
 }
 
+/// Fee incl. gas
 public struct TW_Cosmos_Proto_Fee {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Fee amount(s)
   public var amounts: [TW_Cosmos_Proto_Amount] = []
 
+  /// Gas price
   public var gas: UInt64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -160,11 +168,56 @@ public struct TW_Cosmos_Proto_Height {
   public init() {}
 }
 
+public struct TW_Cosmos_Proto_THORChainAsset {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var chain: String = String()
+
+  public var symbol: String = String()
+
+  public var ticker: String = String()
+
+  public var synth: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct TW_Cosmos_Proto_THORChainCoin {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var asset: TW_Cosmos_Proto_THORChainAsset {
+    get {return _asset ?? TW_Cosmos_Proto_THORChainAsset()}
+    set {_asset = newValue}
+  }
+  /// Returns true if `asset` has been explicitly set.
+  public var hasAsset: Bool {return self._asset != nil}
+  /// Clears the value of `asset`. Subsequent reads from it will return its default value.
+  public mutating func clearAsset() {self._asset = nil}
+
+  public var amount: String = String()
+
+  public var decimals: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _asset: TW_Cosmos_Proto_THORChainAsset? = nil
+}
+
+/// A transaction payload message
 public struct TW_Cosmos_Proto_Message {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// The payload message
   public var messageOneof: TW_Cosmos_Proto_Message.OneOf_MessageOneof? = nil
 
   public var sendCoinsMessage: TW_Cosmos_Proto_Message.Send {
@@ -247,6 +300,14 @@ public struct TW_Cosmos_Proto_Message {
     set {messageOneof = .thorchainSendMessage(newValue)}
   }
 
+  public var executeContractMessage: TW_Cosmos_Proto_Message.ExecuteContract {
+    get {
+      if case .executeContractMessage(let v)? = messageOneof {return v}
+      return TW_Cosmos_Proto_Message.ExecuteContract()
+    }
+    set {messageOneof = .executeContractMessage(newValue)}
+  }
+
   public var wasmTerraExecuteContractGeneric: TW_Cosmos_Proto_Message.WasmTerraExecuteContractGeneric {
     get {
       if case .wasmTerraExecuteContractGeneric(let v)? = messageOneof {return v}
@@ -279,8 +340,73 @@ public struct TW_Cosmos_Proto_Message {
     set {messageOneof = .wasmExecuteContractGeneric(newValue)}
   }
 
+  public var signDirectMessage: TW_Cosmos_Proto_Message.SignDirect {
+    get {
+      if case .signDirectMessage(let v)? = messageOneof {return v}
+      return TW_Cosmos_Proto_Message.SignDirect()
+    }
+    set {messageOneof = .signDirectMessage(newValue)}
+  }
+
+  public var authGrant: TW_Cosmos_Proto_Message.AuthGrant {
+    get {
+      if case .authGrant(let v)? = messageOneof {return v}
+      return TW_Cosmos_Proto_Message.AuthGrant()
+    }
+    set {messageOneof = .authGrant(newValue)}
+  }
+
+  public var authRevoke: TW_Cosmos_Proto_Message.AuthRevoke {
+    get {
+      if case .authRevoke(let v)? = messageOneof {return v}
+      return TW_Cosmos_Proto_Message.AuthRevoke()
+    }
+    set {messageOneof = .authRevoke(newValue)}
+  }
+
+  public var setWithdrawAddressMessage: TW_Cosmos_Proto_Message.SetWithdrawAddress {
+    get {
+      if case .setWithdrawAddressMessage(let v)? = messageOneof {return v}
+      return TW_Cosmos_Proto_Message.SetWithdrawAddress()
+    }
+    set {messageOneof = .setWithdrawAddressMessage(newValue)}
+  }
+
+  public var msgVote: TW_Cosmos_Proto_Message.MsgVote {
+    get {
+      if case .msgVote(let v)? = messageOneof {return v}
+      return TW_Cosmos_Proto_Message.MsgVote()
+    }
+    set {messageOneof = .msgVote(newValue)}
+  }
+
+  public var msgStrideLiquidStakingStake: TW_Cosmos_Proto_Message.MsgStrideLiquidStakingStake {
+    get {
+      if case .msgStrideLiquidStakingStake(let v)? = messageOneof {return v}
+      return TW_Cosmos_Proto_Message.MsgStrideLiquidStakingStake()
+    }
+    set {messageOneof = .msgStrideLiquidStakingStake(newValue)}
+  }
+
+  public var msgStrideLiquidStakingRedeem: TW_Cosmos_Proto_Message.MsgStrideLiquidStakingRedeem {
+    get {
+      if case .msgStrideLiquidStakingRedeem(let v)? = messageOneof {return v}
+      return TW_Cosmos_Proto_Message.MsgStrideLiquidStakingRedeem()
+    }
+    set {messageOneof = .msgStrideLiquidStakingRedeem(newValue)}
+  }
+
+  public var thorchainDepositMessage: TW_Cosmos_Proto_Message.THORChainDeposit {
+    get {
+      if case .thorchainDepositMessage(let v)? = messageOneof {return v}
+      return TW_Cosmos_Proto_Message.THORChainDeposit()
+    }
+    set {messageOneof = .thorchainDepositMessage(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
+  /// The payload message
   public enum OneOf_MessageOneof: Equatable {
     case sendCoinsMessage(TW_Cosmos_Proto_Message.Send)
     case transferTokensMessage(TW_Cosmos_Proto_Message.Transfer)
@@ -292,10 +418,19 @@ public struct TW_Cosmos_Proto_Message {
     case wasmTerraExecuteContractTransferMessage(TW_Cosmos_Proto_Message.WasmTerraExecuteContractTransfer)
     case wasmTerraExecuteContractSendMessage(TW_Cosmos_Proto_Message.WasmTerraExecuteContractSend)
     case thorchainSendMessage(TW_Cosmos_Proto_Message.THORChainSend)
+    case executeContractMessage(TW_Cosmos_Proto_Message.ExecuteContract)
     case wasmTerraExecuteContractGeneric(TW_Cosmos_Proto_Message.WasmTerraExecuteContractGeneric)
     case wasmExecuteContractTransferMessage(TW_Cosmos_Proto_Message.WasmExecuteContractTransfer)
     case wasmExecuteContractSendMessage(TW_Cosmos_Proto_Message.WasmExecuteContractSend)
     case wasmExecuteContractGeneric(TW_Cosmos_Proto_Message.WasmExecuteContractGeneric)
+    case signDirectMessage(TW_Cosmos_Proto_Message.SignDirect)
+    case authGrant(TW_Cosmos_Proto_Message.AuthGrant)
+    case authRevoke(TW_Cosmos_Proto_Message.AuthRevoke)
+    case setWithdrawAddressMessage(TW_Cosmos_Proto_Message.SetWithdrawAddress)
+    case msgVote(TW_Cosmos_Proto_Message.MsgVote)
+    case msgStrideLiquidStakingStake(TW_Cosmos_Proto_Message.MsgStrideLiquidStakingStake)
+    case msgStrideLiquidStakingRedeem(TW_Cosmos_Proto_Message.MsgStrideLiquidStakingRedeem)
+    case thorchainDepositMessage(TW_Cosmos_Proto_Message.THORChainDeposit)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_Cosmos_Proto_Message.OneOf_MessageOneof, rhs: TW_Cosmos_Proto_Message.OneOf_MessageOneof) -> Bool {
@@ -343,6 +478,10 @@ public struct TW_Cosmos_Proto_Message {
         guard case .thorchainSendMessage(let l) = lhs, case .thorchainSendMessage(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
+      case (.executeContractMessage, .executeContractMessage): return {
+        guard case .executeContractMessage(let l) = lhs, case .executeContractMessage(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
       case (.wasmTerraExecuteContractGeneric, .wasmTerraExecuteContractGeneric): return {
         guard case .wasmTerraExecuteContractGeneric(let l) = lhs, case .wasmTerraExecuteContractGeneric(let r) = rhs else { preconditionFailure() }
         return l == r
@@ -359,10 +498,135 @@ public struct TW_Cosmos_Proto_Message {
         guard case .wasmExecuteContractGeneric(let l) = lhs, case .wasmExecuteContractGeneric(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
+      case (.signDirectMessage, .signDirectMessage): return {
+        guard case .signDirectMessage(let l) = lhs, case .signDirectMessage(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.authGrant, .authGrant): return {
+        guard case .authGrant(let l) = lhs, case .authGrant(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.authRevoke, .authRevoke): return {
+        guard case .authRevoke(let l) = lhs, case .authRevoke(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.setWithdrawAddressMessage, .setWithdrawAddressMessage): return {
+        guard case .setWithdrawAddressMessage(let l) = lhs, case .setWithdrawAddressMessage(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.msgVote, .msgVote): return {
+        guard case .msgVote(let l) = lhs, case .msgVote(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.msgStrideLiquidStakingStake, .msgStrideLiquidStakingStake): return {
+        guard case .msgStrideLiquidStakingStake(let l) = lhs, case .msgStrideLiquidStakingStake(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.msgStrideLiquidStakingRedeem, .msgStrideLiquidStakingRedeem): return {
+        guard case .msgStrideLiquidStakingRedeem(let l) = lhs, case .msgStrideLiquidStakingRedeem(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.thorchainDepositMessage, .thorchainDepositMessage): return {
+        guard case .thorchainDepositMessage(let l) = lhs, case .thorchainDepositMessage(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
       default: return false
       }
     }
   #endif
+  }
+
+  /// AuthorizationType defines the type of staking module authorization type
+  ///
+  /// Since: cosmos-sdk 0.43
+  public enum AuthorizationType: SwiftProtobuf.Enum {
+    public typealias RawValue = Int
+
+    /// AUTHORIZATION_TYPE_UNSPECIFIED specifies an unknown authorization type
+    case unspecified // = 0
+
+    /// AUTHORIZATION_TYPE_DELEGATE defines an authorization type for Msg/Delegate
+    case delegate // = 1
+
+    /// AUTHORIZATION_TYPE_UNDELEGATE defines an authorization type for Msg/Undelegate
+    case undelegate // = 2
+
+    /// AUTHORIZATION_TYPE_REDELEGATE defines an authorization type for Msg/BeginRedelegate
+    case redelegate // = 3
+    case UNRECOGNIZED(Int)
+
+    public init() {
+      self = .unspecified
+    }
+
+    public init?(rawValue: Int) {
+      switch rawValue {
+      case 0: self = .unspecified
+      case 1: self = .delegate
+      case 2: self = .undelegate
+      case 3: self = .redelegate
+      default: self = .UNRECOGNIZED(rawValue)
+      }
+    }
+
+    public var rawValue: Int {
+      switch self {
+      case .unspecified: return 0
+      case .delegate: return 1
+      case .undelegate: return 2
+      case .redelegate: return 3
+      case .UNRECOGNIZED(let i): return i
+      }
+    }
+
+  }
+
+  /// VoteOption enumerates the valid vote options for a given governance proposal.
+  public enum VoteOption: SwiftProtobuf.Enum {
+    public typealias RawValue = Int
+
+    ///_UNSPECIFIED defines a no-op vote option.
+    case unspecified // = 0
+
+    /// YES defines a yes vote option.
+    case yes // = 1
+
+    /// ABSTAIN defines an abstain vote option.
+    case abstain // = 2
+
+    /// NO defines a no vote option.
+    case no // = 3
+
+    /// NO_WITH_VETO defines a no with veto vote option.
+    case noWithVeto // = 4
+    case UNRECOGNIZED(Int)
+
+    public init() {
+      self = .unspecified
+    }
+
+    public init?(rawValue: Int) {
+      switch rawValue {
+      case 0: self = .unspecified
+      case 1: self = .yes
+      case 2: self = .abstain
+      case 3: self = .no
+      case 4: self = .noWithVeto
+      default: self = .UNRECOGNIZED(rawValue)
+      }
+    }
+
+    public var rawValue: Int {
+      switch self {
+      case .unspecified: return 0
+      case .yes: return 1
+      case .abstain: return 2
+      case .no: return 3
+      case .noWithVeto: return 4
+      case .UNRECOGNIZED(let i): return i
+      }
+    }
+
   }
 
   /// cosmos-sdk/MsgSend
@@ -517,6 +781,23 @@ public struct TW_Cosmos_Proto_Message {
     fileprivate var _amount: TW_Cosmos_Proto_Amount? = nil
   }
 
+  /// cosmos-sdk/MsgSetWithdrawAddress
+  public struct SetWithdrawAddress {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    public var delegatorAddress: String = String()
+
+    public var withdrawAddress: String = String()
+
+    public var typePrefix: String = String()
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
   /// cosmos-sdk/MsgWithdrawDelegationReward
   public struct WithdrawDelegationReward {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -526,6 +807,26 @@ public struct TW_Cosmos_Proto_Message {
     public var delegatorAddress: String = String()
 
     public var validatorAddress: String = String()
+
+    public var typePrefix: String = String()
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
+  public struct ExecuteContract {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    public var sender: String = String()
+
+    public var contract: String = String()
+
+    public var executeMsg: String = String()
+
+    public var coins: [TW_Cosmos_Proto_Amount] = []
 
     public var typePrefix: String = String()
 
@@ -595,6 +896,23 @@ public struct TW_Cosmos_Proto_Message {
     public var toAddress: Data = Data()
 
     public var amounts: [TW_Cosmos_Proto_Amount] = []
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
+  /// thorchain/MsgDeposit
+  public struct THORChainDeposit {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    public var coins: [TW_Cosmos_Proto_THORChainCoin] = []
+
+    public var memo: String = String()
+
+    public var signer: Data = Data()
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -713,22 +1031,272 @@ public struct TW_Cosmos_Proto_Message {
     public init() {}
   }
 
+  /// For signing an already serialized transaction. Account number and chain ID must be set outside.
+  public struct SignDirect {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    /// The prepared serialized TxBody
+    public var bodyBytes: Data = Data()
+
+    /// The prepared serialized AuthInfo
+    public var authInfoBytes: Data = Data()
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
+  /// StakeAuthorization defines authorization for delegate/undelegate/redelegate.
+  ///
+  /// Since: cosmos-sdk 0.43
+  public struct StakeAuthorization {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    /// max_tokens specifies the maximum amount of tokens can be delegate to a validator. If it is
+    /// empty, there is no spend limit and any amount of coins can be delegated.
+    public var maxTokens: TW_Cosmos_Proto_Amount {
+      get {return _maxTokens ?? TW_Cosmos_Proto_Amount()}
+      set {_maxTokens = newValue}
+    }
+    /// Returns true if `maxTokens` has been explicitly set.
+    public var hasMaxTokens: Bool {return self._maxTokens != nil}
+    /// Clears the value of `maxTokens`. Subsequent reads from it will return its default value.
+    public mutating func clearMaxTokens() {self._maxTokens = nil}
+
+    /// validators is the oneof that represents either allow_list or deny_list
+    public var validators: TW_Cosmos_Proto_Message.StakeAuthorization.OneOf_Validators? = nil
+
+    /// allow_list specifies list of validator addresses to whom grantee can delegate tokens on behalf of granter's
+    /// account.
+    public var allowList: TW_Cosmos_Proto_Message.StakeAuthorization.Validators {
+      get {
+        if case .allowList(let v)? = validators {return v}
+        return TW_Cosmos_Proto_Message.StakeAuthorization.Validators()
+      }
+      set {validators = .allowList(newValue)}
+    }
+
+    /// deny_list specifies list of validator addresses to whom grantee can not delegate tokens.
+    public var denyList: TW_Cosmos_Proto_Message.StakeAuthorization.Validators {
+      get {
+        if case .denyList(let v)? = validators {return v}
+        return TW_Cosmos_Proto_Message.StakeAuthorization.Validators()
+      }
+      set {validators = .denyList(newValue)}
+    }
+
+    /// authorization_type defines one of AuthorizationType.
+    public var authorizationType: TW_Cosmos_Proto_Message.AuthorizationType = .unspecified
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    /// validators is the oneof that represents either allow_list or deny_list
+    public enum OneOf_Validators: Equatable {
+      /// allow_list specifies list of validator addresses to whom grantee can delegate tokens on behalf of granter's
+      /// account.
+      case allowList(TW_Cosmos_Proto_Message.StakeAuthorization.Validators)
+      /// deny_list specifies list of validator addresses to whom grantee can not delegate tokens.
+      case denyList(TW_Cosmos_Proto_Message.StakeAuthorization.Validators)
+
+    #if !swift(>=4.1)
+      public static func ==(lhs: TW_Cosmos_Proto_Message.StakeAuthorization.OneOf_Validators, rhs: TW_Cosmos_Proto_Message.StakeAuthorization.OneOf_Validators) -> Bool {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch (lhs, rhs) {
+        case (.allowList, .allowList): return {
+          guard case .allowList(let l) = lhs, case .allowList(let r) = rhs else { preconditionFailure() }
+          return l == r
+        }()
+        case (.denyList, .denyList): return {
+          guard case .denyList(let l) = lhs, case .denyList(let r) = rhs else { preconditionFailure() }
+          return l == r
+        }()
+        default: return false
+        }
+      }
+    #endif
+    }
+
+    /// Validators defines list of validator addresses.
+    public struct Validators {
+      // SwiftProtobuf.Message conformance is added in an extension below. See the
+      // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+      // methods supported on all messages.
+
+      public var address: [String] = []
+
+      public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+      public init() {}
+    }
+
+    public init() {}
+
+    fileprivate var _maxTokens: TW_Cosmos_Proto_Amount? = nil
+  }
+
+  /// cosmos-sdk/MsgGrant
+  public struct AuthGrant {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    public var granter: String = String()
+
+    public var grantee: String = String()
+
+    public var grantType: TW_Cosmos_Proto_Message.AuthGrant.OneOf_GrantType? = nil
+
+    public var grantStake: TW_Cosmos_Proto_Message.StakeAuthorization {
+      get {
+        if case .grantStake(let v)? = grantType {return v}
+        return TW_Cosmos_Proto_Message.StakeAuthorization()
+      }
+      set {grantType = .grantStake(newValue)}
+    }
+
+    public var expiration: Int64 = 0
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public enum OneOf_GrantType: Equatable {
+      case grantStake(TW_Cosmos_Proto_Message.StakeAuthorization)
+
+    #if !swift(>=4.1)
+      public static func ==(lhs: TW_Cosmos_Proto_Message.AuthGrant.OneOf_GrantType, rhs: TW_Cosmos_Proto_Message.AuthGrant.OneOf_GrantType) -> Bool {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch (lhs, rhs) {
+        case (.grantStake, .grantStake): return {
+          guard case .grantStake(let l) = lhs, case .grantStake(let r) = rhs else { preconditionFailure() }
+          return l == r
+        }()
+        }
+      }
+    #endif
+    }
+
+    public init() {}
+  }
+
+  /// cosmos-sdk/MsgRevoke
+  public struct AuthRevoke {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    public var granter: String = String()
+
+    public var grantee: String = String()
+
+    public var msgTypeURL: String = String()
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
+  /// cosmos-sdk/MsgVote defines a message to cast a vote.
+  public struct MsgVote {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    public var proposalID: UInt64 = 0
+
+    public var voter: String = String()
+
+    public var option: TW_Cosmos_Proto_Message.VoteOption = .unspecified
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
+  public struct MsgStrideLiquidStakingStake {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    public var creator: String = String()
+
+    public var amount: String = String()
+
+    public var hostDenom: String = String()
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
+  public struct MsgStrideLiquidStakingRedeem {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    public var creator: String = String()
+
+    public var amount: String = String()
+
+    public var hostZone: String = String()
+
+    public var receiver: String = String()
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
   public init() {}
 }
 
-/// Input data necessary to create a signed order.
+#if swift(>=4.2)
+
+extension TW_Cosmos_Proto_Message.AuthorizationType: CaseIterable {
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static var allCases: [TW_Cosmos_Proto_Message.AuthorizationType] = [
+    .unspecified,
+    .delegate,
+    .undelegate,
+    .redelegate,
+  ]
+}
+
+extension TW_Cosmos_Proto_Message.VoteOption: CaseIterable {
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static var allCases: [TW_Cosmos_Proto_Message.VoteOption] = [
+    .unspecified,
+    .yes,
+    .abstain,
+    .no,
+    .noWithVeto,
+  ]
+}
+
+#endif  // swift(>=4.2)
+
+/// Input data necessary to create a signed transaction.
 public struct TW_Cosmos_Proto_SigningInput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Specify if Stargate or earlier serialization is used
+  /// Specify if protobuf (a.k.a. Stargate) or earlier JSON serialization is used
   public var signingMode: TW_Cosmos_Proto_SigningMode = .json
 
+  /// Source account number
   public var accountNumber: UInt64 = 0
 
+  /// Chain ID (string)
   public var chainID: String = String()
 
+  /// Transaction fee
   public var fee: TW_Cosmos_Proto_Fee {
     get {return _fee ?? TW_Cosmos_Proto_Fee()}
     set {_fee = newValue}
@@ -738,15 +1306,22 @@ public struct TW_Cosmos_Proto_SigningInput {
   /// Clears the value of `fee`. Subsequent reads from it will return its default value.
   public mutating func clearFee() {self._fee = nil}
 
+  /// Optional memo
   public var memo: String = String()
 
+  /// Sequence number (account specific)
   public var sequence: UInt64 = 0
 
+  /// The secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
 
+  /// Payload message(s)
   public var messages: [TW_Cosmos_Proto_Message] = []
 
+  /// Broadcast mode (included in output, relevant when broadcasting)
   public var mode: TW_Cosmos_Proto_BroadcastMode = .block
+
+  public var publicKey: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -755,7 +1330,7 @@ public struct TW_Cosmos_Proto_SigningInput {
   fileprivate var _fee: TW_Cosmos_Proto_Fee? = nil
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_Cosmos_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -771,8 +1346,13 @@ public struct TW_Cosmos_Proto_SigningOutput {
   /// wrapped in a ready-to-broadcast json.
   public var serialized: String = String()
 
-  /// Set in case of error
-  public var error: String = String()
+  /// signatures array json string
+  public var signatureJson: String = String()
+
+  /// error description
+  public var errorMessage: String = String()
+
+  public var error: TW_Common_Proto_SigningError = .ok
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -912,6 +1492,104 @@ extension TW_Cosmos_Proto_Height: SwiftProtobuf.Message, SwiftProtobuf._MessageI
   }
 }
 
+extension TW_Cosmos_Proto_THORChainAsset: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".THORChainAsset"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "chain"),
+    2: .same(proto: "symbol"),
+    3: .same(proto: "ticker"),
+    4: .same(proto: "synth"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.chain) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.symbol) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.ticker) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self.synth) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.chain.isEmpty {
+      try visitor.visitSingularStringField(value: self.chain, fieldNumber: 1)
+    }
+    if !self.symbol.isEmpty {
+      try visitor.visitSingularStringField(value: self.symbol, fieldNumber: 2)
+    }
+    if !self.ticker.isEmpty {
+      try visitor.visitSingularStringField(value: self.ticker, fieldNumber: 3)
+    }
+    if self.synth != false {
+      try visitor.visitSingularBoolField(value: self.synth, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cosmos_Proto_THORChainAsset, rhs: TW_Cosmos_Proto_THORChainAsset) -> Bool {
+    if lhs.chain != rhs.chain {return false}
+    if lhs.symbol != rhs.symbol {return false}
+    if lhs.ticker != rhs.ticker {return false}
+    if lhs.synth != rhs.synth {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cosmos_Proto_THORChainCoin: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".THORChainCoin"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "asset"),
+    2: .same(proto: "amount"),
+    3: .same(proto: "decimals"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._asset) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.amount) }()
+      case 3: try { try decoder.decodeSingularInt64Field(value: &self.decimals) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._asset {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if !self.amount.isEmpty {
+      try visitor.visitSingularStringField(value: self.amount, fieldNumber: 2)
+    }
+    if self.decimals != 0 {
+      try visitor.visitSingularInt64Field(value: self.decimals, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cosmos_Proto_THORChainCoin, rhs: TW_Cosmos_Proto_THORChainCoin) -> Bool {
+    if lhs._asset != rhs._asset {return false}
+    if lhs.amount != rhs.amount {return false}
+    if lhs.decimals != rhs.decimals {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension TW_Cosmos_Proto_Message: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Message"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -925,10 +1603,19 @@ extension TW_Cosmos_Proto_Message: SwiftProtobuf.Message, SwiftProtobuf._Message
     8: .standard(proto: "wasm_terra_execute_contract_transfer_message"),
     9: .standard(proto: "wasm_terra_execute_contract_send_message"),
     10: .standard(proto: "thorchain_send_message"),
-    11: .standard(proto: "wasm_terra_execute_contract_generic"),
-    12: .standard(proto: "wasm_execute_contract_transfer_message"),
-    13: .standard(proto: "wasm_execute_contract_send_message"),
-    14: .standard(proto: "wasm_execute_contract_generic"),
+    11: .standard(proto: "execute_contract_message"),
+    12: .standard(proto: "wasm_terra_execute_contract_generic"),
+    13: .standard(proto: "wasm_execute_contract_transfer_message"),
+    14: .standard(proto: "wasm_execute_contract_send_message"),
+    15: .standard(proto: "wasm_execute_contract_generic"),
+    16: .standard(proto: "sign_direct_message"),
+    17: .standard(proto: "auth_grant"),
+    18: .standard(proto: "auth_revoke"),
+    19: .standard(proto: "set_withdraw_address_message"),
+    20: .standard(proto: "msg_vote"),
+    21: .standard(proto: "msg_stride_liquid_staking_stake"),
+    22: .standard(proto: "msg_stride_liquid_staking_redeem"),
+    23: .standard(proto: "thorchain_deposit_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1068,6 +1755,19 @@ extension TW_Cosmos_Proto_Message: SwiftProtobuf.Message, SwiftProtobuf._Message
         }
       }()
       case 11: try {
+        var v: TW_Cosmos_Proto_Message.ExecuteContract?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .executeContractMessage(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .executeContractMessage(v)
+        }
+      }()
+      case 12: try {
         var v: TW_Cosmos_Proto_Message.WasmTerraExecuteContractGeneric?
         var hadOneofValue = false
         if let current = self.messageOneof {
@@ -1080,7 +1780,7 @@ extension TW_Cosmos_Proto_Message: SwiftProtobuf.Message, SwiftProtobuf._Message
           self.messageOneof = .wasmTerraExecuteContractGeneric(v)
         }
       }()
-      case 12: try {
+      case 13: try {
         var v: TW_Cosmos_Proto_Message.WasmExecuteContractTransfer?
         var hadOneofValue = false
         if let current = self.messageOneof {
@@ -1093,7 +1793,7 @@ extension TW_Cosmos_Proto_Message: SwiftProtobuf.Message, SwiftProtobuf._Message
           self.messageOneof = .wasmExecuteContractTransferMessage(v)
         }
       }()
-      case 13: try {
+      case 14: try {
         var v: TW_Cosmos_Proto_Message.WasmExecuteContractSend?
         var hadOneofValue = false
         if let current = self.messageOneof {
@@ -1106,7 +1806,7 @@ extension TW_Cosmos_Proto_Message: SwiftProtobuf.Message, SwiftProtobuf._Message
           self.messageOneof = .wasmExecuteContractSendMessage(v)
         }
       }()
-      case 14: try {
+      case 15: try {
         var v: TW_Cosmos_Proto_Message.WasmExecuteContractGeneric?
         var hadOneofValue = false
         if let current = self.messageOneof {
@@ -1117,6 +1817,110 @@ extension TW_Cosmos_Proto_Message: SwiftProtobuf.Message, SwiftProtobuf._Message
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
           self.messageOneof = .wasmExecuteContractGeneric(v)
+        }
+      }()
+      case 16: try {
+        var v: TW_Cosmos_Proto_Message.SignDirect?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .signDirectMessage(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .signDirectMessage(v)
+        }
+      }()
+      case 17: try {
+        var v: TW_Cosmos_Proto_Message.AuthGrant?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .authGrant(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .authGrant(v)
+        }
+      }()
+      case 18: try {
+        var v: TW_Cosmos_Proto_Message.AuthRevoke?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .authRevoke(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .authRevoke(v)
+        }
+      }()
+      case 19: try {
+        var v: TW_Cosmos_Proto_Message.SetWithdrawAddress?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .setWithdrawAddressMessage(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .setWithdrawAddressMessage(v)
+        }
+      }()
+      case 20: try {
+        var v: TW_Cosmos_Proto_Message.MsgVote?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .msgVote(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .msgVote(v)
+        }
+      }()
+      case 21: try {
+        var v: TW_Cosmos_Proto_Message.MsgStrideLiquidStakingStake?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .msgStrideLiquidStakingStake(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .msgStrideLiquidStakingStake(v)
+        }
+      }()
+      case 22: try {
+        var v: TW_Cosmos_Proto_Message.MsgStrideLiquidStakingRedeem?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .msgStrideLiquidStakingRedeem(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .msgStrideLiquidStakingRedeem(v)
+        }
+      }()
+      case 23: try {
+        var v: TW_Cosmos_Proto_Message.THORChainDeposit?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .thorchainDepositMessage(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .thorchainDepositMessage(v)
         }
       }()
       default: break
@@ -1170,21 +1974,57 @@ extension TW_Cosmos_Proto_Message: SwiftProtobuf.Message, SwiftProtobuf._Message
       guard case .thorchainSendMessage(let v)? = self.messageOneof else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
     }()
+    case .executeContractMessage?: try {
+      guard case .executeContractMessage(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
+    }()
     case .wasmTerraExecuteContractGeneric?: try {
       guard case .wasmTerraExecuteContractGeneric(let v)? = self.messageOneof else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
     }()
     case .wasmExecuteContractTransferMessage?: try {
       guard case .wasmExecuteContractTransferMessage(let v)? = self.messageOneof else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
     }()
     case .wasmExecuteContractSendMessage?: try {
       guard case .wasmExecuteContractSendMessage(let v)? = self.messageOneof else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 14)
     }()
     case .wasmExecuteContractGeneric?: try {
       guard case .wasmExecuteContractGeneric(let v)? = self.messageOneof else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 14)
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 15)
+    }()
+    case .signDirectMessage?: try {
+      guard case .signDirectMessage(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 16)
+    }()
+    case .authGrant?: try {
+      guard case .authGrant(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 17)
+    }()
+    case .authRevoke?: try {
+      guard case .authRevoke(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 18)
+    }()
+    case .setWithdrawAddressMessage?: try {
+      guard case .setWithdrawAddressMessage(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 19)
+    }()
+    case .msgVote?: try {
+      guard case .msgVote(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 20)
+    }()
+    case .msgStrideLiquidStakingStake?: try {
+      guard case .msgStrideLiquidStakingStake(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 21)
+    }()
+    case .msgStrideLiquidStakingRedeem?: try {
+      guard case .msgStrideLiquidStakingRedeem(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 22)
+    }()
+    case .thorchainDepositMessage?: try {
+      guard case .thorchainDepositMessage(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 23)
     }()
     case nil: break
     }
@@ -1196,6 +2036,25 @@ extension TW_Cosmos_Proto_Message: SwiftProtobuf.Message, SwiftProtobuf._Message
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
+}
+
+extension TW_Cosmos_Proto_Message.AuthorizationType: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "UNSPECIFIED"),
+    1: .same(proto: "DELEGATE"),
+    2: .same(proto: "UNDELEGATE"),
+    3: .same(proto: "REDELEGATE"),
+  ]
+}
+
+extension TW_Cosmos_Proto_Message.VoteOption: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "_UNSPECIFIED"),
+    1: .same(proto: "YES"),
+    2: .same(proto: "ABSTAIN"),
+    3: .same(proto: "NO"),
+    4: .same(proto: "NO_WITH_VETO"),
+  ]
 }
 
 extension TW_Cosmos_Proto_Message.Send: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
@@ -1488,6 +2347,50 @@ extension TW_Cosmos_Proto_Message.BeginRedelegate: SwiftProtobuf.Message, SwiftP
   }
 }
 
+extension TW_Cosmos_Proto_Message.SetWithdrawAddress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Cosmos_Proto_Message.protoMessageName + ".SetWithdrawAddress"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "delegator_address"),
+    2: .standard(proto: "withdraw_address"),
+    3: .standard(proto: "type_prefix"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.delegatorAddress) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.withdrawAddress) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.typePrefix) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.delegatorAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.delegatorAddress, fieldNumber: 1)
+    }
+    if !self.withdrawAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.withdrawAddress, fieldNumber: 2)
+    }
+    if !self.typePrefix.isEmpty {
+      try visitor.visitSingularStringField(value: self.typePrefix, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cosmos_Proto_Message.SetWithdrawAddress, rhs: TW_Cosmos_Proto_Message.SetWithdrawAddress) -> Bool {
+    if lhs.delegatorAddress != rhs.delegatorAddress {return false}
+    if lhs.withdrawAddress != rhs.withdrawAddress {return false}
+    if lhs.typePrefix != rhs.typePrefix {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension TW_Cosmos_Proto_Message.WithdrawDelegationReward: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = TW_Cosmos_Proto_Message.protoMessageName + ".WithdrawDelegationReward"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -1526,6 +2429,62 @@ extension TW_Cosmos_Proto_Message.WithdrawDelegationReward: SwiftProtobuf.Messag
   public static func ==(lhs: TW_Cosmos_Proto_Message.WithdrawDelegationReward, rhs: TW_Cosmos_Proto_Message.WithdrawDelegationReward) -> Bool {
     if lhs.delegatorAddress != rhs.delegatorAddress {return false}
     if lhs.validatorAddress != rhs.validatorAddress {return false}
+    if lhs.typePrefix != rhs.typePrefix {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cosmos_Proto_Message.ExecuteContract: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Cosmos_Proto_Message.protoMessageName + ".ExecuteContract"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "sender"),
+    2: .same(proto: "contract"),
+    3: .standard(proto: "execute_msg"),
+    4: .same(proto: "coins"),
+    5: .standard(proto: "type_prefix"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sender) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.contract) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.executeMsg) }()
+      case 4: try { try decoder.decodeRepeatedMessageField(value: &self.coins) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.typePrefix) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sender.isEmpty {
+      try visitor.visitSingularStringField(value: self.sender, fieldNumber: 1)
+    }
+    if !self.contract.isEmpty {
+      try visitor.visitSingularStringField(value: self.contract, fieldNumber: 2)
+    }
+    if !self.executeMsg.isEmpty {
+      try visitor.visitSingularStringField(value: self.executeMsg, fieldNumber: 3)
+    }
+    if !self.coins.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.coins, fieldNumber: 4)
+    }
+    if !self.typePrefix.isEmpty {
+      try visitor.visitSingularStringField(value: self.typePrefix, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cosmos_Proto_Message.ExecuteContract, rhs: TW_Cosmos_Proto_Message.ExecuteContract) -> Bool {
+    if lhs.sender != rhs.sender {return false}
+    if lhs.contract != rhs.contract {return false}
+    if lhs.executeMsg != rhs.executeMsg {return false}
+    if lhs.coins != rhs.coins {return false}
     if lhs.typePrefix != rhs.typePrefix {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1683,6 +2642,50 @@ extension TW_Cosmos_Proto_Message.THORChainSend: SwiftProtobuf.Message, SwiftPro
     if lhs.fromAddress != rhs.fromAddress {return false}
     if lhs.toAddress != rhs.toAddress {return false}
     if lhs.amounts != rhs.amounts {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cosmos_Proto_Message.THORChainDeposit: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Cosmos_Proto_Message.protoMessageName + ".THORChainDeposit"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "coins"),
+    2: .same(proto: "memo"),
+    3: .same(proto: "signer"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.coins) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.memo) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.signer) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.coins.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.coins, fieldNumber: 1)
+    }
+    if !self.memo.isEmpty {
+      try visitor.visitSingularStringField(value: self.memo, fieldNumber: 2)
+    }
+    if !self.signer.isEmpty {
+      try visitor.visitSingularBytesField(value: self.signer, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cosmos_Proto_Message.THORChainDeposit, rhs: TW_Cosmos_Proto_Message.THORChainDeposit) -> Bool {
+    if lhs.coins != rhs.coins {return false}
+    if lhs.memo != rhs.memo {return false}
+    if lhs.signer != rhs.signer {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1938,6 +2941,406 @@ extension TW_Cosmos_Proto_Message.RawJSON: SwiftProtobuf.Message, SwiftProtobuf.
   }
 }
 
+extension TW_Cosmos_Proto_Message.SignDirect: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Cosmos_Proto_Message.protoMessageName + ".SignDirect"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "body_bytes"),
+    2: .standard(proto: "auth_info_bytes"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.bodyBytes) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.authInfoBytes) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.bodyBytes.isEmpty {
+      try visitor.visitSingularBytesField(value: self.bodyBytes, fieldNumber: 1)
+    }
+    if !self.authInfoBytes.isEmpty {
+      try visitor.visitSingularBytesField(value: self.authInfoBytes, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cosmos_Proto_Message.SignDirect, rhs: TW_Cosmos_Proto_Message.SignDirect) -> Bool {
+    if lhs.bodyBytes != rhs.bodyBytes {return false}
+    if lhs.authInfoBytes != rhs.authInfoBytes {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cosmos_Proto_Message.StakeAuthorization: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Cosmos_Proto_Message.protoMessageName + ".StakeAuthorization"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "max_tokens"),
+    2: .standard(proto: "allow_list"),
+    3: .standard(proto: "deny_list"),
+    4: .standard(proto: "authorization_type"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._maxTokens) }()
+      case 2: try {
+        var v: TW_Cosmos_Proto_Message.StakeAuthorization.Validators?
+        var hadOneofValue = false
+        if let current = self.validators {
+          hadOneofValue = true
+          if case .allowList(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.validators = .allowList(v)
+        }
+      }()
+      case 3: try {
+        var v: TW_Cosmos_Proto_Message.StakeAuthorization.Validators?
+        var hadOneofValue = false
+        if let current = self.validators {
+          hadOneofValue = true
+          if case .denyList(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.validators = .denyList(v)
+        }
+      }()
+      case 4: try { try decoder.decodeSingularEnumField(value: &self.authorizationType) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._maxTokens {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    switch self.validators {
+    case .allowList?: try {
+      guard case .allowList(let v)? = self.validators else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case .denyList?: try {
+      guard case .denyList(let v)? = self.validators else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    }()
+    case nil: break
+    }
+    if self.authorizationType != .unspecified {
+      try visitor.visitSingularEnumField(value: self.authorizationType, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cosmos_Proto_Message.StakeAuthorization, rhs: TW_Cosmos_Proto_Message.StakeAuthorization) -> Bool {
+    if lhs._maxTokens != rhs._maxTokens {return false}
+    if lhs.validators != rhs.validators {return false}
+    if lhs.authorizationType != rhs.authorizationType {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cosmos_Proto_Message.StakeAuthorization.Validators: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Cosmos_Proto_Message.StakeAuthorization.protoMessageName + ".Validators"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "address"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedStringField(value: &self.address) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.address.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.address, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cosmos_Proto_Message.StakeAuthorization.Validators, rhs: TW_Cosmos_Proto_Message.StakeAuthorization.Validators) -> Bool {
+    if lhs.address != rhs.address {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cosmos_Proto_Message.AuthGrant: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Cosmos_Proto_Message.protoMessageName + ".AuthGrant"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "granter"),
+    2: .same(proto: "grantee"),
+    3: .standard(proto: "grant_stake"),
+    4: .same(proto: "expiration"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.granter) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.grantee) }()
+      case 3: try {
+        var v: TW_Cosmos_Proto_Message.StakeAuthorization?
+        var hadOneofValue = false
+        if let current = self.grantType {
+          hadOneofValue = true
+          if case .grantStake(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.grantType = .grantStake(v)
+        }
+      }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self.expiration) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.granter.isEmpty {
+      try visitor.visitSingularStringField(value: self.granter, fieldNumber: 1)
+    }
+    if !self.grantee.isEmpty {
+      try visitor.visitSingularStringField(value: self.grantee, fieldNumber: 2)
+    }
+    try { if case .grantStake(let v)? = self.grantType {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    if self.expiration != 0 {
+      try visitor.visitSingularInt64Field(value: self.expiration, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cosmos_Proto_Message.AuthGrant, rhs: TW_Cosmos_Proto_Message.AuthGrant) -> Bool {
+    if lhs.granter != rhs.granter {return false}
+    if lhs.grantee != rhs.grantee {return false}
+    if lhs.grantType != rhs.grantType {return false}
+    if lhs.expiration != rhs.expiration {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cosmos_Proto_Message.AuthRevoke: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Cosmos_Proto_Message.protoMessageName + ".AuthRevoke"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "granter"),
+    2: .same(proto: "grantee"),
+    3: .standard(proto: "msg_type_url"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.granter) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.grantee) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.msgTypeURL) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.granter.isEmpty {
+      try visitor.visitSingularStringField(value: self.granter, fieldNumber: 1)
+    }
+    if !self.grantee.isEmpty {
+      try visitor.visitSingularStringField(value: self.grantee, fieldNumber: 2)
+    }
+    if !self.msgTypeURL.isEmpty {
+      try visitor.visitSingularStringField(value: self.msgTypeURL, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cosmos_Proto_Message.AuthRevoke, rhs: TW_Cosmos_Proto_Message.AuthRevoke) -> Bool {
+    if lhs.granter != rhs.granter {return false}
+    if lhs.grantee != rhs.grantee {return false}
+    if lhs.msgTypeURL != rhs.msgTypeURL {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cosmos_Proto_Message.MsgVote: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Cosmos_Proto_Message.protoMessageName + ".MsgVote"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "proposal_id"),
+    2: .same(proto: "voter"),
+    3: .same(proto: "option"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.proposalID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.voter) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.option) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.proposalID != 0 {
+      try visitor.visitSingularUInt64Field(value: self.proposalID, fieldNumber: 1)
+    }
+    if !self.voter.isEmpty {
+      try visitor.visitSingularStringField(value: self.voter, fieldNumber: 2)
+    }
+    if self.option != .unspecified {
+      try visitor.visitSingularEnumField(value: self.option, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cosmos_Proto_Message.MsgVote, rhs: TW_Cosmos_Proto_Message.MsgVote) -> Bool {
+    if lhs.proposalID != rhs.proposalID {return false}
+    if lhs.voter != rhs.voter {return false}
+    if lhs.option != rhs.option {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cosmos_Proto_Message.MsgStrideLiquidStakingStake: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Cosmos_Proto_Message.protoMessageName + ".MsgStrideLiquidStakingStake"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "creator"),
+    2: .same(proto: "amount"),
+    3: .standard(proto: "host_denom"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.creator) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.amount) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.hostDenom) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.creator.isEmpty {
+      try visitor.visitSingularStringField(value: self.creator, fieldNumber: 1)
+    }
+    if !self.amount.isEmpty {
+      try visitor.visitSingularStringField(value: self.amount, fieldNumber: 2)
+    }
+    if !self.hostDenom.isEmpty {
+      try visitor.visitSingularStringField(value: self.hostDenom, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cosmos_Proto_Message.MsgStrideLiquidStakingStake, rhs: TW_Cosmos_Proto_Message.MsgStrideLiquidStakingStake) -> Bool {
+    if lhs.creator != rhs.creator {return false}
+    if lhs.amount != rhs.amount {return false}
+    if lhs.hostDenom != rhs.hostDenom {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cosmos_Proto_Message.MsgStrideLiquidStakingRedeem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Cosmos_Proto_Message.protoMessageName + ".MsgStrideLiquidStakingRedeem"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "creator"),
+    2: .same(proto: "amount"),
+    3: .standard(proto: "host_zone"),
+    4: .same(proto: "receiver"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.creator) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.amount) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.hostZone) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.receiver) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.creator.isEmpty {
+      try visitor.visitSingularStringField(value: self.creator, fieldNumber: 1)
+    }
+    if !self.amount.isEmpty {
+      try visitor.visitSingularStringField(value: self.amount, fieldNumber: 2)
+    }
+    if !self.hostZone.isEmpty {
+      try visitor.visitSingularStringField(value: self.hostZone, fieldNumber: 3)
+    }
+    if !self.receiver.isEmpty {
+      try visitor.visitSingularStringField(value: self.receiver, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cosmos_Proto_Message.MsgStrideLiquidStakingRedeem, rhs: TW_Cosmos_Proto_Message.MsgStrideLiquidStakingRedeem) -> Bool {
+    if lhs.creator != rhs.creator {return false}
+    if lhs.amount != rhs.amount {return false}
+    if lhs.hostZone != rhs.hostZone {return false}
+    if lhs.receiver != rhs.receiver {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension TW_Cosmos_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SigningInput"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -1950,6 +3353,7 @@ extension TW_Cosmos_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Me
     7: .standard(proto: "private_key"),
     8: .same(proto: "messages"),
     9: .same(proto: "mode"),
+    10: .standard(proto: "public_key"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1967,6 +3371,7 @@ extension TW_Cosmos_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Me
       case 7: try { try decoder.decodeSingularBytesField(value: &self.privateKey) }()
       case 8: try { try decoder.decodeRepeatedMessageField(value: &self.messages) }()
       case 9: try { try decoder.decodeSingularEnumField(value: &self.mode) }()
+      case 10: try { try decoder.decodeSingularBytesField(value: &self.publicKey) }()
       default: break
       }
     }
@@ -2004,6 +3409,9 @@ extension TW_Cosmos_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Me
     if self.mode != .block {
       try visitor.visitSingularEnumField(value: self.mode, fieldNumber: 9)
     }
+    if !self.publicKey.isEmpty {
+      try visitor.visitSingularBytesField(value: self.publicKey, fieldNumber: 10)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -2017,6 +3425,7 @@ extension TW_Cosmos_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Me
     if lhs.privateKey != rhs.privateKey {return false}
     if lhs.messages != rhs.messages {return false}
     if lhs.mode != rhs.mode {return false}
+    if lhs.publicKey != rhs.publicKey {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -2028,7 +3437,9 @@ extension TW_Cosmos_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._M
     1: .same(proto: "signature"),
     2: .same(proto: "json"),
     3: .same(proto: "serialized"),
-    4: .same(proto: "error"),
+    4: .standard(proto: "signature_json"),
+    5: .standard(proto: "error_message"),
+    6: .same(proto: "error"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -2040,7 +3451,9 @@ extension TW_Cosmos_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._M
       case 1: try { try decoder.decodeSingularBytesField(value: &self.signature) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.json) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.serialized) }()
-      case 4: try { try decoder.decodeSingularStringField(value: &self.error) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.signatureJson) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
+      case 6: try { try decoder.decodeSingularEnumField(value: &self.error) }()
       default: break
       }
     }
@@ -2056,8 +3469,14 @@ extension TW_Cosmos_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._M
     if !self.serialized.isEmpty {
       try visitor.visitSingularStringField(value: self.serialized, fieldNumber: 3)
     }
-    if !self.error.isEmpty {
-      try visitor.visitSingularStringField(value: self.error, fieldNumber: 4)
+    if !self.signatureJson.isEmpty {
+      try visitor.visitSingularStringField(value: self.signatureJson, fieldNumber: 4)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 5)
+    }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 6)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -2066,6 +3485,8 @@ extension TW_Cosmos_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._M
     if lhs.signature != rhs.signature {return false}
     if lhs.json != rhs.json {return false}
     if lhs.serialized != rhs.serialized {return false}
+    if lhs.signatureJson != rhs.signatureJson {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.error != rhs.error {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

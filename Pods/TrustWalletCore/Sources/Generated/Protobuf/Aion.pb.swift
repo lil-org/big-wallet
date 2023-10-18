@@ -26,25 +26,25 @@ public struct TW_Aion_Proto_SigningInput {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Nonce (256-bit number)
+  /// Nonce (uint256, serialized little endian)
   public var nonce: Data = Data()
 
-  /// Gas price (256-bit number)
+  /// Gas price (uint256, serialized little endian)
   public var gasPrice: Data = Data()
 
-  /// Gas limit (256-bit number)
+  /// Gas limit (uint256, serialized little endian)
   public var gasLimit: Data = Data()
 
   /// Recipient's address.
   public var toAddress: String = String()
 
-  /// Amount to send in wei (256-bit number)
+  /// Amount to send in wei (uint256, serialized little endian)
   public var amount: Data = Data()
 
   /// Optional payload
   public var payload: Data = Data()
 
-  /// Private key.
+  /// The secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
 
   /// Timestamp
@@ -55,7 +55,7 @@ public struct TW_Aion_Proto_SigningInput {
   public init() {}
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_Aion_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -66,6 +66,12 @@ public struct TW_Aion_Proto_SigningOutput {
 
   /// Signature.
   public var signature: Data = Data()
+
+  /// error code, 0 is ok, other codes will be treated as errors
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  /// error description
+  public var errorMessage: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -155,6 +161,8 @@ extension TW_Aion_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mes
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "encoded"),
     2: .same(proto: "signature"),
+    3: .same(proto: "error"),
+    4: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -165,6 +173,8 @@ extension TW_Aion_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mes
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.encoded) }()
       case 2: try { try decoder.decodeSingularBytesField(value: &self.signature) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -177,12 +187,20 @@ extension TW_Aion_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     if !self.signature.isEmpty {
       try visitor.visitSingularBytesField(value: self.signature, fieldNumber: 2)
     }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 3)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Aion_Proto_SigningOutput, rhs: TW_Aion_Proto_SigningOutput) -> Bool {
     if lhs.encoded != rhs.encoded {return false}
     if lhs.signature != rhs.signature {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

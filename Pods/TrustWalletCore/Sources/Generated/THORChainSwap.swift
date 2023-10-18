@@ -1,4 +1,4 @@
-// Copyright © 2017-2022 Trust Wallet.
+// Copyright © 2017-2023 Trust Wallet.
 //
 // This file is part of Trust. The full Trust copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
@@ -9,8 +9,13 @@
 
 import Foundation
 
+/// THORChain swap functions
 public struct THORChainSwap {
 
+    /// Builds a THORChainSwap transaction input.
+    ///
+    /// - Parameter input: The serialized data of SwapInput.
+    /// - Returns: The serialized data of SwapOutput.
     public static func buildSwap(input: Data) -> Data {
         let inputData = TWDataCreateWithNSData(input)
         defer {

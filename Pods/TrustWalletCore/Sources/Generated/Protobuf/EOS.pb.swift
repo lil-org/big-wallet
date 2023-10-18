@@ -70,10 +70,13 @@ public struct TW_EOS_Proto_Asset {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Total amount
   public var amount: Int64 = 0
 
+  /// Number of decimals defined
   public var decimals: UInt32 = 0
 
+  /// Asset symbol
   public var symbol: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -87,10 +90,10 @@ public struct TW_EOS_Proto_SigningInput {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Chain id (256-bit number)
+  /// Chain id (uint256, serialized little endian)
   public var chainID: Data = Data()
 
-  /// Reference Block Id (256-bits)
+  /// Reference Block Id (uint256, serialized little endian)
   public var referenceBlockID: Data = Data()
 
   /// Timestamp on the reference block
@@ -118,11 +121,14 @@ public struct TW_EOS_Proto_SigningInput {
   /// Clears the value of `asset`. Subsequent reads from it will return its default value.
   public mutating func clearAsset() {self._asset = nil}
 
-  /// Sender's private key's raw bytes
+  /// Sender's secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
 
   /// Type of the private key
   public var privateKeyType: TW_EOS_Proto_KeyType = .legacy
+
+  /// Expiration of the transaction, if not set, default is reference_block_time + 3600 seconds
+  public var expiration: Int32 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -131,7 +137,7 @@ public struct TW_EOS_Proto_SigningInput {
   fileprivate var _asset: TW_EOS_Proto_Asset? = nil
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_EOS_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -142,6 +148,9 @@ public struct TW_EOS_Proto_SigningOutput {
 
   /// Optional error
   public var error: TW_Common_Proto_SigningError = .ok
+
+  /// error code description
+  public var errorMessage: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -217,6 +226,7 @@ extension TW_EOS_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Messa
     8: .same(proto: "asset"),
     9: .standard(proto: "private_key"),
     10: .standard(proto: "private_key_type"),
+    11: .same(proto: "expiration"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -235,6 +245,7 @@ extension TW_EOS_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Messa
       case 8: try { try decoder.decodeSingularMessageField(value: &self._asset) }()
       case 9: try { try decoder.decodeSingularBytesField(value: &self.privateKey) }()
       case 10: try { try decoder.decodeSingularEnumField(value: &self.privateKeyType) }()
+      case 11: try { try decoder.decodeSingularSFixed32Field(value: &self.expiration) }()
       default: break
       }
     }
@@ -275,6 +286,9 @@ extension TW_EOS_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Messa
     if self.privateKeyType != .legacy {
       try visitor.visitSingularEnumField(value: self.privateKeyType, fieldNumber: 10)
     }
+    if self.expiration != 0 {
+      try visitor.visitSingularSFixed32Field(value: self.expiration, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -289,6 +303,7 @@ extension TW_EOS_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Messa
     if lhs._asset != rhs._asset {return false}
     if lhs.privateKey != rhs.privateKey {return false}
     if lhs.privateKeyType != rhs.privateKeyType {return false}
+    if lhs.expiration != rhs.expiration {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -299,6 +314,7 @@ extension TW_EOS_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mess
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .standard(proto: "json_encoded"),
     2: .same(proto: "error"),
+    3: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -309,6 +325,7 @@ extension TW_EOS_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mess
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.jsonEncoded) }()
       case 2: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -321,12 +338,16 @@ extension TW_EOS_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mess
     if self.error != .ok {
       try visitor.visitSingularEnumField(value: self.error, fieldNumber: 2)
     }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_EOS_Proto_SigningOutput, rhs: TW_EOS_Proto_SigningOutput) -> Bool {
     if lhs.jsonEncoded != rhs.jsonEncoded {return false}
     if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

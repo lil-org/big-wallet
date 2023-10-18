@@ -1,4 +1,4 @@
-// Copyright © 2017-2022 Trust Wallet.
+// Copyright © 2017-2023 Trust Wallet.
 //
 // This file is part of Trust. The full Trust copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
@@ -11,6 +11,7 @@
 
 TW_EXTERN_C_BEGIN
 
+/// Password-Based Key Derivation Function 2
 TW_EXPORT_STRUCT
 struct TWPBKDF2;
 
@@ -20,6 +21,7 @@ struct TWPBKDF2;
 /// \param salt is a sequence of bits, known as a cryptographic salt
 /// \param iterations is the number of iterations desired
 /// \param dkLen is the desired bit-length of the derived key
+/// \return the derived key data.
 TW_EXPORT_STATIC_METHOD
 TWData *_Nullable TWPBKDF2HmacSha256(TWData *_Nonnull password, TWData *_Nonnull salt, uint32_t iterations, uint32_t dkLen);
 
@@ -29,6 +31,7 @@ TWData *_Nullable TWPBKDF2HmacSha256(TWData *_Nonnull password, TWData *_Nonnull
 /// \param salt is a sequence of bits, known as a cryptographic salt
 /// \param iterations is the number of iterations desired
 /// \param dkLen is the desired bit-length of the derived key
+/// \return the derived key data.
 TW_EXPORT_STATIC_METHOD
 TWData *_Nullable TWPBKDF2HmacSha512(TWData *_Nonnull password, TWData *_Nonnull salt, uint32_t iterations, uint32_t dkLen);
 

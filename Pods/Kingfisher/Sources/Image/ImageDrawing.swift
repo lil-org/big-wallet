@@ -201,7 +201,7 @@ extension KingfisherWrapper where Base: KFCrossPlatformImage {
     }
     #endif
     
-    #if os(iOS) || os(tvOS)
+    #if os(iOS) || os(tvOS) || os(visionOS)
     func resize(to size: CGSize, for contentMode: UIView.ContentMode) -> KFCrossPlatformImage {
         switch contentMode {
         case .scaleAspectFit:
@@ -513,8 +513,8 @@ extension KingfisherWrapper where Base: KFCrossPlatformImage {
     ///         For any non-CG-based image or animated image, `base` itself is returned.
     public func decoded(scale: CGFloat) -> KFCrossPlatformImage {
         // Prevent animated image (GIF) losing it's images
-        #if os(iOS)
-        if imageSource != nil { return base }
+        #if os(iOS) || os(visionOS)
+        if frameSource != nil { return base }
         #else
         if images != nil { return base }
         #endif
@@ -542,26 +542,30 @@ extension KingfisherWrapper where Base: KFCrossPlatformImage {
     ///         For any non-CG-based image or animated image, `base` itself is returned.
     public func decoded(on context: CGContext) -> KFCrossPlatformImage {
         // Prevent animated image (GIF) losing it's images
-        #if os(iOS)
-        if imageSource != nil { return base }
+        #if os(iOS) || os(visionOS)
+        if frameSource != nil { return base }
         #else
         if images != nil { return base }
         #endif
 
-        guard let refImage = cgImage else {
+        guard let refImage = cgImage,
+              let decodedRefImage = refImage.decoded(on: context, scale: scale) else
+        {
             assertionFailure("[Kingfisher] Decoding only works for CG-based image.")
             return base
         }
+        return KingfisherWrapper.image(cgImage: decodedRefImage, scale: scale, refImage: base)
+    }
+}
 
-        let size = CGSize(width: CGFloat(refImage.width) / scale, height: CGFloat(refImage.height) / scale)
-
-        context.draw(refImage, in: CGRect(origin: .zero, size: size))
-
-        guard let cgImage = context.makeImage() else {
-            return base
+extension CGImage {
+    func decoded(on context: CGContext, scale: CGFloat) -> CGImage? {
+        let size = CGSize(width: CGFloat(self.width) / scale, height: CGFloat(self.height) / scale)
+        context.draw(self, in: CGRect(origin: .zero, size: size))
+        guard let decodedImageRef = context.makeImage() else {
+            return nil
         }
-
-        return KingfisherWrapper.image(cgImage: cgImage, scale: scale, refImage: base)
+        return decodedImageRef
     }
 }
 

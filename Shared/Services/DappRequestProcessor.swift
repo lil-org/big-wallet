@@ -7,8 +7,6 @@ struct DappRequestProcessor {
     
     private static let walletsManager = WalletsManager.shared
     private static let ethereum = Ethereum.shared
-    private static let solana = Solana.shared
-    private static let near = Near.shared
     
     static func processSafariRequest(_ request: SafariRequest, completion: @escaping () -> Void) -> DappRequestAction {
         guard ExtensionBridge.hasRequest(id: request.id) else {
@@ -19,12 +17,8 @@ struct DappRequestProcessor {
         switch request.body {
         case let .ethereum(body):
             return process(request: request, ethereumRequest: body, completion: completion)
-        case let .solana(body):
-            return process(request: request, solanaRequest: body, completion: completion)
-        case let .near(body):
-            return process(request: request, nearRequest: body, completion: completion)
-        case .tezos:
-            respond(to: request, error: "Tezos is not supported yet", completion: completion)
+        case .solana, .near, .tezos:
+            respond(to: request, error: "not supported yet", completion: completion)
             return .none
         case let .unknown(body):
             switch body.method {
@@ -80,148 +74,6 @@ struct DappRequestProcessor {
                 }
                 return .switchAccount(action)
             }
-        }
-    }
-    
-    private static func process(request: SafariRequest, nearRequest body: SafariRequest.Near, completion: @escaping () -> Void) -> DappRequestAction {
-        let peerMeta = request.peerMeta
-        lazy var account = walletsManager.getAccount(coin: .near, address: body.account)
-        lazy var privateKey = walletsManager.getPrivateKey(coin: .near, address: body.account)
-        
-        switch body.method {
-        case .signIn:
-            let action = SelectAccountAction(peer: peerMeta,
-                                             coinType: .near,
-                                             selectedAccounts: Set(walletsManager.suggestedAccounts(coin: .near)),
-                                             initiallyConnectedProviders: Set(),
-                                             network: nil,
-                                             source: .safariExtension) { _, specificWalletAccounts in
-                if let specificWalletAccount = specificWalletAccounts?.first, specificWalletAccount.account.coin == .near {
-                    let responseBody = ResponseToExtension.Near(account: specificWalletAccount.account.address)
-                    respond(to: request, body: .near(responseBody), completion: completion)
-                } else {
-                    respond(to: request, error: Strings.canceled, completion: completion)
-                }
-            }
-            return .selectAccount(action)
-        case .signAndSendTransactions:
-            guard let account = account, let transactions = body.transactions, !transactions.isEmpty else {
-                respond(to: request, error: Strings.somethingWentWrong, completion: completion)
-                return .none
-            }
-            
-            let meta: String
-            if let jsonObject: Any = transactions.count == 1 ? transactions.first : transactions,
-               let data = try? JSONSerialization.data(withJSONObject: jsonObject, options: .prettyPrinted),
-               let string = String(data: data, encoding: .utf8) {
-                meta = string
-            } else {
-                meta = Strings.somethingWentWrong
-            }
-            
-            let action = SignMessageAction(provider: request.provider, subject: .approveTransaction, account: account, meta: meta, peerMeta: peerMeta) { approved in
-                if approved, let privateKey = privateKey {
-                    near.signAndSendTransactions(transactions, account: account, privateKey: privateKey) { result in
-                        switch result {
-                        case let .success(response):
-                            let body = ResponseToExtension.Near(response: response)
-                            respond(to: request, body: .near(body), completion: completion)
-                        case .failure:
-                            respond(to: request, error: Strings.failedToSend, completion: completion)
-                        }
-                    }
-                } else {
-                    respond(to: request, error: Strings.failedToSign, completion: completion)
-                }
-            }
-            
-            return .approveMessage(action)
-        }
-    }
-    
-    private static func process(request: SafariRequest, solanaRequest body: SafariRequest.Solana, completion: @escaping () -> Void) -> DappRequestAction {
-        let peerMeta = request.peerMeta
-        lazy var account = walletsManager.getAccount(coin: .solana, address: body.publicKey)
-        lazy var privateKey = walletsManager.getPrivateKey(coin: .solana, address: body.publicKey)
-        
-        switch body.method {
-        case .connect:
-            let action = SelectAccountAction(peer: peerMeta,
-                                             coinType: .solana,
-                                             selectedAccounts: Set(walletsManager.suggestedAccounts(coin: .solana)),
-                                             initiallyConnectedProviders: Set(),
-                                             network: nil,
-                                             source: .safariExtension) { _, specificWalletAccounts in
-                if let specificWalletAccount = specificWalletAccounts?.first, specificWalletAccount.account.coin == .solana {
-                    let responseBody = ResponseToExtension.Solana(publicKey: specificWalletAccount.account.address)
-                    respond(to: request, body: .solana(responseBody), completion: completion)
-                } else {
-                    respond(to: request, error: Strings.canceled, completion: completion)
-                }
-            }
-            return .selectAccount(action)
-        case .signAllTransactions:
-            guard let messages = body.messages, let account = account else {
-                respond(to: request, error: Strings.somethingWentWrong, completion: completion)
-                return .none
-            }
-            let displayMessage = Strings.data + ":\n\n" + messages.joined(separator: "\n\n")
-            let action = SignMessageAction(provider: request.provider, subject: .approveTransaction, account: account, meta: displayMessage, peerMeta: peerMeta) { approved in
-                if approved, let privateKey = privateKey {
-                    var results = [String]()
-                    for message in messages {
-                        guard let signed = solana.sign(message: message, asHex: false, privateKey: privateKey) else {
-                            respond(to: request, error: Strings.failedToSign, completion: completion)
-                            return
-                        }
-                        results.append(signed)
-                    }
-                    let responseBody = ResponseToExtension.Solana(results: results)
-                    respond(to: request, body: .solana(responseBody), completion: completion)
-                } else {
-                    respond(to: request, error: Strings.failedToSign, completion: completion)
-                }
-            }
-            return .approveMessage(action)
-        case .signMessage, .signTransaction, .signAndSendTransaction:
-            guard let message = body.message, let account = account else {
-                respond(to: request, error: Strings.somethingWentWrong, completion: completion)
-                return .none
-            }
-            let displayMessage: String
-            let subject: ApprovalSubject
-            switch body.method {
-            case .signMessage:
-                displayMessage = body.displayHex ? message : (String(data: Data(hex: message), encoding: .utf8) ?? message)
-                subject = .signMessage
-            default:
-                displayMessage = Strings.data + ":\n\n" + message
-                subject = .approveTransaction
-            }
-            let action = SignMessageAction(provider: request.provider, subject: subject, account: account, meta: displayMessage, peerMeta: peerMeta) { approved in
-                guard approved, let privateKey = privateKey else {
-                    respond(to: request, error: Strings.failedToSign, completion: completion)
-                    return
-                }
-                
-                if body.method == .signAndSendTransaction {
-                    solana.signAndSendTransaction(message: message, options: body.sendOptions, privateKey: privateKey) { result in
-                        switch result {
-                        case let .success(signature):
-                            let responseBody = ResponseToExtension.Solana(result: signature)
-                            respond(to: request, body: .solana(responseBody), completion: completion)
-                        case .failure:
-                            respond(to: request, error: Strings.failedToSend, completion: completion)
-                        }
-                    }
-                } else if let signed = solana.sign(message: message, asHex: body.method == .signMessage, privateKey: privateKey) {
-                    let responseBody = ResponseToExtension.Solana(result: signed)
-                    respond(to: request, body: .solana(responseBody), completion: completion)
-                } else {
-                    respond(to: request, error: Strings.failedToSign, completion: completion)
-                }
-            }
-            return .approveMessage(action)
         }
     }
     

@@ -10,5 +10,12 @@
 
 #include "TWData.h"
 
+typedef TWData *_Nonnull TW_Ripple_Proto_CurrencyAmount;
+typedef TWData *_Nonnull TW_Ripple_Proto_OperationTrustSet;
+typedef TWData *_Nonnull TW_Ripple_Proto_OperationPayment;
+typedef TWData *_Nonnull TW_Ripple_Proto_OperationNFTokenBurn;
+typedef TWData *_Nonnull TW_Ripple_Proto_OperationNFTokenCreateOffer;
+typedef TWData *_Nonnull TW_Ripple_Proto_OperationNFTokenAcceptOffer;
+typedef TWData *_Nonnull TW_Ripple_Proto_OperationNFTokenCancelOffer;
 typedef TWData *_Nonnull TW_Ripple_Proto_SigningInput;
 typedef TWData *_Nonnull TW_Ripple_Proto_SigningOutput;

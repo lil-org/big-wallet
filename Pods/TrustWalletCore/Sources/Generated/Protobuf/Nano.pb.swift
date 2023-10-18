@@ -26,12 +26,13 @@ public struct TW_Nano_Proto_SigningInput {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Private key
+  /// The secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
 
   /// Optional parent block hash
   public var parentBlock: Data = Data()
 
+  /// Receive/Send reference
   public var linkOneof: TW_Nano_Proto_SigningInput.OneOf_LinkOneof? = nil
 
   /// Hash of a block to receive from
@@ -61,8 +62,12 @@ public struct TW_Nano_Proto_SigningInput {
   /// Work
   public var work: String = String()
 
+  /// Pulic key used for building preImage (32 bytes).
+  public var publicKey: Data = Data()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
+  /// Receive/Send reference
   public enum OneOf_LinkOneof: Equatable {
     /// Hash of a block to receive from
     case linkBlock(Data)
@@ -92,7 +97,7 @@ public struct TW_Nano_Proto_SigningInput {
   public init() {}
 }
 
-/// Transaction signing output.
+/// Result containing the signed and encoded transaction.
 public struct TW_Nano_Proto_SigningOutput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -104,8 +109,14 @@ public struct TW_Nano_Proto_SigningOutput {
   /// Block hash
   public var blockHash: Data = Data()
 
-  /// Json representation of the block
+  /// JSON representation of the block
   public var json: String = String()
+
+  /// error code, 0 is ok, other codes will be treated as errors
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  /// error code description
+  public var errorMessage: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -126,6 +137,7 @@ extension TW_Nano_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mess
     5: .same(proto: "representative"),
     6: .same(proto: "balance"),
     7: .same(proto: "work"),
+    8: .standard(proto: "public_key"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -155,6 +167,7 @@ extension TW_Nano_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mess
       case 5: try { try decoder.decodeSingularStringField(value: &self.representative) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.balance) }()
       case 7: try { try decoder.decodeSingularStringField(value: &self.work) }()
+      case 8: try { try decoder.decodeSingularBytesField(value: &self.publicKey) }()
       default: break
       }
     }
@@ -191,6 +204,9 @@ extension TW_Nano_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mess
     if !self.work.isEmpty {
       try visitor.visitSingularStringField(value: self.work, fieldNumber: 7)
     }
+    if !self.publicKey.isEmpty {
+      try visitor.visitSingularBytesField(value: self.publicKey, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -201,6 +217,7 @@ extension TW_Nano_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mess
     if lhs.representative != rhs.representative {return false}
     if lhs.balance != rhs.balance {return false}
     if lhs.work != rhs.work {return false}
+    if lhs.publicKey != rhs.publicKey {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -212,6 +229,8 @@ extension TW_Nano_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     1: .same(proto: "signature"),
     2: .standard(proto: "block_hash"),
     3: .same(proto: "json"),
+    4: .same(proto: "error"),
+    5: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -223,6 +242,8 @@ extension TW_Nano_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mes
       case 1: try { try decoder.decodeSingularBytesField(value: &self.signature) }()
       case 2: try { try decoder.decodeSingularBytesField(value: &self.blockHash) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.json) }()
+      case 4: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -238,6 +259,12 @@ extension TW_Nano_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     if !self.json.isEmpty {
       try visitor.visitSingularStringField(value: self.json, fieldNumber: 3)
     }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 4)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -245,6 +272,8 @@ extension TW_Nano_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     if lhs.signature != rhs.signature {return false}
     if lhs.blockHash != rhs.blockHash {return false}
     if lhs.json != rhs.json {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

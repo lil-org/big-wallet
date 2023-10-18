@@ -1,4 +1,4 @@
-// Copyright © 2017-2022 Trust Wallet.
+// Copyright © 2017-2023 Trust Wallet.
 //
 // This file is part of Trust. The full Trust copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
@@ -7,6 +7,9 @@
 // This is a GENERATED FILE, changes made here WILL BE LOST.
 //
 
+/// Represents a private key./// Represents a public key./// Coin type for Level 2 of BIP44.
+///
+/// \see https://github.com/satoshilabs/slips/blob/master/slip-0044.md
 public enum CoinType: UInt32, CaseIterable {
     case aeternity = 457
     case aion = 425
@@ -17,11 +20,13 @@ public enum CoinType: UInt32, CaseIterable {
     case callisto = 820
     case cardano = 1815
     case cosmos = 118
+    case pivx = 119
     case dash = 5
     case decred = 42
     case digiByte = 20
     case dogecoin = 3
     case eos = 194
+    case wax = 14001
     case ethereum = 60
     case ethereumClassic = 61
     case fio = 235
@@ -46,7 +51,7 @@ public enum CoinType: UInt32, CaseIterable {
     case stellar = 148
     case tezos = 1729
     case theta = 500
-    case thunderToken = 1001
+    case thunderCore = 1001
     case neo = 888
     case tomoChain = 889
     case tron = 195
@@ -66,15 +71,17 @@ public enum CoinType: UInt32, CaseIterable {
     case kusama = 434
     case polkadot = 354
     case filecoin = 461
-    case elrond = 508
+    case multiversX = 508
     case bandChain = 494
     case smartChainLegacy = 10000714
     case smartChain = 20000714
+    case tbinance = 30000714
     case oasis = 474
     case polygon = 966
     case thorchain = 931
     case bluzelle = 483
     case optimism = 10000070
+    case zksync = 10000324
     case arbitrum = 10042221
     case ecochain = 10000553
     case avalancheCChain = 10009000
@@ -85,11 +92,16 @@ public enum CoinType: UInt32, CaseIterable {
     case ronin = 10002020
     case osmosis = 10000118
     case ecash = 899
+    case iost = 291
     case cronosChain = 10000025
     case smartBitcoinCash = 10000145
     case kuCoinCommunityChain = 10000321
+    case bitcoinDiamond = 999
     case boba = 10000288
-    case metis = 1001088
+    case syscoin = 57
+    case verge = 77
+    case zen = 121
+    case metis = 10001088
     case aurora = 1323161554
     case evmos = 10009001
     case nativeEvmos = 20009001
@@ -98,4 +110,52 @@ public enum CoinType: UInt32, CaseIterable {
     case kavaEvm = 10002222
     case klaytn = 10008217
     case meter = 18000
+    case okxchain = 996
+    case stratis = 105105
+    case komodo = 141
+    case nervos = 309
+    case everscale = 396
+    case aptos = 637
+    case nebl = 146
+    case hedera = 3030
+    case secret = 529
+    case nativeInjective = 10000060
+    case agoric = 564
+    case ton = 607
+    case sui = 784
+    case stargaze = 20000118
+    case polygonzkEVM = 10001101
+    case juno = 30000118
+    case stride = 40000118
+    case axelar = 50000118
+    case crescent = 60000118
+    case kujira = 70000118
+    case ioTeXEVM = 10004689
+    case nativeCanto = 10007700
+    case comdex = 80000118
+    case neutron = 90000118
+    case sommelier = 11000118
+    case fetchAI = 12000118
+    case mars = 13000118
+    case umee = 14000118
+    case coreum = 10000990
+    case quasar = 15000118
+    case persistence = 16000118
+    case akash = 17000118
+    case noble = 18000118
+    case scroll = 534353
+    case rootstock = 137
+    case thetaFuel = 361
+    case confluxeSpace = 1030
+    case acala = 787
+    case acalaEVM = 10000787
+    case opBNB = 204
+    case neon = 245022934
+    case base = 8453
+    case sei = 19000118
+    case arbitrumNova = 10042170
+    case linea = 59144
+    case greenfield = 5600
+    case mantle = 5000
+    case zenEON = 7332
 }

@@ -1,6 +1,0 @@
-framework module WalletConnect {
-  umbrella header "WalletConnect-macOS-umbrella.h"
-
-  export *
-  module * { export * }
-}

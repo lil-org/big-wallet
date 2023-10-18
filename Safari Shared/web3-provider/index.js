@@ -26,18 +26,18 @@ window.web3 = {currentProvider: window.ethereum};
 window.metamask = window.ethereum;
 window.dispatchEvent(new Event('ethereum#initialized'));
 
-// - MARK: Solana
+// - MARK: Solana - disabled
 
-window.solana = new TokenarySolana();
-window.tokenarySolana = window.solana;
-window.phantom = {solana: window.solana};
-window.dispatchEvent(new Event("solana#initialized"));
+//window.solana = new TokenarySolana();
+//window.tokenarySolana = window.solana;
+//window.phantom = {solana: window.solana};
+//window.dispatchEvent(new Event("solana#initialized"));
 
-// - MARK: Near
+// - MARK: Near - disabled
 
-window.near = new TokenaryNear();
-window.sender = window.near;
-window.dispatchEvent(new Event("near#initialized"));
+//window.near = new TokenaryNear();
+//window.sender = window.near;
+//window.dispatchEvent(new Event("near#initialized"));
 
 // - MARK: Process content script messages
 

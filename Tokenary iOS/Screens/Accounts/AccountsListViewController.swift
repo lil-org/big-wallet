@@ -7,11 +7,11 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     enum Section {
         case privateKeyWallets(cellModels: [CellModel])
-        case mnemonicWallet(cellModels: [CellModel])
+        case mnemonicWallet(cellModels: [CellModel], walletIndex: Int)
         
         var items: [CellModel] {
             switch self {
-            case let .mnemonicWallet(cellModels: cellModels):
+            case let .mnemonicWallet(cellModels: cellModels, _):
                 return cellModels
             case let .privateKeyWallets(cellModels: cellModels):
                 return cellModels
@@ -166,7 +166,18 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func walletForIndexPath(_ indexPath: IndexPath) -> TokenaryWallet {
-        let item = sections[indexPath.section].items[indexPath.row]
+        let section = sections[indexPath.section]
+        let items = section.items
+        
+        guard !items.isEmpty else {
+            if case let .mnemonicWallet(_, walletIndex) = section {
+                return wallets[walletIndex]
+            } else {
+                fatalError("no wallet")
+            }
+        }
+        
+        let item = items[indexPath.row]
         switch item {
         case let .mnemonicAccount(walletIndex: walletIndex, accountIndex: _):
             return wallets[walletIndex]
@@ -203,7 +214,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             
             let accounts = wallet.accounts
             let cellModels = (0..<accounts.count).map { CellModel.mnemonicAccount(walletIndex: index, accountIndex: $0) }
-            sections.append(.mnemonicWallet(cellModels: cellModels))
+            sections.append(.mnemonicWallet(cellModels: cellModels, walletIndex: index))
         }
         
         if !privateKeyAccountCellModels.isEmpty {

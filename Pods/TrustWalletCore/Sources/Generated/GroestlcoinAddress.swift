@@ -1,4 +1,4 @@
-// Copyright © 2017-2022 Trust Wallet.
+// Copyright © 2017-2023 Trust Wallet.
 //
 // This file is part of Trust. The full Trust copyright notice, including
 // terms governing use, modification, and redistribution, is contained in the
@@ -9,12 +9,22 @@
 
 import Foundation
 
+/// Represents a legacy Groestlcoin address.
 public final class GroestlcoinAddress: Address {
 
+    /// Compares two addresses for equality.
+    ///
+    /// - Parameter lhs: left Non-null GroestlCoin address to be compared
+    /// - Parameter rhs: right Non-null GroestlCoin address to be compared
+    /// - Returns: true if both address are equal, false otherwise
     public static func == (lhs: GroestlcoinAddress, rhs: GroestlcoinAddress) -> Bool {
         return TWGroestlcoinAddressEqual(lhs.rawValue, rhs.rawValue)
     }
 
+    /// Determines if the string is a valid Groestlcoin address.
+    ///
+    /// - Parameter string: Non-null string.
+    /// - Returns: true if it's a valid address, false otherwise
     public static func isValidString(string: String) -> Bool {
         let stringString = TWStringCreateWithNSString(string)
         defer {
@@ -23,6 +33,10 @@ public final class GroestlcoinAddress: Address {
         return TWGroestlcoinAddressIsValidString(stringString)
     }
 
+    /// Returns the address base58 string representation.
+    ///
+    /// - Parameter address: Non-null GroestlcoinAddress
+    /// - Returns: Address description as a non-null string
     public var description: String {
         return TWStringNSString(TWGroestlcoinAddressDescription(rawValue))
     }

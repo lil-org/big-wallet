@@ -1,7 +1,6 @@
 // Copyright © 2021 Tokenary. All rights reserved.
 
 import Cocoa
-import WalletConnect
 import Kingfisher
 
 class ApproveTransactionViewController: NSViewController {
