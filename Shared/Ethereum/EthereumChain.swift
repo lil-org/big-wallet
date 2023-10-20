@@ -116,10 +116,10 @@ enum EthereumChain: Int {
     
     var nodeURLString: String {
         switch self {
-        case .ethereum: return "https://eth.llamarpc.com"
-        case .arbitrum: return "https://arbitrum.llamarpc.com"
-        case .optimism: return "https://optimism.llamarpc.com"
-        case .polygon: return "https://polygon.llamarpc.com"
+        case .ethereum: return "https://mainnet.infura.io/v3/" + infuraKey
+        case .arbitrum: return "https://arbitrum-mainnet.infura.io/v3/" + infuraKey
+        case .optimism: return "https://optimism-mainnet.infura.io/v3/" + infuraKey
+        case .polygon: return "https://polygon-mainnet.infura.io/v3/" + infuraKey
         case .binance: return "https://bsc-dataseed.binance.org/"
         case .avalanche: return "https://api.avax.network/ext/bc/C/rpc"
         case .gnosisChain: return "https://rpc.gnosischain.com/"
