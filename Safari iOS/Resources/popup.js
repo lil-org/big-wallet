@@ -12,6 +12,8 @@ button.addEventListener('click', () => {
     setTimeout( function() {
         window.close();
     }, 200);
+    
+    browser.runtime.sendMessage({subject: 'POPUP_DID_PROCEED'});
 });
 
 var title = "proceed\nin tokenary";
