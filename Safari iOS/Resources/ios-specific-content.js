@@ -12,11 +12,3 @@ function didChangeVisibility() {
 }
 
 document.addEventListener('visibilitychange', didChangeVisibility);
-
-function platformSpecificProcessMessage(message) {
-    if (message.provider == "ethereum" && (message.name == "switchEthereumChain" || message.name == "addEthereumChain")) {
-        return;
-    } else if (document.inpageAvailable != true && message.name == "switchAccount") {
-        window.location.href = "tokenary://" + encodeURIComponent(JSON.stringify(message));
-    }
-}
