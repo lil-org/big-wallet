@@ -216,7 +216,6 @@
 		2CF255B8275A748300AE54B9 /* ApproveTransactionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF255B7275A748300AE54B9 /* ApproveTransactionViewController.swift */; };
 		2CF255BA275A749300AE54B9 /* ApproveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF255B9275A749300AE54B9 /* ApproveViewController.swift */; };
 		2CFAE56A28BE6292001D0799 /* NSImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CFAE56928BE6292001D0799 /* NSImage.swift */; };
-		2CFDDF4C2765416F00F89019 /* macos-specific-content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CFDDF4B2765416F00F89019 /* macos-specific-content.js */; };
 		2CFDDF4E2765417E00F89019 /* ios-specific-content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CFDDF4D2765417D00F89019 /* ios-specific-content.js */; };
 		E1F659197E90BA26C3A3A6EE /* Pods_Tokenary.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 80697A23D681CBF87CF830B1 /* Pods_Tokenary.framework */; };
 /* End PBXBuildFile section */
@@ -413,7 +412,6 @@
 		2CF255B7275A748300AE54B9 /* ApproveTransactionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveTransactionViewController.swift; sourceTree = "<group>"; };
 		2CF255B9275A749300AE54B9 /* ApproveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveViewController.swift; sourceTree = "<group>"; };
 		2CFAE56928BE6292001D0799 /* NSImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSImage.swift; sourceTree = "<group>"; };
-		2CFDDF4B2765416F00F89019 /* macos-specific-content.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = "macos-specific-content.js"; sourceTree = "<group>"; };
 		2CFDDF4D2765417D00F89019 /* ios-specific-content.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = "ios-specific-content.js"; sourceTree = "<group>"; };
 		3238B55CC74B94A606D08A98 /* Pods-Tokenary iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary iOS.debug.xcconfig"; path = "Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS.debug.xcconfig"; sourceTree = "<group>"; };
 		3819EB5B48C6943F202EA8A0 /* Pods-Tokenary.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary.release.xcconfig"; path = "Target Support Files/Pods-Tokenary/Pods-Tokenary.release.xcconfig"; sourceTree = "<group>"; };
@@ -495,7 +493,6 @@
 			isa = PBXGroup;
 			children = (
 				2C09CBA8273979C1009AD39B /* manifest.json */,
-				2CFDDF4B2765416F00F89019 /* macos-specific-content.js */,
 				2CC8C5A6276A54DA0083FB1B /* macos-specific-background.js */,
 			);
 			path = Resources;
@@ -1085,7 +1082,6 @@
 				2C09CBAB273979C1009AD39B /* background.js in Resources */,
 				2C09CBA9273979C1009AD39B /* manifest.json in Resources */,
 				2C09CBAD273979C1009AD39B /* content.js in Resources */,
-				2CFDDF4C2765416F00F89019 /* macos-specific-content.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

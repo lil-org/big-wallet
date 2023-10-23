@@ -107,7 +107,6 @@ function sendMessageToNativeApp(message) {
     browser.runtime.sendMessage({ subject: "message-to-wallet", message: message, host: window.location.host }).then((response) => {
         sendToInpage(response, message.id);
     });
-    platformSpecificProcessMessage(message); // iOS opens app here
 }
 
 // Receive from background
@@ -132,8 +131,6 @@ window.addEventListener("message", function(event) {
             const disconnectRequest = event.data;
             disconnectRequest.host = window.location.host;
             browser.runtime.sendMessage(disconnectRequest);
-        } else if (event.data.inpageAvailable) {
-            document.inpageAvailable = true;
         }
     }
 });

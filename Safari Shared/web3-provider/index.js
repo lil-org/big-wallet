@@ -8,7 +8,7 @@ import TokenarySolana from "./solana";
 import TokenaryNear from "./near";
 import ProviderRpcError from "./error";
 
-window.tokenary = {overlayConfigurations: []};
+window.tokenary = {};
 window.tokenary.postMessage = (name, id, body, provider) => {
     const message = {name: name, id: id, provider: provider, body: body};
     window.postMessage({direction: "from-page-script", message: message}, "*");
@@ -46,10 +46,7 @@ window.addEventListener("message", function(event) {
         const response = event.data.response;
         const id = event.data.id;
         
-        if ("overlayConfiguration" in response) {
-            window.tokenary.overlayConfigurations.push(response.overlayConfiguration);
-            window.tokenary.showOverlay();
-        } else if ("latestConfigurations" in response) {
+        if ("latestConfigurations" in response) {
             const name = "didLoadLatestConfiguration";
             var remainingProviders = new Set(["ethereum", "solana", "near"]);
             
@@ -110,65 +107,3 @@ function deliverResponseToSpecificProvider(id, response, provider) {
             window.near.processTokenaryResponse(id, response);
     }
 }
-
-// MARK: - Tokenary overlay for iOS
-
-window.postMessage({inpageAvailable: true}, "*");
-
-window.tokenary.overlayTapped = () => {
-    const request = window.tokenary.overlayConfigurations[0].request;
-    window.tokenary.overlayConfigurations.shift();
-    window.tokenary.hideOverlayImmediately(true);
-    deliverResponseToSpecificProvider(request.id, {id: request.id, error: new ProviderRpcError(4001, "Canceled"), name: request.name}, request.provider);
-    
-    const cancelRequest = {subject: "cancelRequest", id: request.id};
-    window.postMessage(cancelRequest, "*");
-};
-
-window.tokenary.hideOverlayImmediately = (immediately) => {
-    if (immediately) {
-        document.getElementById("tokenary-overlay").style.display = "none";
-        if (window.tokenary.overlayConfigurations.length) {
-            window.tokenary.showOverlay();
-        }
-    } else {
-        setTimeout( function() { window.tokenary.hideOverlayImmediately(true); }, 200);
-    }
-};
-
-window.tokenary.showOverlay = () => {
-    const overlay = document.getElementById("tokenary-overlay");
-    if (overlay) {
-        window.tokenary.unhideOverlay(overlay);
-    } else {
-        window.tokenary.createOverlay();
-    }
-};
-
-window.tokenary.createOverlay = () => {
-    const overlay = document.createElement("div");
-    overlay.setAttribute("id", "tokenary-overlay");
-    overlay.setAttribute("ontouchstart", `
-        event.stopPropagation();
-        if (event.target === event.currentTarget) {
-            window.tokenary.overlayTapped();
-            return false;
-        }
-    `);
-    
-    overlay.innerHTML = `<button id="tokenary-button" onclick="window.tokenary.overlayButtonTapped();">Proceed in Tokenary</button>`;
-    document.body.appendChild(overlay);
-    window.tokenary.unhideOverlay(overlay);
-};
-
-window.tokenary.unhideOverlay = (overlay) => {
-    overlay.firstChild.innerHTML = window.tokenary.overlayConfigurations[0].title;
-    overlay.style.display = "grid";
-}
-
-window.tokenary.overlayButtonTapped = () => {
-    const request = window.tokenary.overlayConfigurations[0].request;
-    window.tokenary.overlayConfigurations.shift();
-    window.location.href = "https://tokenary.io/extension?query=" + encodeURIComponent(JSON.stringify(request));
-    window.tokenary.hideOverlayImmediately(false);
-};
