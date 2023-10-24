@@ -153,3 +153,12 @@ browser.browserAction.onClicked.addListener(function(tab) {
 function genId() {
     return new Date().getTime() + Math.floor(Math.random() * 1000);
 }
+
+function hasVisiblePopup() {
+    const popup = browser.extension.getViews({ type: 'popup' });
+    if (popup.length === 0) {
+        return false;
+    } else if (popup.length > 0) {
+        return true;
+    }
+}
