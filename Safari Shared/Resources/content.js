@@ -123,10 +123,6 @@ window.addEventListener("message", function(event) {
     if (event.source == window && event.data) {
         if (event.data.direction == "from-page-script") {
             sendMessageToNativeApp(event.data.message);
-        } else if (event.data.subject == "cancelRequest") {
-            const cancelRequest = event.data;
-            document.pendingRequestsIds.delete(cancelRequest.id);
-            browser.runtime.sendMessage(cancelRequest);
         } else if (event.data.subject == "disconnect") {
             const disconnectRequest = event.data;
             disconnectRequest.host = window.location.host;
