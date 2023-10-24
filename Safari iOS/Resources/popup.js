@@ -1,7 +1,7 @@
 // Copyright © 2023 Tokenary. All rights reserved.
 
 const button = document.getElementById('tokenary-button');
-const message = browser.extension.getBackgroundPage().sharedData;
+const message = browser.extension.getBackgroundPage().pendingPopupRequest;
 
 button.addEventListener('click', () => {
     const query = encodeURIComponent(JSON.stringify(message)) + '";';
