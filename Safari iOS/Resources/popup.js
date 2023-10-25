@@ -6,12 +6,16 @@ const message = browser.extension.getBackgroundPage().pendingPopupRequest;
 if (message != null) {
     setupButton();
 } else {
-    // TODO: if there is no message, this is an action-click popup
-    // go communicate with a background script
+    browser.tabs.getCurrent(function(tab) {
+        browser.runtime.sendMessage({subject: 'POPUP_APPEARED', tab: tab}).then((response) => {
+            button.innerText = response;
+        });
+    });
 }
 
 button.addEventListener('click', () => {
-    const query = encodeURIComponent(JSON.stringify(message)) + '";';
+    const request = browser.extension.getBackgroundPage().pendingPopupRequest;
+    const query = encodeURIComponent(JSON.stringify(request)) + '";';
     browser.tabs.executeScript({
       code: 'window.location.href = "https://tokenary.io/extension?query=' + query
     });
@@ -20,7 +24,7 @@ button.addEventListener('click', () => {
         window.close();
     }, 200);
     
-    browser.runtime.sendMessage({subject: 'POPUP_DID_PROCEED', id: message.id});
+    browser.runtime.sendMessage({subject: 'POPUP_DID_PROCEED', id: request.id});
 });
 
 function setupButton() {
