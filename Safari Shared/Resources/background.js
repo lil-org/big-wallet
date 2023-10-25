@@ -176,15 +176,23 @@ var sendPopupCancelResponse = null;
 var popupQueue = [];
 
 function processPopupQueue() {
-    if (popupQueue.length && pendingPopupId == null && !hasVisiblePopup()) {
-        const next = popupQueue[0];
-        popupQueue.shift();
-        pendingPopupRequest = next.pendingPopupRequest;
-        const id = pendingPopupRequest.id;
-        pendingPopupId = id;
-        sendPopupCancelResponse = next.sendPopupCancelResponse;
-        browser.browserAction.openPopup();
-        setTimeout( function() { pollPopupStatus(id); }, 1000);
+    if (popupQueue.length && pendingPopupId == null) {
+        const setupExistingSwitchAccountPopup = popupQueue[0].pendingPopupRequest.name == "switchAccount";
+        
+        if (!hasVisiblePopup() || setupExistingSwitchAccountPopup) {
+            const next = popupQueue[0];
+            popupQueue.shift();
+            pendingPopupRequest = next.pendingPopupRequest;
+            const id = pendingPopupRequest.id;
+            pendingPopupId = id;
+            sendPopupCancelResponse = next.sendPopupCancelResponse;
+            
+            if (!setupExistingSwitchAccountPopup) {
+                browser.browserAction.openPopup();
+            }
+            
+            setTimeout( function() { pollPopupStatus(id); }, 1000);
+        }
     }
 }
 
