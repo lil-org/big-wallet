@@ -13,7 +13,7 @@ button.addEventListener('click', () => {
         window.close();
     }, 200);
     
-    browser.runtime.sendMessage({subject: 'POPUP_DID_PROCEED'});
+    browser.runtime.sendMessage({subject: 'POPUP_DID_PROCEED', id: message.id});
 });
 
 var title = "proceed\nin tokenary";

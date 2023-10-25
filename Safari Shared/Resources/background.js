@@ -1,17 +1,26 @@
 // Copyright © 2022 Tokenary. All rights reserved.
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.subject === "message-to-wallet") {
+    if (request.subject === "POPUP_DID_PROCEED" && request.id === pendingPopupId) {
+        pendingPopupId = null;
+        pendingPopupRequest = null;
+        sendPopupCancelResponse = null;
+    } else if (request.subject === "message-to-wallet") {
+        if (isMobile) {
+            popupQueue.push({pendingPopupRequest: request.message, sendPopupCancelResponse: sendResponse});
+            processPopupQueue();
+        }
         sendNativeMessage(request, sender, sendResponse);
     } else if (request.subject === "getResponse") {
         browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
             sendResponse(response);
             storeConfigurationIfNeeded(request.host, response);
+            if (isMobile) {
+                setTimeout( function() { processPopupQueue(); }, 500);
+            }
         });
     } else if (request.subject === "getLatestConfiguration") {
         getLatestConfiguration(request.host, sendResponse);
-    } else if (request.subject === "cancelRequest") {
-        browser.runtime.sendNativeMessage("mac.tokenary.io", request);
     } else if (request.subject === "disconnect") {
         const provider = request.provider;
         const host = request.host;
@@ -44,6 +53,9 @@ function sendNativeMessage(request, sender, sendResponse) {
         sendResponse(response);
         didCompleteRequest(request.message.id, sender.tab.id);
         storeConfigurationIfNeeded(request.host, response);
+        if (isMobile) {
+            setTimeout( function() { processPopupQueue(); }, 500);
+        }
     });
 }
 
@@ -152,6 +164,60 @@ browser.browserAction.onClicked.addListener(function(tab) {
 
 function genId() {
     return new Date().getTime() + Math.floor(Math.random() * 1000);
+}
+
+// MARK: - iOS extension popup
+
+var pendingPopupRequest = null;
+var pendingPopupId = null;
+var sendPopupCancelResponse = null;
+var popupQueue = [];
+
+function processPopupQueue() {
+    if (popupQueue.length && pendingPopupId == null && !hasVisiblePopup()) {
+        const next = popupQueue[0];
+        popupQueue.shift();
+        pendingPopupRequest = next.pendingPopupRequest;
+        const id = pendingPopupRequest.id;
+        pendingPopupId = id;
+        sendPopupCancelResponse = next.sendPopupCancelResponse;
+        browser.browserAction.openPopup();
+        setTimeout( function() { pollPopupStatus(id); }, 1000);
+    }
+}
+
+function pollPopupStatus(id) {
+    if (hasVisiblePopup() && pendingPopupId === id) {
+        setTimeout( function() { pollPopupStatus(id); }, 1000);
+    } else if (pendingPopupId === id) {
+        pendingPopupId = null;
+        didDismissPopup();
+    }
+}
+
+function didDismissPopup() {
+    cancelPopupRequest(pendingPopupRequest, sendPopupCancelResponse);
+    pendingPopupRequest = null;
+    sendPopupCancelResponse = null;
+    
+    if (popupQueue.length) {
+        for (let item of popupQueue) {
+            cancelPopupRequest(item.pendingPopupRequest, item.sendPopupCancelResponse);
+        }
+        popupQueue = [];
+    }
+}
+
+function cancelPopupRequest(request, sendResponse) {
+    const cancelResponse = {
+        id: request.id,
+        provider: request.provider,
+        name: request.name,
+        error: "canceled",
+        subject: "cancelRequest",
+    };
+    browser.runtime.sendNativeMessage("mac.tokenary.io", cancelResponse);
+    sendResponse(cancelResponse);
 }
 
 function hasVisiblePopup() {
