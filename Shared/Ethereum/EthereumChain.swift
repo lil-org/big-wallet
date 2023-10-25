@@ -107,9 +107,9 @@ enum EthereumChain: Int {
     
     var hasUSDPrice: Bool {
         switch self {
-        case .ethereum, .optimism:
-            return true
-        default:
+        case .ethereum, .arbitrum, .klaytn, .polygon, .optimism, .binance, .avalanche, .gnosisChain, .fantomOpera, .celo, .aurora, .neon, .base, .zora:
+            return symbolIsETH
+        case .fantomTestnet, .neonDevnet, .avalancheFuji, .binanceTestnet, .polygonMumbai, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby:
             return false
         }
     }
