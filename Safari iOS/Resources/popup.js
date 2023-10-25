@@ -28,7 +28,7 @@ button.addEventListener('click', () => {
 });
 
 function setupButton() {
-    var title = "proceed\nin tokenary";
+    var title = "open the app";
     switch (message.name) {
         case "signPersonalMessage":
         case "signMessage":
@@ -51,7 +51,7 @@ function setupButton() {
             if (Array.isArray(latestConfigurations) && latestConfigurations.length) {
                 title = "switch\naccount";
             } else {
-                title = "connect\ntokenary";
+                title = "connect\nwallet";
             }
             break;
     }
