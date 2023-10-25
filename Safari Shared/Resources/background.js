@@ -5,6 +5,8 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         pendingPopupId = null;
         pendingPopupRequest = null;
         sendPopupCancelResponse = null;
+    } else if (request.subject === "POPUP_APPEARED") {
+        didClickMobileExtensionButton(request.tab, sendResponse);
     } else if (request.subject === "message-to-wallet") {
         if (isMobile) {
             popupQueue.push({pendingPopupRequest: request.message, sendPopupCancelResponse: sendResponse});
@@ -218,6 +220,25 @@ function cancelPopupRequest(request, sendResponse) {
     };
     browser.runtime.sendNativeMessage("mac.tokenary.io", cancelResponse);
     sendResponse(cancelResponse);
+}
+
+function didClickMobileExtensionButton(tab, sendResponse) {
+    const message = {didTapExtensionButton: true};
+    browser.tabs.sendMessage(tab.id, message, function(host) {
+        if (typeof host !== "undefined") {
+            getLatestConfiguration(host, function(currentConfiguration) {
+                const latestConfigurations = currentConfiguration.latestConfigurations;
+                if (Array.isArray(latestConfigurations) && latestConfigurations.length) {
+                    sendResponse("switch\naccount");
+                } else {
+                    sendResponse("connect\nwallet");
+                }
+                
+                const switchAccountMessage = {name: "switchAccount", id: genId(), provider: "unknown", body: currentConfiguration};
+                browser.tabs.sendMessage(tab.id, switchAccountMessage);
+            });
+        }
+    });
 }
 
 function hasVisiblePopup() {
