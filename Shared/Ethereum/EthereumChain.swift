@@ -27,6 +27,7 @@ enum EthereumChain: Int {
     case binanceTestnet = 97
     case avalancheFuji = 43113
     case fantomTestnet = 4002
+    case fantomSonicOpen = 64240
     case neonDevnet = 245022926
     
     var id: Int {
@@ -47,7 +48,7 @@ enum EthereumChain: Int {
     }
     
     static let allMainnets: [EthereumChain] = [.ethereum, .zora, .base, .klaytn, .polygon, .optimism, .binance, .arbitrum, .avalanche, .gnosisChain, .fantomOpera, .celo, .aurora, .neon]
-    static let allTestnets: [EthereumChain] = [.ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji, .fantomTestnet, .neonDevnet]
+    static let allTestnets: [EthereumChain] = [.ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji, .fantomTestnet, .neonDevnet, .fantomSonicOpen]
     
     var name: String {
         switch self {
@@ -75,6 +76,7 @@ enum EthereumChain: Int {
         case .avalancheFuji: return "Avalanche FUJI"
         case .fantomTestnet: return "Fantom Testnet"
         case .neonDevnet: return "Neon Devnet"
+        case .fantomSonicOpen: return "Fantom Sonic Open"
         }
     }
     
@@ -90,7 +92,7 @@ enum EthereumChain: Int {
             return "AVAX"
         case .gnosisChain:
             return "xDai"
-        case .fantomOpera, .fantomTestnet:
+        case .fantomOpera, .fantomTestnet, .fantomSonicOpen:
             return "FTM"
         case .celo:
             return "CELO"
@@ -107,9 +109,9 @@ enum EthereumChain: Int {
     
     var hasUSDPrice: Bool {
         switch self {
-        case .ethereum, .optimism:
-            return true
-        default:
+        case .ethereum, .arbitrum, .klaytn, .polygon, .optimism, .binance, .avalanche, .gnosisChain, .fantomOpera, .celo, .aurora, .neon, .base, .zora:
+            return symbolIsETH
+        case .fantomTestnet, .neonDevnet, .avalancheFuji, .binanceTestnet, .polygonMumbai, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .fantomSonicOpen:
             return false
         }
     }
@@ -140,6 +142,7 @@ enum EthereumChain: Int {
         case .polygonMumbai: return "https://rpc.ankr.com/polygon_mumbai"
         case .fantomTestnet: return "https://rpc.testnet.fantom.network/"
         case .neonDevnet: return "https://devnet.neonevm.org/"
+        case .fantomSonicOpen: return "https://rpcapi.sonic.fantom.network/"
         }
     }
     

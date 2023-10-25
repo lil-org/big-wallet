@@ -15,61 +15,6 @@ function injectScript() {
         scriptTag.textContent = request.responseText;
         container.insertBefore(scriptTag, container.children[0]);
         container.removeChild(scriptTag);
-        
-        const styles = `
-            #tokenary-button {
-                font-family: "Helvetica";
-                font-size: min(6vw, 6vh);
-                font-weight: bold;
-                color: white;
-                background-color: #0093FF;
-                width: min(78vw, 78vh);
-                height: min(34vw, 34vh);
-                border: none;
-                border-radius: min(17vw, 17vh);
-                -webkit-touch-callout: none;
-                -webkit-user-select: none;
-                user-select: none;
-                padding: 0px;
-                line-height: 1.2em;
-                text-align: center;
-                margin: 0;
-            }
-        
-            @keyframes fadeInOpacity {
-                0% {
-                    opacity: 0;
-                }
-                100% {
-                    opacity: 1;
-                }
-            }
-            
-            #tokenary-overlay {
-                position: fixed;
-                display: none;
-                width: 100%;
-                height: 100%;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background-color: rgba(0, 0, 0, 0);
-                -webkit-backdrop-filter: blur(3pt);
-                z-index: 2147483647;
-                cursor: pointer;
-                align-content: center;
-                justify-content: center;
-                animation-name: fadeInOpacity;
-                animation-iteration-count: 1;
-                animation-timing-function: ease;
-                animation-duration: 0.2s;
-            }
-        `;
-
-        const styleSheet = document.createElement("style");
-        styleSheet.innerText = styles;
-        container.insertBefore(styleSheet, container.children[0]);
     } catch (error) {
         console.error('Tokenary: Provider injection failed.', error);
     }
@@ -162,7 +107,6 @@ function sendMessageToNativeApp(message) {
     browser.runtime.sendMessage({ subject: "message-to-wallet", message: message, host: window.location.host }).then((response) => {
         sendToInpage(response, message.id);
     });
-    platformSpecificProcessMessage(message); // iOS opens app here
 }
 
 // Receive from background
@@ -179,16 +123,10 @@ window.addEventListener("message", function(event) {
     if (event.source == window && event.data) {
         if (event.data.direction == "from-page-script") {
             sendMessageToNativeApp(event.data.message);
-        } else if (event.data.subject == "cancelRequest") {
-            const cancelRequest = event.data;
-            document.pendingRequestsIds.delete(cancelRequest.id);
-            browser.runtime.sendMessage(cancelRequest);
         } else if (event.data.subject == "disconnect") {
             const disconnectRequest = event.data;
             disconnectRequest.host = window.location.host;
             browser.runtime.sendMessage(disconnectRequest);
-        } else if (event.data.inpageAvailable) {
-            document.inpageAvailable = true;
         }
     }
 });

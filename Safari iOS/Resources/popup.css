@@ -1,0 +1,38 @@
+:root {
+    color-scheme: light dark;
+}
+
+body {
+    width: 100%;
+    height: 100%;
+    font-family: system-ui;
+    text-align: center;
+    align-content: center;
+    justify-content: center;
+    min-width: 200pt;
+    margin: 0;
+    margin-top: 23pt;
+    margin-bottom: 23pt;
+}
+
+#tokenary-button {
+    font-size: 21pt;
+    font-weight: bold;
+    color: white;
+    background-color: #0093FF;
+    width: 88%;
+    min-height: 100pt;
+    border: none;
+    border-radius: min(17vw, 17vh);
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    padding: 8pt;
+    line-height: 1.2em;
+    text-align: center;
+    margin: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+    
+}

@@ -23,7 +23,7 @@
         "matches": [ "file://*/*", "http://*/*", "https://*/*" ],
         "run_at": "document_start",
         "all_frames": false,
-        "js": [ "content.js", "macos-specific-content.js" ]
+        "js": [ "content.js" ]
     }],
     
     "browser_action": {

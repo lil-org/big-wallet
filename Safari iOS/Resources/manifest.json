@@ -27,6 +27,7 @@
     }],
     
     "browser_action": {
+        "default_popup": "popup.html",
         "default_icon": {
             "16": "images/toolbar-icon-16.png",
             "19": "images/toolbar-icon-19.png",
@@ -37,6 +38,7 @@
     
     "permissions": [
         "nativeMessaging",
+        "browserAction",
         "storage",
         "https://*.infura.io/",
         "https://*.infura.io/*",
@@ -44,6 +46,7 @@
         "https://tokenary.io/*",
         "https://tokenary.io/*/*",
         "activeTab",
+        "tabs",
         "tokenary://*"
     ],
     
