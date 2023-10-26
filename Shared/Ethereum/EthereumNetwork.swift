@@ -35,7 +35,7 @@ enum EthereumNetwork: Int {
     }
     
     var hexStringId: String {
-        return String(id, radix: 16, uppercase: false).withHexPrefix
+        return String.hex(id, withPrefix: true)
     }
     
     static func withChainId(_ chainId: String?) -> EthereumNetwork? {

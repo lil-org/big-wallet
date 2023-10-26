@@ -35,8 +35,9 @@ extension String {
         return String.hexPrefix + self
     }
     
-    static func hex<T>(_ value: T) -> String where T : BinaryInteger {
-        return String(value, radix: 16)
+    static func hex<T>(_ value: T, withPrefix: Bool = false) -> String where T : BinaryInteger {
+        let prefix = withPrefix ? hexPrefix : ""
+        return prefix + String(value, radix: 16)
     }
     
 }
