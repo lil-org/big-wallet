@@ -2,7 +2,6 @@
 
 import Foundation
 import WalletCore
-import Web3Swift // TODO: deprecate
 
 struct Ethereum {
 

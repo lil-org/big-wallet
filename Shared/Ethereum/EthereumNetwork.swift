@@ -1,7 +1,6 @@
 // Copyright © 2021 Tokenary. All rights reserved.
 
 import Foundation
-import Web3Swift
 
 final class EthereumNetwork: Network {
     

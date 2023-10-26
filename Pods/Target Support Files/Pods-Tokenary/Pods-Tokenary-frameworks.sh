@@ -176,26 +176,16 @@ code_sign_if_enabled() {
 }
 
 if [[ "$CONFIGURATION" == "Debug" ]]; then
-  install_framework "${BUILT_PRODUCTS_DIR}/BigInt-macOS/BigInt.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/BlockiesSwift-macOS/BlockiesSwift.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/CryptoSwift-macOS/CryptoSwift.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/Kingfisher-macOS/Kingfisher.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/SwiftProtobuf-macOS/SwiftProtobuf.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/SwiftyJSON-macOS/SwiftyJSON.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/TrustWalletCore-macOS/WalletCore.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/Web3Swift.io-macOS/Web3Swift.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/secp256k1.swift-macOS/secp256k1.framework"
 fi
 if [[ "$CONFIGURATION" == "Release" ]]; then
-  install_framework "${BUILT_PRODUCTS_DIR}/BigInt-macOS/BigInt.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/BlockiesSwift-macOS/BlockiesSwift.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/CryptoSwift-macOS/CryptoSwift.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/Kingfisher-macOS/Kingfisher.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/SwiftProtobuf-macOS/SwiftProtobuf.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/SwiftyJSON-macOS/SwiftyJSON.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/TrustWalletCore-macOS/WalletCore.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/Web3Swift.io-macOS/Web3Swift.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/secp256k1.swift-macOS/secp256k1.framework"
 fi
 if [ "${COCOAPODS_PARALLEL_CODE_SIGN}" == "true" ]; then
   wait
