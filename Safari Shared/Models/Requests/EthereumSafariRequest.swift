@@ -21,8 +21,8 @@ extension SafariRequest {
         
         let method: Method
         let address: String
-        let chain: EthereumChain?
-        let switchToChain: EthereumChain?
+        let chain: EthereumNetwork?
+        let switchToChain: EthereumNetwork?
         let parameters: [String: Any]?
         
         init?(name: String, json: [String: Any]) {
@@ -33,7 +33,7 @@ extension SafariRequest {
             self.method = method
             
             if let network = json["networkId"] as? String, let networkId = Int(network) {
-                self.chain = EthereumChain(rawValue: networkId)
+                self.chain = EthereumNetwork(rawValue: networkId)
             } else {
                 self.chain = nil
             }
@@ -43,7 +43,7 @@ extension SafariRequest {
             
             if let chainId = (parameters?["chainId"] as? String)?.dropFirst(2),
                let networkId = Int(chainId, radix: 16),
-               let chain = EthereumChain(rawValue: networkId) {
+               let chain = EthereumNetwork(rawValue: networkId) {
                 self.switchToChain = chain
             } else {
                 self.switchToChain = nil

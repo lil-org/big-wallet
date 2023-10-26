@@ -61,7 +61,7 @@ struct Ethereum {
         return signed.toPrefixedHexString()
     }
     
-    func send(transaction: Transaction, privateKey: WalletCore.PrivateKey, chain: EthereumChain) throws -> String {
+    func send(transaction: Transaction, privateKey: WalletCore.PrivateKey, chain: EthereumNetwork) throws -> String {
         let network = EthereumNetwork.forChain(chain)
         let bytes = try signedTransactionBytes(transaction: transaction, privateKey: privateKey, chain: chain)
         let response = try SendRawTransactionProcedure(network: network, transactionBytes: bytes).call()
@@ -71,7 +71,7 @@ struct Ethereum {
         return hash
     }
     
-    private func signedTransactionBytes(transaction: Transaction, privateKey: WalletCore.PrivateKey, chain: EthereumChain) throws -> EthContractCallBytes {
+    private func signedTransactionBytes(transaction: Transaction, privateKey: WalletCore.PrivateKey, chain: EthereumNetwork) throws -> EthContractCallBytes {
         let network = EthereumNetwork.forChain(chain)
         let senderKey = EthPrivateKey(hex: privateKey.data.hexString)
         let contractAddress = EthAddress(hex: transaction.to)
@@ -110,7 +110,7 @@ struct Ethereum {
         return bytes
     }
     
-    func prepareTransaction(_ transaction: Transaction, chain: EthereumChain, completion: @escaping (Transaction) -> Void) {
+    func prepareTransaction(_ transaction: Transaction, chain: EthereumNetwork, completion: @escaping (Transaction) -> Void) {
         var transaction = transaction
         
         if transaction.nonce == nil {
@@ -142,7 +142,7 @@ struct Ethereum {
         
     }
     
-    private func getGas(chain: EthereumChain, from: String, to: String, gasPrice: String, weiAmount: EthNumber, data: String, completion: @escaping (String?) -> Void) {
+    private func getGas(chain: EthereumNetwork, from: String, to: String, gasPrice: String, weiAmount: EthNumber, data: String, completion: @escaping (String?) -> Void) {
         let network = EthereumNetwork.forChain(chain)
         queue.async {
             let value = (try? weiAmount.value().hexString) ?? ""
@@ -189,7 +189,7 @@ struct Ethereum {
         }
     }
     
-    private func getGasPrice(chain: EthereumChain, completion: @escaping (String?) -> Void) {
+    private func getGasPrice(chain: EthereumNetwork, completion: @escaping (String?) -> Void) {
         let network = EthereumNetwork.forChain(chain)
         queue.async {
             let gasPrice = try? EthGasPrice(network: network).value().toHexString()
@@ -199,7 +199,7 @@ struct Ethereum {
         }
     }
     
-    private func getNonce(chain: EthereumChain, from: String, completion: @escaping (String?) -> Void) {
+    private func getNonce(chain: EthereumNetwork, from: String, completion: @escaping (String?) -> Void) {
         let network = EthereumNetwork.forChain(chain)
         queue.async {
             let nonce = try? EthTransactions(network: network, address: EthAddress(hex: from), blockChainState: PendingBlockChainState()).count().value().toHexString()

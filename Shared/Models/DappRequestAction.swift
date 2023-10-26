@@ -17,9 +17,9 @@ struct SelectAccountAction {
     let coinType: CoinType?
     var selectedAccounts: Set<SpecificWalletAccount>
     let initiallyConnectedProviders: Set<Web3Provider>
-    var network: EthereumChain?
+    var network: EthereumNetwork?
     let source: Source
-    let completion: (EthereumChain?, [SpecificWalletAccount]?) -> Void
+    let completion: (EthereumNetwork?, [SpecificWalletAccount]?) -> Void
     
     enum Source {
         case walletConnect, safariExtension
@@ -38,7 +38,7 @@ struct SignMessageAction {
 struct SendTransactionAction {
     let provider: Web3Provider
     let transaction: Transaction
-    let chain: EthereumChain
+    let chain: EthereumNetwork
     let account: Account
     let peerMeta: PeerMeta
     let completion: (Transaction?) -> Void

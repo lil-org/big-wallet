@@ -128,8 +128,7 @@
 		2C96D3A62763CCA000687301 /* Images.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D3A52763CCA000687301 /* Images.swift */; };
 		2C96D3A92763D13400687301 /* DataStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D3A72763D13400687301 /* DataStateView.swift */; };
 		2C96D3AA2763D13400687301 /* DataStateView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C96D3A82763D13400687301 /* DataStateView.xib */; };
-		2C9F0B6526BDC9AF008FA3D6 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */; };
-		2C9F0B6826BDCB2E008FA3D6 /* EthereumChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */; };
+		2C9F0B6826BDCB2E008FA3D6 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */; };
 		2CAA412526C7CD93009F3535 /* ReviewRequester.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CAA412426C7CD93009F3535 /* ReviewRequester.swift */; };
 		2CB3845A27654EA900A189B9 /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 2CB3845827654E9700A189B9 /* _locales */; };
 		2CB3845B27654EA900A189B9 /* images in Resources */ = {isa = PBXBuildFile; fileRef = 2CB3845927654E9700A189B9 /* images */; };
@@ -144,8 +143,8 @@
 		2CC8C5A32767D3B30083FB1B /* GasPriceSliderTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2CC8C5A12767D3B30083FB1B /* GasPriceSliderTableViewCell.xib */; };
 		2CC8C5A5276A52670083FB1B /* ios-specific-background.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CC8C5A4276A52670083FB1B /* ios-specific-background.js */; };
 		2CC8C5A7276A54DA0083FB1B /* macos-specific-background.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CC8C5A6276A54DA0083FB1B /* macos-specific-background.js */; };
-		2CC8C5AC276A7EF70083FB1B /* EthereumChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */; };
-		2CC8C5AD276A7EF80083FB1B /* EthereumChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */; };
+		2CC8C5AC276A7EF70083FB1B /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */; };
+		2CC8C5AD276A7EF80083FB1B /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */; };
 		2CC8C5B4276A96760083FB1B /* Haptic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8C5B3276A96760083FB1B /* Haptic.swift */; };
 		2CCEB83727594E2A00768473 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 2CCEB83627594E2A00768473 /* manifest.json */; };
 		2CCEB84527594E2A00768473 /* Safari iOS.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2CCEB82D27594E2A00768473 /* Safari iOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -186,8 +185,7 @@
 		2CF255A8275A48BB00AE54B9 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03D1D1269B407900EF10EA /* NetworkMonitor.swift */; };
 		2CF255A9275A48BB00AE54B9 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C917428267D2A6E00049075 /* Keychain.swift */; };
 		2CF255AB275A48CF00AE54B9 /* Ethereum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995552674D0F300A8E370 /* Ethereum.swift */; };
-		2CF255AC275A48CF00AE54B9 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */; };
-		2CF255AD275A48CF00AE54B9 /* EthereumChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */; };
+		2CF255AD275A48CF00AE54B9 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */; };
 		2CF255AE275A48CF00AE54B9 /* Transaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D011267F73C00032A62E /* Transaction.swift */; };
 		2CF255B1275A4A1800AE54B9 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
 		2CF255B2275A4A7200AE54B9 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC89470269A334A00879245 /* UserDefaults.swift */; };
@@ -344,8 +342,7 @@
 		2C96D3A52763CCA000687301 /* Images.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Images.swift; sourceTree = "<group>"; };
 		2C96D3A72763D13400687301 /* DataStateView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DataStateView.swift; sourceTree = "<group>"; };
 		2C96D3A82763D13400687301 /* DataStateView.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = DataStateView.xib; sourceTree = "<group>"; };
-		2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumNetwork.swift; sourceTree = "<group>"; };
-		2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumChain.swift; sourceTree = "<group>"; };
+		2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumNetwork.swift; sourceTree = "<group>"; };
 		2CAA412426C7CD93009F3535 /* ReviewRequester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewRequester.swift; sourceTree = "<group>"; };
 		2CB3844327654BF600A189B9 /* error.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = error.js; path = "web3-provider/error.js"; sourceTree = "<group>"; };
 		2CB3844427654BF600A189B9 /* package.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = package.json; path = "web3-provider/package.json"; sourceTree = "<group>"; };
@@ -628,8 +625,7 @@
 			isa = PBXGroup;
 			children = (
 				2C1995552674D0F300A8E370 /* Ethereum.swift */,
-				2C9F0B6426BDC9AF008FA3D6 /* EthereumNetwork.swift */,
-				2C9F0B6726BDCB2E008FA3D6 /* EthereumChain.swift */,
+				2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */,
 				2CE3D011267F73C00032A62E /* Transaction.swift */,
 			);
 			path = Ethereum;
@@ -1237,7 +1233,7 @@
 				2C2AA1D728AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
 				2C773F5E27450B97007B04E7 /* ExtensionBridge.swift in Sources */,
 				2C264BDE27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */,
-				2CC8C5AC276A7EF70083FB1B /* EthereumChain.swift in Sources */,
+				2CC8C5AC276A7EF70083FB1B /* EthereumNetwork.swift in Sources */,
 				2C264BC327B2F2C100234393 /* EthereumSafariRequest.swift in Sources */,
 				2C264BBE27B2F25E00234393 /* SafariRequest.swift in Sources */,
 				2C09CBA2273979C1009AD39B /* SafariWebExtensionHandler.swift in Sources */,
@@ -1260,7 +1256,6 @@
 				2C8A09D42675184700993638 /* Window.swift in Sources */,
 				2C264BD527B5806200234393 /* Web3Provider.swift in Sources */,
 				2C4768B42826ED83005E8D4D /* CoinType.swift in Sources */,
-				2C9F0B6526BDC9AF008FA3D6 /* EthereumNetwork.swift in Sources */,
 				2C773F62274523DC007B04E7 /* ResponseToExtension.swift in Sources */,
 				0DC850E726B73A5900809E82 /* AuthenticationReason.swift in Sources */,
 				2C4768AB2826CA63005E8D4D /* CoinDerivation.swift in Sources */,
@@ -1268,7 +1263,7 @@
 				2CD0669126B5537B00728C20 /* TokenaryWallet.swift in Sources */,
 				2C89D26827BADCA9006C0C8D /* DappRequestAction.swift in Sources */,
 				2C3B7F022756A08600931264 /* Identifiers.swift in Sources */,
-				2C9F0B6826BDCB2E008FA3D6 /* EthereumChain.swift in Sources */,
+				2C9F0B6826BDCB2E008FA3D6 /* EthereumNetwork.swift in Sources */,
 				2C03D1D2269B407900EF10EA /* NetworkMonitor.swift in Sources */,
 				2C8A09E326757FC000993638 /* AccountCellView.swift in Sources */,
 				2C6B964C26B9D92500D2C819 /* NSColor.swift in Sources */,
@@ -1325,7 +1320,6 @@
 				2C264BC227B2F2C100234393 /* EthereumSafariRequest.swift in Sources */,
 				2CE059372763D60A0042D844 /* KeyboardObserver.swift in Sources */,
 				2CF255A0275A47DD00AE54B9 /* Bundle.swift in Sources */,
-				2CF255AC275A48CF00AE54B9 /* EthereumNetwork.swift in Sources */,
 				2C2AA1D328AD1DC100E35DBF /* SpecificWalletAccount.swift in Sources */,
 				2C40709027667A6600AB3D55 /* MultilineLabelTableViewCell.swift in Sources */,
 				2CF255A6275A48BB00AE54B9 /* GasService.swift in Sources */,
@@ -1358,7 +1352,7 @@
 				2C96D3A62763CCA000687301 /* Images.swift in Sources */,
 				2C264BD127B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
 				2C96D39827623EC600687301 /* URL.swift in Sources */,
-				2CF255AD275A48CF00AE54B9 /* EthereumChain.swift in Sources */,
+				2CF255AD275A48CF00AE54B9 /* EthereumNetwork.swift in Sources */,
 				2CF2559C275A477F00AE54B9 /* ApprovalSubject.swift in Sources */,
 				2C09FC672828331D00DE9C27 /* Image.swift in Sources */,
 				2C264BD627B5806200234393 /* Web3Provider.swift in Sources */,
@@ -1405,7 +1399,7 @@
 				2C2AA1D828AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
 				2CE0594327640EAB0042D844 /* ExtensionBridge.swift in Sources */,
 				2C264BDF27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */,
-				2CC8C5AD276A7EF80083FB1B /* EthereumChain.swift in Sources */,
+				2CC8C5AD276A7EF80083FB1B /* EthereumNetwork.swift in Sources */,
 				2C264BC427B2F2C100234393 /* EthereumSafariRequest.swift in Sources */,
 				2C264BBF27B2F25E00234393 /* SafariRequest.swift in Sources */,
 				2CE0593F27640E300042D844 /* SafariWebExtensionHandler.swift in Sources */,

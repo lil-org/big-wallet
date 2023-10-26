@@ -137,7 +137,7 @@ class AccountsListViewController: NSViewController {
                 networkButton.isHidden = true
             } else if networkButton.menu == nil {
                 let menu = NSMenu()
-                for mainnet in EthereumChain.allMainnets {
+                for mainnet in EthereumNetwork.allMainnets {
                     let item = NSMenuItem(title: mainnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
                     item.tag = mainnet.id
                     menu.addItem(item)
@@ -146,7 +146,7 @@ class AccountsListViewController: NSViewController {
                 let submenuItem = NSMenuItem()
                 submenuItem.title = Strings.testnets
                 let submenu = NSMenu()
-                for testnet in EthereumChain.allTestnets {
+                for testnet in EthereumNetwork.allTestnets {
                     let item = NSMenuItem(title: testnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
                     item.tag = testnet.id
                     submenu.addItem(item)
@@ -249,11 +249,11 @@ class AccountsListViewController: NSViewController {
     
     @objc private func didSelectChain(_ sender: AnyObject) {
         guard let menuItem = sender as? NSMenuItem,
-              let selectedNetwork = EthereumChain(rawValue: menuItem.tag) else { return }
+              let selectedNetwork = EthereumNetwork(rawValue: menuItem.tag) else { return }
         selectNetwork(selectedNetwork)
     }
     
-    private func selectNetwork(_ network: EthereumChain) {
+    private func selectNetwork(_ network: EthereumNetwork) {
         let title = network.name + " — " + Strings.isSelected
         let attributedTitle = NSAttributedString(string: title,
                                                  attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])

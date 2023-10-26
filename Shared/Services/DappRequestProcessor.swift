@@ -192,7 +192,7 @@ struct DappRequestProcessor {
         }
     }
     
-    private static func sendTransaction(privateKey: PrivateKey, transaction: Transaction, chain: EthereumChain, request: SafariRequest, completion: () -> Void) {
+    private static func sendTransaction(privateKey: PrivateKey, transaction: Transaction, chain: EthereumNetwork, request: SafariRequest, completion: () -> Void) {
         if let transactionHash = try? ethereum.send(transaction: transaction, privateKey: privateKey, chain: chain) {
             DappRequestProcessor.respond(to: request, body: .ethereum(.init(result: transactionHash)), completion: completion)
         } else {
