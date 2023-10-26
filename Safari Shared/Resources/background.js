@@ -9,8 +9,11 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         didClickMobileExtensionButton(request.tab, sendResponse);
     } else if (request.subject === "message-to-wallet") {
         if (isMobile) {
-            popupQueue.push({pendingPopupRequest: request.message, sendPopupCancelResponse: sendResponse});
-            processPopupQueue();
+            const name = request.message.name;
+            if (name != "switchEthereumChain" && name != "addEthereumChain") {
+                popupQueue.push({pendingPopupRequest: request.message, sendPopupCancelResponse: sendResponse});
+                processPopupQueue();
+            }
         }
         sendNativeMessage(request, sender, sendResponse);
     } else if (request.subject === "getResponse") {
