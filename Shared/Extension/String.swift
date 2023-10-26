@@ -4,6 +4,8 @@ import Foundation
 
 extension String {
     
+    static let hexPrefix = "0x"
+    
     var maybeJSON: Bool {
         return hasPrefix("{") && hasSuffix("}") && count > 3
     }
@@ -21,7 +23,13 @@ extension String {
         return self + "…"
     }
     
-    static let hexPrefix = "0x"
+    var cleanHex: String {
+        if hasPrefix(String.hexPrefix) {
+            return String(dropFirst(2))
+        } else {
+            return self
+        }
+    }
     
     var withHexPrefix: String {
         return String.hexPrefix + self

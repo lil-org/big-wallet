@@ -16,9 +16,9 @@ struct Transaction {
     }
     
     var gasPriceGwei: Int? {
-        guard let gasPrice = gasPrice else { return nil }
-        let current = 0 // TODO: gasPrice hex to decimal / 1_000_000_000
-        return current
+        guard let gasPrice = gasPrice, let decimal = NSDecimalNumber(hexString: gasPrice) else { return nil }
+        let gwei = decimal.multiplying(byPowerOf10: -9)
+        return gwei.intValue
     }
     
     func description(chain: EthereumNetwork, ethPrice: Double?) -> String {
