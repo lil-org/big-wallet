@@ -30,9 +30,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         processInput(url: event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue)
     }
     
-    func applicationDidFinishLaunching(_ aNotification: Notification) {
-        walletsManager.migrateFromLegacyIfNeeded()
-        
+    func applicationDidFinishLaunching(_ aNotification: Notification) {        
         agent.start()
         gasService.start()
         priceService.start()

@@ -98,7 +98,6 @@ class AccountsListViewController: NSViewController {
         getBackToRectIfNeeded()
         blinkNewWalletCellIfNeeded()
         view.window?.delegate = self
-        promptSafariForLegacyUsersIfNeeded()
         
         if !didAppear {
             didAppear = true
@@ -106,12 +105,6 @@ class AccountsListViewController: NSViewController {
                 Alert.showWithMessage(String(format: Strings.addAccountToConnect, arguments: [coin.name]), style: .informational)
             }
         }
-    }
-    
-    private func promptSafariForLegacyUsersIfNeeded() {
-        guard Defaults.shouldPromptSafariForLegacyUsers else { return }
-        Defaults.shouldPromptSafariForLegacyUsers = false
-        Alert.showSafariPrompt()
     }
     
     private func callCompletion(specificWalletAccounts: [SpecificWalletAccount]?) {
