@@ -97,6 +97,8 @@
 		2C8155682ADFC7A700F4559B /* popup.css in Resources */ = {isa = PBXBuildFile; fileRef = 2C8155662ADFC7A700F4559B /* popup.css */; };
 		2C81556B2ADFC7B900F4559B /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C8155692ADFC7B900F4559B /* popup.js */; };
 		2C81556E2ADFC7C400F4559B /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = 2C81556C2ADFC7C400F4559B /* popup.html */; };
+		2C8944C52AEAFF97006A711F /* UInt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944C42AEAFF97006A711F /* UInt.swift */; };
+		2C8944C62AEAFF97006A711F /* UInt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944C42AEAFF97006A711F /* UInt.swift */; };
 		2C89D26827BADCA9006C0C8D /* DappRequestAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */; };
 		2C89D26927BADCA9006C0C8D /* DappRequestAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */; };
 		2C8A09C6267513FC00993638 /* Agent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09C5267513FC00993638 /* Agent.swift */; };
@@ -316,6 +318,7 @@
 		2C8155662ADFC7A700F4559B /* popup.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = popup.css; sourceTree = "<group>"; };
 		2C8155692ADFC7B900F4559B /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = popup.js; sourceTree = "<group>"; };
 		2C81556C2ADFC7C400F4559B /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = popup.html; sourceTree = "<group>"; };
+		2C8944C42AEAFF97006A711F /* UInt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UInt.swift; sourceTree = "<group>"; };
 		2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DappRequestAction.swift; sourceTree = "<group>"; };
 		2C89D26A27BAF2A3006C0C8D /* yarn.lock */ = {isa = PBXFileReference; lastKnownFileType = text; name = yarn.lock; path = "web3-provider/yarn.lock"; sourceTree = "<group>"; };
 		2C89D26B27BAF2A3006C0C8D /* package-lock.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "package-lock.json"; path = "web3-provider/package-lock.json"; sourceTree = "<group>"; };
@@ -833,6 +836,7 @@
 				2C03D1D4269B428C00EF10EA /* Notification.swift */,
 				2C603D0126B6E13F00956955 /* String.swift */,
 				2C8ED8DB2AEADDC400818D74 /* BigInt.swift */,
+				2C8944C42AEAFF97006A711F /* UInt.swift */,
 			);
 			path = Extension;
 			sourceTree = "<group>";
@@ -1287,6 +1291,7 @@
 				2C4768A9282598C5005E8D4D /* CoinDerivationCellView.swift in Sources */,
 				2CB4031D281D745D00BAEBEE /* NSTableView.swift in Sources */,
 				2CD0B3F726AC619900488D92 /* AddAccountOptionCellView.swift in Sources */,
+				2C8944C52AEAFF97006A711F /* UInt.swift in Sources */,
 				0D059AD226C2796200EE3023 /* ApprovalSubject.swift in Sources */,
 				2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */,
 				2C8E47A326A322E8007B8354 /* RightClickTableView.swift in Sources */,
@@ -1341,6 +1346,7 @@
 				2CC8C5B4276A96760083FB1B /* Haptic.swift in Sources */,
 				2CF255AB275A48CF00AE54B9 /* Ethereum.swift in Sources */,
 				2CC8C5A22767D3B30083FB1B /* GasPriceSliderTableViewCell.swift in Sources */,
+				2C8944C62AEAFF97006A711F /* UInt.swift in Sources */,
 				2CC6EF0D275E64810040CC62 /* UIViewController.swift in Sources */,
 				2C264BDD27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */,
 				2CF255A9275A48BB00AE54B9 /* Keychain.swift in Sources */,

@@ -35,4 +35,8 @@ extension String {
         return String.hexPrefix + self
     }
     
+    static func hex<T>(_ value: T) -> String where T : BinaryInteger {
+        return String(value, radix: 16)
+    }
+    
 }
