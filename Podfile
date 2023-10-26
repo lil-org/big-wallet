@@ -5,6 +5,7 @@ def shared_pods
   pod 'BlockiesSwift'
   pod 'Kingfisher'
   pod 'TrustWalletCore'
+  pod 'BigInt'
 end
 
 target 'Tokenary' do

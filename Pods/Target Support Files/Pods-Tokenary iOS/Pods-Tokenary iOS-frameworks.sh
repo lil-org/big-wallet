@@ -176,12 +176,14 @@ code_sign_if_enabled() {
 }
 
 if [[ "$CONFIGURATION" == "Debug" ]]; then
+  install_framework "${BUILT_PRODUCTS_DIR}/BigInt-iOS/BigInt.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/BlockiesSwift-iOS/BlockiesSwift.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/Kingfisher-iOS/Kingfisher.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/SwiftProtobuf-iOS/SwiftProtobuf.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/TrustWalletCore-iOS/WalletCore.framework"
 fi
 if [[ "$CONFIGURATION" == "Release" ]]; then
+  install_framework "${BUILT_PRODUCTS_DIR}/BigInt-iOS/BigInt.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/BlockiesSwift-iOS/BlockiesSwift.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/Kingfisher-iOS/Kingfisher.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/SwiftProtobuf-iOS/SwiftProtobuf.framework"
