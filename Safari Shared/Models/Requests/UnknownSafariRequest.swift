@@ -38,15 +38,7 @@ extension SafariRequest {
                         guard let response = try? jsonDecoder.decode(ResponseToExtension.Ethereum.self, from: data),
                               let address = response.results?.first else { continue }
                         configurations.append(ProviderConfiguration(provider: provider, address: address, network: EthereumChain.withChainId(response.chainId)))
-                    case .solana:
-                        guard let response = try? jsonDecoder.decode(ResponseToExtension.Solana.self, from: data),
-                              let address = response.publicKey else { continue }
-                        configurations.append(ProviderConfiguration(provider: provider, address: address, network: nil))
-                    case .near:
-                        guard let response = try? jsonDecoder.decode(ResponseToExtension.Near.self, from: data),
-                              let address = response.account else { continue }
-                        configurations.append(ProviderConfiguration(provider: provider, address: address, network: nil))
-                    case .tezos, .unknown, .multiple:
+                    case .unknown, .multiple:
                         continue
                     }
                 }

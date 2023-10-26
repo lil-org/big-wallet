@@ -3,5 +3,5 @@
 import Foundation
 
 enum Web3Provider: String, Codable {
-    case ethereum, solana, tezos, near, unknown, multiple
+    case ethereum, unknown, multiple
 }

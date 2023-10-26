@@ -19,19 +19,10 @@ struct SafariRequest {
     enum Body {
         case unknown(Unknown)
         case ethereum(Ethereum)
-        case solana(Solana)
-        case tezos(Tezos)
-        case near(Near)
         
         var value: SafariRequestBody {
             switch self {
             case .ethereum(let body):
-                return body
-            case .solana(let body):
-                return body
-            case .tezos(let body):
-                return body
-            case .near(let body):
                 return body
             case .unknown(let body):
                 return body
@@ -79,18 +70,6 @@ struct SafariRequest {
         case .ethereum:
             if let request = Ethereum(name: name, json: jsonBody) {
                 body = .ethereum(request)
-            }
-        case .solana:
-            if let request = Solana(name: name, json: jsonBody) {
-                body = .solana(request)
-            }
-        case .tezos:
-            if let request = Tezos(name: name, json: jsonBody) {
-                body = .tezos(request)
-            }
-        case .near:
-            if let request = Near(name: name, json: jsonBody) {
-                body = .near(request)
             }
         case .unknown, .multiple:
             if let request = Unknown(name: name, json: jsonBody) {

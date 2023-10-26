@@ -47,12 +47,6 @@ extension CoinType {
         switch web3Provider {
         case .ethereum:
             return .ethereum
-        case .solana:
-            return .solana
-        case .tezos:
-            return .tezos
-        case .near:
-            return .near
         case .unknown, .multiple:
             return nil
         }
