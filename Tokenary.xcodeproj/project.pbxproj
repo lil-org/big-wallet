@@ -109,6 +109,8 @@
 		2C8E889F275F9967003EB8DB /* Storyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8E889E275F9967003EB8DB /* Storyboard.swift */; };
 		2C8E88A2275FA596003EB8DB /* ImportViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8E88A1275FA596003EB8DB /* ImportViewController.swift */; };
 		2C8E88A4275FB7B9003EB8DB /* UIApplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8E88A3275FB7B9003EB8DB /* UIApplication.swift */; };
+		2C8ED8D62AEA7DB200818D74 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
+		2C8ED8D72AEA7DB300818D74 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
 		2C901C472689E6D400D0926A /* ApproveTransactionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C462689E6D400D0926A /* ApproveTransactionViewController.swift */; };
 		2C901C4A2689F01700D0926A /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C492689F01700D0926A /* Strings.swift */; };
 		2C901C4D268A033100D0926A /* GasService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C4C268A033100D0926A /* GasService.swift */; };
@@ -1229,6 +1231,7 @@
 				2CF255B2275A4A7200AE54B9 /* UserDefaults.swift in Sources */,
 				2C264BD227B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
 				2C264BD727B5806200234393 /* Web3Provider.swift in Sources */,
+				2C8ED8D62AEA7DB200818D74 /* String.swift in Sources */,
 				2C90E61D27B2C5C100C8991E /* InternalSafariRequest.swift in Sources */,
 				2C2AA1D728AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
 				2C773F5E27450B97007B04E7 /* ExtensionBridge.swift in Sources */,
@@ -1395,6 +1398,7 @@
 				2CE0594627640F470042D844 /* UserDefaults.swift in Sources */,
 				2C264BD327B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
 				2C264BD827B5806200234393 /* Web3Provider.swift in Sources */,
+				2C8ED8D72AEA7DB300818D74 /* String.swift in Sources */,
 				2C90E61E27B2C5C100C8991E /* InternalSafariRequest.swift in Sources */,
 				2C2AA1D828AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
 				2CE0594327640EAB0042D844 /* ExtensionBridge.swift in Sources */,

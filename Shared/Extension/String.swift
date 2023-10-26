@@ -21,4 +21,10 @@ extension String {
         return self + "…"
     }
     
+    static let hexPrefix = "0x"
+    
+    var withHexPrefix: String {
+        return String.hexPrefix + self
+    }
+    
 }

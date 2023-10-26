@@ -11,23 +11,14 @@ struct Transaction {
     let value: String?
     let data: String
     
-    var weiAmount: EthNumber {
-        if let value = value {
-            return EthNumber(hex: value)
-        } else {
-            return EthNumber(value: 0)
-        }
-    }
-    
     var hasFee: Bool {
         return gas != nil && gasPrice != nil
     }
     
     var gasPriceGwei: Int? {
-        guard let gasPrice = gasPrice,
-              let currentAsDecimal = try? EthNumber(hex: gasPrice).value().toDecimal() else { return nil }
-        let current = NSDecimalNumber(decimal: currentAsDecimal).uintValue / 1_000_000_000
-        return Int(current)
+        guard let gasPrice = gasPrice else { return nil }
+        let current = 0 // TODO: gasPrice hex to decimal / 1_000_000_000
+        return current
     }
     
     func description(chain: EthereumNetwork, ethPrice: Double?) -> String {
@@ -65,10 +56,9 @@ struct Transaction {
     
     func feeWithSymbol(chain: EthereumNetwork, ethPrice: Double?) -> String {
         let fee: String
-        if let gasPrice = gasPrice,
-           let gas = gas,
-           let a = try? EthNumber(hex: gasPrice).value().toNormalizedDecimal(power: 18),
-           let b = try? EthNumber(hex: gas).value().toDecimal() {
+        if let _ = gasPrice, let _ = gas {
+            let a = Decimal() // TODO: toNormalizedDecimal(power: 18)
+            let b = Decimal() // TODO: toDecimal()
             let c = NSDecimalNumber(decimal: a).multiplying(by: NSDecimalNumber(decimal: b))
             let costString = chain.hasUSDPrice ? cost(value: c, price: ethPrice) : ""
             fee = c.stringValue.prefix(7) + " \(chain.symbol)" + costString
@@ -79,15 +69,16 @@ struct Transaction {
     }
     
     func valueWithSymbol(chain: EthereumNetwork, ethPrice: Double?, withLabel: Bool) -> String? {
-        if let decimal = try? weiAmount.value().toNormalizedDecimal(power: 18) {
-            let decimalNumber = NSDecimalNumber(decimal: decimal)
-            let costString = chain.hasUSDPrice ? cost(value: decimalNumber, price: ethPrice) : ""
-            if let value = ethString(decimalNumber: decimalNumber) {
-                let valueString = "\(value) \(chain.symbol)" + costString
-                return withLabel ? "Value: " + valueString : valueString
-            }
+        guard let value = value else { return nil }
+        let decimal = Decimal() // TODO: toNormalizedDecimal(power: 18)
+        let decimalNumber = NSDecimalNumber(decimal: decimal)
+        let costString = chain.hasUSDPrice ? cost(value: decimalNumber, price: ethPrice) : ""
+        if let value = ethString(decimalNumber: decimalNumber) {
+            let valueString = "\(value) \(chain.symbol)" + costString
+            return withLabel ? "Value: " + valueString : valueString
+        } else {
+            return nil
         }
-        return nil
     }
     
     private func cost(value: NSDecimalNumber, price: Double?) -> String {
@@ -135,13 +126,13 @@ struct Transaction {
     }
     
     private mutating func setGasPrice(value: UInt) {
-        gasPrice = try? EthNumber(decimal: String(value)).value().toHexString()
+        // TODO: update gasPrice hex with a new value
     }
     
     func currentGasInRelationTo(info: GasService.Info) -> Double {
-        guard let gasPrice = gasPrice,
-              let currentAsDecimal = try? EthNumber(hex: gasPrice).value().toDecimal() else { return 0 }
+        guard let gasPrice = gasPrice else { return 0 }
         
+        let currentAsDecimal = Decimal() // TODO: gasPrice toDecimal()
         let current = NSDecimalNumber(decimal: currentAsDecimal).uintValue
         let tickValues = info.sortedValues
         let tickValuesCount = tickValues.count
