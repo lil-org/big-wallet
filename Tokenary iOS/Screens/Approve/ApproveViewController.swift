@@ -37,7 +37,7 @@ class ApproveViewController: UIViewController {
     static func with(subject: ApprovalSubject, provider: Web3Provider, account: Account, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
         let new = instantiate(ApproveViewController.self, from: .main)
         new.completion = completion
-        new.shouldEnableWaiting = provider == .near && subject == .approveTransaction
+        new.shouldEnableWaiting = false
         new.account = account
         new.meta = meta
         new.approveTitle = subject.title

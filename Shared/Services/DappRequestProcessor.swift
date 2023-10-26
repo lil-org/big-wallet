@@ -17,9 +17,6 @@ struct DappRequestProcessor {
         switch request.body {
         case let .ethereum(body):
             return process(request: request, ethereumRequest: body, completion: completion)
-        case .solana, .near, .tezos:
-            respond(to: request, error: "not supported yet", completion: completion)
-            return .none
         case let .unknown(body):
             switch body.method {
             case .justShowApp:
@@ -46,12 +43,6 @@ struct DappRequestProcessor {
                             case .ethereum:
                                 let responseBody = ResponseToExtension.Ethereum(results: [account.address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
                                 specificProviderBodies.append(.ethereum(responseBody))
-                            case .solana:
-                                let responseBody = ResponseToExtension.Solana(publicKey: account.address)
-                                specificProviderBodies.append(.solana(responseBody))
-                            case .near:
-                                let responseBody = ResponseToExtension.Near(account: account.address)
-                                specificProviderBodies.append(.near(responseBody))
                             default:
                                 fatalError("Can't select that coin")
                             }
