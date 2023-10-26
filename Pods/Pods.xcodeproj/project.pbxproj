@@ -1060,9 +1060,9 @@
 		09DB7DA4C7FEF45C13DDECD686A6F4C8 /* HRP.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = HRP.swift; path = Sources/Generated/Enums/HRP.swift; sourceTree = "<group>"; };
 		0A3692107FDBD58089D6737DB91A3647 /* TWEthereumAbiFunction.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWEthereumAbiFunction.h; path = include/TrustWalletCore/TWEthereumAbiFunction.h; sourceTree = "<group>"; };
 		0A5B34D3EF9DF7BF477C11401BF167CC /* StringUtils.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = StringUtils.swift; path = Sources/SwiftProtobuf/StringUtils.swift; sourceTree = "<group>"; };
-		0A90AABC168E7ACBF249426FCA99F19B /* TrustWalletCore-macOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "TrustWalletCore-macOS"; path = WalletCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		0A90AABC168E7ACBF249426FCA99F19B /* WalletCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = WalletCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		0BE5E89FBCA9AC62BCE17F081F06A79C /* TWCardano.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TWCardano.swift; path = Sources/TWCardano.swift; sourceTree = "<group>"; };
-		0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher-iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Kingfisher-iOS"; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		0C806F76D9A5CC1277EF99F6A245FCA4 /* DoubleParser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DoubleParser.swift; path = Sources/SwiftProtobuf/DoubleParser.swift; sourceTree = "<group>"; };
 		0CC0B02ACD3DED22FDA5E4824B94C326 /* BlockiesSwift-macOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "BlockiesSwift-macOS.debug.xcconfig"; path = "../BlockiesSwift-macOS/BlockiesSwift-macOS.debug.xcconfig"; sourceTree = "<group>"; };
 		0CD673B19ED226C32616FFBC8874C2A4 /* Aptos.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Aptos.pb.swift; path = Sources/Generated/Protobuf/Aptos.pb.swift; sourceTree = "<group>"; };
@@ -1238,10 +1238,10 @@
 		5C806114B4506B7C391450DD762D8118 /* EthereumMessageSigner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EthereumMessageSigner.swift; path = Sources/Generated/EthereumMessageSigner.swift; sourceTree = "<group>"; };
 		5CB5439D3A4CAA6430C57A5988FF7667 /* TextFormatDecodingOptions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TextFormatDecodingOptions.swift; path = Sources/SwiftProtobuf/TextFormatDecodingOptions.swift; sourceTree = "<group>"; };
 		5F27F68A21D4DE5276CDFDCB1EE65AC1 /* ProtobufAPIVersionCheck.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ProtobufAPIVersionCheck.swift; path = Sources/SwiftProtobuf/ProtobufAPIVersionCheck.swift; sourceTree = "<group>"; };
-		5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf-macOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "SwiftProtobuf-macOS"; path = SwiftProtobuf.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SwiftProtobuf.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		5F9E5CB0DACF7421706677E49014B9AC /* Cosmos+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Cosmos+Proto.swift"; path = "Sources/Generated/Protobuf/Cosmos+Proto.swift"; sourceTree = "<group>"; };
 		5FD8ACC65DCAAE77637F2F0F9B1AE404 /* Blockies.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Blockies.swift; path = BlockiesSwift/Classes/Blockies.swift; sourceTree = "<group>"; };
-		60CD9336BF0D87EB43F318C3C417DB66 /* TrustWalletCore-iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "TrustWalletCore-iOS"; path = WalletCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		60CD9336BF0D87EB43F318C3C417DB66 /* WalletCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = WalletCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		611A41B2C271A31BBE229BEAF2E24B31 /* Box.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Box.swift; path = Sources/Utility/Box.swift; sourceTree = "<group>"; };
 		61E76FCCF69F96ABB69AC3B2267B7B37 /* Nervos+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Nervos+Proto.swift"; path = "Sources/Generated/Protobuf/Nervos+Proto.swift"; sourceTree = "<group>"; };
 		6248623AF2E0CEFC2F84699D73643D45 /* TWDerivation.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWDerivation.h; path = include/TrustWalletCore/TWDerivation.h; sourceTree = "<group>"; };
@@ -1330,7 +1330,7 @@
 		8AD256C36281BF9FCAD3407A5370B088 /* Everscale.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Everscale.pb.swift; path = Sources/Generated/Protobuf/Everscale.pb.swift; sourceTree = "<group>"; };
 		8AE311006BE97274B907D95E7545F9A6 /* TWTheOpenNetworkProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWTheOpenNetworkProto.h; path = include/TrustWalletCore/TWTheOpenNetworkProto.h; sourceTree = "<group>"; };
 		8AEE4E7667E8393CC25297290C502102 /* FieldTypes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FieldTypes.swift; path = Sources/SwiftProtobuf/FieldTypes.swift; sourceTree = "<group>"; };
-		8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf-iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "SwiftProtobuf-iOS"; path = SwiftProtobuf.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SwiftProtobuf.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BEE39ABFCCAE9C2A28295CDF99CD263 /* Kingfisher-macOS-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = "Kingfisher-macOS-Info.plist"; path = "../Kingfisher-macOS/Kingfisher-macOS-Info.plist"; sourceTree = "<group>"; };
 		8DA0FC38CC13E2C87C66911DEF410B5D /* SimpleExtensionMap.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SimpleExtensionMap.swift; path = Sources/SwiftProtobuf/SimpleExtensionMap.swift; sourceTree = "<group>"; };
 		8DD8F0AD72525F59B5A45B06630F1A80 /* BinaryDecoder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BinaryDecoder.swift; path = Sources/SwiftProtobuf/BinaryDecoder.swift; sourceTree = "<group>"; };
@@ -1344,15 +1344,15 @@
 		92F8EF08B3C38AE995936AE34095BE50 /* KFImageProtocol.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KFImageProtocol.swift; path = Sources/SwiftUI/KFImageProtocol.swift; sourceTree = "<group>"; };
 		947804BF901DD454F393CD6B528D97A4 /* StellarPassphrase.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = StellarPassphrase.swift; path = Sources/Generated/Enums/StellarPassphrase.swift; sourceTree = "<group>"; };
 		94B2363B95933CED763DA75D34D475A7 /* TWStellarMemoType.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWStellarMemoType.h; path = include/TrustWalletCore/TWStellarMemoType.h; sourceTree = "<group>"; };
-		9537468CF4D5C16DB31E0F967000827C /* Kingfisher-macOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Kingfisher-macOS"; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		95BAA53196A79D500C92AFCCDED26039 /* Pods-Tokenary */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Pods-Tokenary"; path = Pods_Tokenary.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		9537468CF4D5C16DB31E0F967000827C /* Kingfisher.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		95BAA53196A79D500C92AFCCDED26039 /* Pods_Tokenary.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Tokenary.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		95C4BB4D1892DC34549923D7598AE777 /* Hedera.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Hedera.pb.swift; path = Sources/Generated/Protobuf/Hedera.pb.swift; sourceTree = "<group>"; };
 		9618FBFC19168F583E4EF5EA563FC070 /* Kingfisher-iOS-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Kingfisher-iOS-Info.plist"; sourceTree = "<group>"; };
 		96251155067211659D2C0B5536A81FF4 /* KFOptionsSetter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KFOptionsSetter.swift; path = Sources/General/KFOptionsSetter.swift; sourceTree = "<group>"; };
 		96645359FB04ADE844786A0189A172FD /* TWTHORChainSwapProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWTHORChainSwapProto.h; path = include/TrustWalletCore/TWTHORChainSwapProto.h; sourceTree = "<group>"; };
 		96FF97EDE0191CAAFFE708D38516D194 /* FormatIndicatedCacheSerializer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FormatIndicatedCacheSerializer.swift; path = Sources/Cache/FormatIndicatedCacheSerializer.swift; sourceTree = "<group>"; };
 		97EC28EFCE64C3D3BFF27D9880B65E58 /* JSONDecodingOptions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JSONDecodingOptions.swift; path = Sources/SwiftProtobuf/JSONDecodingOptions.swift; sourceTree = "<group>"; };
-		985063CF25F026FD329CB9B4D9F3E0A6 /* Pods-Tokenary iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Pods-Tokenary iOS"; path = Pods_Tokenary_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		985063CF25F026FD329CB9B4D9F3E0A6 /* Pods_Tokenary_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Tokenary_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		99081746B8E8ABAB0533FEA54C1BEA3A /* TWCosmosProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWCosmosProto.h; path = include/TrustWalletCore/TWCosmosProto.h; sourceTree = "<group>"; };
 		993E6D4BF21375B2ABEDC2C46FC3F2EF /* BitcoinAddress.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BitcoinAddress.swift; path = Sources/Generated/BitcoinAddress.swift; sourceTree = "<group>"; };
 		997E468117CDA80C3BF35751A19AA985 /* TransactionCompiler+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "TransactionCompiler+Proto.swift"; path = "Sources/Generated/Protobuf/TransactionCompiler+Proto.swift"; sourceTree = "<group>"; };
@@ -1363,7 +1363,7 @@
 		9C77B53FBC3B75081440DA43724EC0BE /* EthereumChainID.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EthereumChainID.swift; path = Sources/Generated/Enums/EthereumChainID.swift; sourceTree = "<group>"; };
 		9CA48889718BBE3F60D650E2D24D55E8 /* Theta+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Theta+Proto.swift"; path = "Sources/Generated/Protobuf/Theta+Proto.swift"; sourceTree = "<group>"; };
 		9CF2C40D6A774B7D8999DB3378313DA1 /* TWCommonProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWCommonProto.h; path = include/TrustWalletCore/TWCommonProto.h; sourceTree = "<group>"; };
-		9D940727FF8FB9C785EB98E56350EF41 /* Podfile */ = {isa = PBXFileReference; explicitFileType = text.script.ruby; includeInIndex = 1; indentWidth = 2; lastKnownFileType = text; name = Podfile; path = ../Podfile; sourceTree = SOURCE_ROOT; tabWidth = 2; xcLanguageSpecificationIdentifier = xcode.lang.ruby; };
+		9D940727FF8FB9C785EB98E56350EF41 /* Podfile */ = {isa = PBXFileReference; explicitFileType = text.script.ruby; includeInIndex = 1; indentWidth = 2; name = Podfile; path = ../Podfile; sourceTree = SOURCE_ROOT; tabWidth = 2; xcLanguageSpecificationIdentifier = xcode.lang.ruby; };
 		9D9A7F71337DBC2863AEC492D204AFC0 /* PublicKey.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PublicKey.swift; path = Sources/Generated/PublicKey.swift; sourceTree = "<group>"; };
 		9DB41640426926D74B189F6FA89B1ACA /* EthereumRlp+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "EthereumRlp+Proto.swift"; path = "Sources/Generated/Protobuf/EthereumRlp+Proto.swift"; sourceTree = "<group>"; };
 		9E1FD77DACEE83D91058241B4A71E938 /* Storage.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Storage.swift; path = Sources/Cache/Storage.swift; sourceTree = "<group>"; };
@@ -1445,7 +1445,7 @@
 		C01508CBCB7B9585910830B81B825BF9 /* TWBase.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWBase.h; path = include/TrustWalletCore/TWBase.h; sourceTree = "<group>"; };
 		C116952AE59B0A131A197D30039785D7 /* Message+AnyAdditions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Message+AnyAdditions.swift"; path = "Sources/SwiftProtobuf/Message+AnyAdditions.swift"; sourceTree = "<group>"; };
 		C1D4B0E095D61E3597DD802802E6FA6E /* TWAESPaddingMode.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWAESPaddingMode.h; path = include/TrustWalletCore/TWAESPaddingMode.h; sourceTree = "<group>"; };
-		C1FAADCAF1476091AA79DD1F86D70AF2 /* BlockiesSwift-iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "BlockiesSwift-iOS"; path = BlockiesSwift.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		C1FAADCAF1476091AA79DD1F86D70AF2 /* BlockiesSwift.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = BlockiesSwift.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		C298F8E7CEDE32917802E28232BC29F3 /* TWZilliqaProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWZilliqaProto.h; path = include/TrustWalletCore/TWZilliqaProto.h; sourceTree = "<group>"; };
 		C2B1EAE0E0EEB53B92ACB4C5CC09D458 /* ImageTransition.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ImageTransition.swift; path = Sources/Image/ImageTransition.swift; sourceTree = "<group>"; };
 		C3271ED180CEFE46EA1B9777CEA3B04E /* AnySigner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AnySigner.swift; path = Sources/AnySigner.swift; sourceTree = "<group>"; };
@@ -1462,7 +1462,7 @@
 		C6A741BE90701364C1E97801F6B25322 /* Pods-Tokenary-acknowledgements.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Pods-Tokenary-acknowledgements.plist"; sourceTree = "<group>"; };
 		C7511A9290D020A03D73B349A6A6A733 /* TWFIOProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWFIOProto.h; path = include/TrustWalletCore/TWFIOProto.h; sourceTree = "<group>"; };
 		C7DD4218D36631B2B359AA7779F1B93A /* RippleXAddress.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RippleXAddress.swift; path = Sources/Generated/RippleXAddress.swift; sourceTree = "<group>"; };
-		C83E09FA0F0C0CD8C0F7AE3FB821AE8E /* WalletCoreCommon.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; path = WalletCoreCommon.xcframework; sourceTree = "<group>"; };
+		C83E09FA0F0C0CD8C0F7AE3FB821AE8E /* WalletCoreCommon.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = wrapper.xcframework; path = WalletCoreCommon.xcframework; sourceTree = "<group>"; };
 		C99EB13C807FD8D361A9E61B73D141DE /* TWWavesProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWWavesProto.h; path = include/TrustWalletCore/TWWavesProto.h; sourceTree = "<group>"; };
 		C9C0C1B8C10A2E228B9A92232C549E30 /* RetryStrategy.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RetryStrategy.swift; path = Sources/Networking/RetryStrategy.swift; sourceTree = "<group>"; };
 		CAA7AEFEA5DF4E03E0AEF3C931C0B207 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.15.sdk/System/Library/Frameworks/Accelerate.framework; sourceTree = DEVELOPER_DIR; };
@@ -1555,7 +1555,7 @@
 		F1C53D39C658D45B0C98972DC02E05A3 /* TWPrivateKeyType.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWPrivateKeyType.h; path = include/TrustWalletCore/TWPrivateKeyType.h; sourceTree = "<group>"; };
 		F2A387FCF72F66FCF14EBB9AA6EE21A1 /* AddressProtocol.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AddressProtocol.swift; path = Sources/Extensions/AddressProtocol.swift; sourceTree = "<group>"; };
 		F3165D4CEF2350070A377465930B61DB /* SwiftProtobuf-macOS.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; name = "SwiftProtobuf-macOS.modulemap"; path = "../SwiftProtobuf-macOS/SwiftProtobuf-macOS.modulemap"; sourceTree = "<group>"; };
-		F32FBB742C2738F997207F1797526411 /* BlockiesSwift-macOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "BlockiesSwift-macOS"; path = BlockiesSwift.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		F32FBB742C2738F997207F1797526411 /* BlockiesSwift.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = BlockiesSwift.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F372C813DFC740CECBFF0A7CD92D5FF8 /* PublicKey+Bitcoin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "PublicKey+Bitcoin.swift"; path = "Sources/Extensions/PublicKey+Bitcoin.swift"; sourceTree = "<group>"; };
 		F3DF2625838BC61E16518D30C7863482 /* SwiftProtobuf-iOS-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "SwiftProtobuf-iOS-Info.plist"; sourceTree = "<group>"; };
 		F467C0E70F09E2A542B5816428D0EF02 /* TWCoinType.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWCoinType.h; path = include/TrustWalletCore/TWCoinType.h; sourceTree = "<group>"; };
@@ -1669,16 +1669,16 @@
 		0CEDEAC6F774E66C5D6CD5846269DC51 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				C1FAADCAF1476091AA79DD1F86D70AF2 /* BlockiesSwift-iOS */,
-				F32FBB742C2738F997207F1797526411 /* BlockiesSwift-macOS */,
-				0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher-iOS */,
-				9537468CF4D5C16DB31E0F967000827C /* Kingfisher-macOS */,
-				95BAA53196A79D500C92AFCCDED26039 /* Pods-Tokenary */,
-				985063CF25F026FD329CB9B4D9F3E0A6 /* Pods-Tokenary iOS */,
-				8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf-iOS */,
-				5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf-macOS */,
-				60CD9336BF0D87EB43F318C3C417DB66 /* TrustWalletCore-iOS */,
-				0A90AABC168E7ACBF249426FCA99F19B /* TrustWalletCore-macOS */,
+				C1FAADCAF1476091AA79DD1F86D70AF2 /* BlockiesSwift.framework */,
+				F32FBB742C2738F997207F1797526411 /* BlockiesSwift.framework */,
+				0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher.framework */,
+				9537468CF4D5C16DB31E0F967000827C /* Kingfisher.framework */,
+				95BAA53196A79D500C92AFCCDED26039 /* Pods_Tokenary.framework */,
+				985063CF25F026FD329CB9B4D9F3E0A6 /* Pods_Tokenary_iOS.framework */,
+				8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf.framework */,
+				5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf.framework */,
+				60CD9336BF0D87EB43F318C3C417DB66 /* WalletCore.framework */,
+				0A90AABC168E7ACBF249426FCA99F19B /* WalletCore.framework */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -1783,7 +1783,6 @@
 				7A04DCF993E272DB09FFE364C3F614C9 /* ZigZag.swift */,
 				3E9CB557475AFCE3665EA1D6E8B2C5A8 /* Support Files */,
 			);
-			name = SwiftProtobuf;
 			path = SwiftProtobuf;
 			sourceTree = "<group>";
 		};
@@ -2059,7 +2058,6 @@
 				48AA2734D0E77309B483FB41C60A8C29 /* WKInterfaceImage+Kingfisher.swift */,
 				E0DC67C031E2B8797A665A06F21ED45E /* Support Files */,
 			);
-			name = Kingfisher;
 			path = Kingfisher;
 			sourceTree = "<group>";
 		};
@@ -2105,7 +2103,6 @@
 				536B2EC2251B9F41BDBEE0FAE39945A2 /* Support Files */,
 				43F4DCDDD8330F39A00153B9D5BBE8C7 /* Types */,
 			);
-			name = TrustWalletCore;
 			path = TrustWalletCore;
 			sourceTree = "<group>";
 		};
@@ -2319,7 +2316,6 @@
 				DFAD03AB5B9440CBECCE4F44EAA794A4 /* Color+HSL.swift */,
 				2FDD635DA7B6ED3958A9C51777590B93 /* Support Files */,
 			);
-			name = BlockiesSwift;
 			path = BlockiesSwift;
 			sourceTree = "<group>";
 		};
@@ -2724,7 +2720,7 @@
 			);
 			name = "SwiftProtobuf-iOS";
 			productName = SwiftProtobuf;
-			productReference = 8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf-iOS */;
+			productReference = 8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		35A10C11B6EB213A0C198A376AD46F6F /* BlockiesSwift-macOS */ = {
@@ -2742,7 +2738,7 @@
 			);
 			name = "BlockiesSwift-macOS";
 			productName = BlockiesSwift;
-			productReference = F32FBB742C2738F997207F1797526411 /* BlockiesSwift-macOS */;
+			productReference = F32FBB742C2738F997207F1797526411 /* BlockiesSwift.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		65AA93B2B9CF39819DBD1DDF58FCBC15 /* Kingfisher-macOS */ = {
@@ -2760,7 +2756,7 @@
 			);
 			name = "Kingfisher-macOS";
 			productName = Kingfisher;
-			productReference = 9537468CF4D5C16DB31E0F967000827C /* Kingfisher-macOS */;
+			productReference = 9537468CF4D5C16DB31E0F967000827C /* Kingfisher.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		685A5AC5E317EE1D980ECCFE9E6EB08A /* Kingfisher-iOS */ = {
@@ -2778,7 +2774,7 @@
 			);
 			name = "Kingfisher-iOS";
 			productName = Kingfisher;
-			productReference = 0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher-iOS */;
+			productReference = 0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		AA186741961F10502016CE44BFED6684 /* SwiftProtobuf-macOS */ = {
@@ -2796,7 +2792,7 @@
 			);
 			name = "SwiftProtobuf-macOS";
 			productName = SwiftProtobuf;
-			productReference = 5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf-macOS */;
+			productReference = 5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		AA69821F03C2BC35F1E5A4AF5FE590CA /* Pods-Tokenary */ = {
@@ -2818,7 +2814,7 @@
 			);
 			name = "Pods-Tokenary";
 			productName = Pods_Tokenary;
-			productReference = 95BAA53196A79D500C92AFCCDED26039 /* Pods-Tokenary */;
+			productReference = 95BAA53196A79D500C92AFCCDED26039 /* Pods_Tokenary.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		B2CB0C3BB2520C312857C9F0535D50C1 /* BlockiesSwift-iOS */ = {
@@ -2836,7 +2832,7 @@
 			);
 			name = "BlockiesSwift-iOS";
 			productName = BlockiesSwift;
-			productReference = C1FAADCAF1476091AA79DD1F86D70AF2 /* BlockiesSwift-iOS */;
+			productReference = C1FAADCAF1476091AA79DD1F86D70AF2 /* BlockiesSwift.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		CE0DF9902CC5CC81D77770A1E35CCFDE /* Pods-Tokenary iOS */ = {
@@ -2858,7 +2854,7 @@
 			);
 			name = "Pods-Tokenary iOS";
 			productName = Pods_Tokenary_iOS;
-			productReference = 985063CF25F026FD329CB9B4D9F3E0A6 /* Pods-Tokenary iOS */;
+			productReference = 985063CF25F026FD329CB9B4D9F3E0A6 /* Pods_Tokenary_iOS.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		D84FF1ABB5E840CFBA9F610D26DFB42D /* TrustWalletCore-macOS */ = {
@@ -2878,7 +2874,7 @@
 			);
 			name = "TrustWalletCore-macOS";
 			productName = WalletCore;
-			productReference = 0A90AABC168E7ACBF249426FCA99F19B /* TrustWalletCore-macOS */;
+			productReference = 0A90AABC168E7ACBF249426FCA99F19B /* WalletCore.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		DC6F436FE9D7D62655988D0B8E3A24DE /* TrustWalletCore-iOS */ = {
@@ -2898,7 +2894,7 @@
 			);
 			name = "TrustWalletCore-iOS";
 			productName = WalletCore;
-			productReference = 60CD9336BF0D87EB43F318C3C417DB66 /* TrustWalletCore-iOS */;
+			productReference = 60CD9336BF0D87EB43F318C3C417DB66 /* WalletCore.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 /* End PBXNativeTarget section */
@@ -3881,13 +3877,14 @@
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				INFOPLIST_FILE = "Target Support Files/Pods-Tokenary/Pods-Tokenary-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
 				MACH_O_TYPE = staticlib;
-				MACOSX_DEPLOYMENT_TARGET = 11.4;
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				MODULEMAP_FILE = "Target Support Files/Pods-Tokenary/Pods-Tokenary.modulemap";
 				OTHER_LDFLAGS = "";
 				OTHER_LIBTOOLFLAGS = "";
@@ -3919,12 +3916,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/BlockiesSwift-macOS/BlockiesSwift-macOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/BlockiesSwift-macOS/BlockiesSwift-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.10;
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				MODULEMAP_FILE = "Target Support Files/BlockiesSwift-macOS/BlockiesSwift-macOS.modulemap";
 				PRODUCT_MODULE_NAME = BlockiesSwift;
 				PRODUCT_NAME = BlockiesSwift;
@@ -3953,12 +3951,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/TrustWalletCore-iOS/TrustWalletCore-iOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/TrustWalletCore-iOS/TrustWalletCore-iOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				MODULEMAP_FILE = "Target Support Files/TrustWalletCore-iOS/TrustWalletCore-iOS.modulemap";
 				PRODUCT_MODULE_NAME = WalletCore;
 				PRODUCT_NAME = WalletCore;
@@ -3995,6 +3994,7 @@
 					"@loader_path/Frameworks",
 				);
 				MACH_O_TYPE = staticlib;
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				MODULEMAP_FILE = "Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS.modulemap";
 				OTHER_LDFLAGS = "";
 				OTHER_LIBTOOLFLAGS = "";
@@ -4026,12 +4026,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/Kingfisher-iOS/Kingfisher-iOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/Kingfisher-iOS/Kingfisher-iOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				MODULEMAP_FILE = "Target Support Files/Kingfisher-iOS/Kingfisher-iOS.modulemap";
 				PRODUCT_MODULE_NAME = Kingfisher;
 				PRODUCT_NAME = Kingfisher;
@@ -4064,6 +4065,7 @@
 				GCC_PREFIX_HEADER = "Target Support Files/Kingfisher-macOS/Kingfisher-macOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/Kingfisher-macOS/Kingfisher-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -4097,12 +4099,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/SwiftProtobuf-iOS/SwiftProtobuf-iOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/SwiftProtobuf-iOS/SwiftProtobuf-iOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				MODULEMAP_FILE = "Target Support Files/SwiftProtobuf-iOS/SwiftProtobuf-iOS.modulemap";
 				PRODUCT_MODULE_NAME = SwiftProtobuf;
 				PRODUCT_NAME = SwiftProtobuf;
@@ -4132,12 +4135,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/SwiftProtobuf-iOS/SwiftProtobuf-iOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/SwiftProtobuf-iOS/SwiftProtobuf-iOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				MODULEMAP_FILE = "Target Support Files/SwiftProtobuf-iOS/SwiftProtobuf-iOS.modulemap";
 				PRODUCT_MODULE_NAME = SwiftProtobuf;
 				PRODUCT_NAME = SwiftProtobuf;
@@ -4167,12 +4171,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/TrustWalletCore-iOS/TrustWalletCore-iOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/TrustWalletCore-iOS/TrustWalletCore-iOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				MODULEMAP_FILE = "Target Support Files/TrustWalletCore-iOS/TrustWalletCore-iOS.modulemap";
 				PRODUCT_MODULE_NAME = WalletCore;
 				PRODUCT_NAME = WalletCore;
@@ -4202,12 +4207,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/BlockiesSwift-iOS/BlockiesSwift-iOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/BlockiesSwift-iOS/BlockiesSwift-iOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				MODULEMAP_FILE = "Target Support Files/BlockiesSwift-iOS/BlockiesSwift-iOS.modulemap";
 				PRODUCT_MODULE_NAME = BlockiesSwift;
 				PRODUCT_NAME = BlockiesSwift;
@@ -4245,6 +4251,7 @@
 					"@loader_path/Frameworks",
 				);
 				MACH_O_TYPE = staticlib;
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				MODULEMAP_FILE = "Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS.modulemap";
 				OTHER_LDFLAGS = "";
 				OTHER_LIBTOOLFLAGS = "";
@@ -4277,6 +4284,7 @@
 				GCC_PREFIX_HEADER = "Target Support Files/TrustWalletCore-macOS/TrustWalletCore-macOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/TrustWalletCore-macOS/TrustWalletCore-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -4443,6 +4451,7 @@
 				GCC_PREFIX_HEADER = "Target Support Files/Kingfisher-macOS/Kingfisher-macOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/Kingfisher-macOS/Kingfisher-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -4479,12 +4488,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/SwiftProtobuf-macOS/SwiftProtobuf-macOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/SwiftProtobuf-macOS/SwiftProtobuf-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.11;
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				MODULEMAP_FILE = "Target Support Files/SwiftProtobuf-macOS/SwiftProtobuf-macOS.modulemap";
 				PRODUCT_MODULE_NAME = SwiftProtobuf;
 				PRODUCT_NAME = SwiftProtobuf;
@@ -4515,12 +4525,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/BlockiesSwift-macOS/BlockiesSwift-macOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/BlockiesSwift-macOS/BlockiesSwift-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.10;
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				MODULEMAP_FILE = "Target Support Files/BlockiesSwift-macOS/BlockiesSwift-macOS.modulemap";
 				PRODUCT_MODULE_NAME = BlockiesSwift;
 				PRODUCT_NAME = BlockiesSwift;
@@ -4551,6 +4562,7 @@
 				GCC_PREFIX_HEADER = "Target Support Files/TrustWalletCore-macOS/TrustWalletCore-macOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/TrustWalletCore-macOS/TrustWalletCore-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -4585,12 +4597,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/Kingfisher-iOS/Kingfisher-iOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/Kingfisher-iOS/Kingfisher-iOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				MODULEMAP_FILE = "Target Support Files/Kingfisher-iOS/Kingfisher-iOS.modulemap";
 				PRODUCT_MODULE_NAME = Kingfisher;
 				PRODUCT_NAME = Kingfisher;
@@ -4622,12 +4635,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/SwiftProtobuf-macOS/SwiftProtobuf-macOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/SwiftProtobuf-macOS/SwiftProtobuf-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.11;
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				MODULEMAP_FILE = "Target Support Files/SwiftProtobuf-macOS/SwiftProtobuf-macOS.modulemap";
 				PRODUCT_MODULE_NAME = SwiftProtobuf;
 				PRODUCT_NAME = SwiftProtobuf;
@@ -4657,13 +4671,14 @@
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				INFOPLIST_FILE = "Target Support Files/Pods-Tokenary/Pods-Tokenary-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
 				MACH_O_TYPE = staticlib;
-				MACOSX_DEPLOYMENT_TARGET = 11.4;
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				MODULEMAP_FILE = "Target Support Files/Pods-Tokenary/Pods-Tokenary.modulemap";
 				OTHER_LDFLAGS = "";
 				OTHER_LIBTOOLFLAGS = "";
@@ -4692,12 +4707,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/BlockiesSwift-iOS/BlockiesSwift-iOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/BlockiesSwift-iOS/BlockiesSwift-iOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				MODULEMAP_FILE = "Target Support Files/BlockiesSwift-iOS/BlockiesSwift-iOS.modulemap";
 				PRODUCT_MODULE_NAME = BlockiesSwift;
 				PRODUCT_NAME = BlockiesSwift;
