@@ -1,6 +1,7 @@
 // Copyright © 2021 Tokenary. All rights reserved.
 
 import Foundation
+import BigInt
 
 struct Transaction {
     let from: String
@@ -15,10 +16,9 @@ struct Transaction {
         return gas != nil && gasPrice != nil
     }
     
-    var gasPriceGwei: Int? {
-        guard let gasPrice = gasPrice, let decimal = NSDecimalNumber(hexString: gasPrice) else { return nil }
-        let gwei = decimal.multiplying(byPowerOf10: -9)
-        return gwei.intValue
+    var gasPriceGwei: UInt? {
+        guard let gasPrice = gasPrice, let value = BigInt(hexString: gasPrice) else { return nil }
+        return UInt(value.gwei)
     }
     
     func description(chain: EthereumNetwork, ethPrice: Double?) -> String {
@@ -55,35 +55,29 @@ struct Transaction {
     }
     
     func feeWithSymbol(chain: EthereumNetwork, ethPrice: Double?) -> String {
-        let fee: String
-        if let _ = gasPrice, let _ = gas {
-            let a = Decimal() // TODO: toNormalizedDecimal(power: 18)
-            let b = Decimal() // TODO: toDecimal()
-            let c = NSDecimalNumber(decimal: a).multiplying(by: NSDecimalNumber(decimal: b))
-            let costString = chain.hasUSDPrice ? cost(value: c, price: ethPrice) : ""
-            fee = c.stringValue.prefix(7) + " \(chain.symbol)" + costString
+        let feeString: String
+        if let gasPriceString = gasPrice, let gasString = gas,
+           let gasPrice = BigInt(hexString: gasPriceString),
+           let gas = BigInt(hexString: gasString) {
+            let fee = gas * gasPrice
+            let costString = chain.hasUSDPrice ? cost(value: fee, price: ethPrice) : ""
+            feeString = fee.eth.prefix(7) + " \(chain.symbol)" + costString
         } else {
-            fee = Strings.calculating
+            feeString = Strings.calculating
         }
-        return "Fee: " + fee
+        return "Fee: " + feeString
     }
     
     func valueWithSymbol(chain: EthereumNetwork, ethPrice: Double?, withLabel: Bool) -> String? {
-        guard let value = value else { return nil }
-        let decimal = Decimal() // TODO: toNormalizedDecimal(power: 18)
-        let decimalNumber = NSDecimalNumber(decimal: decimal)
-        let costString = chain.hasUSDPrice ? cost(value: decimalNumber, price: ethPrice) : ""
-        if let value = ethString(decimalNumber: decimalNumber) {
-            let valueString = "\(value) \(chain.symbol)" + costString
-            return withLabel ? "Value: " + valueString : valueString
-        } else {
-            return nil
-        }
+        guard let value = value, let value = BigInt(hexString: value) else { return nil }
+        let costString = chain.hasUSDPrice ? cost(value: value, price: ethPrice) : ""
+        let valueString = "\(value.eth) \(chain.symbol)" + costString
+        return withLabel ? "Value: " + valueString : valueString
     }
     
-    private func cost(value: NSDecimalNumber, price: Double?) -> String {
-        guard let price = price else { return "" }
-        let cost = value.multiplying(by: NSDecimalNumber(value: price))
+    private func cost(value: BigInt, price: Double?) -> String {
+        guard let price = price, let ethValue = Double(value.eth) else { return "" }
+        let cost = NSNumber(floatLiteral: price * ethValue)
         let formatter = NumberFormatter()
         formatter.decimalSeparator = "."
         formatter.maximumFractionDigits = 1
@@ -92,13 +86,6 @@ struct Transaction {
         } else {
             return ""
         }
-    }
-    
-    private func ethString(decimalNumber: NSDecimalNumber) -> String? {
-        let formatter = NumberFormatter()
-        formatter.decimalSeparator = "."
-        formatter.maximumFractionDigits = 12
-        return formatter.string(from: decimalNumber)
     }
     
     mutating func setGasPrice(value: Double, inRelationTo info: GasService.Info) {
@@ -126,14 +113,11 @@ struct Transaction {
     }
     
     private mutating func setGasPrice(value: UInt) {
-        // TODO: update gasPrice hex with a new value
+        gasPrice = String.hex(value)
     }
     
     func currentGasInRelationTo(info: GasService.Info) -> Double {
-        guard let gasPrice = gasPrice else { return 0 }
-        
-        let currentAsDecimal = Decimal() // TODO: gasPrice toDecimal()
-        let current = NSDecimalNumber(decimal: currentAsDecimal).uintValue
+        guard let gasPrice = gasPrice, let current = UInt(hexString: gasPrice) else { return 0 }
         let tickValues = info.sortedValues
         let tickValuesCount = tickValues.count
         guard tickValuesCount > 1 else { return 0 }
