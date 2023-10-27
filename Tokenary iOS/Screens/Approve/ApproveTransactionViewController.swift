@@ -34,14 +34,15 @@ class ApproveTransactionViewController: UIViewController {
     
     private var account: Account!
     private var transaction: Transaction!
-    private var chain: EthereumChain!
+    private var chain: EthereumNetwork!
     private var completion: ((Transaction?) -> Void)!
+    private var didCallCompletion = false
     private var peerMeta: PeerMeta?
     
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var cancelButton: UIButton!
     
-    static func with(transaction: Transaction, chain: EthereumChain, account: Account, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
+    static func with(transaction: Transaction, chain: EthereumNetwork, account: Account, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self, from: .main)
         new.transaction = transaction
         new.chain = chain
@@ -71,7 +72,7 @@ class ApproveTransactionViewController: UIViewController {
     }
     
     private func prepareTransaction() {
-        ethereum.prepareTransaction(transaction, chain: chain) { [weak self] updated in
+        ethereum.prepareTransaction(transaction, network: chain) { [weak self] updated in
             self?.transaction = updated
             self?.updateDisplayedTransactionInfo(initially: false)
             self?.enableSpeedConfigurationIfNeeded()
@@ -118,6 +119,13 @@ class ApproveTransactionViewController: UIViewController {
         }
     }
     
+    private func callCompletion(result: Transaction?) {
+        if !didCallCompletion {
+            didCallCompletion = true
+            completion(result)
+        }
+    }
+    
     private func didApproveTransaction() {
         
     }
@@ -127,7 +135,7 @@ class ApproveTransactionViewController: UIViewController {
         LocalAuthentication.attempt(reason: Strings.sendTransaction, presentPasswordAlertFrom: self, passwordReason: Strings.sendTransaction) { [weak self] success in
             if success, let transaction = self?.transaction {
                 self?.didApproveTransaction()
-                self?.completion(transaction)
+                self?.callCompletion(result: transaction)
             } else {
                 self?.view.isUserInteractionEnabled = true
             }
@@ -135,7 +143,7 @@ class ApproveTransactionViewController: UIViewController {
     }
     
     @IBAction func cancelButtonTapped(_ sender: Any) {
-        completion(nil)
+        callCompletion(result: nil)
     }
     
 }

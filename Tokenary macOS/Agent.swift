@@ -75,7 +75,7 @@ class Agent: NSObject {
         }
     }
     
-    func showApprove(windowController: NSWindowController, browser: Browser?, transaction: Transaction, chain: EthereumChain, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) {
+    func showApprove(windowController: NSWindowController, browser: Browser?, transaction: Transaction, chain: EthereumNetwork, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) {
         let window = windowController.window
         let approveViewController = ApproveTransactionViewController.with(transaction: transaction, chain: chain, peerMeta: peerMeta) { [weak self, weak window] transaction in
             if transaction != nil {

@@ -2,7 +2,6 @@
 
 import Foundation
 import WalletCore
-import Web3Swift // TODO: deprecate
 
 struct Ethereum {
 
@@ -13,10 +12,9 @@ struct Ethereum {
         case keyNotFound
     }
 
-    private let queue = DispatchQueue(label: "Ethereum", qos: .default)
     private init() {}
-    
     static let shared = Ethereum()
+    private let rpc = EthereumRPC()
     
     func sign(data: Data, privateKey: WalletCore.PrivateKey) throws -> String {
         return try sign(data: data, privateKey: privateKey, addPrefix: false)
@@ -52,70 +50,21 @@ struct Ethereum {
         
         guard var signed = privateKey.sign(digest: digest, curve: CoinType.ethereum.curve) else { throw Error.failedToSign }
         signed[64] += 27
-        return signed.toPrefixedHexString()
+        return signed.hexString.withHexPrefix
     }
     
     func sign(typedData: String, privateKey: WalletCore.PrivateKey) throws -> String {
         let digest = EthereumAbi.encodeTyped(messageJson: typedData)
         guard var signed = privateKey.sign(digest: digest, curve: CoinType.ethereum.curve) else { throw Error.failedToSign }
         signed[64] += 27
-        return signed.toPrefixedHexString()
+        return signed.hexString.withHexPrefix
     }
     
-    func send(transaction: Transaction, privateKey: WalletCore.PrivateKey, chain: EthereumChain) throws -> String {
-        let network = EthereumNetwork.forChain(chain)
-        let bytes = try signedTransactionBytes(transaction: transaction, privateKey: privateKey, chain: chain)
-        let response = try SendRawTransactionProcedure(network: network, transactionBytes: bytes).call()
-        guard let hash = response["result"].string else {
-            throw Error.failedToSendTransaction
-        }
-        return hash
-    }
-    
-    private func signedTransactionBytes(transaction: Transaction, privateKey: WalletCore.PrivateKey, chain: EthereumChain) throws -> EthContractCallBytes {
-        let network = EthereumNetwork.forChain(chain)
-        let senderKey = EthPrivateKey(hex: privateKey.data.hexString)
-        let contractAddress = EthAddress(hex: transaction.to)
-        let functionCall = BytesFromHexString(hex: transaction.data)
-        let bytes: EthContractCallBytes
-        if let gasPriceString = transaction.gasPrice {
-            let gasPrice = EthNumber(hex: gasPriceString)
-            if let gasEstimateString = transaction.gas,
-               let transctionCountString = transaction.nonce {
-                let gasEstimate = EthNumber(hex: gasEstimateString)
-                let transactionCount = EthNumber(hex: transctionCountString)
-                
-                bytes = EthContractCallBytes(networkID: NetworkID(network: network),
-                                             transactionsCount: transactionCount,
-                                             gasPrice: gasPrice,
-                                             gasEstimate: gasEstimate,
-                                             senderKey: senderKey,
-                                             contractAddress: contractAddress,
-                                             weiAmount: transaction.weiAmount,
-                                             functionCall: functionCall)
-            } else {
-                bytes = EthContractCallBytes(network: network,
-                                             gasPrice: gasPrice,
-                                             senderKey: senderKey,
-                                             contractAddress: contractAddress,
-                                             weiAmount: transaction.weiAmount,
-                                             functionCall: functionCall)
-            }
-        } else {
-            bytes = EthContractCallBytes(network: network,
-                                         senderKey: senderKey,
-                                         contractAddress: contractAddress,
-                                         weiAmount: transaction.weiAmount,
-                                         functionCall: functionCall)
-        }
-        return bytes
-    }
-    
-    func prepareTransaction(_ transaction: Transaction, chain: EthereumChain, completion: @escaping (Transaction) -> Void) {
+    func prepareTransaction(_ transaction: Transaction, network: EthereumNetwork, completion: @escaping (Transaction) -> Void) {
         var transaction = transaction
         
         if transaction.nonce == nil {
-            getNonce(chain: chain, from: transaction.from) { nonce in
+            getNonce(network: network, from: transaction.from) { nonce in
                 transaction.nonce = nonce
                 completion(transaction)
             }
@@ -123,7 +72,7 @@ struct Ethereum {
         
         func getGasIfNeeded(gasPrice: String) {
             guard transaction.gas == nil else { return }
-            getGas(chain: chain, from: transaction.from, to: transaction.to, gasPrice: gasPrice, weiAmount: transaction.weiAmount, data: transaction.data) { gas in
+            getGas(network: network, transaction: transaction) { gas in
                 transaction.gas = gas
                 completion(transaction)
             }
@@ -132,7 +81,7 @@ struct Ethereum {
         if let gasPrice = transaction.gasPrice {
             getGasIfNeeded(gasPrice: gasPrice)
         } else {
-            getGasPrice(chain: chain) { gasPrice in
+            getGasPrice(network: network) { gasPrice in
                 transaction.gasPrice = gasPrice
                 completion(transaction)
                 if let gasPrice = gasPrice {
@@ -140,72 +89,76 @@ struct Ethereum {
                 }
             }
         }
+    }
+    
+    func send(transaction: Transaction, privateKey: WalletCore.PrivateKey, network: EthereumNetwork, completion: @escaping (String?) -> Void) {
+        guard let nonceHex = transaction.nonce?.cleanEvenHex,
+              let gasPriceHex = transaction.gasPrice?.cleanEvenHex,
+              let gasHex = transaction.gas?.cleanEvenHex,
+              let valueHex = transaction.value?.cleanEvenHex,
+              let chainID = Data(hexString: network.hexStringId.cleanEvenHex),
+              let nonce = Data(hexString: nonceHex),
+              let gasPrice = Data(hexString: gasPriceHex),
+              let gasLimit = Data(hexString: gasHex),
+              let amount = Data(hexString: valueHex),
+              let data = Data(hexString: transaction.data.cleanEvenHex) else {
+            completion(nil)
+            return
+        }
         
-    }
-    
-    private func getGas(chain: EthereumChain, from: String, to: String, gasPrice: String, weiAmount: EthNumber, data: String, completion: @escaping (String?) -> Void) {
-        let network = EthereumNetwork.forChain(chain)
-        queue.async {
-            let value = (try? weiAmount.value().hexString) ?? ""
-            let isZeroValue = value == "" || value == "0x"
-            if isZeroValue {
-                let gas = try? EthGasEstimate(
-                    network: network,
-                    senderAddress: EthAddress(hex: from),
-                    recipientAddress: EthAddress(hex: to),
-                    gasEstimate: EthGasEstimate(
-                        network: network,
-                        senderAddress: EthAddress(hex: from),
-                        recipientAddress: EthAddress(hex: to),
-                        gasPrice: EthNumber(hex: gasPrice),
-                        contractCall: BytesFromHexString(hex: data)
-                    ),
-                    gasPrice: EthNumber(hex: gasPrice),
-                    contractCall: BytesFromHexString(hex: data)
-                ).value().toHexString()
-                DispatchQueue.main.async {
-                    completion(gas)
+        let input = EthereumSigningInput.with {
+            $0.chainID = chainID
+            $0.nonce = nonce
+            $0.gasPrice = gasPrice
+            $0.gasLimit = gasLimit
+            $0.toAddress = transaction.to
+            $0.privateKey = privateKey.data
+            $0.transaction = EthereumTransaction.with {
+                $0.contractGeneric = EthereumTransaction.ContractGeneric.with {
+                    $0.amount = amount
+                    $0.data = data
                 }
-            } else {
-                let gas = try? EthGasEstimate(
-                    network: network,
-                    senderAddress: EthAddress(hex: from),
-                    recipientAddress: EthAddress(hex: to),
-                    gasEstimate: EthGasEstimate(
-                        network: network,
-                        senderAddress: EthAddress(hex: from),
-                        recipientAddress: EthAddress(hex: to),
-                        gasPrice: EthNumber(hex: gasPrice),
-                        weiAmount: weiAmount,
-                        contractCall: BytesFromHexString(hex: data)
-                    ),
-                    gasPrice: EthNumber(hex: gasPrice),
-                    weiAmount: weiAmount,
-                    contractCall: BytesFromHexString(hex: data)
-                ).value().toHexString()
-                DispatchQueue.main.async {
-                    completion(gas)
+            }
+        }
+        
+        let output: EthereumSigningOutput = AnySigner.sign(input: input, coin: .ethereum)
+        rpc.sendRawTransaction(rpcUrl: network.nodeURLString, signedTxData: output.encoded.hexString.withHexPrefix) { result in
+            DispatchQueue.main.async {
+                if case let .success(txHash) = result {
+                     completion(txHash)
+                } else {
+                    completion(nil)
                 }
             }
         }
     }
     
-    private func getGasPrice(chain: EthereumChain, completion: @escaping (String?) -> Void) {
-        let network = EthereumNetwork.forChain(chain)
-        queue.async {
-            let gasPrice = try? EthGasPrice(network: network).value().toHexString()
-            DispatchQueue.main.async {
-                completion(gasPrice)
+    private func getGas(network: EthereumNetwork, transaction: Transaction, completion: @escaping (String?) -> Void) {
+        rpc.estimateGas(rpcUrl: network.nodeURLString, transaction: transaction) { result in
+            if case let .success(estimatedGas) = result {
+                var updatedTransaction = transaction
+                updatedTransaction.gas = estimatedGas
+                rpc.estimateGas(rpcUrl: network.nodeURLString, transaction: updatedTransaction) { result in
+                    if case let .success(gas) = result {
+                        DispatchQueue.main.async { completion(gas) }
+                    }
+                }
             }
         }
     }
     
-    private func getNonce(chain: EthereumChain, from: String, completion: @escaping (String?) -> Void) {
-        let network = EthereumNetwork.forChain(chain)
-        queue.async {
-            let nonce = try? EthTransactions(network: network, address: EthAddress(hex: from), blockChainState: PendingBlockChainState()).count().value().toHexString()
-            DispatchQueue.main.async {
-                completion(nonce)
+    private func getGasPrice(network: EthereumNetwork, completion: @escaping (String?) -> Void) {
+        rpc.fetchGasPrice(rpcUrl: network.nodeURLString) { result in
+            if case let .success(gasPrice) = result {
+                DispatchQueue.main.async { completion(gasPrice) }
+            }
+        }
+    }
+    
+    private func getNonce(network: EthereumNetwork, from: String, completion: @escaping (String?) -> Void) {
+        rpc.fetchNonce(rpcUrl: network.nodeURLString, for: from) { result in
+            if case let .success(nonce) = result {
+                DispatchQueue.main.async { completion(nonce) }
             }
         }
     }

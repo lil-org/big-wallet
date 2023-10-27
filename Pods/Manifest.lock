@@ -1,61 +1,36 @@
 PODS:
   - BigInt (5.2.0)
   - BlockiesSwift (0.1.2)
-  - CryptoSwift (1.8.0)
   - Kingfisher (7.9.1)
-  - secp256k1.swift (0.1.4)
   - SwiftProtobuf (1.24.0)
-  - SwiftyJSON (4.3.0)
-  - TrustWalletCore (4.0.0):
-    - TrustWalletCore/Core (= 4.0.0)
-  - TrustWalletCore/Core (4.0.0):
+  - TrustWalletCore (4.0.1):
+    - TrustWalletCore/Core (= 4.0.1)
+  - TrustWalletCore/Core (4.0.1):
     - TrustWalletCore/Types
-  - TrustWalletCore/Types (4.0.0):
+  - TrustWalletCore/Types (4.0.1):
     - SwiftProtobuf
-  - Web3Swift.io (0.0.4):
-    - BigInt (~> 5.0)
-    - CryptoSwift (~> 1.0)
-    - secp256k1.swift (~> 0.1)
-    - SwiftyJSON (~> 4.3)
 
 DEPENDENCIES:
+  - BigInt
   - BlockiesSwift
   - Kingfisher
   - TrustWalletCore
-  - Web3Swift.io (from `https://github.com/grachyov/Web3Swift.git`, branch `develop`)
 
 SPEC REPOS:
   trunk:
     - BigInt
     - BlockiesSwift
-    - CryptoSwift
     - Kingfisher
-    - secp256k1.swift
     - SwiftProtobuf
-    - SwiftyJSON
     - TrustWalletCore
-
-EXTERNAL SOURCES:
-  Web3Swift.io:
-    :branch: develop
-    :git: https://github.com/grachyov/Web3Swift.git
-
-CHECKOUT OPTIONS:
-  Web3Swift.io:
-    :commit: 951e6217f7899b5614b1530c3fbd2a46ee315b3c
-    :git: https://github.com/grachyov/Web3Swift.git
 
 SPEC CHECKSUMS:
   BigInt: f668a80089607f521586bbe29513d708491ef2f7
   BlockiesSwift: 22d8d56dd187e6bfd16cb8c8fbd4fd4896c3e65d
-  CryptoSwift: 52aaf3fce7337552863b1d952e408085f0e65030
   Kingfisher: 1d14e9f59cbe19389f591c929000332bf70efd32
-  secp256k1.swift: a7e7a214f6db6ce5db32cc6b2b45e5c4dd633634
   SwiftProtobuf: bcfd2bc231cf9ae552cdc7c4e877bd3b41fe57b1
-  SwiftyJSON: 6faa0040f8b59dead0ee07436cbf76b73c08fd08
-  TrustWalletCore: b9b385357a858510454254d8d503f9fd4a7dc334
-  Web3Swift.io: 18fd06aed9d56df9c704f9c6f87b06675bb05b53
+  TrustWalletCore: 77c78bda1d1a411390321b7d9f7b81bd1d547b71
 
-PODFILE CHECKSUM: 8e21bf453906c437bcd2b86369d4e0a459130c78
+PODFILE CHECKSUM: 80600e3a469003bb39f77a8b610658742fa669da
 
 COCOAPODS: 1.13.0

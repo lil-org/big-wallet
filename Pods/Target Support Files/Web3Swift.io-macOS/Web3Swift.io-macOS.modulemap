@@ -1,6 +1,0 @@
-framework module Web3Swift {
-  umbrella header "Web3Swift.io-macOS-umbrella.h"
-
-  export *
-  module * { export * }
-}

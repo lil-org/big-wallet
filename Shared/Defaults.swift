@@ -15,24 +15,6 @@ struct Defaults {
         }
     }
     
-    static var shouldPromptSafariForLegacyUsers: Bool {
-        get {
-            return userDefaults.bool(forKey: "shouldPromptSafariForLegacyUsers")
-        }
-        set {
-            userDefaults.set(newValue, forKey: "shouldPromptSafariForLegacyUsers")
-        }
-    }
-    
-    static var didMigrateKeychainFromTokenaryV1: Bool {
-        get {
-            return userDefaults.bool(forKey: "didMigrateKeychainFromTokenaryV1")
-        }
-        set {
-            userDefaults.set(newValue, forKey: "didMigrateKeychainFromTokenaryV1")
-        }
-    }
-    
     static var reviewRequestsGoodMomentsCount: Int {
         get {
             return userDefaults.integer(forKey: "reviewRequestsGoodMomentsCount")

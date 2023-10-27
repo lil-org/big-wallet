@@ -146,7 +146,7 @@ struct DappRequestProcessor {
                                                    account: account,
                                                    peerMeta: peerMeta) { transaction in
                     if let transaction = transaction {
-                        sendTransaction(privateKey: privateKey, transaction: transaction, chain: chain, request: request, completion: completion)
+                        sendTransaction(privateKey: privateKey, transaction: transaction, network: chain, request: request, completion: completion)
                     } else {
                         respond(to: request, error: Strings.canceled, completion: completion)
                     }
@@ -191,12 +191,14 @@ struct DappRequestProcessor {
             respond(to: request, error: Strings.failedToSign, completion: completion)
         }
     }
-    
-    private static func sendTransaction(privateKey: PrivateKey, transaction: Transaction, chain: EthereumChain, request: SafariRequest, completion: () -> Void) {
-        if let transactionHash = try? ethereum.send(transaction: transaction, privateKey: privateKey, chain: chain) {
-            DappRequestProcessor.respond(to: request, body: .ethereum(.init(result: transactionHash)), completion: completion)
-        } else {
-            respond(to: request, error: Strings.failedToSend, completion: completion)
+     
+    private static func sendTransaction(privateKey: PrivateKey, transaction: Transaction, network: EthereumNetwork, request: SafariRequest, completion: @escaping () -> Void) {
+        ethereum.send(transaction: transaction, privateKey: privateKey, network: network) { hash in
+            if let hash = hash {
+                DappRequestProcessor.respond(to: request, body: .ethereum(.init(result: hash)), completion: completion)
+            } else {
+                respond(to: request, error: Strings.failedToSend, completion: completion)
+            }
         }
     }
     

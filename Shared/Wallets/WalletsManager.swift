@@ -25,26 +25,6 @@ final class WalletsManager {
         try? loadWalletsFromKeychain()
     }
     
-    #if os(macOS)
-    func migrateFromLegacyIfNeeded() {
-        guard !Defaults.didMigrateKeychainFromTokenaryV1 else { return }
-        let legacyKeystores = keychain.getLegacyKeystores()
-        if !legacyKeystores.isEmpty, let legacyPassword = keychain.legacyPassword {
-            keychain.save(password: legacyPassword)
-            for keystore in legacyKeystores {
-                _ = try? importJSON(keystore,
-                                    name: defaultWalletName,
-                                    password: legacyPassword,
-                                    newPassword: legacyPassword,
-                                    coin: .ethereum,
-                                    onlyToKeychain: true)
-            }
-            Defaults.shouldPromptSafariForLegacyUsers = true
-        }
-        Defaults.didMigrateKeychainFromTokenaryV1 = true
-    }
-    #endif
-    
     func validateWalletInput(_ input: String) -> InputValidationResult {
         if Mnemonic.isValid(mnemonic: input) {
             return .valid

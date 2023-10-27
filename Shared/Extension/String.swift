@@ -4,6 +4,17 @@ import Foundation
 
 extension String {
     
+    static let hexPrefix = "0x"
+    
+    var cleanEvenHex: String {
+        let clean = cleanHex
+        if clean.count.isMultiple(of: 2) {
+            return clean
+        } else {
+            return "0" + clean
+        }
+    }
+    
     var maybeJSON: Bool {
         return hasPrefix("{") && hasSuffix("}") && count > 3
     }
@@ -19,6 +30,23 @@ extension String {
     
     var withEllipsis: String {
         return self + "…"
+    }
+    
+    var cleanHex: String {
+        if hasPrefix(String.hexPrefix) {
+            return String(dropFirst(2))
+        } else {
+            return self
+        }
+    }
+    
+    var withHexPrefix: String {
+        return String.hexPrefix + self
+    }
+    
+    static func hex<T>(_ value: T, withPrefix: Bool = false) -> String where T : BinaryInteger {
+        let prefix = withPrefix ? hexPrefix : ""
+        return prefix + String(value, radix: 16)
     }
     
 }

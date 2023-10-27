@@ -27,7 +27,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private var sections = [Section]()
     private let walletsManager = WalletsManager.shared
     
-    private var network = EthereumChain.ethereum
+    private var network = EthereumNetwork.ethereum
     var selectAccountAction: SelectAccountAction?
     
     private var wallets: [TokenaryWallet] {
@@ -285,7 +285,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         
         let actionSheet = UIAlertController(title: Strings.selectNetwork, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.sourceView = networkButton
-        for network in EthereumChain.allMainnets {
+        for network in EthereumNetwork.allMainnets {
             let prefix = network == self.network ? "✅ " : ""
             let action = UIAlertAction(title: prefix + network.name, style: .default) { [weak self] _ in
                 self?.selectNetwork(network)
@@ -304,7 +304,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private func showTestnets() {
         let actionSheet = UIAlertController(title: Strings.selectTestnet, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.sourceView = networkButton
-        for network in EthereumChain.allTestnets {
+        for network in EthereumNetwork.allTestnets {
             let prefix = network == self.network ? "✅ " : ""
             let action = UIAlertAction(title: prefix + network.name, style: .default) { [weak self] _ in
                 self?.selectNetwork(network)
@@ -316,7 +316,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(actionSheet, animated: true)
     }
     
-    private func selectNetwork(_ network: EthereumChain) {
+    private func selectNetwork(_ network: EthereumNetwork) {
         self.network = network
         var tintedConfiguration = UIButton.Configuration.tinted()
         tintedConfiguration.image = networkButton.configuration?.image
