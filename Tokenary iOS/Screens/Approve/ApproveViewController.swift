@@ -1,7 +1,6 @@
 // Copyright © 2021 Tokenary. All rights reserved.
 
 import UIKit
-import BlockiesSwift
 import WalletCore
 
 class ApproveViewController: UIViewController {
@@ -34,7 +33,7 @@ class ApproveViewController: UIViewController {
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var cancelButton: UIButton!
     
-    static func with(subject: ApprovalSubject, provider: Web3Provider, account: Account, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
+    static func with(subject: ApprovalSubject, provider: InpageProvider, account: Account, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
         let new = instantiate(ApproveViewController.self, from: .main)
         new.completion = completion
         new.shouldEnableWaiting = false

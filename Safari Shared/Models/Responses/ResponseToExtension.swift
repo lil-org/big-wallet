@@ -35,7 +35,7 @@ struct ResponseToExtension {
             }
         }
         
-        var provider: Web3Provider {
+        var provider: InpageProvider {
             switch self {
             case .ethereum:
                 return .ethereum

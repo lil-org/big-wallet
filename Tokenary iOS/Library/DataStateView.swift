@@ -1,7 +1,6 @@
 // Copyright © 2021 Tokenary. All rights reserved.
 
 import UIKit
-import BlockiesSwift
 
 enum DataState: CaseIterable {
     case hasData, loading, failedToLoad, noData, unknown

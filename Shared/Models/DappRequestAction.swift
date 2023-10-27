@@ -16,7 +16,7 @@ struct SelectAccountAction {
     let peer: PeerMeta?
     let coinType: CoinType?
     var selectedAccounts: Set<SpecificWalletAccount>
-    let initiallyConnectedProviders: Set<Web3Provider>
+    let initiallyConnectedProviders: Set<InpageProvider>
     var network: EthereumNetwork?
     let source: Source
     let completion: (EthereumNetwork?, [SpecificWalletAccount]?) -> Void
@@ -27,7 +27,7 @@ struct SelectAccountAction {
 }
 
 struct SignMessageAction {
-    let provider: Web3Provider
+    let provider: InpageProvider
     let subject: ApprovalSubject
     let account: Account
     let meta: String
@@ -36,7 +36,7 @@ struct SignMessageAction {
 }
 
 struct SendTransactionAction {
-    let provider: Web3Provider
+    let provider: InpageProvider
     let transaction: Transaction
     let chain: EthereumNetwork
     let account: Account

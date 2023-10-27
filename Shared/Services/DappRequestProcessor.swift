@@ -24,7 +24,7 @@ struct DappRequestProcessor {
                 return .justShowApp
             case .switchAccount:
                 let preselectedAccounts = body.providerConfigurations.compactMap { (configuration) -> SpecificWalletAccount? in
-                    guard let coin = CoinType.correspondingToWeb3Provider(configuration.provider) else { return nil }
+                    guard let coin = CoinType.correspondingToInpageProvider(configuration.provider) else { return nil }
                     return walletsManager.getSpecificAccount(coin: coin, address: configuration.address)
                 }
                 let network = body.providerConfigurations.compactMap { $0.network }.first
@@ -49,7 +49,7 @@ struct DappRequestProcessor {
                         }
                         
                         let providersToDisconnect = initiallyConnectedProviders.filter { provider in
-                            if let coin = CoinType.correspondingToWeb3Provider(provider),
+                            if let coin = CoinType.correspondingToInpageProvider(provider),
                                specificWalletAccounts.contains(where: { $0.account.coin == coin }) {
                                 return false
                             } else {

@@ -2,6 +2,6 @@
 
 import Foundation
 
-enum Web3Provider: String, Codable {
+enum InpageProvider: String, Codable {
     case ethereum, unknown, multiple
 }

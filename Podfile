@@ -2,7 +2,6 @@ inhibit_all_warnings!
 use_frameworks!
 
 def shared_pods
-  pod 'BlockiesSwift'
   pod 'Kingfisher'
   pod 'TrustWalletCore'
   pod 'BigInt'

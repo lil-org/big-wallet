@@ -43,8 +43,8 @@ extension CoinType {
         }
     }
     
-    static func correspondingToWeb3Provider(_ web3Provider: Web3Provider) -> CoinType? {
-        switch web3Provider {
+    static func correspondingToInpageProvider(_ inpageProvider: InpageProvider) -> CoinType? {
+        switch inpageProvider {
         case .ethereum:
             return .ethereum
         case .unknown, .multiple:
