@@ -72,7 +72,7 @@ class ApproveTransactionViewController: UIViewController {
     }
     
     private func prepareTransaction() {
-        ethereum.prepareTransaction(transaction, chain: chain) { [weak self] updated in
+        ethereum.prepareTransaction(transaction, network: chain) { [weak self] updated in
             self?.transaction = updated
             self?.updateDisplayedTransactionInfo(initially: false)
             self?.enableSpeedConfigurationIfNeeded()

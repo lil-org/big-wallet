@@ -99,6 +99,8 @@
 		2C81556E2ADFC7C400F4559B /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = 2C81556C2ADFC7C400F4559B /* popup.html */; };
 		2C8944C52AEAFF97006A711F /* UInt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944C42AEAFF97006A711F /* UInt.swift */; };
 		2C8944C62AEAFF97006A711F /* UInt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944C42AEAFF97006A711F /* UInt.swift */; };
+		2C8944CB2AEB0C10006A711F /* EthereumRPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944CA2AEB0C10006A711F /* EthereumRPC.swift */; };
+		2C8944CC2AEB0C10006A711F /* EthereumRPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944CA2AEB0C10006A711F /* EthereumRPC.swift */; };
 		2C89D26827BADCA9006C0C8D /* DappRequestAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */; };
 		2C89D26927BADCA9006C0C8D /* DappRequestAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */; };
 		2C8A09C6267513FC00993638 /* Agent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09C5267513FC00993638 /* Agent.swift */; };
@@ -319,6 +321,7 @@
 		2C8155692ADFC7B900F4559B /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = popup.js; sourceTree = "<group>"; };
 		2C81556C2ADFC7C400F4559B /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = popup.html; sourceTree = "<group>"; };
 		2C8944C42AEAFF97006A711F /* UInt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UInt.swift; sourceTree = "<group>"; };
+		2C8944CA2AEB0C10006A711F /* EthereumRPC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumRPC.swift; sourceTree = "<group>"; };
 		2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DappRequestAction.swift; sourceTree = "<group>"; };
 		2C89D26A27BAF2A3006C0C8D /* yarn.lock */ = {isa = PBXFileReference; lastKnownFileType = text; name = yarn.lock; path = "web3-provider/yarn.lock"; sourceTree = "<group>"; };
 		2C89D26B27BAF2A3006C0C8D /* package-lock.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "package-lock.json"; path = "web3-provider/package-lock.json"; sourceTree = "<group>"; };
@@ -633,6 +636,7 @@
 			isa = PBXGroup;
 			children = (
 				2C1995552674D0F300A8E370 /* Ethereum.swift */,
+				2C8944CA2AEB0C10006A711F /* EthereumRPC.swift */,
 				2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */,
 				2CE3D011267F73C00032A62E /* Transaction.swift */,
 			);
@@ -1272,6 +1276,7 @@
 				2C4768AB2826CA63005E8D4D /* CoinDerivation.swift in Sources */,
 				2CAA412526C7CD93009F3535 /* ReviewRequester.swift in Sources */,
 				2CD0669126B5537B00728C20 /* TokenaryWallet.swift in Sources */,
+				2C8944CB2AEB0C10006A711F /* EthereumRPC.swift in Sources */,
 				2C89D26827BADCA9006C0C8D /* DappRequestAction.swift in Sources */,
 				2C3B7F022756A08600931264 /* Identifiers.swift in Sources */,
 				2C9F0B6826BDCB2E008FA3D6 /* EthereumNetwork.swift in Sources */,
@@ -1360,6 +1365,7 @@
 				2C4297292ADEDCBD0044357A /* PeerMeta.swift in Sources */,
 				2CE059392763F3FF0042D844 /* CGFloat.swift in Sources */,
 				2C264BBD27B2F25E00234393 /* SafariRequest.swift in Sources */,
+				2C8944CC2AEB0C10006A711F /* EthereumRPC.swift in Sources */,
 				2CF255B4275A744000AE54B9 /* PasswordViewController.swift in Sources */,
 				2C8E889F275F9967003EB8DB /* Storyboard.swift in Sources */,
 				2C96D39C2763ADE100687301 /* LocalAuthentication.swift in Sources */,
