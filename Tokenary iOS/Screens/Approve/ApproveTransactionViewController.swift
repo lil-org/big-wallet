@@ -36,6 +36,7 @@ class ApproveTransactionViewController: UIViewController {
     private var transaction: Transaction!
     private var chain: EthereumNetwork!
     private var completion: ((Transaction?) -> Void)!
+    private var didCallCompletion = false
     private var peerMeta: PeerMeta?
     
     @IBOutlet weak var okButton: UIButton!
@@ -118,6 +119,13 @@ class ApproveTransactionViewController: UIViewController {
         }
     }
     
+    private func callCompletion(result: Transaction?) {
+        if !didCallCompletion {
+            didCallCompletion = true
+            completion(result)
+        }
+    }
+    
     private func didApproveTransaction() {
         
     }
@@ -127,7 +135,7 @@ class ApproveTransactionViewController: UIViewController {
         LocalAuthentication.attempt(reason: Strings.sendTransaction, presentPasswordAlertFrom: self, passwordReason: Strings.sendTransaction) { [weak self] success in
             if success, let transaction = self?.transaction {
                 self?.didApproveTransaction()
-                self?.completion(transaction)
+                self?.callCompletion(result: transaction)
             } else {
                 self?.view.isUserInteractionEnabled = true
             }
@@ -135,7 +143,7 @@ class ApproveTransactionViewController: UIViewController {
     }
     
     @IBAction func cancelButtonTapped(_ sender: Any) {
-        completion(nil)
+        callCompletion(result: nil)
     }
     
 }
