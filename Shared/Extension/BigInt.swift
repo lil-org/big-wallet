@@ -8,16 +8,20 @@ extension BigInt {
         self.init(hexString.cleanHex, radix: 16)
     }
     
+    private var decimal: NSDecimalNumber {
+        return NSDecimalNumber(string: String(self))
+    }
+    
     var eth: String {
-        return NSDecimalNumber(string: String(self)).multiplying(byPowerOf10: -18).stringValue
+        return decimal.multiplying(byPowerOf10: -18).stringValue
     }
     
-    var gwei: String {
-        return NSDecimalNumber(string: String(self)).multiplying(byPowerOf10: -9).stringValue
+    var ethDouble: Double {
+        return decimal.multiplying(byPowerOf10: -18).doubleValue
     }
     
-    var wei: String {
-        return String(self)
+    var gweiUInt: UInt {
+        return decimal.multiplying(byPowerOf10: -9).uintValue
     }
     
 }

@@ -18,7 +18,7 @@ struct Transaction {
     
     var gasPriceGwei: UInt? {
         guard let gasPrice = gasPrice, let value = BigInt(hexString: gasPrice) else { return nil }
-        return UInt(value.gwei)
+        return value.gweiUInt
     }
     
     func description(chain: EthereumNetwork, ethPrice: Double?) -> String {
@@ -76,7 +76,8 @@ struct Transaction {
     }
     
     private func cost(value: BigInt, price: Double?) -> String {
-        guard let price = price, let ethValue = Double(value.eth) else { return "" }
+        guard let price = price else { return "" }
+        let ethValue = value.ethDouble
         let cost = NSNumber(floatLiteral: price * ethValue)
         let formatter = NumberFormatter()
         formatter.decimalSeparator = "."
