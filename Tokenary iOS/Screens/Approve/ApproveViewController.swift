@@ -1,7 +1,6 @@
 // Copyright © 2021 Tokenary. All rights reserved.
 
 import UIKit
-import BlockiesSwift
 import WalletCore
 
 class ApproveViewController: UIViewController {

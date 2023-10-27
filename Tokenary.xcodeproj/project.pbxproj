@@ -99,6 +99,8 @@
 		2C8944C62AEAFF97006A711F /* UInt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944C42AEAFF97006A711F /* UInt.swift */; };
 		2C8944CB2AEB0C10006A711F /* EthereumRPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944CA2AEB0C10006A711F /* EthereumRPC.swift */; };
 		2C8944CC2AEB0C10006A711F /* EthereumRPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944CA2AEB0C10006A711F /* EthereumRPC.swift */; };
+		2C8944CE2AEC34EB006A711F /* Blockies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944CD2AEC34EB006A711F /* Blockies.swift */; };
+		2C8944CF2AEC34EB006A711F /* Blockies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944CD2AEC34EB006A711F /* Blockies.swift */; };
 		2C89D26827BADCA9006C0C8D /* DappRequestAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */; };
 		2C89D26927BADCA9006C0C8D /* DappRequestAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */; };
 		2C8A09C6267513FC00993638 /* Agent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09C5267513FC00993638 /* Agent.swift */; };
@@ -316,6 +318,7 @@
 		2C81556C2ADFC7C400F4559B /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = popup.html; sourceTree = "<group>"; };
 		2C8944C42AEAFF97006A711F /* UInt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UInt.swift; sourceTree = "<group>"; };
 		2C8944CA2AEB0C10006A711F /* EthereumRPC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumRPC.swift; sourceTree = "<group>"; };
+		2C8944CD2AEC34EB006A711F /* Blockies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Blockies.swift; sourceTree = "<group>"; };
 		2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DappRequestAction.swift; sourceTree = "<group>"; };
 		2C89D26A27BAF2A3006C0C8D /* yarn.lock */ = {isa = PBXFileReference; lastKnownFileType = text; name = yarn.lock; path = "web3-provider/yarn.lock"; sourceTree = "<group>"; };
 		2C89D26B27BAF2A3006C0C8D /* package-lock.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "package-lock.json"; path = "web3-provider/package-lock.json"; sourceTree = "<group>"; };
@@ -607,6 +610,14 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
+		2C8944D02AEC34F2006A711F /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+				2C8944CD2AEC34EB006A711F /* Blockies.swift */,
+			);
+			path = Utilities;
+			sourceTree = "<group>";
+		};
 		2C8A09C2267513A700993638 /* Ethereum */ = {
 			isa = PBXGroup;
 			children = (
@@ -739,8 +750,9 @@
 				2CF255A4275A483600AE54B9 /* Services */,
 				2CF2559F275A47B600AE54B9 /* Extension */,
 				2CD0668826B213BB00728C20 /* Wallets */,
-				2CF255AF275A490600AE54B9 /* Supporting Files */,
 				2CF25596275A468B00AE54B9 /* Models */,
+				2C8944D02AEC34F2006A711F /* Utilities */,
+				2CF255AF275A490600AE54B9 /* Supporting Files */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -1257,6 +1269,7 @@
 				2C264BDC27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */,
 				2C03D1D5269B428C00EF10EA /* Notification.swift in Sources */,
 				2C1995562674D0F300A8E370 /* Ethereum.swift in Sources */,
+				2C8944CE2AEC34EB006A711F /* Blockies.swift in Sources */,
 				2C8A09DF267579EA00993638 /* AccountsListViewController.swift in Sources */,
 				2C917429267D2A6E00049075 /* Keychain.swift in Sources */,
 			);
@@ -1285,6 +1298,7 @@
 				2CF2559D275A479800AE54B9 /* TokenaryWallet.swift in Sources */,
 				2CC8C5B4276A96760083FB1B /* Haptic.swift in Sources */,
 				2CF255AB275A48CF00AE54B9 /* Ethereum.swift in Sources */,
+				2C8944CF2AEC34EB006A711F /* Blockies.swift in Sources */,
 				2CC8C5A22767D3B30083FB1B /* GasPriceSliderTableViewCell.swift in Sources */,
 				2C8944C62AEAFF97006A711F /* UInt.swift in Sources */,
 				2CC6EF0D275E64810040CC62 /* UIViewController.swift in Sources */,

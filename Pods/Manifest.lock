@@ -1,6 +1,5 @@
 PODS:
   - BigInt (5.2.0)
-  - BlockiesSwift (0.1.2)
   - Kingfisher (7.9.1)
   - SwiftProtobuf (1.24.0)
   - TrustWalletCore (4.0.1):
@@ -12,25 +11,22 @@ PODS:
 
 DEPENDENCIES:
   - BigInt
-  - BlockiesSwift
   - Kingfisher
   - TrustWalletCore
 
 SPEC REPOS:
   trunk:
     - BigInt
-    - BlockiesSwift
     - Kingfisher
     - SwiftProtobuf
     - TrustWalletCore
 
 SPEC CHECKSUMS:
   BigInt: f668a80089607f521586bbe29513d708491ef2f7
-  BlockiesSwift: 22d8d56dd187e6bfd16cb8c8fbd4fd4896c3e65d
   Kingfisher: 1d14e9f59cbe19389f591c929000332bf70efd32
   SwiftProtobuf: bcfd2bc231cf9ae552cdc7c4e877bd3b41fe57b1
   TrustWalletCore: 77c78bda1d1a411390321b7d9f7b81bd1d547b71
 
-PODFILE CHECKSUM: 80600e3a469003bb39f77a8b610658742fa669da
+PODFILE CHECKSUM: 63ae34d7b530436a1a7d72f33a0171a22f73d4ad
 
 COCOAPODS: 1.13.0
