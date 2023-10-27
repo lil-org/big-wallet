@@ -11,7 +11,7 @@ struct SafariRequest {
     
     let id: Int
     let name: String
-    let provider: Web3Provider
+    let provider: InpageProvider
     let body: Body
     let host: String
     let favicon: String?
@@ -62,7 +62,7 @@ struct SafariRequest {
             self.favicon = nil
         }
         
-        let provider = Web3Provider(rawValue: json["provider"] as? String ?? "") ?? .unknown
+        let provider = InpageProvider(rawValue: json["provider"] as? String ?? "") ?? .unknown
         self.provider = provider
         
         var body: Body?

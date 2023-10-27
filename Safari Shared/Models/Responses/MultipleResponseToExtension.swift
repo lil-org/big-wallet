@@ -7,7 +7,7 @@ extension ResponseToExtension {
     struct Multiple {
         
         let bodies: [Body]
-        let providersToDisconnect: [Web3Provider]
+        let providersToDisconnect: [InpageProvider]
         
     }
 

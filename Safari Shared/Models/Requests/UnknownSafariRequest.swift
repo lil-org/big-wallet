@@ -12,7 +12,7 @@ extension SafariRequest {
         }
         
         struct ProviderConfiguration {
-            let provider: Web3Provider
+            let provider: InpageProvider
             let address: String
             let network: EthereumNetwork?
         }
@@ -29,7 +29,7 @@ extension SafariRequest {
             if let latestConfigurations = json["latestConfigurations"] as? [[String: Any]] {
                 for configuration in latestConfigurations {
                     guard let providerString = configuration["provider"] as? String,
-                          let provider = Web3Provider(rawValue: providerString),
+                          let provider = InpageProvider(rawValue: providerString),
                           let data = try? JSONSerialization.data(withJSONObject: configuration)
                     else { continue }
                     

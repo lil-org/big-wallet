@@ -39,10 +39,10 @@
 		2C264BD127B2F30C00234393 /* UnknownSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BCF27B2F30C00234393 /* UnknownSafariRequest.swift */; };
 		2C264BD227B2F30C00234393 /* UnknownSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BCF27B2F30C00234393 /* UnknownSafariRequest.swift */; };
 		2C264BD327B2F30C00234393 /* UnknownSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BCF27B2F30C00234393 /* UnknownSafariRequest.swift */; };
-		2C264BD527B5806200234393 /* Web3Provider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BD427B5806200234393 /* Web3Provider.swift */; };
-		2C264BD627B5806200234393 /* Web3Provider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BD427B5806200234393 /* Web3Provider.swift */; };
-		2C264BD727B5806200234393 /* Web3Provider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BD427B5806200234393 /* Web3Provider.swift */; };
-		2C264BD827B5806200234393 /* Web3Provider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BD427B5806200234393 /* Web3Provider.swift */; };
+		2C264BD527B5806200234393 /* InpageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BD427B5806200234393 /* InpageProvider.swift */; };
+		2C264BD627B5806200234393 /* InpageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BD427B5806200234393 /* InpageProvider.swift */; };
+		2C264BD727B5806200234393 /* InpageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BD427B5806200234393 /* InpageProvider.swift */; };
+		2C264BD827B5806200234393 /* InpageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BD427B5806200234393 /* InpageProvider.swift */; };
 		2C264BDC27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BDB27B5AC5400234393 /* EthereumResponseToExtension.swift */; };
 		2C264BDD27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BDB27B5AC5400234393 /* EthereumResponseToExtension.swift */; };
 		2C264BDE27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BDB27B5AC5400234393 /* EthereumResponseToExtension.swift */; };
@@ -79,8 +79,6 @@
 		2C5FF97926C84F7B00B32ACC /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C5FF97726C84F7B00B32ACC /* Main.storyboard */; };
 		2C5FF97B26C84F7C00B32ACC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C5FF97A26C84F7C00B32ACC /* Assets.xcassets */; };
 		2C5FF97E26C84F7C00B32ACC /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C5FF97C26C84F7C00B32ACC /* LaunchScreen.storyboard */; };
-		2C5FF98C26C8567D00B32ACC /* Tokenary_ScreensaverView.h in Headers */ = {isa = PBXBuildFile; fileRef = 2C5FF98B26C8567D00B32ACC /* Tokenary_ScreensaverView.h */; };
-		2C5FF98E26C8567D00B32ACC /* Tokenary_ScreensaverView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2C5FF98D26C8567D00B32ACC /* Tokenary_ScreensaverView.m */; };
 		2C603D0226B6E13F00956955 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
 		2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6706A4267A6BFE006AAEF2 /* Bundle.swift */; };
 		2C6B964C26B9D92500D2C819 /* NSColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6B964B26B9D92500D2C819 /* NSColor.swift */; };
@@ -275,7 +273,7 @@
 		2C264BBB27B2F25E00234393 /* SafariRequest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SafariRequest.swift; sourceTree = "<group>"; };
 		2C264BC027B2F2C100234393 /* EthereumSafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumSafariRequest.swift; sourceTree = "<group>"; };
 		2C264BCF27B2F30C00234393 /* UnknownSafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnknownSafariRequest.swift; sourceTree = "<group>"; };
-		2C264BD427B5806200234393 /* Web3Provider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Web3Provider.swift; sourceTree = "<group>"; };
+		2C264BD427B5806200234393 /* InpageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InpageProvider.swift; sourceTree = "<group>"; };
 		2C264BDB27B5AC5400234393 /* EthereumResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumResponseToExtension.swift; sourceTree = "<group>"; };
 		2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DappRequestProcessor.swift; sourceTree = "<group>"; };
 		2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecificWalletAccount.swift; sourceTree = "<group>"; };
@@ -302,10 +300,6 @@
 		2C5FF97A26C84F7C00B32ACC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2C5FF97D26C84F7C00B32ACC /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		2C5FF97F26C84F7C00B32ACC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		2C5FF98926C8567D00B32ACC /* Screensaver.saver */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Screensaver.saver; sourceTree = BUILT_PRODUCTS_DIR; };
-		2C5FF98B26C8567D00B32ACC /* Tokenary_ScreensaverView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Tokenary_ScreensaverView.h; sourceTree = "<group>"; };
-		2C5FF98D26C8567D00B32ACC /* Tokenary_ScreensaverView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Tokenary_ScreensaverView.m; sourceTree = "<group>"; };
-		2C5FF98F26C8567D00B32ACC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C603D0126B6E13F00956955 /* String.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = String.swift; sourceTree = "<group>"; };
 		2C6706A4267A6BFE006AAEF2 /* Bundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bundle.swift; sourceTree = "<group>"; };
 		2C6B964B26B9D92500D2C819 /* NSColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSColor.swift; sourceTree = "<group>"; };
@@ -426,13 +420,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		2C5FF98626C8567D00B32ACC /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		2CCEB82A27594E2A00768473 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -488,7 +475,6 @@
 				2CCEB7A227592A3800768473 /* Safari Shared */,
 				2C09CBA0273979C1009AD39B /* Safari macOS */,
 				2CCEB82E27594E2A00768473 /* Safari iOS */,
-				2C5FF98A26C8567D00B32ACC /* Screensaver */,
 				2C19953D2674C4B900A8E370 /* Products */,
 				FB5786212D81829B0FADBD25 /* Pods */,
 				2A7484A18D772B4233D171DA /* Frameworks */,
@@ -500,7 +486,6 @@
 			children = (
 				2C19953C2674C4B900A8E370 /* Tokenary.app */,
 				2C5FF96F26C84F7B00B32ACC /* Tokenary iOS.app */,
-				2C5FF98926C8567D00B32ACC /* Screensaver.saver */,
 				2C09CB9F273979C1009AD39B /* Safari macOS.appex */,
 				2CCEB82D27594E2A00768473 /* Safari iOS.appex */,
 			);
@@ -552,7 +537,7 @@
 			children = (
 				2C90E62427B2F1B200C8991E /* Requests */,
 				2C264BD927B5A91B00234393 /* Responses */,
-				2C264BD427B5806200234393 /* Web3Provider.swift */,
+				2C264BD427B5806200234393 /* InpageProvider.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -596,16 +581,6 @@
 				2C5FF97F26C84F7C00B32ACC /* Info.plist */,
 			);
 			path = "Tokenary iOS";
-			sourceTree = "<group>";
-		};
-		2C5FF98A26C8567D00B32ACC /* Screensaver */ = {
-			isa = PBXGroup;
-			children = (
-				2C5FF98B26C8567D00B32ACC /* Tokenary_ScreensaverView.h */,
-				2C5FF98D26C8567D00B32ACC /* Tokenary_ScreensaverView.m */,
-				2C5FF98F26C8567D00B32ACC /* Info.plist */,
-			);
-			path = Screensaver;
 			sourceTree = "<group>";
 		};
 		2C6706A7267A6C04006AAEF2 /* Extensions */ = {
@@ -890,17 +865,6 @@
 		};
 /* End PBXGroup section */
 
-/* Begin PBXHeadersBuildPhase section */
-		2C5FF98426C8567D00B32ACC /* Headers */ = {
-			isa = PBXHeadersBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				2C5FF98C26C8567D00B32ACC /* Tokenary_ScreensaverView.h in Headers */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXHeadersBuildPhase section */
-
 /* Begin PBXNativeTarget section */
 		2C09CB9E273979C1009AD39B /* Safari macOS */ = {
 			isa = PBXNativeTarget;
@@ -962,24 +926,6 @@
 			productReference = 2C5FF96F26C84F7B00B32ACC /* Tokenary iOS.app */;
 			productType = "com.apple.product-type.application";
 		};
-		2C5FF98826C8567D00B32ACC /* Screensaver */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 2C5FF99026C8567D00B32ACC /* Build configuration list for PBXNativeTarget "Screensaver" */;
-			buildPhases = (
-				2C5FF98426C8567D00B32ACC /* Headers */,
-				2C5FF98526C8567D00B32ACC /* Sources */,
-				2C5FF98626C8567D00B32ACC /* Frameworks */,
-				2C5FF98726C8567D00B32ACC /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = Screensaver;
-			productName = "Encrypted Ink Screensaver";
-			productReference = 2C5FF98926C8567D00B32ACC /* Screensaver.saver */;
-			productType = "com.apple.product-type.bundle";
-		};
 		2CCEB82C27594E2A00768473 /* Safari iOS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2CCEB84927594E2A00768473 /* Build configuration list for PBXNativeTarget "Safari iOS" */;
@@ -1016,9 +962,6 @@
 					2C5FF96E26C84F7B00B32ACC = {
 						CreatedOnToolsVersion = 12.5.1;
 					};
-					2C5FF98826C8567D00B32ACC = {
-						CreatedOnToolsVersion = 12.5.1;
-					};
 					2CCEB82C27594E2A00768473 = {
 						CreatedOnToolsVersion = 13.1;
 					};
@@ -1041,7 +984,6 @@
 				2C5FF96E26C84F7B00B32ACC /* Tokenary iOS */,
 				2C09CB9E273979C1009AD39B /* Safari macOS */,
 				2CCEB82C27594E2A00768473 /* Safari iOS */,
-				2C5FF98826C8567D00B32ACC /* Screensaver */,
 			);
 		};
 /* End PBXProject section */
@@ -1087,13 +1029,6 @@
 				2C5FF97B26C84F7C00B32ACC /* Assets.xcassets in Resources */,
 				2C5FF97926C84F7B00B32ACC /* Main.storyboard in Resources */,
 				2C6F6D5D2827434800D6E8FB /* CoinDerivationTableViewCell.xib in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		2C5FF98726C8567D00B32ACC /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1242,7 +1177,7 @@
 				2CDD86FA2AE3296600F33F95 /* Secrets.swift in Sources */,
 				2CF255B2275A4A7200AE54B9 /* UserDefaults.swift in Sources */,
 				2C264BD227B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
-				2C264BD727B5806200234393 /* Web3Provider.swift in Sources */,
+				2C264BD727B5806200234393 /* InpageProvider.swift in Sources */,
 				2C8ED8D62AEA7DB200818D74 /* String.swift in Sources */,
 				2C90E61D27B2C5C100C8991E /* InternalSafariRequest.swift in Sources */,
 				2C2AA1D728AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
@@ -1269,7 +1204,7 @@
 				2CC0CDBE2692027E0072922A /* PriceService.swift in Sources */,
 				2C8A09C6267513FC00993638 /* Agent.swift in Sources */,
 				2C8A09D42675184700993638 /* Window.swift in Sources */,
-				2C264BD527B5806200234393 /* Web3Provider.swift in Sources */,
+				2C264BD527B5806200234393 /* InpageProvider.swift in Sources */,
 				2C4768B42826ED83005E8D4D /* CoinType.swift in Sources */,
 				2C773F62274523DC007B04E7 /* ResponseToExtension.swift in Sources */,
 				0DC850E726B73A5900809E82 /* AuthenticationReason.swift in Sources */,
@@ -1376,7 +1311,7 @@
 				2CF255AD275A48CF00AE54B9 /* EthereumNetwork.swift in Sources */,
 				2CF2559C275A477F00AE54B9 /* ApprovalSubject.swift in Sources */,
 				2C09FC672828331D00DE9C27 /* Image.swift in Sources */,
-				2C264BD627B5806200234393 /* Web3Provider.swift in Sources */,
+				2C264BD627B5806200234393 /* InpageProvider.swift in Sources */,
 				2CE0594427640EB40042D844 /* ExtensionBridge.swift in Sources */,
 				2CF255B1275A4A1800AE54B9 /* ResponseToExtension.swift in Sources */,
 				2C09FC602828078C00DE9C27 /* AccountsHeaderView.swift in Sources */,
@@ -1400,14 +1335,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		2C5FF98526C8567D00B32ACC /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				2C5FF98E26C8567D00B32ACC /* Tokenary_ScreensaverView.m in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		2CCEB82927594E2A00768473 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -1415,7 +1342,7 @@
 				2CDD86FB2AE3296700F33F95 /* Secrets.swift in Sources */,
 				2CE0594627640F470042D844 /* UserDefaults.swift in Sources */,
 				2C264BD327B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
-				2C264BD827B5806200234393 /* Web3Provider.swift in Sources */,
+				2C264BD827B5806200234393 /* InpageProvider.swift in Sources */,
 				2C8ED8D72AEA7DB300818D74 /* String.swift in Sources */,
 				2C90E61E27B2C5C100C8991E /* InternalSafariRequest.swift in Sources */,
 				2C2AA1D828AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
@@ -1770,40 +1697,6 @@
 			};
 			name = Release;
 		};
-		2C5FF99126C8567D00B32ACC /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 57;
-				DEVELOPMENT_TEAM = XWNXDSM6BU;
-				INFOPLIST_FILE = Screensaver/Info.plist;
-				INSTALL_PATH = "$(HOME)/Library/Screen Savers";
-				MACOSX_DEPLOYMENT_TARGET = 11.4;
-				MARKETING_VERSION = 2.0.14;
-				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io.Screensaver;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				WRAPPER_EXTENSION = saver;
-			};
-			name = Debug;
-		};
-		2C5FF99226C8567D00B32ACC /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 57;
-				DEVELOPMENT_TEAM = XWNXDSM6BU;
-				INFOPLIST_FILE = Screensaver/Info.plist;
-				INSTALL_PATH = "$(HOME)/Library/Screen Savers";
-				MACOSX_DEPLOYMENT_TARGET = 11.4;
-				MARKETING_VERSION = 2.0.14;
-				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io.Screensaver;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				WRAPPER_EXTENSION = saver;
-			};
-			name = Release;
-		};
 		2CCEB84727594E2A00768473 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1908,15 +1801,6 @@
 			buildConfigurations = (
 				2C5FF98126C84F7C00B32ACC /* Debug */,
 				2C5FF98226C84F7C00B32ACC /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		2C5FF99026C8567D00B32ACC /* Build configuration list for PBXNativeTarget "Screensaver" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				2C5FF99126C8567D00B32ACC /* Debug */,
-				2C5FF99226C8567D00B32ACC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
