@@ -15,13 +15,13 @@ private struct RPCResponse: Codable {
 }
 
 enum EthereumRPCError: Error {
-    case noDataReceived
-    case unknown
     case serverError(Int, String)
+    case unknown
 }
 
 class EthereumRPC {
     
+    private let queue = DispatchQueue(label: "EthereumRPC")
     private let urlSession = URLSession(configuration: .default)
     
     func fetchGasPrice(rpcUrl: String, completion: @escaping (Result<String, Error>) -> Void) {
@@ -44,7 +44,7 @@ class EthereumRPC {
         request(method: "eth_sendRawTransaction", params: [signedTxData], rpcUrl: rpcUrl, completion: completion)
     }
     
-    private func request(method: String, params: [Any], rpcUrl: String, completion: @escaping (Result<String, Error>) -> Void) {
+    private func request(method: String, params: [Any], rpcUrl: String, retryCount: Int = 0, completion: @escaping (Result<String, Error>) -> Void) {
         guard let url = URL(string: rpcUrl) else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -52,19 +52,15 @@ class EthereumRPC {
         let dict: [String: Any] = ["jsonrpc": "2.0", "id": 1, "method": method, "params": params]
         request.httpBody = try? JSONSerialization.data(withJSONObject: dict)
         
-        let task = urlSession.dataTask(with: request) { data, response, error in
-            if let error = error {
-                completion(.failure(error))
-                return
-            }
-            
-            guard let data = data else {
-                completion(.failure(EthereumRPCError.noDataReceived))
-                return
-            }
-            
-            guard let rpcResponse = try? JSONDecoder().decode(RPCResponse.self, from: data) else {
-                completion(.failure(EthereumRPCError.unknown))
+        let task = urlSession.dataTask(with: request) { [weak self] data, response, error in
+            guard let data = data, let rpcResponse = try? JSONDecoder().decode(RPCResponse.self, from: data) else {
+                if retryCount > 3 {
+                    completion(.failure(EthereumRPCError.unknown))
+                } else {
+                    self?.queue.asyncAfter(deadline: .now() + .milliseconds(500)) {
+                        self?.request(method: method, params: params, rpcUrl: rpcUrl, retryCount: retryCount + 1, completion: completion)
+                    }
+                }
                 return
             }
             
