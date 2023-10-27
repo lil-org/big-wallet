@@ -61,7 +61,7 @@ struct Transaction {
            let gas = BigInt(hexString: gasString) {
             let fee = gas * gasPrice
             let costString = chain.hasUSDPrice ? cost(value: fee, price: ethPrice) : ""
-            feeString = fee.eth.prefix(7) + " \(chain.symbol)" + costString
+            feeString = fee.eth.prefix(8) + " \(chain.symbol)" + costString
         } else {
             feeString = Strings.calculating
         }
