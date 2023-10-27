@@ -14,6 +14,7 @@ struct Ethereum {
 
     private init() {}
     static let shared = Ethereum()
+    private let rpc = EthereumRPC()
     
     func sign(data: Data, privateKey: WalletCore.PrivateKey) throws -> String {
         return try sign(data: data, privateKey: privateKey, addPrefix: false)
@@ -71,7 +72,7 @@ struct Ethereum {
         
         func getGasIfNeeded(gasPrice: String) {
             guard transaction.gas == nil else { return }
-            getGas(network: network, from: transaction.from, to: transaction.to, gasPrice: gasPrice, value: transaction.value, data: transaction.data) { gas in
+            getGas(network: network, transaction: transaction) { gas in
                 transaction.gas = gas
                 completion(transaction)
             }
@@ -90,29 +91,74 @@ struct Ethereum {
         }
     }
     
-    private func getGas(network: EthereumNetwork, from: String, to: String, gasPrice: String, value: String?, data: String, completion: @escaping (String?) -> Void) {
-        queue.async {
-            let gas = "" // TODO: get hex for network
+    func send(transaction: Transaction, privateKey: WalletCore.PrivateKey, network: EthereumNetwork, completion: @escaping (String?) -> Void) {
+        guard let nonceHex = transaction.nonce?.cleanEvenHex,
+              let gasPriceHex = transaction.gasPrice?.cleanEvenHex,
+              let gasHex = transaction.gas?.cleanEvenHex,
+              let valueHex = transaction.value?.cleanEvenHex,
+              let chainID = Data(hexString: network.hexStringId.cleanEvenHex),
+              let nonce = Data(hexString: nonceHex),
+              let gasPrice = Data(hexString: gasPriceHex),
+              let gasLimit = Data(hexString: gasHex),
+              let amount = Data(hexString: valueHex),
+              let data = Data(hexString: transaction.data.cleanEvenHex) else {
+            completion(nil)
+            return
+        }
+        
+        let input = EthereumSigningInput.with {
+            $0.chainID = chainID
+            $0.nonce = nonce
+            $0.gasPrice = gasPrice
+            $0.gasLimit = gasLimit
+            $0.toAddress = transaction.to
+            $0.privateKey = privateKey.data
+            $0.transaction = EthereumTransaction.with {
+                $0.contractGeneric = EthereumTransaction.ContractGeneric.with {
+                    $0.amount = amount
+                    $0.data = data
+                }
+            }
+        }
+        
+        let output: EthereumSigningOutput = AnySigner.sign(input: input, coin: .ethereum)
+        rpc.sendRawTransaction(rpcUrl: network.nodeURLString, signedTxData: output.encoded.hexString.withHexPrefix) { result in
             DispatchQueue.main.async {
-                completion(gas)
+                if case let .success(txHash) = result {
+                     completion(txHash)
+                } else {
+                    completion(nil)
+                }
+            }
+        }
+    }
+    
+    private func getGas(network: EthereumNetwork, transaction: Transaction, completion: @escaping (String?) -> Void) {
+        rpc.estimateGas(rpcUrl: network.nodeURLString, transaction: transaction) { result in
+            if case let .success(estimatedGas) = result {
+                var updatedTransaction = transaction
+                updatedTransaction.gas = estimatedGas
+                rpc.estimateGas(rpcUrl: network.nodeURLString, transaction: updatedTransaction) { result in
+                    if case let .success(gas) = result {
+                        DispatchQueue.main.async { completion(gas) }
+                    }
+                }
             }
         }
     }
     
     private func getGasPrice(network: EthereumNetwork, completion: @escaping (String?) -> Void) {
-        queue.async {
-            let gasPrice = "" // TODO: get hex for network
-            DispatchQueue.main.async {
-                completion(gasPrice)
+        rpc.fetchGasPrice(rpcUrl: network.nodeURLString) { result in
+            if case let .success(gasPrice) = result {
+                DispatchQueue.main.async { completion(gasPrice) }
             }
         }
     }
     
     private func getNonce(network: EthereumNetwork, from: String, completion: @escaping (String?) -> Void) {
-        queue.async {
-            let nonce = "" // TODO: get hex for network
-            DispatchQueue.main.async {
-                completion(nonce)
+        rpc.fetchNonce(rpcUrl: network.nodeURLString, for: from) { result in
+            if case let .success(nonce) = result {
+                DispatchQueue.main.async { completion(nonce) }
             }
         }
     }
