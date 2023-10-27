@@ -12,9 +12,7 @@ struct Ethereum {
         case keyNotFound
     }
 
-    private let queue = DispatchQueue(label: "Ethereum", qos: .default)
     private init() {}
-    
     static let shared = Ethereum()
     
     func sign(data: Data, privateKey: WalletCore.PrivateKey) throws -> String {
@@ -61,20 +59,11 @@ struct Ethereum {
         return signed.hexString.withHexPrefix
     }
     
-    func send(transaction: Transaction, privateKey: WalletCore.PrivateKey, chain: EthereumNetwork) throws -> String {
-        if Bool.random() {
-            throw Error.failedToSendTransaction
-        } else {
-            let hash = "" // TODO: sign and send transaction
-            return hash
-        }
-    }
-    
-    func prepareTransaction(_ transaction: Transaction, chain: EthereumNetwork, completion: @escaping (Transaction) -> Void) {
+    func prepareTransaction(_ transaction: Transaction, network: EthereumNetwork, completion: @escaping (Transaction) -> Void) {
         var transaction = transaction
         
         if transaction.nonce == nil {
-            getNonce(network: chain, from: transaction.from) { nonce in
+            getNonce(network: network, from: transaction.from) { nonce in
                 transaction.nonce = nonce
                 completion(transaction)
             }
@@ -82,7 +71,7 @@ struct Ethereum {
         
         func getGasIfNeeded(gasPrice: String) {
             guard transaction.gas == nil else { return }
-            getGas(network: chain, from: transaction.from, to: transaction.to, gasPrice: gasPrice, value: transaction.value, data: transaction.data) { gas in
+            getGas(network: network, from: transaction.from, to: transaction.to, gasPrice: gasPrice, value: transaction.value, data: transaction.data) { gas in
                 transaction.gas = gas
                 completion(transaction)
             }
@@ -91,7 +80,7 @@ struct Ethereum {
         if let gasPrice = transaction.gasPrice {
             getGasIfNeeded(gasPrice: gasPrice)
         } else {
-            getGasPrice(network: chain) { gasPrice in
+            getGasPrice(network: network) { gasPrice in
                 transaction.gasPrice = gasPrice
                 completion(transaction)
                 if let gasPrice = gasPrice {
