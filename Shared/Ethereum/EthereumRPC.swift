@@ -36,7 +36,7 @@ class EthereumRPC {
         var dict: [String: Any] = ["from": transaction.from, "to": transaction.to, "data": transaction.data]
         if let gasPrice = transaction.gasPrice { dict["gasPrice"] = gasPrice }
         if let gas = transaction.gas { dict["gas"] = gas }
-        if let value = transaction.value { dict["value"] = value }
+        if let value = transaction.value, value != String.hexPrefix, value != "0" { dict["value"] = value }
         request(method: "eth_estimateGas", params: [dict], rpcUrl: rpcUrl, completion: completion)
     }
     
