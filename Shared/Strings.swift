@@ -24,7 +24,7 @@ struct Strings {
     static let enableSafariExtension = "Enable Safari extension"
     static let dropUsALine = "Drop us a line"
     static let viewOnGithub = "View on GitHub"
-    static let viewOnTwitter = "View on Twitter"
+    static let viewOnX = "View on X"
     static let walletConnectClientDescription = "Crypto wallet for macOS"
     static let start = "Start"
     static let removeAccount = "Remove account"

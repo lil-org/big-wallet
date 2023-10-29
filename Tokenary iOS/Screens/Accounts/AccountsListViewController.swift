@@ -396,8 +396,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     @objc private func preferencesButtonTapped() {
         let actionSheet = UIAlertController(title: "❤️ " + Strings.tokenary + " ❤️", message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.barButtonItem = preferencesItem
-        let twitterAction = UIAlertAction(title: Strings.viewOnTwitter, style: .default) { _ in
-            UIApplication.shared.open(URL.twitter)
+        let xAction = UIAlertAction(title: Strings.viewOnX, style: .default) { _ in
+            UIApplication.shared.open(URL.x)
         }
         let githubAction = UIAlertAction(title: Strings.viewOnGithub, style: .default) { _ in
             UIApplication.shared.open(URL.github)
@@ -415,7 +415,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             UIApplication.shared.open(URL.iosSafariGuide)
         }
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
-        actionSheet.addAction(twitterAction)
+        actionSheet.addAction(xAction)
         actionSheet.addAction(githubAction)
         actionSheet.addAction(emailAction)
         actionSheet.addAction(shareInvite)

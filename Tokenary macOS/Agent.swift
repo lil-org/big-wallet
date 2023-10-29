@@ -111,14 +111,14 @@ class Agent: NSObject {
         let safariItem = NSMenuItem(title: Strings.enableSafariExtension.withEllipsis, action: #selector(enableSafariExtension), keyEquivalent: "")
         let mailItem = NSMenuItem(title: Strings.dropUsALine.withEllipsis, action: #selector(didSelectMailMenuItem), keyEquivalent: "")
         let githubItem = NSMenuItem(title: Strings.viewOnGithub.withEllipsis, action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
-        let twitterItem = NSMenuItem(title: Strings.viewOnTwitter.withEllipsis, action: #selector(didSelectTwitterMenuItem), keyEquivalent: "")
+        let xItem = NSMenuItem(title: Strings.viewOnX.withEllipsis, action: #selector(didSelectXMenuItem), keyEquivalent: "")
         let quitItem = NSMenuItem(title: Strings.quit, action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
         showItem.attributedTitle = NSAttributedString(string: "👀 " + Strings.showTokenary, attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
         
         showItem.target = self
         safariItem.target = self
         githubItem.target = self
-        twitterItem.target = self
+        xItem.target = self
         mailItem.target = self
         quitItem.target = self
         
@@ -127,7 +127,7 @@ class Agent: NSObject {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(safariItem)
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(twitterItem)
+        menu.addItem(xItem)
         menu.addItem(githubItem)
         menu.addItem(mailItem)
         menu.addItem(NSMenuItem.separator())
@@ -154,8 +154,8 @@ class Agent: NSObject {
         }
     }
     
-    @objc private func didSelectTwitterMenuItem() {
-        NSWorkspace.shared.open(URL.twitter)
+    @objc private func didSelectXMenuItem() {
+        NSWorkspace.shared.open(URL.x)
     }
     
     @objc private func didSelectGitHubMenuItem() {
