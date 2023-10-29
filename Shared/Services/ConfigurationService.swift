@@ -4,7 +4,7 @@ import Foundation
 
 class ConfigurationService {
     
-    var shouldUpdateApp = false // TODO: implement with defaults
+    var shouldUpdateApp = Defaults.didReceiveShouldUpdateAppNotification
     
     private struct ConfigurationResponse: Codable {
         let shouldUpdateApp: Bool
@@ -17,7 +17,9 @@ class ConfigurationService {
     private let urlSession = URLSession(configuration: .ephemeral)
         
     func check() {
-        getConfiguration()
+        if !shouldUpdateApp {
+            getConfiguration()
+        }
     }
     
     private func getConfiguration() {
@@ -25,7 +27,10 @@ class ConfigurationService {
         let dataTask = urlSession.dataTask(with: url) { [weak self] (data, _, _) in
             if let data = data, let configuration = try? self?.jsonDecoder.decode(ConfigurationResponse.self, from: data) {
                 guard configuration.shouldUpdateApp else { return }
-                DispatchQueue.main.async { self?.shouldUpdateApp = true }
+                DispatchQueue.main.async { 
+                    Defaults.didReceiveShouldUpdateAppNotification = true
+                    self?.shouldUpdateApp = true
+                }
             }
         }
         dataTask.resume()
