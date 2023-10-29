@@ -17,6 +17,7 @@ enum EthereumNetwork: Int {
     case base = 8453
     case zora = 7777777
     case klaytn = 8217
+    case scroll = 534352
     
     // Testnets
     case arbitrumRinkeby = 421611
@@ -29,6 +30,7 @@ enum EthereumNetwork: Int {
     case fantomTestnet = 4002
     case fantomSonicOpen = 64240
     case neonDevnet = 245022926
+    case scrollSepolia = 534351
     
     var id: Int {
         return rawValue
@@ -47,8 +49,8 @@ enum EthereumNetwork: Int {
         }
     }
     
-    static let allMainnets: [EthereumNetwork] = [.ethereum, .zora, .base, .klaytn, .polygon, .optimism, .binance, .arbitrum, .avalanche, .gnosisChain, .fantomOpera, .celo, .aurora, .neon]
-    static let allTestnets: [EthereumNetwork] = [.ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji, .fantomTestnet, .neonDevnet, .fantomSonicOpen]
+    static let allMainnets: [EthereumNetwork] = [.ethereum, .zora, .base, .klaytn, .polygon, .optimism, .binance, .arbitrum, .avalanche, .gnosisChain, .fantomOpera, .celo, .aurora, .neon, .scroll]
+    static let allTestnets: [EthereumNetwork] = [.ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .polygonMumbai, .binanceTestnet, .avalancheFuji, .fantomTestnet, .neonDevnet, .fantomSonicOpen, .scrollSepolia]
     
     var name: String {
         switch self {
@@ -66,6 +68,7 @@ enum EthereumNetwork: Int {
         case .celo: return "Celo"
         case .aurora: return "Aurora"
         case .neon: return "Neon"
+        case .scroll: return "Scroll"
             
         case .arbitrumRinkeby: return "Arbitrum Rinkeby"
         case .optimisticKovan: return "Optimistic Kovan"
@@ -77,6 +80,7 @@ enum EthereumNetwork: Int {
         case .fantomTestnet: return "Fantom Testnet"
         case .neonDevnet: return "Neon Devnet"
         case .fantomSonicOpen: return "Fantom Sonic Open"
+        case .scrollSepolia: return "Scroll Sepolia"
         }
     }
     
@@ -86,7 +90,7 @@ enum EthereumNetwork: Int {
             return "BNB"
         case .polygon, .polygonMumbai:
             return "MATIC"
-        case .arbitrum, .arbitrumKovan, .arbitrumRinkeby, .ethereum, .ethereumGoerli, .optimism, .optimisticKovan, .aurora, .zora, .base:
+        case .arbitrum, .arbitrumKovan, .arbitrumRinkeby, .ethereum, .ethereumGoerli, .optimism, .optimisticKovan, .aurora, .zora, .base, .scroll, .scrollSepolia:
             return "ETH"
         case .avalanche, .avalancheFuji:
             return "AVAX"
@@ -109,9 +113,9 @@ enum EthereumNetwork: Int {
     
     var hasUSDPrice: Bool {
         switch self {
-        case .ethereum, .arbitrum, .klaytn, .polygon, .optimism, .binance, .avalanche, .gnosisChain, .fantomOpera, .celo, .aurora, .neon, .base, .zora:
+        case .ethereum, .arbitrum, .klaytn, .polygon, .optimism, .binance, .avalanche, .gnosisChain, .fantomOpera, .celo, .aurora, .neon, .base, .zora, .scroll:
             return symbolIsETH
-        case .fantomTestnet, .neonDevnet, .avalancheFuji, .binanceTestnet, .polygonMumbai, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .fantomSonicOpen:
+        case .fantomTestnet, .neonDevnet, .avalancheFuji, .binanceTestnet, .polygonMumbai, .ethereumGoerli, .optimisticKovan, .arbitrumKovan, .arbitrumRinkeby, .fantomSonicOpen, .scrollSepolia:
             return false
         }
     }
@@ -132,6 +136,7 @@ enum EthereumNetwork: Int {
         case .zora: return "https://rpc.zora.energy"
         case .base: return "https://mainnet.base.org"
         case .klaytn: return "https://1rpc.io/klay"
+        case .scroll: return "https://rpc.scroll.io"
             
         case .arbitrumRinkeby: return "https://rinkeby.arbitrum.io/rpc"
         case .arbitrumKovan: return "https://kovan5.arbitrum.io/rpc"
@@ -143,6 +148,7 @@ enum EthereumNetwork: Int {
         case .fantomTestnet: return "https://rpc.testnet.fantom.network/"
         case .neonDevnet: return "https://devnet.neonevm.org/"
         case .fantomSonicOpen: return "https://rpcapi.sonic.fantom.network/"
+        case .scrollSepolia: return "https://sepolia-rpc.scroll.io"
         }
     }
     
