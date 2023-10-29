@@ -88,6 +88,8 @@
 		2C6F6D5A28273FE500D6E8FB /* EditAccountsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5928273FE500D6E8FB /* EditAccountsViewController.swift */; };
 		2C6F6D5D2827434800D6E8FB /* CoinDerivationTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5B2827434800D6E8FB /* CoinDerivationTableViewCell.xib */; };
 		2C6F6D5E2827434800D6E8FB /* CoinDerivationTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5C2827434800D6E8FB /* CoinDerivationTableViewCell.swift */; };
+		2C73215A2AEE8F5200AA8A71 /* ConfigurationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7321592AEE8F5200AA8A71 /* ConfigurationService.swift */; };
+		2C73215B2AEE8F5200AA8A71 /* ConfigurationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7321592AEE8F5200AA8A71 /* ConfigurationService.swift */; };
 		2C773F5E27450B97007B04E7 /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
 		2C773F5F27450FBD007B04E7 /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
 		2C773F62274523DC007B04E7 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
@@ -311,6 +313,7 @@
 		2C6F6D5928273FE500D6E8FB /* EditAccountsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditAccountsViewController.swift; sourceTree = "<group>"; };
 		2C6F6D5B2827434800D6E8FB /* CoinDerivationTableViewCell.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = CoinDerivationTableViewCell.xib; sourceTree = "<group>"; };
 		2C6F6D5C2827434800D6E8FB /* CoinDerivationTableViewCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CoinDerivationTableViewCell.swift; sourceTree = "<group>"; };
+		2C7321592AEE8F5200AA8A71 /* ConfigurationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationService.swift; sourceTree = "<group>"; };
 		2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionBridge.swift; sourceTree = "<group>"; };
 		2C773F61274523DC007B04E7 /* ResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseToExtension.swift; sourceTree = "<group>"; };
 		2C78F8272683BDCC00C10670 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alert.swift; sourceTree = "<group>"; };
@@ -841,6 +844,7 @@
 				2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */,
 				2CAA412426C7CD93009F3535 /* ReviewRequester.swift */,
 				2C901C4C268A033100D0926A /* GasService.swift */,
+				2C7321592AEE8F5200AA8A71 /* ConfigurationService.swift */,
 				2CC0CDBD2692027E0072922A /* PriceService.swift */,
 				2C917428267D2A6E00049075 /* Keychain.swift */,
 			);
@@ -1268,6 +1272,7 @@
 				2CE3D012267F73C00032A62E /* Transaction.swift in Sources */,
 				2C90E62227B2ED2D00C8991E /* SafariRequest+Helpers.swift in Sources */,
 				2C09FC662828331D00DE9C27 /* Image.swift in Sources */,
+				2C73215A2AEE8F5200AA8A71 /* ConfigurationService.swift in Sources */,
 				2C8A09EB2675964700993638 /* ApproveViewController.swift in Sources */,
 				2C264BDC27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */,
 				2C03D1D5269B428C00EF10EA /* Notification.swift in Sources */,
@@ -1296,6 +1301,7 @@
 				2CF255A5275A48BB00AE54B9 /* ReviewRequester.swift in Sources */,
 				2CF255B6275A746000AE54B9 /* AccountsListViewController.swift in Sources */,
 				2C96D3A42763C6A800687301 /* UIView.swift in Sources */,
+				2C73215B2AEE8F5200AA8A71 /* ConfigurationService.swift in Sources */,
 				2CF25597275A46D300AE54B9 /* Defaults.swift in Sources */,
 				2CF255A2275A47DD00AE54B9 /* String.swift in Sources */,
 				2CF2559D275A479800AE54B9 /* TokenaryWallet.swift in Sources */,
