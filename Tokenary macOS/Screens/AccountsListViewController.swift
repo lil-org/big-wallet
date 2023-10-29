@@ -86,7 +86,7 @@ class AccountsListViewController: NSViewController {
         reloadHeader()
         updateBottomButtons()
         updateCellModels()
-        NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: Notification.Name.walletsChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
         
         if let preselectedAccount = selectAccountAction?.selectedAccounts.first {
             scrollTo(specificWalletAccount: preselectedAccount)

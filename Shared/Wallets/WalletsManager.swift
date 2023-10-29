@@ -234,7 +234,7 @@ final class WalletsManager {
     }
     
     private func postWalletsChangedNotification() {
-        NotificationCenter.default.post(name: Notification.Name.walletsChanged, object: nil)
+        NotificationCenter.default.post(name: .walletsChanged, object: nil)
     }
     
     private var defaultWalletName = ""

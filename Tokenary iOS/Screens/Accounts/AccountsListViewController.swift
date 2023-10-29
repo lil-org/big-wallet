@@ -94,7 +94,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         updateCellModels()
         updateDataState()
         NotificationCenter.default.addObserver(self, selector: #selector(processInput), name: UIApplication.didBecomeActiveNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: Notification.Name.walletsChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(processInput), name: .receievedWalletRequest, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
         
         bottomOverlayView.isHidden = !forWalletSelection
         topOverlayView.isHidden = !forWalletSelection

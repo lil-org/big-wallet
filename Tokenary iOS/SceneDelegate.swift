@@ -30,6 +30,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     
     private func wasOpenedWithURL(_ url: URL, onStart: Bool) {
         launchURL = url
+        NotificationCenter.default.post(name: .receievedWalletRequest, object: nil)
     }
 
 }

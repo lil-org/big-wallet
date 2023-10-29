@@ -8,7 +8,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let agent = Agent.shared
     private let gasService = GasService.shared
     private let priceService = PriceService.shared
-    private let networkMonitor = NetworkMonitor.shared
     private let walletsManager = WalletsManager.shared
     
     private var didFinishLaunching = false
@@ -34,7 +33,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         agent.start()
         gasService.start()
         priceService.start()
-        networkMonitor.start()
         walletsManager.start()
         
         didFinishLaunching = true

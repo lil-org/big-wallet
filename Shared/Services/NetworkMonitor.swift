@@ -21,7 +21,7 @@ class NetworkMonitor {
                 DispatchQueue.main.async {
                     self?.hasConnection = hasConnectionNow
                     if hasConnectionNow {
-                        NotificationCenter.default.post(name: Notification.Name.connectionAppeared, object: nil)
+                        NotificationCenter.default.post(name: .connectionAppeared, object: nil)
                     }
                 }
             }
