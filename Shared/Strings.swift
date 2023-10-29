@@ -24,7 +24,7 @@ struct Strings {
     static let enableSafariExtension = "Enable Safari extension"
     static let dropUsALine = "Drop us a line"
     static let viewOnGithub = "View on GitHub"
-    static let viewOnTwitter = "View on Twitter"
+    static let viewOnX = "View on 𝕏"
     static let walletConnectClientDescription = "Crypto wallet for macOS"
     static let start = "Start"
     static let removeAccount = "Remove account"
@@ -93,5 +93,8 @@ struct Strings {
     static let switchAccountTwoLines = "Switch\nAccount"
     static let unknownNetwork = "Unknown network ⚠️"
     static let addAccountToConnect = "Add %@ account to connect"
+    static let thisAppVersionIsNoLongerSupported = "this app version is no longer supported 🥺"
+    static let pleaseGetANewOne = "please get a new one"
+    static let notNow = "not now"
     
 }

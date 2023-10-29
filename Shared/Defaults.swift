@@ -24,4 +24,13 @@ struct Defaults {
         }
     }
     
+    static var didReceiveShouldUpdateAppNotification: Bool {
+        get {
+            return userDefaults.bool(forKey: "didReceiveShouldUpdateAppNotification")
+        }
+        set {
+            userDefaults.set(newValue, forKey: "didReceiveShouldUpdateAppNotification")
+        }
+    }
+    
 }

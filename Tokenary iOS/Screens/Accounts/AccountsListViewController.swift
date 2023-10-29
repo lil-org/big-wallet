@@ -133,6 +133,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         processInput()
+        requestAnUpdateIfNeeded()
         didAppear = true
         DispatchQueue.main.async { [weak self] in
             let heightBefore = self?.navigationController?.navigationBar.frame.height ?? 0
@@ -145,6 +146,20 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                 }
             }
         }
+    }
+    
+    private func requestAnUpdateIfNeeded() {
+        let configurationService = ConfigurationService.shared
+        guard !didAppear, configurationService.shouldPromptToUpdate else { return }
+        configurationService.didPromptToUpdate()
+        let alert = UIAlertController(title: Strings.thisAppVersionIsNoLongerSupported, message: Strings.pleaseGetANewOne, preferredStyle: .alert)
+        let notNowAction = UIAlertAction(title: Strings.notNow, style: .destructive)
+        let okAction = UIAlertAction(title: Strings.ok, style: .default) { _ in
+            UIApplication.shared.open(URL.updateApp)
+        }
+        alert.addAction(notNowAction)
+        alert.addAction(okAction)
+        present(alert, animated: true)
     }
     
     private func scrollToTheFirst(_ specificWalletAccounts: Set<SpecificWalletAccount>) {
@@ -379,10 +394,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     @objc private func preferencesButtonTapped() {
-        let actionSheet = UIAlertController(title: "❤️ " + Strings.tokenary + " ❤️", message: nil, preferredStyle: .actionSheet)
+        let actionSheet = UIAlertController(title: "❤️ " + Strings.tokenary.uppercased() + " ⭐️", message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.barButtonItem = preferencesItem
-        let twitterAction = UIAlertAction(title: Strings.viewOnTwitter, style: .default) { _ in
-            UIApplication.shared.open(URL.twitter)
+        let xAction = UIAlertAction(title: Strings.viewOnX, style: .default) { _ in
+            UIApplication.shared.open(URL.x)
         }
         let githubAction = UIAlertAction(title: Strings.viewOnGithub, style: .default) { _ in
             UIApplication.shared.open(URL.github)
@@ -400,7 +415,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             UIApplication.shared.open(URL.iosSafariGuide)
         }
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
-        actionSheet.addAction(twitterAction)
+        actionSheet.addAction(xAction)
         actionSheet.addAction(githubAction)
         actionSheet.addAction(emailAction)
         actionSheet.addAction(shareInvite)
