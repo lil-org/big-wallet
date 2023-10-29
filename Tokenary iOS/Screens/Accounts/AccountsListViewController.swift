@@ -274,7 +274,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     private func openSafari(requestId: Int) {
         UIApplication.shared.openSafari()
-        toDismissAfterResponse[requestId]?.dismiss(animated: false)
+        let isFullscreen = view.bounds.width == UIScreen.main.bounds.width
+        toDismissAfterResponse[requestId]?.dismiss(animated: !isFullscreen)
         toDismissAfterResponse.removeValue(forKey: requestId)
     }
     
