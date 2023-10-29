@@ -1,7 +1,7 @@
 // Copyright © 2023 Tokenary. All rights reserved.
 
 const button = document.getElementById('tokenary-button');
-const message = browser.extension.getBackgroundPage().pendingPopupRequest;
+var message = getPendingRequest();
 
 if (message != null) {
     setupButton();
@@ -14,7 +14,11 @@ if (message != null) {
 }
 
 button.addEventListener('click', () => {
-    const request = browser.extension.getBackgroundPage().pendingPopupRequest;
+    var request = message;
+    const fresh = getPendingRequest();
+    if (fresh != null) {
+        request = fresh;
+    }
     const query = encodeURIComponent(JSON.stringify(request)) + '";';
     browser.tabs.executeScript({
       code: 'window.location.href = "https://tokenary.io/extension?query=' + query
@@ -57,4 +61,13 @@ function setupButton() {
     }
 
     button.innerText = title;
+}
+
+function getPendingRequest() {
+    const bg = browser.extension.getBackgroundPage();
+    if (bg != null) {
+        return bg.pendingPopupRequest;
+    } else {
+        return null;
+    }
 }
