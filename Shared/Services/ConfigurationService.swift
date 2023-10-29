@@ -4,7 +4,12 @@ import Foundation
 
 class ConfigurationService {
     
-    var shouldUpdateApp = Defaults.didReceiveShouldUpdateAppNotification
+    var shouldPromptToUpdate: Bool {
+        return shouldUpdateApp && !didPropmtToUpdate
+    }
+    
+    private var shouldUpdateApp = Defaults.didReceiveShouldUpdateAppNotification
+    private var didPropmtToUpdate = false
     
     private struct ConfigurationResponse: Codable {
         let shouldUpdateApp: Bool
@@ -20,6 +25,10 @@ class ConfigurationService {
         if !shouldUpdateApp {
             getConfiguration()
         }
+    }
+    
+    func didPromptToUpdate() {
+        didPropmtToUpdate = true
     }
     
     private func getConfiguration() {
