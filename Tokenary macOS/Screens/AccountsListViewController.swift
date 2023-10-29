@@ -104,6 +104,23 @@ class AccountsListViewController: NSViewController {
             if let coin = selectAccountAction?.coinType, walletsManager.suggestedAccounts(coin: coin).isEmpty, !wallets.isEmpty {
                 Alert.showWithMessage(String(format: Strings.addAccountToConnect, arguments: [coin.name]), style: .informational)
             }
+            requestAnUpdateIfNeeded()
+        }
+    }
+    
+    private func requestAnUpdateIfNeeded() {
+        let configurationService = ConfigurationService.shared
+        guard configurationService.shouldPromptToUpdate else { return }
+        configurationService.didPromptToUpdate()
+        
+        let alert = Alert()
+        alert.messageText = Strings.thisAppVersionIsNoLongerSupported
+        alert.informativeText = Strings.pleaseGetANewOne
+        alert.alertStyle = .critical
+        alert.addButton(withTitle: Strings.ok)
+        alert.addButton(withTitle: Strings.notNow)
+        if alert.runModal() == .alertFirstButtonReturn {
+            NSWorkspace.shared.open(URL.updateApp)
         }
     }
     
