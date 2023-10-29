@@ -40,7 +40,7 @@ enum EthereumNetwork: Int {
     
     static func withChainId(_ chainId: String?) -> EthereumNetwork? {
         guard let chainId = chainId else { return nil }
-        if let rawValue = Int(chainId.dropFirst(2), radix: 16) {
+        if let rawValue = Int(hexString: chainId) {
             return EthereumNetwork(rawValue: rawValue)
         } else {
             return nil

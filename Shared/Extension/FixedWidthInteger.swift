@@ -2,10 +2,10 @@
 
 import Foundation
 
-extension UInt {
+extension FixedWidthInteger {
     
     init?(hexString: String) {
-        self.init(hexString, radix: 16)
+        self.init(hexString.cleanHex, radix: 16)
     }
     
 }

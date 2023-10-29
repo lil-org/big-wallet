@@ -41,8 +41,8 @@ extension SafariRequest {
             let parameters = json["object"] as? [String: Any]
             self.parameters = parameters
             
-            if let chainId = (parameters?["chainId"] as? String)?.dropFirst(2),
-               let networkId = Int(chainId, radix: 16),
+            if let chainId = parameters?["chainId"] as? String,
+               let networkId = Int(hexString: chainId),
                let chain = EthereumNetwork(rawValue: networkId) {
                 self.switchToChain = chain
             } else {

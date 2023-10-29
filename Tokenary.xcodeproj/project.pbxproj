@@ -27,6 +27,8 @@
 		2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995432674C4BA00A8E370 /* Assets.xcassets */; };
 		2C1995472674C4BA00A8E370 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995452674C4BA00A8E370 /* Main.storyboard */; };
 		2C1995562674D0F300A8E370 /* Ethereum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995552674D0F300A8E370 /* Ethereum.swift */; };
+		2C20ED992AEE54A300DDE709 /* FixedWidthInteger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944C42AEAFF97006A711F /* FixedWidthInteger.swift */; };
+		2C20ED9A2AEE54A400DDE709 /* FixedWidthInteger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944C42AEAFF97006A711F /* FixedWidthInteger.swift */; };
 		2C264BBC27B2F25E00234393 /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BBB27B2F25E00234393 /* SafariRequest.swift */; };
 		2C264BBD27B2F25E00234393 /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BBB27B2F25E00234393 /* SafariRequest.swift */; };
 		2C264BBE27B2F25E00234393 /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BBB27B2F25E00234393 /* SafariRequest.swift */; };
@@ -95,8 +97,8 @@
 		2C8155682ADFC7A700F4559B /* popup.css in Resources */ = {isa = PBXBuildFile; fileRef = 2C8155662ADFC7A700F4559B /* popup.css */; };
 		2C81556B2ADFC7B900F4559B /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C8155692ADFC7B900F4559B /* popup.js */; };
 		2C81556E2ADFC7C400F4559B /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = 2C81556C2ADFC7C400F4559B /* popup.html */; };
-		2C8944C52AEAFF97006A711F /* UInt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944C42AEAFF97006A711F /* UInt.swift */; };
-		2C8944C62AEAFF97006A711F /* UInt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944C42AEAFF97006A711F /* UInt.swift */; };
+		2C8944C52AEAFF97006A711F /* FixedWidthInteger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944C42AEAFF97006A711F /* FixedWidthInteger.swift */; };
+		2C8944C62AEAFF97006A711F /* FixedWidthInteger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944C42AEAFF97006A711F /* FixedWidthInteger.swift */; };
 		2C8944CB2AEB0C10006A711F /* EthereumRPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944CA2AEB0C10006A711F /* EthereumRPC.swift */; };
 		2C8944CC2AEB0C10006A711F /* EthereumRPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944CA2AEB0C10006A711F /* EthereumRPC.swift */; };
 		2C8944CE2AEC34EB006A711F /* Blockies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944CD2AEC34EB006A711F /* Blockies.swift */; };
@@ -316,7 +318,7 @@
 		2C8155662ADFC7A700F4559B /* popup.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = popup.css; sourceTree = "<group>"; };
 		2C8155692ADFC7B900F4559B /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = popup.js; sourceTree = "<group>"; };
 		2C81556C2ADFC7C400F4559B /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = popup.html; sourceTree = "<group>"; };
-		2C8944C42AEAFF97006A711F /* UInt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UInt.swift; sourceTree = "<group>"; };
+		2C8944C42AEAFF97006A711F /* FixedWidthInteger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FixedWidthInteger.swift; sourceTree = "<group>"; };
 		2C8944CA2AEB0C10006A711F /* EthereumRPC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumRPC.swift; sourceTree = "<group>"; };
 		2C8944CD2AEC34EB006A711F /* Blockies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Blockies.swift; sourceTree = "<group>"; };
 		2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DappRequestAction.swift; sourceTree = "<group>"; };
@@ -827,7 +829,7 @@
 				2C03D1D4269B428C00EF10EA /* Notification.swift */,
 				2C603D0126B6E13F00956955 /* String.swift */,
 				2C8ED8DB2AEADDC400818D74 /* BigInt.swift */,
-				2C8944C42AEAFF97006A711F /* UInt.swift */,
+				2C8944C42AEAFF97006A711F /* FixedWidthInteger.swift */,
 			);
 			path = Extension;
 			sourceTree = "<group>";
@@ -1191,6 +1193,7 @@
 				2C264BD227B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
 				2C264BD727B5806200234393 /* InpageProvider.swift in Sources */,
 				2C8ED8D62AEA7DB200818D74 /* String.swift in Sources */,
+				2C20ED992AEE54A300DDE709 /* FixedWidthInteger.swift in Sources */,
 				2C90E61D27B2C5C100C8991E /* InternalSafariRequest.swift in Sources */,
 				2C2AA1D728AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
 				2C773F5E27450B97007B04E7 /* ExtensionBridge.swift in Sources */,
@@ -1243,7 +1246,7 @@
 				2C4768A9282598C5005E8D4D /* CoinDerivationCellView.swift in Sources */,
 				2CB4031D281D745D00BAEBEE /* NSTableView.swift in Sources */,
 				2CD0B3F726AC619900488D92 /* AddAccountOptionCellView.swift in Sources */,
-				2C8944C52AEAFF97006A711F /* UInt.swift in Sources */,
+				2C8944C52AEAFF97006A711F /* FixedWidthInteger.swift in Sources */,
 				0D059AD226C2796200EE3023 /* ApprovalSubject.swift in Sources */,
 				2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */,
 				2C8E47A326A322E8007B8354 /* RightClickTableView.swift in Sources */,
@@ -1300,7 +1303,7 @@
 				2CF255AB275A48CF00AE54B9 /* Ethereum.swift in Sources */,
 				2C8944CF2AEC34EB006A711F /* Blockies.swift in Sources */,
 				2CC8C5A22767D3B30083FB1B /* GasPriceSliderTableViewCell.swift in Sources */,
-				2C8944C62AEAFF97006A711F /* UInt.swift in Sources */,
+				2C8944C62AEAFF97006A711F /* FixedWidthInteger.swift in Sources */,
 				2CC6EF0D275E64810040CC62 /* UIViewController.swift in Sources */,
 				2C264BDD27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */,
 				2CF255A9275A48BB00AE54B9 /* Keychain.swift in Sources */,
@@ -1358,6 +1361,7 @@
 				2C264BD327B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
 				2C264BD827B5806200234393 /* InpageProvider.swift in Sources */,
 				2C8ED8D72AEA7DB300818D74 /* String.swift in Sources */,
+				2C20ED9A2AEE54A400DDE709 /* FixedWidthInteger.swift in Sources */,
 				2C90E61E27B2C5C100C8991E /* InternalSafariRequest.swift in Sources */,
 				2C2AA1D828AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
 				2CE0594327640EAB0042D844 /* ExtensionBridge.swift in Sources */,
