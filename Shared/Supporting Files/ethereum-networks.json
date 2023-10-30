@@ -1,152 +1,152 @@
 [
   {
     "chainId" : 1,
-    "symbol" : "ETH",
     "name" : "Ethereum Mainnet",
-    "nodeURLString" : "https://mainnet.infura.io/v3/${INFURA_API_KEY}"
+    "nodeURLString" : "https://mainnet.infura.io/v3/${INFURA_API_KEY}",
+    "symbol" : "ETH"
   },
   {
     "chainId" : 5,
-    "symbol" : "ETH",
     "name" : "Goerli",
-    "nodeURLString" : "https://goerli.infura.io/v3/${INFURA_API_KEY}"
+    "nodeURLString" : "https://goerli.infura.io/v3/${INFURA_API_KEY}",
+    "symbol" : "ETH"
   },
   {
     "chainId" : 10,
-    "symbol" : "ETH",
+    "name" : "OP Mainnet",
     "nodeURLString" : "https://mainnet.optimism.io",
-    "name" : "OP Mainnet"
+    "symbol" : "ETH"
   },
   {
+    "chainId" : 56,
     "name" : "BNB Smart Chain Mainnet",
     "nodeURLString" : "https://bsc-dataseed1.bnbchain.org",
-    "chainId" : 56,
     "symbol" : "BNB"
   },
   {
-    "name" : "Optimism Kovan",
-    "symbol" : "ETH",
     "chainId" : 69,
-    "nodeURLString" : "https://kovan.optimism.io/"
+    "name" : "Optimism Kovan",
+    "nodeURLString" : "https://kovan.optimism.io/",
+    "symbol" : "ETH"
   },
   {
     "chainId" : 97,
-    "symbol" : "tBNB",
+    "name" : "BNB Smart Chain Testnet",
     "nodeURLString" : "https://data-seed-prebsc-1-s1.bnbchain.org:8545",
-    "name" : "BNB Smart Chain Testnet"
+    "symbol" : "tBNB"
   },
   {
+    "chainId" : 100,
     "name" : "Gnosis",
-    "symbol" : "XDAI",
     "nodeURLString" : "https://rpc.gnosischain.com",
-    "chainId" : 100
+    "symbol" : "XDAI"
   },
   {
-    "nodeURLString" : "https://polygon-rpc.com/",
     "chainId" : 137,
     "name" : "Polygon Mainnet",
+    "nodeURLString" : "https://polygon-rpc.com/",
     "symbol" : "MATIC"
   },
   {
     "chainId" : 250,
-    "symbol" : "FTM",
     "name" : "Fantom Opera",
-    "nodeURLString" : "https://rpc.ftm.tools"
+    "nodeURLString" : "https://rpc.ftm.tools",
+    "symbol" : "FTM"
   },
   {
     "chainId" : 4002,
     "name" : "Fantom Testnet",
-    "symbol" : "FTM",
-    "nodeURLString" : "https://rpc.testnet.fantom.network"
+    "nodeURLString" : "https://rpc.testnet.fantom.network",
+    "symbol" : "FTM"
   },
   {
+    "chainId" : 8217,
     "name" : "Klaytn Mainnet Cypress",
     "nodeURLString" : "https://public-node-api.klaytnapi.com/v1/cypress",
-    "chainId" : 8217,
     "symbol" : "KLAY"
   },
   {
     "chainId" : 8453,
+    "name" : "Base",
     "nodeURLString" : "https://mainnet.base.org/",
-    "symbol" : "ETH",
-    "name" : "Base"
+    "symbol" : "ETH"
   },
   {
     "chainId" : 42161,
+    "name" : "Arbitrum One",
     "nodeURLString" : "https://arbitrum-mainnet.infura.io/v3/${INFURA_API_KEY}",
-    "symbol" : "ETH",
-    "name" : "Arbitrum One"
+    "symbol" : "ETH"
   },
   {
-    "symbol" : "CELO",
+    "chainId" : 42220,
     "name" : "Celo Mainnet",
     "nodeURLString" : "https://forno.celo.org",
-    "chainId" : 42220
+    "symbol" : "CELO"
   },
   {
+    "chainId" : 43113,
     "name" : "Avalanche Fuji Testnet",
-    "symbol" : "AVAX",
     "nodeURLString" : "https://api.avax-test.network/ext/bc/C/rpc",
-    "chainId" : 43113
+    "symbol" : "AVAX"
   },
   {
-    "name" : "Avalanche C-Chain",
     "chainId" : 43114,
-    "symbol" : "AVAX",
-    "nodeURLString" : "https://api.avax.network/ext/bc/C/rpc"
+    "name" : "Avalanche C-Chain",
+    "nodeURLString" : "https://api.avax.network/ext/bc/C/rpc",
+    "symbol" : "AVAX"
   },
   {
-    "symbol" : "MATIC",
+    "chainId" : 80001,
     "name" : "Mumbai",
     "nodeURLString" : "https://rpc-mumbai.maticvigil.com",
-    "chainId" : 80001
+    "symbol" : "MATIC"
   },
   {
-    "name" : "Arbitrum Rinkeby",
     "chainId" : 421611,
-    "symbol" : "ETH",
-    "nodeURLString" : "https://rinkeby.arbitrum.io/rpc"
+    "name" : "Arbitrum Rinkeby",
+    "nodeURLString" : "https://rinkeby.arbitrum.io/rpc",
+    "symbol" : "ETH"
   },
   {
-    "nodeURLString" : "https://sepolia-rpc.scroll.io",
+    "chainId" : 534351,
     "name" : "Scroll Sepolia Testnet",
-    "symbol" : "ETH",
-    "chainId" : 534351
+    "nodeURLString" : "https://sepolia-rpc.scroll.io",
+    "symbol" : "ETH"
   },
   {
     "chainId" : 534352,
-    "nodeURLString" : "https://rpc.scroll.io",
     "name" : "Scroll",
+    "nodeURLString" : "https://rpc.scroll.io",
     "symbol" : "ETH"
   },
   {
     "chainId" : 7777777,
-    "nodeURLString" : "https://rpc.zora.energy/",
     "name" : "Zora",
+    "nodeURLString" : "https://rpc.zora.energy/",
     "symbol" : "ETH"
   },
   {
-    "nodeURLString" : "https://devnet.neonevm.org",
     "chainId" : 245022926,
     "name" : "Neon EVM DevNet",
+    "nodeURLString" : "https://devnet.neonevm.org",
     "symbol" : "NEON"
   },
   {
-    "nodeURLString" : "",
-    "symbol" : "NEON",
+    "chainId" : 245022934,
     "name" : "Neon EVM MainNet",
-    "chainId" : 245022934
+    "nodeURLString" : "",
+    "symbol" : "NEON"
   },
   {
-    "nodeURLString" : "https://mainnet.aurora.dev",
+    "chainId" : 1313161554,
     "name" : "Aurora Mainnet",
-    "symbol" : "ETH",
-    "chainId" : 1313161554
+    "nodeURLString" : "https://mainnet.aurora.dev",
+    "symbol" : "ETH"
   },
   {
-    "nodeURLString" : "https://rpcapi.sonic.fantom.network/",
+    "chainId" : 64240,
     "name" : "Fantom Sonic Open",
-    "symbol" : "FTM",
-    "chainId" : 64240
+    "nodeURLString" : "https://rpcapi.sonic.fantom.network/",
+    "symbol" : "FTM"
   }
 ]
