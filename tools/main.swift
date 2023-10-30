@@ -17,11 +17,19 @@ func fetchChains(completion: @escaping ([EIP155ChainData]) -> Void) {
 }
 
 fetchChains { chains in
-    let ok = Set(mainnets + testnets)
+    var ok = Set(mainnets + testnets)
     let filtered = chains.filter { ok.contains($0.chainId) }
+    
+    let result = filtered.map {
+        EthereumNetwork(chainId: $0.chainId,
+                        name: $0.name,
+                        symbol: $0.nativeCurrency.symbol,
+                        nodeURLString: $0.rpc.first ?? "")
+    }
+    
     let encoder = JSONEncoder()
-    encoder.outputFormatting = .prettyPrinted
-    let data = try! encoder.encode(filtered)
+    encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+    let data = try! encoder.encode(result)
     try! data.write(to: URL(fileURLWithPath: filePath))
     semaphore.signal()
 }

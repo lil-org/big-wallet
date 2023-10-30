@@ -2,11 +2,10 @@
 
 import Foundation
 
-struct EthereumNetwork {
+struct EthereumNetwork: Codable {
     
-    let id: Int
+    let chainId: Int
     let name: String
-    let chainId: String
     let symbol: String
     let nodeURLString: String
     

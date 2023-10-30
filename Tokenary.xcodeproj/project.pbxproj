@@ -184,6 +184,8 @@
 		2CE3D012267F73C00032A62E /* Transaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D011267F73C00032A62E /* Transaction.swift */; };
 		2CED86A52AF00BC9006F9E26 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86A42AF00BC9006F9E26 /* main.swift */; };
 		2CED86B02AF0167F006F9E26 /* EIP155ChainData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86AF2AF0167F006F9E26 /* EIP155ChainData.swift */; };
+		2CED86B22AF01EFC006F9E26 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */; };
+		2CED86B32AF01F99006F9E26 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
 		2CEFEB16274D5DCA00CE23BD /* inpage.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CEFEB15274D5DC900CE23BD /* inpage.js */; };
 		2CF25597275A46D300AE54B9 /* Defaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C528A15267FA8EB00CA3ADD /* Defaults.swift */; };
 		2CF25598275A46D600AE54B9 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C492689F01700D0926A /* Strings.swift */; };
@@ -767,13 +769,13 @@
 			isa = PBXGroup;
 			children = (
 				2C901C492689F01700D0926A /* Strings.swift */,
-				2C9931DB2AEEC0E200577C8A /* EthereumNetworksList.swift */,
 				2CDD86F72AE3295600F33F95 /* Secrets.swift */,
 				2C528A15267FA8EB00CA3ADD /* Defaults.swift */,
 				2C8A09C2267513A700993638 /* Ethereum */,
 				2CF255A4275A483600AE54B9 /* Services */,
 				2CF2559F275A47B600AE54B9 /* Extension */,
 				2CD0668826B213BB00728C20 /* Wallets */,
+				2CED86B12AF01DFD006F9E26 /* Views */,
 				2CF25596275A468B00AE54B9 /* Models */,
 				2C8944D02AEC34F2006A711F /* Utilities */,
 				2CF255AF275A490600AE54B9 /* Supporting Files */,
@@ -834,6 +836,14 @@
 				2CED86AF2AF0167F006F9E26 /* EIP155ChainData.swift */,
 			);
 			path = tools;
+			sourceTree = "<group>";
+		};
+		2CED86B12AF01DFD006F9E26 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				2C9931DB2AEEC0E200577C8A /* EthereumNetworksList.swift */,
+			);
+			path = Views;
 			sourceTree = "<group>";
 		};
 		2CF25596275A468B00AE54B9 /* Models */ = {
@@ -1437,6 +1447,8 @@
 			files = (
 				2CED86B02AF0167F006F9E26 /* EIP155ChainData.swift in Sources */,
 				2CED86A52AF00BC9006F9E26 /* main.swift in Sources */,
+				2CED86B32AF01F99006F9E26 /* String.swift in Sources */,
+				2CED86B22AF01EFC006F9E26 /* EthereumNetwork.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
