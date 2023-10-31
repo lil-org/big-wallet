@@ -40,6 +40,7 @@
         "nativeMessaging",
         "browserAction",
         "storage",
+        "https://*.llamarpc.com/",
         "https://*.infura.io/",
         "https://*.infura.io/*",
         "https://*.infura.io/*/*",
