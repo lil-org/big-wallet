@@ -52,7 +52,7 @@ fetchChains { chains in
                         nodeURLString: $0.rpc.first ?? "")
     }
     
-    let data = try! encoder.encode(result)
+    let data = (try! encoder.encode(result)) + "\n".data(using: .utf8)!
     try! data.write(to: networksFileURL)
     updateNodesFile(networks: result)
     
