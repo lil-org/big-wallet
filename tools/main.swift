@@ -8,6 +8,8 @@ let projectDir = FileManager.default.currentDirectoryPath
 let networksFileURL = URL(fileURLWithPath: "\(projectDir)/tools/generated/ethereum-networks.json")
 let nodesFileURL = URL(fileURLWithPath: "\(projectDir)/tools/generated/Nodes.swift")
 
+let https = "https://"
+
 let encoder = JSONEncoder()
 encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes, .sortedKeys]
 
@@ -18,7 +20,20 @@ func fetchChains(completion: @escaping ([EIP155ChainData]) -> Void) {
 }
 
 func updateNodesFile(networks: [EthereumNetwork]) {
-    let contents = "yo"
+    let dictString = networks.map { "\($0.chainId): \"\($0.nodeURLString.dropFirst(https.count))\"" }.joined(separator: ",\n        ")
+    let contents = """
+    import Foundation
+
+    struct Nodes {
+        
+        static let standard: [Int: String] = [
+            \(dictString)
+        ]
+        
+    }
+
+    """
+    
     try! contents.data(using: .utf8)?.write(to: nodesFileURL)
 }
 
@@ -26,6 +41,8 @@ fetchChains { chains in
     let currentData = try! Data(contentsOf: networksFileURL)
     let currentNetworks = try! JSONDecoder().decode([EthereumNetwork].self, from: currentData)
     let ids = Set(currentNetworks.map { $0.chainId })
+    
+    // TODO: make sure https
     
     let filtered = chains.filter { ids.contains($0.chainId) }
     let result = filtered.map {

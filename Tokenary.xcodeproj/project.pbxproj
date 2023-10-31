@@ -188,6 +188,9 @@
 		2CED86B32AF01F99006F9E26 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
 		2CED86B62AF17D5A006F9E26 /* Nodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B52AF17D5A006F9E26 /* Nodes.swift */; };
 		2CED86B72AF17D5A006F9E26 /* Nodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B52AF17D5A006F9E26 /* Nodes.swift */; };
+		2CED86B82AF18192006F9E26 /* Nodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B52AF17D5A006F9E26 /* Nodes.swift */; };
+		2CED86BA2AF1820E006F9E26 /* NodesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B92AF1820E006F9E26 /* NodesService.swift */; };
+		2CED86BB2AF1820E006F9E26 /* NodesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B92AF1820E006F9E26 /* NodesService.swift */; };
 		2CEFEB16274D5DCA00CE23BD /* inpage.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CEFEB15274D5DC900CE23BD /* inpage.js */; };
 		2CF25597275A46D300AE54B9 /* Defaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C528A15267FA8EB00CA3ADD /* Defaults.swift */; };
 		2CF25598275A46D600AE54B9 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C492689F01700D0926A /* Strings.swift */; };
@@ -403,6 +406,7 @@
 		2CED86A92AF00F56006F9E26 /* ethereum-networks.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "ethereum-networks.json"; sourceTree = "<group>"; };
 		2CED86AF2AF0167F006F9E26 /* EIP155ChainData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EIP155ChainData.swift; sourceTree = "<group>"; };
 		2CED86B52AF17D5A006F9E26 /* Nodes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Nodes.swift; sourceTree = "<group>"; };
+		2CED86B92AF1820E006F9E26 /* NodesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodesService.swift; sourceTree = "<group>"; };
 		2CEFEB15274D5DC900CE23BD /* inpage.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = inpage.js; sourceTree = "<group>"; };
 		2CF255B3275A744000AE54B9 /* PasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordViewController.swift; sourceTree = "<group>"; };
 		2CF255B5275A746000AE54B9 /* AccountsListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsListViewController.swift; sourceTree = "<group>"; };
@@ -794,6 +798,7 @@
 				2C264BDA27B5A94400234393 /* Models */,
 				2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */,
 				2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */,
+				2CED86B92AF1820E006F9E26 /* NodesService.swift */,
 			);
 			path = "Safari Shared";
 			sourceTree = "<group>";
@@ -1273,6 +1278,7 @@
 				2C2AA1D728AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
 				2C773F5E27450B97007B04E7 /* ExtensionBridge.swift in Sources */,
 				2C264BDE27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */,
+				2CED86BA2AF1820E006F9E26 /* NodesService.swift in Sources */,
 				2CC8C5AC276A7EF70083FB1B /* EthereumNetwork.swift in Sources */,
 				2C264BC327B2F2C100234393 /* EthereumSafariRequest.swift in Sources */,
 				2C264BBE27B2F25E00234393 /* SafariRequest.swift in Sources */,
@@ -1313,6 +1319,7 @@
 				2C603D0226B6E13F00956955 /* String.swift in Sources */,
 				2C264BC127B2F2C100234393 /* EthereumSafariRequest.swift in Sources */,
 				2C264BD027B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
+				2CED86B82AF18192006F9E26 /* Nodes.swift in Sources */,
 				2C134BA627553EC500DAFBDB /* Browser.swift in Sources */,
 				2CC89471269A334A00879245 /* UserDefaults.swift in Sources */,
 				2C78F8282683BDCC00C10670 /* Alert.swift in Sources */,
@@ -1446,6 +1453,7 @@
 				2C2AA1D828AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
 				2CE0594327640EAB0042D844 /* ExtensionBridge.swift in Sources */,
 				2C264BDF27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */,
+				2CED86BB2AF1820E006F9E26 /* NodesService.swift in Sources */,
 				2CC8C5AD276A7EF80083FB1B /* EthereumNetwork.swift in Sources */,
 				2C264BC427B2F2C100234393 /* EthereumSafariRequest.swift in Sources */,
 				2C264BBF27B2F25E00234393 /* SafariRequest.swift in Sources */,
