@@ -59,7 +59,7 @@ class ApproveTransactionViewController: UIViewController {
         navigationItem.largeTitleDisplayMode = .always
         isModalInPresentation = true
         
-        if chain == .ethereum {
+        if chain.isEthMainnet {
             sectionModels = [[], [.gasPriceSlider]]
         } else {
             sectionModels = [[]]

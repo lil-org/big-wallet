@@ -14,7 +14,7 @@ extension SafariRequest {
         struct ProviderConfiguration {
             let provider: InpageProvider
             let address: String
-            let network: EthereumNetwork?
+            let chainId: String?
         }
         
         let method: Method
@@ -37,7 +37,7 @@ extension SafariRequest {
                     case .ethereum:
                         guard let response = try? jsonDecoder.decode(ResponseToExtension.Ethereum.self, from: data),
                               let address = response.results?.first else { continue }
-                        configurations.append(ProviderConfiguration(provider: provider, address: address, network: EthereumNetwork.withChainId(response.chainId)))
+                        configurations.append(ProviderConfiguration(provider: provider, address: address, chainId: response.chainId))
                     case .unknown, .multiple:
                         continue
                     }
