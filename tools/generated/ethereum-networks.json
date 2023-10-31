@@ -142,11 +142,5 @@
     "name" : "Aurora Mainnet",
     "nodeURLString" : "https://mainnet.aurora.dev",
     "symbol" : "ETH"
-  },
-  {
-    "chainId" : 64240,
-    "name" : "Fantom Sonic Open",
-    "nodeURLString" : "https://rpcapi.sonic.fantom.network/",
-    "symbol" : "FTM"
   }
 ]

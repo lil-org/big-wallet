@@ -834,6 +834,7 @@
 			children = (
 				2CED86A42AF00BC9006F9E26 /* main.swift */,
 				2CED86AF2AF0167F006F9E26 /* EIP155ChainData.swift */,
+				2CED86B42AF17BF0006F9E26 /* generated */,
 			);
 			path = tools;
 			sourceTree = "<group>";
@@ -844,6 +845,14 @@
 				2C9931DB2AEEC0E200577C8A /* EthereumNetworksList.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		2CED86B42AF17BF0006F9E26 /* generated */ = {
+			isa = PBXGroup;
+			children = (
+				2CED86A92AF00F56006F9E26 /* ethereum-networks.json */,
+			);
+			path = generated;
 			sourceTree = "<group>";
 		};
 		2CF25596275A468B00AE54B9 /* Models */ = {
@@ -892,7 +901,6 @@
 		2CF255AF275A490600AE54B9 /* Supporting Files */ = {
 			isa = PBXGroup;
 			children = (
-				2CED86A92AF00F56006F9E26 /* ethereum-networks.json */,
 				2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */,
 			);
 			path = "Supporting Files";

@@ -5,7 +5,7 @@ import Foundation
 let semaphore = DispatchSemaphore(value: 0)
 
 let projectDir = FileManager.default.currentDirectoryPath
-let filePath = "\(projectDir)/Shared/Supporting Files/ethereum-networks.json"
+let filePath = "\(projectDir)/tools/generated/ethereum-networks.json"
 
 func fetchChains(completion: @escaping ([EIP155ChainData]) -> Void) {
     URLSession.shared.dataTask(with: URL(string: "https://chainid.network/chains.json")!) { (data, _, _) in
@@ -34,3 +34,4 @@ fetchChains { chains in
 }
 
 semaphore.wait()
+print("🟢 all done")
