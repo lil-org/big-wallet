@@ -5,7 +5,11 @@ import Foundation
 let semaphore = DispatchSemaphore(value: 0)
 
 let projectDir = FileManager.default.currentDirectoryPath
-let filePath = "\(projectDir)/tools/generated/ethereum-networks.json"
+let networksFileURL = URL(fileURLWithPath: "\(projectDir)/tools/generated/ethereum-networks.json")
+let nodesFileURL = URL(fileURLWithPath: "\(projectDir)/tools/generated/Nodes.swift")
+
+let encoder = JSONEncoder()
+encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes, .sortedKeys]
 
 func fetchChains(completion: @escaping ([EIP155ChainData]) -> Void) {
     URLSession.shared.dataTask(with: URL(string: "https://chainid.network/chains.json")!) { (data, _, _) in
@@ -13,8 +17,13 @@ func fetchChains(completion: @escaping ([EIP155ChainData]) -> Void) {
     }.resume()
 }
 
+func updateNodesFile(networks: [EthereumNetwork]) {
+    let contents = "yo"
+    try! contents.data(using: .utf8)?.write(to: nodesFileURL)
+}
+
 fetchChains { chains in
-    let currentData = try! Data(contentsOf: URL(fileURLWithPath: filePath))
+    let currentData = try! Data(contentsOf: networksFileURL)
     let currentNetworks = try! JSONDecoder().decode([EthereumNetwork].self, from: currentData)
     let ids = Set(currentNetworks.map { $0.chainId })
     
@@ -26,10 +35,10 @@ fetchChains { chains in
                         nodeURLString: $0.rpc.first ?? "")
     }
     
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes, .sortedKeys]
     let data = try! encoder.encode(result)
-    try! data.write(to: URL(fileURLWithPath: filePath))
+    try! data.write(to: networksFileURL)
+    updateNodesFile(networks: result)
+    
     semaphore.signal()
 }
 
