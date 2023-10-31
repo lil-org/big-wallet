@@ -45,12 +45,14 @@ fetchChains { chains in
     // TODO: make sure https
     
     let filtered = chains.filter { ids.contains($0.chainId) }
-    let result = filtered.map {
+    var result = filtered.map {
         EthereumNetwork(chainId: $0.chainId,
                         name: $0.name,
                         symbol: $0.nativeCurrency.symbol,
                         nodeURLString: $0.rpc.first ?? "")
     }
+    
+    result = currentNetworks
     
     let data = (try! encoder.encode(result)) + "\n".data(using: .utf8)!
     try! data.write(to: networksFileURL)
