@@ -25,6 +25,7 @@ extension EthereumNetwork {
     static func withChainId(_ chainId: Int?) -> EthereumNetwork? {
         guard let chainId = chainId else { return nil }
         // TODO: get from json / defaults / etc
+        // TODO: initialize infura urls correctly (adding api key)
         return EthereumNetwork(chainId: chainId, name: "", symbol: "", nodeURLString: "")
     }
     

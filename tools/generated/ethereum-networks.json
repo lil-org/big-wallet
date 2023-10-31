@@ -2,19 +2,19 @@
   {
     "chainId" : 1,
     "name" : "Ethereum Mainnet",
-    "nodeURLString" : "https://mainnet.infura.io/v3/${INFURA_API_KEY}",
+    "nodeURLString" : "https://mainnet.infura.io/v3/",
     "symbol" : "ETH"
   },
   {
     "chainId" : 5,
     "name" : "Goerli",
-    "nodeURLString" : "https://goerli.infura.io/v3/${INFURA_API_KEY}",
+    "nodeURLString" : "https://goerli.infura.io/v3/",
     "symbol" : "ETH"
   },
   {
     "chainId" : 10,
     "name" : "OP Mainnet",
-    "nodeURLString" : "https://mainnet.optimism.io",
+    "nodeURLString" : "https://optimism-mainnet.infura.io/v3/",
     "symbol" : "ETH"
   },
   {
@@ -44,7 +44,7 @@
   {
     "chainId" : 137,
     "name" : "Polygon Mainnet",
-    "nodeURLString" : "https://polygon-rpc.com/",
+    "nodeURLString" : "https://polygon-mainnet.infura.io/v3/",
     "symbol" : "MATIC"
   },
   {
@@ -60,9 +60,15 @@
     "symbol" : "FTM"
   },
   {
+    "chainId" : 64240,
+    "name" : "Fantom Sonic Open",
+    "nodeURLString" : "https://rpcapi.sonic.fantom.network/",
+    "symbol" : "FTM"
+  },
+  {
     "chainId" : 8217,
     "name" : "Klaytn Mainnet Cypress",
-    "nodeURLString" : "https://public-node-api.klaytnapi.com/v1/cypress",
+    "nodeURLString" : "https://1rpc.io/klay",
     "symbol" : "KLAY"
   },
   {
@@ -74,7 +80,7 @@
   {
     "chainId" : 42161,
     "name" : "Arbitrum One",
-    "nodeURLString" : "https://arbitrum-mainnet.infura.io/v3/${INFURA_API_KEY}",
+    "nodeURLString" : "https://arbitrum-mainnet.infura.io/v3/",
     "symbol" : "ETH"
   },
   {
@@ -134,7 +140,7 @@
   {
     "chainId" : 245022934,
     "name" : "Neon EVM MainNet",
-    "nodeURLString" : "",
+    "nodeURLString" : "https://neon-proxy-mainnet.solana.p2p.org/",
     "symbol" : "NEON"
   },
   {
