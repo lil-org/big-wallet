@@ -191,6 +191,8 @@
 		2CED86B82AF18192006F9E26 /* Nodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B52AF17D5A006F9E26 /* Nodes.swift */; };
 		2CED86BA2AF1820E006F9E26 /* NodesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B92AF1820E006F9E26 /* NodesService.swift */; };
 		2CED86BB2AF1820E006F9E26 /* NodesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B92AF1820E006F9E26 /* NodesService.swift */; };
+		2CED86BF2AF25C32006F9E26 /* Networks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86BE2AF25C32006F9E26 /* Networks.swift */; };
+		2CED86C02AF25C32006F9E26 /* Networks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86BE2AF25C32006F9E26 /* Networks.swift */; };
 		2CEFEB16274D5DCA00CE23BD /* inpage.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CEFEB15274D5DC900CE23BD /* inpage.js */; };
 		2CF25597275A46D300AE54B9 /* Defaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C528A15267FA8EB00CA3ADD /* Defaults.swift */; };
 		2CF25598275A46D600AE54B9 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C492689F01700D0926A /* Strings.swift */; };
@@ -407,6 +409,7 @@
 		2CED86AF2AF0167F006F9E26 /* EIP155ChainData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EIP155ChainData.swift; sourceTree = "<group>"; };
 		2CED86B52AF17D5A006F9E26 /* Nodes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Nodes.swift; sourceTree = "<group>"; };
 		2CED86B92AF1820E006F9E26 /* NodesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodesService.swift; sourceTree = "<group>"; };
+		2CED86BE2AF25C32006F9E26 /* Networks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Networks.swift; sourceTree = "<group>"; };
 		2CEFEB15274D5DC900CE23BD /* inpage.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = inpage.js; sourceTree = "<group>"; };
 		2CF255B3275A744000AE54B9 /* PasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordViewController.swift; sourceTree = "<group>"; };
 		2CF255B5275A746000AE54B9 /* AccountsListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsListViewController.swift; sourceTree = "<group>"; };
@@ -654,9 +657,10 @@
 			isa = PBXGroup;
 			children = (
 				2C1995552674D0F300A8E370 /* Ethereum.swift */,
+				2CE3D011267F73C00032A62E /* Transaction.swift */,
 				2C8944CA2AEB0C10006A711F /* EthereumRPC.swift */,
 				2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */,
-				2CE3D011267F73C00032A62E /* Transaction.swift */,
+				2CED86BE2AF25C32006F9E26 /* Networks.swift */,
 			);
 			path = Ethereum;
 			sourceTree = "<group>";
@@ -1328,6 +1332,7 @@
 				2C264BC127B2F2C100234393 /* EthereumSafariRequest.swift in Sources */,
 				2C264BD027B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
 				2CED86B82AF18192006F9E26 /* Nodes.swift in Sources */,
+				2CED86BF2AF25C32006F9E26 /* Networks.swift in Sources */,
 				2C134BA627553EC500DAFBDB /* Browser.swift in Sources */,
 				2CC89471269A334A00879245 /* UserDefaults.swift in Sources */,
 				2C78F8282683BDCC00C10670 /* Alert.swift in Sources */,
@@ -1405,6 +1410,7 @@
 				2CF255A7275A48BB00AE54B9 /* PriceService.swift in Sources */,
 				2CF25598275A46D600AE54B9 /* Strings.swift in Sources */,
 				2C4768B52826ED83005E8D4D /* CoinType.swift in Sources */,
+				2CED86C02AF25C32006F9E26 /* Networks.swift in Sources */,
 				2CF255AE275A48CF00AE54B9 /* Transaction.swift in Sources */,
 				2C96D38F2762317300687301 /* AccountTableViewCell.swift in Sources */,
 				2C264BEC27B6B50700234393 /* DappRequestProcessor.swift in Sources */,

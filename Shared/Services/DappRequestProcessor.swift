@@ -28,7 +28,7 @@ struct DappRequestProcessor {
                     return walletsManager.getSpecificAccount(coin: coin, address: configuration.address)
                 }
                 let chainId = body.providerConfigurations.compactMap { $0.chainId }.first
-                let network = EthereumNetwork.withChainIdHex(chainId)
+                let network = Networks.withChainIdHex(chainId)
                 let initiallyConnectedProviders = Set(body.providerConfigurations.map { $0.provider })
                 let action = SelectAccountAction(peer: request.peerMeta,
                                                  coinType: nil,
@@ -141,7 +141,7 @@ struct DappRequestProcessor {
         case .signTransaction:
             if let transaction = ethereumRequest.transaction,
                let chainId = ethereumRequest.currentChainId,
-               let chain = EthereumNetwork.withChainId(chainId),
+               let chain = Networks.withChainId(chainId),
                let account = account,
                let privateKey = privateKey {
                 let action = SendTransactionAction(provider: request.provider,
