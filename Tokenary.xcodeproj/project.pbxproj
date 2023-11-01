@@ -188,7 +188,6 @@
 		2CED86B32AF01F99006F9E26 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
 		2CED86B62AF17D5A006F9E26 /* Nodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B52AF17D5A006F9E26 /* Nodes.swift */; };
 		2CED86B72AF17D5A006F9E26 /* Nodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B52AF17D5A006F9E26 /* Nodes.swift */; };
-		2CED86B82AF18192006F9E26 /* Nodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B52AF17D5A006F9E26 /* Nodes.swift */; };
 		2CED86BA2AF1820E006F9E26 /* NodesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B92AF1820E006F9E26 /* NodesService.swift */; };
 		2CED86BB2AF1820E006F9E26 /* NodesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B92AF1820E006F9E26 /* NodesService.swift */; };
 		2CED86BF2AF25C32006F9E26 /* Networks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86BE2AF25C32006F9E26 /* Networks.swift */; };
@@ -1331,7 +1330,6 @@
 				2C603D0226B6E13F00956955 /* String.swift in Sources */,
 				2C264BC127B2F2C100234393 /* EthereumSafariRequest.swift in Sources */,
 				2C264BD027B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
-				2CED86B82AF18192006F9E26 /* Nodes.swift in Sources */,
 				2CED86BF2AF25C32006F9E26 /* Networks.swift in Sources */,
 				2C134BA627553EC500DAFBDB /* Browser.swift in Sources */,
 				2CC89471269A334A00879245 /* UserDefaults.swift in Sources */,
