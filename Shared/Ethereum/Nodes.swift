@@ -2,10 +2,10 @@
 
 import Foundation
 
-struct NodesService {
+struct Nodes {
     
     static func getNode(chainId: Int) -> String? {
-        if let domain = Nodes.standard[chainId] {
+        if let domain = BundledNodes.dict[chainId] {
             let https = "https://" + domain
             if domain.hasSuffix(".infura.io/v3/") {
                 return https + infuraKey

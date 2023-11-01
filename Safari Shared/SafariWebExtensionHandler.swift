@@ -39,7 +39,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             self.context = context
             if case let .ethereum(ethereumRequest) = request.body,
                ethereumRequest.method == .switchEthereumChain || ethereumRequest.method == .addEthereumChain {
-                if let switchToChainId = ethereumRequest.switchToChainId, let rpcURL = NodesService.getNode(chainId: switchToChainId) {
+                if let switchToChainId = ethereumRequest.switchToChainId, let rpcURL = Nodes.getNode(chainId: switchToChainId) {
                     let chainId = String.hex(switchToChainId, withPrefix: true)
                     let responseBody = ResponseToExtension.Ethereum(results: [ethereumRequest.address], chainId: chainId, rpcURL: rpcURL)
                     let response = ResponseToExtension(for: request, body: .ethereum(responseBody))

@@ -1,8 +1,8 @@
 import Foundation
 
-struct Nodes {
+struct BundledNodes {
     
-    static let standard: [Int: String] = [
+    static let dict: [Int: String] = [
         1: "mainnet.infura.io/v3/",
         5: "goerli.infura.io/v3/",
         10: "optimism-mainnet.infura.io/v3/",

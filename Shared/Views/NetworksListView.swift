@@ -4,7 +4,7 @@ import SwiftUI
 
 struct NetworksListView: View {
     @State private var searchText: String = ""
-    let items: [String] = (1...30).map { String($0) }
+    let items: [String] = Networks.all().map { $0.name }
     
     @Environment(\.presentationMode) var presentationMode
 

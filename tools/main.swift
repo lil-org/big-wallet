@@ -24,9 +24,9 @@ func updateNodesFile(networks: [EthereumNetwork]) {
     let contents = """
     import Foundation
 
-    struct Nodes {
+    struct BundledNodes {
         
-        static let standard: [Int: String] = [
+        static let dict: [Int: String] = [
             \(dictString)
         ]
         
