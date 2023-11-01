@@ -10,27 +10,32 @@ struct Networks {
     
     static func withChainId(_ chainId: Int?) -> EthereumNetwork? {
         guard let chainId = chainId else { return nil }
-        // TODO: get from json / defaults / etc
-        // TODO: initialize infura urls correctly (adding api key)
-        return EthereumNetwork(chainId: chainId, name: "", symbol: "", nodeURLString: "")
+        return allBundled[chainId]
     }
     
     static func withChainIdHex(_ chainIdHex: String?) -> EthereumNetwork? {
-        return nil // TODO: implement
+        guard let chainIdHex = chainIdHex, let id = Int(hexString: chainIdHex) else { return nil }
+        return allBundled[id]
     }
     
-    private static let allBundled: [EthereumNetwork] = {
+    private static let allBundled: [Int: EthereumNetwork] = {
         if let url = Bundle.main.url(forResource: "bundled-networks", withExtension: "json"),
            let data = try? Data(contentsOf: url),
-           let networks = try? JSONDecoder().decode([EthereumNetwork].self, from: data) {
-            return networks
+           let bundledNetworks = try? JSONDecoder().decode([Int: BundledNetwork].self, from: data) {
+            let mapped = bundledNetworks.compactMap { (key, value) -> (Int, EthereumNetwork)? in
+                guard let node = Nodes.getNode(chainId: key) else { return nil }
+                let network = EthereumNetwork(chainId: key, name: value.name, symbol: value.symbol, nodeURLString: node)
+                return (key, network)
+            }
+            let dict = [Int: EthereumNetwork](uniqueKeysWithValues: mapped)
+            return dict
         } else {
-            return []
+            return [:]
         }
     }()
     
     static func all() -> [EthereumNetwork] {
-        return allBundled
+        return Array(allBundled.values.sorted(by: { $0.chainId < $1.chainId }))
     }
     
 }
