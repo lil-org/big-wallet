@@ -5,8 +5,11 @@ import Foundation
 let semaphore = DispatchSemaphore(value: 0)
 
 let projectDir = FileManager.default.currentDirectoryPath
-let networksFileURL = URL(fileURLWithPath: "\(projectDir)/tools/generated/bundled-networks.json")
-let nodesFileURL = URL(fileURLWithPath: "\(projectDir)/tools/generated/BundledNodes.swift")
+let base = "\(projectDir)/tools/generated/"
+
+let bundledNetworksFileURL = URL(fileURLWithPath: base + "bundled-networks.json")
+let nodesFileURL = URL(fileURLWithPath: base + "nodes-to-bundle.json")
+let bundledNodesFileURL = URL(fileURLWithPath: base + "BundledNodes.swift")
 
 let https = "https://"
 
@@ -20,6 +23,15 @@ func fetchChains(completion: @escaping ([EIP155ChainData]) -> Void) {
 }
 
 func updateNodesFile(networks: [EthereumNetwork]) {
+    var dict = [String: String]()
+    for n in networks {
+        dict[String(n.chainId)] = n.nodeURLString
+    }
+    
+    let dictData = try! JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+    try! dictData.write(to: nodesFileURL)
+    
+    
     let dictString = networks.map { "\($0.chainId): \"\($0.nodeURLString.dropFirst(https.count))\"" }.joined(separator: ",\n        ")
     let contents = """
     import Foundation
@@ -34,11 +46,11 @@ func updateNodesFile(networks: [EthereumNetwork]) {
 
     """
     
-    try! contents.data(using: .utf8)?.write(to: nodesFileURL)
+    try! contents.data(using: .utf8)?.write(to: bundledNodesFileURL)
 }
 
 fetchChains { chains in
-    let currentData = try! Data(contentsOf: networksFileURL)
+    let currentData = try! Data(contentsOf: bundledNetworksFileURL)
     let currentNetworks = try! JSONDecoder().decode([EthereumNetwork].self, from: currentData)
     let ids = Set(currentNetworks.map { $0.chainId })
     
@@ -55,7 +67,7 @@ fetchChains { chains in
     result = currentNetworks
     
     let data = (try! encoder.encode(result)) + "\n".data(using: .utf8)!
-    try! data.write(to: networksFileURL)
+    try! data.write(to: bundledNetworksFileURL)
     updateNodesFile(networks: result)
     
     semaphore.signal()
