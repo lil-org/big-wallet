@@ -841,8 +841,8 @@
 			isa = PBXGroup;
 			children = (
 				2CED86A42AF00BC9006F9E26 /* main.swift */,
-				2CED86AF2AF0167F006F9E26 /* EIP155ChainData.swift */,
 				2CED86B42AF17BF0006F9E26 /* generated */,
+				2CED86BD2AF225A4006F9E26 /* models */,
 			);
 			path = tools;
 			sourceTree = "<group>";
@@ -862,6 +862,14 @@
 				2CED86B52AF17D5A006F9E26 /* Nodes.swift */,
 			);
 			path = generated;
+			sourceTree = "<group>";
+		};
+		2CED86BD2AF225A4006F9E26 /* models */ = {
+			isa = PBXGroup;
+			children = (
+				2CED86AF2AF0167F006F9E26 /* EIP155ChainData.swift */,
+			);
+			path = models;
 			sourceTree = "<group>";
 		};
 		2CF25596275A468B00AE54B9 /* Models */ = {
