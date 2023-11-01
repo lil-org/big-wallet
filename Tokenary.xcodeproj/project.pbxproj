@@ -187,7 +187,6 @@
 		2CE3D012267F73C00032A62E /* Transaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D011267F73C00032A62E /* Transaction.swift */; };
 		2CED86A52AF00BC9006F9E26 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86A42AF00BC9006F9E26 /* main.swift */; };
 		2CED86B02AF0167F006F9E26 /* EIP155ChainData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86AF2AF0167F006F9E26 /* EIP155ChainData.swift */; };
-		2CED86B22AF01EFC006F9E26 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */; };
 		2CED86B32AF01F99006F9E26 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
 		2CED86B62AF17D5A006F9E26 /* BundledNodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B52AF17D5A006F9E26 /* BundledNodes.swift */; };
 		2CED86B72AF17D5A006F9E26 /* BundledNodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B52AF17D5A006F9E26 /* BundledNodes.swift */; };
@@ -747,6 +746,14 @@
 			path = Library;
 			sourceTree = "<group>";
 		};
+		2C9B55D52AF2B8D5008BE899 /* helpers */ = {
+			isa = PBXGroup;
+			children = (
+				2C9B55D42AF2B004008BE899 /* nodes-to-bundle.json */,
+			);
+			path = helpers;
+			sourceTree = "<group>";
+		};
 		2CB3844027654A0D00A189B9 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
@@ -855,8 +862,9 @@
 			isa = PBXGroup;
 			children = (
 				2CED86A42AF00BC9006F9E26 /* main.swift */,
-				2CED86B42AF17BF0006F9E26 /* generated */,
+				2CED86B42AF17BF0006F9E26 /* bundled */,
 				2CED86BD2AF225A4006F9E26 /* models */,
+				2C9B55D52AF2B8D5008BE899 /* helpers */,
 			);
 			path = tools;
 			sourceTree = "<group>";
@@ -869,14 +877,13 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
-		2CED86B42AF17BF0006F9E26 /* generated */ = {
+		2CED86B42AF17BF0006F9E26 /* bundled */ = {
 			isa = PBXGroup;
 			children = (
 				2CED86A92AF00F56006F9E26 /* bundled-networks.json */,
-				2C9B55D42AF2B004008BE899 /* nodes-to-bundle.json */,
 				2CED86B52AF17D5A006F9E26 /* BundledNodes.swift */,
 			);
-			path = generated;
+			path = bundled;
 			sourceTree = "<group>";
 		};
 		2CED86BD2AF225A4006F9E26 /* models */ = {
@@ -1504,7 +1511,6 @@
 				2CED86B02AF0167F006F9E26 /* EIP155ChainData.swift in Sources */,
 				2CED86A52AF00BC9006F9E26 /* main.swift in Sources */,
 				2CED86B32AF01F99006F9E26 /* String.swift in Sources */,
-				2CED86B22AF01EFC006F9E26 /* EthereumNetwork.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

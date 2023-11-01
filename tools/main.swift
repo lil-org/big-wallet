@@ -5,11 +5,11 @@ import Foundation
 let semaphore = DispatchSemaphore(value: 0)
 
 let projectDir = FileManager.default.currentDirectoryPath
-let base = "\(projectDir)/tools/generated/"
+let base = "\(projectDir)/tools/"
 
-let bundledNetworksFileURL = URL(fileURLWithPath: base + "bundled-networks.json")
-let nodesFileURL = URL(fileURLWithPath: base + "nodes-to-bundle.json")
-let bundledNodesFileURL = URL(fileURLWithPath: base + "BundledNodes.swift")
+let bundledNetworksFileURL = URL(fileURLWithPath: base + "bundled/bundled-networks.json")
+let bundledNodesFileURL = URL(fileURLWithPath: base + "bundled/BundledNodes.swift")
+let nodesToBundleFileURL = URL(fileURLWithPath: base + "helpers/nodes-to-bundle.json")
 
 let https = "https://"
 
@@ -22,17 +22,37 @@ func fetchChains(completion: @escaping ([EIP155ChainData]) -> Void) {
     }.resume()
 }
 
-func updateNodesFile(networks: [EthereumNetwork]) {
-    var dict = [String: String]()
-    for n in networks {
-        dict[String(n.chainId)] = n.nodeURLString
+fetchChains { chains in
+    let currentNetworksData = try! Data(contentsOf: bundledNetworksFileURL)
+    let currentNodesData = try! Data(contentsOf: nodesToBundleFileURL)
+    
+    let currentNetworks = try! JSONDecoder().decode([Int: BundledNetwork].self, from: currentNetworksData)
+    let currentNodes = try! JSONDecoder().decode([String: String].self, from: currentNodesData)
+    let ids = Set(currentNetworks.keys)
+    
+    // TODO: make sure https
+    let filtered = chains.filter { ids.contains($0.chainId) }
+    
+    var updatedNetworks = [Int: BundledNetwork]()
+    let updatedNodes = currentNodes
+    
+    filtered.forEach { chain in
+        updatedNetworks[chain.chainId] = BundledNetwork(name: chain.name, symbol: chain.nativeCurrency.symbol)
     }
     
-    let dictData = try! JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
-    try! dictData.write(to: nodesFileURL)
+    updatedNetworks = currentNetworks
     
+    let data = (try! encoder.encode(updatedNetworks)) + "\n".data(using: .utf8)!
+    try! data.write(to: bundledNetworksFileURL)
+    updateNodesFiles(nodes: updatedNodes)
+    semaphore.signal()
+}
+
+func updateNodesFiles(nodes: [String: String]) {
+    let dictData = try! JSONSerialization.data(withJSONObject: nodes, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]) + "\n".data(using: .utf8)!
+    try! dictData.write(to: nodesToBundleFileURL)
     
-    let dictString = networks.map { "\($0.chainId): \"\($0.nodeURLString.dropFirst(https.count))\"" }.joined(separator: ",\n        ")
+    let dictString = nodes.sorted(by: { Int($0.key)! < Int($1.key)! }).map { "\($0.key): \"\($0.value.dropFirst(https.count))\"" }.joined(separator: ",\n        ")
     let contents = """
     import Foundation
 
@@ -47,30 +67,6 @@ func updateNodesFile(networks: [EthereumNetwork]) {
     """
     
     try! contents.data(using: .utf8)?.write(to: bundledNodesFileURL)
-}
-
-fetchChains { chains in
-    let currentData = try! Data(contentsOf: bundledNetworksFileURL)
-    let currentNetworks = try! JSONDecoder().decode([EthereumNetwork].self, from: currentData)
-    let ids = Set(currentNetworks.map { $0.chainId })
-    
-    // TODO: make sure https
-    
-    let filtered = chains.filter { ids.contains($0.chainId) }
-    var result = filtered.map {
-        EthereumNetwork(chainId: $0.chainId,
-                        name: $0.name,
-                        symbol: $0.nativeCurrency.symbol,
-                        nodeURLString: $0.rpc.first ?? "")
-    }
-    
-    result = currentNetworks
-    
-    let data = (try! encoder.encode(result)) + "\n".data(using: .utf8)!
-    try! data.write(to: bundledNetworksFileURL)
-    updateNodesFile(networks: result)
-    
-    semaphore.signal()
 }
 
 semaphore.wait()
