@@ -20,7 +20,7 @@ struct Networks {
     }
     
     private static let allBundled: [EthereumNetwork] = {
-        if let url = Bundle.main.url(forResource: "ethereum-networks", withExtension: "json"),
+        if let url = Bundle.main.url(forResource: "bundled-networks", withExtension: "json"),
            let data = try? Data(contentsOf: url),
            let networks = try? JSONDecoder().decode([EthereumNetwork].self, from: data) {
             return networks

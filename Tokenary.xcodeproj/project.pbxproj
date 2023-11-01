@@ -142,6 +142,9 @@
 		2C96D3AA2763D13400687301 /* DataStateView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C96D3A82763D13400687301 /* DataStateView.xib */; };
 		2C9931DC2AEEC0E200577C8A /* NetworksListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9931DB2AEEC0E200577C8A /* NetworksListView.swift */; };
 		2C9931DD2AEEC0E200577C8A /* NetworksListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9931DB2AEEC0E200577C8A /* NetworksListView.swift */; };
+		2C9B55D12AF2AE4B008BE899 /* BundledNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */; };
+		2C9B55D22AF2AE4B008BE899 /* BundledNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */; };
+		2C9B55D32AF2AE4B008BE899 /* BundledNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */; };
 		2C9F0B6826BDCB2E008FA3D6 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */; };
 		2CAA412526C7CD93009F3535 /* ReviewRequester.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CAA412426C7CD93009F3535 /* ReviewRequester.swift */; };
 		2CB3845A27654EA900A189B9 /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 2CB3845827654E9700A189B9 /* _locales */; };
@@ -192,8 +195,8 @@
 		2CED86BB2AF1820E006F9E26 /* Nodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B92AF1820E006F9E26 /* Nodes.swift */; };
 		2CED86BF2AF25C32006F9E26 /* Networks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86BE2AF25C32006F9E26 /* Networks.swift */; };
 		2CED86C02AF25C32006F9E26 /* Networks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86BE2AF25C32006F9E26 /* Networks.swift */; };
-		2CED86C12AF26114006F9E26 /* ethereum-networks.json in Resources */ = {isa = PBXBuildFile; fileRef = 2CED86A92AF00F56006F9E26 /* ethereum-networks.json */; };
-		2CED86C22AF2611D006F9E26 /* ethereum-networks.json in Resources */ = {isa = PBXBuildFile; fileRef = 2CED86A92AF00F56006F9E26 /* ethereum-networks.json */; };
+		2CED86C12AF26114006F9E26 /* bundled-networks.json in Resources */ = {isa = PBXBuildFile; fileRef = 2CED86A92AF00F56006F9E26 /* bundled-networks.json */; };
+		2CED86C22AF2611D006F9E26 /* bundled-networks.json in Resources */ = {isa = PBXBuildFile; fileRef = 2CED86A92AF00F56006F9E26 /* bundled-networks.json */; };
 		2CED86C32AF262E6006F9E26 /* Nodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B92AF1820E006F9E26 /* Nodes.swift */; };
 		2CED86C42AF262E7006F9E26 /* Nodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B92AF1820E006F9E26 /* Nodes.swift */; };
 		2CED86C52AF26327006F9E26 /* BundledNodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B52AF17D5A006F9E26 /* BundledNodes.swift */; };
@@ -374,6 +377,7 @@
 		2C96D3A72763D13400687301 /* DataStateView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DataStateView.swift; sourceTree = "<group>"; };
 		2C96D3A82763D13400687301 /* DataStateView.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = DataStateView.xib; sourceTree = "<group>"; };
 		2C9931DB2AEEC0E200577C8A /* NetworksListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworksListView.swift; sourceTree = "<group>"; };
+		2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundledNetwork.swift; sourceTree = "<group>"; };
 		2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumNetwork.swift; sourceTree = "<group>"; };
 		2CAA412426C7CD93009F3535 /* ReviewRequester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewRequester.swift; sourceTree = "<group>"; };
 		2CB3844327654BF600A189B9 /* error.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = error.js; path = "web3-provider/error.js"; sourceTree = "<group>"; };
@@ -410,7 +414,7 @@
 		2CE3D011267F73C00032A62E /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
 		2CED86A22AF00BC9006F9E26 /* tools */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = tools; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CED86A42AF00BC9006F9E26 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
-		2CED86A92AF00F56006F9E26 /* ethereum-networks.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "ethereum-networks.json"; sourceTree = "<group>"; };
+		2CED86A92AF00F56006F9E26 /* bundled-networks.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "bundled-networks.json"; sourceTree = "<group>"; };
 		2CED86AF2AF0167F006F9E26 /* EIP155ChainData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EIP155ChainData.swift; sourceTree = "<group>"; };
 		2CED86B52AF17D5A006F9E26 /* BundledNodes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundledNodes.swift; sourceTree = "<group>"; };
 		2CED86B92AF1820E006F9E26 /* Nodes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Nodes.swift; sourceTree = "<group>"; };
@@ -867,7 +871,7 @@
 		2CED86B42AF17BF0006F9E26 /* generated */ = {
 			isa = PBXGroup;
 			children = (
-				2CED86A92AF00F56006F9E26 /* ethereum-networks.json */,
+				2CED86A92AF00F56006F9E26 /* bundled-networks.json */,
 				2CED86B52AF17D5A006F9E26 /* BundledNodes.swift */,
 			);
 			path = generated;
@@ -877,6 +881,7 @@
 			isa = PBXGroup;
 			children = (
 				2CED86AF2AF0167F006F9E26 /* EIP155ChainData.swift */,
+				2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */,
 			);
 			path = models;
 			sourceTree = "<group>";
@@ -1118,7 +1123,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2CED86C12AF26114006F9E26 /* ethereum-networks.json in Resources */,
+				2CED86C12AF26114006F9E26 /* bundled-networks.json in Resources */,
 				2C6B964F26B9D98C00D2C819 /* Colors.xcassets in Resources */,
 				2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */,
 				2C1995472674C4BA00A8E370 /* Main.storyboard in Resources */,
@@ -1130,7 +1135,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2CED86C22AF2611D006F9E26 /* ethereum-networks.json in Resources */,
+				2CED86C22AF2611D006F9E26 /* bundled-networks.json in Resources */,
 				2C96D3AA2763D13400687301 /* DataStateView.xib in Resources */,
 				2C5FF97E26C84F7C00B32ACC /* LaunchScreen.storyboard in Resources */,
 				2C40709527667A8600AB3D55 /* ImageWithLabelTableViewCell.xib in Resources */,
@@ -1381,6 +1386,7 @@
 				2C8944CE2AEC34EB006A711F /* Blockies.swift in Sources */,
 				2C8A09DF267579EA00993638 /* AccountsListViewController.swift in Sources */,
 				2C917429267D2A6E00049075 /* Keychain.swift in Sources */,
+				2C9B55D12AF2AE4B008BE899 /* BundledNetwork.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1435,6 +1441,7 @@
 				2C8ED8DD2AEADDC400818D74 /* BigInt.swift in Sources */,
 				2C96D3A62763CCA000687301 /* Images.swift in Sources */,
 				2C264BD127B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
+				2C9B55D22AF2AE4B008BE899 /* BundledNetwork.swift in Sources */,
 				2C96D39827623EC600687301 /* URL.swift in Sources */,
 				2CF255AD275A48CF00AE54B9 /* EthereumNetwork.swift in Sources */,
 				2CF2559C275A477F00AE54B9 /* ApprovalSubject.swift in Sources */,
@@ -1491,6 +1498,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2C9B55D32AF2AE4B008BE899 /* BundledNetwork.swift in Sources */,
 				2CED86B02AF0167F006F9E26 /* EIP155ChainData.swift in Sources */,
 				2CED86A52AF00BC9006F9E26 /* main.swift in Sources */,
 				2CED86B32AF01F99006F9E26 /* String.swift in Sources */,

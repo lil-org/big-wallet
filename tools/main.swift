@@ -5,8 +5,8 @@ import Foundation
 let semaphore = DispatchSemaphore(value: 0)
 
 let projectDir = FileManager.default.currentDirectoryPath
-let networksFileURL = URL(fileURLWithPath: "\(projectDir)/tools/generated/ethereum-networks.json")
-let nodesFileURL = URL(fileURLWithPath: "\(projectDir)/tools/generated/Nodes.swift")
+let networksFileURL = URL(fileURLWithPath: "\(projectDir)/tools/generated/bundled-networks.json")
+let nodesFileURL = URL(fileURLWithPath: "\(projectDir)/tools/generated/BundledNodes.swift")
 
 let https = "https://"
 
