@@ -31,16 +31,16 @@ fetchChains { chains in
     let ids = Set(currentNetworks.keys)
     
     // TODO: make sure https
-    let filtered = chains.filter { ids.contains($0.chainId) }
+    // TODO: look at all fields and filter these
+    let newChains = chains.filter { !ids.contains($0.chainId) }
     
-    var updatedNetworks = [Int: BundledNetwork]()
-    let updatedNodes = currentNodes
+    var updatedNetworks = currentNetworks
+    var updatedNodes = currentNodes
     
-    filtered.forEach { chain in
+    newChains.forEach { chain in
         updatedNetworks[chain.chainId] = BundledNetwork(name: chain.name, symbol: chain.nativeCurrency.symbol)
+        updatedNodes[String(chain.chainId)] = chain.rpc.first
     }
-    
-    updatedNetworks = currentNetworks
     
     let data = (try! encoder.encode(updatedNetworks)) + "\n".data(using: .utf8)!
     try! data.write(to: bundledNetworksFileURL)
