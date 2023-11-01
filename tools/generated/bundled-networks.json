@@ -1,152 +1,102 @@
-[
-  {
-    "chainId" : 1,
+{
+  "1" : {
     "name" : "Ethereum Mainnet",
-    "nodeURLString" : "https://mainnet.infura.io/v3/",
     "symbol" : "ETH"
   },
-  {
-    "chainId" : 5,
+  "5" : {
     "name" : "Goerli",
-    "nodeURLString" : "https://goerli.infura.io/v3/",
     "symbol" : "ETH"
   },
-  {
-    "chainId" : 10,
+  "10" : {
     "name" : "OP Mainnet",
-    "nodeURLString" : "https://optimism-mainnet.infura.io/v3/",
     "symbol" : "ETH"
   },
-  {
-    "chainId" : 56,
+  "56" : {
     "name" : "BNB Smart Chain Mainnet",
-    "nodeURLString" : "https://bsc-dataseed1.bnbchain.org",
     "symbol" : "BNB"
   },
-  {
-    "chainId" : 69,
+  "69" : {
     "name" : "Optimism Kovan",
-    "nodeURLString" : "https://kovan.optimism.io/",
     "symbol" : "ETH"
   },
-  {
-    "chainId" : 97,
+  "97" : {
     "name" : "BNB Smart Chain Testnet",
-    "nodeURLString" : "https://data-seed-prebsc-1-s1.bnbchain.org:8545",
     "symbol" : "tBNB"
   },
-  {
-    "chainId" : 100,
+  "100" : {
     "name" : "Gnosis",
-    "nodeURLString" : "https://rpc.gnosischain.com",
     "symbol" : "XDAI"
   },
-  {
-    "chainId" : 137,
+  "137" : {
     "name" : "Polygon Mainnet",
-    "nodeURLString" : "https://polygon-mainnet.infura.io/v3/",
     "symbol" : "MATIC"
   },
-  {
-    "chainId" : 250,
+  "250" : {
     "name" : "Fantom Opera",
-    "nodeURLString" : "https://rpc.ftm.tools",
     "symbol" : "FTM"
   },
-  {
-    "chainId" : 4002,
+  "4002" : {
     "name" : "Fantom Testnet",
-    "nodeURLString" : "https://rpc.testnet.fantom.network",
     "symbol" : "FTM"
   },
-  {
-    "chainId" : 64240,
-    "name" : "Fantom Sonic Open",
-    "nodeURLString" : "https://rpcapi.sonic.fantom.network/",
-    "symbol" : "FTM"
-  },
-  {
-    "chainId" : 8217,
+  "8217" : {
     "name" : "Klaytn Mainnet Cypress",
-    "nodeURLString" : "https://1rpc.io/klay",
     "symbol" : "KLAY"
   },
-  {
-    "chainId" : 8453,
+  "8453" : {
     "name" : "Base",
-    "nodeURLString" : "https://mainnet.base.org/",
     "symbol" : "ETH"
   },
-  {
-    "chainId" : 42161,
+  "42161" : {
     "name" : "Arbitrum One",
-    "nodeURLString" : "https://arbitrum-mainnet.infura.io/v3/",
     "symbol" : "ETH"
   },
-  {
-    "chainId" : 42220,
+  "42220" : {
     "name" : "Celo Mainnet",
-    "nodeURLString" : "https://forno.celo.org",
     "symbol" : "CELO"
   },
-  {
-    "chainId" : 43113,
+  "43113" : {
     "name" : "Avalanche Fuji Testnet",
-    "nodeURLString" : "https://api.avax-test.network/ext/bc/C/rpc",
     "symbol" : "AVAX"
   },
-  {
-    "chainId" : 43114,
+  "43114" : {
     "name" : "Avalanche C-Chain",
-    "nodeURLString" : "https://api.avax.network/ext/bc/C/rpc",
     "symbol" : "AVAX"
   },
-  {
-    "chainId" : 80001,
+  "64240" : {
+    "name" : "Fantom Sonic Open",
+    "symbol" : "FTM"
+  },
+  "80001" : {
     "name" : "Mumbai",
-    "nodeURLString" : "https://rpc-mumbai.maticvigil.com",
     "symbol" : "MATIC"
   },
-  {
-    "chainId" : 421611,
+  "421611" : {
     "name" : "Arbitrum Rinkeby",
-    "nodeURLString" : "https://rinkeby.arbitrum.io/rpc",
     "symbol" : "ETH"
   },
-  {
-    "chainId" : 534351,
+  "534351" : {
     "name" : "Scroll Sepolia Testnet",
-    "nodeURLString" : "https://sepolia-rpc.scroll.io",
     "symbol" : "ETH"
   },
-  {
-    "chainId" : 534352,
+  "534352" : {
     "name" : "Scroll",
-    "nodeURLString" : "https://rpc.scroll.io",
     "symbol" : "ETH"
   },
-  {
-    "chainId" : 7777777,
+  "7777777" : {
     "name" : "Zora",
-    "nodeURLString" : "https://rpc.zora.energy/",
     "symbol" : "ETH"
   },
-  {
-    "chainId" : 245022926,
+  "245022926" : {
     "name" : "Neon EVM DevNet",
-    "nodeURLString" : "https://devnet.neonevm.org",
     "symbol" : "NEON"
   },
-  {
-    "chainId" : 245022934,
+  "245022934" : {
     "name" : "Neon EVM MainNet",
-    "nodeURLString" : "https://neon-proxy-mainnet.solana.p2p.org/",
     "symbol" : "NEON"
   },
-  {
-    "chainId" : 1313161554,
+  "1313161554" : {
     "name" : "Aurora Mainnet",
-    "nodeURLString" : "https://mainnet.aurora.dev",
     "symbol" : "ETH"
   }
-]
+}
