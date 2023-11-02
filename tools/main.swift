@@ -30,16 +30,25 @@ fetchChains { chains in
     let currentNodes = try! JSONDecoder().decode([String: String].self, from: currentNodesData)
     let ids = Set(currentNetworks.keys)
     
-    // TODO: make sure https
-    // TODO: look at all fields and filter these
-    let newChains = chains.filter { !ids.contains($0.chainId) }
+    let newChains = chains.filter { chain in
+        if !ids.contains(chain.chainId) &&
+            chain.rpc.contains(where: { $0.hasPrefix(https) }) &&
+            chain.redFlags == nil &&
+            chain.status != "deprecated" &&
+            chain.nativeCurrency.decimals == 18 &&
+            chain.explorers?.contains(where: { $0.standard == "EIP3091" }) == true {
+            return true
+        } else {
+            return false
+        }
+    }
     
     var updatedNetworks = currentNetworks
     var updatedNodes = currentNodes
     
     newChains.forEach { chain in
         updatedNetworks[chain.chainId] = BundledNetwork(name: chain.name, symbol: chain.nativeCurrency.symbol)
-        updatedNodes[String(chain.chainId)] = chain.rpc.first
+        updatedNodes[String(chain.chainId)] = String(chain.rpc.first(where: { $0.hasPrefix(https) })!.dropFirst(https.count))
     }
     
     let data = (try! encoder.encode(updatedNetworks)) + "\n".data(using: .utf8)!
@@ -52,7 +61,7 @@ func updateNodesFiles(nodes: [String: String]) {
     let dictData = try! JSONSerialization.data(withJSONObject: nodes, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]) + "\n".data(using: .utf8)!
     try! dictData.write(to: nodesToBundleFileURL)
     
-    let dictString = nodes.sorted(by: { Int($0.key)! < Int($1.key)! }).map { "\($0.key): \"\($0.value.dropFirst(https.count))\"" }.joined(separator: ",\n        ")
+    let dictString = nodes.sorted(by: { Int($0.key)! < Int($1.key)! }).map { "\($0.key): \"\($0.value)\"" }.joined(separator: ",\n        ")
     let contents = """
     import Foundation
 
