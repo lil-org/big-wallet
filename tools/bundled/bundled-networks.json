@@ -15,29 +15,121 @@
     "name" : "BNB Smart Chain Mainnet",
     "symbol" : "BNB"
   },
+  "66" : {
+    "name" : "OKXChain Mainnet",
+    "symbol" : "OKT"
+  },
   "69" : {
     "name" : "Optimism Kovan",
     "symbol" : "ETH"
+  },
+  "77" : {
+    "name" : "POA Network Sokol",
+    "symbol" : "SPOA"
   },
   "97" : {
     "name" : "BNB Smart Chain Testnet",
     "symbol" : "tBNB"
   },
+  "99" : {
+    "name" : "POA Network Core",
+    "symbol" : "POA"
+  },
   "100" : {
     "name" : "Gnosis",
     "symbol" : "XDAI"
+  },
+  "122" : {
+    "name" : "Fuse Mainnet",
+    "symbol" : "FUSE"
+  },
+  "128" : {
+    "name" : "Huobi ECO Chain Mainnet",
+    "symbol" : "HT"
   },
   "137" : {
     "name" : "Polygon Mainnet",
     "symbol" : "MATIC"
   },
+  "200" : {
+    "name" : "Arbitrum on xDai",
+    "symbol" : "xDAI"
+  },
+  "204" : {
+    "name" : "opBNB Mainnet",
+    "symbol" : "BNB"
+  },
   "250" : {
     "name" : "Fantom Opera",
     "symbol" : "FTM"
   },
+  "280" : {
+    "name" : "zkSync Era Testnet",
+    "symbol" : "ETH"
+  },
+  "314" : {
+    "name" : "Filecoin - Mainnet",
+    "symbol" : "FIL"
+  },
+  "324" : {
+    "name" : "zkSync Era Mainnet",
+    "symbol" : "ETH"
+  },
+  "420" : {
+    "name" : "Optimism Goerli Testnet",
+    "symbol" : "ETH"
+  },
+  "424" : {
+    "name" : "PGN (Public Goods Network)",
+    "symbol" : "ETH"
+  },
+  "1001" : {
+    "name" : "Klaytn Testnet Baobab",
+    "symbol" : "KLAY"
+  },
+  "1088" : {
+    "name" : "Metis Andromeda Mainnet",
+    "symbol" : "METIS"
+  },
+  "1101" : {
+    "name" : "Polygon zkEVM",
+    "symbol" : "ETH"
+  },
+  "1442" : {
+    "name" : "Polygon zkEVM Testnet",
+    "symbol" : "ETH"
+  },
+  "2221" : {
+    "name" : "Kava Testnet",
+    "symbol" : "TKAVA"
+  },
+  "2222" : {
+    "name" : "Kava",
+    "symbol" : "KAVA"
+  },
   "4002" : {
     "name" : "Fantom Testnet",
     "symbol" : "FTM"
+  },
+  "4337" : {
+    "name" : "Beam",
+    "symbol" : "BEAM"
+  },
+  "5000" : {
+    "name" : "Mantle",
+    "symbol" : "MNT"
+  },
+  "5001" : {
+    "name" : "Mantle Testnet",
+    "symbol" : "MNT"
+  },
+  "5611" : {
+    "name" : "opBNB Testnet",
+    "symbol" : "tBNB"
+  },
+  "7700" : {
+    "name" : "Canto",
+    "symbol" : "CANTO"
   },
   "8217" : {
     "name" : "Klaytn Mainnet Cypress",
@@ -47,8 +139,16 @@
     "name" : "Base",
     "symbol" : "ETH"
   },
+  "10200" : {
+    "name" : "Gnosis Chiado Testnet",
+    "symbol" : "XDAI"
+  },
   "42161" : {
     "name" : "Arbitrum One",
+    "symbol" : "ETH"
+  },
+  "42170" : {
+    "name" : "Arbitrum Nova",
     "symbol" : "ETH"
   },
   "42220" : {
@@ -63,6 +163,22 @@
     "name" : "Avalanche C-Chain",
     "symbol" : "AVAX"
   },
+  "44787" : {
+    "name" : "Celo Alfajores Testnet",
+    "symbol" : "CELO"
+  },
+  "58008" : {
+    "name" : "Sepolia PGN (Public Goods Network)",
+    "symbol" : "ETH"
+  },
+  "59140" : {
+    "name" : "Linea Testnet",
+    "symbol" : "ETH"
+  },
+  "59144" : {
+    "name" : "Linea",
+    "symbol" : "ETH"
+  },
   "64240" : {
     "name" : "Fantom Sonic Open",
     "symbol" : "FTM"
@@ -71,8 +187,24 @@
     "name" : "Mumbai",
     "symbol" : "MATIC"
   },
+  "84531" : {
+    "name" : "Base Goerli Testnet",
+    "symbol" : "ETH"
+  },
+  "84532" : {
+    "name" : "Base Sepolia Testnet",
+    "symbol" : "ETH"
+  },
   "421611" : {
     "name" : "Arbitrum Rinkeby",
+    "symbol" : "ETH"
+  },
+  "421613" : {
+    "name" : "Arbitrum Goerli",
+    "symbol" : "AGOR"
+  },
+  "421614" : {
+    "name" : "Arbitrum Sepolia",
     "symbol" : "ETH"
   },
   "534351" : {
@@ -87,6 +219,10 @@
     "name" : "Zora",
     "symbol" : "ETH"
   },
+  "11155111" : {
+    "name" : "Sepolia",
+    "symbol" : "ETH"
+  },
   "245022926" : {
     "name" : "Neon EVM DevNet",
     "symbol" : "NEON"
@@ -95,8 +231,28 @@
     "name" : "Neon EVM MainNet",
     "symbol" : "NEON"
   },
+  "999999999" : {
+    "name" : "Zora Sepolia Testnet",
+    "symbol" : "ETH"
+  },
   "1313161554" : {
     "name" : "Aurora Mainnet",
     "symbol" : "ETH"
+  },
+  "1313161555" : {
+    "name" : "Aurora Testnet",
+    "symbol" : "ETH"
+  },
+  "1666600000" : {
+    "name" : "Harmony Mainnet Shard 0",
+    "symbol" : "ONE"
+  },
+  "11297108099" : {
+    "name" : "Palm Testnet",
+    "symbol" : "PALM"
+  },
+  "11297108109" : {
+    "name" : "Palm",
+    "symbol" : "PALM"
   }
 }
