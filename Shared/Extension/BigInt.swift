@@ -20,8 +20,17 @@ extension BigInt {
         return decimal.multiplying(byPowerOf10: -18).doubleValue
     }
     
-    var gweiUInt: UInt {
-        return decimal.multiplying(byPowerOf10: -9).uintValue
+    var gwei: String {
+        let gweiDecimal = decimal.multiplying(byPowerOf10: -9)
+        let uintValue = gweiDecimal.uintValue
+        if uintValue > 0 {
+            return String(uintValue)
+        } else {
+            let formatter = NumberFormatter()
+            formatter.minimumSignificantDigits = 1
+            formatter.maximumSignificantDigits = 1
+            return formatter.string(from: gweiDecimal) ?? "0"
+        }
     }
     
 }

@@ -16,9 +16,9 @@ struct Transaction {
         return gas != nil && gasPrice != nil
     }
     
-    var gasPriceGwei: UInt? {
+    var gasPriceGwei: String? {
         guard let gasPrice = gasPrice, let value = BigInt(hexString: gasPrice) else { return nil }
-        return value.gweiUInt
+        return value.gwei
     }
     
     func description(chain: EthereumNetwork, price: Double?) -> String {
