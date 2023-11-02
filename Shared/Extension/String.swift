@@ -49,4 +49,10 @@ extension String {
         return prefix + String(value, radix: 16)
     }
     
+    var singleSpaced: String {
+        let trimmedString = self.trimmingCharacters(in: .whitespacesAndNewlines)
+        let singleSpacedString = trimmedString.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression, range: nil)
+        return singleSpacedString
+    }
+    
 }
