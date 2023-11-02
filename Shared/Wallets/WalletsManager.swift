@@ -26,9 +26,10 @@ final class WalletsManager {
     }
     
     func validateWalletInput(_ input: String) -> InputValidationResult {
-        if Mnemonic.isValid(mnemonic: input) {
+        let trimmedInput = input.singleSpaced
+        if Mnemonic.isValid(mnemonic: trimmedInput) {
             return .valid
-        } else if let data = Data(hexString: input) {
+        } else if let data = Data(hexString: trimmedInput) {
             return PrivateKey.isValid(data: data, curve: CoinType.ethereum.curve) ? .valid : .invalid
         } else {
             return input.maybeJSON ? .requiresPassword : .invalid
@@ -48,9 +49,10 @@ final class WalletsManager {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         let name = defaultWalletName
         let defaultCoin = CoinType.ethereum
-        if Mnemonic.isValid(mnemonic: input) {
-            return try importMnemonic(input, name: name, encryptPassword: password)
-        } else if let data = Data(hexString: input), PrivateKey.isValid(data: data, curve: defaultCoin.curve), let privateKey = PrivateKey(data: data) {
+        let trimmedInput = input.singleSpaced
+        if Mnemonic.isValid(mnemonic: trimmedInput) {
+            return try importMnemonic(trimmedInput, name: name, encryptPassword: password)
+        } else if let data = Data(hexString: trimmedInput), PrivateKey.isValid(data: data, curve: defaultCoin.curve), let privateKey = PrivateKey(data: data) {
             return try importPrivateKey(privateKey, name: name, password: password, coin: defaultCoin, onlyToKeychain: false)
         } else if input.maybeJSON, let inputPassword = inputPassword, let json = input.data(using: .utf8) {
             return try importJSON(json, name: name, password: inputPassword, newPassword: password, coin: defaultCoin, onlyToKeychain: false)
