@@ -28,15 +28,17 @@ fetchChains { chains in
     
     let currentNetworks = try! JSONDecoder().decode([Int: BundledNetwork].self, from: currentNetworksData)
     let currentNodes = try! JSONDecoder().decode([String: String].self, from: currentNodesData)
-    let ids = Set(currentNetworks.keys)
+    let newChainsIds = Set([1284, 1285, 288, 43288, 25, 338])
     
     let newChains = chains.filter { chain in
-        if !ids.contains(chain.chainId) &&
+        let isEIP3091 = chain.explorers?.contains(where: { $0.standard == "EIP3091" }) == true
+        let allowNoEIP3091 = true
+        if newChainsIds.contains(chain.chainId) &&
             chain.rpc.contains(where: { $0.hasPrefix(https) }) &&
             chain.redFlags == nil &&
             chain.status != "deprecated" &&
             chain.nativeCurrency.decimals == 18 &&
-            chain.explorers?.contains(where: { $0.standard == "EIP3091" }) == true {
+            (isEIP3091 || allowNoEIP3091) {
             return true
         } else {
             return false

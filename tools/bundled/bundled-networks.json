@@ -11,6 +11,10 @@
     "name" : "Optimism",
     "symbol" : "ETH"
   },
+  "25" : {
+    "name" : "Cronos",
+    "symbol" : "CRO"
+  },
   "56" : {
     "name" : "BNB Chain",
     "symbol" : "BNB"
@@ -67,6 +71,10 @@
     "name" : "zkSync Era Testnet",
     "symbol" : "ETH"
   },
+  "288" : {
+    "name" : "Boba",
+    "symbol" : "ETH"
+  },
   "314" : {
     "name" : "Filecoin",
     "symbol" : "FIL"
@@ -74,6 +82,10 @@
   "324" : {
     "name" : "zkSync Era",
     "symbol" : "ETH"
+  },
+  "338" : {
+    "name" : "Cronos Testnet",
+    "symbol" : "TCRO"
   },
   "420" : {
     "name" : "Optimism Goerli",
@@ -94,6 +106,14 @@
   "1101" : {
     "name" : "Polygon zkEVM",
     "symbol" : "ETH"
+  },
+  "1284" : {
+    "name" : "Moonbeam",
+    "symbol" : "GLMR"
+  },
+  "1285" : {
+    "name" : "Moonriver",
+    "symbol" : "MOVR"
   },
   "1442" : {
     "name" : "Polygon zkEVM Testnet",
@@ -162,6 +182,10 @@
   "43114" : {
     "name" : "Avalanche",
     "symbol" : "AVAX"
+  },
+  "43288" : {
+    "name" : "Boba Avax",
+    "symbol" : "BOBA"
   },
   "44787" : {
     "name" : "Celo Alfajores Testnet",
