@@ -140,8 +140,6 @@
 		2C96D3A62763CCA000687301 /* Images.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D3A52763CCA000687301 /* Images.swift */; };
 		2C96D3A92763D13400687301 /* DataStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D3A72763D13400687301 /* DataStateView.swift */; };
 		2C96D3AA2763D13400687301 /* DataStateView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C96D3A82763D13400687301 /* DataStateView.xib */; };
-		2C9931DC2AEEC0E200577C8A /* NetworksListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9931DB2AEEC0E200577C8A /* NetworksListView.swift */; };
-		2C9931DD2AEEC0E200577C8A /* NetworksListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9931DB2AEEC0E200577C8A /* NetworksListView.swift */; };
 		2C9B55D12AF2AE4B008BE899 /* BundledNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */; };
 		2C9B55D22AF2AE4B008BE899 /* BundledNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */; };
 		2C9B55D32AF2AE4B008BE899 /* BundledNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */; };
@@ -1385,7 +1383,6 @@
 				2C264BEB27B6B50700234393 /* DappRequestProcessor.swift in Sources */,
 				2CE3D012267F73C00032A62E /* Transaction.swift in Sources */,
 				2C90E62227B2ED2D00C8991E /* SafariRequest+Helpers.swift in Sources */,
-				2C9931DC2AEEC0E200577C8A /* NetworksListView.swift in Sources */,
 				2C09FC662828331D00DE9C27 /* Image.swift in Sources */,
 				2C73215A2AEE8F5200AA8A71 /* ConfigurationService.swift in Sources */,
 				2C8A09EB2675964700993638 /* ApproveViewController.swift in Sources */,
@@ -1407,7 +1404,6 @@
 				2CF255BA275A749300AE54B9 /* ApproveViewController.swift in Sources */,
 				2C3024FD28C1193100C304ED /* TokenaryAccount.swift in Sources */,
 				2C96D3962762380400687301 /* ButtonWithExtendedArea.swift in Sources */,
-				2C9931DD2AEEC0E200577C8A /* NetworksListView.swift in Sources */,
 				2C264BC227B2F2C100234393 /* EthereumSafariRequest.swift in Sources */,
 				2CE059372763D60A0042D844 /* KeyboardObserver.swift in Sources */,
 				2CF255A0275A47DD00AE54B9 /* Bundle.swift in Sources */,
