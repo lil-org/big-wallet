@@ -973,7 +973,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2C09CBBC273979C1009AD39B /* Build configuration list for PBXNativeTarget "Safari macOS" */;
 			buildPhases = (
-				2C85D99C274E531100160AD5 /* ShellScript */,
+				2C85D99C274E531100160AD5 /* Run Script */,
 				2C09CB9B273979C1009AD39B /* Sources */,
 				2C09CB9C273979C1009AD39B /* Frameworks */,
 				2C09CB9D273979C1009AD39B /* Resources */,
@@ -1217,28 +1217,29 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Tokenary/Pods-Tokenary-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		2C85D99C274E531100160AD5 /* ShellScript */ = {
+		2C85D99C274E531100160AD5 /* Run Script */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
-			buildActionMask = 8;
+			buildActionMask = 12;
 			files = (
 			);
 			inputFileListPaths = (
 			);
 			inputPaths = (
 			);
+			name = "Run Script";
 			outputFileListPaths = (
 			);
 			outputPaths = (
 			);
-			runOnlyForDeploymentPostprocessing = 1;
+			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "FILE=/usr/lib/bin/yarn\nif [ -f \"$FILE\" ]; then\n    export PATH=/usr/lib/bin:$PATH\nelse\n    export PATH=/opt/homebrew/bin:$PATH\nfi\n\ncd \"$PROJECT_DIR\"/Safari\\ Shared/web3-provider\nyarn run build\n";
+			shellScript = "if [ \"${CONFIGURATION}\" = \"Debug\" ]; then\n    FILE=/usr/lib/bin/yarn\n    if [ -f \"$FILE\" ]; then\n        export PATH=/usr/lib/bin:$PATH\n    else\n        export PATH=/opt/homebrew/bin:$PATH\n    fi\n\n    cd \"$PROJECT_DIR\"/Safari\\ Shared/web3-provider\n    yarn run build\nfi\n";
 		};
 		2CB3844927654C8D00A189B9 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
-			buildActionMask = 8;
+			buildActionMask = 12;
 			files = (
 			);
 			inputFileListPaths = (
@@ -1249,9 +1250,9 @@
 			);
 			outputPaths = (
 			);
-			runOnlyForDeploymentPostprocessing = 1;
+			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "FILE=/usr/lib/bin/yarn\nif [ -f \"$FILE\" ]; then\n    export PATH=/usr/lib/bin:$PATH\nelse\n    export PATH=/opt/homebrew/bin:$PATH\nfi\n\ncd \"$PROJECT_DIR\"/Safari\\ Shared/web3-provider\nyarn run build\n";
+			shellScript = "if [ \"${CONFIGURATION}\" = \"Debug\" ]; then\n    FILE=/usr/lib/bin/yarn\n    if [ -f \"$FILE\" ]; then\n        export PATH=/usr/lib/bin:$PATH\n    else\n        export PATH=/opt/homebrew/bin:$PATH\n    fi\n\n    cd \"$PROJECT_DIR\"/Safari\\ Shared/web3-provider\n    yarn run build\nfi\n";
 		};
 		5ED94A042948552AFC0B9216 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
