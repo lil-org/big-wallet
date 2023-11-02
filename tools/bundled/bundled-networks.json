@@ -195,10 +195,6 @@
     "name" : "Base Sepolia Testnet",
     "symbol" : "ETH"
   },
-  "421611" : {
-    "name" : "Arbitrum Rinkeby",
-    "symbol" : "ETH"
-  },
   "421613" : {
     "name" : "Arbitrum Goerli",
     "symbol" : "AGOR"
