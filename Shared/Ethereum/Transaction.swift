@@ -21,12 +21,12 @@ struct Transaction {
         return value.gweiUInt
     }
     
-    func description(chain: EthereumNetwork, ethPrice: Double?) -> String {
+    func description(chain: EthereumNetwork, price: Double?) -> String {
         var result = ["🌐 " + chain.name]
-        if let value = valueWithSymbol(chain: chain, ethPrice: ethPrice, withLabel: false) {
+        if let value = valueWithSymbol(chain: chain, price: price, withLabel: false) {
             result.append(value)
         }
-        result.append(feeWithSymbol(chain: chain, ethPrice: ethPrice))
+        result.append(feeWithSymbol(chain: chain, price: price))
         result.append(dataWithLabel)
         
         return result.joined(separator: "\n\n")
@@ -54,13 +54,13 @@ struct Transaction {
         return "Gas price: " + gwei
     }
     
-    func feeWithSymbol(chain: EthereumNetwork, ethPrice: Double?) -> String {
+    func feeWithSymbol(chain: EthereumNetwork, price: Double?) -> String {
         let feeString: String
         if let gasPriceString = gasPrice, let gasString = gas,
            let gasPrice = BigInt(hexString: gasPriceString),
            let gas = BigInt(hexString: gasString) {
             let fee = gas * gasPrice
-            let costString = chain.hasUSDPrice ? cost(value: fee, price: ethPrice) : ""
+            let costString = chain.mightShowPrice ? cost(value: fee, price: price) : ""
             feeString = fee.eth.prefix(8) + " \(chain.symbol)" + costString
         } else {
             feeString = Strings.calculating
@@ -68,9 +68,9 @@ struct Transaction {
         return "Fee: " + feeString
     }
     
-    func valueWithSymbol(chain: EthereumNetwork, ethPrice: Double?, withLabel: Bool) -> String? {
+    func valueWithSymbol(chain: EthereumNetwork, price: Double?, withLabel: Bool) -> String? {
         guard let value = value, let value = BigInt(hexString: value) else { return nil }
-        let costString = chain.hasUSDPrice ? cost(value: value, price: ethPrice) : ""
+        let costString = chain.mightShowPrice ? cost(value: value, price: price) : ""
         let valueString = "\(value.eth) \(chain.symbol)" + costString
         return withLabel ? "Value: " + valueString : valueString
     }

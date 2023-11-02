@@ -11,7 +11,7 @@ struct EthereumNetwork: Codable, Equatable {
     let isTestnet: Bool
     
     var symbolIsETH: Bool { return symbol == "ETH" }
-    var hasUSDPrice: Bool { return chainId == EthereumNetwork.ethMainnetChainId } // TODO: list more chains with usd price
+    var mightShowPrice: Bool { return !isTestnet } // TODO: check if explicitly allowed to match price for symbol
     var chainIdHexString: String { String.hex(chainId, withPrefix: true) }
     var isEthMainnet: Bool { return chainId == EthereumNetwork.ethMainnetChainId }
     

@@ -85,10 +85,11 @@ class ApproveTransactionViewController: UIViewController {
             .textWithImage(text: chain.name, imageURL: nil, image: Images.network)
         ]
         
-        if let value = transaction.valueWithSymbol(chain: chain, ethPrice: priceService.currentPrice, withLabel: true) {
+        let price = priceService.forNetwork(chain)
+        if let value = transaction.valueWithSymbol(chain: chain, price: price, withLabel: true) {
             cellModels.append(.text(text: value, oneLine: false))
         }
-        cellModels.append(.text(text: transaction.feeWithSymbol(chain: chain, ethPrice: priceService.currentPrice), oneLine: false))
+        cellModels.append(.text(text: transaction.feeWithSymbol(chain: chain, price: price), oneLine: false))
         cellModels.append(.text(text: transaction.gasPriceWithLabel(chain: chain), oneLine: false))
         if let data = transaction.nonEmptyDataWithLabel {
             cellModels.append(.text(text: data, oneLine: true))

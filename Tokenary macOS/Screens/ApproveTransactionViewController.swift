@@ -94,7 +94,7 @@ class ApproveTransactionViewController: NSViewController {
         okButton.isEnabled = transaction.hasFee
         
         enableSpeedConfigurationIfNeeded()
-        let meta = transaction.description(chain: chain, ethPrice: priceService.currentPrice)
+        let meta = transaction.description(chain: chain, price: priceService.forNetwork(chain))
         if metaTextView.string != meta {
             metaTextView.string = meta
         }
