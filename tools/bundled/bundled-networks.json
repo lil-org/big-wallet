@@ -1,278 +1,308 @@
 {
   "1" : {
-    "name" : "Ethereum",
-    "symbol" : "ETH"
+    "n" : "Ethereum",
+    "s" : "ETH"
   },
   "5" : {
-    "name" : "Ethereum Goerli",
-    "symbol" : "ETH"
+    "n" : "Goerli",
+    "s" : "ETH",
+    "t" : true
   },
   "10" : {
-    "name" : "Optimism",
-    "symbol" : "ETH"
+    "n" : "Optimism",
+    "s" : "ETH"
   },
   "25" : {
-    "name" : "Cronos",
-    "symbol" : "CRO"
+    "n" : "Cronos",
+    "s" : "CRO"
   },
   "56" : {
-    "name" : "BNB Chain",
-    "symbol" : "BNB"
+    "n" : "BNB Chain",
+    "s" : "BNB"
   },
   "66" : {
-    "name" : "OKXChain",
-    "symbol" : "OKT"
+    "n" : "OKXChain",
+    "s" : "OKT"
   },
   "69" : {
-    "name" : "Optimism Kovan",
-    "symbol" : "ETH"
+    "n" : "Optimism Kovan",
+    "s" : "ETH",
+    "t" : true
   },
   "77" : {
-    "name" : "POA Network Sokol",
-    "symbol" : "SPOA"
+    "n" : "POA Network Sokol",
+    "s" : "SPOA",
+    "t" : true
   },
   "97" : {
-    "name" : "BNB Chain Testnet",
-    "symbol" : "tBNB"
+    "n" : "BNB Chain Testnet",
+    "s" : "tBNB",
+    "t" : true
   },
   "99" : {
-    "name" : "POA Network",
-    "symbol" : "POA"
+    "n" : "POA Network",
+    "s" : "POA"
   },
   "100" : {
-    "name" : "Gnosis",
-    "symbol" : "XDAI"
+    "n" : "Gnosis",
+    "s" : "XDAI"
   },
   "122" : {
-    "name" : "Fuse",
-    "symbol" : "FUSE"
+    "n" : "Fuse",
+    "s" : "FUSE"
   },
   "128" : {
-    "name" : "Huobi ECO Chain",
-    "symbol" : "HT"
+    "n" : "Huobi ECO Chain",
+    "s" : "HT"
   },
   "137" : {
-    "name" : "Polygon",
-    "symbol" : "MATIC"
+    "n" : "Polygon",
+    "s" : "MATIC"
   },
   "200" : {
-    "name" : "Arbitrum on xDai",
-    "symbol" : "xDAI"
+    "n" : "Arbitrum on xDai",
+    "s" : "xDAI"
   },
   "204" : {
-    "name" : "opBNB",
-    "symbol" : "BNB"
+    "n" : "opBNB",
+    "s" : "BNB"
   },
   "250" : {
-    "name" : "Fantom Opera",
-    "symbol" : "FTM"
+    "n" : "Fantom Opera",
+    "s" : "FTM"
   },
   "280" : {
-    "name" : "zkSync Era Testnet",
-    "symbol" : "ETH"
+    "n" : "zkSync Era Testnet",
+    "s" : "ETH",
+    "t" : true
   },
   "288" : {
-    "name" : "Boba",
-    "symbol" : "ETH"
+    "n" : "Boba",
+    "s" : "ETH"
   },
   "314" : {
-    "name" : "Filecoin",
-    "symbol" : "FIL"
+    "n" : "Filecoin",
+    "s" : "FIL"
   },
   "324" : {
-    "name" : "zkSync Era",
-    "symbol" : "ETH"
+    "n" : "zkSync Era",
+    "s" : "ETH"
   },
   "338" : {
-    "name" : "Cronos Testnet",
-    "symbol" : "TCRO"
+    "n" : "Cronos Testnet",
+    "s" : "TCRO",
+    "t" : true
   },
   "420" : {
-    "name" : "Optimism Goerli",
-    "symbol" : "ETH"
+    "n" : "Optimism Goerli",
+    "s" : "ETH",
+    "t" : true
   },
   "424" : {
-    "name" : "Public Goods Network",
-    "symbol" : "ETH"
+    "n" : "Public Goods Network",
+    "s" : "ETH"
   },
   "1001" : {
-    "name" : "Klaytn Baobab",
-    "symbol" : "KLAY"
+    "n" : "Klaytn Baobab",
+    "s" : "KLAY",
+    "t" : true
   },
   "1088" : {
-    "name" : "Metis Andromeda",
-    "symbol" : "METIS"
+    "n" : "Metis Andromeda",
+    "s" : "METIS"
   },
   "1101" : {
-    "name" : "Polygon zkEVM",
-    "symbol" : "ETH"
+    "n" : "Polygon zkEVM",
+    "s" : "ETH"
   },
   "1284" : {
-    "name" : "Moonbeam",
-    "symbol" : "GLMR"
+    "n" : "Moonbeam",
+    "s" : "GLMR"
   },
   "1285" : {
-    "name" : "Moonriver",
-    "symbol" : "MOVR"
+    "n" : "Moonriver",
+    "s" : "MOVR"
   },
   "1442" : {
-    "name" : "Polygon zkEVM Testnet",
-    "symbol" : "ETH"
+    "n" : "Polygon zkEVM Testnet",
+    "s" : "ETH",
+    "t" : true
   },
   "2221" : {
-    "name" : "Kava Testnet",
-    "symbol" : "TKAVA"
+    "n" : "Kava Testnet",
+    "s" : "TKAVA",
+    "t" : true
   },
   "2222" : {
-    "name" : "Kava",
-    "symbol" : "KAVA"
+    "n" : "Kava",
+    "s" : "KAVA"
   },
   "4002" : {
-    "name" : "Fantom Testnet",
-    "symbol" : "FTM"
+    "n" : "Fantom Testnet",
+    "s" : "FTM",
+    "t" : true
   },
   "4337" : {
-    "name" : "Beam",
-    "symbol" : "BEAM"
+    "n" : "Beam",
+    "s" : "BEAM"
   },
   "5000" : {
-    "name" : "Mantle",
-    "symbol" : "MNT"
+    "n" : "Mantle",
+    "s" : "MNT"
   },
   "5001" : {
-    "name" : "Mantle Testnet",
-    "symbol" : "MNT"
+    "n" : "Mantle Testnet",
+    "s" : "MNT",
+    "t" : true
   },
   "5611" : {
-    "name" : "opBNB Testnet",
-    "symbol" : "tBNB"
+    "n" : "opBNB Testnet",
+    "s" : "tBNB",
+    "t" : true
   },
   "7700" : {
-    "name" : "Canto",
-    "symbol" : "CANTO"
+    "n" : "Canto",
+    "s" : "CANTO"
   },
   "8217" : {
-    "name" : "Klaytn",
-    "symbol" : "KLAY"
+    "n" : "Klaytn",
+    "s" : "KLAY"
   },
   "8453" : {
-    "name" : "Base",
-    "symbol" : "ETH"
+    "n" : "Base",
+    "s" : "ETH"
   },
   "10200" : {
-    "name" : "Gnosis Chiado",
-    "symbol" : "XDAI"
+    "n" : "Gnosis Chiado",
+    "s" : "XDAI",
+    "t" : true
   },
   "42161" : {
-    "name" : "Arbitrum One",
-    "symbol" : "ETH"
+    "n" : "Arbitrum One",
+    "s" : "ETH"
   },
   "42170" : {
-    "name" : "Arbitrum Nova",
-    "symbol" : "ETH"
+    "n" : "Arbitrum Nova",
+    "s" : "ETH"
   },
   "42220" : {
-    "name" : "Celo",
-    "symbol" : "CELO"
+    "n" : "Celo",
+    "s" : "CELO"
   },
   "43113" : {
-    "name" : "Avalanche Fuji",
-    "symbol" : "AVAX"
+    "n" : "Avalanche Fuji",
+    "s" : "AVAX",
+    "t" : true
   },
   "43114" : {
-    "name" : "Avalanche",
-    "symbol" : "AVAX"
+    "n" : "Avalanche",
+    "s" : "AVAX"
   },
   "43288" : {
-    "name" : "Boba Avax",
-    "symbol" : "BOBA"
+    "n" : "Boba Avax",
+    "s" : "BOBA"
   },
   "44787" : {
-    "name" : "Celo Alfajores Testnet",
-    "symbol" : "CELO"
+    "n" : "Celo Alfajores Testnet",
+    "s" : "CELO",
+    "t" : true
   },
   "58008" : {
-    "name" : "Public Goods Network Sepolia",
-    "symbol" : "ETH"
+    "n" : "Public Goods Network Sepolia",
+    "s" : "ETH",
+    "t" : true
   },
   "59140" : {
-    "name" : "Linea Testnet",
-    "symbol" : "ETH"
+    "n" : "Linea Testnet",
+    "s" : "ETH",
+    "t" : true
   },
   "59144" : {
-    "name" : "Linea",
-    "symbol" : "ETH"
+    "n" : "Linea",
+    "s" : "ETH"
   },
   "64240" : {
-    "name" : "Fantom Sonic Open",
-    "symbol" : "FTM"
+    "n" : "Fantom Sonic Open",
+    "s" : "FTM",
+    "t" : true
   },
   "80001" : {
-    "name" : "Polygon Mumbai",
-    "symbol" : "MATIC"
+    "n" : "Polygon Mumbai",
+    "s" : "MATIC",
+    "t" : true
   },
   "84531" : {
-    "name" : "Base Goerli",
-    "symbol" : "ETH"
+    "n" : "Base Goerli",
+    "s" : "ETH",
+    "t" : true
   },
   "84532" : {
-    "name" : "Base Sepolia",
-    "symbol" : "ETH"
+    "n" : "Base Sepolia",
+    "s" : "ETH",
+    "t" : true
   },
   "421613" : {
-    "name" : "Arbitrum Goerli",
-    "symbol" : "AGOR"
+    "n" : "Arbitrum Goerli",
+    "s" : "AGOR",
+    "t" : true
   },
   "421614" : {
-    "name" : "Arbitrum Sepolia",
-    "symbol" : "ETH"
+    "n" : "Arbitrum Sepolia",
+    "s" : "ETH",
+    "t" : true
   },
   "534351" : {
-    "name" : "Scroll Sepolia",
-    "symbol" : "ETH"
+    "n" : "Scroll Sepolia",
+    "s" : "ETH",
+    "t" : true
   },
   "534352" : {
-    "name" : "Scroll",
-    "symbol" : "ETH"
+    "n" : "Scroll",
+    "s" : "ETH"
   },
   "7777777" : {
-    "name" : "Zora",
-    "symbol" : "ETH"
+    "n" : "Zora",
+    "s" : "ETH"
   },
   "11155111" : {
-    "name" : "Sepolia",
-    "symbol" : "ETH"
+    "n" : "Sepolia",
+    "s" : "ETH",
+    "t" : true
   },
   "245022926" : {
-    "name" : "Neon EVM DevNet",
-    "symbol" : "NEON"
+    "n" : "Neon EVM DevNet",
+    "s" : "NEON",
+    "t" : true
   },
   "245022934" : {
-    "name" : "Neon EVM",
-    "symbol" : "NEON"
+    "n" : "Neon EVM",
+    "s" : "NEON"
   },
   "999999999" : {
-    "name" : "Zora Sepolia",
-    "symbol" : "ETH"
+    "n" : "Zora Sepolia",
+    "s" : "ETH",
+    "t" : true
   },
   "1313161554" : {
-    "name" : "Aurora",
-    "symbol" : "ETH"
+    "n" : "Aurora",
+    "s" : "ETH"
   },
   "1313161555" : {
-    "name" : "Aurora Testnet",
-    "symbol" : "ETH"
+    "n" : "Aurora Testnet",
+    "s" : "ETH",
+    "t" : true
   },
   "1666600000" : {
-    "name" : "Harmony",
-    "symbol" : "ONE"
+    "n" : "Harmony",
+    "s" : "ONE"
   },
   "11297108099" : {
-    "name" : "Palm Testnet",
-    "symbol" : "PALM"
+    "n" : "Palm Testnet",
+    "s" : "PALM",
+    "t" : true
   },
   "11297108109" : {
-    "name" : "Palm",
-    "symbol" : "PALM"
+    "n" : "Palm",
+    "s" : "PALM"
   }
 }
