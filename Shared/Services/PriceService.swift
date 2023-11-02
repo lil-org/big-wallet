@@ -10,12 +10,14 @@ class PriceService {
         let bnb: Price?
         let matic: Price?
         let ftm: Price?
+        let avax: Price?
         
         enum CodingKeys: String, CodingKey, CaseIterable {
             case eth = "ethereum"
             case bnb = "binancecoin"
             case matic = "matic-network"
             case ftm = "fantom"
+            case avax = "avalanche-2"
         }
         
     }
@@ -55,6 +57,8 @@ class PriceService {
             return currentPrices?.ftm?.usd
         case "MATIC":
             return currentPrices?.matic?.usd
+        case "AVAX":
+            return currentPrices?.avax?.usd
         default:
             return nil
         }

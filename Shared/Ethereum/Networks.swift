@@ -36,7 +36,12 @@ struct Networks {
            let bundledNetworks = try? JSONDecoder().decode([Int: BundledNetwork].self, from: data) {
             let mapped = bundledNetworks.compactMap { (key, value) -> (Int, EthereumNetwork)? in
                 guard let node = Nodes.getNode(chainId: key) else { return nil }
-                let network = EthereumNetwork(chainId: key, name: value.name, symbol: value.symbol, nodeURLString: node, isTestnet: value.isTest)
+                let network = EthereumNetwork(chainId: key,
+                                              name: value.name,
+                                              symbol: value.symbol,
+                                              nodeURLString: node,
+                                              isTestnet: value.isTest,
+                                              mightShowPrice: value.okToShowPriceForSymbol)
                 return (key, network)
             }
             let dict = [Int: EthereumNetwork](uniqueKeysWithValues: mapped)
