@@ -1,22 +1,22 @@
 {
   "1" : {
-    "name" : "Ethereum Mainnet",
+    "name" : "Ethereum",
     "symbol" : "ETH"
   },
   "5" : {
-    "name" : "Goerli",
+    "name" : "Ethereum Goerli",
     "symbol" : "ETH"
   },
   "10" : {
-    "name" : "OP Mainnet",
+    "name" : "Optimism",
     "symbol" : "ETH"
   },
   "56" : {
-    "name" : "BNB Smart Chain Mainnet",
+    "name" : "BNB Chain",
     "symbol" : "BNB"
   },
   "66" : {
-    "name" : "OKXChain Mainnet",
+    "name" : "OKXChain",
     "symbol" : "OKT"
   },
   "69" : {
@@ -28,11 +28,11 @@
     "symbol" : "SPOA"
   },
   "97" : {
-    "name" : "BNB Smart Chain Testnet",
+    "name" : "BNB Chain Testnet",
     "symbol" : "tBNB"
   },
   "99" : {
-    "name" : "POA Network Core",
+    "name" : "POA Network",
     "symbol" : "POA"
   },
   "100" : {
@@ -40,15 +40,15 @@
     "symbol" : "XDAI"
   },
   "122" : {
-    "name" : "Fuse Mainnet",
+    "name" : "Fuse",
     "symbol" : "FUSE"
   },
   "128" : {
-    "name" : "Huobi ECO Chain Mainnet",
+    "name" : "Huobi ECO Chain",
     "symbol" : "HT"
   },
   "137" : {
-    "name" : "Polygon Mainnet",
+    "name" : "Polygon",
     "symbol" : "MATIC"
   },
   "200" : {
@@ -56,7 +56,7 @@
     "symbol" : "xDAI"
   },
   "204" : {
-    "name" : "opBNB Mainnet",
+    "name" : "opBNB",
     "symbol" : "BNB"
   },
   "250" : {
@@ -68,27 +68,27 @@
     "symbol" : "ETH"
   },
   "314" : {
-    "name" : "Filecoin - Mainnet",
+    "name" : "Filecoin",
     "symbol" : "FIL"
   },
   "324" : {
-    "name" : "zkSync Era Mainnet",
+    "name" : "zkSync Era",
     "symbol" : "ETH"
   },
   "420" : {
-    "name" : "Optimism Goerli Testnet",
+    "name" : "Optimism Goerli",
     "symbol" : "ETH"
   },
   "424" : {
-    "name" : "PGN (Public Goods Network)",
+    "name" : "Public Goods Network",
     "symbol" : "ETH"
   },
   "1001" : {
-    "name" : "Klaytn Testnet Baobab",
+    "name" : "Klaytn Baobab",
     "symbol" : "KLAY"
   },
   "1088" : {
-    "name" : "Metis Andromeda Mainnet",
+    "name" : "Metis Andromeda",
     "symbol" : "METIS"
   },
   "1101" : {
@@ -132,7 +132,7 @@
     "symbol" : "CANTO"
   },
   "8217" : {
-    "name" : "Klaytn Mainnet Cypress",
+    "name" : "Klaytn",
     "symbol" : "KLAY"
   },
   "8453" : {
@@ -140,7 +140,7 @@
     "symbol" : "ETH"
   },
   "10200" : {
-    "name" : "Gnosis Chiado Testnet",
+    "name" : "Gnosis Chiado",
     "symbol" : "XDAI"
   },
   "42161" : {
@@ -152,15 +152,15 @@
     "symbol" : "ETH"
   },
   "42220" : {
-    "name" : "Celo Mainnet",
+    "name" : "Celo",
     "symbol" : "CELO"
   },
   "43113" : {
-    "name" : "Avalanche Fuji Testnet",
+    "name" : "Avalanche Fuji",
     "symbol" : "AVAX"
   },
   "43114" : {
-    "name" : "Avalanche C-Chain",
+    "name" : "Avalanche",
     "symbol" : "AVAX"
   },
   "44787" : {
@@ -168,7 +168,7 @@
     "symbol" : "CELO"
   },
   "58008" : {
-    "name" : "Sepolia PGN (Public Goods Network)",
+    "name" : "Public Goods Network Sepolia",
     "symbol" : "ETH"
   },
   "59140" : {
@@ -184,15 +184,15 @@
     "symbol" : "FTM"
   },
   "80001" : {
-    "name" : "Mumbai",
+    "name" : "Polygon Mumbai",
     "symbol" : "MATIC"
   },
   "84531" : {
-    "name" : "Base Goerli Testnet",
+    "name" : "Base Goerli",
     "symbol" : "ETH"
   },
   "84532" : {
-    "name" : "Base Sepolia Testnet",
+    "name" : "Base Sepolia",
     "symbol" : "ETH"
   },
   "421613" : {
@@ -204,7 +204,7 @@
     "symbol" : "ETH"
   },
   "534351" : {
-    "name" : "Scroll Sepolia Testnet",
+    "name" : "Scroll Sepolia",
     "symbol" : "ETH"
   },
   "534352" : {
@@ -224,15 +224,15 @@
     "symbol" : "NEON"
   },
   "245022934" : {
-    "name" : "Neon EVM MainNet",
+    "name" : "Neon EVM",
     "symbol" : "NEON"
   },
   "999999999" : {
-    "name" : "Zora Sepolia Testnet",
+    "name" : "Zora Sepolia",
     "symbol" : "ETH"
   },
   "1313161554" : {
-    "name" : "Aurora Mainnet",
+    "name" : "Aurora",
     "symbol" : "ETH"
   },
   "1313161555" : {
@@ -240,7 +240,7 @@
     "symbol" : "ETH"
   },
   "1666600000" : {
-    "name" : "Harmony Mainnet Shard 0",
+    "name" : "Harmony",
     "symbol" : "ONE"
   },
   "11297108099" : {
