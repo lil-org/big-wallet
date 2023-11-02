@@ -10,15 +10,27 @@ struct Networks {
     
     static func withChainId(_ chainId: Int?) -> EthereumNetwork? {
         guard let chainId = chainId else { return nil }
-        return allBundled[chainId]
+        return allBundledDict[chainId]
     }
     
     static func withChainIdHex(_ chainIdHex: String?) -> EthereumNetwork? {
         guard let chainIdHex = chainIdHex, let id = Int(hexString: chainIdHex) else { return nil }
-        return allBundled[id]
+        return allBundledDict[id]
     }
     
-    private static let allBundled: [Int: EthereumNetwork] = {
+    static let allMainnets: [EthereumNetwork] = {
+        return allBundled // TODO: filter mainnets
+    }()
+    
+    static let allTestnets: [EthereumNetwork] = {
+        return allBundled // TODO: filter testnets
+    }()
+    
+    private static let allBundled: [EthereumNetwork] = {
+        return Array(allBundledDict.values.sorted(by: { $0.chainId < $1.chainId }))
+    }()
+    
+    private static let allBundledDict: [Int: EthereumNetwork] = {
         if let url = Bundle.main.url(forResource: "bundled-networks", withExtension: "json"),
            let data = try? Data(contentsOf: url),
            let bundledNetworks = try? JSONDecoder().decode([Int: BundledNetwork].self, from: data) {
@@ -33,9 +45,5 @@ struct Networks {
             return [:]
         }
     }()
-    
-    static func all() -> [EthereumNetwork] {
-        return Array(allBundled.values.sorted(by: { $0.chainId < $1.chainId }))
-    }
     
 }
