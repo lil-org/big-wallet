@@ -21,7 +21,7 @@
     "s" : "BNB"
   },
   "66" : {
-    "n" : "OKXChain",
+    "n" : "OKTC",
     "s" : "OKT"
   },
   "69" : {
@@ -45,7 +45,7 @@
   },
   "100" : {
     "n" : "Gnosis",
-    "s" : "XDAI"
+    "s" : "xDai"
   },
   "122" : {
     "n" : "Fuse",
@@ -61,7 +61,7 @@
   },
   "200" : {
     "n" : "Arbitrum on xDai",
-    "s" : "xDAI"
+    "s" : "xDai"
   },
   "204" : {
     "n" : "opBNB",
@@ -174,7 +174,7 @@
   },
   "10200" : {
     "n" : "Gnosis Chiado",
-    "s" : "XDAI",
+    "s" : "xDai",
     "t" : true
   },
   "42161" : {
