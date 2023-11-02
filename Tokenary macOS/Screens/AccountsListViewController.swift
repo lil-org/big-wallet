@@ -127,7 +127,7 @@ class AccountsListViewController: NSViewController {
     private func callCompletion(specificWalletAccounts: [SpecificWalletAccount]?) {
         if !didCallCompletion {
             didCallCompletion = true
-            let network = selectAccountAction?.network ?? .ethereum
+            let network = selectAccountAction?.network ?? Networks.ethereum
             selectAccountAction?.completion(network, specificWalletAccounts)
         }
     }
@@ -147,18 +147,18 @@ class AccountsListViewController: NSViewController {
                 networkButton.isHidden = true
             } else if networkButton.menu == nil {
                 let menu = NSMenu()
-                for mainnet in EthereumNetwork.allMainnets {
+                for mainnet in Networks.allMainnets {
                     let item = NSMenuItem(title: mainnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
-                    item.tag = mainnet.id
+                    item.tag = mainnet.chainId
                     menu.addItem(item)
                 }
                 
                 let submenuItem = NSMenuItem()
                 submenuItem.title = Strings.testnets
                 let submenu = NSMenu()
-                for testnet in EthereumNetwork.allTestnets {
+                for testnet in Networks.allTestnets {
                     let item = NSMenuItem(title: testnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
-                    item.tag = testnet.id
+                    item.tag = testnet.chainId
                     submenu.addItem(item)
                 }
                 
@@ -171,7 +171,7 @@ class AccountsListViewController: NSViewController {
                 let titleItem = NSMenuItem(title: Strings.selectNetworkOptionally, action: nil, keyEquivalent: "")
                 menu.addItem(titleItem)
                 
-                if let network = selectAccountAction.network, network != .ethereum {
+                if let network = selectAccountAction.network, !network.isEthMainnet {
                     selectNetwork(network)
                 }
             }
@@ -259,7 +259,7 @@ class AccountsListViewController: NSViewController {
     
     @objc private func didSelectChain(_ sender: AnyObject) {
         guard let menuItem = sender as? NSMenuItem,
-              let selectedNetwork = EthereumNetwork(rawValue: menuItem.tag) else { return }
+              let selectedNetwork = Networks.withChainId(menuItem.tag) else { return }
         selectNetwork(selectedNetwork)
     }
     

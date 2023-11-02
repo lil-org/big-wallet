@@ -27,7 +27,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private var sections = [Section]()
     private let walletsManager = WalletsManager.shared
     
-    private var network = EthereumNetwork.ethereum
+    private var network = Networks.ethereum
     var selectAccountAction: SelectAccountAction?
     
     private var wallets: [TokenaryWallet] {
@@ -302,7 +302,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         
         let actionSheet = UIAlertController(title: Strings.selectNetwork, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.sourceView = networkButton
-        for network in EthereumNetwork.allMainnets {
+        for network in Networks.allMainnets {
             let prefix = network == self.network ? "✅ " : ""
             let action = UIAlertAction(title: prefix + network.name, style: .default) { [weak self] _ in
                 self?.selectNetwork(network)
@@ -321,7 +321,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private func showTestnets() {
         let actionSheet = UIAlertController(title: Strings.selectTestnet, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.sourceView = networkButton
-        for network in EthereumNetwork.allTestnets {
+        for network in Networks.allTestnets {
             let prefix = network == self.network ? "✅ " : ""
             let action = UIAlertAction(title: prefix + network.name, style: .default) { [weak self] _ in
                 self?.selectNetwork(network)

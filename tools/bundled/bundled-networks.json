@@ -1,0 +1,326 @@
+{
+  "1" : {
+    "n" : "Ethereum",
+    "s" : "ETH",
+    "o" : true
+  },
+  "5" : {
+    "n" : "Goerli",
+    "s" : "ETH",
+    "t" : true
+  },
+  "10" : {
+    "n" : "Optimism",
+    "s" : "ETH",
+    "o" : true
+  },
+  "25" : {
+    "n" : "Cronos",
+    "s" : "CRO"
+  },
+  "56" : {
+    "n" : "BNB Chain",
+    "s" : "BNB",
+    "o" : true
+  },
+  "66" : {
+    "n" : "OKTC",
+    "s" : "OKT"
+  },
+  "69" : {
+    "n" : "Optimism Kovan",
+    "s" : "ETH",
+    "t" : true
+  },
+  "77" : {
+    "n" : "POA Network Sokol",
+    "s" : "SPOA",
+    "t" : true
+  },
+  "97" : {
+    "n" : "BNB Chain Testnet",
+    "s" : "tBNB",
+    "t" : true
+  },
+  "99" : {
+    "n" : "POA Network",
+    "s" : "POA"
+  },
+  "100" : {
+    "n" : "Gnosis",
+    "s" : "xDai"
+  },
+  "122" : {
+    "n" : "Fuse",
+    "s" : "FUSE"
+  },
+  "128" : {
+    "n" : "Huobi ECO Chain",
+    "s" : "HT"
+  },
+  "137" : {
+    "n" : "Polygon",
+    "s" : "MATIC",
+    "o" : true
+  },
+  "200" : {
+    "n" : "Arbitrum on xDai",
+    "s" : "xDai"
+  },
+  "204" : {
+    "n" : "opBNB",
+    "s" : "BNB",
+    "o" : true
+  },
+  "250" : {
+    "n" : "Fantom Opera",
+    "s" : "FTM",
+    "o" : true
+  },
+  "280" : {
+    "n" : "zkSync Era Testnet",
+    "s" : "ETH",
+    "t" : true
+  },
+  "288" : {
+    "n" : "Boba",
+    "s" : "ETH",
+    "o" : true
+  },
+  "314" : {
+    "n" : "Filecoin",
+    "s" : "FIL"
+  },
+  "324" : {
+    "n" : "zkSync Era",
+    "s" : "ETH",
+    "o" : true
+  },
+  "338" : {
+    "n" : "Cronos Testnet",
+    "s" : "TCRO",
+    "t" : true
+  },
+  "420" : {
+    "n" : "Optimism Goerli",
+    "s" : "ETH",
+    "t" : true
+  },
+  "424" : {
+    "n" : "Public Goods Network",
+    "s" : "ETH",
+    "o" : true
+  },
+  "1001" : {
+    "n" : "Klaytn Baobab",
+    "s" : "KLAY",
+    "t" : true
+  },
+  "1088" : {
+    "n" : "Metis Andromeda",
+    "s" : "METIS"
+  },
+  "1101" : {
+    "n" : "Polygon zkEVM",
+    "s" : "ETH",
+    "o" : true
+  },
+  "1284" : {
+    "n" : "Moonbeam",
+    "s" : "GLMR"
+  },
+  "1285" : {
+    "n" : "Moonriver",
+    "s" : "MOVR"
+  },
+  "1442" : {
+    "n" : "Polygon zkEVM Testnet",
+    "s" : "ETH",
+    "t" : true
+  },
+  "2221" : {
+    "n" : "Kava Testnet",
+    "s" : "TKAVA",
+    "t" : true
+  },
+  "2222" : {
+    "n" : "Kava",
+    "s" : "KAVA"
+  },
+  "4002" : {
+    "n" : "Fantom Testnet",
+    "s" : "FTM",
+    "t" : true
+  },
+  "4337" : {
+    "n" : "Beam",
+    "s" : "BEAM"
+  },
+  "5000" : {
+    "n" : "Mantle",
+    "s" : "MNT"
+  },
+  "5001" : {
+    "n" : "Mantle Testnet",
+    "s" : "MNT",
+    "t" : true
+  },
+  "5611" : {
+    "n" : "opBNB Testnet",
+    "s" : "tBNB",
+    "t" : true
+  },
+  "7700" : {
+    "n" : "Canto",
+    "s" : "CANTO"
+  },
+  "8217" : {
+    "n" : "Klaytn",
+    "s" : "KLAY"
+  },
+  "8453" : {
+    "n" : "Base",
+    "s" : "ETH",
+    "o" : true
+  },
+  "10200" : {
+    "n" : "Gnosis Chiado",
+    "s" : "xDai",
+    "t" : true
+  },
+  "42161" : {
+    "n" : "Arbitrum One",
+    "s" : "ETH",
+    "o" : true
+  },
+  "42170" : {
+    "n" : "Arbitrum Nova",
+    "s" : "ETH",
+    "o" : true
+  },
+  "42220" : {
+    "n" : "Celo",
+    "s" : "CELO"
+  },
+  "43113" : {
+    "n" : "Avalanche Fuji",
+    "s" : "AVAX",
+    "t" : true
+  },
+  "43114" : {
+    "n" : "Avalanche",
+    "s" : "AVAX",
+    "o" : true
+  },
+  "43288" : {
+    "n" : "Boba Avax",
+    "s" : "BOBA"
+  },
+  "44787" : {
+    "n" : "Celo Alfajores Testnet",
+    "s" : "CELO",
+    "t" : true
+  },
+  "58008" : {
+    "n" : "Public Goods Network Sepolia",
+    "s" : "ETH",
+    "t" : true
+  },
+  "59140" : {
+    "n" : "Linea Testnet",
+    "s" : "ETH",
+    "t" : true
+  },
+  "59144" : {
+    "n" : "Linea",
+    "s" : "ETH",
+    "o" : true
+  },
+  "64240" : {
+    "n" : "Fantom Sonic Open",
+    "s" : "FTM",
+    "t" : true
+  },
+  "80001" : {
+    "n" : "Polygon Mumbai",
+    "s" : "MATIC",
+    "t" : true
+  },
+  "84531" : {
+    "n" : "Base Goerli",
+    "s" : "ETH",
+    "t" : true
+  },
+  "84532" : {
+    "n" : "Base Sepolia",
+    "s" : "ETH",
+    "t" : true
+  },
+  "421613" : {
+    "n" : "Arbitrum Goerli",
+    "s" : "AGOR",
+    "t" : true
+  },
+  "421614" : {
+    "n" : "Arbitrum Sepolia",
+    "s" : "ETH",
+    "t" : true
+  },
+  "534351" : {
+    "n" : "Scroll Sepolia",
+    "s" : "ETH",
+    "t" : true
+  },
+  "534352" : {
+    "n" : "Scroll",
+    "s" : "ETH",
+    "o" : true
+  },
+  "7777777" : {
+    "n" : "Zora",
+    "s" : "ETH",
+    "o" : true
+  },
+  "11155111" : {
+    "n" : "Sepolia",
+    "s" : "ETH",
+    "t" : true
+  },
+  "245022926" : {
+    "n" : "Neon EVM DevNet",
+    "s" : "NEON",
+    "t" : true
+  },
+  "245022934" : {
+    "n" : "Neon EVM",
+    "s" : "NEON"
+  },
+  "999999999" : {
+    "n" : "Zora Sepolia",
+    "s" : "ETH",
+    "t" : true
+  },
+  "1313161554" : {
+    "n" : "Aurora",
+    "s" : "ETH",
+    "o" : true
+  },
+  "1313161555" : {
+    "n" : "Aurora Testnet",
+    "s" : "ETH",
+    "t" : true
+  },
+  "1666600000" : {
+    "n" : "Harmony",
+    "s" : "ONE"
+  },
+  "11297108099" : {
+    "n" : "Palm Testnet",
+    "s" : "PALM",
+    "t" : true
+  },
+  "11297108109" : {
+    "n" : "Palm",
+    "s" : "PALM"
+  }
+}

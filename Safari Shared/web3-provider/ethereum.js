@@ -22,7 +22,7 @@ class TokenaryEthereum extends EventEmitter {
     
     constructor() {
         super();
-        const config = {address: "", chainId: "0x1", rpcUrl: "https://mainnet.infura.io/v3/3f99b6096fda424bbb26e17866dcddfc"};
+        const config = {address: "", chainId: "0x1", rpcUrl: "https://eth.llamarpc.com"};
         this.setConfig(config);
         this.idMapping = new IdMapping();
         this.callbacks = new Map();
@@ -381,7 +381,7 @@ class TokenaryEthereum extends EventEmitter {
             let object = {
                 object: data,
                 address: this.address,
-                networkId: this.net_version()
+                chainId: this.chainId
             };
             window.tokenary.postMessage(handler, id, object, "ethereum");
         } else {

@@ -4,8 +4,22 @@ import Foundation
 
 class PriceService {
     
-    private struct PriceResponse: Codable {
-        let ethereum: Price
+    private struct Prices: Codable {
+        
+        let eth: Price?
+        let bnb: Price?
+        let matic: Price?
+        let ftm: Price?
+        let avax: Price?
+        
+        enum CodingKeys: String, CodingKey, CaseIterable {
+            case eth = "ethereum"
+            case bnb = "binancecoin"
+            case matic = "matic-network"
+            case ftm = "fantom"
+            case avax = "avalanche-2"
+        }
+        
     }
     
     private struct Price: Codable {
@@ -15,10 +29,14 @@ class PriceService {
     static let shared = PriceService()
     private let jsonDecoder = JSONDecoder()
     private let urlSession = URLSession(configuration: .ephemeral)
+    private let idsQuery: String = {
+        let ids = Prices.CodingKeys.allCases.map { $0.rawValue }
+        return ids.joined(separator: "%2C")
+    }()
     
     private init() {}
     
-    var currentPrice: Double?
+    private var currentPrices: Prices?
     
     func start() {
         getPrice(scheduleNextRequest: true)
@@ -28,13 +46,31 @@ class PriceService {
         getPrice(scheduleNextRequest: false)
     }
     
+    func forNetwork(_ network: EthereumNetwork) -> Double? {
+        guard network.mightShowPrice else { return nil }
+        switch network.symbol {
+        case "ETH":
+            return currentPrices?.eth?.usd
+        case "BNB":
+            return currentPrices?.bnb?.usd
+        case "FTM":
+            return currentPrices?.ftm?.usd
+        case "MATIC":
+            return currentPrices?.matic?.usd
+        case "AVAX":
+            return currentPrices?.avax?.usd
+        default:
+            return nil
+        }
+    }
+    
     private func getPrice(scheduleNextRequest: Bool) {
-        let url = URL(string: "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd")!
+        let url = URL(string: "https://api.coingecko.com/api/v3/simple/price?ids=\(idsQuery)&vs_currencies=usd")!
         let dataTask = urlSession.dataTask(with: url) { [weak self] (data, _, _) in
             if let data = data,
-               let priceResponse = try? self?.jsonDecoder.decode(PriceResponse.self, from: data) {
+               let pricesResponse = try? self?.jsonDecoder.decode(Prices.self, from: data) {
                 DispatchQueue.main.async {
-                    self?.currentPrice = priceResponse.ethereum.usd
+                    self?.currentPrices = pricesResponse
                 }
             }
             if scheduleNextRequest {

@@ -96,7 +96,7 @@ struct Ethereum {
               let gasPriceHex = transaction.gasPrice?.cleanEvenHex,
               let gasHex = transaction.gas?.cleanEvenHex,
               let valueHex = transaction.value?.cleanEvenHex,
-              let chainID = Data(hexString: network.hexStringId.cleanEvenHex),
+              let chainID = Data(hexString: network.chainIdHexString.cleanEvenHex),
               let nonce = Data(hexString: nonceHex),
               let gasPrice = Data(hexString: gasPriceHex),
               let gasLimit = Data(hexString: gasHex),

@@ -27,7 +27,8 @@ struct DappRequestProcessor {
                     guard let coin = CoinType.correspondingToInpageProvider(configuration.provider) else { return nil }
                     return walletsManager.getSpecificAccount(coin: coin, address: configuration.address)
                 }
-                let network = body.providerConfigurations.compactMap { $0.network }.first
+                let chainId = body.providerConfigurations.compactMap { $0.chainId }.first
+                let network = Networks.withChainIdHex(chainId)
                 let initiallyConnectedProviders = Set(body.providerConfigurations.map { $0.provider })
                 let action = SelectAccountAction(peer: request.peerMeta,
                                                  coinType: nil,
@@ -41,7 +42,9 @@ struct DappRequestProcessor {
                             let account = specificWalletAccount.account
                             switch account.coin {
                             case .ethereum:
-                                let responseBody = ResponseToExtension.Ethereum(results: [account.address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
+                                let responseBody = ResponseToExtension.Ethereum(results: [account.address],
+                                                                                chainId: chain.chainIdHexString,
+                                                                                rpcURL: chain.nodeURLString)
                                 specificProviderBodies.append(.ethereum(responseBody))
                             default:
                                 fatalError("Can't select that coin")
@@ -82,7 +85,7 @@ struct DappRequestProcessor {
                                              network: nil,
                                              source: .safariExtension) { chain, specificWalletAccounts in
                 if let chain = chain, let specificWalletAccount = specificWalletAccounts?.first, specificWalletAccount.account.coin == .ethereum {
-                    let responseBody = ResponseToExtension.Ethereum(results: [specificWalletAccount.account.address], chainId: chain.hexStringId, rpcURL: chain.nodeURLString)
+                    let responseBody = ResponseToExtension.Ethereum(results: [specificWalletAccount.account.address], chainId: chain.chainIdHexString, rpcURL: chain.nodeURLString)
                     respond(to: request, body: .ethereum(responseBody), completion: completion)
                 } else {
                     respond(to: request, error: Strings.canceled, completion: completion)
@@ -137,7 +140,8 @@ struct DappRequestProcessor {
             }
         case .signTransaction:
             if let transaction = ethereumRequest.transaction,
-               let chain = ethereumRequest.chain,
+               let chainId = ethereumRequest.currentChainId,
+               let chain = Networks.withChainId(chainId),
                let account = account,
                let privateKey = privateKey {
                 let action = SendTransactionAction(provider: request.provider,

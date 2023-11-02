@@ -85,7 +85,7 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     private func updateInterface() {
-        if chain != .ethereum {
+        if !chain.isEthMainnet {
             speedContainerStackView.isHidden = true
             gweiLabel.isHidden = true
             infoTextViewBottomConstraint.constant = 30
@@ -94,7 +94,7 @@ class ApproveTransactionViewController: NSViewController {
         okButton.isEnabled = transaction.hasFee
         
         enableSpeedConfigurationIfNeeded()
-        let meta = transaction.description(chain: chain, ethPrice: priceService.currentPrice)
+        let meta = transaction.description(chain: chain, price: priceService.forNetwork(chain))
         if metaTextView.string != meta {
             metaTextView.string = meta
         }
