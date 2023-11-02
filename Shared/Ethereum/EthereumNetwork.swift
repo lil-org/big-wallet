@@ -8,6 +8,7 @@ struct EthereumNetwork: Codable, Equatable {
     let name: String
     let symbol: String
     let nodeURLString: String
+    let isTestnet: Bool
     
     var symbolIsETH: Bool { return symbol == "ETH" }
     var hasUSDPrice: Bool { return chainId == EthereumNetwork.ethMainnetChainId } // TODO: list more chains with usd price
