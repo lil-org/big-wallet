@@ -19,9 +19,6 @@ xcuserdata
 *.moved-aside
 *.xcuserstate
 .DS_Store
-WalletCoreCommon.xcframework/
-
-Secrets.swift
 
 # Bundler
 .bundle

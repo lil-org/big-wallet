@@ -4,6 +4,8 @@ import Foundation
 
 struct Nodes {
     
+    private static var infuraKey = "" // TODO: get from CloudKit
+    
     static func getNode(chainId: Int) -> String? {
         if let domain = BundledNodes.dict[chainId] {
             let https = "https://" + domain

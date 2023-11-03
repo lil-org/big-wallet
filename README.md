@@ -1,5 +1,5 @@
 # Tokenary
-Crypto wallet with Safari extension for iOS and macOS.
+Crypto wallet with a Safari extension for iOS and macOS.
 
 Download on the [App Store](https://tokenary.io/get).
 
@@ -7,10 +7,8 @@ Download on the [App Store](https://tokenary.io/get).
 
 Required:
 
-- CocoaPods (`brew install cocoapods`)
 - Yarn (`brew install yarn`)
 
 Steps:
 
-1. Run `pod install`
-2. Run Xcode project
+1. Run the Xcode project.
