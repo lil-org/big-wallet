@@ -346,7 +346,6 @@
 		2C8944CD2AEC34EB006A711F /* Blockies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Blockies.swift; sourceTree = "<group>"; };
 		2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DappRequestAction.swift; sourceTree = "<group>"; };
 		2C89D26A27BAF2A3006C0C8D /* yarn.lock */ = {isa = PBXFileReference; lastKnownFileType = text; name = yarn.lock; path = "web3-provider/yarn.lock"; sourceTree = "<group>"; };
-		2C89D26B27BAF2A3006C0C8D /* package-lock.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "package-lock.json"; path = "web3-provider/package-lock.json"; sourceTree = "<group>"; };
 		2C8A09C5267513FC00993638 /* Agent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent.swift; sourceTree = "<group>"; };
 		2C8A09D32675184700993638 /* Window.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Window.swift; sourceTree = "<group>"; };
 		2C8A09DE267579EA00993638 /* AccountsListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsListViewController.swift; sourceTree = "<group>"; };
@@ -562,7 +561,6 @@
 			children = (
 				2C1995482674C4BA00A8E370 /* Info.plist */,
 				2C1995492674C4BA00A8E370 /* Tokenary.entitlements */,
-				2C4E26BD27564EB000265DCC /* README.md */,
 			);
 			path = "Supporting Files";
 			sourceTree = "<group>";
@@ -774,7 +772,6 @@
 				2CB3844827654BF600A189B9 /* rpc.js */,
 				2CB3844627654BF600A189B9 /* utils.js */,
 				2CB3844427654BF600A189B9 /* package.json */,
-				2C89D26B27BAF2A3006C0C8D /* package-lock.json */,
 				2C89D26A27BAF2A3006C0C8D /* yarn.lock */,
 			);
 			name = "web3-provider";
@@ -939,6 +936,7 @@
 		2CF255AF275A490600AE54B9 /* Supporting Files */ = {
 			isa = PBXGroup;
 			children = (
+				2C4E26BD27564EB000265DCC /* README.md */,
 				2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */,
 			);
 			path = "Supporting Files";
