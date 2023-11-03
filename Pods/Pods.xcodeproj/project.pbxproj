@@ -178,7 +178,7 @@
 		2F8C89A38FA1078FBD686907C7A2C45A /* CoinType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86C44BB0D31B0BB69F2BD2D84BFB7397 /* CoinType.swift */; };
 		2F90D4514CA2FCF1C306823D7509E063 /* BinaryEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DDB7A88B15D46561468D364A2BBE1B1 /* BinaryEncoder.swift */; };
 		2F9532110130ACBA206DE17FA26B1823 /* ExtensionMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6035A5375CCAC1108A5256A5E4D443FA /* ExtensionMap.swift */; };
-		2FC03836589A988B8AEFB82A414A4AE8 /* Kingfisher.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher.bundle */; };
+		2FC03836589A988B8AEFB82A414A4AE8 /* Kingfisher-macOS-Kingfisher in Resources */ = {isa = PBXBuildFile; fileRef = 5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher-macOS-Kingfisher */; };
 		300712E3E5B9A26028DEA68E8DCE97E1 /* TWEthereumProto.h in Headers */ = {isa = PBXBuildFile; fileRef = EBC8B3F766C9E534385BF5B9CAD1504F /* TWEthereumProto.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		30110CB5269D9462E5A0A6E6AA5AF5E2 /* TWEOSProto.h in Headers */ = {isa = PBXBuildFile; fileRef = 7C066BD92281FA6A549B8DC21E86DFDF /* TWEOSProto.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3034E2D14B3134762802DDAF9A5B416F /* TWNEARAccount.h in Headers */ = {isa = PBXBuildFile; fileRef = 5FC84B3093A848901AC994234867BC93 /* TWNEARAccount.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -917,7 +917,7 @@
 		EC34BC14F6B26491E208D67DF17ED512 /* Filecoin.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81E6823C89AB8AF6757ED9FD07040705 /* Filecoin.pb.swift */; };
 		EC3E7109E6E03C032F2F19F84B65C060 /* NEO.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 528301163D9C04043976B9CEB1089FC8 /* NEO.pb.swift */; };
 		ECBD65FB0F1B63387E813C3AF0A2D88C /* Blockchain.swift in Sources */ = {isa = PBXBuildFile; fileRef = BACEE9ED175755B9BDF245B1B2DC280D /* Blockchain.swift */; };
-		ECFB3B908AD207E14E098F2E4A3E4821 /* Kingfisher.bundle in Resources */ = {isa = PBXBuildFile; fileRef = D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher.bundle */; };
+		ECFB3B908AD207E14E098F2E4A3E4821 /* Kingfisher-iOS-Kingfisher in Resources */ = {isa = PBXBuildFile; fileRef = D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher-iOS-Kingfisher */; };
 		ED07C5128D68804E4A05C9A717715A58 /* MessageExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 064DC889ACD509F29619F2EC8C614644 /* MessageExtension.swift */; };
 		ED25A63A9BEC4D142169C91A65710E5B /* Exponentiation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 680B7CE27E02B8073C3494C5020C6F77 /* Exponentiation.swift */; };
 		ED59EF47E8A805CB79DDE8CE35E47A36 /* Algorand.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4385282B45988556A472090C286D620 /* Algorand.pb.swift */; };
@@ -1295,7 +1295,7 @@
 		5D2BDBB5FC2D531E8D2B0A0DB4958A23 /* TWHDVersion.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWHDVersion.h; path = include/TrustWalletCore/TWHDVersion.h; sourceTree = "<group>"; };
 		5D7FFEDB1639E36F1275A04B6DB0053C /* ProtoNameProviding.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ProtoNameProviding.swift; path = Sources/SwiftProtobuf/ProtoNameProviding.swift; sourceTree = "<group>"; };
 		5DAF680AA5A704652B50A7749E1E7C67 /* StoredKeyEncryption.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = StoredKeyEncryption.swift; path = Sources/Generated/Enums/StoredKeyEncryption.swift; sourceTree = "<group>"; };
-		5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Kingfisher.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
+		5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher-macOS-Kingfisher */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = "Kingfisher-macOS-Kingfisher"; path = Kingfisher.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
 		5F18B835F60CBEFE8D0AAE093F26B41C /* BigInt-macOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "BigInt-macOS.debug.xcconfig"; path = "../BigInt-macOS/BigInt-macOS.debug.xcconfig"; sourceTree = "<group>"; };
 		5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SwiftProtobuf.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		5F5DF41A48A74AA8257F405288E2A9D0 /* Aion.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Aion.pb.swift; path = Sources/Generated/Protobuf/Aion.pb.swift; sourceTree = "<group>"; };
@@ -1418,9 +1418,9 @@
 		9537468CF4D5C16DB31E0F967000827C /* Kingfisher.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		9569F26AB766917EE6CF7BB561241439 /* TWNULSProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWNULSProto.h; path = include/TrustWalletCore/TWNULSProto.h; sourceTree = "<group>"; };
 		95724038B225C802D5E5B24C41F29CD0 /* JSONEncodingError.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JSONEncodingError.swift; path = Sources/SwiftProtobuf/JSONEncodingError.swift; sourceTree = "<group>"; };
-		95BAA53196A79D500C92AFCCDED26039 /* Pods_Tokenary.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Tokenary.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		95BAA53196A79D500C92AFCCDED26039 /* Pods-Tokenary */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Pods-Tokenary"; path = Pods_Tokenary.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		96162B21DA75C0CB210F3FC177DB6DFE /* Binance.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Binance.pb.swift; path = Sources/Generated/Protobuf/Binance.pb.swift; sourceTree = "<group>"; };
-		985063CF25F026FD329CB9B4D9F3E0A6 /* Pods_Tokenary_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Tokenary_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		985063CF25F026FD329CB9B4D9F3E0A6 /* Pods-Tokenary iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Pods-Tokenary iOS"; path = Pods_Tokenary_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		993C856FBB41BAA25BA0C3462D14CD58 /* TWCoinTypeConfiguration.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWCoinTypeConfiguration.h; path = include/TrustWalletCore/TWCoinTypeConfiguration.h; sourceTree = "<group>"; };
 		9950FB5AA58FBB836C49BBF432A0F3FB /* TWAnySigner.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWAnySigner.h; path = include/TrustWalletCore/TWAnySigner.h; sourceTree = "<group>"; };
 		9A72A27DE702C7D6F4549B27EBAD19AB /* CPListItem+Kingfisher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "CPListItem+Kingfisher.swift"; path = "Sources/Extensions/CPListItem+Kingfisher.swift"; sourceTree = "<group>"; };
@@ -1563,7 +1563,7 @@
 		D81702FD9A3E32F2A582309FF30EA3AF /* ZigZag.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ZigZag.swift; path = Sources/SwiftProtobuf/ZigZag.swift; sourceTree = "<group>"; };
 		D89BD6C5B8B5AA05B2554E7A26093B7C /* TWAsnParser.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWAsnParser.h; path = include/TrustWalletCore/TWAsnParser.h; sourceTree = "<group>"; };
 		D8B8E71487737D810614FF0298F95C13 /* IoTeX+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "IoTeX+Proto.swift"; path = "Sources/Generated/Protobuf/IoTeX+Proto.swift"; sourceTree = "<group>"; };
-		D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Kingfisher.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
+		D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher-iOS-Kingfisher */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = "Kingfisher-iOS-Kingfisher"; path = Kingfisher.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
 		D900453DC4867A6FC049C688DF4CE413 /* Pods-Tokenary iOS-frameworks.sh */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.script.sh; path = "Pods-Tokenary iOS-frameworks.sh"; sourceTree = "<group>"; };
 		D96702779FB41560EBEB18E94B0F47E7 /* TWBase.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWBase.h; path = include/TrustWalletCore/TWBase.h; sourceTree = "<group>"; };
 		D99BD4E02C7EB8A65D457D1285ADB905 /* PrivateKeyType.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PrivateKeyType.swift; path = Sources/Generated/Enums/PrivateKeyType.swift; sourceTree = "<group>"; };
@@ -2239,11 +2239,11 @@
 				F3E0621221B49CBB46826033D3DEB84B /* BigInt.framework */,
 				59C5DD41EE313A65C03650784BF278F3 /* BigInt.framework */,
 				0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher.framework */,
-				D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher.bundle */,
+				D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher-iOS-Kingfisher */,
 				9537468CF4D5C16DB31E0F967000827C /* Kingfisher.framework */,
-				5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher.bundle */,
-				95BAA53196A79D500C92AFCCDED26039 /* Pods_Tokenary.framework */,
-				985063CF25F026FD329CB9B4D9F3E0A6 /* Pods_Tokenary_iOS.framework */,
+				5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher-macOS-Kingfisher */,
+				95BAA53196A79D500C92AFCCDED26039 /* Pods-Tokenary */,
+				985063CF25F026FD329CB9B4D9F3E0A6 /* Pods-Tokenary iOS */,
 				8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf.framework */,
 				5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf.framework */,
 				60CD9336BF0D87EB43F318C3C417DB66 /* WalletCore.framework */,
@@ -2927,7 +2927,7 @@
 			);
 			name = "Kingfisher-iOS-Kingfisher";
 			productName = Kingfisher;
-			productReference = D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher.bundle */;
+			productReference = D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher-iOS-Kingfisher */;
 			productType = "com.apple.product-type.bundle";
 		};
 		889A3C6D0A70D789D17B7BFFE160AD76 /* BigInt-iOS */ = {
@@ -2985,7 +2985,7 @@
 			);
 			name = "Pods-Tokenary";
 			productName = Pods_Tokenary;
-			productReference = 95BAA53196A79D500C92AFCCDED26039 /* Pods_Tokenary.framework */;
+			productReference = 95BAA53196A79D500C92AFCCDED26039 /* Pods-Tokenary */;
 			productType = "com.apple.product-type.framework";
 		};
 		B2085DBECFAD83713FC1BE448B7882B0 /* Kingfisher-macOS-Kingfisher */ = {
@@ -3002,7 +3002,7 @@
 			);
 			name = "Kingfisher-macOS-Kingfisher";
 			productName = Kingfisher;
-			productReference = 5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher.bundle */;
+			productReference = 5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher-macOS-Kingfisher */;
 			productType = "com.apple.product-type.bundle";
 		};
 		CE0DF9902CC5CC81D77770A1E35CCFDE /* Pods-Tokenary iOS */ = {
@@ -3024,7 +3024,7 @@
 			);
 			name = "Pods-Tokenary iOS";
 			productName = Pods_Tokenary_iOS;
-			productReference = 985063CF25F026FD329CB9B4D9F3E0A6 /* Pods_Tokenary_iOS.framework */;
+			productReference = 985063CF25F026FD329CB9B4D9F3E0A6 /* Pods-Tokenary iOS */;
 			productType = "com.apple.product-type.framework";
 		};
 		D84FF1ABB5E840CFBA9F610D26DFB42D /* TrustWalletCore-macOS */ = {
@@ -3140,7 +3140,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				ECFB3B908AD207E14E098F2E4A3E4821 /* Kingfisher.bundle in Resources */,
+				ECFB3B908AD207E14E098F2E4A3E4821 /* Kingfisher-iOS-Kingfisher in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3190,7 +3190,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2FC03836589A988B8AEFB82A414A4AE8 /* Kingfisher.bundle in Resources */,
+				2FC03836589A988B8AEFB82A414A4AE8 /* Kingfisher-macOS-Kingfisher in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -4317,7 +4317,6 @@
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				INFOPLIST_FILE = "Target Support Files/Pods-Tokenary/Pods-Tokenary-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -4385,8 +4384,7 @@
 				IBSC_MODULE = Kingfisher;
 				INFOPLIST_FILE = "Target Support Files/Kingfisher-macOS/ResourceBundle-Kingfisher-Kingfisher-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				MACOSX_DEPLOYMENT_TARGET = 11.4;
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				PRODUCT_NAME = Kingfisher;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -4411,7 +4409,6 @@
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				INFOPLIST_FILE = "Target Support Files/Pods-Tokenary/Pods-Tokenary-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -4440,8 +4437,7 @@
 				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Kingfisher-iOS";
 				IBSC_MODULE = Kingfisher;
 				INFOPLIST_FILE = "Target Support Files/Kingfisher-iOS/ResourceBundle-Kingfisher-Kingfisher-iOS-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				MACOSX_DEPLOYMENT_TARGET = 11.4;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				PRODUCT_NAME = Kingfisher;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -4495,8 +4491,7 @@
 				IBSC_MODULE = Kingfisher;
 				INFOPLIST_FILE = "Target Support Files/Kingfisher-macOS/ResourceBundle-Kingfisher-Kingfisher-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				MACOSX_DEPLOYMENT_TARGET = 11.4;
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				PRODUCT_NAME = Kingfisher;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -4564,7 +4559,6 @@
 					"@loader_path/Frameworks",
 				);
 				MACH_O_TYPE = staticlib;
-				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS.modulemap";
 				OTHER_LDFLAGS = "";
 				OTHER_LIBTOOLFLAGS = "";
@@ -4603,7 +4597,6 @@
 					"@loader_path/Frameworks",
 				);
 				MACH_O_TYPE = staticlib;
-				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS.modulemap";
 				OTHER_LDFLAGS = "";
 				OTHER_LIBTOOLFLAGS = "";
@@ -4661,8 +4654,7 @@
 				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Kingfisher-iOS";
 				IBSC_MODULE = Kingfisher;
 				INFOPLIST_FILE = "Target Support Files/Kingfisher-iOS/ResourceBundle-Kingfisher-Kingfisher-iOS-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				MACOSX_DEPLOYMENT_TARGET = 11.4;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				PRODUCT_NAME = Kingfisher;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
