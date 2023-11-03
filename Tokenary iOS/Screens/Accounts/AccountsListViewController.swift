@@ -148,6 +148,16 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
     }
     
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if let myVariable = ProcessInfo.processInfo.environment["MY_VARIABLE"] {
+            showMessageAlert(text: myVariable)
+        } else {
+            showMessageAlert(text: "no variable")
+        }
+
+    }
+    
     private func requestAnUpdateIfNeeded() {
         let configurationService = ConfigurationService.shared
         guard !didAppear, configurationService.shouldPromptToUpdate else { return }
