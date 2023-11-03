@@ -66,8 +66,8 @@ window.addEventListener("message", function(event) {
     }
 });
 
-function deliverResponseToSpecificProvider(id, response, provider) {
-    switch (provider) {
+function deliverResponseToSpecificProvider(id, response, providerName) {
+    switch (providerName) {
         case "ethereum":
             window.ethereum.processTokenaryResponse(id, response);
             break;
@@ -78,8 +78,8 @@ function deliverResponseToSpecificProvider(id, response, provider) {
                 deliverResponseToSpecificProvider(id, body, body.provider);
             });
             
-            response.providersToDisconnect.forEach((provider) => {
-                switch (provider) {
+            response.providersToDisconnect.forEach((providerName) => {
+                switch (providerName) {
                     case "ethereum":
                         window.ethereum.externalDisconnect();
                         break;
