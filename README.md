@@ -7,10 +7,8 @@ Download on the [App Store](https://tokenary.io/get).
 
 Required:
 
-- CocoaPods (`brew install cocoapods`)
 - Yarn (`brew install yarn`)
 
 Steps:
 
-1. Run `pod install`
-2. Run Xcode project
+1. Run Xcode project.

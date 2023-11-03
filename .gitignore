@@ -19,7 +19,6 @@ xcuserdata
 *.moved-aside
 *.xcuserstate
 .DS_Store
-WalletCoreCommon.xcframework/
 
 # Bundler
 .bundle
