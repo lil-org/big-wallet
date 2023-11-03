@@ -1,17 +1,17 @@
 {
     "name": "tokenary-web3-provider",
     "version": "1.0.0",
-    "description": "Tokenary Web3 Provider",
+    "description": "tokenary web3 provider",
     "main": "index.js",
     "scripts": {
-        "build": "npx browserify index.js -t [ babelify --presets [ @babel/preset-env ] ] | uglifyjs > ../Resources/inpage.js"
+        "build": "browserify index.js -t [ babelify --presets [ @babel/preset-env ] ] | uglifyjs -o ../Resources/inpage.js"
     },
     "repository": {
         "type": "git",
         "url": "git+ssh://git@github.com/zeriontech/Tokenary.git"
     },
     "keywords": [],
-    "author": "Tokenary <support@tokenary.io>",
+    "author": "tokenary <support@tokenary.io>",
     "license": "MIT",
     "dependencies": {
         "buffer": "^5.6.0",
