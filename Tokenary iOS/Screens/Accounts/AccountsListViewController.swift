@@ -150,12 +150,12 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        if let myVariable = ProcessInfo.processInfo.environment["MY_VARIABLE"] {
-            showMessageAlert(text: myVariable)
-        } else {
-            showMessageAlert(text: "no variable")
+        if let path = Bundle.main.path(forResource: "shared", ofType: "plist"),
+           let dict = NSDictionary(contentsOfFile: path) as? [String: AnyObject] {
+           let apiKey = dict["MY_VARIABLE"] as? String
+            let message = apiKey ?? "no variable"
+            showMessageAlert(text: message)
         }
-
     }
     
     private func requestAnUpdateIfNeeded() {

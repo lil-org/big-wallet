@@ -120,6 +120,10 @@
 		2C8BD3142AF53B0200DC9A7C /* BigInt in Frameworks */ = {isa = PBXBuildFile; productRef = 2C8BD3132AF53B0200DC9A7C /* BigInt */; };
 		2C8BD3172AF53B1800DC9A7C /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 2C8BD3162AF53B1800DC9A7C /* Kingfisher */; };
 		2C8BD3192AF53B2100DC9A7C /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 2C8BD3182AF53B2100DC9A7C /* Kingfisher */; };
+		2C8BD31B2AF5704000DC9A7C /* shared.plist in Resources */ = {isa = PBXBuildFile; fileRef = 2C8BD31A2AF5704000DC9A7C /* shared.plist */; };
+		2C8BD31C2AF5704000DC9A7C /* shared.plist in Resources */ = {isa = PBXBuildFile; fileRef = 2C8BD31A2AF5704000DC9A7C /* shared.plist */; };
+		2C8BD31D2AF5704000DC9A7C /* shared.plist in Resources */ = {isa = PBXBuildFile; fileRef = 2C8BD31A2AF5704000DC9A7C /* shared.plist */; };
+		2C8BD31E2AF5704000DC9A7C /* shared.plist in Resources */ = {isa = PBXBuildFile; fileRef = 2C8BD31A2AF5704000DC9A7C /* shared.plist */; };
 		2C8E47A326A322E8007B8354 /* RightClickTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8E47A226A322E8007B8354 /* RightClickTableView.swift */; };
 		2C8E889F275F9967003EB8DB /* Storyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8E889E275F9967003EB8DB /* Storyboard.swift */; };
 		2C8E88A2275FA596003EB8DB /* ImportViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8E88A1275FA596003EB8DB /* ImportViewController.swift */; };
@@ -352,6 +356,7 @@
 		2C8A09E226757FC000993638 /* AccountCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountCellView.swift; sourceTree = "<group>"; };
 		2C8A09EA2675964700993638 /* ApproveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveViewController.swift; sourceTree = "<group>"; };
 		2C8A09ED2675965F00993638 /* WaitingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitingViewController.swift; sourceTree = "<group>"; };
+		2C8BD31A2AF5704000DC9A7C /* shared.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = shared.plist; sourceTree = "<group>"; };
 		2C8E47A226A322E8007B8354 /* RightClickTableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RightClickTableView.swift; sourceTree = "<group>"; };
 		2C8E889E275F9967003EB8DB /* Storyboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Storyboard.swift; sourceTree = "<group>"; };
 		2C8E88A1275FA596003EB8DB /* ImportViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportViewController.swift; sourceTree = "<group>"; };
@@ -937,6 +942,7 @@
 				2C4E26BD27564EB000265DCC /* README.md */,
 				2CF16E522AF523A40098F996 /* .gitignore */,
 				2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */,
+				2C8BD31A2AF5704000DC9A7C /* shared.plist */,
 			);
 			path = "Supporting Files";
 			sourceTree = "<group>";
@@ -1121,6 +1127,7 @@
 				2CC8C5A7276A54DA0083FB1B /* macos-specific-background.js in Resources */,
 				2CEFEB16274D5DCA00CE23BD /* inpage.js in Resources */,
 				2C09CBAB273979C1009AD39B /* background.js in Resources */,
+				2C8BD31D2AF5704000DC9A7C /* shared.plist in Resources */,
 				2C09CBA9273979C1009AD39B /* manifest.json in Resources */,
 				2C09CBAD273979C1009AD39B /* content.js in Resources */,
 			);
@@ -1133,6 +1140,7 @@
 				2CED86C12AF26114006F9E26 /* bundled-networks.json in Resources */,
 				2C6B964F26B9D98C00D2C819 /* Colors.xcassets in Resources */,
 				2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */,
+				2C8BD31B2AF5704000DC9A7C /* shared.plist in Resources */,
 				2C1995472674C4BA00A8E370 /* Main.storyboard in Resources */,
 				2C4768AE2826ECE5005E8D4D /* SharedAssets.xcassets in Resources */,
 			);
@@ -1148,6 +1156,7 @@
 				2C40709527667A8600AB3D55 /* ImageWithLabelTableViewCell.xib in Resources */,
 				2C4768AF2826ECE5005E8D4D /* SharedAssets.xcassets in Resources */,
 				2CC8C5A32767D3B30083FB1B /* GasPriceSliderTableViewCell.xib in Resources */,
+				2C8BD31C2AF5704000DC9A7C /* shared.plist in Resources */,
 				2C40709127667A6600AB3D55 /* MultilineLabelTableViewCell.xib in Resources */,
 				2C09FC5F2828078C00DE9C27 /* AccountsHeaderView.xib in Resources */,
 				2C96D3902762317300687301 /* AccountTableViewCell.xib in Resources */,
@@ -1170,6 +1179,7 @@
 				2C8155682ADFC7A700F4559B /* popup.css in Resources */,
 				2CCEB83727594E2A00768473 /* manifest.json in Resources */,
 				2C81556B2ADFC7B900F4559B /* popup.js in Resources */,
+				2C8BD31E2AF5704000DC9A7C /* shared.plist in Resources */,
 				2CE0594127640E8E0042D844 /* content.js in Resources */,
 				2CFDDF4E2765417E00F89019 /* ios-specific-content.js in Resources */,
 			);
@@ -1494,6 +1504,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MARKETING_VERSION = 2.0.22;
+				MY_VARIABLE = "$(MY_VARIABLE)";
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -1529,6 +1540,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MARKETING_VERSION = 2.0.22;
+				MY_VARIABLE = "$(MY_VARIABLE)";
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -1680,6 +1692,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MARKETING_VERSION = 2.0.22;
+				MY_VARIABLE = "$(MY_VARIABLE)";
 				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1708,6 +1721,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MARKETING_VERSION = 2.0.22;
+				MY_VARIABLE = "$(MY_VARIABLE)";
 				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1733,6 +1747,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				MARKETING_VERSION = 2.0.22;
+				MY_VARIABLE = "$(MY_VARIABLE)";
 				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -1762,6 +1777,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				MARKETING_VERSION = 2.0.22;
+				MY_VARIABLE = "$(MY_VARIABLE)";
 				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -1794,6 +1810,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				MARKETING_VERSION = 2.0.22;
+				MY_VARIABLE = "$(MY_VARIABLE)";
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -1829,6 +1846,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				MARKETING_VERSION = 2.0.22;
+				MY_VARIABLE = "$(MY_VARIABLE)";
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
