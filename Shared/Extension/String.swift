@@ -5,13 +5,14 @@ import Foundation
 extension String {
     
     static let hexPrefix = "0x"
+    static let zero = "0"
     
     var cleanEvenHex: String {
         let clean = cleanHex
         if clean.count.isMultiple(of: 2) {
             return clean
         } else {
-            return "0" + clean
+            return String.zero + clean
         }
     }
     
@@ -29,7 +30,7 @@ extension String {
     }
     
     var withEllipsis: String {
-        return self + "…"
+        return self + "..."
     }
     
     var cleanHex: String {

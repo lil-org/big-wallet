@@ -11,4 +11,4 @@ Required:
 
 Steps:
 
-1. Run the Xcode project.
+- Run the Xcode project.

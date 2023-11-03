@@ -75,7 +75,7 @@ struct Strings {
     static let tokenaryIsEmpty = "Tokenary is empty"
     static let pleaseTypeAtLeast = "Please type at least 4 characters"
     static let unknownWebsite = "Unknown website ⚠️"
-    static let calculating = "Calculating…"
+    static let calculating = "Calculating..."
     static let howToEnableSafariExtension = "How to enable Safari extension?"
     static let shareInvite = "Share an invite"
     static let approveTransaction = "Approve Transaction"

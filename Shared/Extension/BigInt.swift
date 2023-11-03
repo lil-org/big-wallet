@@ -13,8 +13,15 @@ extension BigInt {
         return NSDecimalNumber(string: String(self))
     }
     
-    var eth: String {
-        return decimal.multiplying(byPowerOf10: -18).stringValue
+    func eth(ofFee: Bool = false) -> String {
+        let ethDecimal = decimal.multiplying(byPowerOf10: -18)
+        guard ofFee else { return ethDecimal.stringValue }
+        let formatter = NumberFormatter()
+        formatter.minimumFractionDigits = 3
+        formatter.maximumFractionDigits = 6
+        formatter.minimumSignificantDigits = 1
+        formatter.maximumSignificantDigits = 2
+        return formatter.string(from: ethDecimal) ?? .zero
     }
     
     var ethDouble: Double {
@@ -30,7 +37,7 @@ extension BigInt {
             let formatter = NumberFormatter()
             formatter.minimumSignificantDigits = 1
             formatter.maximumSignificantDigits = 1
-            return formatter.string(from: gweiDecimal) ?? "0"
+            return formatter.string(from: gweiDecimal) ?? .zero
         }
     }
     

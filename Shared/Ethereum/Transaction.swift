@@ -61,7 +61,7 @@ struct Transaction {
            let gas = BigInt(hexString: gasString) {
             let fee = gas * gasPrice
             let costString = chain.mightShowPrice ? cost(value: fee, price: price) : ""
-            feeString = fee.eth.prefix(8) + " \(chain.symbol)" + costString
+            feeString = fee.eth(ofFee: true) + " \(chain.symbol)" + costString
         } else {
             feeString = Strings.calculating
         }
@@ -71,7 +71,7 @@ struct Transaction {
     func valueWithSymbol(chain: EthereumNetwork, price: Double?, withLabel: Bool) -> String? {
         guard let value = value, let value = BigInt(hexString: value) else { return nil }
         let costString = chain.mightShowPrice ? cost(value: value, price: price) : ""
-        let valueString = "\(value.eth) \(chain.symbol)" + costString
+        let valueString = "\(value.eth()) \(chain.symbol)" + costString
         return withLabel ? "Value: " + valueString : valueString
     }
     
@@ -80,8 +80,14 @@ struct Transaction {
         let ethValue = value.ethDouble
         let cost = NSNumber(floatLiteral: price * ethValue)
         let formatter = NumberFormatter()
-        formatter.decimalSeparator = "."
-        formatter.maximumFractionDigits = 1
+        if cost.uintValue > 0 {
+            formatter.maximumFractionDigits = 2
+            formatter.minimumFractionDigits = 2
+        } else {
+            formatter.minimumFractionDigits = 2
+            formatter.minimumSignificantDigits = 1
+            formatter.maximumSignificantDigits = 1
+        }
         if let costString = formatter.string(from: cost) {
             return " ≈ $\(costString)"
         } else {
