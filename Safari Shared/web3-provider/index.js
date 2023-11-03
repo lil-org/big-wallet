@@ -69,7 +69,7 @@ window.addEventListener("message", function(event) {
 function deliverResponseToSpecificProvider(id, response, providerName) {
     switch (providerName) {
         case "ethereum":
-            window.ethereum.processTokenaryResponse(id, response);
+            provider.processTokenaryResponse(id, response);
             break;
         case "multiple":
             response.bodies.forEach((body) => {
@@ -81,7 +81,7 @@ function deliverResponseToSpecificProvider(id, response, providerName) {
             response.providersToDisconnect.forEach((providerName) => {
                 switch (providerName) {
                     case "ethereum":
-                        window.ethereum.externalDisconnect();
+                        provider.externalDisconnect();
                         break;
                     default:
                         break;
@@ -91,6 +91,6 @@ function deliverResponseToSpecificProvider(id, response, providerName) {
             break;
         default:
             // pass unknown provider message to all providers
-            window.ethereum.processTokenaryResponse(id, response);
+            provider.processTokenaryResponse(id, response);
     }
 }
