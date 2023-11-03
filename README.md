@@ -5,7 +5,7 @@ Download on the [App Store](https://tokenary.io/get).
 
 ## Development
 
-Required
+Required:
 
 - CocoaPods (`brew install cocoapods`)
 - Yarn (`brew install yarn`)
@@ -13,4 +13,4 @@ Required
 Steps:
 
 1. Run `pod install`
-2. In `Safari-Shared/web3-provider` run `yarn install`
+2. Run Xcode project
