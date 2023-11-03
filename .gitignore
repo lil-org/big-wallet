@@ -21,8 +21,6 @@ xcuserdata
 .DS_Store
 WalletCoreCommon.xcframework/
 
-Secrets.swift
-
 # Bundler
 .bundle
 .cache

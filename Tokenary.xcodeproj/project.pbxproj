@@ -168,10 +168,6 @@
 		2CD0B3F526A0DAA900488D92 /* NSPasteboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0B3F426A0DAA900488D92 /* NSPasteboard.swift */; };
 		2CD0B3F726AC619900488D92 /* AddAccountOptionCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0B3F626AC619900488D92 /* AddAccountOptionCellView.swift */; };
 		2CDAB3722675B3F0009F8B97 /* PasswordViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */; };
-		2CDD86F82AE3295600F33F95 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CDD86F72AE3295600F33F95 /* Secrets.swift */; };
-		2CDD86F92AE3295600F33F95 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CDD86F72AE3295600F33F95 /* Secrets.swift */; };
-		2CDD86FA2AE3296600F33F95 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CDD86F72AE3295600F33F95 /* Secrets.swift */; };
-		2CDD86FB2AE3296700F33F95 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CDD86F72AE3295600F33F95 /* Secrets.swift */; };
 		2CE059372763D60A0042D844 /* KeyboardObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE059362763D60A0042D844 /* KeyboardObserver.swift */; };
 		2CE059392763F3FF0042D844 /* CGFloat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE059382763F3FF0042D844 /* CGFloat.swift */; };
 		2CE0593F27640E300042D844 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */; };
@@ -405,7 +401,6 @@
 		2CD0B3F426A0DAA900488D92 /* NSPasteboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSPasteboard.swift; sourceTree = "<group>"; };
 		2CD0B3F626AC619900488D92 /* AddAccountOptionCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddAccountOptionCellView.swift; sourceTree = "<group>"; };
 		2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordViewController.swift; sourceTree = "<group>"; };
-		2CDD86F72AE3295600F33F95 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		2CE059362763D60A0042D844 /* KeyboardObserver.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KeyboardObserver.swift; sourceTree = "<group>"; };
 		2CE059382763F3FF0042D844 /* CGFloat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CGFloat.swift; sourceTree = "<group>"; };
 		2CE059482764169E0042D844 /* Tokenary iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Tokenary iOS.entitlements"; sourceTree = "<group>"; };
@@ -419,6 +414,7 @@
 		2CED86B92AF1820E006F9E26 /* Nodes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Nodes.swift; sourceTree = "<group>"; };
 		2CED86BE2AF25C32006F9E26 /* Networks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Networks.swift; sourceTree = "<group>"; };
 		2CEFEB15274D5DC900CE23BD /* inpage.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = inpage.js; sourceTree = "<group>"; };
+		2CF16E522AF523A40098F996 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = SOURCE_ROOT; };
 		2CF255B3275A744000AE54B9 /* PasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordViewController.swift; sourceTree = "<group>"; };
 		2CF255B5275A746000AE54B9 /* AccountsListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsListViewController.swift; sourceTree = "<group>"; };
 		2CF255B7275A748300AE54B9 /* ApproveTransactionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveTransactionViewController.swift; sourceTree = "<group>"; };
@@ -793,7 +789,6 @@
 			isa = PBXGroup;
 			children = (
 				2C901C492689F01700D0926A /* Strings.swift */,
-				2CDD86F72AE3295600F33F95 /* Secrets.swift */,
 				2C528A15267FA8EB00CA3ADD /* Defaults.swift */,
 				2C8A09C2267513A700993638 /* Ethereum */,
 				2CF255A4275A483600AE54B9 /* Services */,
@@ -937,6 +932,7 @@
 			isa = PBXGroup;
 			children = (
 				2C4E26BD27564EB000265DCC /* README.md */,
+				2CF16E522AF523A40098F996 /* .gitignore */,
 				2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */,
 			);
 			path = "Supporting Files";
@@ -1298,7 +1294,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2CDD86FA2AE3296600F33F95 /* Secrets.swift in Sources */,
 				2CF255B2275A4A7200AE54B9 /* UserDefaults.swift in Sources */,
 				2C264BD227B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
 				2C264BD727B5806200234393 /* InpageProvider.swift in Sources */,
@@ -1327,7 +1322,6 @@
 				2C901C4A2689F01700D0926A /* Strings.swift in Sources */,
 				2C2AA1D228AD1DC100E35DBF /* SpecificWalletAccount.swift in Sources */,
 				2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */,
-				2CDD86F82AE3295600F33F95 /* Secrets.swift in Sources */,
 				2CC0CDBE2692027E0072922A /* PriceService.swift in Sources */,
 				2C8A09C6267513FC00993638 /* Agent.swift in Sources */,
 				2C8A09D42675184700993638 /* Window.swift in Sources */,
@@ -1454,7 +1448,6 @@
 				2CE0594427640EB40042D844 /* ExtensionBridge.swift in Sources */,
 				2CF255B1275A4A1800AE54B9 /* ResponseToExtension.swift in Sources */,
 				2C09FC602828078C00DE9C27 /* AccountsHeaderView.swift in Sources */,
-				2CDD86F92AE3295600F33F95 /* Secrets.swift in Sources */,
 				2CF2559B275A46E700AE54B9 /* AuthenticationReason.swift in Sources */,
 				2C6F6D5E2827434800D6E8FB /* CoinDerivationTableViewCell.swift in Sources */,
 				2C96D3A92763D13400687301 /* DataStateView.swift in Sources */,
@@ -1478,7 +1471,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2CDD86FB2AE3296700F33F95 /* Secrets.swift in Sources */,
 				2CE0594627640F470042D844 /* UserDefaults.swift in Sources */,
 				2C264BD327B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
 				2C264BD827B5806200234393 /* InpageProvider.swift in Sources */,
