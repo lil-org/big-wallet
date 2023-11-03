@@ -1193,7 +1193,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ \"${CONFIGURATION}\" = \"Debug\" ]; then\n    FILE=/usr/lib/bin/yarn\n    if [ -f \"$FILE\" ]; then\n        export PATH=/usr/lib/bin:$PATH\n    else\n        export PATH=/opt/homebrew/bin:$PATH\n    fi\n\n    cd \"$PROJECT_DIR\"/Safari\\ Shared/web3-provider\n    yarn run build\nfi\n";
+			shellScript = "if [ \"${CONFIGURATION}\" = \"Debug\" ]; then\n    FILE=/usr/lib/bin/yarn\n    if [ -f \"$FILE\" ]; then\n        export PATH=/usr/lib/bin:$PATH\n    else\n        export PATH=/opt/homebrew/bin:$PATH\n    fi\n\n    cd \"$PROJECT_DIR\"/Safari\\ Shared/web3-provider\n    yarn run prebuild\n    yarn run build\nfi\n";
 		};
 		2CB3844927654C8D00A189B9 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -1211,7 +1211,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ \"${CONFIGURATION}\" = \"Debug\" ]; then\n    FILE=/usr/lib/bin/yarn\n    if [ -f \"$FILE\" ]; then\n        export PATH=/usr/lib/bin:$PATH\n    else\n        export PATH=/opt/homebrew/bin:$PATH\n    fi\n\n    cd \"$PROJECT_DIR\"/Safari\\ Shared/web3-provider\n    yarn run build\nfi\n";
+			shellScript = "if [ \"${CONFIGURATION}\" = \"Debug\" ]; then\n    FILE=/usr/lib/bin/yarn\n    if [ -f \"$FILE\" ]; then\n        export PATH=/usr/lib/bin:$PATH\n    else\n        export PATH=/opt/homebrew/bin:$PATH\n    fi\n\n    cd \"$PROJECT_DIR\"/Safari\\ Shared/web3-provider\n    yarn run prebuild\n    yarn run build\nfi\n";
 		};
 		531D279F638FC010BDFF3AB3 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;

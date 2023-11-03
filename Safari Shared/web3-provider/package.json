@@ -4,6 +4,7 @@
     "description": "tokenary web3 provider",
     "main": "index.js",
     "scripts": {
+        "prebuild": "if [ ! -d node_modules ]; then yarn install; fi",
         "build": "browserify index.js -t [ babelify --presets [ @babel/preset-env ] ] | uglifyjs -o ../Resources/inpage.js"
     },
     "repository": {
