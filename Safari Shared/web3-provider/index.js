@@ -19,10 +19,26 @@ window.tokenary.disconnect = (provider) => {
 
 // - MARK: Ethereum
 
-window.ethereum = new TokenaryEthereum();
-window.web3 = {currentProvider: window.ethereum};
-window.metamask = window.ethereum;
+let provider = new TokenaryEthereum();
+window.ethereum = provider;
+window.web3 = {currentProvider: provider};
+window.metamask = provider;
 window.dispatchEvent(new Event('ethereum#initialized'));
+
+// MARK: EIP-6963
+
+function announceProvider() {
+    const info = {
+        uuid: "f9058af0-b501-43c4-bd7d-b43f83244681",
+        name: "tokenary",
+        icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgdmlld0JveD0iMCAwIDEyOCAxMjgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiBmaWxsPSJ3aGl0ZSIvPgo8Y2lyY2xlIGN4PSI2NCIgY3k9IjY0IiByPSI0MC44NzUiIGZpbGw9IiMyQzdDRjUiLz4KPC9zdmc+Cg==',
+        rdns: "io.tokenary"
+    };
+    window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: Object.freeze({ info, provider }), }));
+}
+
+window.addEventListener("eip6963:requestProvider", function(event) { announceProvider(); });
+announceProvider();
 
 // - MARK: Process content script messages
 
