@@ -89,7 +89,9 @@ struct Transaction {
             formatter.maximumSignificantDigits = 1
         }
         if let costString = formatter.string(from: cost) {
-            return " ≈ $\(costString)"
+            let exactly = value.isZero || price.isZero
+            let sign = exactly ? "=" : "≈"
+            return " \(sign) $\(costString)"
         } else {
             return ""
         }
