@@ -20,6 +20,7 @@ window.tokenary.disconnect = (provider) => {
 // - MARK: Ethereum
 
 let provider = new TokenaryEthereum();
+window.tokenary.eth = provider;
 window.ethereum = provider;
 window.web3 = {currentProvider: provider};
 window.metamask = provider;

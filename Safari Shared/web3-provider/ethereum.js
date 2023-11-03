@@ -41,22 +41,22 @@ class TokenaryEthereum extends EventEmitter {
         this.on = (...args) => {
             if (args[0] == "connect") {
                 setTimeout( function() {
-                    if (!window.ethereum.didEmitConnectAfterSubscription) {
-                        window.ethereum.emitConnect(window.ethereum.chainId);
-                        window.ethereum.didEmitConnectAfterSubscription = true;
+                    if (!window.tokenary.eth.didEmitConnectAfterSubscription) {
+                        window.tokenary.eth.emitConnect(window.tokenary.eth.chainId);
+                        window.tokenary.eth.didEmitConnectAfterSubscription = true;
                     }
                 }, 1);
             }
             return originalOn.apply(this, args);
         };
         
-        setTimeout( function() { window.ethereum.emit("_initialized"); }, 1);
+        setTimeout( function() { window.tokenary.eth.emit("_initialized"); }, 1);
     }
     
     externalDisconnect() {
         this.setAddress("");
-        window.ethereum.emit("disconnect");
-        window.ethereum.emit("accountsChanged", []);
+        window.tokenary.eth.emit("disconnect");
+        window.tokenary.eth.emit("accountsChanged", []);
     }
     
     setAddress(address) {
@@ -67,22 +67,22 @@ class TokenaryEthereum extends EventEmitter {
     }
     
     updateAccount(eventName, addresses, chainId, rpcUrl) {
-        window.ethereum.setAddress(addresses[0]);
+        window.tokenary.eth.setAddress(addresses[0]);
         
         if (eventName == "switchAccount") {
-            window.ethereum.emit("accountsChanged", addresses);
+            window.tokenary.eth.emit("accountsChanged", addresses);
         }
         
-        if (window.ethereum.rpc.rpcUrl != rpcUrl) {
+        if (window.tokenary.eth.rpc.rpcUrl != rpcUrl) {
             this.rpc = new RPCServer(rpcUrl);
         }
         
-        if (window.ethereum.chainId != chainId) {
-            window.ethereum.chainId = chainId;
-            window.ethereum.networkVersion = this.net_version();
+        if (window.tokenary.eth.chainId != chainId) {
+            window.tokenary.eth.chainId = chainId;
+            window.tokenary.eth.networkVersion = this.net_version();
             if (eventName != "didLoadLatestConfiguration") {
-                window.ethereum.emit("chainChanged", chainId);
-                window.ethereum.emit("networkChanged", window.ethereum.net_version());
+                window.tokenary.eth.emit("chainChanged", chainId);
+                window.tokenary.eth.emit("networkChanged", window.tokenary.eth.net_version());
             }
         }
     }
@@ -97,7 +97,7 @@ class TokenaryEthereum extends EventEmitter {
     request(payload) {
         var that = this;
         if (!(this instanceof TokenaryEthereum)) {
-            that = window.ethereum;
+            that = window.tokenary.eth;
         }
         return that._request(payload, false);
     }
@@ -111,7 +111,7 @@ class TokenaryEthereum extends EventEmitter {
     }
     
     enable() {
-        if (!window.ethereum.address) { // avoid double accounts request in uniswap
+        if (!window.tokenary.eth.address) { // avoid double accounts request in uniswap
             return this.request({ method: "eth_requestAccounts", params: [] });
         } else {
             return this.request({ method: "eth_accounts", params: [] });
@@ -121,7 +121,7 @@ class TokenaryEthereum extends EventEmitter {
     send(payload, callback) {
         var that = this;
         if (!(this instanceof TokenaryEthereum)) {
-            that = window.ethereum;
+            that = window.tokenary.eth;
         }
         var requestPayload = {};
         if (typeof payload.method !== "undefined") {
@@ -144,7 +144,7 @@ class TokenaryEthereum extends EventEmitter {
     sendAsync(payload, callback) {
         var that = this;
         if (!(this instanceof TokenaryEthereum)) {
-            that = window.ethereum;
+            that = window.tokenary.eth;
         }
         if (Array.isArray(payload)) {
             Promise.all(payload.map(that._request.bind(that)))
