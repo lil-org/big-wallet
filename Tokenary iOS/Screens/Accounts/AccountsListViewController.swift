@@ -394,6 +394,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     @objc private func preferencesButtonTapped() {
+        // TODO: tmp to test ci
+        showMessageAlert(text: Nodes.getNode(chainId: EthereumNetwork.ethMainnetChainId)!)
+        return
+        
         let actionSheet = UIAlertController(title: "❤️ " + Strings.tokenary.uppercased() + " ⭐️", message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.barButtonItem = preferencesItem
         let xAction = UIAlertAction(title: Strings.viewOnX, style: .default) { _ in

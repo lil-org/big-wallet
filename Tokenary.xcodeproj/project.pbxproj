@@ -26,6 +26,10 @@
 		2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995432674C4BA00A8E370 /* Assets.xcassets */; };
 		2C1995472674C4BA00A8E370 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995452674C4BA00A8E370 /* Main.storyboard */; };
 		2C1995562674D0F300A8E370 /* Ethereum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995552674D0F300A8E370 /* Ethereum.swift */; };
+		2C209B652AF7B3BC00FF9012 /* shared.plist in Resources */ = {isa = PBXBuildFile; fileRef = 2C209B642AF7B3BC00FF9012 /* shared.plist */; };
+		2C209B662AF7B3BC00FF9012 /* shared.plist in Resources */ = {isa = PBXBuildFile; fileRef = 2C209B642AF7B3BC00FF9012 /* shared.plist */; };
+		2C209B672AF7B3BC00FF9012 /* shared.plist in Resources */ = {isa = PBXBuildFile; fileRef = 2C209B642AF7B3BC00FF9012 /* shared.plist */; };
+		2C209B682AF7B3BC00FF9012 /* shared.plist in Resources */ = {isa = PBXBuildFile; fileRef = 2C209B642AF7B3BC00FF9012 /* shared.plist */; };
 		2C20ED992AEE54A300DDE709 /* FixedWidthInteger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944C42AEAFF97006A711F /* FixedWidthInteger.swift */; };
 		2C20ED9A2AEE54A400DDE709 /* FixedWidthInteger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944C42AEAFF97006A711F /* FixedWidthInteger.swift */; };
 		2C264BBC27B2F25E00234393 /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BBB27B2F25E00234393 /* SafariRequest.swift */; };
@@ -296,6 +300,7 @@
 		2C1995482674C4BA00A8E370 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C1995492674C4BA00A8E370 /* Tokenary.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Tokenary.entitlements; sourceTree = "<group>"; };
 		2C1995552674D0F300A8E370 /* Ethereum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ethereum.swift; sourceTree = "<group>"; };
+		2C209B642AF7B3BC00FF9012 /* shared.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = shared.plist; sourceTree = "<group>"; };
 		2C264BBB27B2F25E00234393 /* SafariRequest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SafariRequest.swift; sourceTree = "<group>"; };
 		2C264BC027B2F2C100234393 /* EthereumSafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumSafariRequest.swift; sourceTree = "<group>"; };
 		2C264BCF27B2F30C00234393 /* UnknownSafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnknownSafariRequest.swift; sourceTree = "<group>"; };
@@ -389,6 +394,8 @@
 		2CB3845927654E9700A189B9 /* images */ = {isa = PBXFileReference; lastKnownFileType = folder; path = images; sourceTree = "<group>"; };
 		2CB4031A281C99C800BAEBEE /* AccountsHeaderRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsHeaderRowView.swift; sourceTree = "<group>"; };
 		2CB4031C281D745D00BAEBEE /* NSTableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSTableView.swift; sourceTree = "<group>"; };
+		2CBB9FA42AF7B5970047B0CD /* ci_post_clone.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = ci_post_clone.sh; sourceTree = "<group>"; };
+		2CBB9FA52AF7B5970047B0CD /* shared.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = shared.plist; sourceTree = "<group>"; };
 		2CC0CDBD2692027E0072922A /* PriceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceService.swift; sourceTree = "<group>"; };
 		2CC6EF0C275E64810040CC62 /* UIViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIViewController.swift; sourceTree = "<group>"; };
 		2CC89470269A334A00879245 /* UserDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaults.swift; sourceTree = "<group>"; };
@@ -511,6 +518,7 @@
 				2C09CBA0273979C1009AD39B /* Safari macOS */,
 				2CCEB82E27594E2A00768473 /* Safari iOS */,
 				2CED86A32AF00BC9006F9E26 /* tools */,
+				2CBB9FA32AF7B5970047B0CD /* ci_scripts */,
 				2C19953D2674C4B900A8E370 /* Products */,
 				2C8BD30B2AF53AD600DC9A7C /* Frameworks */,
 			);
@@ -776,6 +784,15 @@
 			name = "web3-provider";
 			sourceTree = "<group>";
 		};
+		2CBB9FA32AF7B5970047B0CD /* ci_scripts */ = {
+			isa = PBXGroup;
+			children = (
+				2CBB9FA42AF7B5970047B0CD /* ci_post_clone.sh */,
+				2CBB9FA52AF7B5970047B0CD /* shared.plist */,
+			);
+			path = ci_scripts;
+			sourceTree = SOURCE_ROOT;
+		};
 		2CC6EF0E275E64840040CC62 /* Extensions */ = {
 			isa = PBXGroup;
 			children = (
@@ -936,6 +953,7 @@
 			children = (
 				2C4E26BD27564EB000265DCC /* README.md */,
 				2CF16E522AF523A40098F996 /* .gitignore */,
+				2C209B642AF7B3BC00FF9012 /* shared.plist */,
 				2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */,
 			);
 			path = "Supporting Files";
@@ -1121,6 +1139,7 @@
 				2CC8C5A7276A54DA0083FB1B /* macos-specific-background.js in Resources */,
 				2CEFEB16274D5DCA00CE23BD /* inpage.js in Resources */,
 				2C09CBAB273979C1009AD39B /* background.js in Resources */,
+				2C209B672AF7B3BC00FF9012 /* shared.plist in Resources */,
 				2C09CBA9273979C1009AD39B /* manifest.json in Resources */,
 				2C09CBAD273979C1009AD39B /* content.js in Resources */,
 			);
@@ -1133,6 +1152,7 @@
 				2CED86C12AF26114006F9E26 /* bundled-networks.json in Resources */,
 				2C6B964F26B9D98C00D2C819 /* Colors.xcassets in Resources */,
 				2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */,
+				2C209B652AF7B3BC00FF9012 /* shared.plist in Resources */,
 				2C1995472674C4BA00A8E370 /* Main.storyboard in Resources */,
 				2C4768AE2826ECE5005E8D4D /* SharedAssets.xcassets in Resources */,
 			);
@@ -1148,6 +1168,7 @@
 				2C40709527667A8600AB3D55 /* ImageWithLabelTableViewCell.xib in Resources */,
 				2C4768AF2826ECE5005E8D4D /* SharedAssets.xcassets in Resources */,
 				2CC8C5A32767D3B30083FB1B /* GasPriceSliderTableViewCell.xib in Resources */,
+				2C209B662AF7B3BC00FF9012 /* shared.plist in Resources */,
 				2C40709127667A6600AB3D55 /* MultilineLabelTableViewCell.xib in Resources */,
 				2C09FC5F2828078C00DE9C27 /* AccountsHeaderView.xib in Resources */,
 				2C96D3902762317300687301 /* AccountTableViewCell.xib in Resources */,
@@ -1170,6 +1191,7 @@
 				2C8155682ADFC7A700F4559B /* popup.css in Resources */,
 				2CCEB83727594E2A00768473 /* manifest.json in Resources */,
 				2C81556B2ADFC7B900F4559B /* popup.js in Resources */,
+				2C209B682AF7B3BC00FF9012 /* shared.plist in Resources */,
 				2CE0594127640E8E0042D844 /* content.js in Resources */,
 				2CFDDF4E2765417E00F89019 /* ios-specific-content.js in Resources */,
 			);
