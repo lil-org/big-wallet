@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>MY_VARIABLE</key>
-	<string>$(MY_VARIABLE)</string>
+	<key>MYVARIABLE</key>
+	<string></string>
 </dict>
 </plist>

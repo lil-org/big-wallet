@@ -152,7 +152,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         super.viewDidAppear(animated)
         if let path = Bundle.main.path(forResource: "shared", ofType: "plist"),
            let dict = NSDictionary(contentsOfFile: path) as? [String: AnyObject] {
-           let apiKey = dict["MY_VARIABLE"] as? String
+           let apiKey = dict["MYVARIABLE"] as? String
             let message = apiKey ?? "no variable"
             showMessageAlert(text: message)
         }
