@@ -1,6 +1,7 @@
 // Copyright © 2023 Tokenary. All rights reserved.
 
 import Foundation
+import CloudKit
 
 class ConfigurationService {
     
@@ -25,6 +26,10 @@ class ConfigurationService {
         if !shouldUpdateApp {
             getConfiguration()
         }
+        getInfuraKeyFromCloudKit { infuraKey in
+            // TODO: keep latest version in defaults and make it accessible to Nodes
+            print(infuraKey)
+        }
     }
     
     func didPromptToUpdate() {
@@ -43,6 +48,23 @@ class ConfigurationService {
             }
         }
         dataTask.resume()
+    }
+    
+    private func getInfuraKeyFromCloudKit(completion: @escaping (String) -> Void) {
+        let container = CKContainer(identifier: "iCloud.tokenary")
+        let publicDatabase = container.publicCloudDatabase
+        let predicate = NSPredicate(value: true)
+        let query = CKQuery(recordType: "Config", predicate: predicate)
+        publicDatabase.fetch(withQuery: query) { result in
+            if case .success(let success) = result,
+               case let .success(record) = success.matchResults.first?.1,
+               let infuraKeys = record["infuraKeys"] as? [String],
+               let infuraKey = infuraKeys.first {
+                DispatchQueue.main.async {
+                    completion(infuraKey)
+                }
+            }
+        }
     }
     
 }
