@@ -9,7 +9,7 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+ssh://git@github.com/zeriontech/Tokenary.git"
+        "url": "git+ssh://git@github.com/lilorg/tokenary.git"
     },
     "keywords": [],
     "author": "tokenary <support@tokenary.io>",
