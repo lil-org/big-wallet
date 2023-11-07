@@ -160,7 +160,6 @@
 		2CADD2C62AFAAE860082BFA4 /* Infura.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CADD2C42AFAAE860082BFA4 /* Infura.swift */; };
 		2CADD2C72AFAAE860082BFA4 /* Infura.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CADD2C42AFAAE860082BFA4 /* Infura.swift */; };
 		2CADD2C82AFAAE860082BFA4 /* Infura.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CADD2C42AFAAE860082BFA4 /* Infura.swift */; };
-		2CADD2C92AFAAE860082BFA4 /* Infura.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CADD2C42AFAAE860082BFA4 /* Infura.swift */; };
 		2CB3845A27654EA900A189B9 /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 2CB3845827654E9700A189B9 /* _locales */; };
 		2CB3845B27654EA900A189B9 /* images in Resources */ = {isa = PBXBuildFile; fileRef = 2CB3845927654E9700A189B9 /* images */; };
 		2CB3845C27654EB300A189B9 /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 2CB3845827654E9700A189B9 /* _locales */; };
@@ -1456,7 +1455,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				2C9B55D32AF2AE4B008BE899 /* BundledNetwork.swift in Sources */,
-				2CADD2C92AFAAE860082BFA4 /* Infura.swift in Sources */,
 				2CED86B02AF0167F006F9E26 /* EIP155ChainData.swift in Sources */,
 				2CED86A52AF00BC9006F9E26 /* main.swift in Sources */,
 				2CED86B32AF01F99006F9E26 /* String.swift in Sources */,

@@ -3,9 +3,9 @@ import Foundation
 struct BundledNodes {
     
     static let dict: [Int: String] = [
-        1: "",
-        5: "",
-        10: "",
+        1: "eth.llamarpc.com",
+        5: "ethereum-goerli.publicnode.com",
+        10: "optimism.llamarpc.com",
         25: "evm.cronos.org",
         56: "bsc-dataseed1.bnbchain.org",
         66: "exchainrpc.okex.org",
@@ -16,7 +16,7 @@ struct BundledNodes {
         100: "rpc.gnosischain.com",
         122: "rpc.fuse.io",
         128: "http-mainnet.hecochain.com",
-        137: "",
+        137: "polygon.llamarpc.com",
         200: "arbitrum.xdaichain.com/",
         204: "opbnb-mainnet-rpc.bnbchain.org",
         250: "rpc.ftm.tools",
@@ -44,7 +44,7 @@ struct BundledNodes {
         8217: "1rpc.io/klay",
         8453: "mainnet.base.org/",
         10200: "rpc.chiadochain.net",
-        42161: "",
+        42161: "arbitrum.llamarpc.com",
         42170: "nova.arbitrum.io/rpc",
         42220: "forno.celo.org",
         43113: "api.avax-test.network/ext/bc/C/rpc",
@@ -70,8 +70,8 @@ struct BundledNodes {
         1313161554: "mainnet.aurora.dev",
         1313161555: "testnet.aurora.dev/",
         1666600000: "api.harmony.one",
-        11297108099: "",
-        11297108109: ""
+        11297108099: "palm-testnet.public.blastapi.io",
+        11297108109: "palm-mainnet.public.blastapi.io"
     ]
     
 }

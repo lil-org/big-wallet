@@ -52,7 +52,7 @@ fetchChains { chains in
     var updatedNodes = currentNodes
     
     newChains.forEach { chain in
-        updatedNetworks[chain.chainId] = BundledNetwork(name: chain.name, symbol: chain.nativeCurrency.symbol, isTest: true)
+        updatedNetworks[chain.chainId] = BundledNetwork(name: chain.name, symbol: chain.nativeCurrency.symbol, isTest: true, okToShowPriceForSymbol: false)
         updatedNodes[String(chain.chainId)] = String(chain.rpc.first(where: { $0.hasPrefix(https) })!.dropFirst(https.count))
     }
     

@@ -1,8 +1,8 @@
 {
   "1" : {
     "n" : "Ethereum",
-    "s" : "ETH",
-    "o" : true
+    "o" : true,
+    "s" : "ETH"
   },
   "5" : {
     "n" : "Goerli",
@@ -11,8 +11,8 @@
   },
   "10" : {
     "n" : "Optimism",
-    "s" : "ETH",
-    "o" : true
+    "o" : true,
+    "s" : "ETH"
   },
   "25" : {
     "n" : "Cronos",
@@ -20,8 +20,8 @@
   },
   "56" : {
     "n" : "BNB Chain",
-    "s" : "BNB",
-    "o" : true
+    "o" : true,
+    "s" : "BNB"
   },
   "66" : {
     "n" : "OKTC",
@@ -60,8 +60,8 @@
   },
   "137" : {
     "n" : "Polygon",
-    "s" : "MATIC",
-    "o" : true
+    "o" : true,
+    "s" : "MATIC"
   },
   "200" : {
     "n" : "Arbitrum on xDai",
@@ -69,13 +69,13 @@
   },
   "204" : {
     "n" : "opBNB",
-    "s" : "BNB",
-    "o" : true
+    "o" : true,
+    "s" : "BNB"
   },
   "250" : {
     "n" : "Fantom Opera",
-    "s" : "FTM",
-    "o" : true
+    "o" : true,
+    "s" : "FTM"
   },
   "280" : {
     "n" : "zkSync Era Testnet",
@@ -84,8 +84,8 @@
   },
   "288" : {
     "n" : "Boba",
-    "s" : "ETH",
-    "o" : true
+    "o" : true,
+    "s" : "ETH"
   },
   "314" : {
     "n" : "Filecoin",
@@ -93,8 +93,8 @@
   },
   "324" : {
     "n" : "zkSync Era",
-    "s" : "ETH",
-    "o" : true
+    "o" : true,
+    "s" : "ETH"
   },
   "338" : {
     "n" : "Cronos Testnet",
@@ -108,8 +108,8 @@
   },
   "424" : {
     "n" : "Public Goods Network",
-    "s" : "ETH",
-    "o" : true
+    "o" : true,
+    "s" : "ETH"
   },
   "1001" : {
     "n" : "Klaytn Baobab",
@@ -122,8 +122,8 @@
   },
   "1101" : {
     "n" : "Polygon zkEVM",
-    "s" : "ETH",
-    "o" : true
+    "o" : true,
+    "s" : "ETH"
   },
   "1284" : {
     "n" : "Moonbeam",
@@ -180,8 +180,8 @@
   },
   "8453" : {
     "n" : "Base",
-    "s" : "ETH",
-    "o" : true
+    "o" : true,
+    "s" : "ETH"
   },
   "10200" : {
     "n" : "Gnosis Chiado",
@@ -190,13 +190,13 @@
   },
   "42161" : {
     "n" : "Arbitrum One",
-    "s" : "ETH",
-    "o" : true
+    "o" : true,
+    "s" : "ETH"
   },
   "42170" : {
     "n" : "Arbitrum Nova",
-    "s" : "ETH",
-    "o" : true
+    "o" : true,
+    "s" : "ETH"
   },
   "42220" : {
     "n" : "Celo",
@@ -209,8 +209,8 @@
   },
   "43114" : {
     "n" : "Avalanche",
-    "s" : "AVAX",
-    "o" : true
+    "o" : true,
+    "s" : "AVAX"
   },
   "43288" : {
     "n" : "Boba Avax",
@@ -233,8 +233,8 @@
   },
   "59144" : {
     "n" : "Linea",
-    "s" : "ETH",
-    "o" : true
+    "o" : true,
+    "s" : "ETH"
   },
   "64240" : {
     "n" : "Fantom Sonic Open",
@@ -273,13 +273,13 @@
   },
   "534352" : {
     "n" : "Scroll",
-    "s" : "ETH",
-    "o" : true
+    "o" : true,
+    "s" : "ETH"
   },
   "7777777" : {
     "n" : "Zora",
-    "s" : "ETH",
-    "o" : true
+    "o" : true,
+    "s" : "ETH"
   },
   "11155111" : {
     "n" : "Sepolia",
@@ -302,8 +302,8 @@
   },
   "1313161554" : {
     "n" : "Aurora",
-    "s" : "ETH",
-    "o" : true
+    "o" : true,
+    "s" : "ETH"
   },
   "1313161555" : {
     "n" : "Aurora Testnet",
