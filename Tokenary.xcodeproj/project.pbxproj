@@ -156,6 +156,11 @@
 		2C9B55D32AF2AE4B008BE899 /* BundledNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */; };
 		2C9F0B6826BDCB2E008FA3D6 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */; };
 		2CAA412526C7CD93009F3535 /* ReviewRequester.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CAA412426C7CD93009F3535 /* ReviewRequester.swift */; };
+		2CADD2C52AFAAE860082BFA4 /* Infura.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CADD2C42AFAAE860082BFA4 /* Infura.swift */; };
+		2CADD2C62AFAAE860082BFA4 /* Infura.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CADD2C42AFAAE860082BFA4 /* Infura.swift */; };
+		2CADD2C72AFAAE860082BFA4 /* Infura.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CADD2C42AFAAE860082BFA4 /* Infura.swift */; };
+		2CADD2C82AFAAE860082BFA4 /* Infura.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CADD2C42AFAAE860082BFA4 /* Infura.swift */; };
+		2CADD2C92AFAAE860082BFA4 /* Infura.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CADD2C42AFAAE860082BFA4 /* Infura.swift */; };
 		2CB3845A27654EA900A189B9 /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 2CB3845827654E9700A189B9 /* _locales */; };
 		2CB3845B27654EA900A189B9 /* images in Resources */ = {isa = PBXBuildFile; fileRef = 2CB3845927654E9700A189B9 /* images */; };
 		2CB3845C27654EB300A189B9 /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 2CB3845827654E9700A189B9 /* _locales */; };
@@ -384,6 +389,7 @@
 		2C9B55D42AF2B004008BE899 /* nodes-to-bundle.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "nodes-to-bundle.json"; sourceTree = "<group>"; };
 		2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumNetwork.swift; sourceTree = "<group>"; };
 		2CAA412426C7CD93009F3535 /* ReviewRequester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewRequester.swift; sourceTree = "<group>"; };
+		2CADD2C42AFAAE860082BFA4 /* Infura.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Infura.swift; sourceTree = "<group>"; };
 		2CB3844327654BF600A189B9 /* error.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = error.js; path = "web3-provider/error.js"; sourceTree = "<group>"; };
 		2CB3844427654BF600A189B9 /* package.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = package.json; path = "web3-provider/package.json"; sourceTree = "<group>"; };
 		2CB3844527654BF600A189B9 /* id_mapping.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = id_mapping.js; path = "web3-provider/id_mapping.js"; sourceTree = "<group>"; };
@@ -892,6 +898,7 @@
 			children = (
 				2CED86A92AF00F56006F9E26 /* bundled-networks.json */,
 				2CED86B52AF17D5A006F9E26 /* BundledNodes.swift */,
+				2CADD2C42AFAAE860082BFA4 /* Infura.swift */,
 			);
 			path = bundled;
 			sourceTree = "<group>";
@@ -1248,6 +1255,7 @@
 				2C264BD227B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
 				2C264BD727B5806200234393 /* InpageProvider.swift in Sources */,
 				2C8ED8D62AEA7DB200818D74 /* String.swift in Sources */,
+				2CADD2C72AFAAE860082BFA4 /* Infura.swift in Sources */,
 				2C20ED992AEE54A300DDE709 /* FixedWidthInteger.swift in Sources */,
 				2C90E61D27B2C5C100C8991E /* InternalSafariRequest.swift in Sources */,
 				2C2AA1D728AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
@@ -1318,6 +1326,7 @@
 				2C4768A728258627005E8D4D /* EditAccountsViewController.swift in Sources */,
 				2C5C829F2822B9DF007D9488 /* Images.swift in Sources */,
 				2C4297282ADEDCBD0044357A /* PeerMeta.swift in Sources */,
+				2CADD2C52AFAAE860082BFA4 /* Infura.swift in Sources */,
 				2C528A16267FA8EB00CA3ADD /* Defaults.swift in Sources */,
 				2C264BBC27B2F25E00234393 /* SafariRequest.swift in Sources */,
 				2CFAE56A28BE6292001D0799 /* NSImage.swift in Sources */,
@@ -1386,6 +1395,7 @@
 				2CF255B4275A744000AE54B9 /* PasswordViewController.swift in Sources */,
 				2C8E889F275F9967003EB8DB /* Storyboard.swift in Sources */,
 				2C96D39C2763ADE100687301 /* LocalAuthentication.swift in Sources */,
+				2CADD2C62AFAAE860082BFA4 /* Infura.swift in Sources */,
 				2C8ED8DD2AEADDC400818D74 /* BigInt.swift in Sources */,
 				2C96D3A62763CCA000687301 /* Images.swift in Sources */,
 				2C264BD127B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
@@ -1425,6 +1435,7 @@
 				2C264BD327B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
 				2C264BD827B5806200234393 /* InpageProvider.swift in Sources */,
 				2C8ED8D72AEA7DB300818D74 /* String.swift in Sources */,
+				2CADD2C82AFAAE860082BFA4 /* Infura.swift in Sources */,
 				2C20ED9A2AEE54A400DDE709 /* FixedWidthInteger.swift in Sources */,
 				2C90E61E27B2C5C100C8991E /* InternalSafariRequest.swift in Sources */,
 				2C2AA1D828AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
@@ -1445,6 +1456,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2C9B55D32AF2AE4B008BE899 /* BundledNetwork.swift in Sources */,
+				2CADD2C92AFAAE860082BFA4 /* Infura.swift in Sources */,
 				2CED86B02AF0167F006F9E26 /* EIP155ChainData.swift in Sources */,
 				2CED86A52AF00BC9006F9E26 /* main.swift in Sources */,
 				2CED86B32AF01F99006F9E26 /* String.swift in Sources */,
