@@ -5,13 +5,14 @@ import Foundation
 struct Nodes {
     
     private static let infuraKey: String = {
-        if let path = Bundle.main.path(forResource: "shared", ofType: "plist"),
+        if let latest = ExtensionBridge.defaultInfuraKeys?.first, !latest.isEmpty {
+            return latest
+        } else if let path = Bundle.main.path(forResource: "shared", ofType: "plist"),
            let dict = NSDictionary(contentsOfFile: path) as? [String: AnyObject],
            let infuraKey = dict["InfuraKey"] as? String, !infuraKey.isEmpty {
             return infuraKey
         } else {
-            // TODO: hande infura key not being bundled
-            return ""
+            return "" // TODO: return nil instead
         }
     }()
     

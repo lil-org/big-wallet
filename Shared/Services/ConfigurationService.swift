@@ -26,9 +26,8 @@ class ConfigurationService {
         if !shouldUpdateApp {
             getConfiguration()
         }
-        getInfuraKeyFromCloudKit { infuraKey in
-            // TODO: keep latest version in defaults and make it accessible to Nodes
-            print(infuraKey)
+        getInfuraKeysFromCloudKit { infuraKeys in
+            ExtensionBridge.defaultInfuraKeys = infuraKeys
         }
     }
     
@@ -50,7 +49,7 @@ class ConfigurationService {
         dataTask.resume()
     }
     
-    private func getInfuraKeyFromCloudKit(completion: @escaping (String) -> Void) {
+    private func getInfuraKeysFromCloudKit(completion: @escaping ([String]) -> Void) {
         let container = CKContainer(identifier: "iCloud.tokenary")
         let publicDatabase = container.publicCloudDatabase
         let predicate = NSPredicate(value: true)
@@ -58,10 +57,9 @@ class ConfigurationService {
         publicDatabase.fetch(withQuery: query) { result in
             if case .success(let success) = result,
                case let .success(record) = success.matchResults.first?.1,
-               let infuraKeys = record["infuraKeys"] as? [String],
-               let infuraKey = infuraKeys.first {
+               let infuraKeys = record["infuraKeys"] as? [String], infuraKeys.first?.isEmpty == false {
                 DispatchQueue.main.async {
-                    completion(infuraKey)
+                    completion(infuraKeys)
                 }
             }
         }

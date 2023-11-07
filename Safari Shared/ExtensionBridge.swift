@@ -10,6 +10,15 @@ struct ExtensionBridge {
         return String(id)
     }
     
+    static var defaultInfuraKeys: [String]? {
+        get {
+            return defaults?.array(forKey: "defaultInfuraKeys") as? [String]
+        }
+        set {
+            defaults?.set(newValue, forKey: "defaultInfuraKeys")
+        }
+    }
+    
     private static var initiatedRequests: Set<Int> {
         get {
             Set(defaults?.array(forKey: "initiatedRequests") as? [Int] ?? [])
