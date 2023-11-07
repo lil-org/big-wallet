@@ -26,7 +26,7 @@ button.addEventListener('click', () => {
     
     setTimeout( function() {
         window.close();
-    }, 200);
+    }, 420);
     
     browser.runtime.sendMessage({subject: 'POPUP_DID_PROCEED', id: request.id});
 });
