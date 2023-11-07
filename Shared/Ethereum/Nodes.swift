@@ -4,7 +4,7 @@ import Foundation
 
 struct Nodes {
     
-    private static let infuraKey: String = {
+    private static let infuraKey: String? = {
         if let latest = ExtensionBridge.defaultInfuraKeys?.first, !latest.isEmpty {
             return latest
         } else if let path = Bundle.main.path(forResource: "shared", ofType: "plist"),
@@ -12,18 +12,16 @@ struct Nodes {
            let infuraKey = dict["InfuraKey"] as? String, !infuraKey.isEmpty {
             return infuraKey
         } else {
-            return "" // TODO: return nil instead
+            return nil
         }
     }()
     
     static func getNode(chainId: Int) -> String? {
-        if let domain = BundledNodes.dict[chainId] {
-            let https = "https://" + domain
-            if domain.hasSuffix(".infura.io/v3/") {
-                return https + infuraKey
-            } else {
-                return https
-            }
+        let https = "https://"
+        if let infura = BundledNodes.infura[chainId], let infuraKey = infuraKey {
+            return https + infura + ".infura.io/v3/" + infuraKey
+        } else if let domain = BundledNodes.dict[chainId] {
+            return https + domain
         } else {
             return nil
         }
