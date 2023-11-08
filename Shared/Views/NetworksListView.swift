@@ -4,8 +4,8 @@ import SwiftUI
 
 struct NetworksListView: View {
     
-    private let mainnets = Networks.allMainnets
-    private let testnets = Networks.allTestnets
+    private let mainnets = Networks.mainnets
+    private let testnets = Networks.testnets
     private let pinned = Networks.pinned
     
     @Environment(\.presentationMode) var presentationMode

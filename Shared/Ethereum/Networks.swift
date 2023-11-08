@@ -18,15 +18,18 @@ struct Networks {
         return allBundledDict[id]
     }
     
+    private static let pinnedIds = [1, 7777777, 10, 8453, 42161]
+    
     static let pinned: [EthereumNetwork] = {
-        return [1, 7777777, 10, 8453, 42161].compactMap { Networks.withChainId($0) }
+        return pinnedIds.compactMap { Networks.withChainId($0) }
     }()
     
-    static let allMainnets: [EthereumNetwork] = {
-        return allBundled.filter { !$0.isTestnet }
+    static let mainnets: [EthereumNetwork] = {
+        let excluded = Set(pinnedIds)
+        return allBundled.filter { !$0.isTestnet && !excluded.contains($0.chainId) }
     }()
     
-    static let allTestnets: [EthereumNetwork] = {
+    static let testnets: [EthereumNetwork] = {
         return allBundled.filter { $0.isTestnet }
     }()
     
