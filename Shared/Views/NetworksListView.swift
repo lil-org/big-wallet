@@ -9,9 +9,9 @@ struct NetworksListView: View {
     private let pinned = Networks.pinned
     
     @Environment(\.presentationMode) var presentationMode
-    @State private var selectedChainId: Int?
+    @State private var selectedNetwork: EthereumNetwork?
     
-    private let completion: ((Int?) -> Void)
+    private let completion: ((EthereumNetwork?) -> Void)
     
     var body: some View {
         NavigationView {
@@ -24,15 +24,15 @@ struct NetworksListView: View {
             }
             .navigationBarTitle(Strings.selectNetwork, displayMode: .large)
             .navigationBarItems(leading: Button(action: {
-                completion(selectedChainId)
+                completion(selectedNetwork)
                 presentationMode.wrappedValue.dismiss() }) {
-                Text(Strings.done).bold()
-            })
+                    Text(Strings.done).bold()
+            }.disabled(selectedNetwork == nil))
         }
     }
     
-    init(selectedChainId: Int?, completion: @escaping ((Int?) -> Void)) {
-        self._selectedChainId = State(initialValue: selectedChainId)
+    init(selectedNetwork: EthereumNetwork?, completion: @escaping ((EthereumNetwork?) -> Void)) {
+        self._selectedNetwork = State(initialValue: selectedNetwork)
         self.completion = completion
     }
     
@@ -43,16 +43,16 @@ struct NetworksListView: View {
                 HStack {
                     Text(network.name)
                     Spacer()
-                    if selectedChainId == network.chainId {
+                    if selectedNetwork?.chainId == network.chainId {
                         Image.checkmark.foregroundStyle(.selection)
                     }
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    if selectedChainId == network.chainId {
-                        selectedChainId = nil
+                    if selectedNetwork?.chainId == network.chainId {
+                        selectedNetwork = nil
                     } else {
-                        selectedChainId = network.chainId
+                        selectedNetwork = network
                     }
                 }
             }

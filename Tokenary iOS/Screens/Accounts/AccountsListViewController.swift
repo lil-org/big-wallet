@@ -1,6 +1,7 @@
 // Copyright © 2021 Tokenary. All rights reserved.
 
 import UIKit
+import SwiftUI
 import WalletCore
 
 class AccountsListViewController: UIViewController, DataStateContainer {
@@ -300,37 +301,13 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             return
         }
         
-        let actionSheet = UIAlertController(title: Strings.selectNetwork, message: nil, preferredStyle: .actionSheet)
-        actionSheet.popoverPresentationController?.sourceView = networkButton
-        for network in Networks.allMainnets {
-            let prefix = network == self.network ? "✅ " : ""
-            let action = UIAlertAction(title: prefix + network.name, style: .default) { [weak self] _ in
-                self?.selectNetwork(network)
-            }
-            actionSheet.addAction(action)
+        let networksList = NetworksListView(selectedNetwork: network) { [weak self] newSelected in
+            guard let newSelected = newSelected else { return }
+            self?.selectNetwork(newSelected)
         }
-        let testnetsAction = UIAlertAction(title: Strings.testnets.withEllipsis, style: .default) { [weak self] _ in
-            self?.showTestnets()
-        }
-        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
-        actionSheet.addAction(testnetsAction)
-        actionSheet.addAction(cancelAction)
-        present(actionSheet, animated: true)
-    }
-    
-    private func showTestnets() {
-        let actionSheet = UIAlertController(title: Strings.selectTestnet, message: nil, preferredStyle: .actionSheet)
-        actionSheet.popoverPresentationController?.sourceView = networkButton
-        for network in Networks.allTestnets {
-            let prefix = network == self.network ? "✅ " : ""
-            let action = UIAlertAction(title: prefix + network.name, style: .default) { [weak self] _ in
-                self?.selectNetwork(network)
-            }
-            actionSheet.addAction(action)
-        }
-        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
-        actionSheet.addAction(cancelAction)
-        present(actionSheet, animated: true)
+        
+        let hostingController = UIHostingController(rootView: networksList)
+        present(hostingController, animated: true)
     }
     
     private func selectNetwork(_ network: EthereumNetwork) {
