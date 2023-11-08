@@ -18,6 +18,10 @@ struct Networks {
         return allBundledDict[id]
     }
     
+    static let pinned: [EthereumNetwork] = {
+        return [1, 7777777, 10, 8453, 42161].compactMap { Networks.withChainId($0) }
+    }()
+    
     static let allMainnets: [EthereumNetwork] = {
         return allBundled.filter { !$0.isTestnet }
     }()

@@ -6,6 +6,7 @@ struct NetworksListView: View {
     
     private let mainnets = Networks.allMainnets
     private let testnets = Networks.allTestnets
+    private let pinned = Networks.pinned
     
     @Environment(\.presentationMode) var presentationMode
     @State private var selectedChainId: Int?
@@ -16,6 +17,7 @@ struct NetworksListView: View {
         NavigationView {
             VStack {
                 List {
+                    networkSection(networks: pinned, title: Strings.pinned)
                     networkSection(networks: mainnets)
                     networkSection(networks: testnets, title: Strings.testnets)
                 }

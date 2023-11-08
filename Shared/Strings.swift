@@ -96,5 +96,6 @@ struct Strings {
     static let pleaseGetANewOne = "please get a new one"
     static let notNow = "not now"
     static let done = "Done"
+    static let pinned = "Pinned"
     
 }
