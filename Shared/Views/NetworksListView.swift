@@ -3,64 +3,66 @@
 import SwiftUI
 
 struct NetworksListView: View {
-    @State private var searchText: String = ""
-    let items: [String] = Networks.all().map { $0.name }
+    
+    private let mainnets = Networks.mainnets
+    private let testnets = Networks.testnets
+    private let pinned = Networks.pinned
     
     @Environment(\.presentationMode) var presentationMode
-
-    var filteredItems: [String] {
-        items.filter { $0.contains(searchText) || searchText.isEmpty }
-    }
-
+    @State private var selectedNetwork: EthereumNetwork?
+    
+    private let completion: ((EthereumNetwork?) -> Void)
+    
     var body: some View {
-        VStack {
-            SearchBar(text: $searchText)
-            List(filteredItems, id: \.self) { item in
-                Text(item)
+        NavigationView {
+            VStack {
+                List {
+                    networkSection(networks: pinned, title: Strings.pinned)
+                    networkSection(networks: mainnets)
+                    networkSection(networks: testnets, title: Strings.testnets)
+                }
             }
-            
-            Divider() // Separate the list from the buttons
-
-            HStack {
-                Spacer()
-                Button("Cancel") {
-                    self.presentationMode.wrappedValue.dismiss()
+            .navigationBarTitle(Strings.selectNetwork, displayMode: .large)
+            .navigationBarItems(leading: Button(action: {
+                completion(selectedNetwork)
+                presentationMode.wrappedValue.dismiss() }) {
+                    Text(Strings.done).bold()
+            }.disabled(selectedNetwork == nil))
+        }
+    }
+    
+    init(selectedNetwork: EthereumNetwork?, completion: @escaping ((EthereumNetwork?) -> Void)) {
+        self._selectedNetwork = State(initialValue: selectedNetwork)
+        self.completion = completion
+    }
+    
+    @ViewBuilder
+    private func networkSection(networks: [EthereumNetwork], title: String? = nil) -> some View {
+        Section(header: title.map { Text($0) }) {
+            ForEach(networks, id: \.self) { network in
+                HStack {
+                    Text(network.name)
+                    Spacer()
+                    if selectedNetwork?.chainId == network.chainId {
+                        Image.checkmark.foregroundStyle(.selection)
+                    }
                 }
-                .padding()
-
-                Button("OK") {
-                    self.presentationMode.wrappedValue.dismiss()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if selectedNetwork?.chainId == network.chainId {
+                        selectedNetwork = nil
+                    } else {
+                        selectedNetwork = network
+                    }
                 }
-                .padding()
             }
         }
     }
+    
 }
 
-struct SearchBar: View {
-    @Binding var text: String
+#if os(macOS)
 
-    var body: some View {
-        HStack {
-            TextField("Search ...", text: $text)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-        }.padding()
-    }
-}
-
-#if os(iOS)
-import UIKit
-
-extension UIViewController {
-    func showPopup() {
-        let contentView = NetworksListView()
-        let hostingController = UIHostingController(rootView: contentView)
-        hostingController.modalPresentationStyle = .fullScreen
-        self.present(hostingController, animated: true, completion: nil)
-    }
-}
-
-#elseif os(macOS)
 import Cocoa
 
 var popupWindow: NSWindow? // keep a reference within a NSViewController

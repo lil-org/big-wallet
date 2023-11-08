@@ -4,8 +4,8 @@ import Foundation
 
 #if os(iOS)
 import UIKit
-public typealias Image = UIImage
+public typealias PlatformSpecificImage = UIImage
 #elseif os(macOS)
 import Cocoa
-public typealias Image = NSImage
+public typealias PlatformSpecificImage = NSImage
 #endif
