@@ -2,7 +2,7 @@
 
 import Foundation
 
-struct EthereumNetwork: Codable, Equatable {
+struct EthereumNetwork: Codable, Equatable, Hashable {
     
     let chainId: Int
     let name: String

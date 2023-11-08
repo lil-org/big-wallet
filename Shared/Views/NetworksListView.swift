@@ -4,8 +4,8 @@ import SwiftUI
 
 struct NetworksListView: View {
     
-    let mainnets: [String] = Networks.allMainnets.map { $0.name }
-    let testnets: [String] = Networks.allTestnets.map { $0.name }
+    let mainnets = Networks.allMainnets
+    let testnets = Networks.allTestnets
     
     @Environment(\.presentationMode) var presentationMode
     
@@ -15,13 +15,13 @@ struct NetworksListView: View {
                 List {
                     Section() {
                         ForEach(mainnets, id: \.self) { item in
-                            Text(item)
+                            Text(item.name)
                         }
                     }
                     
                     Section(header: Text(Strings.testnets)) {
                         ForEach(testnets, id: \.self) { item in
-                            Text(item)
+                            Text(item.name)
                         }
                     }
                 }
