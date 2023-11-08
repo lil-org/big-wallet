@@ -3,64 +3,41 @@
 import SwiftUI
 
 struct NetworksListView: View {
-    @State private var searchText: String = ""
-    let items: [String] = Networks.all().map { $0.name }
+    
+    let mainnets: [String] = Networks.allMainnets.map { $0.name }
+    let testnets: [String] = Networks.allTestnets.map { $0.name }
     
     @Environment(\.presentationMode) var presentationMode
-
-    var filteredItems: [String] {
-        items.filter { $0.contains(searchText) || searchText.isEmpty }
-    }
-
+    
     var body: some View {
-        VStack {
-            SearchBar(text: $searchText)
-            List(filteredItems, id: \.self) { item in
-                Text(item)
-            }
-            
-            Divider() // Separate the list from the buttons
-
-            HStack {
-                Spacer()
-                Button("Cancel") {
-                    self.presentationMode.wrappedValue.dismiss()
+        NavigationView {
+            VStack {
+                List {
+                    Section() {
+                        ForEach(mainnets, id: \.self) { item in
+                            Text(item)
+                        }
+                    }
+                    
+                    Section(header: Text(Strings.testnets)) {
+                        ForEach(testnets, id: \.self) { item in
+                            Text(item)
+                        }
+                    }
                 }
-                .padding()
-
-                Button("OK") {
-                    self.presentationMode.wrappedValue.dismiss()
-                }
-                .padding()
             }
+            .navigationBarTitle(Strings.selectNetwork, displayMode: .large)
+            .navigationBarItems(leading: Button(action: {
+                presentationMode.wrappedValue.dismiss()
+            }) {
+                Text(Strings.cancel)
+            })
         }
     }
 }
 
-struct SearchBar: View {
-    @Binding var text: String
+#if os(macOS)
 
-    var body: some View {
-        HStack {
-            TextField("Search ...", text: $text)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-        }.padding()
-    }
-}
-
-#if os(iOS)
-import UIKit
-
-extension UIViewController {
-    func showPopup() {
-        let contentView = NetworksListView()
-        let hostingController = UIHostingController(rootView: contentView)
-        hostingController.modalPresentationStyle = .fullScreen
-        self.present(hostingController, animated: true, completion: nil)
-    }
-}
-
-#elseif os(macOS)
 import Cocoa
 
 var popupWindow: NSWindow? // keep a reference within a NSViewController

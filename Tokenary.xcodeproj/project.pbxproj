@@ -91,6 +91,8 @@
 		2C6F6D5A28273FE500D6E8FB /* EditAccountsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5928273FE500D6E8FB /* EditAccountsViewController.swift */; };
 		2C6F6D5D2827434800D6E8FB /* CoinDerivationTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5B2827434800D6E8FB /* CoinDerivationTableViewCell.xib */; };
 		2C6F6D5E2827434800D6E8FB /* CoinDerivationTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5C2827434800D6E8FB /* CoinDerivationTableViewCell.swift */; };
+		2C728B5E2AFBE7EA00E4DD47 /* NetworksListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9931DB2AEEC0E200577C8A /* NetworksListView.swift */; };
+		2C728B5F2AFBE7EA00E4DD47 /* NetworksListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9931DB2AEEC0E200577C8A /* NetworksListView.swift */; };
 		2C73215A2AEE8F5200AA8A71 /* ConfigurationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7321592AEE8F5200AA8A71 /* ConfigurationService.swift */; };
 		2C73215B2AEE8F5200AA8A71 /* ConfigurationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7321592AEE8F5200AA8A71 /* ConfigurationService.swift */; };
 		2C773F5E27450B97007B04E7 /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
@@ -1305,6 +1307,7 @@
 				2C134BA627553EC500DAFBDB /* Browser.swift in Sources */,
 				2CC89471269A334A00879245 /* UserDefaults.swift in Sources */,
 				2C78F8282683BDCC00C10670 /* Alert.swift in Sources */,
+				2C728B5F2AFBE7EA00E4DD47 /* NetworksListView.swift in Sources */,
 				2C8A09EE2675965F00993638 /* WaitingViewController.swift in Sources */,
 				2C797E7E267BB88800F2CE2D /* WelcomeViewController.swift in Sources */,
 				2CD0669226B5537B00728C20 /* WalletsManager.swift in Sources */,
@@ -1414,6 +1417,7 @@
 				2CF255B8275A748300AE54B9 /* ApproveTransactionViewController.swift in Sources */,
 				2C8E88A4275FB7B9003EB8DB /* UIApplication.swift in Sources */,
 				2C40709427667A8600AB3D55 /* ImageWithLabelTableViewCell.swift in Sources */,
+				2C728B5E2AFBE7EA00E4DD47 /* NetworksListView.swift in Sources */,
 				2C5FF97226C84F7B00B32ACC /* AppDelegate.swift in Sources */,
 				2C4768AC2826CA63005E8D4D /* CoinDerivation.swift in Sources */,
 				2C89D26927BADCA9006C0C8D /* DappRequestAction.swift in Sources */,
