@@ -95,5 +95,6 @@ struct Strings {
     static let thisAppVersionIsNoLongerSupported = "this app version is no longer supported 🥺"
     static let pleaseGetANewOne = "please get a new one"
     static let notNow = "not now"
+    static let done = "Done"
     
 }

@@ -18,7 +18,7 @@ extension Account {
         return withoutCommonPart.prefix(4) + "..." + withoutCommonPart.suffix(4)
     }
     
-    var image: Image? {
+    var image: PlatformSpecificImage? {
         if coin == .ethereum {
             return Blockies(seed: address.lowercased()).createImage()
         } else {

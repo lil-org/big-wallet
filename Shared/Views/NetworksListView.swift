@@ -4,36 +4,59 @@ import SwiftUI
 
 struct NetworksListView: View {
     
-    let mainnets = Networks.allMainnets
-    let testnets = Networks.allTestnets
+    private let mainnets = Networks.allMainnets
+    private let testnets = Networks.allTestnets
     
     @Environment(\.presentationMode) var presentationMode
+    @State private var selectedChainId: Int?
+    
+    private let completion: ((Int?) -> Void)
     
     var body: some View {
         NavigationView {
             VStack {
                 List {
-                    Section() {
-                        ForEach(mainnets, id: \.self) { item in
-                            Text(item.name)
-                        }
-                    }
-                    
-                    Section(header: Text(Strings.testnets)) {
-                        ForEach(testnets, id: \.self) { item in
-                            Text(item.name)
-                        }
-                    }
+                    networkSection(networks: mainnets)
+                    networkSection(networks: testnets, title: Strings.testnets)
                 }
             }
             .navigationBarTitle(Strings.selectNetwork, displayMode: .large)
             .navigationBarItems(leading: Button(action: {
-                presentationMode.wrappedValue.dismiss()
-            }) {
-                Text(Strings.cancel)
+                completion(selectedChainId)
+                presentationMode.wrappedValue.dismiss() }) {
+                Text(Strings.done).bold()
             })
         }
     }
+    
+    init(selectedChainId: Int?, completion: @escaping ((Int?) -> Void)) {
+        self._selectedChainId = State(initialValue: selectedChainId)
+        self.completion = completion
+    }
+    
+    @ViewBuilder
+    private func networkSection(networks: [EthereumNetwork], title: String? = nil) -> some View {
+        Section(header: title.map { Text($0) }) {
+            ForEach(networks, id: \.self) { network in
+                HStack {
+                    Text(network.name)
+                    Spacer()
+                    if selectedChainId == network.chainId {
+                        Image.checkmark.foregroundStyle(.selection)
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if selectedChainId == network.chainId {
+                        selectedChainId = nil
+                    } else {
+                        selectedChainId = network.chainId
+                    }
+                }
+            }
+        }
+    }
+    
 }
 
 #if os(macOS)
