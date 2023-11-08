@@ -396,20 +396,14 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     @objc private func preferencesButtonTapped() {
         let actionSheet = UIAlertController(title: "❤️ " + Strings.tokenary.uppercased() + " ⭐️", message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.barButtonItem = preferencesItem
-        let xAction = UIAlertAction(title: Strings.viewOnX, style: .default) { _ in
+        let xAction = UIAlertAction(title: Strings.viewOnX.withEllipsis, style: .default) { _ in
             UIApplication.shared.open(URL.x)
         }
-        let githubAction = UIAlertAction(title: Strings.viewOnGithub, style: .default) { _ in
+        let githubAction = UIAlertAction(title: Strings.viewOnGithub.withEllipsis, style: .default) { _ in
             UIApplication.shared.open(URL.github)
         }
         let emailAction = UIAlertAction(title: Strings.dropUsALine.withEllipsis, style: .default) { _ in
             UIApplication.shared.open(URL.email)
-        }
-        let shareInvite = UIAlertAction(title: Strings.shareInvite.withEllipsis, style: .default) { [weak self] _ in
-            let shareViewController = UIActivityViewController(activityItems: [URL.appStore], applicationActivities: nil)
-            shareViewController.popoverPresentationController?.barButtonItem = self?.preferencesItem
-            shareViewController.excludedActivityTypes = [.addToReadingList, .airDrop, .assignToContact, .openInIBooks, .postToFlickr, .postToVimeo, .markupAsPDF]
-            self?.present(shareViewController, animated: true)
         }
         let howToEnableSafariExtension = UIAlertAction(title: Strings.howToEnableSafariExtension, style: .default) { _ in
             UIApplication.shared.open(URL.iosSafariGuide)
@@ -418,7 +412,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         actionSheet.addAction(xAction)
         actionSheet.addAction(githubAction)
         actionSheet.addAction(emailAction)
-        actionSheet.addAction(shareInvite)
         actionSheet.addAction(howToEnableSafariExtension)
         actionSheet.addAction(cancelAction)
         present(actionSheet, animated: true)

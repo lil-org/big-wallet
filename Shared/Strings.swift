@@ -77,7 +77,6 @@ struct Strings {
     static let unknownWebsite = "Unknown website ⚠️"
     static let calculating = "Calculating..."
     static let howToEnableSafariExtension = "How to enable Safari extension?"
-    static let shareInvite = "Share an invite"
     static let approveTransaction = "Approve Transaction"
     static let multicoinWallet = "Multicoin Wallet"
     static let privateKeyWallets = "Private Key Wallets"
