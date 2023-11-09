@@ -5,10 +5,4 @@ Download on the [App Store](https://tokenary.io/get).
 
 ## Development
 
-Required:
-
-- Yarn (`brew install yarn`)
-
-Steps:
-
-- Run the Xcode project.
+Run the Xcode project.
