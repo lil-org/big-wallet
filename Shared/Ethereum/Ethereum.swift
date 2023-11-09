@@ -97,6 +97,11 @@ struct Ethereum {
                 }
             }
         }
+        
+        TransactionInspector.shared.getMethodName(data: transaction.data) { name in
+            transaction.interpretation = name
+            completion(transaction)
+        }
     }
     
     func send(transaction: Transaction, privateKey: WalletCore.PrivateKey, network: EthereumNetwork, completion: @escaping (String?) -> Void) {
