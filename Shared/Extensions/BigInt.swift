@@ -24,9 +24,9 @@ extension BigInt {
             formatter.maximumSignificantDigits = 2
         } else {
             formatter.minimumFractionDigits = 6
-            formatter.maximumFractionDigits = 11
+            formatter.maximumFractionDigits = 9
             formatter.minimumSignificantDigits = 1
-            formatter.maximumSignificantDigits = 11
+            formatter.maximumSignificantDigits = 10
         }
         
         return formatter.string(from: ethDecimal) ?? .zero

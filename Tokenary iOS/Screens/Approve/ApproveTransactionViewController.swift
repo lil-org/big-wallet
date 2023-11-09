@@ -103,7 +103,7 @@ class ApproveTransactionViewController: UIViewController {
         
         sectionModels[0] = cellModels
         if !initially, tableView.numberOfSections > 0 {
-            tableView.reloadSections(IndexSet([0]), with: .none)
+            tableView.reloadData()
         }
         okButton.isEnabled = transaction.hasFee
     }
