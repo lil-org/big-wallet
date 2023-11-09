@@ -2,6 +2,7 @@
 
 import Foundation
 import WalletCore
+import BigInt
 
 struct Ethereum {
 
@@ -15,6 +16,13 @@ struct Ethereum {
     private init() {}
     static let shared = Ethereum()
     private let rpc = EthereumRPC()
+    
+    func getBalance(network: EthereumNetwork, address: String, completion: @escaping (BigInt) -> Void) {
+        rpc.getBalance(rpcUrl: network.nodeURLString, for: address) { result in
+            guard case let .success(hex) = result, let balance = BigInt(hexString: hex) else { return }
+            DispatchQueue.main.async { completion(balance) }
+        }
+    }
     
     func sign(data: Data, privateKey: WalletCore.PrivateKey) throws -> String {
         return try sign(data: data, privateKey: privateKey, addPrefix: false)
@@ -88,6 +96,11 @@ struct Ethereum {
                     getGasIfNeeded(gasPrice: gasPrice)
                 }
             }
+        }
+        
+        TransactionInspector.shared.getMethodName(data: transaction.data) { name in
+            transaction.interpretation = name
+            completion(transaction)
         }
     }
     

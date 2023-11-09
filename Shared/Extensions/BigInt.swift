@@ -13,14 +13,22 @@ extension BigInt {
         return NSDecimalNumber(string: String(self))
     }
     
-    func eth(ofFee: Bool = false) -> String {
+    func eth(shortest: Bool = false) -> String {
         let ethDecimal = decimal.multiplying(byPowerOf10: -18)
-        guard ofFee else { return ethDecimal.stringValue }
         let formatter = NumberFormatter()
-        formatter.minimumFractionDigits = 3
-        formatter.maximumFractionDigits = 6
-        formatter.minimumSignificantDigits = 1
-        formatter.maximumSignificantDigits = 2
+        
+        if shortest {
+            formatter.minimumFractionDigits = 3
+            formatter.maximumFractionDigits = 6
+            formatter.minimumSignificantDigits = 1
+            formatter.maximumSignificantDigits = 2
+        } else {
+            formatter.minimumFractionDigits = 6
+            formatter.maximumFractionDigits = 9
+            formatter.minimumSignificantDigits = 1
+            formatter.maximumSignificantDigits = 10
+        }
+        
         return formatter.string(from: ethDecimal) ?? .zero
     }
     

@@ -7,9 +7,11 @@ class ImageWithLabelTableViewCell: UITableViewCell {
 
     @IBOutlet weak var iconImageView: UIImageView!
     @IBOutlet weak var titleLabel: UILabel!
+    @IBOutlet weak var extraTitleLabel: UILabel!
     
-    func setup(text: String, imageURL: String?, image: UIImage?) {
+    func setup(text: String, extraText: String?, imageURL: String?, image: UIImage?) {
         titleLabel.text = text
+        extraTitleLabel.text = extraText
         if let image = image {
             iconImageView.image = image
             iconImageView.layer.cornerRadius = 15

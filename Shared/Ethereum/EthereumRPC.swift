@@ -28,6 +28,10 @@ class EthereumRPC {
         request(method: "eth_gasPrice", params: [], rpcUrl: rpcUrl, completion: completion)
     }
     
+    func getBalance(rpcUrl: String, for address: String, completion: @escaping (Result<String, Error>) -> Void) {
+        request(method: "eth_getBalance", params: [address, "pending"], rpcUrl: rpcUrl, completion: completion)
+    }
+    
     func fetchNonce(rpcUrl: String, for address: String, completion: @escaping (Result<String, Error>) -> Void) {
         request(method: "eth_getTransactionCount", params: [address, "pending"], rpcUrl: rpcUrl, completion: completion)
     }

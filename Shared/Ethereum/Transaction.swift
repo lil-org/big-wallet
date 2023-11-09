@@ -11,6 +11,7 @@ struct Transaction {
     var gas: String?
     let value: String?
     let data: String
+    var interpretation: String?
     
     var hasFee: Bool {
         return gas != nil && gasPrice != nil
@@ -41,7 +42,11 @@ struct Transaction {
     }
     
     var dataWithLabel: String {
-        return "Data: " + data
+        if let interpretation = interpretation {
+            return interpretation + " " + data
+        } else {
+            return "Data: \(data)"
+        }
     }
     
     func gasPriceWithLabel(chain: EthereumNetwork) -> String {
@@ -61,7 +66,7 @@ struct Transaction {
            let gas = BigInt(hexString: gasString) {
             let fee = gas * gasPrice
             let costString = chain.mightShowPrice ? cost(value: fee, price: price) : ""
-            feeString = fee.eth(ofFee: true) + " \(chain.symbol)" + costString
+            feeString = fee.eth(shortest: true) + " \(chain.symbol)" + costString
         } else {
             feeString = Strings.calculating
         }

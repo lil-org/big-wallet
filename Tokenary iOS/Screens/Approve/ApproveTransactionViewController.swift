@@ -7,7 +7,7 @@ class ApproveTransactionViewController: UIViewController {
     
     private enum CellModel {
         case text(text: String, oneLine: Bool)
-        case textWithImage(text: String, imageURL: String?, image: UIImage?)
+        case textWithImage(text: String, extraText: String?, imageURL: String?, image: UIImage?)
         case gasPriceSlider
     }
     
@@ -37,6 +37,7 @@ class ApproveTransactionViewController: UIViewController {
     private var completion: ((Transaction?) -> Void)!
     private var didCallCompletion = false
     private var peerMeta: PeerMeta?
+    private var balance: String?
     
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var cancelButton: UIButton!
@@ -68,6 +69,11 @@ class ApproveTransactionViewController: UIViewController {
         updateDisplayedTransactionInfo(initially: true)
         prepareTransaction()
         enableSpeedConfigurationIfNeeded()
+        
+        ethereum.getBalance(network: chain, address: account.address) { [weak self] balance in
+            self?.balance = balance.eth(shortest: true) + " " + (self?.chain.symbol ?? "")
+            self?.updateDisplayedTransactionInfo(initially: false)
+        }
     }
     
     private func prepareTransaction() {
@@ -80,9 +86,9 @@ class ApproveTransactionViewController: UIViewController {
     
     private func updateDisplayedTransactionInfo(initially: Bool) {
         var cellModels: [CellModel] = [
-            .textWithImage(text: peerMeta?.name ?? Strings.unknownWebsite, imageURL: peerMeta?.iconURLString, image: nil),
-            .textWithImage(text: account.croppedAddress, imageURL: nil, image: account.image),
-            .textWithImage(text: chain.name, imageURL: nil, image: Images.network)
+            .textWithImage(text: peerMeta?.name ?? Strings.unknownWebsite, extraText: nil, imageURL: peerMeta?.iconURLString, image: nil),
+            .textWithImage(text: account.croppedAddress, extraText: balance, imageURL: nil, image: account.image),
+            .textWithImage(text: chain.name, extraText: nil, imageURL: nil, image: Images.network)
         ]
         
         let price = priceService.forNetwork(chain)
@@ -97,7 +103,7 @@ class ApproveTransactionViewController: UIViewController {
         
         sectionModels[0] = cellModels
         if !initially, tableView.numberOfSections > 0 {
-            tableView.reloadSections(IndexSet([0]), with: .none)
+            tableView.reloadData()
         }
         okButton.isEnabled = transaction.hasFee
     }
@@ -173,9 +179,9 @@ extension ApproveTransactionViewController: UITableViewDataSource {
             let cell = tableView.dequeueReusableCellOfType(MultilineLabelTableViewCell.self, for: indexPath)
             cell.setup(text: text, largeFont: true, oneLine: oneLine)
             return cell
-        case let .textWithImage(text: text, imageURL: imageURL, image: image):
+        case let .textWithImage(text: text, extraText: extraText, imageURL: imageURL, image: image):
             let cell = tableView.dequeueReusableCellOfType(ImageWithLabelTableViewCell.self, for: indexPath)
-            cell.setup(text: text, imageURL: imageURL, image: image)
+            cell.setup(text: text, extraText: extraText, imageURL: imageURL, image: image)
             return cell
         case .gasPriceSlider:
             let cell = tableView.dequeueReusableCellOfType(GasPriceSliderTableViewCell.self, for: indexPath)

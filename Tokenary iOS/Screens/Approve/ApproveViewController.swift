@@ -99,7 +99,7 @@ extension ApproveViewController: UITableViewDataSource {
             return cell
         case let .textWithImage(text: text, imageURL: imageURL, image: image):
             let cell = tableView.dequeueReusableCellOfType(ImageWithLabelTableViewCell.self, for: indexPath)
-            cell.setup(text: text, imageURL: imageURL, image: image)
+            cell.setup(text: text, extraText: nil, imageURL: imageURL, image: image)
             return cell
         }
         
