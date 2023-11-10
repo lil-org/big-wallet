@@ -16,8 +16,13 @@ struct TransactionInspector {
         guard nameHex.count == length,
               let url = URL(string: "https://raw.githubusercontent.com/ethereum-lists/4bytes/master/signatures/\(nameHex)")
         else { return }
-        let dataTask = urlSession.dataTask(with: url) { (data, _, _) in
-            if let data = data, let name = String(data: data, encoding: .utf8), !name.isEmpty {
+        let dataTask = urlSession.dataTask(with: url) { (data, response, error) in
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if error == nil,
+               (200...299).contains(statusCode),
+               let data = data,
+               let name = String(data: data, encoding: .utf8),
+               !name.isEmpty {
                 DispatchQueue.main.async { completion(name) }
             }
         }
