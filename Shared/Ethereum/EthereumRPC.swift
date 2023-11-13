@@ -29,7 +29,7 @@ class EthereumRPC {
         request(method: "eth_gasPrice", params: [], rpcUrl: rpcUrl, completion: completion)
     }
     
-    func resolveENS(rpcUrl: String, for address: String, completion: @escaping (Result<String, Error>) -> Void) {
+    func resolveENS(rpcUrl: String, address: String, completion: @escaping (Result<String, Error>) -> Void) {
         let reverseRecord = "\(address.lowercased().cleanHex).addr.reverse"
         
         var node = Data(repeating: 0, count: 32)
@@ -43,15 +43,29 @@ class EthereumRPC {
         }
         
         let nameHash = node.hexString
+        let data = "0x691f3431" + String(repeating: "0", count: 64 - nameHash.count) + nameHash
         let method = "eth_call"
         let params: [Any] = [
             [
                 "to": "0x231b0Ee14048e9dCcD1d247744d114a4EB5E8E63",
-                "data": "0x691f3431" + String(repeating: "0", count: 64 - nameHash.count) + nameHash
+                "data": data
             ],
             "latest"
         ]
-        request(method: method, params: params, rpcUrl: rpcUrl, completion: completion)
+        
+        request(method: method, params: params, rpcUrl: rpcUrl) { result in
+            switch result {
+            case .success(let success):
+                if let data = Data(hexString: String(success.cleanHex.dropFirst(64))),
+                   let ens = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .controlCharacters) {
+                    completion(.success(ens))
+                } else {
+                    completion(.failure(EthereumRPCError.unknown))
+                }
+            case .failure:
+                completion(result)
+            }
+        }
     }
     
     func getBalance(rpcUrl: String, for address: String, completion: @escaping (Result<String, Error>) -> Void) {
