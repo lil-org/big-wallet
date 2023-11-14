@@ -6,10 +6,19 @@ class MultilineLabelTableViewCell: UITableViewCell {
 
     @IBOutlet weak var multilineLabel: UILabel!
     
-    func setup(text: String, largeFont: Bool, oneLine: Bool) {
+    func setup(text: String, largeFont: Bool, oneLine: Bool, pro: Bool) {
         multilineLabel.text = text
-        multilineLabel.font = largeFont ? UIFont.systemFont(ofSize: 21, weight: .medium) : UIFont.systemFont(ofSize: 17, weight: .regular)
+        
+        if pro {
+            multilineLabel.textColor = .secondaryLabel
+            multilineLabel.font = UIFont.italicSystemFont(ofSize: 15)
+        } else if largeFont {
+            multilineLabel.textColor = .label
+            multilineLabel.font = largeFont ? UIFont.systemFont(ofSize: 21, weight: .medium) : UIFont.systemFont(ofSize: 17, weight: .regular)
+        }
+        
         multilineLabel.numberOfLines = oneLine ? 1 : 0
+        multilineLabel.lineBreakMode = oneLine ? .byTruncatingTail : .byCharWrapping
     }
     
 }

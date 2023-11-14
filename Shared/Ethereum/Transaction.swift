@@ -42,11 +42,7 @@ struct Transaction {
     }
     
     var dataWithLabel: String {
-        if let interpretation = interpretation {
-            return interpretation + " " + data
-        } else {
-            return "Data: \(data)"
-        }
+        return "Data: \(data)"
     }
     
     func gasPriceWithLabel(chain: EthereumNetwork) -> String {
