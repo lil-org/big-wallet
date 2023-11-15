@@ -42,18 +42,76 @@ struct TransactionInspector {
         guard let start = signature.firstIndex(of: "("), signature.hasSuffix(")") else { return nil }
         let name = signature.prefix(upTo: start)
         let args = String(signature.dropFirst(name.count + 1).dropLast())
-        
-        let inputs = [Any]() // TODO: implement
-        
+        let parsedArguments = parseArguments(args)
+        let inputs = parsedArguments.compactMap { argToDict(arg: $0) }
+        guard inputs.count == parsedArguments.count else { return nil }
         let dict: [String: Any] = ["inputs": inputs, "name": name]
         let abi = [nameHex: dict]
         if let abiData = try? JSONSerialization.data(withJSONObject: abi),
            let abiString = String(data: abiData, encoding: .utf8),
            let callData = Data(hexString: data),
-           let decoded = EthereumAbi.decodeCall(data: callData, abi: abiString) {
-            let json = try! JSONSerialization.jsonObject(with: decoded.data(using: .utf8)!) // TODO: make a good string
-            print(json)
-            return decoded
+           let decoded = EthereumAbi.decodeCall(data: callData, abi: abiString),
+           let decodedData = decoded.data(using: .utf8),
+           let decodedInputs = (try? JSONSerialization.jsonObject(with: decodedData) as? [String: Any])?["inputs"] as? [[String: Any]] {
+            if let prettyData = try? JSONSerialization.data(withJSONObject: decodedInputs, options: .prettyPrinted),
+               let pretty = String(data: prettyData, encoding: .utf8) {
+                let result = signature + "\n\n" + pretty // TODO: prettier
+                return result
+            } else {
+                return nil
+            }
+        } else {
+            return nil
+        }
+    }
+    
+    private func parseArguments(_ arguments: String) -> [Any] {
+        var args = [Any]()
+        var currentArg = ""
+        var parenthesisLevel = 0
+
+        for char in arguments {
+            if char == "(" {
+                parenthesisLevel += 1
+                if parenthesisLevel > 1 {
+                    currentArg.append(char)
+                }
+            } else if char == ")" {
+                parenthesisLevel -= 1
+                if parenthesisLevel > 0 {
+                    currentArg.append(char)
+                } else if parenthesisLevel == 0 {
+                    args.append(parseArguments(currentArg))
+                    currentArg = ""
+                }
+            } else if char == "," {
+                if parenthesisLevel == 0 {
+                    if !currentArg.isEmpty {
+                        args.append(currentArg.trimmingCharacters(in: .whitespacesAndNewlines))
+                        currentArg = ""
+                    }
+                } else {
+                    currentArg.append(char)
+                }
+            } else {
+                currentArg.append(char)
+            }
+        }
+
+        if !currentArg.isEmpty {
+            args.append(parenthesisLevel == 0 ? currentArg.trimmingCharacters(in: .whitespacesAndNewlines) : parseArguments(currentArg))
+        }
+
+        return args
+    }
+    
+    private func argToDict(arg: Any) -> [String: Any]? {
+        if let argString = arg as? String {
+            return ["name": "", "type": argString]
+        } else if let args = arg as? [Any] {
+            let components = args.compactMap { argToDict(arg: $0) }
+            guard components.count == args.count else { return nil }
+            return ["name": "", "type": "tuple", "components": components]
         } else {
             return nil
         }
