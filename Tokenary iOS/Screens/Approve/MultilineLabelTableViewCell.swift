@@ -12,7 +12,7 @@ class MultilineLabelTableViewCell: UITableViewCell {
         if pro {
             multilineLabel.textColor = .secondaryLabel
             multilineLabel.font = UIFont.italicSystemFont(ofSize: 17)
-        } else if largeFont {
+        } else {
             multilineLabel.textColor = .label
             multilineLabel.font = largeFont ? UIFont.systemFont(ofSize: 21, weight: .medium) : UIFont.systemFont(ofSize: 17, weight: .regular)
         }
