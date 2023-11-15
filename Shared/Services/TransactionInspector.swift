@@ -53,13 +53,8 @@ struct TransactionInspector {
            let decoded = EthereumAbi.decodeCall(data: callData, abi: abiString),
            let decodedData = decoded.data(using: .utf8),
            let decodedInputs = (try? JSONSerialization.jsonObject(with: decodedData) as? [String: Any])?["inputs"] as? [[String: Any]] {
-            if let prettyData = try? JSONSerialization.data(withJSONObject: decodedInputs, options: .prettyPrinted),
-               let pretty = String(data: prettyData, encoding: .utf8) {
-                let result = signature + "\n\n" + pretty // TODO: prettier
-                return result
-            } else {
-                return nil
-            }
+            let flat = [signature] + decodedInputs.compactMap { flatValueFrom(input: $0) }
+            return flat.joined(separator: "\n\n")
         } else {
             return nil
         }
@@ -103,6 +98,18 @@ struct TransactionInspector {
         }
 
         return args
+    }
+    
+    private func flatValueFrom(input: [String: Any]) -> String? {
+        if let value = input["value"] as? String {
+            return value
+        } else if let components = input["components"] as? [[String: Any]] {
+            let flatComponents = components.compactMap { flatValueFrom(input: $0) }
+            let joined = flatComponents.joined(separator: ", ")
+            return "(" + joined + ")"
+        } else {
+            return nil
+        }
     }
     
     private func argToDict(arg: Any) -> [String: Any]? {
