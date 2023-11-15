@@ -13,7 +13,7 @@ struct TransactionInspector {
     func interpret(data: String, completion: @escaping (String) -> Void) {
         let length = 8
         let nameHex = String(data.cleanHex.prefix(length))
-        guard nameHex.count == length else {return}
+        guard nameHex.count == length else { return }
         
         getMethodSignature(nameHex: nameHex) { signature in
             let decoded = decode(data: data, nameHex: nameHex, signature: signature)
@@ -64,7 +64,7 @@ struct TransactionInspector {
         var args = [Any]()
         var currentArg = ""
         var parenthesisLevel = 0
-
+        
         for char in arguments {
             if char == "(" {
                 parenthesisLevel += 1
@@ -92,11 +92,11 @@ struct TransactionInspector {
                 currentArg.append(char)
             }
         }
-
+        
         if !currentArg.isEmpty {
             args.append(parenthesisLevel == 0 ? currentArg.trimmingCharacters(in: .whitespacesAndNewlines) : parseArguments(currentArg))
         }
-
+        
         return args
     }
     
