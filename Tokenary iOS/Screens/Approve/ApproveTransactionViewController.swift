@@ -59,12 +59,7 @@ class ApproveTransactionViewController: UIViewController {
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
         isModalInPresentation = true
-        
-        if chain.isEthMainnet {
-            sectionModels = [[], [.gasPriceSlider]]
-        } else {
-            sectionModels = [[]]
-        }
+        sectionModels = [[]]
         
         updateDisplayedTransactionInfo(initially: true)
         prepareTransaction()
@@ -97,10 +92,15 @@ class ApproveTransactionViewController: UIViewController {
         }
         cellModels.append(.text(text: transaction.feeWithSymbol(chain: chain, price: price), oneLine: false, pro: false))
         cellModels.append(.text(text: transaction.gasPriceWithLabel(chain: chain), oneLine: false, pro: false))
+        
+        if chain.isEthMainnet {
+            cellModels.append(.gasPriceSlider)
+        }
+        
         if let interpretation = transaction.interpretation {
-            cellModels.append(.text(text: interpretation, oneLine: false, pro: true))
+            cellModels.append(.text(text: interpretation + "\n\n" + transaction.data, oneLine: false, pro: true))
         } else if let data = transaction.nonEmptyDataWithLabel {
-            cellModels.append(.text(text: data, oneLine: true, pro: false))
+            cellModels.append(.text(text: data, oneLine: false, pro: true))
         }
         
         sectionModels[0] = cellModels
@@ -160,11 +160,7 @@ class ApproveTransactionViewController: UIViewController {
 extension ApproveTransactionViewController: UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
-        if section == sectionModels.count - 1 {
-            return 18
-        } else {
-            return .leastNormalMagnitude
-        }
+        return .leastNormalMagnitude
     }
     
     func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
