@@ -1,6 +1,7 @@
 // Copyright © 2023 Tokenary. All rights reserved.
 
 import Foundation
+import WalletCore
 
 struct TransactionInspector {
     
@@ -9,8 +10,15 @@ struct TransactionInspector {
     
     private let urlSession = URLSession.shared
     
+    func interpret(data: String, completion: @escaping (String) -> Void) {
+        getMethodSignature(data: data) { signature in
+            let decoded = decode(data: data, signature: signature)
+            DispatchQueue.main.async { completion(signature) }
+        }
+    }
+    
     // https://github.com/ethereum-lists/4bytes
-    func getMethodName(data: String, completion: @escaping (String) -> Void) {
+    private func getMethodSignature(data: String, completion: @escaping (String) -> Void) {
         let length = 8
         let nameHex = data.cleanHex.prefix(length)
         guard nameHex.count == length,
@@ -21,12 +29,17 @@ struct TransactionInspector {
             if error == nil,
                (200...299).contains(statusCode),
                let data = data,
-               let name = String(data: data, encoding: .utf8),
-               !name.isEmpty {
-                DispatchQueue.main.async { completion(name) }
+               let sig = String(data: data, encoding: .utf8),
+               !sig.isEmpty {
+                completion(sig)
             }
         }
         dataTask.resume()
+    }
+    
+    private func decode(data: String, signature: String) -> String {
+        // TODO: implement
+        return signature + "\n\n" + data
     }
     
 }

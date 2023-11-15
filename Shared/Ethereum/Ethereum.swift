@@ -98,8 +98,8 @@ struct Ethereum {
             }
         }
         
-        TransactionInspector.shared.getMethodName(data: transaction.data) { name in
-            transaction.interpretation = name
+        TransactionInspector.shared.interpret(data: transaction.data) { interpretation in
+            transaction.interpretation = interpretation
             completion(transaction)
         }
     }

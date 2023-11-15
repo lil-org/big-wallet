@@ -98,7 +98,7 @@ class ApproveTransactionViewController: UIViewController {
         }
         
         if let interpretation = transaction.interpretation {
-            cellModels.append(.text(text: interpretation + "\n\n" + transaction.data, oneLine: false, pro: true))
+            cellModels.append(.text(text: interpretation, oneLine: false, pro: true))
         } else if let data = transaction.nonEmptyDataWithLabel {
             cellModels.append(.text(text: data, oneLine: false, pro: true))
         }
