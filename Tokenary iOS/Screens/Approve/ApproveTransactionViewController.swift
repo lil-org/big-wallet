@@ -6,7 +6,7 @@ import WalletCore
 class ApproveTransactionViewController: UIViewController {
     
     private enum CellModel {
-        case text(text: String, oneLine: Bool)
+        case text(text: String, oneLine: Bool, pro: Bool)
         case textWithImage(text: String, extraText: String?, imageURL: String?, image: UIImage?)
         case gasPriceSlider
     }
@@ -59,12 +59,7 @@ class ApproveTransactionViewController: UIViewController {
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
         isModalInPresentation = true
-        
-        if chain.isEthMainnet {
-            sectionModels = [[], [.gasPriceSlider]]
-        } else {
-            sectionModels = [[]]
-        }
+        sectionModels = [[]]
         
         updateDisplayedTransactionInfo(initially: true)
         prepareTransaction()
@@ -93,12 +88,19 @@ class ApproveTransactionViewController: UIViewController {
         
         let price = priceService.forNetwork(chain)
         if let value = transaction.valueWithSymbol(chain: chain, price: price, withLabel: true) {
-            cellModels.append(.text(text: value, oneLine: false))
+            cellModels.append(.text(text: value, oneLine: false, pro: false))
         }
-        cellModels.append(.text(text: transaction.feeWithSymbol(chain: chain, price: price), oneLine: false))
-        cellModels.append(.text(text: transaction.gasPriceWithLabel(chain: chain), oneLine: false))
-        if let data = transaction.nonEmptyDataWithLabel {
-            cellModels.append(.text(text: data, oneLine: true))
+        cellModels.append(.text(text: transaction.feeWithSymbol(chain: chain, price: price), oneLine: false, pro: false))
+        cellModels.append(.text(text: transaction.gasPriceWithLabel(chain: chain), oneLine: false, pro: false))
+        
+        if chain.isEthMainnet {
+            cellModels.append(.gasPriceSlider)
+        }
+        
+        if let interpretation = transaction.interpretation {
+            cellModels.append(.text(text: interpretation, oneLine: false, pro: true))
+        } else if let data = transaction.nonEmptyDataWithLabel {
+            cellModels.append(.text(text: data, oneLine: false, pro: true))
         }
         
         sectionModels[0] = cellModels
@@ -158,11 +160,7 @@ class ApproveTransactionViewController: UIViewController {
 extension ApproveTransactionViewController: UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
-        if section == sectionModels.count - 1 {
-            return 18
-        } else {
-            return .leastNormalMagnitude
-        }
+        return .leastNormalMagnitude
     }
     
     func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
@@ -175,9 +173,9 @@ extension ApproveTransactionViewController: UITableViewDataSource {
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         switch sectionModels[indexPath.section][indexPath.row] {
-        case let .text(text, oneLine):
+        case let .text(text, oneLine, pro):
             let cell = tableView.dequeueReusableCellOfType(MultilineLabelTableViewCell.self, for: indexPath)
-            cell.setup(text: text, largeFont: true, oneLine: oneLine)
+            cell.setup(text: text, largeFont: true, oneLine: oneLine, pro: pro)
             return cell
         case let .textWithImage(text: text, extraText: extraText, imageURL: imageURL, image: image):
             let cell = tableView.dequeueReusableCellOfType(ImageWithLabelTableViewCell.self, for: indexPath)
