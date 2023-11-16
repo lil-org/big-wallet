@@ -38,7 +38,7 @@ struct TransactionInspector {
         dataTask.resume()
     }
     
-    private func decode(data: String, nameHex: String, signature: String) -> String? {
+    func decode(data: String, nameHex: String, signature: String) -> String? {
         guard let start = signature.firstIndex(of: "("), signature.hasSuffix(")") else { return nil }
         let name = signature.prefix(upTo: start)
         let args = String(signature.dropFirst(name.count + 1).dropLast())
