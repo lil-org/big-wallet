@@ -124,14 +124,6 @@
 		2C8A09E326757FC000993638 /* AccountCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09E226757FC000993638 /* AccountCellView.swift */; };
 		2C8A09EB2675964700993638 /* ApproveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09EA2675964700993638 /* ApproveViewController.swift */; };
 		2C8A09EE2675965F00993638 /* WaitingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09ED2675965F00993638 /* WaitingViewController.swift */; };
-		2C8BD3082AF53AC200DC9A7C /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = 2C8BD3072AF53AC200DC9A7C /* SwiftProtobuf */; };
-		2C8BD30A2AF53AC200DC9A7C /* WalletCore in Frameworks */ = {isa = PBXBuildFile; productRef = 2C8BD3092AF53AC200DC9A7C /* WalletCore */; };
-		2C8BD30D2AF53AD600DC9A7C /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = 2C8BD30C2AF53AD600DC9A7C /* SwiftProtobuf */; };
-		2C8BD30F2AF53AD600DC9A7C /* WalletCore in Frameworks */ = {isa = PBXBuildFile; productRef = 2C8BD30E2AF53AD600DC9A7C /* WalletCore */; };
-		2C8BD3122AF53AF600DC9A7C /* BigInt in Frameworks */ = {isa = PBXBuildFile; productRef = 2C8BD3112AF53AF600DC9A7C /* BigInt */; };
-		2C8BD3142AF53B0200DC9A7C /* BigInt in Frameworks */ = {isa = PBXBuildFile; productRef = 2C8BD3132AF53B0200DC9A7C /* BigInt */; };
-		2C8BD3172AF53B1800DC9A7C /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 2C8BD3162AF53B1800DC9A7C /* Kingfisher */; };
-		2C8BD3192AF53B2100DC9A7C /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 2C8BD3182AF53B2100DC9A7C /* Kingfisher */; };
 		2C8E47A326A322E8007B8354 /* RightClickTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8E47A226A322E8007B8354 /* RightClickTableView.swift */; };
 		2C8E889F275F9967003EB8DB /* Storyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8E889E275F9967003EB8DB /* Storyboard.swift */; };
 		2C8E88A2275FA596003EB8DB /* ImportViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8E88A1275FA596003EB8DB /* ImportViewController.swift */; };
@@ -496,10 +488,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2C8BD3172AF53B1800DC9A7C /* Kingfisher in Frameworks */,
-				2C8BD3122AF53AF600DC9A7C /* BigInt in Frameworks */,
-				2C8BD30A2AF53AC200DC9A7C /* WalletCore in Frameworks */,
-				2C8BD3082AF53AC200DC9A7C /* SwiftProtobuf in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -507,10 +495,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2C8BD3192AF53B2100DC9A7C /* Kingfisher in Frameworks */,
-				2C8BD3142AF53B0200DC9A7C /* BigInt in Frameworks */,
-				2C8BD30F2AF53AD600DC9A7C /* WalletCore in Frameworks */,
-				2C8BD30D2AF53AD600DC9A7C /* SwiftProtobuf in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1117,10 +1101,6 @@
 			);
 			name = Tokenary;
 			packageProductDependencies = (
-				2C8BD3072AF53AC200DC9A7C /* SwiftProtobuf */,
-				2C8BD3092AF53AC200DC9A7C /* WalletCore */,
-				2C8BD3112AF53AF600DC9A7C /* BigInt */,
-				2C8BD3162AF53B1800DC9A7C /* Kingfisher */,
 			);
 			productName = "Ecrypted Ink";
 			productReference = 2C19953C2674C4B900A8E370 /* Tokenary.app */;
@@ -1142,10 +1122,6 @@
 			);
 			name = "Tokenary iOS";
 			packageProductDependencies = (
-				2C8BD30C2AF53AD600DC9A7C /* SwiftProtobuf */,
-				2C8BD30E2AF53AD600DC9A7C /* WalletCore */,
-				2C8BD3132AF53B0200DC9A7C /* BigInt */,
-				2C8BD3182AF53B2100DC9A7C /* Kingfisher */,
 			);
 			productName = "Encrypted Ink iOS";
 			productReference = 2C5FF96F26C84F7B00B32ACC /* Tokenary iOS.app */;
@@ -1230,9 +1206,6 @@
 			);
 			mainGroup = 2C1995332674C4B900A8E370;
 			packageReferences = (
-				2C8BD3062AF53AC200DC9A7C /* XCRemoteSwiftPackageReference "wallet-core" */,
-				2C8BD3102AF53AF600DC9A7C /* XCRemoteSwiftPackageReference "BigInt" */,
-				2C8BD3152AF53B1800DC9A7C /* XCRemoteSwiftPackageReference "Kingfisher" */,
 			);
 			productRefGroup = 2C19953D2674C4B900A8E370 /* Products */;
 			projectDirPath = "";
@@ -2274,76 +2247,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		2C8BD3062AF53AC200DC9A7C /* XCRemoteSwiftPackageReference "wallet-core" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/trustwallet/wallet-core";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 4.0.4;
-			};
-		};
-		2C8BD3102AF53AF600DC9A7C /* XCRemoteSwiftPackageReference "BigInt" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/attaswift/BigInt";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 5.1.0;
-			};
-		};
-		2C8BD3152AF53B1800DC9A7C /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/onevcat/Kingfisher";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 7.10.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		2C8BD3072AF53AC200DC9A7C /* SwiftProtobuf */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 2C8BD3062AF53AC200DC9A7C /* XCRemoteSwiftPackageReference "wallet-core" */;
-			productName = SwiftProtobuf;
-		};
-		2C8BD3092AF53AC200DC9A7C /* WalletCore */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 2C8BD3062AF53AC200DC9A7C /* XCRemoteSwiftPackageReference "wallet-core" */;
-			productName = WalletCore;
-		};
-		2C8BD30C2AF53AD600DC9A7C /* SwiftProtobuf */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 2C8BD3062AF53AC200DC9A7C /* XCRemoteSwiftPackageReference "wallet-core" */;
-			productName = SwiftProtobuf;
-		};
-		2C8BD30E2AF53AD600DC9A7C /* WalletCore */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 2C8BD3062AF53AC200DC9A7C /* XCRemoteSwiftPackageReference "wallet-core" */;
-			productName = WalletCore;
-		};
-		2C8BD3112AF53AF600DC9A7C /* BigInt */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 2C8BD3102AF53AF600DC9A7C /* XCRemoteSwiftPackageReference "BigInt" */;
-			productName = BigInt;
-		};
-		2C8BD3132AF53B0200DC9A7C /* BigInt */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 2C8BD3102AF53AF600DC9A7C /* XCRemoteSwiftPackageReference "BigInt" */;
-			productName = BigInt;
-		};
-		2C8BD3162AF53B1800DC9A7C /* Kingfisher */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 2C8BD3152AF53B1800DC9A7C /* XCRemoteSwiftPackageReference "Kingfisher" */;
-			productName = Kingfisher;
-		};
-		2C8BD3182AF53B2100DC9A7C /* Kingfisher */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 2C8BD3152AF53B1800DC9A7C /* XCRemoteSwiftPackageReference "Kingfisher" */;
-			productName = Kingfisher;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 2C1995342674C4B900A8E370 /* Project object */;
 }
