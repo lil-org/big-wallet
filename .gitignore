@@ -20,6 +20,8 @@ xcuserdata
 *.xcuserstate
 .DS_Store
 
+WalletCoreCommon.xcframework/
+
 # Bundler
 .bundle
 .cache
