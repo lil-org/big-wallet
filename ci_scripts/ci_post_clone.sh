@@ -12,4 +12,7 @@ fi
 
 echo "INFURA_KEY has been written to ${PLIST_PATH}"
 
+brew install cocoapods
+pod install
+
 exit 0
