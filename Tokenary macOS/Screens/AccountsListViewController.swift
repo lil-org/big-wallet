@@ -227,7 +227,9 @@ class AccountsListViewController: NSViewController {
             self.popupWindowId = nil
         }
         let networksList = NetworksListView(selectedNetwork: selectAccountAction?.network) { [weak self] selectedNetwork in
-            // TODO: implement
+            if let network = selectedNetwork {
+                self?.selectNetwork(network)
+            }
         }
         popupWindowId = showHostingWindow(content: networksList, title: Strings.selectNetwork)
     }
