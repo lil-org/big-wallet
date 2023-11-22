@@ -14,26 +14,35 @@ struct NetworksListView: View {
     private let completion: ((EthereumNetwork?) -> Void)
     
     var body: some View {
+#if os(iOS)
         NavigationView {
             VStack {
-                List {
-                    networkSection(networks: pinned, title: Strings.pinned)
-                    networkSection(networks: mainnets)
-                    networkSection(networks: testnets, title: Strings.testnets)
-                }
+                list()
             }
             .navigationBarTitle(Strings.selectNetwork, displayMode: .large)
             .navigationBarItems(leading: Button(action: {
                 completion(selectedNetwork)
                 presentationMode.wrappedValue.dismiss() }) {
                     Text(Strings.done).bold()
-            }.disabled(selectedNetwork == nil))
+                }.disabled(selectedNetwork == nil))
         }
+#elseif os(macOS)
+        list()
+#endif
     }
     
     init(selectedNetwork: EthereumNetwork?, completion: @escaping ((EthereumNetwork?) -> Void)) {
         self._selectedNetwork = State(initialValue: selectedNetwork)
         self.completion = completion
+    }
+    
+    @ViewBuilder
+    private func list() -> some View {
+        List {
+            networkSection(networks: pinned, title: Strings.pinned)
+            networkSection(networks: mainnets)
+            networkSection(networks: testnets, title: Strings.testnets)
+        }
     }
     
     @ViewBuilder
@@ -47,13 +56,13 @@ struct NetworksListView: View {
                         Image.checkmark.foregroundStyle(.selection)
                     }
                 }.frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
-                .onTapGesture {
-                    if selectedNetwork?.chainId == network.chainId {
-                        selectedNetwork = nil
-                    } else {
-                        selectedNetwork = network
+                    .onTapGesture {
+                        if selectedNetwork?.chainId == network.chainId {
+                            selectedNetwork = nil
+                        } else {
+                            selectedNetwork = network
+                        }
                     }
-                }
             }
         }
     }
