@@ -45,7 +45,7 @@ struct TransactionInspector {
         let parsedArguments = parseArguments(args)
         let inputs = parsedArguments.compactMap { argToDict(arg: $0) }
         guard inputs.count == parsedArguments.count else { return nil }
-        let dict: [String: Any] = ["inputs": inputs, "name": name]
+        let dict: [String: Any] = ["inputs": inputs, "name": name, "outputs": []]
         let abi = [nameHex: dict]
         if let abiData = try? JSONSerialization.data(withJSONObject: abi),
            let abiString = String(data: abiData, encoding: .utf8),
