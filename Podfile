@@ -20,8 +20,17 @@ end
 post_install do |installer|
   installer.generated_projects.each do |project|
     project.build_configurations.each do |config|
-      config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '12.0'
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+      project.targets.each do |target|
+        if target.platform_name == :ios
+          target.build_configurations.each do |config|
+            config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+          end
+        elsif target.platform_name == :osx
+          target.build_configurations.each do |config|
+            config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '12.0'
+          end
+        end
+      end
     end
   end
 end
