@@ -8,7 +8,7 @@ def shared_pods
 end
 
 target 'Tokenary' do
-  platform :osx, '11.4'
+  platform :osx, '12.0'
   shared_pods
 end
 

@@ -178,7 +178,7 @@
 		2F90D4514CA2FCF1C306823D7509E063 /* BinaryEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DDB7A88B15D46561468D364A2BBE1B1 /* BinaryEncoder.swift */; };
 		2F9532110130ACBA206DE17FA26B1823 /* ExtensionMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6035A5375CCAC1108A5256A5E4D443FA /* ExtensionMap.swift */; };
 		2FBCE4A8D4145047CC8BD3CCF91DCDB2 /* RippleXAddress.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73C0D12C9AB0AE015CF48DBD7DEE9337 /* RippleXAddress.swift */; };
-		2FC03836589A988B8AEFB82A414A4AE8 /* Kingfisher-macOS-Kingfisher in Resources */ = {isa = PBXBuildFile; fileRef = 5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher-macOS-Kingfisher */; };
+		2FC03836589A988B8AEFB82A414A4AE8 /* Kingfisher.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher.bundle */; };
 		2FE4C6AAEE50A8F19555F9C7C4E07F08 /* MultiversX.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90083FEFC10DAE65941A03AC86865072 /* MultiversX.pb.swift */; };
 		2FEE8A08F9BB3FF425D0830A8032A492 /* TWFilecoinAddressType.h in Headers */ = {isa = PBXBuildFile; fileRef = 59F603177176CA5428D90CF82557683D /* TWFilecoinAddressType.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		30755A337860647DE0681E73D3C4756A /* KeyStore.Error.swift in Sources */ = {isa = PBXBuildFile; fileRef = 865425C88B5CBF457BA415B27547CAAF /* KeyStore.Error.swift */; };
@@ -922,7 +922,7 @@
 		EC0CBC52D7A313D62822596B48659DEF /* FieldTag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AD0E1BCC2EB545E03E7B239BCC8D8E6 /* FieldTag.swift */; };
 		EC4409252BF4F5BF731BE09589124B5C /* TWRippleProto.h in Headers */ = {isa = PBXBuildFile; fileRef = B1D30DA54CB20F17D614DE238B49954E /* TWRippleProto.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		EC7F418A47A8B6E5DB0D9EE17E9260D2 /* Solana+Proto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03FAE248C34C9A2C465FBAE81C1FAF63 /* Solana+Proto.swift */; };
-		ECFB3B908AD207E14E098F2E4A3E4821 /* Kingfisher-iOS-Kingfisher in Resources */ = {isa = PBXBuildFile; fileRef = D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher-iOS-Kingfisher */; };
+		ECFB3B908AD207E14E098F2E4A3E4821 /* Kingfisher.bundle in Resources */ = {isa = PBXBuildFile; fileRef = D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher.bundle */; };
 		ED07C5128D68804E4A05C9A717715A58 /* MessageExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 064DC889ACD509F29619F2EC8C614644 /* MessageExtension.swift */; };
 		ED19D8054B02246A7A02ED3E0128DBBE /* Zilliqa.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCB49419FEE81194BA9A85AC6CF8615E /* Zilliqa.pb.swift */; };
 		ED25A63A9BEC4D142169C91A65710E5B /* Exponentiation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 680B7CE27E02B8073C3494C5020C6F77 /* Exponentiation.swift */; };
@@ -1114,11 +1114,11 @@
 		09875149BA0EB6EA8D1F172933E037D6 /* CoinType+Extension.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "CoinType+Extension.swift"; path = "Sources/Generated/CoinType+Extension.swift"; sourceTree = "<group>"; };
 		09EC48E003757F37CAFEB0FFA7256155 /* TWBarz.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWBarz.h; path = include/TrustWalletCore/TWBarz.h; sourceTree = "<group>"; };
 		0A79E573A9B5D20D52D281E6A10E8786 /* NEAR+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "NEAR+Proto.swift"; path = "Sources/Generated/Protobuf/NEAR+Proto.swift"; sourceTree = "<group>"; };
-		0A90AABC168E7ACBF249426FCA99F19B /* TrustWalletCore-macOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "TrustWalletCore-macOS"; path = WalletCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		0A90AABC168E7ACBF249426FCA99F19B /* WalletCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = WalletCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		0AD0E1BCC2EB545E03E7B239BCC8D8E6 /* FieldTag.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FieldTag.swift; path = Sources/SwiftProtobuf/FieldTag.swift; sourceTree = "<group>"; };
 		0AF303BAE07F7DC0D6D31BDE2333EF57 /* Oasis.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Oasis.pb.swift; path = Sources/Generated/Protobuf/Oasis.pb.swift; sourceTree = "<group>"; };
 		0BE65C7D02261B5840A99BE4A3BF06C2 /* TWNEARProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWNEARProto.h; path = include/TrustWalletCore/TWNEARProto.h; sourceTree = "<group>"; };
-		0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher-iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Kingfisher-iOS"; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		0C50BD9CF04FE2B54FBC8549AA19B230 /* DerivationPath+Extension.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "DerivationPath+Extension.swift"; path = "Sources/Extensions/DerivationPath+Extension.swift"; sourceTree = "<group>"; };
 		0C6FC6982DF8311F44A3CCF6B96F9686 /* StellarVersionByte.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = StellarVersionByte.swift; path = Sources/Generated/Enums/StellarVersionByte.swift; sourceTree = "<group>"; };
 		0CCD7C56401C1335560C00BC4986EDAC /* TWTronMessageSigner.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWTronMessageSigner.h; path = include/TrustWalletCore/TWTronMessageSigner.h; sourceTree = "<group>"; };
@@ -1289,24 +1289,24 @@
 		580B97BF3D9DE91BF6F4581A07FC8AA9 /* BigInt-iOS-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "BigInt-iOS-Info.plist"; sourceTree = "<group>"; };
 		581052DF5BB2D6AC275B6BE162E11BA3 /* THORChainSwap.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = THORChainSwap.pb.swift; path = Sources/Generated/Protobuf/THORChainSwap.pb.swift; sourceTree = "<group>"; };
 		586D3B6456E4A2F888D630AA8B50007E /* Nimiq+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Nimiq+Proto.swift"; path = "Sources/Generated/Protobuf/Nimiq+Proto.swift"; sourceTree = "<group>"; };
-		59C5DD41EE313A65C03650784BF278F3 /* BigInt-macOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "BigInt-macOS"; path = BigInt.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		59C5DD41EE313A65C03650784BF278F3 /* BigInt.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = BigInt.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		59F603177176CA5428D90CF82557683D /* TWFilecoinAddressType.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWFilecoinAddressType.h; path = include/TrustWalletCore/TWFilecoinAddressType.h; sourceTree = "<group>"; };
 		5CC52A2485E823A652BF8007B9F2C4DC /* TWZilliqaProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWZilliqaProto.h; path = include/TrustWalletCore/TWZilliqaProto.h; sourceTree = "<group>"; };
 		5CEFC6B602CAB1207068967F60CD14DF /* Solana.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Solana.pb.swift; path = Sources/Generated/Protobuf/Solana.pb.swift; sourceTree = "<group>"; };
 		5D7FFEDB1639E36F1275A04B6DB0053C /* ProtoNameProviding.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ProtoNameProviding.swift; path = Sources/SwiftProtobuf/ProtoNameProviding.swift; sourceTree = "<group>"; };
-		5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher-macOS-Kingfisher */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = "Kingfisher-macOS-Kingfisher"; path = Kingfisher.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
+		5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Kingfisher.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
 		5E4F1E840139C8F052C75997A76E231A /* TWLiquidStaking.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWLiquidStaking.h; path = include/TrustWalletCore/TWLiquidStaking.h; sourceTree = "<group>"; };
 		5EC2120D01CA994D28D1BA2D4785F296 /* TransactionCompiler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TransactionCompiler.swift; path = Sources/Generated/TransactionCompiler.swift; sourceTree = "<group>"; };
 		5F18B835F60CBEFE8D0AAE093F26B41C /* BigInt-macOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "BigInt-macOS.debug.xcconfig"; path = "../BigInt-macOS/BigInt-macOS.debug.xcconfig"; sourceTree = "<group>"; };
 		5F3AADE738B70E55DB0E1CCB29676BA5 /* InternetComputer.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = InternetComputer.pb.swift; path = Sources/Generated/Protobuf/InternetComputer.pb.swift; sourceTree = "<group>"; };
-		5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf-macOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "SwiftProtobuf-macOS"; path = SwiftProtobuf.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SwiftProtobuf.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		5FA1ED4A65328C7B9AE17E36E3DE3CF4 /* NEO.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = NEO.pb.swift; path = Sources/Generated/Protobuf/NEO.pb.swift; sourceTree = "<group>"; };
 		5FB7B9C7D1F8FCDFF47453F49CA67F5B /* Internal.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Internal.swift; path = Sources/SwiftProtobuf/Internal.swift; sourceTree = "<group>"; };
 		5FE36D53685E2397E240CE8399131045 /* TWBitcoinScript.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWBitcoinScript.h; path = include/TrustWalletCore/TWBitcoinScript.h; sourceTree = "<group>"; };
 		60268982FE131CE798D5EB37949FD341 /* TrustWalletCore-macOS-dummy.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = "TrustWalletCore-macOS-dummy.m"; path = "../TrustWalletCore-macOS/TrustWalletCore-macOS-dummy.m"; sourceTree = "<group>"; };
 		6035A5375CCAC1108A5256A5E4D443FA /* ExtensionMap.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExtensionMap.swift; path = Sources/SwiftProtobuf/ExtensionMap.swift; sourceTree = "<group>"; };
 		60AEDB88F299F3DAD67DBD7E77037B7C /* Zilliqa+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Zilliqa+Proto.swift"; path = "Sources/Generated/Protobuf/Zilliqa+Proto.swift"; sourceTree = "<group>"; };
-		60CD9336BF0D87EB43F318C3C417DB66 /* TrustWalletCore-iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "TrustWalletCore-iOS"; path = WalletCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		60CD9336BF0D87EB43F318C3C417DB66 /* WalletCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = WalletCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		63301C991CE9C732D4C3499D09A8F669 /* TWNEARAccount.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWNEARAccount.h; path = include/TrustWalletCore/TWNEARAccount.h; sourceTree = "<group>"; };
 		6330966403211B35C9F223F24FD7FCD6 /* struct.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = struct.pb.swift; path = Sources/SwiftProtobuf/struct.pb.swift; sourceTree = "<group>"; };
 		63D9F7056C354D314A2D390D512A366A /* BitcoinV2+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "BitcoinV2+Proto.swift"; path = "Sources/Generated/Protobuf/BitcoinV2+Proto.swift"; sourceTree = "<group>"; };
@@ -1344,7 +1344,7 @@
 		750173C35820349C07178A5CF95B0F87 /* TWFilecoinAddressConverter.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWFilecoinAddressConverter.h; path = include/TrustWalletCore/TWFilecoinAddressConverter.h; sourceTree = "<group>"; };
 		752820D333566556D461186C664F52F9 /* BinaryEncodingVisitor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BinaryEncodingVisitor.swift; path = Sources/SwiftProtobuf/BinaryEncodingVisitor.swift; sourceTree = "<group>"; };
 		753BE363C328A634C50B7CC6B75E5EA2 /* TWNervosProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWNervosProto.h; path = include/TrustWalletCore/TWNervosProto.h; sourceTree = "<group>"; };
-		75FFFAE58702D743AA2517B60E6B0A10 /* WalletCoreCommon.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; path = WalletCoreCommon.xcframework; sourceTree = "<group>"; };
+		75FFFAE58702D743AA2517B60E6B0A10 /* WalletCoreCommon.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = wrapper.xcframework; path = WalletCoreCommon.xcframework; sourceTree = "<group>"; };
 		76A9191ABB4D7BD2B89F5B14BE9907FA /* AVAssetImageDataProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AVAssetImageDataProvider.swift; path = Sources/General/ImageSource/AVAssetImageDataProvider.swift; sourceTree = "<group>"; };
 		775D9FE0C026342366BA1B6A1339E7F0 /* Sui.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Sui.pb.swift; path = Sources/Generated/Protobuf/Sui.pb.swift; sourceTree = "<group>"; };
 		792B8DE3A8EA740C156954EBA50E6C71 /* ImageDataProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ImageDataProvider.swift; path = Sources/General/ImageSource/ImageDataProvider.swift; sourceTree = "<group>"; };
@@ -1381,13 +1381,13 @@
 		8631534B41EB16A2D4532F528E3ECA01 /* TWWavesProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWWavesProto.h; path = include/TrustWalletCore/TWWavesProto.h; sourceTree = "<group>"; };
 		865425C88B5CBF457BA415B27547CAAF /* KeyStore.Error.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KeyStore.Error.swift; path = Sources/KeyStore.Error.swift; sourceTree = "<group>"; };
 		865D92F9483B14071F97F6516F07E38E /* TWStoredKey.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWStoredKey.h; path = include/TrustWalletCore/TWStoredKey.h; sourceTree = "<group>"; };
-		87601A1F0DAC6747565BE384EC2E639A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Sources/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		87601A1F0DAC6747565BE384EC2E639A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Sources/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		886F3524AD0CE136C282038BB836E0A9 /* Addition.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Addition.swift; path = Sources/Addition.swift; sourceTree = "<group>"; };
 		887E99CEBC059806E355F163AE2B1628 /* BigInt-macOS-dummy.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = "BigInt-macOS-dummy.m"; path = "../BigInt-macOS/BigInt-macOS-dummy.m"; sourceTree = "<group>"; };
 		88B72F3E85F1B5A453FF8A781B5B909F /* WebAuthn.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WebAuthn.swift; path = Sources/Generated/WebAuthn.swift; sourceTree = "<group>"; };
 		88C06D7001EEE67D2CA2CCEB25BD79A2 /* EthereumAbi+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "EthereumAbi+Proto.swift"; path = "Sources/Generated/Protobuf/EthereumAbi+Proto.swift"; sourceTree = "<group>"; };
 		8A8B7C1888CB4E7CB263E98509CC35D6 /* Message+BinaryAdditions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Message+BinaryAdditions.swift"; path = "Sources/SwiftProtobuf/Message+BinaryAdditions.swift"; sourceTree = "<group>"; };
-		8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf-iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "SwiftProtobuf-iOS"; path = SwiftProtobuf.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SwiftProtobuf.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		8B834D424680C126A5AB061997265979 /* FieldTypes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FieldTypes.swift; path = Sources/SwiftProtobuf/FieldTypes.swift; sourceTree = "<group>"; };
 		8CA2130F3C5FA843B63B437B242B6B9B /* Nervos.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Nervos.pb.swift; path = Sources/Generated/Protobuf/Nervos.pb.swift; sourceTree = "<group>"; };
 		8D31EEFFEBC60F302E182A3101A0EC4A /* UnsafeRawPointer+Shims.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "UnsafeRawPointer+Shims.swift"; path = "Sources/SwiftProtobuf/UnsafeRawPointer+Shims.swift"; sourceTree = "<group>"; };
@@ -1413,14 +1413,14 @@
 		940770CB6F9992679CCAE0195EE8513C /* HDVersion.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = HDVersion.swift; path = Sources/Generated/Enums/HDVersion.swift; sourceTree = "<group>"; };
 		94B3841CA93AF85619A2174DAC1F231B /* Base58.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Base58.swift; path = Sources/Generated/Base58.swift; sourceTree = "<group>"; };
 		95127108F9DA9C688B0F584478CEEEB0 /* StarkExMessageSigner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = StarkExMessageSigner.swift; path = Sources/Generated/StarkExMessageSigner.swift; sourceTree = "<group>"; };
-		9537468CF4D5C16DB31E0F967000827C /* Kingfisher-macOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Kingfisher-macOS"; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		9537468CF4D5C16DB31E0F967000827C /* Kingfisher.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		95724038B225C802D5E5B24C41F29CD0 /* JSONEncodingError.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JSONEncodingError.swift; path = Sources/SwiftProtobuf/JSONEncodingError.swift; sourceTree = "<group>"; };
-		95BAA53196A79D500C92AFCCDED26039 /* Pods-Tokenary */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Pods-Tokenary"; path = Pods_Tokenary.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		95BAA53196A79D500C92AFCCDED26039 /* Pods_Tokenary.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Tokenary.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		960A855212B045C1F8ED6B02599A60BC /* StellarPassphrase.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = StellarPassphrase.swift; path = Sources/Generated/Enums/StellarPassphrase.swift; sourceTree = "<group>"; };
 		96295BB80BE9A22F5273DC856CCE3D5E /* PublicKey+Bitcoin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "PublicKey+Bitcoin.swift"; path = "Sources/Extensions/PublicKey+Bitcoin.swift"; sourceTree = "<group>"; };
 		9746DCE6DEC3D7B5743089CA3FFDAE70 /* Ripple.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Ripple.pb.swift; path = Sources/Generated/Protobuf/Ripple.pb.swift; sourceTree = "<group>"; };
 		97BF694211D43078E3F0B18E8F150952 /* TrustWalletCore-iOS.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; path = "TrustWalletCore-iOS.modulemap"; sourceTree = "<group>"; };
-		985063CF25F026FD329CB9B4D9F3E0A6 /* Pods-Tokenary iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Pods-Tokenary iOS"; path = Pods_Tokenary_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		985063CF25F026FD329CB9B4D9F3E0A6 /* Pods_Tokenary_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Tokenary_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		9A46D4458CB6A5F4E3BAE88C1B87D4AD /* Everscale.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Everscale.pb.swift; path = Sources/Generated/Protobuf/Everscale.pb.swift; sourceTree = "<group>"; };
 		9A72A27DE702C7D6F4549B27EBAD19AB /* CPListItem+Kingfisher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "CPListItem+Kingfisher.swift"; path = "Sources/Extensions/CPListItem+Kingfisher.swift"; sourceTree = "<group>"; };
 		9A8E8417B114FD27E348F1AFEF7B1AB9 /* TWOasisProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWOasisProto.h; path = include/TrustWalletCore/TWOasisProto.h; sourceTree = "<group>"; };
@@ -1428,7 +1428,7 @@
 		9D177E738F82045E126407D6D037E91A /* TWIOSTProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWIOSTProto.h; path = include/TrustWalletCore/TWIOSTProto.h; sourceTree = "<group>"; };
 		9D217D668D126AE40460CA35FD06EA0E /* BitcoinFee.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BitcoinFee.swift; path = Sources/Generated/BitcoinFee.swift; sourceTree = "<group>"; };
 		9D805E4E6F945F69ED42EB7D02AA314E /* PublicKeyType.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PublicKeyType.swift; path = Sources/Generated/Enums/PublicKeyType.swift; sourceTree = "<group>"; };
-		9D940727FF8FB9C785EB98E56350EF41 /* Podfile */ = {isa = PBXFileReference; explicitFileType = text.script.ruby; includeInIndex = 1; indentWidth = 2; lastKnownFileType = text; name = Podfile; path = ../Podfile; sourceTree = SOURCE_ROOT; tabWidth = 2; xcLanguageSpecificationIdentifier = xcode.lang.ruby; };
+		9D940727FF8FB9C785EB98E56350EF41 /* Podfile */ = {isa = PBXFileReference; explicitFileType = text.script.ruby; includeInIndex = 1; indentWidth = 2; name = Podfile; path = ../Podfile; sourceTree = SOURCE_ROOT; tabWidth = 2; xcLanguageSpecificationIdentifier = xcode.lang.ruby; };
 		9DA28D27CE4CDA760D691469B73855B5 /* Comparable.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Comparable.swift; path = Sources/Comparable.swift; sourceTree = "<group>"; };
 		9DC6943246D26C9AA7BE3D41D441ED6A /* TWLiquidStakingProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWLiquidStakingProto.h; path = include/TrustWalletCore/TWLiquidStakingProto.h; sourceTree = "<group>"; };
 		9E1546D69D5F2CAF17A226475A18B58F /* DoubleParser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DoubleParser.swift; path = Sources/SwiftProtobuf/DoubleParser.swift; sourceTree = "<group>"; };
@@ -1568,7 +1568,7 @@
 		D76D3062F86973344DD12CD05130FCED /* TWCommonProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWCommonProto.h; path = include/TrustWalletCore/TWCommonProto.h; sourceTree = "<group>"; };
 		D78D407747D8005F8138C4E32FACF0D7 /* JSONEncodingOptions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JSONEncodingOptions.swift; path = Sources/SwiftProtobuf/JSONEncodingOptions.swift; sourceTree = "<group>"; };
 		D81702FD9A3E32F2A582309FF30EA3AF /* ZigZag.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ZigZag.swift; path = Sources/SwiftProtobuf/ZigZag.swift; sourceTree = "<group>"; };
-		D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher-iOS-Kingfisher */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = "Kingfisher-iOS-Kingfisher"; path = Kingfisher.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
+		D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Kingfisher.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
 		D900453DC4867A6FC049C688DF4CE413 /* Pods-Tokenary iOS-frameworks.sh */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.script.sh; path = "Pods-Tokenary iOS-frameworks.sh"; sourceTree = "<group>"; };
 		D915A5238941D6A2B3FAFDDAFF3407E2 /* Account.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Account.swift; path = Sources/Generated/Account.swift; sourceTree = "<group>"; };
 		D93D36464C9E985B67B45D4A9EA0B921 /* TransactionCompiler.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TransactionCompiler.pb.swift; path = Sources/Generated/Protobuf/TransactionCompiler.pb.swift; sourceTree = "<group>"; };
@@ -1642,7 +1642,7 @@
 		F36678441168BA9C38F90E2D9DD3E311 /* SwiftProtobuf-iOS.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; path = "SwiftProtobuf-iOS.modulemap"; sourceTree = "<group>"; };
 		F3872E12A22CE547BBE3D254D55C2575 /* Cardano+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Cardano+Proto.swift"; path = "Sources/Generated/Protobuf/Cardano+Proto.swift"; sourceTree = "<group>"; };
 		F3B0FA925C7EF5297E4469C42EEDE538 /* TWStarkWare.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWStarkWare.h; path = include/TrustWalletCore/TWStarkWare.h; sourceTree = "<group>"; };
-		F3E0621221B49CBB46826033D3DEB84B /* BigInt-iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "BigInt-iOS"; path = BigInt.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		F3E0621221B49CBB46826033D3DEB84B /* BigInt.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = BigInt.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F4068258E6EF294F076AFC67B2B92713 /* wrappers.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = wrappers.pb.swift; path = Sources/SwiftProtobuf/wrappers.pb.swift; sourceTree = "<group>"; };
 		F407D166930FCF310990A3EFCEDBE93E /* TrustWalletCore-iOS-prefix.pch */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "TrustWalletCore-iOS-prefix.pch"; sourceTree = "<group>"; };
 		F49CB1727B7EDCD7BC71DC802F6257DD /* THORChainSwap+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "THORChainSwap+Proto.swift"; path = "Sources/Generated/Protobuf/THORChainSwap+Proto.swift"; sourceTree = "<group>"; };
@@ -1850,7 +1850,6 @@
 				7552D97A9C80E47003A42951DB72C979 /* Support Files */,
 				5A6498306583B40D5502A4A548D74CC5 /* Types */,
 			);
-			name = TrustWalletCore;
 			path = TrustWalletCore;
 			sourceTree = "<group>";
 		};
@@ -2045,7 +2044,6 @@
 				689BEA9360638EE3FFDB2D5173580B65 /* Words and Bits.swift */,
 				1866938FC8C286B5808CD4F8FD23548C /* Support Files */,
 			);
-			name = BigInt;
 			path = BigInt;
 			sourceTree = "<group>";
 		};
@@ -2150,7 +2148,6 @@
 				D81702FD9A3E32F2A582309FF30EA3AF /* ZigZag.swift */,
 				16FBA4647D9EBC4608490CD6DFFC9F71 /* Support Files */,
 			);
-			name = SwiftProtobuf;
 			path = SwiftProtobuf;
 			sourceTree = "<group>";
 		};
@@ -2201,18 +2198,18 @@
 		B78DABFD0FF99A4E1D9017C73F2ABA12 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				F3E0621221B49CBB46826033D3DEB84B /* BigInt-iOS */,
-				59C5DD41EE313A65C03650784BF278F3 /* BigInt-macOS */,
-				0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher-iOS */,
-				D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher-iOS-Kingfisher */,
-				9537468CF4D5C16DB31E0F967000827C /* Kingfisher-macOS */,
-				5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher-macOS-Kingfisher */,
-				95BAA53196A79D500C92AFCCDED26039 /* Pods-Tokenary */,
-				985063CF25F026FD329CB9B4D9F3E0A6 /* Pods-Tokenary iOS */,
-				8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf-iOS */,
-				5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf-macOS */,
-				60CD9336BF0D87EB43F318C3C417DB66 /* TrustWalletCore-iOS */,
-				0A90AABC168E7ACBF249426FCA99F19B /* TrustWalletCore-macOS */,
+				F3E0621221B49CBB46826033D3DEB84B /* BigInt.framework */,
+				59C5DD41EE313A65C03650784BF278F3 /* BigInt.framework */,
+				0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher.framework */,
+				D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher.bundle */,
+				9537468CF4D5C16DB31E0F967000827C /* Kingfisher.framework */,
+				5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher.bundle */,
+				95BAA53196A79D500C92AFCCDED26039 /* Pods_Tokenary.framework */,
+				985063CF25F026FD329CB9B4D9F3E0A6 /* Pods_Tokenary_iOS.framework */,
+				8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf.framework */,
+				5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf.framework */,
+				60CD9336BF0D87EB43F318C3C417DB66 /* WalletCore.framework */,
+				0A90AABC168E7ACBF249426FCA99F19B /* WalletCore.framework */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -2508,7 +2505,6 @@
 				AAB1325170E1C9438786C17F0FC8C19C /* Resources */,
 				161C1A8E772FC1DDA824FE4855FFE551 /* Support Files */,
 			);
-			name = Kingfisher;
 			path = Kingfisher;
 			sourceTree = "<group>";
 		};
@@ -2872,7 +2868,7 @@
 			);
 			name = "SwiftProtobuf-iOS";
 			productName = SwiftProtobuf;
-			productReference = 8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf-iOS */;
+			productReference = 8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		63F854E532D7CBA393D37B6C84E1F23F /* BigInt-macOS */ = {
@@ -2890,7 +2886,7 @@
 			);
 			name = "BigInt-macOS";
 			productName = BigInt;
-			productReference = 59C5DD41EE313A65C03650784BF278F3 /* BigInt-macOS */;
+			productReference = 59C5DD41EE313A65C03650784BF278F3 /* BigInt.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		65AA93B2B9CF39819DBD1DDF58FCBC15 /* Kingfisher-macOS */ = {
@@ -2909,7 +2905,7 @@
 			);
 			name = "Kingfisher-macOS";
 			productName = Kingfisher;
-			productReference = 9537468CF4D5C16DB31E0F967000827C /* Kingfisher-macOS */;
+			productReference = 9537468CF4D5C16DB31E0F967000827C /* Kingfisher.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		685A5AC5E317EE1D980ECCFE9E6EB08A /* Kingfisher-iOS */ = {
@@ -2928,7 +2924,7 @@
 			);
 			name = "Kingfisher-iOS";
 			productName = Kingfisher;
-			productReference = 0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher-iOS */;
+			productReference = 0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		7B76B3A65EC90BE00011B16DE4F49E38 /* Kingfisher-iOS-Kingfisher */ = {
@@ -2945,7 +2941,7 @@
 			);
 			name = "Kingfisher-iOS-Kingfisher";
 			productName = Kingfisher;
-			productReference = D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher-iOS-Kingfisher */;
+			productReference = D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher.bundle */;
 			productType = "com.apple.product-type.bundle";
 		};
 		889A3C6D0A70D789D17B7BFFE160AD76 /* BigInt-iOS */ = {
@@ -2963,7 +2959,7 @@
 			);
 			name = "BigInt-iOS";
 			productName = BigInt;
-			productReference = F3E0621221B49CBB46826033D3DEB84B /* BigInt-iOS */;
+			productReference = F3E0621221B49CBB46826033D3DEB84B /* BigInt.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		AA186741961F10502016CE44BFED6684 /* SwiftProtobuf-macOS */ = {
@@ -2981,7 +2977,7 @@
 			);
 			name = "SwiftProtobuf-macOS";
 			productName = SwiftProtobuf;
-			productReference = 5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf-macOS */;
+			productReference = 5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		AA69821F03C2BC35F1E5A4AF5FE590CA /* Pods-Tokenary */ = {
@@ -3003,7 +2999,7 @@
 			);
 			name = "Pods-Tokenary";
 			productName = Pods_Tokenary;
-			productReference = 95BAA53196A79D500C92AFCCDED26039 /* Pods-Tokenary */;
+			productReference = 95BAA53196A79D500C92AFCCDED26039 /* Pods_Tokenary.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		B2085DBECFAD83713FC1BE448B7882B0 /* Kingfisher-macOS-Kingfisher */ = {
@@ -3020,7 +3016,7 @@
 			);
 			name = "Kingfisher-macOS-Kingfisher";
 			productName = Kingfisher;
-			productReference = 5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher-macOS-Kingfisher */;
+			productReference = 5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher.bundle */;
 			productType = "com.apple.product-type.bundle";
 		};
 		CE0DF9902CC5CC81D77770A1E35CCFDE /* Pods-Tokenary iOS */ = {
@@ -3042,7 +3038,7 @@
 			);
 			name = "Pods-Tokenary iOS";
 			productName = Pods_Tokenary_iOS;
-			productReference = 985063CF25F026FD329CB9B4D9F3E0A6 /* Pods-Tokenary iOS */;
+			productReference = 985063CF25F026FD329CB9B4D9F3E0A6 /* Pods_Tokenary_iOS.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		D84FF1ABB5E840CFBA9F610D26DFB42D /* TrustWalletCore-macOS */ = {
@@ -3062,7 +3058,7 @@
 			);
 			name = "TrustWalletCore-macOS";
 			productName = WalletCore;
-			productReference = 0A90AABC168E7ACBF249426FCA99F19B /* TrustWalletCore-macOS */;
+			productReference = 0A90AABC168E7ACBF249426FCA99F19B /* WalletCore.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		DC6F436FE9D7D62655988D0B8E3A24DE /* TrustWalletCore-iOS */ = {
@@ -3082,7 +3078,7 @@
 			);
 			name = "TrustWalletCore-iOS";
 			productName = WalletCore;
-			productReference = 60CD9336BF0D87EB43F318C3C417DB66 /* TrustWalletCore-iOS */;
+			productReference = 60CD9336BF0D87EB43F318C3C417DB66 /* WalletCore.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 /* End PBXNativeTarget section */
@@ -3150,7 +3146,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				ECFB3B908AD207E14E098F2E4A3E4821 /* Kingfisher-iOS-Kingfisher in Resources */,
+				ECFB3B908AD207E14E098F2E4A3E4821 /* Kingfisher.bundle in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3208,7 +3204,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2FC03836589A988B8AEFB82A414A4AE8 /* Kingfisher-macOS-Kingfisher in Resources */,
+				2FC03836589A988B8AEFB82A414A4AE8 /* Kingfisher.bundle in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -4158,12 +4154,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/Kingfisher-macOS/Kingfisher-macOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/Kingfisher-macOS/Kingfisher-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/Kingfisher-macOS/Kingfisher-macOS.modulemap";
 				PRODUCT_MODULE_NAME = Kingfisher;
 				PRODUCT_NAME = Kingfisher;
@@ -4186,7 +4183,8 @@
 				IBSC_MODULE = Kingfisher;
 				INFOPLIST_FILE = "Target Support Files/Kingfisher-macOS/ResourceBundle-Kingfisher-Kingfisher-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
-				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				PRODUCT_NAME = Kingfisher;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -4202,7 +4200,8 @@
 				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Kingfisher-iOS";
 				IBSC_MODULE = Kingfisher;
 				INFOPLIST_FILE = "Target Support Files/Kingfisher-iOS/ResourceBundle-Kingfisher-Kingfisher-iOS-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				PRODUCT_NAME = Kingfisher;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -4227,12 +4226,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/Kingfisher-iOS/Kingfisher-iOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/Kingfisher-iOS/Kingfisher-iOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/Kingfisher-iOS/Kingfisher-iOS.modulemap";
 				PRODUCT_MODULE_NAME = Kingfisher;
 				PRODUCT_NAME = Kingfisher;
@@ -4263,12 +4263,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/BigInt-macOS/BigInt-macOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/BigInt-macOS/BigInt-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/BigInt-macOS/BigInt-macOS.modulemap";
 				PRODUCT_MODULE_NAME = BigInt;
 				PRODUCT_NAME = BigInt;
@@ -4299,12 +4300,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/Kingfisher-macOS/Kingfisher-macOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/Kingfisher-macOS/Kingfisher-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/Kingfisher-macOS/Kingfisher-macOS.modulemap";
 				PRODUCT_MODULE_NAME = Kingfisher;
 				PRODUCT_NAME = Kingfisher;
@@ -4333,12 +4335,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/TrustWalletCore-iOS/TrustWalletCore-iOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/TrustWalletCore-iOS/TrustWalletCore-iOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/TrustWalletCore-iOS/TrustWalletCore-iOS.modulemap";
 				PRODUCT_MODULE_NAME = WalletCore;
 				PRODUCT_NAME = WalletCore;
@@ -4370,6 +4373,7 @@
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				INFOPLIST_FILE = "Target Support Files/Pods-Tokenary/Pods-Tokenary-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -4408,12 +4412,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/SwiftProtobuf-macOS/SwiftProtobuf-macOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/SwiftProtobuf-macOS/SwiftProtobuf-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.11;
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/SwiftProtobuf-macOS/SwiftProtobuf-macOS.modulemap";
 				PRODUCT_MODULE_NAME = SwiftProtobuf;
 				PRODUCT_NAME = SwiftProtobuf;
@@ -4444,12 +4449,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/TrustWalletCore-macOS/TrustWalletCore-macOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/TrustWalletCore-macOS/TrustWalletCore-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/TrustWalletCore-macOS/TrustWalletCore-macOS.modulemap";
 				PRODUCT_MODULE_NAME = WalletCore;
 				PRODUCT_NAME = WalletCore;
@@ -4479,6 +4485,7 @@
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				INFOPLIST_FILE = "Target Support Files/Pods-Tokenary/Pods-Tokenary-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -4514,12 +4521,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/SwiftProtobuf-iOS/SwiftProtobuf-iOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/SwiftProtobuf-iOS/SwiftProtobuf-iOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/SwiftProtobuf-iOS/SwiftProtobuf-iOS.modulemap";
 				PRODUCT_MODULE_NAME = SwiftProtobuf;
 				PRODUCT_NAME = SwiftProtobuf;
@@ -4556,6 +4564,7 @@
 					"@loader_path/Frameworks",
 				);
 				MACH_O_TYPE = staticlib;
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS.modulemap";
 				OTHER_LDFLAGS = "";
 				OTHER_LIBTOOLFLAGS = "";
@@ -4594,6 +4603,7 @@
 					"@loader_path/Frameworks",
 				);
 				MACH_O_TYPE = staticlib;
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS.modulemap";
 				OTHER_LDFLAGS = "";
 				OTHER_LIBTOOLFLAGS = "";
@@ -4623,12 +4633,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/BigInt-iOS/BigInt-iOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/BigInt-iOS/BigInt-iOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/BigInt-iOS/BigInt-iOS.modulemap";
 				PRODUCT_MODULE_NAME = BigInt;
 				PRODUCT_NAME = BigInt;
@@ -4652,7 +4663,8 @@
 				IBSC_MODULE = Kingfisher;
 				INFOPLIST_FILE = "Target Support Files/Kingfisher-macOS/ResourceBundle-Kingfisher-Kingfisher-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
-				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				PRODUCT_NAME = Kingfisher;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -4677,12 +4689,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/BigInt-macOS/BigInt-macOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/BigInt-macOS/BigInt-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/BigInt-macOS/BigInt-macOS.modulemap";
 				PRODUCT_MODULE_NAME = BigInt;
 				PRODUCT_NAME = BigInt;
@@ -4840,12 +4853,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/SwiftProtobuf-iOS/SwiftProtobuf-iOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/SwiftProtobuf-iOS/SwiftProtobuf-iOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/SwiftProtobuf-iOS/SwiftProtobuf-iOS.modulemap";
 				PRODUCT_MODULE_NAME = SwiftProtobuf;
 				PRODUCT_NAME = SwiftProtobuf;
@@ -4876,12 +4890,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/TrustWalletCore-iOS/TrustWalletCore-iOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/TrustWalletCore-iOS/TrustWalletCore-iOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/TrustWalletCore-iOS/TrustWalletCore-iOS.modulemap";
 				PRODUCT_MODULE_NAME = WalletCore;
 				PRODUCT_NAME = WalletCore;
@@ -4911,12 +4926,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/Kingfisher-iOS/Kingfisher-iOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/Kingfisher-iOS/Kingfisher-iOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/Kingfisher-iOS/Kingfisher-iOS.modulemap";
 				PRODUCT_MODULE_NAME = Kingfisher;
 				PRODUCT_NAME = Kingfisher;
@@ -4949,12 +4965,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/TrustWalletCore-macOS/TrustWalletCore-macOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/TrustWalletCore-macOS/TrustWalletCore-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/TrustWalletCore-macOS/TrustWalletCore-macOS.modulemap";
 				PRODUCT_MODULE_NAME = WalletCore;
 				PRODUCT_NAME = WalletCore;
@@ -4985,12 +5002,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/SwiftProtobuf-macOS/SwiftProtobuf-macOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/SwiftProtobuf-macOS/SwiftProtobuf-macOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.11;
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/SwiftProtobuf-macOS/SwiftProtobuf-macOS.modulemap";
 				PRODUCT_MODULE_NAME = SwiftProtobuf;
 				PRODUCT_NAME = SwiftProtobuf;
@@ -5018,12 +5036,13 @@
 				GCC_PREFIX_HEADER = "Target Support Files/BigInt-iOS/BigInt-iOS-prefix.pch";
 				INFOPLIST_FILE = "Target Support Files/BigInt-iOS/BigInt-iOS-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				MODULEMAP_FILE = "Target Support Files/BigInt-iOS/BigInt-iOS.modulemap";
 				PRODUCT_MODULE_NAME = BigInt;
 				PRODUCT_NAME = BigInt;
@@ -5046,7 +5065,8 @@
 				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Kingfisher-iOS";
 				IBSC_MODULE = Kingfisher;
 				INFOPLIST_FILE = "Target Support Files/Kingfisher-iOS/ResourceBundle-Kingfisher-Kingfisher-iOS-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 11.4;
 				PRODUCT_NAME = Kingfisher;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
