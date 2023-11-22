@@ -1886,7 +1886,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 2.0.22;
+				MARKETING_VERSION = 2.0.23;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -1921,7 +1921,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 2.0.22;
+				MARKETING_VERSION = 2.0.23;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -2074,7 +2074,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 2.0.22;
+				MARKETING_VERSION = 2.0.23;
 				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -2104,7 +2104,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 2.0.22;
+				MARKETING_VERSION = 2.0.23;
 				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -2131,7 +2131,7 @@
 					"@executable_path/Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
-				MARKETING_VERSION = 2.0.22;
+				MARKETING_VERSION = 2.0.23;
 				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -2162,7 +2162,7 @@
 					"@executable_path/Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
-				MARKETING_VERSION = 2.0.22;
+				MARKETING_VERSION = 2.0.23;
 				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -2194,7 +2194,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
-				MARKETING_VERSION = 2.0.22;
+				MARKETING_VERSION = 2.0.23;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -2232,7 +2232,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
-				MARKETING_VERSION = 2.0.22;
+				MARKETING_VERSION = 2.0.23;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
