@@ -127,6 +127,7 @@ class AccountsListViewController: NSViewController {
     
     private func callCompletion(specificWalletAccounts: [SpecificWalletAccount]?) {
         if !didCallCompletion {
+            closeAllPopupsIfNeeded()
             didCallCompletion = true
             let network = selectAccountAction?.network ?? Networks.ethereum
             selectAccountAction?.completion(network, specificWalletAccounts)
@@ -226,7 +227,7 @@ class AccountsListViewController: NSViewController {
             self.popupWindowId = nil
         }
         let networksList = NetworksListView(selectedNetwork: selectAccountAction?.network) { [weak self] selectedNetwork in
-            
+            // TODO: implement
         }
         popupWindowId = showHostingWindow(content: networksList, title: Strings.selectNetwork)
     }
@@ -246,6 +247,13 @@ class AccountsListViewController: NSViewController {
     private func selectNetwork(_ network: EthereumNetwork) {
         networkButton.image = networkButton.image?.with(pointSize: 14, weight: .semibold, color: .controlAccentColor.withSystemEffect(.pressed))
         selectAccountAction?.network = network
+    }
+    
+    private func closeAllPopupsIfNeeded() {
+        if let popupWindowId = popupWindowId {
+            self.popupWindowId = nil
+            Window.closeWindow(idToClose: popupWindowId)
+        }
     }
 
     @objc private func didClickCreateAccount() {
@@ -301,6 +309,7 @@ class AccountsListViewController: NSViewController {
         let importViewController = instantiate(ImportViewController.self)
         importViewController.selectAccountAction = selectAccountAction
         view.window?.contentViewController = importViewController
+        closeAllPopupsIfNeeded()
     }
     
     private func scrollTo(specificWalletAccount: SpecificWalletAccount) {
@@ -599,6 +608,7 @@ extension AccountsListViewController: AccountsHeaderDelegate {
         editAccountsViewController.wallet = wallet
         editAccountsViewController.getBackToRect = tableView.visibleRect
         view.window?.contentViewController = editAccountsViewController
+        closeAllPopupsIfNeeded()
     }
     
     func didClickShowSecretWords(sender: NSTableRowView) {
@@ -728,6 +738,7 @@ extension AccountsListViewController: NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
         callCompletion(specificWalletAccounts: nil)
+        closeAllPopupsIfNeeded()
     }
     
 }
