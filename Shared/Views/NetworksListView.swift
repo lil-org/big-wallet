@@ -60,39 +60,3 @@ struct NetworksListView: View {
     }
     
 }
-
-#if os(macOS)
-
-import Cocoa
-
-var popupWindow: NSWindow? // keep a reference within a NSViewController
-
-extension NSViewController {
-    
-    func showPopup() {
-        let contentView = NetworksListView()
-        
-        popupWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 300, height: 400),
-            styleMask: [.closable, .fullSizeContentView, .titled],
-            backing: .buffered, defer: false)
-        popupWindow?.center()
-        popupWindow?.titleVisibility = .hidden
-        popupWindow?.titlebarAppearsTransparent = true
-        popupWindow?.isMovableByWindowBackground = true
-        popupWindow?.backgroundColor = NSColor.windowBackgroundColor
-        popupWindow?.isOpaque = false
-        popupWindow?.hasShadow = true
-        
-        popupWindow?.contentView?.wantsLayer = true
-        popupWindow?.contentView?.layer?.cornerRadius = 10
-        popupWindow?.contentView?.layer?.masksToBounds = true
-        
-        popupWindow?.isReleasedWhenClosed = false
-        popupWindow?.contentView = NSHostingView(rootView: contentView)
-        popupWindow?.makeKeyAndOrderFront(nil)
-    }
-    
-}
-
-#endif
