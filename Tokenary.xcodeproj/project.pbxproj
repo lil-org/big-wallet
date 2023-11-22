@@ -239,8 +239,8 @@
 		2CF255BA275A749300AE54B9 /* ApproveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF255B9275A749300AE54B9 /* ApproveViewController.swift */; };
 		2CFAE56A28BE6292001D0799 /* NSImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CFAE56928BE6292001D0799 /* NSImage.swift */; };
 		2CFDDF4E2765417E00F89019 /* ios-specific-content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CFDDF4D2765417D00F89019 /* ios-specific-content.js */; };
-		9AE882054B0FE06F57378DC9 /* Pods_Tokenary_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB2F4BE89C2449FCCAD7CC29 /* Pods_Tokenary_iOS.framework */; };
-		CFA90D36139271582E553ECF /* Pods_Tokenary.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 22C384F3CFC69817879F2A94 /* Pods_Tokenary.framework */; };
+		4E8C32A95AAFFA5F92AC68F2 /* Pods_Tokenary_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B68D6F8A1A3A0B2B75B3144F /* Pods_Tokenary_iOS.framework */; };
+		6FB42AE67AA91CF5E49E3FDF /* Pods_Tokenary.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D4E16BAD0EF0718C2D51467A /* Pods_Tokenary.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -302,7 +302,7 @@
 /* Begin PBXFileReference section */
 		0D059AD126C2796200EE3023 /* ApprovalSubject.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalSubject.swift; sourceTree = "<group>"; };
 		0DC850E626B73A5900809E82 /* AuthenticationReason.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationReason.swift; sourceTree = "<group>"; };
-		22C384F3CFC69817879F2A94 /* Pods_Tokenary.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Tokenary.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		257128B20D8A5E5CF6B30685 /* Pods-Tokenary iOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary iOS.release.xcconfig"; path = "Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS.release.xcconfig"; sourceTree = "<group>"; };
 		2C03D1D1269B407900EF10EA /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		2C03D1D4269B428C00EF10EA /* Notification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notification.swift; sourceTree = "<group>"; };
 		2C03EB732B069B5A00EF61F5 /* Tests iOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Tests iOS.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -466,11 +466,11 @@
 		2CF255B9275A749300AE54B9 /* ApproveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveViewController.swift; sourceTree = "<group>"; };
 		2CFAE56928BE6292001D0799 /* NSImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSImage.swift; sourceTree = "<group>"; };
 		2CFDDF4D2765417D00F89019 /* ios-specific-content.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = "ios-specific-content.js"; sourceTree = "<group>"; };
-		39EECAE73C8DC588FB23497B /* Pods-Tokenary.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary.debug.xcconfig"; path = "Target Support Files/Pods-Tokenary/Pods-Tokenary.debug.xcconfig"; sourceTree = "<group>"; };
-		48893324F95E8CC1B0B31ED2 /* Pods-Tokenary iOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary iOS.release.xcconfig"; path = "Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS.release.xcconfig"; sourceTree = "<group>"; };
-		BF6BF42F62FF1D879D2F82A6 /* Pods-Tokenary iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary iOS.debug.xcconfig"; path = "Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS.debug.xcconfig"; sourceTree = "<group>"; };
-		CB2F4BE89C2449FCCAD7CC29 /* Pods_Tokenary_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Tokenary_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		D6F78CF35B45B8A7BBEF6AC2 /* Pods-Tokenary.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary.release.xcconfig"; path = "Target Support Files/Pods-Tokenary/Pods-Tokenary.release.xcconfig"; sourceTree = "<group>"; };
+		31994388DB6575DC5C0455DA /* Pods-Tokenary iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary iOS.debug.xcconfig"; path = "Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS.debug.xcconfig"; sourceTree = "<group>"; };
+		5CBBA342061DCD715AD14008 /* Pods-Tokenary.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary.debug.xcconfig"; path = "Target Support Files/Pods-Tokenary/Pods-Tokenary.debug.xcconfig"; sourceTree = "<group>"; };
+		6312B917C20199DA362BB38F /* Pods-Tokenary.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary.release.xcconfig"; path = "Target Support Files/Pods-Tokenary/Pods-Tokenary.release.xcconfig"; sourceTree = "<group>"; };
+		B68D6F8A1A3A0B2B75B3144F /* Pods_Tokenary_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Tokenary_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		D4E16BAD0EF0718C2D51467A /* Pods_Tokenary.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Tokenary.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -499,7 +499,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				CFA90D36139271582E553ECF /* Pods_Tokenary.framework in Frameworks */,
+				6FB42AE67AA91CF5E49E3FDF /* Pods_Tokenary.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -507,7 +507,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				9AE882054B0FE06F57378DC9 /* Pods_Tokenary_iOS.framework in Frameworks */,
+				4E8C32A95AAFFA5F92AC68F2 /* Pods_Tokenary_iOS.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -595,7 +595,7 @@
 				2C03EB812B069BC900EF61F5 /* Tests macOS */,
 				2C19953D2674C4B900A8E370 /* Products */,
 				AA97AE0C21DC8732F06C98F1 /* Pods */,
-				6F537B8E2743EA3D03AABC4D /* Frameworks */,
+				37F7BCC0C74DF8B082163CE2 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -1045,11 +1045,11 @@
 			path = Screens;
 			sourceTree = "<group>";
 		};
-		6F537B8E2743EA3D03AABC4D /* Frameworks */ = {
+		37F7BCC0C74DF8B082163CE2 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				22C384F3CFC69817879F2A94 /* Pods_Tokenary.framework */,
-				CB2F4BE89C2449FCCAD7CC29 /* Pods_Tokenary_iOS.framework */,
+				D4E16BAD0EF0718C2D51467A /* Pods_Tokenary.framework */,
+				B68D6F8A1A3A0B2B75B3144F /* Pods_Tokenary_iOS.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -1057,10 +1057,10 @@
 		AA97AE0C21DC8732F06C98F1 /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				39EECAE73C8DC588FB23497B /* Pods-Tokenary.debug.xcconfig */,
-				D6F78CF35B45B8A7BBEF6AC2 /* Pods-Tokenary.release.xcconfig */,
-				BF6BF42F62FF1D879D2F82A6 /* Pods-Tokenary iOS.debug.xcconfig */,
-				48893324F95E8CC1B0B31ED2 /* Pods-Tokenary iOS.release.xcconfig */,
+				5CBBA342061DCD715AD14008 /* Pods-Tokenary.debug.xcconfig */,
+				6312B917C20199DA362BB38F /* Pods-Tokenary.release.xcconfig */,
+				31994388DB6575DC5C0455DA /* Pods-Tokenary iOS.debug.xcconfig */,
+				257128B20D8A5E5CF6B30685 /* Pods-Tokenary iOS.release.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -1126,12 +1126,12 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2C19954C2674C4BA00A8E370 /* Build configuration list for PBXNativeTarget "Tokenary" */;
 			buildPhases = (
-				67ADBFD696182DA8557BD49E /* [CP] Check Pods Manifest.lock */,
+				67225FF5BC41DD561676982F /* [CP] Check Pods Manifest.lock */,
 				2C1995382674C4B900A8E370 /* Sources */,
 				2C1995392674C4B900A8E370 /* Frameworks */,
 				2C19953A2674C4B900A8E370 /* Resources */,
 				2C09CBB8273979C1009AD39B /* Embed Foundation Extensions */,
-				280F303C3FBCDB0F9C69FA09 /* [CP] Embed Pods Frameworks */,
+				0304D15CC57E7E7D65ECE571 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -1147,12 +1147,12 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2C5FF98026C84F7C00B32ACC /* Build configuration list for PBXNativeTarget "Tokenary iOS" */;
 			buildPhases = (
-				96834CF07C14FC25D612966F /* [CP] Check Pods Manifest.lock */,
+				36FC39BCCBCB4F0B986443FA /* [CP] Check Pods Manifest.lock */,
 				2C5FF96B26C84F7B00B32ACC /* Sources */,
 				2C5FF96C26C84F7B00B32ACC /* Frameworks */,
 				2C5FF96D26C84F7B00B32ACC /* Resources */,
 				2CCEB84627594E2A00768473 /* Embed Foundation Extensions */,
-				CC429A21B26310CAA6AFE034 /* [CP] Embed Pods Frameworks */,
+				057CD1D87A3C5487A79E8554 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -1342,7 +1342,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		280F303C3FBCDB0F9C69FA09 /* [CP] Embed Pods Frameworks */ = {
+		0304D15CC57E7E7D65ECE571 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -1357,6 +1357,23 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Tokenary/Pods-Tokenary-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		057CD1D87A3C5487A79E8554 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		2C85D99C274E531100160AD5 /* Run Script */ = {
@@ -1396,29 +1413,7 @@
 			shellPath = /bin/sh;
 			shellScript = "YARN_PATH=$(command -v yarn)\n\nif [ -z \"$YARN_PATH\" ]; then\n    echo \"warning: install yarn to make changes to the inpage script\"\nelse\n    FILE=/usr/lib/bin/yarn\n    if [ -f \"$FILE\" ]; then\n        export PATH=/usr/lib/bin:$PATH\n    else\n        export PATH=/opt/homebrew/bin:$PATH\n    fi\n\n    cd \"$PROJECT_DIR\"/Safari\\ Shared/web3-provider\n    yarn run prebuild\n    yarn run build\nfi\n";
 		};
-		67ADBFD696182DA8557BD49E /* [CP] Check Pods Manifest.lock */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
-				"${PODS_ROOT}/Manifest.lock",
-			);
-			name = "[CP] Check Pods Manifest.lock";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-Tokenary-checkManifestLockResult.txt",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
-		};
-		96834CF07C14FC25D612966F /* [CP] Check Pods Manifest.lock */ = {
+		36FC39BCCBCB4F0B986443FA /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -1440,21 +1435,26 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		CC429A21B26310CAA6AFE034 /* [CP] Embed Pods Frameworks */ = {
+		67225FF5BC41DD561676982F /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			name = "[CP] Embed Pods Frameworks";
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
 			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-Tokenary-checkManifestLockResult.txt",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS-frameworks.sh\"\n";
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -2054,7 +2054,7 @@
 		};
 		2C19954D2674C4BA00A8E370 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 39EECAE73C8DC588FB23497B /* Pods-Tokenary.debug.xcconfig */;
+			baseConfigurationReference = 5CBBA342061DCD715AD14008 /* Pods-Tokenary.debug.xcconfig */;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = "$(inherited)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -2084,7 +2084,7 @@
 		};
 		2C19954E2674C4BA00A8E370 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = D6F78CF35B45B8A7BBEF6AC2 /* Pods-Tokenary.release.xcconfig */;
+			baseConfigurationReference = 6312B917C20199DA362BB38F /* Pods-Tokenary.release.xcconfig */;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = "$(inherited)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -2114,7 +2114,7 @@
 		};
 		2C5FF98126C84F7C00B32ACC /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = BF6BF42F62FF1D879D2F82A6 /* Pods-Tokenary iOS.debug.xcconfig */;
+			baseConfigurationReference = 31994388DB6575DC5C0455DA /* Pods-Tokenary iOS.debug.xcconfig */;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = "$(inherited)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -2145,7 +2145,7 @@
 		};
 		2C5FF98226C84F7C00B32ACC /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 48893324F95E8CC1B0B31ED2 /* Pods-Tokenary iOS.release.xcconfig */;
+			baseConfigurationReference = 257128B20D8A5E5CF6B30685 /* Pods-Tokenary iOS.release.xcconfig */;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = "$(inherited)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
