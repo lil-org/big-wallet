@@ -13,6 +13,7 @@ class AccountsListViewController: NSViewController {
     var selectAccountAction: SelectAccountAction?
     var newWalletId: String?
     var getBackToRect: CGRect?
+    private var popupWindowId: Int?
     
     enum CellModel {
         case mnemonicWalletHeader(walletIndex: Int)
@@ -126,6 +127,7 @@ class AccountsListViewController: NSViewController {
     
     private func callCompletion(specificWalletAccounts: [SpecificWalletAccount]?) {
         if !didCallCompletion {
+            closeAllPopupsIfNeeded()
             didCallCompletion = true
             let network = selectAccountAction?.network ?? Networks.ethereum
             selectAccountAction?.completion(network, specificWalletAccounts)
@@ -145,32 +147,7 @@ class AccountsListViewController: NSViewController {
             
             if selectAccountAction.source == .walletConnect {
                 networkButton.isHidden = true
-            } else if networkButton.menu == nil {
-                let menu = NSMenu()
-                for mainnet in Networks.allMainnets {
-                    let item = NSMenuItem(title: mainnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
-                    item.tag = mainnet.chainId
-                    menu.addItem(item)
-                }
-                
-                let submenuItem = NSMenuItem()
-                submenuItem.title = Strings.testnets
-                let submenu = NSMenu()
-                for testnet in Networks.allTestnets {
-                    let item = NSMenuItem(title: testnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
-                    item.tag = testnet.chainId
-                    submenu.addItem(item)
-                }
-                
-                submenuItem.submenu = submenu
-                menu.addItem(.separator())
-                menu.addItem(submenuItem)
-                networkButton.menu = menu
-                
-                menu.addItem(.separator())
-                let titleItem = NSMenuItem(title: Strings.selectNetworkOptionally, action: nil, keyEquivalent: "")
-                menu.addItem(titleItem)
-                
+            } else {
                 if let network = selectAccountAction.network, !network.isEthMainnet {
                     selectNetwork(network)
                 }
@@ -241,8 +218,20 @@ class AccountsListViewController: NSViewController {
             Alert.showWithMessage(selectAccountAction?.coinType?.name ?? Strings.unknownNetwork, style: .informational)
             return
         }
-        
-        sender.menu?.popUp(positioning: sender.menu?.items.last, at: CGPoint(x: 12, y: 90), in: view)
+        showNetworksList()
+    }
+    
+    private func showNetworksList() {
+        if let popupWindowId = popupWindowId {
+            Window.closeWindow(idToClose: popupWindowId)
+            self.popupWindowId = nil
+        }
+        let networksList = NetworksListView(selectedNetwork: selectAccountAction?.network) { [weak self] selectedNetwork in
+            if let network = selectedNetwork {
+                self?.selectNetwork(network)
+            }
+        }
+        popupWindowId = showHostingWindow(content: networksList, title: Strings.selectNetwork)
     }
     
     @IBAction func didClickSecondaryButton(_ sender: Any) {
@@ -257,19 +246,16 @@ class AccountsListViewController: NSViewController {
         callCompletion(specificWalletAccounts: selectAccountAction?.selectedAccounts.map { $0 })
     }
     
-    @objc private func didSelectChain(_ sender: AnyObject) {
-        guard let menuItem = sender as? NSMenuItem,
-              let selectedNetwork = Networks.withChainId(menuItem.tag) else { return }
-        selectNetwork(selectedNetwork)
-    }
-    
     private func selectNetwork(_ network: EthereumNetwork) {
-        let title = network.name + " — " + Strings.isSelected
-        let attributedTitle = NSAttributedString(string: title,
-                                                 attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
-        networkButton.menu?.items.last?.attributedTitle = attributedTitle
         networkButton.image = networkButton.image?.with(pointSize: 14, weight: .semibold, color: .controlAccentColor.withSystemEffect(.pressed))
         selectAccountAction?.network = network
+    }
+    
+    private func closeAllPopupsIfNeeded() {
+        if let popupWindowId = popupWindowId {
+            self.popupWindowId = nil
+            Window.closeWindow(idToClose: popupWindowId)
+        }
     }
 
     @objc private func didClickCreateAccount() {
@@ -325,6 +311,7 @@ class AccountsListViewController: NSViewController {
         let importViewController = instantiate(ImportViewController.self)
         importViewController.selectAccountAction = selectAccountAction
         view.window?.contentViewController = importViewController
+        closeAllPopupsIfNeeded()
     }
     
     private func scrollTo(specificWalletAccount: SpecificWalletAccount) {
@@ -623,6 +610,7 @@ extension AccountsListViewController: AccountsHeaderDelegate {
         editAccountsViewController.wallet = wallet
         editAccountsViewController.getBackToRect = tableView.visibleRect
         view.window?.contentViewController = editAccountsViewController
+        closeAllPopupsIfNeeded()
     }
     
     func didClickShowSecretWords(sender: NSTableRowView) {
@@ -752,6 +740,7 @@ extension AccountsListViewController: NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
         callCompletion(specificWalletAccounts: nil)
+        closeAllPopupsIfNeeded()
     }
     
 }

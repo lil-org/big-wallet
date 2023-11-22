@@ -301,6 +301,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             return
         }
         
+        showNetworksList()
+    }
+    
+    private func showNetworksList() {
         let networksList = NetworksListView(selectedNetwork: network) { [weak self] newSelected in
             guard let newSelected = newSelected else { return }
             self?.selectNetwork(newSelected)

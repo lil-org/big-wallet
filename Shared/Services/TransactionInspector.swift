@@ -45,7 +45,7 @@ struct TransactionInspector {
         let parsedArguments = parseArguments(args)
         let inputs = parsedArguments.compactMap { argToDict(arg: $0) }
         guard inputs.count == parsedArguments.count else { return nil }
-        let dict: [String: Any] = ["inputs": inputs, "name": name]
+        let dict: [String: Any] = ["inputs": inputs, "name": name, "outputs": []]
         let abi = [nameHex: dict]
         if let abiData = try? JSONSerialization.data(withJSONObject: abi),
            let abiString = String(data: abiData, encoding: .utf8),
@@ -53,7 +53,9 @@ struct TransactionInspector {
            let decoded = EthereumAbi.decodeCall(data: callData, abi: abiString),
            let decodedData = decoded.data(using: .utf8),
            let decodedInputs = (try? JSONSerialization.jsonObject(with: decodedData) as? [String: Any])?["inputs"] as? [[String: Any]] {
-            let flat = [signature] + decodedInputs.compactMap { flatValueFrom(input: $0) }
+            let values = decodedInputs.compactMap { flatValueFrom(input: $0) }
+            guard values.contains(where: { !$0.isEmpty }) else { return nil }
+            let flat = [signature] + values
             return flat.joined(separator: "\n\n")
         } else {
             return nil

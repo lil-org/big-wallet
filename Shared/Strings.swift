@@ -97,5 +97,6 @@ struct Strings {
     static let notNow = "not now"
     static let done = "Done"
     static let pinned = "Pinned"
+    static let mainnets = "Mainnets"
     
 }
