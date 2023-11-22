@@ -145,32 +145,7 @@ class AccountsListViewController: NSViewController {
             
             if selectAccountAction.source == .walletConnect {
                 networkButton.isHidden = true
-            } else if networkButton.menu == nil {
-                let menu = NSMenu()
-                for mainnet in Networks.allMainnets {
-                    let item = NSMenuItem(title: mainnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
-                    item.tag = mainnet.chainId
-                    menu.addItem(item)
-                }
-                
-                let submenuItem = NSMenuItem()
-                submenuItem.title = Strings.testnets
-                let submenu = NSMenu()
-                for testnet in Networks.allTestnets {
-                    let item = NSMenuItem(title: testnet.name, action: #selector(didSelectChain(_:)), keyEquivalent: "")
-                    item.tag = testnet.chainId
-                    submenu.addItem(item)
-                }
-                
-                submenuItem.submenu = submenu
-                menu.addItem(.separator())
-                menu.addItem(submenuItem)
-                networkButton.menu = menu
-                
-                menu.addItem(.separator())
-                let titleItem = NSMenuItem(title: Strings.selectNetworkOptionally, action: nil, keyEquivalent: "")
-                menu.addItem(titleItem)
-                
+            } else {
                 if let network = selectAccountAction.network, !network.isEthMainnet {
                     selectNetwork(network)
                 }
@@ -242,7 +217,7 @@ class AccountsListViewController: NSViewController {
             return
         }
         
-        sender.menu?.popUp(positioning: sender.menu?.items.last, at: CGPoint(x: 12, y: 90), in: view)
+        // TODO: showPopup()
     }
     
     @IBAction func didClickSecondaryButton(_ sender: Any) {
@@ -257,17 +232,10 @@ class AccountsListViewController: NSViewController {
         callCompletion(specificWalletAccounts: selectAccountAction?.selectedAccounts.map { $0 })
     }
     
-    @objc private func didSelectChain(_ sender: AnyObject) {
-        guard let menuItem = sender as? NSMenuItem,
-              let selectedNetwork = Networks.withChainId(menuItem.tag) else { return }
-        selectNetwork(selectedNetwork)
-    }
-    
     private func selectNetwork(_ network: EthereumNetwork) {
         let title = network.name + " — " + Strings.isSelected
         let attributedTitle = NSAttributedString(string: title,
                                                  attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
-        networkButton.menu?.items.last?.attributedTitle = attributedTitle
         networkButton.image = networkButton.image?.with(pointSize: 14, weight: .semibold, color: .controlAccentColor.withSystemEffect(.pressed))
         selectAccountAction?.network = network
     }
