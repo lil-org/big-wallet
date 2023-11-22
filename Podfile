@@ -16,3 +16,12 @@ target 'Tokenary iOS' do
   platform :ios, '15.0'
   shared_pods
 end
+
+post_install do |installer|
+  installer.generated_projects.each do |project|
+    project.build_configurations.each do |config|
+      config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '12.0'
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+    end
+  end
+end
