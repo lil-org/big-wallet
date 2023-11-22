@@ -46,8 +46,7 @@ struct NetworksListView: View {
                     if selectedNetwork?.chainId == network.chainId {
                         Image.checkmark.foregroundStyle(.selection)
                     }
-                }
-                .contentShape(Rectangle())
+                }.frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
                 .onTapGesture {
                     if selectedNetwork?.chainId == network.chainId {
                         selectedNetwork = nil
