@@ -53,7 +53,7 @@ struct NetworksListView: View {
                     Text(network.name)
                     Spacer()
                     if selectedNetwork?.chainId == network.chainId {
-                        Image.checkmark.foregroundStyle(.selection)
+                        Image.checkmark.foregroundStyle(.tint)
                     }
                 }.frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
                     .onTapGesture {
