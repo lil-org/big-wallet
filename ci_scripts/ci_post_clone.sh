@@ -12,8 +12,12 @@ fi
 
 echo "INFURA_KEY has been written to ${PLIST_PATH}"
 
-brew install cocoapods
-pod install
-pod update
+echo 'export GEM_HOME=$HOME/gems' >>~/.bash_profile
+echo 'export PATH=$HOME/gems/bin:$PATH' >>~/.bash_profile
+export GEM_HOME=$HOME/gems
+export PATH="$GEM_HOME/bin:$PATH"
+gem install bundler --install-dir $GEM_HOME
+bundle install
+bundle exec pod install
 
 exit 0
