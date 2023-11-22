@@ -413,7 +413,6 @@
 		2C9931DB2AEEC0E200577C8A /* NetworksListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworksListView.swift; sourceTree = "<group>"; };
 		2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundledNetwork.swift; sourceTree = "<group>"; };
 		2C9B55D42AF2B004008BE899 /* nodes-to-bundle.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "nodes-to-bundle.json"; sourceTree = "<group>"; };
-		2C9CA0AB2B0EAC5500F3C875 /* Gemfile */ = {isa = PBXFileReference; lastKnownFileType = text; path = Gemfile; sourceTree = "<group>"; };
 		2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumNetwork.swift; sourceTree = "<group>"; };
 		2CAA412426C7CD93009F3535 /* ReviewRequester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewRequester.swift; sourceTree = "<group>"; };
 		2CADD2C42AFAAE860082BFA4 /* Infura.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Infura.swift; sourceTree = "<group>"; };
@@ -859,7 +858,6 @@
 			isa = PBXGroup;
 			children = (
 				2CBB9FA42AF7B5970047B0CD /* ci_post_clone.sh */,
-				2C9CA0AB2B0EAC5500F3C875 /* Gemfile */,
 				2CBB9FA52AF7B5970047B0CD /* shared.plist */,
 			);
 			path = ci_scripts;
