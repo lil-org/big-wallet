@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e # Any subsequent(*) commands which fail will cause the shell script to exit immediately
 
+rm -rf ../Pods
+
 PLIST_PATH="shared.plist"
 
 if [ -z "${INFURA_KEY}" ]; then
