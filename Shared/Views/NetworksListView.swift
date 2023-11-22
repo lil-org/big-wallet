@@ -40,7 +40,7 @@ struct NetworksListView: View {
     private func list() -> some View {
         List {
             networkSection(networks: pinned, title: Strings.pinned)
-            networkSection(networks: mainnets)
+            networkSection(networks: mainnets, title: Strings.mainnets)
             networkSection(networks: testnets, title: Strings.testnets)
         }
     }
