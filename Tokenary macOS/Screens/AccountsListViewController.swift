@@ -13,6 +13,7 @@ class AccountsListViewController: NSViewController {
     var selectAccountAction: SelectAccountAction?
     var newWalletId: String?
     var getBackToRect: CGRect?
+    private var popupWindowId: Int?
     
     enum CellModel {
         case mnemonicWalletHeader(walletIndex: Int)
@@ -216,8 +217,18 @@ class AccountsListViewController: NSViewController {
             Alert.showWithMessage(selectAccountAction?.coinType?.name ?? Strings.unknownNetwork, style: .informational)
             return
         }
-        
-        // TODO: showPopup()
+        showNetworksList()
+    }
+    
+    private func showNetworksList() {
+        if let popupWindowId = popupWindowId {
+            Window.closeWindow(idToClose: popupWindowId)
+            self.popupWindowId = nil
+        }
+        let networksList = NetworksListView(selectedNetwork: selectAccountAction?.network) { [weak self] selectedNetwork in
+            
+        }
+        popupWindowId = showHostingWindow(content: networksList, title: Strings.selectNetwork)
     }
     
     @IBAction func didClickSecondaryButton(_ sender: Any) {
@@ -233,9 +244,6 @@ class AccountsListViewController: NSViewController {
     }
     
     private func selectNetwork(_ network: EthereumNetwork) {
-        let title = network.name + " — " + Strings.isSelected
-        let attributedTitle = NSAttributedString(string: title,
-                                                 attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
         networkButton.image = networkButton.image?.with(pointSize: 14, weight: .semibold, color: .controlAccentColor.withSystemEffect(.pressed))
         selectAccountAction?.network = network
     }
