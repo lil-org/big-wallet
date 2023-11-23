@@ -4,7 +4,8 @@
       "id" : "65FF9AB8-0BA3-41C0-AE71-07446697F0DF",
       "name" : "Configuration 1",
       "options" : {
-
+        "uiTestingScreenshotsLifetime" : "keepNever",
+        "userAttachmentLifetime" : "keepNever"
       }
     }
   ],
@@ -19,6 +20,7 @@
   },
   "testTargets" : [
     {
+      "parallelizable" : true,
       "target" : {
         "containerPath" : "container:Tokenary.xcodeproj",
         "identifier" : "2C03EB722B069B5A00EF61F5",
