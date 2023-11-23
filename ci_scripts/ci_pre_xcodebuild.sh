@@ -6,7 +6,7 @@ echo "CI_XCODEBUILD_ACTION: $CI_XCODEBUILD_ACTION"
 echo "CI_PRIMARY_REPOSITORY_PATH: $CI_PRIMARY_REPOSITORY_PATH"
 echo "CI_XCODE_PROJECT: $CI_XCODE_PROJECT"
 
-if [ "$CI_PRODUCT_PLATFORM" = 'macOS' ] && [ "$CI_XCODEBUILD_ACTION" = 'build-for-testing' ]; then
+if [ "$CI_PRODUCT_PLATFORM" = 'macOS' ] && { [ "$CI_XCODEBUILD_ACTION" = 'build-for-testing' ] || [ "$CI_XCODEBUILD_ACTION" = 'test-without-building' ]; }; then
     filePath="$CI_PRIMARY_REPOSITORY_PATH/Tokenary.xcodeproj/project.pbxproj"
     echo "File path: $filePath"
     
