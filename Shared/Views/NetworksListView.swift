@@ -27,7 +27,14 @@ struct NetworksListView: View {
                 }.disabled(selectedNetwork == nil))
         }
 #elseif os(macOS)
-        list()
+        VStack {
+            list()
+            HStack {
+                Button(Strings.cancel) { presentationMode.wrappedValue.dismiss() }.keyboardShortcut(.cancelAction)
+                Button(Strings.ok) { completion(selectedNetwork); presentationMode.wrappedValue.dismiss() }.keyboardShortcut(.defaultAction)
+                    .disabled(selectedNetwork == nil)
+            }.frame(height: 36).offset(CGSize(width: 0, height: -6))
+        }
 #endif
     }
     
