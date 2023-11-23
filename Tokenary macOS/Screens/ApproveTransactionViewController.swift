@@ -1,6 +1,7 @@
 // Copyright © 2021 Tokenary. All rights reserved.
 
 import Cocoa
+import WalletCore
 import Kingfisher
 
 class ApproveTransactionViewController: NSViewController {
@@ -34,9 +35,12 @@ class ApproveTransactionViewController: NSViewController {
     private var didCallCompletion = false
     private var didEnableSpeedConfiguration = false
     private var peerMeta: PeerMeta?
+    private var account: Account!
+    private var balance: String?
     
-    static func with(transaction: Transaction, chain: EthereumNetwork, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
+    static func with(transaction: Transaction, chain: EthereumNetwork, account: Account, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self)
+        new.account = account
         new.chain = chain
         new.transaction = transaction
         new.completion = completion
@@ -51,6 +55,12 @@ class ApproveTransactionViewController: NSViewController {
         setSpeedConfigurationViews(enabled: false)
         updateInterface()
         prepareTransaction()
+        
+        ethereum.getBalance(network: chain, address: account.address) { [weak self] balance in
+            self?.balance = balance.eth(shortest: true) + " " + (self?.chain.symbol ?? "")
+            self?.updateTextView()
+        }
+        
         if let peer = peerMeta {
             peerNameLabel.stringValue = peer.name
             if let urlString = peer.iconURLString, let url = URL(string: urlString) {
@@ -92,15 +102,40 @@ class ApproveTransactionViewController: NSViewController {
         }
         
         okButton.isEnabled = transaction.hasFee
-        
         enableSpeedConfigurationIfNeeded()
-        let meta = transaction.description(chain: chain, price: priceService.forNetwork(chain))
-        if metaTextView.string != meta {
-            metaTextView.string = meta
-        }
+        updateTextView()
         if didEnableSpeedConfiguration, let gwei = transaction.gasPriceGwei {
             gweiLabel.stringValue = "\(gwei) Gwei"
         }
+    }
+    
+    private var displayedMetaAndBalance = ("", "")
+    private lazy var accountImageAttachmentString: NSAttributedString = {
+        let attachment = NSTextAttachment()
+        attachment.image = account.image?.withCornerRadius(7)
+        attachment.bounds = CGRect(x: 0, y: 0, width: 14, height: 14)
+        let attachmentString = NSAttributedString(attachment: attachment)
+        return attachmentString
+    }()
+    
+    private func updateTextView() {
+        let meta = transaction.description(chain: chain, price: priceService.forNetwork(chain))
+        let balanceString = balance ?? ""
+        guard displayedMetaAndBalance != (meta, balanceString) else { return }
+        displayedMetaAndBalance = (meta, balanceString)
+        
+        let fullString = NSMutableAttributedString(attributedString: accountImageAttachmentString)
+        fullString.insert(NSAttributedString(string: " ", attributes: [.font: NSFont.systemFont(ofSize: 5)]), at: 0)
+        let addressString = NSAttributedString(string: " " + account.croppedAddress,
+                                               attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.labelColor])
+        let balanceAttributedString = NSAttributedString(string: "\n" + balanceString + "\n\n",
+                                               attributes: [.font: NSFont.systemFont(ofSize: 9), .foregroundColor: NSColor.tertiaryLabelColor])
+        let metaString = NSAttributedString(string: meta,
+                                            attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.labelColor])
+        fullString.append(addressString)
+        fullString.append(balanceAttributedString)
+        fullString.append(metaString)
+        metaTextView.textStorage?.setAttributedString(fullString)
     }
     
     private func enableSpeedConfigurationIfNeeded() {
