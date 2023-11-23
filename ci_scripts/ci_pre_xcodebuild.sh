@@ -7,7 +7,7 @@ echo "CI_PRIMARY_REPOSITORY_PATH: $CI_PRIMARY_REPOSITORY_PATH"
 echo "CI_XCODE_PROJECT: $CI_XCODE_PROJECT"
 
 if [ "$CI_PRODUCT_PLATFORM" = 'macOS' ] && [ "$CI_XCODEBUILD_ACTION" = 'build-for-testing' ]; then
-    filePath="$CI_PRIMARY_REPOSITORY_PATH/$CI_XCODE_PROJECT/project.pbxproj"
+    filePath="$CI_PRIMARY_REPOSITORY_PATH/Tokenary.xcodeproj/project.pbxproj"
     echo "File path: $filePath"
     
     if [ -f "$filePath" ]; then
