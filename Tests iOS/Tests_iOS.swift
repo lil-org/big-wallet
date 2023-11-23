@@ -4,4 +4,8 @@ import XCTest
 
 final class Tests_iOS: XCTestCase {
 
+    func testGM() {
+        XCTAssert("gn" == "gm")
+    }
+    
 }

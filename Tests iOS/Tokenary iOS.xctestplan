@@ -1,0 +1,30 @@
+{
+  "configurations" : [
+    {
+      "id" : "65FF9AB8-0BA3-41C0-AE71-07446697F0DF",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "preferredScreenCaptureFormat" : "screenshot",
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:Tokenary.xcodeproj",
+      "identifier" : "2C5FF96E26C84F7B00B32ACC",
+      "name" : "Tokenary iOS"
+    },
+    "testExecutionOrdering" : "random"
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:Tokenary.xcodeproj",
+        "identifier" : "2C03EB722B069B5A00EF61F5",
+        "name" : "Tests iOS"
+      }
+    }
+  ],
+  "version" : 1
+}

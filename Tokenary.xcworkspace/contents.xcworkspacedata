@@ -7,4 +7,10 @@
    <FileRef
       location = "group:Pods/Pods.xcodeproj">
    </FileRef>
+   <FileRef
+      location = "group:Tests macOS/Tokenary.xctestplan">
+   </FileRef>
+   <FileRef
+      location = "group:Tests iOS/Tokenary iOS.xctestplan">
+   </FileRef>
 </Workspace>
