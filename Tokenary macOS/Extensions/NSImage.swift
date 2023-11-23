@@ -23,4 +23,17 @@ extension NSImage {
         }
     }
     
+    func withCornerRadius(_ cornerRadius: CGFloat) -> NSImage {
+        let newImage = NSImage(size: size)
+        newImage.lockFocus()
+        guard let ctx = NSGraphicsContext.current?.cgContext else { return self }
+        let rect = NSRect(x: 0, y: 0, width: size.width, height: size.height)
+        let path = CGPath(roundedRect: rect, cornerWidth: cornerRadius, cornerHeight: cornerRadius, transform: nil)
+        ctx.addPath(path)
+        ctx.clip()
+        draw(in: rect)
+        newImage.unlockFocus()
+        return newImage
+    }
+    
 }
