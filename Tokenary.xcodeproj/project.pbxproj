@@ -345,6 +345,14 @@
 		2C40709227667A8600AB3D55 /* ImageWithLabelTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageWithLabelTableViewCell.swift; sourceTree = "<group>"; };
 		2C40709327667A8600AB3D55 /* ImageWithLabelTableViewCell.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = ImageWithLabelTableViewCell.xib; sourceTree = "<group>"; };
 		2C4297272ADEDCBD0044357A /* PeerMeta.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PeerMeta.swift; sourceTree = "<group>"; };
+		2C452ECF2B0EDB8F0017CE2C /* utils.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = utils.js; path = "Inpage Provider/utils.js"; sourceTree = "<group>"; };
+		2C452ED02B0EDB8F0017CE2C /* yarn.lock */ = {isa = PBXFileReference; lastKnownFileType = text; name = yarn.lock; path = "Inpage Provider/yarn.lock"; sourceTree = "<group>"; };
+		2C452ED12B0EDB8F0017CE2C /* package.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = package.json; path = "Inpage Provider/package.json"; sourceTree = "<group>"; };
+		2C452ED22B0EDB8F0017CE2C /* index.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = index.js; path = "Inpage Provider/index.js"; sourceTree = "<group>"; };
+		2C452ED32B0EDB8F0017CE2C /* ethereum.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = ethereum.js; path = "Inpage Provider/ethereum.js"; sourceTree = "<group>"; };
+		2C452ED42B0EDB8F0017CE2C /* error.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = error.js; path = "Inpage Provider/error.js"; sourceTree = "<group>"; };
+		2C452ED52B0EDB8F0017CE2C /* id_mapping.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = id_mapping.js; path = "Inpage Provider/id_mapping.js"; sourceTree = "<group>"; };
+		2C452ED62B0EDB8F0017CE2C /* rpc.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = rpc.js; path = "Inpage Provider/rpc.js"; sourceTree = "<group>"; };
 		2C4768A628258627005E8D4D /* EditAccountsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditAccountsViewController.swift; sourceTree = "<group>"; };
 		2C4768A8282598C5005E8D4D /* CoinDerivationCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoinDerivationCellView.swift; sourceTree = "<group>"; };
 		2C4768AA2826CA63005E8D4D /* CoinDerivation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoinDerivation.swift; sourceTree = "<group>"; };
@@ -381,7 +389,6 @@
 		2C8944CA2AEB0C10006A711F /* EthereumRPC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumRPC.swift; sourceTree = "<group>"; };
 		2C8944CD2AEC34EB006A711F /* Blockies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Blockies.swift; sourceTree = "<group>"; };
 		2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DappRequestAction.swift; sourceTree = "<group>"; };
-		2C89D26A27BAF2A3006C0C8D /* yarn.lock */ = {isa = PBXFileReference; lastKnownFileType = text; name = yarn.lock; path = "web3-provider/yarn.lock"; sourceTree = "<group>"; };
 		2C8A09C5267513FC00993638 /* Agent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent.swift; sourceTree = "<group>"; };
 		2C8A09D32675184700993638 /* Window.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Window.swift; sourceTree = "<group>"; };
 		2C8A09DE267579EA00993638 /* AccountsListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsListViewController.swift; sourceTree = "<group>"; };
@@ -396,7 +403,6 @@
 		2C901C462689E6D400D0926A /* ApproveTransactionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveTransactionViewController.swift; sourceTree = "<group>"; };
 		2C901C492689F01700D0926A /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		2C901C4C268A033100D0926A /* GasService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GasService.swift; sourceTree = "<group>"; };
-		2C90E5F527A95B9400C8991E /* ethereum.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = ethereum.js; path = "web3-provider/ethereum.js"; sourceTree = "<group>"; };
 		2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InternalSafariRequest.swift; sourceTree = "<group>"; };
 		2C90E62127B2ED2D00C8991E /* SafariRequest+Helpers.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "SafariRequest+Helpers.swift"; sourceTree = "<group>"; };
 		2C917428267D2A6E00049075 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
@@ -416,12 +422,6 @@
 		2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumNetwork.swift; sourceTree = "<group>"; };
 		2CAA412426C7CD93009F3535 /* ReviewRequester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewRequester.swift; sourceTree = "<group>"; };
 		2CADD2C42AFAAE860082BFA4 /* Infura.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Infura.swift; sourceTree = "<group>"; };
-		2CB3844327654BF600A189B9 /* error.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = error.js; path = "web3-provider/error.js"; sourceTree = "<group>"; };
-		2CB3844427654BF600A189B9 /* package.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = package.json; path = "web3-provider/package.json"; sourceTree = "<group>"; };
-		2CB3844527654BF600A189B9 /* id_mapping.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = id_mapping.js; path = "web3-provider/id_mapping.js"; sourceTree = "<group>"; };
-		2CB3844627654BF600A189B9 /* utils.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = utils.js; path = "web3-provider/utils.js"; sourceTree = "<group>"; };
-		2CB3844727654BF600A189B9 /* index.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = index.js; path = "web3-provider/index.js"; sourceTree = "<group>"; };
-		2CB3844827654BF600A189B9 /* rpc.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = rpc.js; path = "web3-provider/rpc.js"; sourceTree = "<group>"; };
 		2CB3845827654E9700A189B9 /* _locales */ = {isa = PBXFileReference; lastKnownFileType = folder; path = _locales; sourceTree = "<group>"; };
 		2CB3845927654E9700A189B9 /* images */ = {isa = PBXFileReference; lastKnownFileType = folder; path = images; sourceTree = "<group>"; };
 		2CB4031A281C99C800BAEBEE /* AccountsHeaderRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsHeaderRowView.swift; sourceTree = "<group>"; };
@@ -551,12 +551,12 @@
 			path = "Tests macOS";
 			sourceTree = "<group>";
 		};
-		2C03EB8E2B06A18700EF61F5 /* tests */ = {
+		2C03EB8E2B06A18700EF61F5 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
 				2C03EB892B069BFD00EF61F5 /* TransactionInspectorTests.swift */,
 			);
-			path = tests;
+			path = Tests;
 			sourceTree = "<group>";
 		};
 		2C09CBA0273979C1009AD39B /* Safari macOS */ = {
@@ -587,11 +587,11 @@
 				2CCEB7A227592A3800768473 /* Safari Shared */,
 				2C09CBA0273979C1009AD39B /* Safari macOS */,
 				2CCEB82E27594E2A00768473 /* Safari iOS */,
-				2CED86A32AF00BC9006F9E26 /* tools */,
-				2CBB9FA32AF7B5970047B0CD /* ci_scripts */,
-				2C03EB8E2B06A18700EF61F5 /* tests */,
+				2CED86A32AF00BC9006F9E26 /* Tools */,
+				2C03EB8E2B06A18700EF61F5 /* Tests */,
 				2C03EB742B069B5A00EF61F5 /* Tests iOS */,
 				2C03EB812B069BC900EF61F5 /* Tests macOS */,
+				2CBB9FA32AF7B5970047B0CD /* ci_scripts */,
 				2C19953D2674C4B900A8E370 /* Products */,
 				AA97AE0C21DC8732F06C98F1 /* Pods */,
 				37F7BCC0C74DF8B082163CE2 /* Frameworks */,
@@ -674,6 +674,21 @@
 				2CC8C5A12767D3B30083FB1B /* GasPriceSliderTableViewCell.xib */,
 			);
 			path = Approve;
+			sourceTree = "<group>";
+		};
+		2C452ECE2B0EDB7E0017CE2C /* Inpage Provider */ = {
+			isa = PBXGroup;
+			children = (
+				2C452ED42B0EDB8F0017CE2C /* error.js */,
+				2C452ED32B0EDB8F0017CE2C /* ethereum.js */,
+				2C452ED52B0EDB8F0017CE2C /* id_mapping.js */,
+				2C452ED22B0EDB8F0017CE2C /* index.js */,
+				2C452ED12B0EDB8F0017CE2C /* package.json */,
+				2C452ED62B0EDB8F0017CE2C /* rpc.js */,
+				2C452ECF2B0EDB8F0017CE2C /* utils.js */,
+				2C452ED02B0EDB8F0017CE2C /* yarn.lock */,
+			);
+			name = "Inpage Provider";
 			sourceTree = "<group>";
 		};
 		2C5C82A02822B9F0007D9488 /* Content */ = {
@@ -819,12 +834,12 @@
 			path = Library;
 			sourceTree = "<group>";
 		};
-		2C9B55D52AF2B8D5008BE899 /* helpers */ = {
+		2C9B55D52AF2B8D5008BE899 /* Helpers */ = {
 			isa = PBXGroup;
 			children = (
 				2C9B55D42AF2B004008BE899 /* nodes-to-bundle.json */,
 			);
-			path = helpers;
+			path = Helpers;
 			sourceTree = "<group>";
 		};
 		2CB3844027654A0D00A189B9 /* Resources */ = {
@@ -837,21 +852,6 @@
 				2C09CBAC273979C1009AD39B /* content.js */,
 			);
 			path = Resources;
-			sourceTree = "<group>";
-		};
-		2CB3844227654BD500A189B9 /* web3-provider */ = {
-			isa = PBXGroup;
-			children = (
-				2CB3844327654BF600A189B9 /* error.js */,
-				2CB3844527654BF600A189B9 /* id_mapping.js */,
-				2C90E5F527A95B9400C8991E /* ethereum.js */,
-				2CB3844727654BF600A189B9 /* index.js */,
-				2CB3844827654BF600A189B9 /* rpc.js */,
-				2CB3844627654BF600A189B9 /* utils.js */,
-				2CB3844427654BF600A189B9 /* package.json */,
-				2C89D26A27BAF2A3006C0C8D /* yarn.lock */,
-			);
-			name = "web3-provider";
 			sourceTree = "<group>";
 		};
 		2CBB9FA32AF7B5970047B0CD /* ci_scripts */ = {
@@ -895,7 +895,7 @@
 		2CCEB7A227592A3800768473 /* Safari Shared */ = {
 			isa = PBXGroup;
 			children = (
-				2CB3844227654BD500A189B9 /* web3-provider */,
+				2C452ECE2B0EDB7E0017CE2C /* Inpage Provider */,
 				2CB3844027654A0D00A189B9 /* Resources */,
 				2C264BDA27B5A94400234393 /* Models */,
 				2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */,
@@ -938,15 +938,15 @@
 			path = Wallets;
 			sourceTree = "<group>";
 		};
-		2CED86A32AF00BC9006F9E26 /* tools */ = {
+		2CED86A32AF00BC9006F9E26 /* Tools */ = {
 			isa = PBXGroup;
 			children = (
 				2CED86A42AF00BC9006F9E26 /* main.swift */,
-				2CED86B42AF17BF0006F9E26 /* bundled */,
-				2CED86BD2AF225A4006F9E26 /* models */,
-				2C9B55D52AF2B8D5008BE899 /* helpers */,
+				2CED86B42AF17BF0006F9E26 /* Bundled */,
+				2CED86BD2AF225A4006F9E26 /* Models */,
+				2C9B55D52AF2B8D5008BE899 /* Helpers */,
 			);
-			path = tools;
+			path = Tools;
 			sourceTree = "<group>";
 		};
 		2CED86B12AF01DFD006F9E26 /* Views */ = {
@@ -957,23 +957,23 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
-		2CED86B42AF17BF0006F9E26 /* bundled */ = {
+		2CED86B42AF17BF0006F9E26 /* Bundled */ = {
 			isa = PBXGroup;
 			children = (
 				2CED86A92AF00F56006F9E26 /* bundled-networks.json */,
 				2CED86B52AF17D5A006F9E26 /* BundledNodes.swift */,
 				2CADD2C42AFAAE860082BFA4 /* Infura.swift */,
 			);
-			path = bundled;
+			path = Bundled;
 			sourceTree = "<group>";
 		};
-		2CED86BD2AF225A4006F9E26 /* models */ = {
+		2CED86BD2AF225A4006F9E26 /* Models */ = {
 			isa = PBXGroup;
 			children = (
 				2CED86AF2AF0167F006F9E26 /* EIP155ChainData.swift */,
 				2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */,
 			);
-			path = models;
+			path = Models;
 			sourceTree = "<group>";
 		};
 		2CF25596275A468B00AE54B9 /* Models */ = {
@@ -1391,7 +1391,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "YARN_PATH=$(command -v yarn)\n\nif [ -z \"$YARN_PATH\" ]; then\n    echo \"warning: install yarn to make changes to the inpage script\"\nelse\n    FILE=/usr/lib/bin/yarn\n    if [ -f \"$FILE\" ]; then\n        export PATH=/usr/lib/bin:$PATH\n    else\n        export PATH=/opt/homebrew/bin:$PATH\n    fi\n\n    cd \"$PROJECT_DIR\"/Safari\\ Shared/web3-provider\n    yarn run prebuild\n    yarn run build\nfi\n";
+			shellScript = "YARN_PATH=$(command -v yarn)\n\nif [ -z \"$YARN_PATH\" ]; then\n    echo \"warning: install yarn to make changes to the inpage script\"\nelse\n    FILE=/usr/lib/bin/yarn\n    if [ -f \"$FILE\" ]; then\n        export PATH=/usr/lib/bin:$PATH\n    else\n        export PATH=/opt/homebrew/bin:$PATH\n    fi\n\n    cd \"$PROJECT_DIR\"/Safari\\ Shared/Inpage\\ Provider\n    yarn run prebuild\n    yarn run build\nfi\n";
 		};
 		2CB3844927654C8D00A189B9 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -1409,7 +1409,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "YARN_PATH=$(command -v yarn)\n\nif [ -z \"$YARN_PATH\" ]; then\n    echo \"warning: install yarn to make changes to the inpage script\"\nelse\n    FILE=/usr/lib/bin/yarn\n    if [ -f \"$FILE\" ]; then\n        export PATH=/usr/lib/bin:$PATH\n    else\n        export PATH=/opt/homebrew/bin:$PATH\n    fi\n\n    cd \"$PROJECT_DIR\"/Safari\\ Shared/web3-provider\n    yarn run prebuild\n    yarn run build\nfi\n";
+			shellScript = "YARN_PATH=$(command -v yarn)\n\nif [ -z \"$YARN_PATH\" ]; then\n    echo \"warning: install yarn to make changes to the inpage script\"\nelse\n    FILE=/usr/lib/bin/yarn\n    if [ -f \"$FILE\" ]; then\n        export PATH=/usr/lib/bin:$PATH\n    else\n        export PATH=/opt/homebrew/bin:$PATH\n    fi\n\n    cd \"$PROJECT_DIR\"/Safari\\ Shared/Inpage\\ Provider\n    yarn run prebuild\n    yarn run build\nfi\n";
 		};
 		36FC39BCCBCB4F0B986443FA /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
