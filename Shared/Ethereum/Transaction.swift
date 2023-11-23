@@ -28,8 +28,11 @@ struct Transaction {
             result.append(value)
         }
         result.append(feeWithSymbol(chain: chain, price: price))
-        result.append(dataWithLabel)
-        
+        if let interpretation = interpretation {
+            result.append(interpretation)
+        } else {
+            result.append(dataWithLabel)
+        }
         return result.joined(separator: "\n\n")
     }
     

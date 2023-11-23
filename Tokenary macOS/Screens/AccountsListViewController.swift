@@ -13,7 +13,6 @@ class AccountsListViewController: NSViewController {
     var selectAccountAction: SelectAccountAction?
     var newWalletId: String?
     var getBackToRect: CGRect?
-    private var popupWindowId: Int?
     
     enum CellModel {
         case mnemonicWalletHeader(walletIndex: Int)
@@ -222,16 +221,15 @@ class AccountsListViewController: NSViewController {
     }
     
     private func showNetworksList() {
-        if let popupWindowId = popupWindowId {
-            Window.closeWindow(idToClose: popupWindowId)
-            self.popupWindowId = nil
-        }
         let networksList = NetworksListView(selectedNetwork: selectAccountAction?.network) { [weak self] selectedNetwork in
+            self?.endAllSheets()
             if let network = selectedNetwork {
                 self?.selectNetwork(network)
             }
         }
-        popupWindowId = showHostingWindow(content: networksList, title: Strings.selectNetwork)
+        
+        let popupWindow = makeHostingWindow(content: networksList, title: Strings.selectNetwork)
+        view.window?.beginSheet(popupWindow)
     }
     
     @IBAction func didClickSecondaryButton(_ sender: Any) {
@@ -252,10 +250,7 @@ class AccountsListViewController: NSViewController {
     }
     
     private func closeAllPopupsIfNeeded() {
-        if let popupWindowId = popupWindowId {
-            self.popupWindowId = nil
-            Window.closeWindow(idToClose: popupWindowId)
-        }
+        endAllSheets()
     }
 
     @objc private func didClickCreateAccount() {

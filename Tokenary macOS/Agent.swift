@@ -75,9 +75,9 @@ class Agent: NSObject {
         }
     }
     
-    func showApprove(windowController: NSWindowController, browser: Browser?, transaction: Transaction, chain: EthereumNetwork, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) {
+    func showApprove(windowController: NSWindowController, browser: Browser?, transaction: Transaction, account: Account, chain: EthereumNetwork, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) {
         let window = windowController.window
-        let approveViewController = ApproveTransactionViewController.with(transaction: transaction, chain: chain, peerMeta: peerMeta) { [weak self, weak window] transaction in
+        let approveViewController = ApproveTransactionViewController.with(transaction: transaction, chain: chain, account: account, peerMeta: peerMeta) { [weak self, weak window] transaction in
             if transaction != nil {
                 self?.askAuthentication(on: window, browser: browser, onStart: false, reason: .sendTransaction) { success in
                     completion(success ? transaction : nil)
@@ -265,7 +265,7 @@ class Agent: NSObject {
         case .approveTransaction(let action):
             let windowController = Window.showNew(closeOthers: false)
             windowNumber = windowController.window?.windowNumber
-            showApprove(windowController: windowController, browser: .safari, transaction: action.transaction, chain: action.chain, peerMeta: action.peerMeta, completion: action.completion)
+            showApprove(windowController: windowController, browser: .safari, transaction: action.transaction, account: action.account, chain: action.chain, peerMeta: action.peerMeta, completion: action.completion)
         case .justShowApp:
             let windowController = Window.showNew(closeOthers: true)
             windowNumber = windowController.window?.windowNumber
