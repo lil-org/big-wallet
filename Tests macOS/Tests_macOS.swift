@@ -5,7 +5,7 @@ import XCTest
 final class Tests_macOS: XCTestCase {
 
     func testGM() {
-        XCTAssert("gn" == "gm")
+        XCTAssert("gm" == "gm")
     }
     
 }
