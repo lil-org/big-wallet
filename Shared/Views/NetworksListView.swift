@@ -30,8 +30,8 @@ struct NetworksListView: View {
         VStack {
             list()
             HStack {
-                Button(Strings.cancel) { presentationMode.wrappedValue.dismiss() }.keyboardShortcut(.cancelAction)
-                Button(Strings.ok) { completion(selectedNetwork); presentationMode.wrappedValue.dismiss() }.keyboardShortcut(.defaultAction)
+                Button(Strings.cancel) { completion(nil) }.keyboardShortcut(.cancelAction)
+                Button(Strings.ok) { completion(selectedNetwork) }.keyboardShortcut(.defaultAction)
                     .disabled(selectedNetwork == nil)
             }.frame(height: 36).offset(CGSize(width: 0, height: -6))
         }
