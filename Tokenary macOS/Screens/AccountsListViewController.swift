@@ -231,7 +231,10 @@ class AccountsListViewController: NSViewController {
                 self?.selectNetwork(network)
             }
         }
-        popupWindowId = showHostingWindow(content: networksList, title: Strings.selectNetwork)
+        
+        let popupWindow = makeHostingWindow(content: networksList, title: Strings.selectNetwork)
+        popupWindow.makeKeyAndOrderFront(nil)
+        popupWindowId = popupWindow.windowNumber
     }
     
     @IBAction func didClickSecondaryButton(_ sender: Any) {
