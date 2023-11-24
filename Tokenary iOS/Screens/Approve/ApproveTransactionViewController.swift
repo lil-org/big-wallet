@@ -60,6 +60,7 @@ class ApproveTransactionViewController: UIViewController {
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
         navigationItem.rightBarButtonItem = UIBarButtonItem(image: Images.preferences, style: .plain, target: self, action: #selector(editTransactionButtonTapped))
+        navigationItem.rightBarButtonItem?.tintColor = .tertiaryLabel
         isModalInPresentation = true
         sectionModels = [[]]
         
