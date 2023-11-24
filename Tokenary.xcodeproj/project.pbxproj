@@ -1128,8 +1128,8 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2C19954C2674C4BA00A8E370 /* Build configuration list for PBXNativeTarget "Tokenary" */;
 			buildPhases = (
-				2CF9B4072B0FC04500B220DF /* ShellScript */,
 				67225FF5BC41DD561676982F /* [CP] Check Pods Manifest.lock */,
+				2CF9B4072B0FC04500B220DF /* ShellScript */,
 				2C1995382674C4B900A8E370 /* Sources */,
 				2C1995392674C4B900A8E370 /* Frameworks */,
 				2C19953A2674C4B900A8E370 /* Resources */,

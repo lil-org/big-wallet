@@ -61,6 +61,6 @@ public enum Blockchain: UInt32, CaseIterable {
     case sui = 50
     case greenfield = 51
     case internetComputer = 52
-    case nativeEvmos = 55
-    case nativeInjective = 56
+    case nativeEvmos = 53
+    case nativeInjective = 54
 }
