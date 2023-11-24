@@ -2,6 +2,7 @@
 
 import UIKit
 import WalletCore
+import SwiftUI
 
 class ApproveTransactionViewController: UIViewController {
     
@@ -73,7 +74,11 @@ class ApproveTransactionViewController: UIViewController {
     }
     
     @objc private func editTransactionButtonTapped() {
-        // TODO: implement
+        let editTransactionView = EditTransactionView(initialTransaction: transaction) { [weak self] editedTransaction in
+            self?.presentedViewController?.dismiss(animated: true)
+        }
+        let hostingController = UIHostingController(rootView: editTransactionView)
+        present(hostingController, animated: true)
     }
     
     private func prepareTransaction() {
