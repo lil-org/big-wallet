@@ -185,6 +185,8 @@
 		2CD0669226B5537B00728C20 /* WalletsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668926B213E500728C20 /* WalletsManager.swift */; };
 		2CD0B3F526A0DAA900488D92 /* NSPasteboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0B3F426A0DAA900488D92 /* NSPasteboard.swift */; };
 		2CD0B3F726AC619900488D92 /* AddAccountOptionCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0B3F626AC619900488D92 /* AddAccountOptionCellView.swift */; };
+		2CD7FC8D2B1115AE00659439 /* EditTransactionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD7FC8C2B1115AE00659439 /* EditTransactionView.swift */; };
+		2CD7FC8E2B1115AE00659439 /* EditTransactionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD7FC8C2B1115AE00659439 /* EditTransactionView.swift */; };
 		2CDAB3722675B3F0009F8B97 /* PasswordViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */; };
 		2CE059372763D60A0042D844 /* KeyboardObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE059362763D60A0042D844 /* KeyboardObserver.swift */; };
 		2CE059392763F3FF0042D844 /* CGFloat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE059382763F3FF0042D844 /* CGFloat.swift */; };
@@ -444,6 +446,7 @@
 		2CD0668B26B2142000728C20 /* TokenaryWallet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenaryWallet.swift; sourceTree = "<group>"; };
 		2CD0B3F426A0DAA900488D92 /* NSPasteboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSPasteboard.swift; sourceTree = "<group>"; };
 		2CD0B3F626AC619900488D92 /* AddAccountOptionCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddAccountOptionCellView.swift; sourceTree = "<group>"; };
+		2CD7FC8C2B1115AE00659439 /* EditTransactionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditTransactionView.swift; sourceTree = "<group>"; };
 		2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordViewController.swift; sourceTree = "<group>"; };
 		2CE059362763D60A0042D844 /* KeyboardObserver.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KeyboardObserver.swift; sourceTree = "<group>"; };
 		2CE059382763F3FF0042D844 /* CGFloat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CGFloat.swift; sourceTree = "<group>"; };
@@ -953,6 +956,7 @@
 			isa = PBXGroup;
 			children = (
 				2C9931DB2AEEC0E200577C8A /* NetworksListView.swift */,
+				2CD7FC8C2B1115AE00659439 /* EditTransactionView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -1559,6 +1563,7 @@
 				2C728B5F2AFBE7EA00E4DD47 /* NetworksListView.swift in Sources */,
 				2C8A09EE2675965F00993638 /* WaitingViewController.swift in Sources */,
 				2C797E7E267BB88800F2CE2D /* WelcomeViewController.swift in Sources */,
+				2CD7FC8D2B1115AE00659439 /* EditTransactionView.swift in Sources */,
 				2C4B72CB2B0E7EA800113087 /* NSViewController.swift in Sources */,
 				2CD0669226B5537B00728C20 /* WalletsManager.swift in Sources */,
 				2C4768A9282598C5005E8D4D /* CoinDerivationCellView.swift in Sources */,
@@ -1608,6 +1613,7 @@
 				2C6F6D5A28273FE500D6E8FB /* EditAccountsViewController.swift in Sources */,
 				2CF255BA275A749300AE54B9 /* ApproveViewController.swift in Sources */,
 				2C3024FD28C1193100C304ED /* TokenaryAccount.swift in Sources */,
+				2CD7FC8E2B1115AE00659439 /* EditTransactionView.swift in Sources */,
 				2C96D3962762380400687301 /* ButtonWithExtendedArea.swift in Sources */,
 				2C264BC227B2F2C100234393 /* EthereumSafariRequest.swift in Sources */,
 				2CE059372763D60A0042D844 /* KeyboardObserver.swift in Sources */,

@@ -155,7 +155,12 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     @IBAction func editTransactionButtonTapped(_ sender: Any) {
-        // TODO: implement
+        let editTransactionView = EditTransactionView(initialTransaction: transaction) { [weak self] editedTransaction in
+            self?.endAllSheets()
+            // TODO: apply new values
+        }
+        let editWindow = makeHostingWindow(content: editTransactionView)
+        view.window?.beginSheet(editWindow)
     }
     
     @IBAction func sliderValueChanged(_ sender: NSSlider) {
@@ -178,6 +183,7 @@ extension ApproveTransactionViewController: NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
         callCompletion(result: nil)
+        endAllSheets()
     }
     
 }
