@@ -5,4 +5,5 @@ Download on the [App Store](https://tokenary.io/get).
 
 ## Development
 
-Run the Xcode project.
+* `pod install`
+* Run the Xcode project.
