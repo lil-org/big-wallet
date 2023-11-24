@@ -1665,8 +1665,22 @@ DQ
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
                                 </textFieldCell>
                             </textField>
+                            <button translatesAutoresizingMaskIntoConstraints="NO" id="qg7-RB-Lb5">
+                                <rect key="frame" x="226" y="391" width="20" height="12"/>
+                                <buttonCell key="cell" type="inline" bezelStyle="inline" image="gearshape" catalog="system" imagePosition="only" alignment="center" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="PhG-pk-F2I">
+                                    <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
+                                    <font key="font" metaFont="smallSystemBold"/>
+                                </buttonCell>
+                                <symbolConfiguration key="symbolConfiguration" configurationType="pointSize" pointSize="11" weight="regular">
+                                    <nil key="locale"/>
+                                </symbolConfiguration>
+                                <connections>
+                                    <action selector="editTransactionButtonTapped:" target="eky-J7-eog" id="2uF-gX-Hdk"/>
+                                </connections>
+                            </button>
                         </subviews>
                         <constraints>
+                            <constraint firstAttribute="trailing" secondItem="qg7-RB-Lb5" secondAttribute="trailing" constant="4" id="1No-oO-RPM"/>
                             <constraint firstItem="7mi-1e-Qtu" firstAttribute="top" secondItem="g2G-lh-X1F" secondAttribute="bottom" constant="18" id="2fE-O4-HKm"/>
                             <constraint firstItem="xby-TM-Wec" firstAttribute="leading" secondItem="SAE-QE-uez" secondAttribute="leading" constant="30" id="4WF-P9-OvZ"/>
                             <constraint firstItem="oWb-y6-1VO" firstAttribute="top" secondItem="xby-TM-Wec" secondAttribute="bottom" constant="10" id="5N2-kr-8SP"/>
@@ -1676,6 +1690,7 @@ DQ
                             <constraint firstItem="pLD-2z-PFP" firstAttribute="top" secondItem="7mi-1e-Qtu" secondAttribute="bottom" constant="36" id="U2U-wR-pBJ"/>
                             <constraint firstItem="7ck-5c-yRP" firstAttribute="top" secondItem="SAE-QE-uez" secondAttribute="top" constant="18" id="UK5-G8-avO"/>
                             <constraint firstItem="g2G-lh-X1F" firstAttribute="leading" secondItem="SAE-QE-uez" secondAttribute="leading" constant="16" id="XkV-Kq-IsL"/>
+                            <constraint firstItem="qg7-RB-Lb5" firstAttribute="top" secondItem="SAE-QE-uez" secondAttribute="top" constant="4" id="eWP-Pe-3OZ"/>
                             <constraint firstItem="7mi-1e-Qtu" firstAttribute="centerX" secondItem="SAE-QE-uez" secondAttribute="centerX" id="efM-Hc-emL"/>
                             <constraint firstAttribute="trailing" relation="greaterThanOrEqual" secondItem="7ck-5c-yRP" secondAttribute="trailing" constant="16" id="fxi-Yj-IYx"/>
                             <constraint firstItem="MlF-7E-1Jg" firstAttribute="top" secondItem="7mi-1e-Qtu" secondAttribute="bottom" constant="78" id="fxj-xB-6jl"/>
@@ -1880,6 +1895,7 @@ DQ
     <resources>
         <image name="NSApplicationIcon" width="32" height="32"/>
         <image name="ellipsis.rectangle" catalog="system" width="17" height="11"/>
+        <image name="gearshape" catalog="system" width="16" height="16"/>
         <image name="network" catalog="system" width="15" height="15"/>
     </resources>
 </document>

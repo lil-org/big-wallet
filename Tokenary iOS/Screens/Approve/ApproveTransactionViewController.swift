@@ -58,6 +58,7 @@ class ApproveTransactionViewController: UIViewController {
         navigationItem.title = Strings.sendTransaction
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
+        navigationItem.rightBarButtonItem = UIBarButtonItem(image: Images.preferences, style: .plain, target: self, action: #selector(editTransactionButtonTapped))
         isModalInPresentation = true
         sectionModels = [[]]
         
@@ -69,6 +70,10 @@ class ApproveTransactionViewController: UIViewController {
             self?.balance = balance.eth(shortest: true) + " " + (self?.chain.symbol ?? "")
             self?.updateDisplayedTransactionInfo(initially: false)
         }
+    }
+    
+    @objc private func editTransactionButtonTapped() {
+        // TODO: implement
     }
     
     private func prepareTransaction() {

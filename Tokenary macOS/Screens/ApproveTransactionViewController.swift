@@ -154,6 +154,10 @@ class ApproveTransactionViewController: NSViewController {
         speedSlider.isEnabled = enabled
     }
     
+    @IBAction func editTransactionButtonTapped(_ sender: Any) {
+        // TODO: implement
+    }
+    
     @IBAction func sliderValueChanged(_ sender: NSSlider) {
         guard let gasInfo = currentGasInfo else { return }
         transaction.setGasPrice(value: sender.doubleValue, inRelationTo: gasInfo)
