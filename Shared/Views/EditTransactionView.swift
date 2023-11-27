@@ -17,19 +17,12 @@ struct EditTransactionView: View {
     
     var body: some View {
         VStack {
-            HStack {
-                Text("Gas Price")
-                TextField("Enter Gas Price", text: $gasPrice)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .onChange(of: gasPrice) { _ in validateGasPrice() }
-                if let message = gasPriceErrorMessage {
-                    Text(message)
-                        .foregroundColor(.red)
+            VStack {
+                HStack {
+                    Text(Strings.nonce).fontWeight(.medium)
+                    Spacer()
                 }
-            }.padding()
-            HStack {
-                Text("Nonce")
-                TextField("Enter Nonce", text: $nonce)
+                TextField(Strings.customNonce, text: $nonce)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .onChange(of: nonce) { _ in validateNonce() }
                 if let message = nonceErrorMessage {
@@ -37,11 +30,24 @@ struct EditTransactionView: View {
                         .foregroundColor(.red)
                 }
             }.padding()
+            VStack {
+                HStack {
+                    Text(Strings.gasPrice).fontWeight(.medium)
+                    Spacer()
+                }
+                TextField(Strings.customGasPrice, text: $gasPrice)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .onChange(of: gasPrice) { _ in validateGasPrice() }
+                if let message = gasPriceErrorMessage {
+                    Text(message)
+                        .foregroundColor(.red)
+                }
+            }.padding([.horizontal, .bottom])
             HStack {
                 Button(Strings.cancel) { completion(nil) }.keyboardShortcut(.cancelAction)
                 Button(Strings.ok) { completion(nil) }.keyboardShortcut(.defaultAction)
                     .disabled(!didEdit) // TODO: directly check if there are custom values entered?
-            }.frame(height: 36).offset(CGSize(width: 0, height: -6))
+            }.frame(height: 36).offset(CGSize(width: 0, height: -6)).padding(.top, 2)
         }
     }
     
