@@ -15,33 +15,38 @@ struct EditTransactionView: View {
     
     private let completion: ((Transaction?) -> Void)
     
+    init(initialTransaction: Transaction, completion: @escaping ((Transaction?) -> Void)) {
+        self._initialTransaction = State(initialValue: initialTransaction)
+        self.completion = completion
+        self._gasPrice = State(initialValue: initialTransaction.gasPriceGwei ?? "")
+        self._nonce = State(initialValue: initialTransaction.decimalNonceString ?? "")
+    }
+    
     var body: some View {
         VStack {
             VStack {
                 HStack {
                     Text(Strings.nonce).fontWeight(.medium)
                     Spacer()
+                    if let message = nonceErrorMessage {
+                        Text(message).foregroundColor(.red)
+                    }
                 }
                 TextField(Strings.customNonce, text: $nonce)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .onChange(of: nonce) { _ in validateNonce() }
-                if let message = nonceErrorMessage {
-                    Text(message)
-                        .foregroundColor(.red)
-                }
             }.padding()
             VStack {
                 HStack {
                     Text(Strings.gasPrice).fontWeight(.medium)
                     Spacer()
+                    if let message = gasPriceErrorMessage {
+                        Text(message).foregroundColor(.red)
+                    }
                 }
                 TextField(Strings.customGasPrice, text: $gasPrice)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .onChange(of: gasPrice) { _ in validateGasPrice() }
-                if let message = gasPriceErrorMessage {
-                    Text(message)
-                        .foregroundColor(.red)
-                }
             }.padding([.horizontal, .bottom])
             HStack {
                 Button(Strings.cancel) { completion(nil) }.keyboardShortcut(.cancelAction)
@@ -53,7 +58,7 @@ struct EditTransactionView: View {
     
     private func validateGasPrice() {
         if gasPrice.isEmpty || !isNumber(gasPrice) {
-            gasPriceErrorMessage = "Invalid gas price"
+            gasPriceErrorMessage = "invalid gas price"
         } else {
             gasPriceErrorMessage = nil
         }
@@ -61,7 +66,7 @@ struct EditTransactionView: View {
     
     private func validateNonce() {
         if nonce.isEmpty || !isNumber(nonce) {
-            nonceErrorMessage = "Invalid nonce"
+            nonceErrorMessage = "invalid nonce"
         } else {
             nonceErrorMessage = nil
         }
@@ -71,8 +76,4 @@ struct EditTransactionView: View {
         return Double(string) != nil
     }
     
-    init(initialTransaction: Transaction, completion: @escaping ((Transaction?) -> Void)) {
-        self._initialTransaction = State(initialValue: initialTransaction)
-        self.completion = completion
-    }
 }

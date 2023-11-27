@@ -17,6 +17,11 @@ struct Transaction {
         return gas != nil && gasPrice != nil
     }
     
+    var decimalNonceString: String? {
+        guard let nonce = nonce, let number = UInt(hexString: nonce) else { return nil }
+        return String(number)
+    }
+    
     var gasPriceGwei: String? {
         guard let gasPrice = gasPrice, let value = BigInt(hexString: gasPrice) else { return nil }
         return value.gwei
