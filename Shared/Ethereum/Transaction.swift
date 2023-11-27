@@ -77,6 +77,15 @@ struct Transaction {
         return "Fee: " + feeString
     }
     
+    mutating func setCustomNonce(value: UInt) {
+        // TODO: implement
+        // TODO: gas = nil if a value is different — gotta recalculate
+    }
+    
+    mutating func setCustomGasPriceGwei(value: Double) {
+        // TODO: implement
+    }
+    
     func valueWithSymbol(chain: EthereumNetwork, price: Double?, withLabel: Bool) -> String? {
         guard let value = value, let value = BigInt(hexString: value) else { return nil }
         let costString = chain.mightShowPrice ? cost(value: value, price: price) : ""
