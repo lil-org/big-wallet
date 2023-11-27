@@ -6,7 +6,7 @@ struct EditTransactionView: View {
     
     @Environment(\.presentationMode) var presentationMode
     
-    private var transaction: Transaction
+    @State private var transaction: Transaction
     private let initialNonce: String
     private let initialGasPrice: String
     
@@ -19,7 +19,7 @@ struct EditTransactionView: View {
     private let completion: ((Transaction?) -> Void)
     
     init(initialTransaction: Transaction, completion: @escaping ((Transaction?) -> Void)) {
-        self.transaction = initialTransaction
+        self._transaction = State(initialValue: initialTransaction)
         self.completion = completion
         self.initialNonce = initialTransaction.decimalNonceString ?? ""
         self.initialGasPrice = initialTransaction.gasPriceGwei ?? ""
@@ -31,27 +31,27 @@ struct EditTransactionView: View {
         VStack {
             VStack {
                 HStack {
-                    Text(Strings.nonce).fontWeight(.medium)
-                    Spacer()
-                    if let message = nonceErrorMessage {
-                        Text(message).foregroundColor(.red)
-                    }
-                }
-                TextField(Strings.customNonce, text: $nonce)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .onChange(of: nonce) { _ in didUpdateNonce() }
-            }.padding()
-            VStack {
-                HStack {
                     Text(Strings.gasPrice).fontWeight(.medium)
                     Spacer()
                     if let message = gasPriceErrorMessage {
-                        Text(message).foregroundColor(.red)
+                        Text(message).foregroundColor(.secondary)
                     }
                 }
                 TextField(Strings.customGasPrice, text: $gasPrice)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .onChange(of: gasPrice) { _ in didUpdateGasPrice() }
+            }.padding()
+            VStack {
+                HStack {
+                    Text(Strings.nonce).fontWeight(.medium)
+                    Spacer()
+                    if let message = nonceErrorMessage {
+                        Text(message).foregroundColor(.secondary)
+                    }
+                }
+                TextField(Strings.customNonce, text: $nonce)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .onChange(of: nonce) { _ in didUpdateNonce() }
             }.padding([.horizontal, .bottom])
             HStack {
                 Button(Strings.cancel) { completion(nil) }.keyboardShortcut(.cancelAction)
@@ -61,27 +61,21 @@ struct EditTransactionView: View {
     }
     
     private func didUpdateGasPrice() {
-        // TODO: update transaction
-        // TODO: update canProceedWithOK
-        if gasPrice.isEmpty || !isNumber(gasPrice) {
-            gasPriceErrorMessage = "invalid gas price"
+        if !gasPrice.isEmpty, let gasPriceNumber = Double(gasPrice) {
+            transaction.setCustomGasPriceGwei(value: gasPriceNumber)
+            canProceedWithOK = true
         } else {
-            gasPriceErrorMessage = nil
+            canProceedWithOK = false
         }
     }
     
     private func didUpdateNonce() {
-        // TODO: update transaction
-        // TODO: update canProceedWithOK
-        if nonce.isEmpty || !isNumber(nonce) {
-            nonceErrorMessage = "invalid nonce"
+        if !nonce.isEmpty, let nonceNumber = UInt(nonce) {
+            transaction.setCustomNonce(value: nonceNumber)
+            canProceedWithOK = true
         } else {
-            nonceErrorMessage = nil
+            canProceedWithOK = false
         }
-    }
-    
-    private func isNumber(_ string: String) -> Bool {
-        return Double(string) != nil
     }
     
 }

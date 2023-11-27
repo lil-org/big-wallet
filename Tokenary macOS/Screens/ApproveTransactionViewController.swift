@@ -157,7 +157,11 @@ class ApproveTransactionViewController: NSViewController {
     @IBAction func editTransactionButtonTapped(_ sender: Any) {
         let editTransactionView = EditTransactionView(initialTransaction: transaction) { [weak self] editedTransaction in
             self?.endAllSheets()
-            // TODO: apply new values
+            if let editedTransaction = editedTransaction {
+                self?.transaction = editedTransaction
+                self?.updateInterface()
+                self?.prepareTransaction()
+            }
         }
         let editWindow = makeHostingWindow(content: editTransactionView)
         view.window?.beginSheet(editWindow)

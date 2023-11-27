@@ -78,12 +78,20 @@ struct Transaction {
     }
     
     mutating func setCustomNonce(value: UInt) {
-        // TODO: implement
-        // TODO: gas = nil if a value is different — gotta recalculate
+        let newValue = String.hex(value)
+        if newValue != nonce {
+            nonce = newValue
+            gas = nil
+        }
     }
     
     mutating func setCustomGasPriceGwei(value: Double) {
-        // TODO: implement
+        let decimalNumber = NSDecimalNumber(floatLiteral: value)
+        let weiDecimal = decimalNumber.multiplying(byPowerOf10: 9)
+        let formatter = NumberFormatter()
+        formatter.maximumFractionDigits = 0
+        let hex = String.hex(BigInt(stringLiteral: formatter.string(from: weiDecimal) ?? .zero))
+        gasPrice = hex
     }
     
     func valueWithSymbol(chain: EthereumNetwork, price: Double?, withLabel: Bool) -> String? {
