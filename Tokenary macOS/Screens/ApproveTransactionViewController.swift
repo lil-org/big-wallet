@@ -145,8 +145,13 @@ class ApproveTransactionViewController: NSViewController {
         guard transaction.hasFee, let gasInfo = newGasInfo else { return }
         didEnableSpeedConfiguration = true
         currentGasInfo = gasInfo
-        speedSlider.doubleValue = transaction.currentGasInRelationTo(info: gasInfo)
+        updateGasSliderValueIfNeeded()
         setSpeedConfigurationViews(enabled: true)
+    }
+    
+    private func updateGasSliderValueIfNeeded() {
+        guard didEnableSpeedConfiguration, let gasInfo = currentGasInfo else { return }
+        speedSlider.doubleValue = transaction.currentGasInRelationTo(info: gasInfo)
     }
 
     private func setSpeedConfigurationViews(enabled: Bool) {
@@ -162,6 +167,7 @@ class ApproveTransactionViewController: NSViewController {
                 self?.transaction = editedTransaction
                 self?.updateInterface()
                 self?.prepareTransaction()
+                self?.updateGasSliderValueIfNeeded()
             }
         }
         let editWindow = makeHostingWindow(content: editTransactionView)

@@ -88,6 +88,7 @@ class ApproveTransactionViewController: UIViewController {
             self?.transaction = updated
             self?.updateDisplayedTransactionInfo(initially: false)
             self?.enableSpeedConfigurationIfNeeded()
+            self?.updateGasSliderValueIfNeeded()
         }
     }
     
@@ -128,6 +129,11 @@ class ApproveTransactionViewController: UIViewController {
         guard transaction.hasFee, let gasInfo = newGasInfo else { return }
         didEnableSpeedConfiguration = true
         currentGasInfo = gasInfo
+        updateGasSliderValueIfNeeded()
+    }
+    
+    private func updateGasSliderValueIfNeeded() {
+        guard didEnableSpeedConfiguration, let gasInfo = currentGasInfo else { return }
         if let cell = tableView.cellForRow(at: IndexPath(row: 0, section: 1)) as? GasPriceSliderTableViewCell {
             cell.update(value: transaction.currentGasInRelationTo(info: gasInfo), isEnabled: true)
         }
