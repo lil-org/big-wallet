@@ -77,6 +77,12 @@ class ApproveTransactionViewController: UIViewController {
     @objc private func editTransactionButtonTapped() {
         let editTransactionView = EditTransactionView(initialTransaction: transaction) { [weak self] editedTransaction in
             self?.presentedViewController?.dismiss(animated: true)
+            if let editedTransaction = editedTransaction {
+                self?.transaction = editedTransaction
+                self?.updateDisplayedTransactionInfo(initially: false)
+                self?.prepareTransaction()
+                self?.updateGasSliderValueIfNeeded()
+            }
         }
         let hostingController = UIHostingController(rootView: editTransactionView)
         present(hostingController, animated: true)
@@ -88,7 +94,6 @@ class ApproveTransactionViewController: UIViewController {
             self?.transaction = updated
             self?.updateDisplayedTransactionInfo(initially: false)
             self?.enableSpeedConfigurationIfNeeded()
-            self?.updateGasSliderValueIfNeeded()
         }
     }
     
