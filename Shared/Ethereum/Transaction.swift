@@ -4,6 +4,7 @@ import Foundation
 import BigInt
 
 struct Transaction {
+    var id = UUID()
     let from: String
     let to: String
     var nonce: String?
@@ -78,6 +79,7 @@ struct Transaction {
     }
     
     mutating func setCustomNonce(value: UInt) {
+        id = UUID()
         let newValue = String.hex(value)
         if newValue != nonce {
             nonce = newValue
@@ -86,6 +88,7 @@ struct Transaction {
     }
     
     mutating func setCustomGasPriceGwei(value: Double) {
+        id = UUID()
         let decimalNumber = NSDecimalNumber(floatLiteral: value)
         let weiDecimal = decimalNumber.multiplying(byPowerOf10: 9)
         let formatter = NumberFormatter()

@@ -89,6 +89,7 @@ class ApproveTransactionViewController: NSViewController {
     
     private func prepareTransaction() {
         ethereum.prepareTransaction(transaction, network: chain) { [weak self] updated in
+            guard updated.id == self?.transaction.id else { return }
             self?.transaction = updated
             self?.updateInterface()
         }
