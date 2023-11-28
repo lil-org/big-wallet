@@ -2,6 +2,7 @@
 
 import UIKit
 import WalletCore
+import SwiftUI
 
 class ApproveTransactionViewController: UIViewController {
     
@@ -58,6 +59,8 @@ class ApproveTransactionViewController: UIViewController {
         navigationItem.title = Strings.sendTransaction
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
+        navigationItem.rightBarButtonItem = UIBarButtonItem(image: Images.preferences, style: .plain, target: self, action: #selector(editTransactionButtonTapped))
+        navigationItem.rightBarButtonItem?.tintColor = .tertiaryLabel
         isModalInPresentation = true
         sectionModels = [[]]
         
@@ -71,8 +74,23 @@ class ApproveTransactionViewController: UIViewController {
         }
     }
     
+    @objc private func editTransactionButtonTapped() {
+        let editTransactionView = EditTransactionView(initialTransaction: transaction) { [weak self] editedTransaction in
+            self?.presentedViewController?.dismiss(animated: true)
+            if let editedTransaction = editedTransaction {
+                self?.transaction = editedTransaction
+                self?.updateDisplayedTransactionInfo(initially: false)
+                self?.prepareTransaction()
+                self?.updateGasSliderValueIfNeeded()
+            }
+        }
+        let hostingController = UIHostingController(rootView: editTransactionView)
+        present(hostingController, animated: true)
+    }
+    
     private func prepareTransaction() {
         ethereum.prepareTransaction(transaction, network: chain) { [weak self] updated in
+            guard updated.id == self?.transaction.id else { return }
             self?.transaction = updated
             self?.updateDisplayedTransactionInfo(initially: false)
             self?.enableSpeedConfigurationIfNeeded()
@@ -116,6 +134,11 @@ class ApproveTransactionViewController: UIViewController {
         guard transaction.hasFee, let gasInfo = newGasInfo else { return }
         didEnableSpeedConfiguration = true
         currentGasInfo = gasInfo
+        updateGasSliderValueIfNeeded()
+    }
+    
+    private func updateGasSliderValueIfNeeded() {
+        guard didEnableSpeedConfiguration, let gasInfo = currentGasInfo else { return }
         if let cell = tableView.cellForRow(at: IndexPath(row: 0, section: 1)) as? GasPriceSliderTableViewCell {
             cell.update(value: transaction.currentGasInRelationTo(info: gasInfo), isEnabled: true)
         }

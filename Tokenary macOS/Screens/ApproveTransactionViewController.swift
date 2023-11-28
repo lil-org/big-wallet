@@ -89,6 +89,7 @@ class ApproveTransactionViewController: NSViewController {
     
     private func prepareTransaction() {
         ethereum.prepareTransaction(transaction, network: chain) { [weak self] updated in
+            guard updated.id == self?.transaction.id else { return }
             self?.transaction = updated
             self?.updateInterface()
         }
@@ -144,14 +145,33 @@ class ApproveTransactionViewController: NSViewController {
         guard transaction.hasFee, let gasInfo = newGasInfo else { return }
         didEnableSpeedConfiguration = true
         currentGasInfo = gasInfo
-        speedSlider.doubleValue = transaction.currentGasInRelationTo(info: gasInfo)
+        updateGasSliderValueIfNeeded()
         setSpeedConfigurationViews(enabled: true)
+    }
+    
+    private func updateGasSliderValueIfNeeded() {
+        guard didEnableSpeedConfiguration, let gasInfo = currentGasInfo else { return }
+        speedSlider.doubleValue = transaction.currentGasInRelationTo(info: gasInfo)
     }
 
     private func setSpeedConfigurationViews(enabled: Bool) {
         slowSpeedLabel.alphaValue = enabled ? 1 : 0.5
         fastSpeedLabel.alphaValue = enabled ? 1 : 0.5
         speedSlider.isEnabled = enabled
+    }
+    
+    @IBAction func editTransactionButtonTapped(_ sender: Any) {
+        let editTransactionView = EditTransactionView(initialTransaction: transaction) { [weak self] editedTransaction in
+            self?.endAllSheets()
+            if let editedTransaction = editedTransaction {
+                self?.transaction = editedTransaction
+                self?.updateInterface()
+                self?.prepareTransaction()
+                self?.updateGasSliderValueIfNeeded()
+            }
+        }
+        let editWindow = makeHostingWindow(content: editTransactionView)
+        view.window?.beginSheet(editWindow)
     }
     
     @IBAction func sliderValueChanged(_ sender: NSSlider) {
@@ -174,6 +194,7 @@ extension ApproveTransactionViewController: NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
         callCompletion(result: nil)
+        endAllSheets()
     }
     
 }

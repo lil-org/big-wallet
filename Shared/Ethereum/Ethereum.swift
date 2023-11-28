@@ -98,9 +98,11 @@ struct Ethereum {
             }
         }
         
-        TransactionInspector.shared.interpret(data: transaction.data) { interpretation in
-            transaction.interpretation = interpretation
-            completion(transaction)
+        if transaction.interpretation == nil {
+            TransactionInspector.shared.interpret(data: transaction.data) { interpretation in
+                transaction.interpretation = interpretation
+                completion(transaction)
+            }
         }
     }
     

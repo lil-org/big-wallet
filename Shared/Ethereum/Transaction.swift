@@ -4,6 +4,7 @@ import Foundation
 import BigInt
 
 struct Transaction {
+    var id = UUID()
     let from: String
     let to: String
     var nonce: String?
@@ -15,6 +16,11 @@ struct Transaction {
     
     var hasFee: Bool {
         return gas != nil && gasPrice != nil
+    }
+    
+    var decimalNonceString: String? {
+        guard let nonce = nonce, let number = UInt(hexString: nonce) else { return nil }
+        return String(number)
     }
     
     var gasPriceGwei: String? {
@@ -70,6 +76,27 @@ struct Transaction {
             feeString = Strings.calculating
         }
         return "Fee: " + feeString
+    }
+    
+    mutating func setCustomNonce(value: UInt) {
+        let newValue = String.hex(value)
+        if newValue != nonce {
+            id = UUID()
+            nonce = newValue
+            gas = nil
+        }
+    }
+    
+    mutating func setCustomGasPriceGwei(value: Double) {
+        let decimalNumber = NSDecimalNumber(floatLiteral: value)
+        let weiDecimal = decimalNumber.multiplying(byPowerOf10: 9)
+        let formatter = NumberFormatter()
+        formatter.maximumFractionDigits = 0
+        let hex = String.hex(BigInt(stringLiteral: formatter.string(from: weiDecimal) ?? .zero))
+        if gasPrice != hex {
+            id = UUID()
+            gasPrice = hex
+        }
     }
     
     func valueWithSymbol(chain: EthereumNetwork, price: Double?, withLabel: Bool) -> String? {

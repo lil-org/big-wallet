@@ -98,5 +98,9 @@ struct Strings {
     static let done = "Done"
     static let pinned = "Pinned"
     static let mainnets = "Mainnets"
+    static let nonce = "nonce"
+    static let gasPrice = "gas price"
+    static let customNonce = "custom nonce"
+    static let customGasPrice = "custom gas price"
     
 }

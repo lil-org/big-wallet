@@ -4,12 +4,14 @@ import SwiftUI
 
 extension NSViewController {
     
-    func makeHostingWindow<Content>(content: Content, title: String) -> NSWindow where Content: View {
+    func makeHostingWindow<Content>(content: Content, title: String? = nil) -> NSWindow where Content: View {
         let hostingWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 400),
             styleMask: [.closable, .fullSizeContentView, .titled],
             backing: .buffered, defer: false)
-        hostingWindow.title = title
+        if let title = title {
+            hostingWindow.title = title
+        }
         hostingWindow.center()
         hostingWindow.titleVisibility = .visible
         hostingWindow.titlebarAppearsTransparent = false
