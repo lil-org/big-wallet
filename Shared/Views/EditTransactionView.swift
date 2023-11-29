@@ -54,9 +54,9 @@ struct EditTransactionView: View {
                     .onChange(of: nonce) { _ in didUpdateNonce() }
             }.padding([.horizontal, .bottom])
             HStack {
-                Button(Strings.cancel) { completion(nil) }.keyboardShortcut(.cancelAction)
-                Button(Strings.ok) { completion(transaction) }.keyboardShortcut(.defaultAction).disabled(!canProceedWithOK)
-            }.frame(height: 36).offset(CGSize(width: 0, height: -6)).padding(.top, 2)
+                Button(Strings.cancel) { completion(nil) }.keyboardShortcut(.cancelAction).buttonStyle(.bordered)
+                Button(Strings.ok) { completion(transaction) }.keyboardShortcut(.defaultAction).disabled(!canProceedWithOK).buttonStyle(.borderedProminent)
+            }.frame(height: 36).offset(CGSize(width: 0, height: -6)).padding(.top, 2).padding(.horizontal)
         }
     }
     
