@@ -85,6 +85,13 @@ class ApproveTransactionViewController: UIViewController {
             }
         }
         let hostingController = UIHostingController(rootView: editTransactionView)
+        hostingController.modalPresentationStyle = .popover
+        hostingController.preferredContentSize = CGSize(width: 230, height: 250)
+        if let hostingController = hostingController.popoverPresentationController {
+            hostingController.permittedArrowDirections = [.up]
+            hostingController.barButtonItem = navigationItem.rightBarButtonItem
+            hostingController.delegate = self
+        }
         present(hostingController, animated: true)
     }
     
@@ -232,6 +239,14 @@ extension ApproveTransactionViewController: GasPriceSliderDelegate {
         guard let gasInfo = currentGasInfo else { return }
         transaction.setGasPrice(value: value, inRelationTo: gasInfo)
         updateDisplayedTransactionInfo(initially: false)
+    }
+    
+}
+
+extension ApproveTransactionViewController: UIPopoverPresentationControllerDelegate {
+    
+    func adaptivePresentationStyle(for controller: UIPresentationController, traitCollection: UITraitCollection) -> UIModalPresentationStyle {
+        return .none
     }
     
 }
