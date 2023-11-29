@@ -29,7 +29,9 @@ struct EditTransactionView: View {
                     Text(Strings.gasPrice).fontWeight(.medium)
                     Spacer()
                     if let suggestedGasPrice = suggestedGasPrice, suggestedGasPrice != gasPrice {
-                        Button(Strings.resetTo + " " + suggestedGasPrice) { }.buttonStyle(.plain).foregroundColor(.secondary)
+                        Button(Strings.resetTo + " " + suggestedGasPrice) {
+                            gasPrice = suggestedGasPrice
+                        }.buttonStyle(.plain).foregroundColor(.secondary)
                     }
                 }
                 TextField(Strings.customGasPrice, text: $gasPrice)
@@ -41,7 +43,9 @@ struct EditTransactionView: View {
                     Text(Strings.nonce).fontWeight(.medium)
                     Spacer()
                     if let suggestedNonce = suggestedNonce, suggestedNonce != nonce {
-                        Button(Strings.resetTo + " " + suggestedNonce) { }.buttonStyle(.plain).foregroundColor(.secondary)
+                        Button(Strings.resetTo + " " + suggestedNonce) {
+                            nonce = suggestedNonce
+                        }.buttonStyle(.plain).foregroundColor(.secondary)
                     }
                 }
                 TextField(Strings.customNonce, text: $nonce)
