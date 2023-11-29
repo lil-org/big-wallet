@@ -68,7 +68,7 @@ struct Ethereum {
         return signed.hexString.withHexPrefix
     }
     
-    func prepareTransaction(_ transaction: Transaction, network: EthereumNetwork, completion: @escaping (Transaction) -> Void) {
+    func prepareTransaction(_ transaction: Transaction, forceGasCheck: Bool, network: EthereumNetwork, completion: @escaping (Transaction) -> Void) {
         var transaction = transaction
         
         if transaction.nonce == nil {
@@ -79,7 +79,7 @@ struct Ethereum {
         }
         
         func getGasIfNeeded(gasPrice: String) {
-            guard transaction.gas == nil else { return }
+            guard transaction.gas == nil || forceGasCheck else { return }
             getGas(network: network, transaction: transaction) { gas in
                 transaction.gas = gas
                 completion(transaction)

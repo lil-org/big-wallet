@@ -39,6 +39,7 @@ class ApproveTransactionViewController: UIViewController {
     private var didCallCompletion = false
     private var peerMeta: PeerMeta?
     private var balance: String?
+    private var suggestedNonceAndGasPrice: (nonce: String?, gasPrice: String?)?
     
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var cancelButton: UIButton!
@@ -65,7 +66,7 @@ class ApproveTransactionViewController: UIViewController {
         sectionModels = [[]]
         
         updateDisplayedTransactionInfo(initially: true)
-        prepareTransaction()
+        prepareTransaction(forceGasCheck: false)
         enableSpeedConfigurationIfNeeded()
         
         ethereum.getBalance(network: chain, address: account.address) { [weak self] balance in
@@ -75,15 +76,15 @@ class ApproveTransactionViewController: UIViewController {
     }
     
     @objc private func editTransactionButtonTapped() {
-        // TODO: suggested nonce & gas price
+        if suggestedNonceAndGasPrice == nil { suggestedNonceAndGasPrice = (transaction.decimalNonceString, transaction.gasPriceGwei) }
         let editTransactionView = EditTransactionView(initialTransaction: transaction,
-                                                      suggestedNonce: "42",
-                                                      suggestedGasPrice: "69") { [weak self] editedTransaction in
+                                                      suggestedNonce: suggestedNonceAndGasPrice?.nonce,
+                                                      suggestedGasPrice: suggestedNonceAndGasPrice?.gasPrice) { [weak self] editedTransaction in
             self?.presentedViewController?.dismiss(animated: true)
             if let editedTransaction = editedTransaction {
                 self?.transaction = editedTransaction
                 self?.updateDisplayedTransactionInfo(initially: false)
-                self?.prepareTransaction()
+                self?.prepareTransaction(forceGasCheck: true)
                 self?.updateGasSliderValueIfNeeded()
             }
         }
@@ -98,8 +99,8 @@ class ApproveTransactionViewController: UIViewController {
         present(hostingController, animated: true)
     }
     
-    private func prepareTransaction() {
-        ethereum.prepareTransaction(transaction, network: chain) { [weak self] updated in
+    private func prepareTransaction(forceGasCheck: Bool) {
+        ethereum.prepareTransaction(transaction, forceGasCheck: forceGasCheck, network: chain) { [weak self] updated in
             guard updated.id == self?.transaction.id else { return }
             self?.transaction = updated
             self?.updateDisplayedTransactionInfo(initially: false)

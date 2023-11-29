@@ -37,6 +37,7 @@ class ApproveTransactionViewController: NSViewController {
     private var peerMeta: PeerMeta?
     private var account: Account!
     private var balance: String?
+    private var suggestedNonceAndGasPrice: (nonce: String?, gasPrice: String?)?
     
     static func with(transaction: Transaction, chain: EthereumNetwork, account: Account, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self)
@@ -54,7 +55,7 @@ class ApproveTransactionViewController: NSViewController {
         titleLabel.stringValue = Strings.sendTransaction
         setSpeedConfigurationViews(enabled: false)
         updateInterface()
-        prepareTransaction()
+        prepareTransaction(forceGasCheck: false)
         
         ethereum.getBalance(network: chain, address: account.address) { [weak self] balance in
             self?.balance = balance.eth(shortest: true) + " " + (self?.chain.symbol ?? "")
@@ -87,8 +88,8 @@ class ApproveTransactionViewController: NSViewController {
         }
     }
     
-    private func prepareTransaction() {
-        ethereum.prepareTransaction(transaction, network: chain) { [weak self] updated in
+    private func prepareTransaction(forceGasCheck: Bool) {
+        ethereum.prepareTransaction(transaction, forceGasCheck: forceGasCheck, network: chain) { [weak self] updated in
             guard updated.id == self?.transaction.id else { return }
             self?.transaction = updated
             self?.updateInterface()
@@ -161,15 +162,15 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     @IBAction func editTransactionButtonTapped(_ sender: Any) {
-        // TODO: suggested nonce & gas price
+        if suggestedNonceAndGasPrice == nil { suggestedNonceAndGasPrice = (transaction.decimalNonceString, transaction.gasPriceGwei) }
         let editTransactionView = EditTransactionView(initialTransaction: transaction,
-                                                      suggestedNonce: "42",
-                                                      suggestedGasPrice: "69") { [weak self] editedTransaction in
+                                                      suggestedNonce: suggestedNonceAndGasPrice?.nonce,
+                                                      suggestedGasPrice: suggestedNonceAndGasPrice?.gasPrice) { [weak self] editedTransaction in
             self?.endAllSheets()
             if let editedTransaction = editedTransaction {
                 self?.transaction = editedTransaction
                 self?.updateInterface()
-                self?.prepareTransaction()
+                self?.prepareTransaction(forceGasCheck: true)
                 self?.updateGasSliderValueIfNeeded()
             }
         }
