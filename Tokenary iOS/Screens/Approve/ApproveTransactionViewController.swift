@@ -39,6 +39,7 @@ class ApproveTransactionViewController: UIViewController {
     private var didCallCompletion = false
     private var peerMeta: PeerMeta?
     private var balance: String?
+    private var suggestedNonceAndGasPrice: (nonce: String?, gasPrice: String?)?
     
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var cancelButton: UIButton!
@@ -65,7 +66,7 @@ class ApproveTransactionViewController: UIViewController {
         sectionModels = [[]]
         
         updateDisplayedTransactionInfo(initially: true)
-        prepareTransaction()
+        prepareTransaction(forceGasCheck: false)
         enableSpeedConfigurationIfNeeded()
         
         ethereum.getBalance(network: chain, address: account.address) { [weak self] balance in
@@ -75,21 +76,31 @@ class ApproveTransactionViewController: UIViewController {
     }
     
     @objc private func editTransactionButtonTapped() {
-        let editTransactionView = EditTransactionView(initialTransaction: transaction) { [weak self] editedTransaction in
+        if suggestedNonceAndGasPrice == nil { suggestedNonceAndGasPrice = (transaction.decimalNonceString, transaction.gasPriceGwei) }
+        let editTransactionView = EditTransactionView(initialTransaction: transaction,
+                                                      suggestedNonce: suggestedNonceAndGasPrice?.nonce,
+                                                      suggestedGasPrice: suggestedNonceAndGasPrice?.gasPrice) { [weak self] editedTransaction in
             self?.presentedViewController?.dismiss(animated: true)
             if let editedTransaction = editedTransaction {
                 self?.transaction = editedTransaction
                 self?.updateDisplayedTransactionInfo(initially: false)
-                self?.prepareTransaction()
+                self?.prepareTransaction(forceGasCheck: true)
                 self?.updateGasSliderValueIfNeeded()
             }
         }
         let hostingController = UIHostingController(rootView: editTransactionView)
+        hostingController.modalPresentationStyle = .popover
+        hostingController.preferredContentSize = CGSize(width: 230, height: 250)
+        if let hostingController = hostingController.popoverPresentationController {
+            hostingController.permittedArrowDirections = [.up]
+            hostingController.barButtonItem = navigationItem.rightBarButtonItem
+            hostingController.delegate = self
+        }
         present(hostingController, animated: true)
     }
     
-    private func prepareTransaction() {
-        ethereum.prepareTransaction(transaction, network: chain) { [weak self] updated in
+    private func prepareTransaction(forceGasCheck: Bool) {
+        ethereum.prepareTransaction(transaction, forceGasCheck: forceGasCheck, network: chain) { [weak self] updated in
             guard updated.id == self?.transaction.id else { return }
             self?.transaction = updated
             self?.updateDisplayedTransactionInfo(initially: false)
@@ -232,6 +243,14 @@ extension ApproveTransactionViewController: GasPriceSliderDelegate {
         guard let gasInfo = currentGasInfo else { return }
         transaction.setGasPrice(value: value, inRelationTo: gasInfo)
         updateDisplayedTransactionInfo(initially: false)
+    }
+    
+}
+
+extension ApproveTransactionViewController: UIPopoverPresentationControllerDelegate {
+    
+    func adaptivePresentationStyle(for controller: UIPresentationController, traitCollection: UITraitCollection) -> UIModalPresentationStyle {
+        return .none
     }
     
 }

@@ -83,7 +83,6 @@ struct Transaction {
         if newValue != nonce {
             id = UUID()
             nonce = newValue
-            gas = nil
         }
     }
     

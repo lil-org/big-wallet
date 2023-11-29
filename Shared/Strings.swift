@@ -102,5 +102,6 @@ struct Strings {
     static let gasPrice = "gas price"
     static let customNonce = "custom nonce"
     static let customGasPrice = "custom gas price"
+    static let resetTo = "reset to"
     
 }
