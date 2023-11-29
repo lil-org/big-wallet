@@ -161,7 +161,10 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     @IBAction func editTransactionButtonTapped(_ sender: Any) {
-        let editTransactionView = EditTransactionView(initialTransaction: transaction) { [weak self] editedTransaction in
+        // TODO: suggested nonce & gas price
+        let editTransactionView = EditTransactionView(initialTransaction: transaction,
+                                                      suggestedNonce: "42",
+                                                      suggestedGasPrice: "69") { [weak self] editedTransaction in
             self?.endAllSheets()
             if let editedTransaction = editedTransaction {
                 self?.transaction = editedTransaction

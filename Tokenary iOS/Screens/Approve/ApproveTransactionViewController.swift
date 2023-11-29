@@ -75,7 +75,10 @@ class ApproveTransactionViewController: UIViewController {
     }
     
     @objc private func editTransactionButtonTapped() {
-        let editTransactionView = EditTransactionView(initialTransaction: transaction) { [weak self] editedTransaction in
+        // TODO: suggested nonce & gas price
+        let editTransactionView = EditTransactionView(initialTransaction: transaction,
+                                                      suggestedNonce: "42",
+                                                      suggestedGasPrice: "69") { [weak self] editedTransaction in
             self?.presentedViewController?.dismiss(animated: true)
             if let editedTransaction = editedTransaction {
                 self?.transaction = editedTransaction
