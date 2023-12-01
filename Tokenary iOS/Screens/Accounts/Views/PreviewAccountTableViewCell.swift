@@ -12,12 +12,14 @@ class PreviewAccountTableViewCell: UITableViewCell {
     private weak var cellDelegate: PreviewAccountTableViewCellDelegate?
     @IBOutlet weak var logoImageView: UIImageView!
     @IBOutlet weak var titleLabel: UILabel!
+    @IBOutlet weak var indexLabel: UILabel!
     
-    func setup(title: String, image: UIImage?, isEnabled: Bool, delegate: PreviewAccountTableViewCellDelegate) {
+    func setup(title: String, image: UIImage?, index: Int, isEnabled: Bool, delegate: PreviewAccountTableViewCellDelegate) {
         cellDelegate = delegate
         logoImageView.image = image
         titleLabel.text = title
         coinSwitch.isOn = isEnabled
+        indexLabel.text = String(index)
     }
     
     func toggle() {
