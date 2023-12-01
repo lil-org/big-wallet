@@ -20,7 +20,7 @@ class CoinDerivationCellView: NSTableRowView {
     
     private weak var cellDelegate: CoinDerivationCellDelegate?
     
-    func setup(title: String, image: NSImage, isEnabled: Bool, delegate: CoinDerivationCellDelegate) {
+    func setup(title: String, image: NSImage?, isEnabled: Bool, delegate: CoinDerivationCellDelegate) {
         cellDelegate = delegate
         titleTextField.stringValue = title
         logoImageView.image = image

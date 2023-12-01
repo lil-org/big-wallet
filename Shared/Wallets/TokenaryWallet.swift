@@ -21,29 +21,15 @@ final class TokenaryWallet: Hashable, Equatable {
         self.id = id
         self.key = key
     }
-
-    func yo(password: String) {
-        guard let wallet = key.wallet(password: Data(password.utf8)) else { return }
-        let coin = CoinType.ethereum
-        for i in 0...20 {
-            let dp = DerivationPath(purpose: .bip44, coin: CoinType.ethereum.slip44Id, account: 0, change: 0, address: UInt32(i))
-            let xpub = wallet.getExtendedPublicKey(purpose: coin.purpose, coin: coin, version: .xpub)
-            guard let pubkey = HDWallet.getPublicKeyFromExtended(extended: xpub, coin: coin, derivationPath: dp.description) else { continue }
-            let address = coin.deriveAddressFromPublicKey(publicKey: pubkey)
-            if i != 0 {
-                key.removeAccountForCoinDerivationPath(coin: coin, derivationPath: dp.description)
-            } else if i > 100 {
-                key.addAccount(address: address, coin: coin, derivationPath: dp.description, publicKey: pubkey.description, extendedPublicKey: xpub)
-            }
-        }
-    }
     
+    // TODO: remake since there will be several accounts for a single coin now
     func getAccount(password: String, coin: CoinType) throws -> Account {
         let wallet = key.wallet(password: Data(password.utf8))
         guard let account = key.accountForCoin(coin: coin, wallet: wallet) else { throw KeyStore.Error.invalidPassword }
         return account
     }
     
+    // TODO: remake since there will be several accounts for a single coin now. do not use derivation model, it is no good
     func getAccount(password: String, coin: CoinType, derivation: Derivation) throws -> Account {
         let wallet = key.wallet(password: Data(password.utf8))
         guard let account = key.accountForCoinDerivation(coin: coin, derivation: derivation, wallet: wallet) else { throw KeyStore.Error.invalidPassword }
