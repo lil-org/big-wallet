@@ -2,12 +2,13 @@
 
 import Cocoa
 
-protocol CoinDerivationCellDelegate: AnyObject {
+protocol PreviewAccountCellDelegate: AnyObject {
     func didToggleCheckmark(_ sender: NSTableRowView)
 }
 
-class CoinDerivationCellView: NSTableRowView {
+class PreviewAccountCellView: NSTableRowView {
     
+    @IBOutlet weak var indexLabel: NSTextField!
     @IBOutlet weak var checkBox: NSButton!
     @IBOutlet weak var titleTextField: NSTextField!
     @IBOutlet weak var logoImageView: NSImageView! {
@@ -18,11 +19,12 @@ class CoinDerivationCellView: NSTableRowView {
         }
     }
     
-    private weak var cellDelegate: CoinDerivationCellDelegate?
+    private weak var cellDelegate: PreviewAccountCellDelegate?
     
-    func setup(title: String, image: NSImage?, isEnabled: Bool, delegate: CoinDerivationCellDelegate) {
+    func setup(title: String, index: Int, image: NSImage?, isEnabled: Bool, delegate: PreviewAccountCellDelegate) {
         cellDelegate = delegate
         titleTextField.stringValue = title
+        indexLabel.stringValue = String(index)
         logoImageView.image = image
         setCheckBox(enabled: isEnabled)
     }

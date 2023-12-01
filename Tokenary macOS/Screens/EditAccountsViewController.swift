@@ -74,7 +74,7 @@ class EditAccountsViewController: NSViewController {
     
 }
 
-extension EditAccountsViewController: CoinDerivationCellDelegate {
+extension EditAccountsViewController: PreviewAccountCellDelegate {
     
     func didToggleCheckmark(_ sender: NSTableRowView) {
         let row = tableView.row(for: sender)
@@ -87,7 +87,7 @@ extension EditAccountsViewController: CoinDerivationCellDelegate {
 extension EditAccountsViewController: NSTableViewDelegate {
     
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
-        if let rowView = tableView.rowView(atRow: row, makeIfNecessary: false) as? CoinDerivationCellView {
+        if let rowView = tableView.rowView(atRow: row, makeIfNecessary: false) as? PreviewAccountCellView {
             rowView.toggle()
             toggleCoinDerivation(row: row)
         }
@@ -100,8 +100,8 @@ extension EditAccountsViewController: NSTableViewDataSource {
     
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let model = cellModels[row]
-        let rowView = tableView.makeViewOfType(CoinDerivationCellView.self, owner: self)
-        rowView.setup(title: model.account.croppedAddress, image: model.account.image, isEnabled: model.isEnabled, delegate: self)
+        let rowView = tableView.makeViewOfType(PreviewAccountCellView.self, owner: self)
+        rowView.setup(title: model.account.croppedAddress, index: row, image: model.account.image, isEnabled: model.isEnabled, delegate: self)
         return rowView
     }
     
