@@ -1,25 +1,25 @@
 // Copyright © 2022 Tokenary. All rights reserved.
 
 import UIKit
+import WalletCore
 
 class EditAccountsViewController: UIViewController {
     
-    struct CoinDerivationCellModel {
-        let coinDerivation: CoinDerivation
+    struct PreviewAccountCellModel {
+        let account: Account
         var isEnabled: Bool
     }
     
     var wallet: TokenaryWallet!
     private let walletsManager = WalletsManager.shared
-    private var initialDerivations = [CoinDerivation]()
-    private var cellModels = [CoinDerivationCellModel]()
+    private var cellModels = [PreviewAccountCellModel]()
     
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var tableView: UITableView! {
         didSet {
             tableView.delegate = self
             tableView.dataSource = self
-            tableView.registerReusableCell(type: CoinDerivationTableViewCell.self)
+            tableView.registerReusableCell(type: PreviewAccountTableViewCell.self)
         }
     }
     
@@ -31,10 +31,10 @@ class EditAccountsViewController: UIViewController {
         navigationItem.largeTitleDisplayMode = .always
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(dismissAnimated))
         
-        initialDerivations = wallet.accounts.map { CoinDerivation(coin: $0.coin, derivation: $0.derivation) }
-        cellModels = CoinDerivation.supportedCoinDerivations.map { coinDerivation in
-            let isEnabled = initialDerivations.contains(coinDerivation)
-            return CoinDerivationCellModel(coinDerivation: coinDerivation, isEnabled: isEnabled)
+        guard let previewAccounts = try? walletsManager.previewAccounts(wallet: wallet) else { return }
+        cellModels = previewAccounts.map { account in
+            let isEnabled = false // TODO: implement
+            return PreviewAccountCellModel(account: account, isEnabled: isEnabled)
         }
     }
     
@@ -51,17 +51,17 @@ class EditAccountsViewController: UIViewController {
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
-        let newDerivations: [CoinDerivation] = cellModels.compactMap { model in
+        let newAccounts: [Account] = cellModels.compactMap { model in
             if model.isEnabled {
-                return model.coinDerivation
+                return model.account
             } else {
                 return nil
             }
         }
-        
-        if newDerivations != initialDerivations {
+        let accountsChanged = false // TODO: implement
+        if accountsChanged {
             do {
-                try walletsManager.update(wallet: wallet, coinDerivations: newDerivations)
+                // TODO: update accounts
                 dismissAnimated()
             } catch {
                 showMessageAlert(text: Strings.somethingWentWrong)
@@ -77,7 +77,7 @@ extension EditAccountsViewController: UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        (tableView.cellForRow(at: indexPath) as? CoinDerivationTableViewCell)?.toggle()
+        (tableView.cellForRow(at: indexPath) as? PreviewAccountTableViewCell)?.toggle()
         toggleAccountAtIndex(indexPath.row)
     }
     
@@ -90,17 +90,17 @@ extension EditAccountsViewController: UITableViewDataSource {
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCellOfType(CoinDerivationTableViewCell.self, for: indexPath)
+        let cell = tableView.dequeueReusableCellOfType(PreviewAccountTableViewCell.self, for: indexPath)
         let model = cellModels[indexPath.row]
-        cell.setup(coinDerivation: model.coinDerivation, isEnabled: model.isEnabled, delegate: self)
+        cell.setup(title: model.account.croppedAddress, image: model.account.image, isEnabled: model.isEnabled, delegate: self)
         return cell
     }
     
 }
 
-extension EditAccountsViewController: CoinDerivationTableViewCellDelegate {
+extension EditAccountsViewController: PreviewAccountTableViewCellDelegate {
     
-    func didToggleSwitch(_ sender: CoinDerivationTableViewCell) {
+    func didToggleSwitch(_ sender: PreviewAccountTableViewCell) {
         if let index = tableView.indexPath(for: sender)?.row {
             toggleAccountAtIndex(index)
         }
