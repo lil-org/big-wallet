@@ -32,8 +32,7 @@ class EditAccountsViewController: UIViewController {
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(dismissAnimated))
         
         guard let previewAccounts = try? walletsManager.previewAccounts(wallet: wallet) else { return }
-        cellModels = previewAccounts.map { account in
-            let isEnabled = false // TODO: implement
+        cellModels = previewAccounts.map { account, isEnabled in
             return PreviewAccountCellModel(account: account, isEnabled: isEnabled)
         }
     }

@@ -80,17 +80,18 @@ final class WalletsManager {
         return []
     }
     
-    func previewAccounts(wallet: TokenaryWallet) throws -> [Account] {
-        guard let password = keychain.password, let wallet = wallet.key.wallet(password: Data(password.utf8)) else { throw Error.keychainAccessFailure }
+    func previewAccounts(wallet: TokenaryWallet) throws -> [(Account, Bool)] {
+        guard let password = keychain.password, let hdWallet = wallet.key.wallet(password: Data(password.utf8)) else { throw Error.keychainAccessFailure }
         let coin = CoinType.ethereum
+        let existingPaths = Set(wallet.accounts.compactMap { $0.coin == coin ? $0.derivationPath : nil })
         let range = 0...20
-        let accounts = range.compactMap { i -> Account? in
-            let dp = DerivationPath(purpose: .bip44, coin: coin.slip44Id, account: 0, change: 0, address: UInt32(i))
-            let xpub = wallet.getExtendedPublicKey(purpose: coin.purpose, coin: coin, version: .xpub)
-            guard let pubkey = HDWallet.getPublicKeyFromExtended(extended: xpub, coin: coin, derivationPath: dp.description) else { return nil }
+        let accounts = range.compactMap { i -> (Account, Bool)? in
+            let dp = DerivationPath(purpose: .bip44, coin: coin.slip44Id, account: 0, change: 0, address: UInt32(i)).description
+            let xpub = hdWallet.getExtendedPublicKey(purpose: coin.purpose, coin: coin, version: .xpub)
+            guard let pubkey = HDWallet.getPublicKeyFromExtended(extended: xpub, coin: coin, derivationPath: dp) else { return nil }
             let address = coin.deriveAddressFromPublicKey(publicKey: pubkey)
-            let account = Account(address: address, coin: coin, derivation: .custom, derivationPath: dp.description, publicKey: pubkey.description, extendedPublicKey: xpub)
-            return account
+            let account = Account(address: address, coin: coin, derivation: .custom, derivationPath: dp, publicKey: pubkey.description, extendedPublicKey: xpub)
+            return (account, existingPaths.contains(dp))
         }
         guard accounts.count == range.count else { throw Error.failedToDeriveAccount }
         return accounts
