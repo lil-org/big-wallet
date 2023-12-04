@@ -1841,7 +1841,7 @@ DQ
                                                                         <constraint firstAttribute="width" relation="greaterThanOrEqual" constant="13" id="cM6-wg-hZB"/>
                                                                     </constraints>
                                                                     <textFieldCell key="cell" lineBreakMode="charWrapping" alignment="center" title="00" id="Ihz-wa-Yve">
-                                                                        <font key="font" metaFont="system" size="9"/>
+                                                                        <font key="font" metaFont="miniSystem"/>
                                                                         <color key="textColor" name="tertiaryLabelColor" catalog="System" colorSpace="catalog"/>
                                                                         <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
                                                                     </textFieldCell>

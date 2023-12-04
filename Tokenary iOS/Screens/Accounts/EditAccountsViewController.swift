@@ -24,6 +24,9 @@ class EditAccountsViewController: UIViewController {
             tableView.delegate = self
             tableView.dataSource = self
             tableView.registerReusableCell(type: PreviewAccountTableViewCell.self)
+            let bottomOverlayHeight: CGFloat = 70
+            tableView.contentInset.bottom += bottomOverlayHeight
+            tableView.verticalScrollIndicatorInsets.bottom += bottomOverlayHeight
         }
     }
     
