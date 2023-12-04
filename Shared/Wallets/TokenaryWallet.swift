@@ -35,11 +35,6 @@ final class TokenaryWallet: Hashable, Equatable {
         guard let account = key.accountForCoinDerivation(coin: coin, derivation: derivation, wallet: wallet) else { throw KeyStore.Error.invalidPassword }
         return account
     }
-    
-    func getAccounts(password: String, coins: [CoinType]) throws -> [Account] {
-        guard let wallet = key.wallet(password: Data(password.utf8)) else { throw KeyStore.Error.invalidPassword }
-        return coins.compactMap({ key.accountForCoin(coin: $0, wallet: wallet) })
-    }
 
     func privateKey(password: String, account: Account) throws -> PrivateKey {
         if isMnemonic {
