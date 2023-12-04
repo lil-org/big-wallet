@@ -20,6 +20,7 @@ class EditAccountsViewController: NSViewController {
     private var page = 1
     private var requestedPreviewFor: Int?
     private var lastPreviewDate = Date()
+    private var toggledIndexes = Set<Int>()
     
     @IBOutlet weak var tableView: RightClickTableView! {
         didSet {
@@ -43,23 +44,17 @@ class EditAccountsViewController: NSViewController {
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
-        let newAccounts: [Account] = cellModels.compactMap { model in
-            if model.isEnabled {
-                return model.account
-            } else {
-                return nil
-            }
-        }
-        let accountsChanged = false // TODO: implement
-        if accountsChanged {
-            do {
-                // TODO: update accounts
-                showAccountsList()
-            } catch {
-                Alert.showWithMessage(Strings.somethingWentWrong, style: .informational)
-            }
-        } else {
+        guard !toggledIndexes.isEmpty else {
             showAccountsList()
+            return
+        }
+        
+        let newAccounts: [Account] = cellModels.compactMap { $0.isEnabled ? $0.account : nil }
+        do {
+            try walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
+            showAccountsList()
+        } catch {
+            Alert.showWithMessage(Strings.somethingWentWrong, style: .informational)
         }
     }
     
@@ -73,6 +68,11 @@ class EditAccountsViewController: NSViewController {
     private func toggleCoinDerivation(row: Int) {
         cellModels[row].isEnabled.toggle()
         okButton.isEnabled = cellModels.contains(where: { $0.isEnabled })
+        if toggledIndexes.contains(row) {
+            toggledIndexes.remove(row)
+        } else {
+            toggledIndexes.insert(row)
+        }
     }
     
     private func previewMoreAccountsIfNeeded() {

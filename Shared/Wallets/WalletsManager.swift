@@ -197,7 +197,11 @@ final class WalletsManager {
         }
     }
     
-    func update(wallet: TokenaryWallet, coinDerivations: [CoinDerivation]) throws {
+    func update(wallet: TokenaryWallet, enabledAccounts: [Account]) throws {
+        // TODO: implement
+    }
+    
+    func deprecatedupdate(wallet: TokenaryWallet, coinDerivations: [CoinDerivation]) throws {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         
         for account in wallet.accounts {
