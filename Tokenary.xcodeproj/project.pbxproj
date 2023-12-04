@@ -71,8 +71,6 @@
 		2C4297292ADEDCBD0044357A /* PeerMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4297272ADEDCBD0044357A /* PeerMeta.swift */; };
 		2C4768A728258627005E8D4D /* EditAccountsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4768A628258627005E8D4D /* EditAccountsViewController.swift */; };
 		2C4768A9282598C5005E8D4D /* PreviewAccountCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4768A8282598C5005E8D4D /* PreviewAccountCellView.swift */; };
-		2C4768AB2826CA63005E8D4D /* CoinDerivation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4768AA2826CA63005E8D4D /* CoinDerivation.swift */; };
-		2C4768AC2826CA63005E8D4D /* CoinDerivation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4768AA2826CA63005E8D4D /* CoinDerivation.swift */; };
 		2C4768AE2826ECE5005E8D4D /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */; };
 		2C4768AF2826ECE5005E8D4D /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */; };
 		2C4768B42826ED83005E8D4D /* CoinType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4768B32826ED83005E8D4D /* CoinType.swift */; };
@@ -357,7 +355,6 @@
 		2C452ED62B0EDB8F0017CE2C /* rpc.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = rpc.js; path = "Inpage Provider/rpc.js"; sourceTree = "<group>"; };
 		2C4768A628258627005E8D4D /* EditAccountsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditAccountsViewController.swift; sourceTree = "<group>"; };
 		2C4768A8282598C5005E8D4D /* PreviewAccountCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewAccountCellView.swift; sourceTree = "<group>"; };
-		2C4768AA2826CA63005E8D4D /* CoinDerivation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoinDerivation.swift; sourceTree = "<group>"; };
 		2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = SharedAssets.xcassets; sourceTree = "<group>"; };
 		2C4768B32826ED83005E8D4D /* CoinType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoinType.swift; sourceTree = "<group>"; };
 		2C4B72CA2B0E7EA800113087 /* NSViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSViewController.swift; sourceTree = "<group>"; };
@@ -935,7 +932,6 @@
 				2CD0668926B213E500728C20 /* WalletsManager.swift */,
 				2CD0668B26B2142000728C20 /* TokenaryWallet.swift */,
 				2C3024FB28C1193100C304ED /* TokenaryAccount.swift */,
-				2C4768AA2826CA63005E8D4D /* CoinDerivation.swift */,
 			);
 			path = Wallets;
 			sourceTree = "<group>";
@@ -1631,7 +1627,6 @@
 				2C4768B42826ED83005E8D4D /* CoinType.swift in Sources */,
 				2C773F62274523DC007B04E7 /* ResponseToExtension.swift in Sources */,
 				0DC850E726B73A5900809E82 /* AuthenticationReason.swift in Sources */,
-				2C4768AB2826CA63005E8D4D /* CoinDerivation.swift in Sources */,
 				2CAA412526C7CD93009F3535 /* ReviewRequester.swift in Sources */,
 				2CD0669126B5537B00728C20 /* TokenaryWallet.swift in Sources */,
 				2C8944CB2AEB0C10006A711F /* EthereumRPC.swift in Sources */,
@@ -1769,7 +1764,6 @@
 				2CB0BC4A2B13AA5100603E68 /* Secrets.swift in Sources */,
 				2C728B5E2AFBE7EA00E4DD47 /* NetworksListView.swift in Sources */,
 				2C5FF97226C84F7B00B32ACC /* AppDelegate.swift in Sources */,
-				2C4768AC2826CA63005E8D4D /* CoinDerivation.swift in Sources */,
 				2C89D26927BADCA9006C0C8D /* DappRequestAction.swift in Sources */,
 				2CF255A8275A48BB00AE54B9 /* NetworkMonitor.swift in Sources */,
 				2C8E88A2275FA596003EB8DB /* ImportViewController.swift in Sources */,
