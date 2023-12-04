@@ -9,14 +9,18 @@ class EditAccountsViewController: NSViewController {
     var getBackToRect: CGRect?
     var selectAccountAction: SelectAccountAction?
     
-    struct CoinDerivationCellModel {
-        let coinDerivation: CoinDerivation
+    struct PreviewAccountCellModel {
+        let account: Account
         var isEnabled: Bool
     }
     
     private let walletsManager = WalletsManager.shared
-    private var initialDerivations = [CoinDerivation]()
-    private var cellModels = [CoinDerivationCellModel]()
+    private var cellModels = [PreviewAccountCellModel]()
+    private let previewAccountsQueue = DispatchQueue(label: "mac.tokenary.io.accounts", qos: .userInitiated)
+    private var page = 1
+    private var requestedPreviewFor: Int?
+    private var lastPreviewDate = Date()
+    private var toggledIndexes = Set<Int>()
     
     @IBOutlet weak var tableView: RightClickTableView! {
         didSet {
@@ -29,11 +33,9 @@ class EditAccountsViewController: NSViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        initialDerivations = wallet.accounts.map { CoinDerivation(coin: $0.coin, derivation: $0.derivation) }
-        cellModels = CoinDerivation.supportedCoinDerivations.map { coinDerivation in
-            let isEnabled = initialDerivations.contains(coinDerivation)
-            return CoinDerivationCellModel(coinDerivation: coinDerivation, isEnabled: isEnabled)
+        guard let previewAccounts = try? walletsManager.previewAccounts(wallet: wallet, page: 0) else { return }
+        cellModels = previewAccounts.map { account, isEnabled in
+            return PreviewAccountCellModel(account: account, isEnabled: isEnabled)
         }
     }
     
@@ -42,23 +44,17 @@ class EditAccountsViewController: NSViewController {
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
-        let newDerivations: [CoinDerivation] = cellModels.compactMap { model in
-            if model.isEnabled {
-                return model.coinDerivation
-            } else {
-                return nil
-            }
+        guard !toggledIndexes.isEmpty else {
+            showAccountsList()
+            return
         }
         
-        if newDerivations != initialDerivations {
-            do {
-                try walletsManager.update(wallet: wallet, coinDerivations: newDerivations)
-                showAccountsList()
-            } catch {
-                Alert.showWithMessage(Strings.somethingWentWrong, style: .informational)
-            }
-        } else {
+        let newAccounts: [Account] = cellModels.compactMap { $0.isEnabled ? $0.account : nil }
+        do {
+            try walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
             showAccountsList()
+        } catch {
+            Alert.showWithMessage(Strings.somethingWentWrong, style: .informational)
         }
     }
     
@@ -72,11 +68,48 @@ class EditAccountsViewController: NSViewController {
     private func toggleCoinDerivation(row: Int) {
         cellModels[row].isEnabled.toggle()
         okButton.isEnabled = cellModels.contains(where: { $0.isEnabled })
+        if toggledIndexes.contains(row) {
+            toggledIndexes.remove(row)
+        } else {
+            toggledIndexes.insert(row)
+        }
+    }
+    
+    private func previewMoreAccountsIfNeeded() {
+        guard requestedPreviewFor != cellModels.count else { return }
+        requestedPreviewFor = cellModels.count
+        previewMoreAccounts()
+    }
+    
+    private func previewMoreAccounts() {
+        guard Date().timeIntervalSince(lastPreviewDate) > 1.31 else {
+            previewAccountsQueue.asyncAfter(deadline: .now() + .milliseconds(1310)) { [weak self] in
+                self?.previewMoreAccounts()
+            }
+            return
+        }
+        lastPreviewDate = Date()
+        previewAccountsQueue.async { [weak self] in
+            guard let wallet = self?.wallet,
+                  let page = self?.page,
+                  let previewAccounts = try? self?.walletsManager.previewAccounts(wallet: wallet, page: page) else { return }
+            DispatchQueue.main.async {
+                let newCellModels = previewAccounts.map { account, isEnabled in
+                    return PreviewAccountCellModel(account: account, isEnabled: isEnabled)
+                }
+                self?.cellModels.append(contentsOf: newCellModels)
+                self?.page += 1
+                if let currentCount = self?.cellModels.count {
+                    let range = (currentCount - newCellModels.count)..<currentCount
+                    self?.tableView.insertRows(at: IndexSet(integersIn: range))
+                }
+            }
+        }
     }
     
 }
 
-extension EditAccountsViewController: CoinDerivationCellDelegate {
+extension EditAccountsViewController: PreviewAccountCellDelegate {
     
     func didToggleCheckmark(_ sender: NSTableRowView) {
         let row = tableView.row(for: sender)
@@ -89,7 +122,7 @@ extension EditAccountsViewController: CoinDerivationCellDelegate {
 extension EditAccountsViewController: NSTableViewDelegate {
     
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
-        if let rowView = tableView.rowView(atRow: row, makeIfNecessary: false) as? CoinDerivationCellView {
+        if let rowView = tableView.rowView(atRow: row, makeIfNecessary: false) as? PreviewAccountCellView {
             rowView.toggle()
             toggleCoinDerivation(row: row)
         }
@@ -102,8 +135,13 @@ extension EditAccountsViewController: NSTableViewDataSource {
     
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let model = cellModels[row]
-        let rowView = tableView.makeViewOfType(CoinDerivationCellView.self, owner: self)
-        rowView.setup(title: model.coinDerivation.title, image: Images.logo(coin: model.coinDerivation.coin), isEnabled: model.isEnabled, delegate: self)
+        let rowView = tableView.makeViewOfType(PreviewAccountCellView.self, owner: self)
+        rowView.setup(title: model.account.croppedAddress, index: row, image: model.account.image, isEnabled: model.isEnabled, delegate: self)
+        
+        if row == cellModels.count - 1 {
+            previewMoreAccountsIfNeeded()
+        }
+        
         return rowView
     }
     

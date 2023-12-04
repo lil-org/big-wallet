@@ -21,22 +21,19 @@ final class TokenaryWallet: Hashable, Equatable {
         self.id = id
         self.key = key
     }
-
+    
+    // TODO: remake since there will be several accounts for a single coin now
     func getAccount(password: String, coin: CoinType) throws -> Account {
         let wallet = key.wallet(password: Data(password.utf8))
         guard let account = key.accountForCoin(coin: coin, wallet: wallet) else { throw KeyStore.Error.invalidPassword }
         return account
     }
     
+    // TODO: remake since there will be several accounts for a single coin now. do not use derivation model, it is no good
     func getAccount(password: String, coin: CoinType, derivation: Derivation) throws -> Account {
         let wallet = key.wallet(password: Data(password.utf8))
         guard let account = key.accountForCoinDerivation(coin: coin, derivation: derivation, wallet: wallet) else { throw KeyStore.Error.invalidPassword }
         return account
-    }
-    
-    func getAccounts(password: String, coins: [CoinType]) throws -> [Account] {
-        guard let wallet = key.wallet(password: Data(password.utf8)) else { throw KeyStore.Error.invalidPassword }
-        return coins.compactMap({ key.accountForCoin(coin: $0, wallet: wallet) })
     }
 
     func privateKey(password: String, account: Account) throws -> PrivateKey {
