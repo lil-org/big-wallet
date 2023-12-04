@@ -17,6 +17,7 @@ class EditAccountsViewController: UIViewController {
     private var page = 1
     private var requestedPreviewFor: Int?
     private var lastPreviewDate = Date()
+    private var toggledIndexes = Set<Int>()
     
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var tableView: UITableView! {
@@ -54,26 +55,24 @@ class EditAccountsViewController: UIViewController {
     private func toggleAccountAtIndex(_ index: Int) {
         cellModels[index].isEnabled.toggle()
         okButton.isEnabled = cellModels.contains(where: { $0.isEnabled })
+        if toggledIndexes.contains(index) {
+            toggledIndexes.remove(index)
+        } else {
+            toggledIndexes.insert(index)
+        }
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
-        let newAccounts: [Account] = cellModels.compactMap { model in
-            if model.isEnabled {
-                return model.account
-            } else {
-                return nil
-            }
-        }
-        let accountsChanged = false // TODO: implement
-        if accountsChanged {
-            do {
-                // TODO: update accounts
-                dismissAnimated()
-            } catch {
-                showMessageAlert(text: Strings.somethingWentWrong)
-            }
-        } else {
+        guard !toggledIndexes.isEmpty else {
             dismissAnimated()
+            return
+        }
+        let newAccounts: [Account] = cellModels.compactMap { $0.isEnabled ? $0.account : nil }
+        do {
+            try walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
+            dismissAnimated()
+        } catch {
+            showMessageAlert(text: Strings.somethingWentWrong)
         }
     }
     
