@@ -80,11 +80,11 @@ final class WalletsManager {
         return []
     }
     
-    func previewAccounts(wallet: TokenaryWallet) throws -> [(Account, Bool)] {
+    func previewAccounts(wallet: TokenaryWallet, page: Int) throws -> [(Account, Bool)] {
         guard let password = keychain.password, let hdWallet = wallet.key.wallet(password: Data(password.utf8)) else { throw Error.keychainAccessFailure }
         let coin = CoinType.ethereum
         let existingPaths = Set(wallet.accounts.compactMap { $0.coin == coin ? $0.derivationPath : nil })
-        let range = 0...20
+        let range = (page * 21)..<((page + 1) * 21)
         let accounts = range.compactMap { i -> (Account, Bool)? in
             let dp = DerivationPath(purpose: .bip44, coin: coin.slip44Id, account: 0, change: 0, address: UInt32(i)).description
             let xpub = hdWallet.getExtendedPublicKey(purpose: coin.purpose, coin: coin, version: .xpub)
