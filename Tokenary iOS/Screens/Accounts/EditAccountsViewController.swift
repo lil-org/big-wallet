@@ -13,6 +13,10 @@ class EditAccountsViewController: UIViewController {
     var wallet: TokenaryWallet!
     private let walletsManager = WalletsManager.shared
     private var cellModels = [PreviewAccountCellModel]()
+    private let previewAccountsQueue = DispatchQueue(label: "mac.tokenary.io.accounts", qos: .userInitiated)
+    private var page = 1
+    private var requestedPreviewFor: Int?
+    private var lastPreviewDate = Date()
     
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var tableView: UITableView! {
@@ -31,7 +35,7 @@ class EditAccountsViewController: UIViewController {
         navigationItem.largeTitleDisplayMode = .always
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(dismissAnimated))
         
-        guard let previewAccounts = try? walletsManager.previewAccounts(wallet: wallet) else { return }
+        guard let previewAccounts = try? walletsManager.previewAccounts(wallet: wallet, page: 0) else { return }
         cellModels = previewAccounts.map { account, isEnabled in
             return PreviewAccountCellModel(account: account, isEnabled: isEnabled)
         }
@@ -70,9 +74,47 @@ class EditAccountsViewController: UIViewController {
         }
     }
     
+    private func previewMoreAccountsIfNeeded() {
+        guard requestedPreviewFor != cellModels.count else { return }
+        requestedPreviewFor = cellModels.count
+        previewMoreAccounts()
+    }
+    
+    private func previewMoreAccounts() {
+        guard Date().timeIntervalSince(lastPreviewDate) > 1.31 else {
+            previewAccountsQueue.asyncAfter(deadline: .now() + .milliseconds(1310)) { [weak self] in
+                self?.previewMoreAccounts()
+            }
+            return
+        }
+        lastPreviewDate = Date()
+        previewAccountsQueue.async { [weak self] in
+            guard let wallet = self?.wallet,
+                  let page = self?.page,
+                  let previewAccounts = try? self?.walletsManager.previewAccounts(wallet: wallet, page: page) else { return }
+            DispatchQueue.main.async {
+                let newCellModels = previewAccounts.map { account, isEnabled in
+                    return PreviewAccountCellModel(account: account, isEnabled: isEnabled)
+                }
+                self?.cellModels.append(contentsOf: newCellModels)
+                self?.page += 1
+                if let currentCount = self?.cellModels.count {
+                    let range = (currentCount - newCellModels.count)..<currentCount
+                    self?.tableView.insertRows(at: range.map({ IndexPath(row: $0, section: 0) }), with: .fade)
+                }
+            }
+        }
+    }
+    
 }
 
 extension EditAccountsViewController: UITableViewDelegate {
+    
+    func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+        if indexPath.row == cellModels.count - 1 {
+            previewMoreAccountsIfNeeded()
+        }
+    }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
