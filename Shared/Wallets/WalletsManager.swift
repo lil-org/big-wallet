@@ -189,7 +189,6 @@ final class WalletsManager {
     }
     
     func update(wallet: TokenaryWallet, enabledAccounts: [Account]) throws {
-        guard let password = keychain.password else { throw Error.keychainAccessFailure }
         for account in wallet.accounts {
             wallet.key.removeAccountForCoinDerivationPath(coin: account.coin, derivationPath: account.derivationPath)
         }
@@ -216,19 +215,26 @@ final class WalletsManager {
         guard let index = wallets.firstIndex(of: wallet) else { throw KeyStore.Error.accountNotFound }
         guard var privateKeyData = wallet.key.decryptPrivateKey(password: Data(password.utf8)) else { throw KeyStore.Error.invalidPassword }
         defer { privateKeyData.resetBytes(in: 0..<privateKeyData.count) }
-
+        let enabledAccounts = wallet.accounts
+        
         if let mnemonic = checkMnemonic(privateKeyData),
            let key = StoredKey.importHDWallet(mnemonic: mnemonic, name: newName, password: Data(newPassword.utf8), coin: defaultCoin) {
             wallets[index].key = key
-        } else if let key = StoredKey.importPrivateKey(
-                privateKey: privateKeyData, name: newName, password: Data(newPassword.utf8), coin: defaultCoin) {
+        } else if let key = StoredKey.importPrivateKey(privateKey: privateKeyData, name: newName, password: Data(newPassword.utf8), coin: defaultCoin) {
             wallets[index].key = key
         } else {
             throw KeyStore.Error.invalidKey
         }
         
-        // TODO: readd existing accounts
-        // TODO: might want to remove account created with defaultCoin
+        wallets[index].key.removeAccountForCoin(coin: defaultCoin)
+        for account in enabledAccounts {
+            wallets[index].key.addAccountDerivation(address: account.address,
+                                                    coin: account.coin,
+                                                    derivation: account.derivation,
+                                                    derivationPath: account.derivationPath,
+                                                    publicKey: account.publicKey,
+                                                    extendedPublicKey: account.extendedPublicKey)
+        }
         
         try save(wallet: wallets[index], isUpdate: true)
     }
