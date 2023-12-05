@@ -401,7 +401,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     @objc private func addWallet() {
         let actionSheet = UIAlertController(title: Strings.addWallet, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.barButtonItem = addWalletItem
-        let newAccountAction = UIAlertAction(title: "🌱 " + Strings.createNew, style: .default) { [weak self] _ in
+        let newAccountAction = UIAlertAction(title: Strings.createNew, style: .default) { [weak self] _ in
             self?.createNewWallet()
         }
         let importAccountAction = UIAlertAction(title: Strings.importExisting, style: .default) { [weak self] _ in
