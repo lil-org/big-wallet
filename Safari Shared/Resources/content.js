@@ -9,7 +9,7 @@ function injectScript() {
         const container = document.head || document.documentElement;
         const scriptTag = document.createElement('script');
         scriptTag.setAttribute('async', 'false');
-        var request = new XMLHttpRequest();
+        var request = new XMLHttpRequest(); // TODO: fix for v3
         request.open('GET', browser.extension.getURL('inpage.js'), false);
         request.send();
         scriptTag.textContent = request.responseText;

@@ -20,12 +20,12 @@ button.addEventListener('click', () => {
         request = fresh;
     }
     const query = encodeURIComponent(JSON.stringify(request)) + '";';
-    browser.tabs.executeScript({
+    browser.tabs.executeScript({ // TODO: fix for v3 https://developer.chrome.com/docs/extensions/develop/migrate/api-calls#replace-executescript
       code: 'window.location.href = "https://tokenary.io/extension?query=' + query
     });
     
     setTimeout( function() {
-        window.close();
+        window.close(); // TODO: fix for v3
     }, 420);
     
     browser.runtime.sendMessage({subject: 'POPUP_DID_PROCEED', id: request.id});
@@ -64,7 +64,7 @@ function setupButton() {
 }
 
 function getPendingRequest() {
-    const bg = browser.extension.getBackgroundPage();
+    const bg = browser.extension.getBackgroundPage(); // TODO: fix for v3
     if (bg != null) {
         return bg.pendingPopupRequest;
     } else {
