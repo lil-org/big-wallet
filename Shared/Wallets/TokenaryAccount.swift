@@ -22,7 +22,7 @@ extension Account {
         if coin == .ethereum {
             return Blockies(seed: address.lowercased()).createImage()
         } else {
-            return Images.logo(coin: coin)
+            return Images.circleFill
         }
     }
     
