@@ -18,6 +18,7 @@ final class WalletsManager {
     
     static let shared = WalletsManager()
     private let keychain = Keychain.shared
+    private let defaultCoin = CoinType.ethereum
     private(set) var wallets = [TokenaryWallet]()
 
     private init() {}
@@ -31,7 +32,7 @@ final class WalletsManager {
         if Mnemonic.isValid(mnemonic: trimmedInput) {
             return .valid
         } else if let data = Data(hexString: trimmedInput) {
-            return PrivateKey.isValid(data: data, curve: CoinType.ethereum.curve) ? .valid : .invalid
+            return PrivateKey.isValid(data: data, curve: defaultCoin.curve) ? .valid : .invalid
         } else {
             return input.maybeJSON ? .requiresPassword : .invalid
         }
@@ -49,7 +50,6 @@ final class WalletsManager {
     func addWallet(input: String, inputPassword: String?) throws -> TokenaryWallet {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         let name = defaultWalletName
-        let defaultCoin = CoinType.ethereum
         let trimmedInput = input.singleSpaced
         if Mnemonic.isValid(mnemonic: trimmedInput) {
             return try importMnemonic(trimmedInput, name: name, encryptPassword: password)
@@ -82,7 +82,7 @@ final class WalletsManager {
     
     func previewAccounts(wallet: TokenaryWallet, page: Int) throws -> [(Account, Bool)] {
         guard let password = keychain.password, let hdWallet = wallet.key.wallet(password: Data(password.utf8)) else { throw Error.keychainAccessFailure }
-        let coin = CoinType.ethereum
+        let coin = defaultCoin
         let existingPaths = Set(wallet.accounts.compactMap { $0.coin == coin ? $0.derivationPath : nil })
         let range = (page * 21)..<((page + 1) * 21)
         let accounts = range.compactMap { i -> (Account, Bool)? in
@@ -101,11 +101,7 @@ final class WalletsManager {
         let key = StoredKey(name: name, password: Data(password.utf8))
         let id = makeNewWalletId()
         let wallet = TokenaryWallet(id: id, key: key)
-        
-        for coinDerivation in CoinDerivation.enabledByDefaultCoinDerivations {
-            _ = try wallet.getAccount(password: password, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
-        }
-        
+        _ = try wallet.getAccount(password: password, coin: defaultCoin)
         wallets.append(wallet)
         try save(wallet: wallet, isUpdate: false)
         return wallet
@@ -137,15 +133,10 @@ final class WalletsManager {
     }
 
     private func importMnemonic(_ mnemonic: String, name: String, encryptPassword: String) throws -> TokenaryWallet {
-        let coinDerivations = CoinDerivation.enabledByDefaultCoinDerivations
-        guard let key = StoredKey.importHDWallet(mnemonic: mnemonic, name: name, password: Data(encryptPassword.utf8), coin: coinDerivations[0].coin) else { throw KeyStore.Error.invalidMnemonic }
+        guard let key = StoredKey.importHDWallet(mnemonic: mnemonic, name: name, password: Data(encryptPassword.utf8), coin: defaultCoin) else { throw KeyStore.Error.invalidMnemonic }
         let id = makeNewWalletId()
         let wallet = TokenaryWallet(id: id, key: key)
-        
-        for coinDerivation in coinDerivations {
-            _ = try wallet.getAccount(password: encryptPassword, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
-        }
-        
+        _ = try wallet.getAccount(password: encryptPassword, coin: defaultCoin)
         wallets.append(wallet)
         try save(wallet: wallet, isUpdate: false)
         return wallet
@@ -198,21 +189,17 @@ final class WalletsManager {
     }
     
     func update(wallet: TokenaryWallet, enabledAccounts: [Account]) throws {
-        // TODO: implement
-    }
-    
-    func deprecatedupdate(wallet: TokenaryWallet, coinDerivations: [CoinDerivation]) throws {
-        guard let password = keychain.password else { throw Error.keychainAccessFailure }
-        
         for account in wallet.accounts {
-            // TODO: use here as well? key.removeAccountForCoinDerivationPath(coin: coin, derivationPath: dp.description)
-            wallet.key.removeAccountForCoin(coin: account.coin)
+            wallet.key.removeAccountForCoinDerivationPath(coin: account.coin, derivationPath: account.derivationPath)
         }
-        
-        for coinDerivation in coinDerivations {
-            _ = try wallet.getAccount(password: password, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
+        for account in enabledAccounts {
+            wallet.key.addAccountDerivation(address: account.address,
+                                            coin: account.coin,
+                                            derivation: account.derivation,
+                                            derivationPath: account.derivationPath,
+                                            publicKey: account.publicKey,
+                                            extendedPublicKey: account.extendedPublicKey)
         }
-        
         try save(wallet: wallet, isUpdate: true)
     }
     
@@ -228,21 +215,25 @@ final class WalletsManager {
         guard let index = wallets.firstIndex(of: wallet) else { throw KeyStore.Error.accountNotFound }
         guard var privateKeyData = wallet.key.decryptPrivateKey(password: Data(password.utf8)) else { throw KeyStore.Error.invalidPassword }
         defer { privateKeyData.resetBytes(in: 0..<privateKeyData.count) }
-        let coinDerivations = wallet.accounts.map { CoinDerivation(coin: $0.coin, derivation: $0.derivation) }
-        guard !coinDerivations.isEmpty else { throw KeyStore.Error.accountNotFound }
-        let firstCoin = coinDerivations[0].coin
+        let enabledAccounts = wallet.accounts
+        
         if let mnemonic = checkMnemonic(privateKeyData),
-           let key = StoredKey.importHDWallet(mnemonic: mnemonic, name: newName, password: Data(newPassword.utf8), coin: firstCoin) {
+           let key = StoredKey.importHDWallet(mnemonic: mnemonic, name: newName, password: Data(newPassword.utf8), coin: defaultCoin) {
             wallets[index].key = key
-        } else if let key = StoredKey.importPrivateKey(
-                privateKey: privateKeyData, name: newName, password: Data(newPassword.utf8), coin: firstCoin) {
+        } else if let key = StoredKey.importPrivateKey(privateKey: privateKeyData, name: newName, password: Data(newPassword.utf8), coin: defaultCoin) {
             wallets[index].key = key
         } else {
             throw KeyStore.Error.invalidKey
         }
         
-        for coinDerivation in coinDerivations {
-            _ = try wallets[index].getAccount(password: newPassword, coin: coinDerivation.coin, derivation: coinDerivation.derivation)
+        wallets[index].key.removeAccountForCoin(coin: defaultCoin)
+        for account in enabledAccounts {
+            wallets[index].key.addAccountDerivation(address: account.address,
+                                                    coin: account.coin,
+                                                    derivation: account.derivation,
+                                                    derivationPath: account.derivationPath,
+                                                    publicKey: account.publicKey,
+                                                    extendedPublicKey: account.extendedPublicKey)
         }
         
         try save(wallet: wallets[index], isUpdate: true)
@@ -289,18 +280,15 @@ extension WalletsManager {
     }
     
     func getWalletAndAccount(coin: CoinType, address: String) -> (TokenaryWallet, Account)? {
-        let searchLowercase = coin == .ethereum
-        let needle = searchLowercase ? address.lowercased() : address
-        
+        let needle = address.lowercased()
         for wallet in wallets {
             for account in wallet.accounts where account.coin == coin {
-                let match = searchLowercase ? account.address.lowercased() == needle : account.address == needle
+                let match = account.address.lowercased() == needle
                 if match {
                     return (wallet, account)
                 }
             }
         }
-        
         return nil
     }
     

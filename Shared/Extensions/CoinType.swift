@@ -22,7 +22,7 @@ extension CoinType {
         case .solana:
             return URL(string: "https://explorer.solana.com/address/\(address)")!
         case .ethereum:
-            return URL(string: "https://etherscan.io/address/\(address)")!
+            return URL(string: "https://blockscan.com/address/\(address)")!
         case .near:
             return URL(string: "https://explorer.near.org/accounts/\(address)")!
         default:
@@ -35,7 +35,7 @@ extension CoinType {
         case .solana:
             return Strings.viewOnSolanaExplorer
         case .ethereum:
-            return Strings.viewOnEtherscan
+            return Strings.viewOnBlockscan
         case .near:
             return Strings.viewOnNearExplorer
         default:

@@ -28,7 +28,7 @@ class AccountsListViewController: NSViewController {
         var title: String {
             switch self {
             case .createNew:
-                return "🌱  " + Strings.createNew
+                return Strings.createNew
             case .importExisting:
                 return Strings.importExisting
             }
