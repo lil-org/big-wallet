@@ -190,14 +190,17 @@ final class WalletsManager {
     
     func update(wallet: TokenaryWallet, enabledAccounts: [Account]) throws {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
-        
         for account in wallet.accounts {
-            // TODO: use here as well? key.removeAccountForCoinDerivationPath(coin: coin, derivationPath: dp.description)
-            wallet.key.removeAccountForCoin(coin: account.coin)
+            wallet.key.removeAccountForCoinDerivationPath(coin: account.coin, derivationPath: account.derivationPath)
         }
-        
-        // TODO: add each enabled account
-        
+        for account in enabledAccounts {
+            wallet.key.addAccountDerivation(address: account.address,
+                                            coin: account.coin,
+                                            derivation: account.derivation,
+                                            derivationPath: account.derivationPath,
+                                            publicKey: account.publicKey,
+                                            extendedPublicKey: account.extendedPublicKey)
+        }
         try save(wallet: wallet, isUpdate: true)
     }
     
