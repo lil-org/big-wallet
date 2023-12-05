@@ -21,6 +21,7 @@ class EditAccountsViewController: NSViewController {
     private var requestedPreviewFor: Int?
     private var lastPreviewDate = Date()
     private var toggledIndexes = Set<Int>()
+    private var enabledUndiscoveredAccounts = [Account]()
     
     @IBOutlet weak var tableView: RightClickTableView! {
         didSet {
@@ -33,10 +34,20 @@ class EditAccountsViewController: NSViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        enabledUndiscoveredAccounts = wallet.accounts
         guard let previewAccounts = try? walletsManager.previewAccounts(wallet: wallet, page: 0) else { return }
-        cellModels = previewAccounts.map { account, isEnabled in
+        appendPreviewAccounts(previewAccounts)
+    }
+    
+    private func appendPreviewAccounts(_ previewAccounts: [Account]) {
+        let newCellModels = previewAccounts.map { account in
+            let isEnabled = enabledUndiscoveredAccounts.first?.derivationPath == account.derivationPath
+            if isEnabled {
+                enabledUndiscoveredAccounts.removeFirst()
+            }
             return PreviewAccountCellModel(account: account, isEnabled: isEnabled)
         }
+        cellModels.append(contentsOf: newCellModels)
     }
     
     @IBAction func cancelButtonTapped(_ sender: Any) {
@@ -49,7 +60,7 @@ class EditAccountsViewController: NSViewController {
             return
         }
         
-        let newAccounts: [Account] = cellModels.compactMap { $0.isEnabled ? $0.account : nil }
+        let newAccounts: [Account] = (cellModels.compactMap { $0.isEnabled ? $0.account : nil }) + enabledUndiscoveredAccounts
         do {
             try walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
             showAccountsList()
@@ -94,13 +105,10 @@ class EditAccountsViewController: NSViewController {
                   let page = self?.page,
                   let previewAccounts = try? self?.walletsManager.previewAccounts(wallet: wallet, page: page) else { return }
             DispatchQueue.main.async {
-                let newCellModels = previewAccounts.map { account, isEnabled in
-                    return PreviewAccountCellModel(account: account, isEnabled: isEnabled)
-                }
-                self?.cellModels.append(contentsOf: newCellModels)
+                self?.appendPreviewAccounts(previewAccounts)
                 self?.page += 1
                 if let currentCount = self?.cellModels.count {
-                    let range = (currentCount - newCellModels.count)..<currentCount
+                    let range = (currentCount - previewAccounts.count)..<currentCount
                     self?.tableView.insertRows(at: IndexSet(integersIn: range))
                 }
             }
