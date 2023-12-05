@@ -139,7 +139,6 @@ class Agent: NSObject {
         Window.activateWindow(nil)
         let alert = Alert()
         alert.messageText = Strings.quitTokenary
-        alert.informativeText = Strings.youWontBeAbleToSignRequests
         alert.alertStyle = .warning
         alert.addButton(withTitle: Strings.ok)
         alert.addButton(withTitle: Strings.cancel)

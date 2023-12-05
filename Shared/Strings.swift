@@ -20,7 +20,6 @@ struct Strings {
     static let enterTokenary = "Enter " + tokenary
     static let quit = "Quit"
     static let quitTokenary = "Quit Tokenary?"
-    static let youWontBeAbleToSignRequests = "You won't be able to sign requests."
     static let enableSafariExtension = "Enable Safari extension"
     static let dropUsALine = "Drop us a line"
     static let viewOnGithub = "View on GitHub"
