@@ -17,7 +17,7 @@
 		2C03EB8D2B06A0FA00EF61F5 /* TransactionInspectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03EB892B069BFD00EF61F5 /* TransactionInspectorTests.swift */; };
 		2C09CBA2273979C1009AD39B /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */; };
 		2C09CBA9273979C1009AD39B /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBA8273979C1009AD39B /* manifest.json */; };
-		2C09CBAB273979C1009AD39B /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAA273979C1009AD39B /* background.js */; };
+		2C09CBAB273979C1009AD39B /* service_worker.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAA273979C1009AD39B /* service_worker.js */; };
 		2C09CBAD273979C1009AD39B /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAC273979C1009AD39B /* content.js */; };
 		2C09CBB9273979C1009AD39B /* Safari macOS.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2C09CB9F273979C1009AD39B /* Safari macOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2C09FC5F2828078C00DE9C27 /* AccountsHeaderView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C09FC5D2828078C00DE9C27 /* AccountsHeaderView.xib */; };
@@ -187,7 +187,7 @@
 		2CE059372763D60A0042D844 /* KeyboardObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE059362763D60A0042D844 /* KeyboardObserver.swift */; };
 		2CE059392763F3FF0042D844 /* CGFloat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE059382763F3FF0042D844 /* CGFloat.swift */; };
 		2CE0593F27640E300042D844 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */; };
-		2CE0594027640E8E0042D844 /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAA273979C1009AD39B /* background.js */; };
+		2CE0594027640E8E0042D844 /* service_worker.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAA273979C1009AD39B /* service_worker.js */; };
 		2CE0594127640E8E0042D844 /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAC273979C1009AD39B /* content.js */; };
 		2CE0594227640E8E0042D844 /* inpage.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CEFEB15274D5DC900CE23BD /* inpage.js */; };
 		2CE0594327640EAB0042D844 /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
@@ -236,7 +236,7 @@
 		2CF255B8275A748300AE54B9 /* ApproveTransactionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF255B7275A748300AE54B9 /* ApproveTransactionViewController.swift */; };
 		2CF255BA275A749300AE54B9 /* ApproveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF255B9275A749300AE54B9 /* ApproveViewController.swift */; };
 		2CFAE56A28BE6292001D0799 /* NSImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CFAE56928BE6292001D0799 /* NSImage.swift */; };
-		2CFDDF4E2765417E00F89019 /* ios-specific-content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CFDDF4D2765417D00F89019 /* ios-specific-content.js */; };
+		2CFDDF4E2765417E00F89019 /* ios_specific_content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CFDDF4D2765417D00F89019 /* ios_specific_content.js */; };
 		4E8C32A95AAFFA5F92AC68F2 /* Pods_Tokenary_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B68D6F8A1A3A0B2B75B3144F /* Pods_Tokenary_iOS.framework */; };
 		6FB42AE67AA91CF5E49E3FDF /* Pods_Tokenary.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D4E16BAD0EF0718C2D51467A /* Pods_Tokenary.framework */; };
 /* End PBXBuildFile section */
@@ -311,7 +311,7 @@
 		2C09CB9F273979C1009AD39B /* Safari macOS.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Safari macOS.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
 		2C09CBA8273979C1009AD39B /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
-		2C09CBAA273979C1009AD39B /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = background.js; sourceTree = "<group>"; };
+		2C09CBAA273979C1009AD39B /* service_worker.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = service_worker.js; sourceTree = "<group>"; };
 		2C09CBAC273979C1009AD39B /* content.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = content.js; sourceTree = "<group>"; };
 		2C09CBB4273979C1009AD39B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C09CBB5273979C1009AD39B /* Safari.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Safari.entitlements; sourceTree = "<group>"; };
@@ -460,7 +460,7 @@
 		2CF255B7275A748300AE54B9 /* ApproveTransactionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveTransactionViewController.swift; sourceTree = "<group>"; };
 		2CF255B9275A749300AE54B9 /* ApproveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveViewController.swift; sourceTree = "<group>"; };
 		2CFAE56928BE6292001D0799 /* NSImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSImage.swift; sourceTree = "<group>"; };
-		2CFDDF4D2765417D00F89019 /* ios-specific-content.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = "ios-specific-content.js"; sourceTree = "<group>"; };
+		2CFDDF4D2765417D00F89019 /* ios_specific_content.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = ios_specific_content.js; sourceTree = "<group>"; };
 		31994388DB6575DC5C0455DA /* Pods-Tokenary iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary iOS.debug.xcconfig"; path = "Target Support Files/Pods-Tokenary iOS/Pods-Tokenary iOS.debug.xcconfig"; sourceTree = "<group>"; };
 		5CBBA342061DCD715AD14008 /* Pods-Tokenary.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary.debug.xcconfig"; path = "Target Support Files/Pods-Tokenary/Pods-Tokenary.debug.xcconfig"; sourceTree = "<group>"; };
 		6312B917C20199DA362BB38F /* Pods-Tokenary.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tokenary.release.xcconfig"; path = "Target Support Files/Pods-Tokenary/Pods-Tokenary.release.xcconfig"; sourceTree = "<group>"; };
@@ -843,7 +843,7 @@
 				2CB3845827654E9700A189B9 /* _locales */,
 				2CB3845927654E9700A189B9 /* images */,
 				2CEFEB15274D5DC900CE23BD /* inpage.js */,
-				2C09CBAA273979C1009AD39B /* background.js */,
+				2C09CBAA273979C1009AD39B /* service_worker.js */,
 				2C09CBAC273979C1009AD39B /* content.js */,
 			);
 			path = Resources;
@@ -915,7 +915,7 @@
 				2C8155662ADFC7A700F4559B /* popup.css */,
 				2C8155692ADFC7B900F4559B /* popup.js */,
 				2C81556C2ADFC7C400F4559B /* popup.html */,
-				2CFDDF4D2765417D00F89019 /* ios-specific-content.js */,
+				2CFDDF4D2765417D00F89019 /* ios_specific_content.js */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -1276,7 +1276,7 @@
 				2CB3845C27654EB300A189B9 /* _locales in Resources */,
 				2CB3845D27654EB300A189B9 /* images in Resources */,
 				2CEFEB16274D5DCA00CE23BD /* inpage.js in Resources */,
-				2C09CBAB273979C1009AD39B /* background.js in Resources */,
+				2C09CBAB273979C1009AD39B /* service_worker.js in Resources */,
 				2C09CBA9273979C1009AD39B /* manifest.json in Resources */,
 				2C09CBAD273979C1009AD39B /* content.js in Resources */,
 			);
@@ -1319,14 +1319,14 @@
 			files = (
 				2CB3845A27654EA900A189B9 /* _locales in Resources */,
 				2CB3845B27654EA900A189B9 /* images in Resources */,
-				2CE0594027640E8E0042D844 /* background.js in Resources */,
+				2CE0594027640E8E0042D844 /* service_worker.js in Resources */,
 				2CE0594227640E8E0042D844 /* inpage.js in Resources */,
 				2C81556E2ADFC7C400F4559B /* popup.html in Resources */,
 				2C8155682ADFC7A700F4559B /* popup.css in Resources */,
 				2CCEB83727594E2A00768473 /* manifest.json in Resources */,
 				2C81556B2ADFC7B900F4559B /* popup.js in Resources */,
 				2CE0594127640E8E0042D844 /* content.js in Resources */,
-				2CFDDF4E2765417E00F89019 /* ios-specific-content.js in Resources */,
+				2CFDDF4E2765417E00F89019 /* ios_specific_content.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1993,7 +1993,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Safari macOS/Safari.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 75;
+				CURRENT_PROJECT_VERSION = 42;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -2007,7 +2007,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 2.0.25;
+				MARKETING_VERSION = 2.0.26;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -2028,7 +2028,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Safari macOS/Safari.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 75;
+				CURRENT_PROJECT_VERSION = 42;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -2042,7 +2042,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 2.0.25;
+				MARKETING_VERSION = 2.0.26;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -2184,7 +2184,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 75;
+				CURRENT_PROJECT_VERSION = 42;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -2195,7 +2195,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 2.0.25;
+				MARKETING_VERSION = 2.0.26;
 				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -2214,7 +2214,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 75;
+				CURRENT_PROJECT_VERSION = 42;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -2225,7 +2225,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 2.0.25;
+				MARKETING_VERSION = 2.0.26;
 				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -2242,7 +2242,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Tokenary iOS/Tokenary iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 75;
+				CURRENT_PROJECT_VERSION = 42;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				INFOPLIST_FILE = "Tokenary iOS/Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
@@ -2252,7 +2252,7 @@
 					"@executable_path/Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
-				MARKETING_VERSION = 2.0.25;
+				MARKETING_VERSION = 2.0.26;
 				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -2273,7 +2273,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Tokenary iOS/Tokenary iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 75;
+				CURRENT_PROJECT_VERSION = 42;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				INFOPLIST_FILE = "Tokenary iOS/Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
@@ -2283,7 +2283,7 @@
 					"@executable_path/Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
-				MARKETING_VERSION = 2.0.25;
+				MARKETING_VERSION = 2.0.26;
 				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -2302,7 +2302,7 @@
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
 				CODE_SIGN_ENTITLEMENTS = "Safari iOS/Safari iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 75;
+				CURRENT_PROJECT_VERSION = 42;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari iOS/Info.plist";
@@ -2315,7 +2315,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
-				MARKETING_VERSION = 2.0.25;
+				MARKETING_VERSION = 2.0.26;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -2340,7 +2340,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Safari iOS/Safari iOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 75;
+				CURRENT_PROJECT_VERSION = 42;
 				DEVELOPMENT_TEAM = XWNXDSM6BU;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari iOS/Info.plist";
@@ -2353,7 +2353,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
-				MARKETING_VERSION = 2.0.25;
+				MARKETING_VERSION = 2.0.26;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
