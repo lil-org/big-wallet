@@ -16,12 +16,12 @@ function injectScript() {
         container.insertBefore(scriptTag, container.children[0]);
         container.removeChild(scriptTag);
     } catch (error) {
-        console.error('Tokenary: Provider injection failed.', error);
+        console.error('tokenary: failed to inject', error);
     }
 }
 
 function shouldInjectProvider() {
-    return (doctypeCheck() && suffixCheck() && documentElementCheck() && !blockedDomainCheck());
+    return (doctypeCheck() && suffixCheck() && documentElementCheck());
 }
 
 function doctypeCheck() {
@@ -49,31 +49,6 @@ function documentElementCheck() {
         return documentElement.toLowerCase() === 'html';
     }
     return true;
-}
-
-function blockedDomainCheck() {
-    const blockedDomains = [
-        'uscourts.gov',
-        'dropbox.com',
-        'webbyawards.com',
-        'cdn.shopify.com/s/javascripts/tricorder/xtld-read-only-frame.html',
-        'adyen.com',
-        'gravityforms.com',
-        'harbourair.com',
-        'ani.gamer.com.tw',
-        'blueskybooking.com',
-        'sharefile.com',
-    ];
-    const currentUrl = window.location.href;
-    let currentRegex;
-    for (let i = 0; i < blockedDomains.length; i++) {
-        const blockedDomain = blockedDomains[i].replace('.', '\\.');
-        currentRegex = new RegExp(`(?:https?:\\/\\/)(?:(?!${blockedDomain}).)*$`, 'u');
-        if (!currentRegex.test(currentUrl)) {
-            return true;
-        }
-    }
-    return false;
 }
 
 if (shouldInjectProvider()) {
@@ -109,7 +84,7 @@ function sendMessageToNativeApp(message) {
     });
 }
 
-// Receive from background
+// Receive from service-worker
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if ("didTapExtensionButton" in request) {
         sendResponse(window.location.host);

@@ -889,11 +889,11 @@
 		2CCEB7A227592A3800768473 /* Safari Shared */ = {
 			isa = PBXGroup;
 			children = (
-				2C452ECE2B0EDB7E0017CE2C /* Inpage Provider */,
-				2CB3844027654A0D00A189B9 /* Resources */,
-				2C264BDA27B5A94400234393 /* Models */,
 				2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */,
 				2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */,
+				2C264BDA27B5A94400234393 /* Models */,
+				2C452ECE2B0EDB7E0017CE2C /* Inpage Provider */,
+				2CB3844027654A0D00A189B9 /* Resources */,
 			);
 			path = "Safari Shared";
 			sourceTree = "<group>";
