@@ -50,6 +50,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
 });
 
+// TODO: fix for v3
 var latestConfigurations = {};
 var didReadLatestConfigurations = false;
 
@@ -182,6 +183,7 @@ function didCompleteRequest(id, tabId) {
 
 // MARK: - iOS extension popup
 
+// TODO: fix for v3
 var pendingPopupRequest = null;
 var pendingPopupId = null;
 var sendPopupCancelResponse = null;
