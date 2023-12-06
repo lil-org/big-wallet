@@ -15,7 +15,7 @@
     },
     
     "background": {
-        "scripts": [ "background.js", "macos-specific-background.js" ],
+        "scripts": [ "background.js" ],
         "persistent": true
     },
     

@@ -15,7 +15,7 @@
     },
     
     "background": {
-        "scripts": [ "background.js", "ios-specific-background.js" ],
+        "scripts": [ "background.js" ],
         "persistent": false
     },
     

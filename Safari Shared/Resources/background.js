@@ -171,6 +171,15 @@ function genId() {
     return new Date().getTime() + Math.floor(Math.random() * 1000);
 }
 
+const isMobile = false; // TODO: setup from platform-specific content script
+function didCompleteRequest(id, tabId) {
+    if (isMobile) {
+        browser.tabs.update(tabId, { active: true });
+        const request = {id: id, subject: "didCompleteRequest"};
+        browser.runtime.sendNativeMessage("mac.tokenary.io", request);
+    }
+}
+
 // MARK: - iOS extension popup
 
 var pendingPopupRequest = null;

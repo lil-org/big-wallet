@@ -172,8 +172,6 @@
 		2CC89471269A334A00879245 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC89470269A334A00879245 /* UserDefaults.swift */; };
 		2CC8C5A22767D3B30083FB1B /* GasPriceSliderTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8C5A02767D3B30083FB1B /* GasPriceSliderTableViewCell.swift */; };
 		2CC8C5A32767D3B30083FB1B /* GasPriceSliderTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2CC8C5A12767D3B30083FB1B /* GasPriceSliderTableViewCell.xib */; };
-		2CC8C5A5276A52670083FB1B /* ios-specific-background.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CC8C5A4276A52670083FB1B /* ios-specific-background.js */; };
-		2CC8C5A7276A54DA0083FB1B /* macos-specific-background.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CC8C5A6276A54DA0083FB1B /* macos-specific-background.js */; };
 		2CC8C5AC276A7EF70083FB1B /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */; };
 		2CC8C5AD276A7EF80083FB1B /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */; };
 		2CC8C5B4276A96760083FB1B /* Haptic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8C5B3276A96760083FB1B /* Haptic.swift */; };
@@ -433,8 +431,6 @@
 		2CC89470269A334A00879245 /* UserDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaults.swift; sourceTree = "<group>"; };
 		2CC8C5A02767D3B30083FB1B /* GasPriceSliderTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GasPriceSliderTableViewCell.swift; sourceTree = "<group>"; };
 		2CC8C5A12767D3B30083FB1B /* GasPriceSliderTableViewCell.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = GasPriceSliderTableViewCell.xib; sourceTree = "<group>"; };
-		2CC8C5A4276A52670083FB1B /* ios-specific-background.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = "ios-specific-background.js"; sourceTree = "<group>"; };
-		2CC8C5A6276A54DA0083FB1B /* macos-specific-background.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = "macos-specific-background.js"; sourceTree = "<group>"; };
 		2CC8C5B3276A96760083FB1B /* Haptic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Haptic.swift; sourceTree = "<group>"; };
 		2CCEB82D27594E2A00768473 /* Safari iOS.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Safari iOS.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CCEB83627594E2A00768473 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
@@ -573,7 +569,6 @@
 			isa = PBXGroup;
 			children = (
 				2C09CBA8273979C1009AD39B /* manifest.json */,
-				2CC8C5A6276A54DA0083FB1B /* macos-specific-background.js */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -921,7 +916,6 @@
 				2C8155692ADFC7B900F4559B /* popup.js */,
 				2C81556C2ADFC7C400F4559B /* popup.html */,
 				2CFDDF4D2765417D00F89019 /* ios-specific-content.js */,
-				2CC8C5A4276A52670083FB1B /* ios-specific-background.js */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -1281,7 +1275,6 @@
 			files = (
 				2CB3845C27654EB300A189B9 /* _locales in Resources */,
 				2CB3845D27654EB300A189B9 /* images in Resources */,
-				2CC8C5A7276A54DA0083FB1B /* macos-specific-background.js in Resources */,
 				2CEFEB16274D5DCA00CE23BD /* inpage.js in Resources */,
 				2C09CBAB273979C1009AD39B /* background.js in Resources */,
 				2C09CBA9273979C1009AD39B /* manifest.json in Resources */,
@@ -1324,7 +1317,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2CC8C5A5276A52670083FB1B /* ios-specific-background.js in Resources */,
 				2CB3845A27654EA900A189B9 /* _locales in Resources */,
 				2CB3845B27654EA900A189B9 /* images in Resources */,
 				2CE0594027640E8E0042D844 /* background.js in Resources */,
