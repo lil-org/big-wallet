@@ -1,6 +1,6 @@
 // Copyright © 2022 Tokenary. All rights reserved.
 
-const isMobile = false; // TODO: setup from platform-specific content script | or mb it is possible to check directly if popup is available
+const isMobile = false; // TODO: setup from platform-specific content script
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.subject === "POPUP_DID_PROCEED" && request.id === pendingPopupId) {
@@ -27,12 +27,14 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
             }
         });
     } else if (request.subject === "getLatestConfiguration") {
-        getLatestConfiguration(request.host, sendResponse);
+        getLatestConfiguration(request.host).then(currentConfiguration => {
+            sendResponse(currentConfiguration);
+        }); // TODO: not sure if it is ok – there is return below. gotta make sure
     } else if (request.subject === "disconnect") {
         const provider = request.provider;
         const host = request.host;
         
-        getLatestConfiguration(host, function(currentConfiguration) {
+        getLatestConfiguration(host).then(currentConfiguration => {
             const configurations = currentConfiguration.latestConfigurations;
             
             var indexToRemove = -1;
@@ -52,9 +54,6 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
 });
 
-var latestConfigurations = {}; // TODO: fix for v3
-var didReadLatestConfigurations = false; // TODO: fix for v3
-
 function sendNativeMessage(request, sender, sendResponse) {
     browser.runtime.sendNativeMessage("mac.tokenary.io", request.message, function(response) {
         sendResponse(response);
@@ -64,21 +63,6 @@ function sendNativeMessage(request, sender, sendResponse) {
             setTimeout( function() { processPopupQueue(); }, 500); // TODO: fix for v3
         }
     });
-}
-
-function respondWithLatestConfiguration(host, sendResponse) { // TODO: fix for v3
-    var response = {};
-    const latest = latestConfigurations[host];
-    
-    if (Array.isArray(latest)) {
-        response.latestConfigurations = latest;
-    } else if (typeof latest !== "undefined" && "provider" in latest) {
-        response.latestConfigurations = [latest];
-    } else {
-        response.latestConfigurations = [];
-    }
-    
-    sendResponse(response);
 }
 
 function storeLatestConfiguration(host, configuration) { // TODO: fix for v3
@@ -113,12 +97,22 @@ function storeLatestConfiguration(host, configuration) { // TODO: fix for v3
     browser.storage.local.set( {[host]: latestArray});
 }
 
-function getLatestConfiguration(host, sendResponse) { // TODO: fix for v3
-    const storageItem = browser.storage.local.get();
-    storageItem.then((storage) => {
-        latestConfigurations = storage;
-        didReadLatestConfigurations = true;
-        respondWithLatestConfiguration(host, sendResponse);
+function getLatestConfiguration(host) {
+    return new Promise((resolve) => {
+        browser.storage.local.get(host).then(result => {
+            const latest = result[host];
+            let response = {};
+            if (Array.isArray(latest)) {
+                response.latestConfigurations = latest;
+            } else if (typeof latest !== "undefined" && "provider" in latest) {
+                response.latestConfigurations = [latest];
+            } else {
+                response.latestConfigurations = [];
+            }
+            resolve(response);
+        }).catch(() => {
+            resolve({ latestConfigurations: [] });
+        });
     });
 }
 
@@ -150,7 +144,7 @@ browser.action.onClicked.addListener(function(tab) {
     const message = {didTapExtensionButton: true};
     browser.tabs.sendMessage(tab.id, message, function(host) {
         if (typeof host !== "undefined") {
-            getLatestConfiguration(host, function(currentConfiguration) {
+            getLatestConfiguration(host).then(currentConfiguration => {
                 const switchAccountMessage = {name: "switchAccount", id: genId(), provider: "unknown", body: currentConfiguration};
                 browser.tabs.sendMessage(tab.id, switchAccountMessage);
             });
@@ -243,7 +237,7 @@ function didClickMobileExtensionButton(tab, sendResponse) {
     const message = {didTapExtensionButton: true};
     browser.tabs.sendMessage(tab.id, message, function(host) {
         if (typeof host !== "undefined") {
-            getLatestConfiguration(host, function(currentConfiguration) {
+            getLatestConfiguration(host).then(currentConfiguration => {
                 const latestConfigurations = currentConfiguration.latestConfigurations;
                 if (Array.isArray(latestConfigurations) && latestConfigurations.length) {
                     sendResponse("switch\naccount");
