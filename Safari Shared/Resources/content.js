@@ -92,6 +92,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else if ("name" in request && request.name == "switchAccount") {
         sendMessageToNativeApp(request);
     }
+    return true;
 });
 
 // Receive from inpage
