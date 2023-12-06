@@ -1,5 +1,7 @@
 // Copyright © 2022 Tokenary. All rights reserved.
 
+const isMobile = false; // TODO: setup from platform-specific content script | or mb it is possible to check directly if popup is available
+
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.subject === "POPUP_DID_PROCEED" && request.id === pendingPopupId) {
         pendingPopupId = null;
@@ -21,7 +23,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
             sendResponse(response);
             storeConfigurationIfNeeded(request.host, response);
             if (isMobile) {
-                setTimeout( function() { processPopupQueue(); }, 500);
+                setTimeout( function() { processPopupQueue(); }, 500); // TODO: fix for v3
             }
         });
     } else if (request.subject === "getLatestConfiguration") {
@@ -50,9 +52,8 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
 });
 
-// TODO: fix for v3
-var latestConfigurations = {};
-var didReadLatestConfigurations = false;
+var latestConfigurations = {}; // TODO: fix for v3
+var didReadLatestConfigurations = false; // TODO: fix for v3
 
 function sendNativeMessage(request, sender, sendResponse) {
     browser.runtime.sendNativeMessage("mac.tokenary.io", request.message, function(response) {
@@ -60,12 +61,12 @@ function sendNativeMessage(request, sender, sendResponse) {
         didCompleteRequest(request.message.id, sender.tab.id);
         storeConfigurationIfNeeded(request.host, response);
         if (isMobile) {
-            setTimeout( function() { processPopupQueue(); }, 500);
+            setTimeout( function() { processPopupQueue(); }, 500); // TODO: fix for v3
         }
     });
 }
 
-function respondWithLatestConfiguration(host, sendResponse) {
+function respondWithLatestConfiguration(host, sendResponse) { // TODO: fix for v3
     var response = {};
     const latest = latestConfigurations[host];
     
@@ -80,7 +81,7 @@ function respondWithLatestConfiguration(host, sendResponse) {
     sendResponse(response);
 }
 
-function storeLatestConfiguration(host, configuration) {
+function storeLatestConfiguration(host, configuration) { // TODO: fix for v3
     var latestArray = [];
     
     if (Array.isArray(configuration)) {
@@ -112,12 +113,7 @@ function storeLatestConfiguration(host, configuration) {
     browser.storage.local.set( {[host]: latestArray});
 }
 
-function getLatestConfiguration(host, sendResponse) {
-    if (didReadLatestConfigurations) {
-        respondWithLatestConfiguration(host, sendResponse);
-        return;
-    }
-    
+function getLatestConfiguration(host, sendResponse) { // TODO: fix for v3
     const storageItem = browser.storage.local.get();
     storageItem.then((storage) => {
         latestConfigurations = storage;
@@ -126,7 +122,7 @@ function getLatestConfiguration(host, sendResponse) {
     });
 }
 
-function storeConfigurationIfNeeded(host, response) {
+function storeConfigurationIfNeeded(host, response) { // TODO: fix for v3
     if (host.length > 0 && "configurationToStore" in response) {
         const configuration = response.configurationToStore;
         
@@ -150,7 +146,7 @@ function justShowApp() {
     browser.runtime.sendNativeMessage("mac.tokenary.io", showAppMessage);
 }
 
-browser.browserAction.onClicked.addListener(function(tab) {
+browser.action.onClicked.addListener(function(tab) {
     const message = {didTapExtensionButton: true};
     browser.tabs.sendMessage(tab.id, message, function(host) {
         if (typeof host !== "undefined") {
@@ -172,7 +168,6 @@ function genId() {
     return new Date().getTime() + Math.floor(Math.random() * 1000);
 }
 
-const isMobile = false; // TODO: setup from platform-specific content script
 function didCompleteRequest(id, tabId) {
     if (isMobile) {
         browser.tabs.update(tabId, { active: true });
@@ -205,14 +200,14 @@ function processPopupQueue() {
                 browser.browserAction.openPopup();
             }
             
-            setTimeout( function() { pollPopupStatus(id); }, 1000);
+            setTimeout( function() { pollPopupStatus(id); }, 1000); // TODO: fix for v3
         }
     }
 }
 
 function pollPopupStatus(id) {
     if (hasVisiblePopup() && pendingPopupId === id) {
-        setTimeout( function() { pollPopupStatus(id); }, 1000);
+        setTimeout( function() { pollPopupStatus(id); }, 1000); // TODO: fix for v3
     } else if (pendingPopupId === id) {
         pendingPopupId = null;
         didDismissPopup();
