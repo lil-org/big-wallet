@@ -5,19 +5,20 @@ if (!("pendingRequestsIds" in document)) {
 }
 
 function injectScript() {
-    try {
-        const container = document.head || document.documentElement;
-        const scriptTag = document.createElement('script');
-        scriptTag.setAttribute('async', 'false');
-        var request = new XMLHttpRequest(); // TODO: fix for v3
-        request.open('GET', browser.extension.getURL('inpage.js'), false);
-        request.send();
-        scriptTag.textContent = request.responseText;
-        container.insertBefore(scriptTag, container.children[0]);
-        container.removeChild(scriptTag);
-    } catch (error) {
-        console.error('tokenary: failed to inject', error);
-    }
+    const container = document.head || document.documentElement;
+    const scriptTag = document.createElement('script');
+    scriptTag.setAttribute('async', 'false');
+
+    fetch(browser.runtime.getURL('inpage.js'))
+        .then(response => response.text())
+        .then(data => {
+            scriptTag.textContent = data;
+            container.insertBefore(scriptTag, container.children[0]);
+            container.removeChild(scriptTag);
+        })
+        .catch(error => {
+            console.error('tokenary: failed to inject', error);
+        });
 }
 
 function shouldInjectProvider() {
