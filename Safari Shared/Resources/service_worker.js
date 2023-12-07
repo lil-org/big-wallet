@@ -1,6 +1,6 @@
 // Copyright © 2022 Tokenary. All rights reserved.
 
-const isMobile = false; // TODO: setup from platform-specific content script
+const isMobile = true; // TODO: setup from platform-specific content script
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.subject === "POPUP_DID_PROCEED" && request.id === pendingPopupId) {
@@ -177,7 +177,7 @@ function processPopupQueue() {
             sendPopupCancelResponse = next.sendPopupCancelResponse;
             
             if (!setupExistingSwitchAccountPopup) {
-                browser.browserAction.openPopup();
+                browser.action.openPopup();
             }
             
             setTimeout( function() { pollPopupStatus(id); }, 1000); // TODO: fix for v3
