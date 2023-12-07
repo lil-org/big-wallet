@@ -15,19 +15,23 @@ if (message != null) {
 
 button.addEventListener('click', () => {
     var request = message;
-    const fresh = getPendingRequest();
+    const fresh = getPendingRequest(); // TODO: fix for v3
     if (fresh != null) {
         request = fresh;
     }
-    const query = encodeURIComponent(JSON.stringify(request)) + '";';
-    browser.tabs.executeScript({ // TODO: fix for v3 https://developer.chrome.com/docs/extensions/develop/migrate/api-calls#replace-executescript
-      code: 'window.location.href = "https://tokenary.io/extension?query=' + query
+    
+    const query = encodeURIComponent(JSON.stringify(request));
+    browser.tabs.getCurrent((tab) => {
+        if (tab) {
+            browser.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: (query) => { window.location.href = `https://tokenary.io/extension?query=${query}`; },
+            args: [query]
+            });
+        }
     });
-    
-    setTimeout( function() {
-        window.close(); // TODO: fix for v3
-    }, 420);
-    
+
+    setTimeout(window.close, 437);
     browser.runtime.sendMessage({subject: 'POPUP_DID_PROCEED', id: request.id});
 });
 

@@ -36,6 +36,7 @@
     },
     
     "permissions": [
+        "scripting",
         "nativeMessaging",
         "storage",
         "activeTab",
