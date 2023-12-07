@@ -65,36 +65,33 @@ function sendNativeMessage(request, sender, sendResponse) {
     });
 }
 
-function storeLatestConfiguration(host, configuration) { // TODO: fix for v3
+function storeLatestConfiguration(host, configuration) {
     var latestArray = [];
-    
     if (Array.isArray(configuration)) {
         latestArray = configuration;
+        browser.storage.local.set({ [host]: latestArray });
     } else if ("provider" in configuration) {
-        const latest = latestConfigurations[host];
-        
-        if (Array.isArray(latest)) {
-            latestArray = latest;
-        } else if (typeof latest !== "undefined" && "provider" in latest) {
-            latestArray = [latest];
-        }
-        
-        var shouldAdd = true;
-        for (var i = 0; i < latestArray.length; i++) {
-            if (latestArray[i].provider == configuration.provider) {
-                latestArray[i] = configuration;
-                shouldAdd = false;
-                break;
+        (async () => {
+            const latest = await getLatestConfiguration(host);
+            if (Array.isArray(latest)) {
+                latestArray = latest;
+            } else if (typeof latest !== "undefined" && "provider" in latest) {
+                latestArray = [latest];
             }
-        }
-        
-        if (shouldAdd) {
-            latestArray.push(configuration);
-        }
+            var shouldAdd = true;
+            for (var i = 0; i < latestArray.length; i++) {
+                if (latestArray[i].provider == configuration.provider) {
+                    latestArray[i] = configuration;
+                    shouldAdd = false;
+                    break;
+                }
+            }
+            if (shouldAdd) {
+                latestArray.push(configuration);
+            }
+            browser.storage.local.set({ [host]: latestArray });
+        })();
     }
-    
-    latestConfigurations[host] = latestArray;
-    browser.storage.local.set( {[host]: latestArray});
 }
 
 function getLatestConfiguration(host) {
@@ -116,21 +113,10 @@ function getLatestConfiguration(host) {
     });
 }
 
-function storeConfigurationIfNeeded(host, response) { // TODO: fix for v3
+function storeConfigurationIfNeeded(host, response) {
     if (host.length > 0 && "configurationToStore" in response) {
         const configuration = response.configurationToStore;
-        
-        if (didReadLatestConfigurations) {
-            storeLatestConfiguration(host, configuration);
-            return;
-        }
-        
-        const storageItem = browser.storage.local.get();
-        storageItem.then((storage) => {
-            latestConfigurations = storage;
-            didReadLatestConfigurations = true;
-            storeLatestConfiguration(host, configuration);
-        });
+        storeLatestConfiguration(host, configuration);
     }
 }
 
