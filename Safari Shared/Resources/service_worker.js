@@ -18,7 +18,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
             }
         }
         sendNativeMessage(request, sender, sendResponse);
-    } else if (request.subject === "getResponse") {
+    } else if (request.subject === "getResponse") { // TODO: test and update for ios
         browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
             sendResponse(response);
             storeConfigurationIfNeeded(request.host, response);
@@ -29,7 +29,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else if (request.subject === "getLatestConfiguration") {
         getLatestConfiguration(request.host).then(currentConfiguration => {
             sendResponse(currentConfiguration);
-        }); // TODO: not sure if it is ok – there is return below. gotta make sure
+        });
     } else if (request.subject === "disconnect") {
         const provider = request.provider;
         const host = request.host;
