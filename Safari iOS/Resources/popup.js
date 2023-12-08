@@ -21,8 +21,8 @@ button.addEventListener('click', () => {
             });
         }
     });
+    browser.runtime.sendMessage({subject: 'POPUP_DID_PROCEED', id: message.id});
     setTimeout(window.close, 437);
-    browser.runtime.sendMessage({subject: 'POPUP_DID_PROCEED', id: message.id}); // TODO: maybe call before close?
 });
 
 function setupButton() {

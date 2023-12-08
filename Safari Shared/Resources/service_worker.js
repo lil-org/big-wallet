@@ -3,17 +3,15 @@
 const isMobile = true; // TODO: setup from platform-specific content script
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.subject === "POPUP_DID_PROCEED" && request.id === pendingPopupId) {
-        pendingPopupId = null;
-        pendingPopupRequest = null;
-        sendPopupCancelResponse = null;
+    if (request.subject === "POPUP_DID_PROCEED") {
+        // TODO: perform cleanup for popup corresponding to request.id
     } else if (request.subject === "POPUP_APPEARED") {
         didClickMobileExtensionButton(request.tab, sendResponse);
     } else if (request.subject === "message-to-wallet") {
         if (isMobile) {
             const name = request.message.name;
-            if (name != "switchEthereumChain" && name != "addEthereumChain") {
-                popupQueue.push({pendingPopupRequest: request.message, sendPopupCancelResponse: sendResponse});
+            if (name != "switchEthereumChain" && name != "addEthereumChain" && name != "switchAccount") {
+                popupQueue.push({pendingPopupRequest: request.message, sendPopupCancelResponse: sendResponse}); // TODO: fix for v3
                 processPopupQueue();
             }
         }
