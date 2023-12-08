@@ -158,12 +158,6 @@ function didCompleteRequest(id, tabId) {
 
 // MARK: - iOS extension popup
 
-// TODO: fix for v3
-var pendingPopupRequest = null;
-var pendingPopupId = null;
-var sendPopupCancelResponse = null;
-var popupQueue = [];
-
 function processPopupQueue() {
     if (popupQueue.length && pendingPopupId == null) {
         const setupExistingSwitchAccountPopup = popupQueue[0].pendingPopupRequest.name == "switchAccount";
