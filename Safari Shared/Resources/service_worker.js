@@ -128,9 +128,9 @@ function justShowApp() {
 
 browser.action.onClicked.addListener(function(tab) {
     const message = {didTapExtensionButton: true};
-    browser.tabs.sendMessage(tab.id, message, function(host) {
-        if (typeof host !== "undefined") {
-            getLatestConfiguration(host).then(currentConfiguration => {
+    browser.tabs.sendMessage(tab.id, message, function(response) {
+        if (typeof response !== "undefined" && typeof response.host !== "undefined") {
+            getLatestConfiguration(response.host).then(currentConfiguration => {
                 const switchAccountMessage = {name: "switchAccount", id: genId(), provider: "unknown", body: currentConfiguration};
                 browser.tabs.sendMessage(tab.id, switchAccountMessage);
             });
@@ -215,17 +215,19 @@ function cancelPopupRequest(request, sendResponse) {
 
 function didClickMobileExtensionButton(tab, sendResponse) {
     const message = {didTapExtensionButton: true};
-    browser.tabs.sendMessage(tab.id, message, function(host) {
-        if (typeof host !== "undefined") {
-            getLatestConfiguration(host).then(currentConfiguration => {
+    browser.tabs.sendMessage(tab.id, message, function(response) {
+        if (typeof response !== "undefined" && typeof response.host !== "undefined") {
+            getLatestConfiguration(response.host).then(currentConfiguration => {
                 const latestConfigurations = currentConfiguration.latestConfigurations;
-                if (Array.isArray(latestConfigurations) && latestConfigurations.length) {
-                    sendResponse("switch\naccount");
-                } else {
-                    sendResponse("connect\nwallet");
-                }
-                
-                const switchAccountMessage = {name: "switchAccount", id: genId(), provider: "unknown", body: currentConfiguration};
+                const switchAccountMessage = {
+                    name: "switchAccount",
+                    id: genId(),
+                    provider: "unknown",
+                    body: currentConfiguration,
+                    host: response.host,
+                    favicon: response.favicon
+                };
+                sendResponse(switchAccountMessage);
                 browser.tabs.sendMessage(tab.id, switchAccountMessage);
             });
         }
