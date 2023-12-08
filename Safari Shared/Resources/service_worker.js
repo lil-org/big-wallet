@@ -6,12 +6,13 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.subject === "POPUP_DID_PROCEED") {
         // TODO: perform cleanup for popup corresponding to request.id
     } else if (request.subject === "POPUP_APPEARED") {
+        // TODO: process something if hasSomething — it was not neccesseraly an action button click
         didClickMobileExtensionButton(request.tab, sendResponse);
     } else if (request.subject === "message-to-wallet") {
         if (isMobile) {
             const name = request.message.name;
             if (name != "switchEthereumChain" && name != "addEthereumChain" && name != "switchAccount") {
-                popupQueue.push({pendingPopupRequest: request.message, sendPopupCancelResponse: sendResponse}); // TODO: fix for v3
+                // TODO: store {pendingPopupRequest: request.message, sendPopupCancelResponse: sendResponse}
                 processPopupQueue();
             }
         }
@@ -157,23 +158,10 @@ function didCompleteRequest(id, tabId) {
 // MARK: - iOS extension popup
 
 function processPopupQueue() {
-    if (popupQueue.length && pendingPopupId == null) {
-        const setupExistingSwitchAccountPopup = popupQueue[0].pendingPopupRequest.name == "switchAccount";
-        
-        if (!hasVisiblePopup() || setupExistingSwitchAccountPopup) {
-            const next = popupQueue[0];
-            popupQueue.shift();
-            pendingPopupRequest = next.pendingPopupRequest;
-            const id = pendingPopupRequest.id;
-            pendingPopupId = id;
-            sendPopupCancelResponse = next.sendPopupCancelResponse;
-            
-            if (!setupExistingSwitchAccountPopup) {
-                browser.action.openPopup();
-            }
-            
-            setTimeout( function() { pollPopupStatus(id); }, 1000); // TODO: fix for v3
-        }
+    const hasSomething = true; // TODO: implement
+    if (hasSomething && !hasVisiblePopup()) {
+        browser.action.openPopup();
+        setTimeout( function() { pollPopupStatus(id); }, 1000); // TODO: fix for v3
     }
 }
 
