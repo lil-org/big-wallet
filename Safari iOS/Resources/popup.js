@@ -1,26 +1,17 @@
 // Copyright © 2023 Tokenary. All rights reserved.
 
 const button = document.getElementById('tokenary-button');
-var message = getPendingRequest();
+var message = {};
 
-if (message != null) {
-    setupButton();
-} else {
-    browser.tabs.getCurrent(function(tab) {
-        browser.runtime.sendMessage({subject: 'POPUP_APPEARED', tab: tab}).then((response) => {
-            button.innerText = response;
-        });
+browser.tabs.getCurrent(function(tab) {
+    browser.runtime.sendMessage({subject: 'POPUP_APPEARED', tab: tab}).then((response) => {
+        message = response;
+        setupButton();
     });
-}
+});
 
 button.addEventListener('click', () => {
-    var request = message;
-    const fresh = getPendingRequest(); // TODO: fix for v3
-    if (fresh != null) {
-        request = fresh;
-    }
-    
-    const query = encodeURIComponent(JSON.stringify(request));
+    const query = encodeURIComponent(JSON.stringify(message));
     browser.tabs.getCurrent((tab) => {
         if (tab) {
             browser.scripting.executeScript({
@@ -30,9 +21,8 @@ button.addEventListener('click', () => {
             });
         }
     });
-
     setTimeout(window.close, 437);
-    browser.runtime.sendMessage({subject: 'POPUP_DID_PROCEED', id: request.id});
+    browser.runtime.sendMessage({subject: 'POPUP_DID_PROCEED', id: message.id}); // TODO: maybe call before close?
 });
 
 function setupButton() {
@@ -65,13 +55,4 @@ function setupButton() {
     }
 
     button.innerText = title;
-}
-
-function getPendingRequest() {
-    const bg = browser.extension.getBackgroundPage(); // TODO: fix for v3
-    if (bg != null) {
-        return bg.pendingPopupRequest;
-    } else {
-        return null;
-    }
 }

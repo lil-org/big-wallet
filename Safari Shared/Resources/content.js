@@ -87,7 +87,7 @@ function sendMessageToNativeApp(message) {
 // Receive from service-worker
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if ("didTapExtensionButton" in request) {
-        sendResponse(window.location.host);
+        sendResponse({ host: window.location.host, favicon: getFavicon() });
     } else if ("name" in request && request.name == "switchAccount") {
         sendMessageToNativeApp(request);
     }
