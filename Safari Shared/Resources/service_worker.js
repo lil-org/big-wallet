@@ -153,7 +153,7 @@ function didCompleteRequest(id, tabId) {
 
 function waitAndShowNextPopupIfNeeded(isMobile) {
     if (isMobile) {
-        setTimeout( function() { processPopupQueue(); }, 500); // TODO: fix for v3
+        setTimeout(processPopupQueue, 420);
     }
 }
 
