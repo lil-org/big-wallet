@@ -3,7 +3,8 @@
 const isMobile = true; // TODO: setup from platform-specific content script
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.subject === "POPUP_DID_PROCEED") {
+    if (request.subject === "POPUP_PING") {
+    } else if (request.subject === "POPUP_DID_PROCEED") {
         popupDidProceed(request.id);
     } else if (request.subject === "POPUP_APPEARED") {
         didAppearPopup(request.tab, sendResponse);
