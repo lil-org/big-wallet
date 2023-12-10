@@ -17,13 +17,11 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
             }
         }
         sendNativeMessage(request, sender, sendResponse);
-    } else if (request.subject === "getResponse") { // TODO: test and update for ios
+    } else if (request.subject === "getResponse") {
         browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
             sendResponse(response);
             storeConfigurationIfNeeded(request.host, response);
-            if (isMobile) {
-                setTimeout( function() { processPopupQueue(); }, 500); // TODO: fix for v3
-            }
+            waitAndShowNextPopupIfNeeded(isMobile);
         });
     } else if (request.subject === "getLatestConfiguration") {
         getLatestConfiguration(request.host).then(currentConfiguration => {
@@ -58,10 +56,14 @@ function sendNativeMessage(request, sender, sendResponse) {
         sendResponse(response);
         didCompleteRequest(request.message.id, sender.tab.id);
         storeConfigurationIfNeeded(request.host, response);
-        if (isMobile) {
-            setTimeout( function() { processPopupQueue(); }, 500); // TODO: fix for v3
-        }
+        waitAndShowNextPopupIfNeeded(isMobile);
     });
+}
+
+function waitAndShowNextPopupIfNeeded(isMobile) {
+    if (isMobile) {
+        setTimeout( function() { processPopupQueue(); }, 500); // TODO: fix for v3
+    }
 }
 
 function storeLatestConfiguration(host, configuration) {
