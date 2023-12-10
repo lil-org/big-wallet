@@ -166,7 +166,7 @@ function processPopupQueue() {
     const hasSomething = true; // TODO: implement
     if (hasSomething && !hasVisiblePopup()) {
         browser.action.openPopup();
-        setTimeout( function() { pollPopupStatus(id); }, 1000); // TODO: fix for v3
+        setTimeout( function() { pollPopupStatus(); }, 1000); // TODO: fix for v3
     }
 }
 
@@ -176,7 +176,7 @@ function pollPopupStatus() {
         setTimeout( function() { pollPopupStatus(); }, 1000); // TODO: fix for v3
     } else {
         const didNotProceed = false; // TODO: implement
-        if didNotProceed {
+        if (didNotProceed) {
             didDismissPopup();
         }
     }
