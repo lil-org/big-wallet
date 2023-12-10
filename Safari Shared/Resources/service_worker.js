@@ -166,14 +166,13 @@ function processPopupQueue() {
     const hasSomething = true; // TODO: implement
     if (hasSomething && !hasVisiblePopup()) {
         browser.action.openPopup();
-        setTimeout( function() { pollPopupStatus(); }, 1000); // TODO: fix for v3
+        setTimeout(pollPopupStatus, 420);
     }
 }
 
-// TODO: maybe there is a way to detect dismiss on popup.js ?
 function pollPopupStatus() {
     if (hasVisiblePopup()) {
-        setTimeout( function() { pollPopupStatus(); }, 1000); // TODO: fix for v3
+        setTimeout(pollPopupStatus, 420);
     } else {
         const didNotProceed = false; // TODO: implement
         if (didNotProceed) {
