@@ -170,12 +170,15 @@ function processPopupQueue() {
     }
 }
 
-function pollPopupStatus(id) {
-    if (hasVisiblePopup() && pendingPopupId === id) {
-        setTimeout( function() { pollPopupStatus(id); }, 1000); // TODO: fix for v3
-    } else if (pendingPopupId === id) {
-        pendingPopupId = null;
-        didDismissPopup();
+// TODO: maybe there is a way to detect dismiss on popup.js ?
+function pollPopupStatus() {
+    if (hasVisiblePopup()) {
+        setTimeout( function() { pollPopupStatus(); }, 1000); // TODO: fix for v3
+    } else {
+        const didNotProceed = false; // TODO: implement
+        if didNotProceed {
+            didDismissPopup();
+        }
     }
 }
 
@@ -184,16 +187,8 @@ function popupDidProceed(id) {
 }
 
 function didDismissPopup() {
-    cancelPopupRequest(pendingPopupRequest, sendPopupCancelResponse);
-    pendingPopupRequest = null;
-    sendPopupCancelResponse = null;
-    
-    if (popupQueue.length) { // TODO: fix for v3
-        for (let item of popupQueue) {
-            cancelPopupRequest(item.pendingPopupRequest, item.sendPopupCancelResponse);
-        }
-        popupQueue = [];
-    }
+    // TODO: cleanup for current and all remove all queued popups
+    // use for current and all queued: cancelPopupRequest(pendingPopupRequest, sendPopupCancelResponse);
 }
 
 function cancelPopupRequest(request, sendResponse) {
