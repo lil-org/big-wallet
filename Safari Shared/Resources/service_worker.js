@@ -4,16 +4,14 @@ const isMobile = true; // TODO: setup from platform-specific content script
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.subject === "POPUP_DID_PROCEED") {
-        // TODO: perform cleanup for popup corresponding to request.id
+        popupDidProceed(request.id);
     } else if (request.subject === "POPUP_APPEARED") {
-        // TODO: process something if hasSomething — it was not neccesseraly an action button click
-        didClickMobileExtensionButton(request.tab, sendResponse);
+        didAppearPopup(request.tab, sendResponse);
     } else if (request.subject === "message-to-wallet") {
         if (isMobile) {
             const name = request.message.name;
             if (name != "switchEthereumChain" && name != "addEthereumChain" && name != "switchAccount") {
-                // TODO: store {pendingPopupRequest: request.message, sendPopupCancelResponse: sendResponse}
-                processPopupQueue();
+                addToPopupQueue(request.message, sendResponse);
             }
         }
         sendNativeMessage(request, sender, sendResponse);
@@ -58,12 +56,6 @@ function sendNativeMessage(request, sender, sendResponse) {
         storeConfigurationIfNeeded(request.host, response);
         waitAndShowNextPopupIfNeeded(isMobile);
     });
-}
-
-function waitAndShowNextPopupIfNeeded(isMobile) {
-    if (isMobile) {
-        setTimeout( function() { processPopupQueue(); }, 500); // TODO: fix for v3
-    }
 }
 
 function storeLatestConfiguration(host, configuration) {
@@ -159,6 +151,17 @@ function didCompleteRequest(id, tabId) {
 
 // MARK: - iOS extension popup
 
+function waitAndShowNextPopupIfNeeded(isMobile) {
+    if (isMobile) {
+        setTimeout( function() { processPopupQueue(); }, 500); // TODO: fix for v3
+    }
+}
+
+function addToPopupQueue(popupRequest, sendCancelResponse) {
+    // TODO: store somehow
+    processPopupQueue();
+}
+
 function processPopupQueue() {
     const hasSomething = true; // TODO: implement
     if (hasSomething && !hasVisiblePopup()) {
@@ -176,12 +179,16 @@ function pollPopupStatus(id) {
     }
 }
 
+function popupDidProceed(id) {
+    // TODO: perform cleanup for popup corresponding to id
+}
+
 function didDismissPopup() {
     cancelPopupRequest(pendingPopupRequest, sendPopupCancelResponse);
     pendingPopupRequest = null;
     sendPopupCancelResponse = null;
     
-    if (popupQueue.length) {
+    if (popupQueue.length) { // TODO: fix for v3
         for (let item of popupQueue) {
             cancelPopupRequest(item.pendingPopupRequest, item.sendPopupCancelResponse);
         }
@@ -201,7 +208,8 @@ function cancelPopupRequest(request, sendResponse) {
     sendResponse(cancelResponse);
 }
 
-function didClickMobileExtensionButton(tab, sendResponse) {
+function didAppearPopup(tab, sendResponse) {
+    // TODO: process something if hasSomething — it was not neccesseraly an action button click
     const message = {didTapExtensionButton: true};
     browser.tabs.sendMessage(tab.id, message, function(response) {
         if (typeof response !== "undefined" && typeof response.host !== "undefined") {
