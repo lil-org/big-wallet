@@ -270,7 +270,7 @@ function getNextStoredPopup() {
     return new Promise((resolve) => {
         getPopupsQueue().then(result => {
             if (Array.isArray(result) && result.length > 0) {
-                resolve(result[0]);
+                resolve(result[0].popupRequest);
             } else {
                 resolve();
             }
