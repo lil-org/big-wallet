@@ -159,26 +159,31 @@ function waitAndShowNextPopupIfNeeded(isMobile) {
 }
 
 function addToPopupQueue(popupRequest, sendCancelResponse) {
-    // TODO: store somehow
-    processPopupQueue();
+    storePopupRequest(popupRequest, sendCancelResponse);
+    showPopupIfThereIsNoVisible(popupRequest.id);
 }
 
 function processPopupQueue() {
-    const hasSomething = true; // TODO: implement
-    if (hasSomething && !hasVisiblePopup()) {
+    const id = 42; // TODO: use actual popup id if there is one
+    showPopupIfThereIsNoVisible(id);
+}
+
+function showPopupIfThereIsNoVisible(id) {
+    if (!hasVisiblePopup()) {
         browser.action.openPopup();
-        setTimeout(pollPopupStatus, 420);
+        setTimeout( function() { pollPopupStatus(id); }, 420);
     }
 }
 
-function pollPopupStatus() {
+function pollPopupStatus(id) {
     if (hasVisiblePopup()) {
-        setTimeout(pollPopupStatus, 420);
+        setTimeout( function() { pollPopupStatus(id); }, 420);
     } else {
-        const didNotProceed = false; // TODO: implement
-        if (didNotProceed) {
-            didDismissPopup();
-        }
+        getCurrentPopupId().then(currentId => {
+            if (id == currentId) {
+                didDismissPopup();
+            }
+        });
     }
 }
 
