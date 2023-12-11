@@ -12,7 +12,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (isMobile) {
             const name = request.message.name;
             if (name != "switchEthereumChain" && name != "addEthereumChain" && name != "switchAccount") {
-                addToPopupQueue(request.message, sendResponse);
+                addToPopupQueue(request.message);
             }
         }
         sendNativeMessage(request, sender, sendResponse);
@@ -158,8 +158,8 @@ function waitAndShowNextPopupIfNeeded(isMobile) {
     }
 }
 
-function addToPopupQueue(popupRequest, sendCancelResponse) {
-    storePopupRequest(popupRequest, sendCancelResponse);
+function addToPopupQueue(popupRequest) {
+    storePopupRequest(popupRequest);
     showPopupIfThereIsNoVisible(popupRequest.id);
 }
 
@@ -203,7 +203,7 @@ function didDismissPopup() {
     cleanupPopupsQueue();
 }
 
-function cancelPopupRequest(request, sendResponse) {
+function cancelPopupRequest(request) {
     const cancelResponse = {
         id: request.id,
         provider: request.provider,
@@ -212,7 +212,7 @@ function cancelPopupRequest(request, sendResponse) {
         subject: "cancelRequest",
     };
     browser.runtime.sendNativeMessage("mac.tokenary.io", cancelResponse);
-    sendResponse(cancelResponse);
+    // TODO: send cancel message to inpage
 }
 
 function didAppearPopup(tab, sendResponse) {
@@ -254,14 +254,13 @@ function hasVisiblePopup() {
 
 // MARK: - popup queue storage
 
-function storePopupRequest(popupRequest, sendCancelResponse) {
-    const item = {popupRequest: popupRequest, sendCancelResponse: sendCancelResponse};
+function storePopupRequest(popupRequest) {
     getPopupsQueue().then(result => {
         if (Array.isArray(result)) {
-            result.push(item);
+            result.push(popupRequest);
             setPopupsQueue(result);
         } else {
-            setPopupsQueue([item]);
+            setPopupsQueue([popupRequest]);
         }
     });
 }
@@ -270,7 +269,7 @@ function getNextStoredPopup() {
     return new Promise((resolve) => {
         getPopupsQueue().then(result => {
             if (Array.isArray(result) && result.length > 0) {
-                resolve(result[0].popupRequest);
+                resolve(result[0]);
             } else {
                 resolve();
             }
@@ -296,7 +295,7 @@ function storeCurrentPopupId(id) {
 
 function cleanupStoredPopup(id) {
     getPopupsQueue().then(result => {
-        if (Array.isArray(result) && result.length > 0 && result[0].popupRequest.id == id) {
+        if (Array.isArray(result) && result.length > 0 && result[0].id == id) {
             result.shift();
             setPopupsQueue(result);
             browser.storage.session.remove("currentPopupId");
@@ -322,7 +321,7 @@ function cleanupPopupsQueue() {
     getPopupsQueue().then(result => {
         if (Array.isArray(result) && result.length > 0) {
             for (var i = 0; i < result.length; i++) {
-                cancelPopupRequest(result[i].popupRequest, result[i].sendCancelResponse);
+                cancelPopupRequest(result[i]);
             }
         }
         browser.storage.session.remove("popupsQueue");
