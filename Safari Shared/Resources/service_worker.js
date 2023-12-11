@@ -171,8 +171,13 @@ function processPopupQueue() {
 function showPopupIfThereIsNoVisible(id) {
     if (!hasVisiblePopup()) {
         browser.action.openPopup();
-        setTimeout( function() { pollPopupStatus(id); }, 420);
+        didShowPopup(id);
     }
+}
+
+function didShowPopup(id) {
+    storeCurrentPopupId(id);
+    setTimeout( function() { pollPopupStatus(id); }, 420);
 }
 
 function pollPopupStatus(id) {
@@ -223,6 +228,7 @@ function didAppearPopup(tab, sendResponse) {
                     favicon: response.favicon
                 };
                 sendResponse(switchAccountMessage);
+                didShowPopup(switchAccountMessage.id);
                 browser.tabs.sendMessage(tab.id, switchAccountMessage);
             });
         }
