@@ -164,8 +164,11 @@ function addToPopupQueue(popupRequest, sendCancelResponse) {
 }
 
 function processPopupQueue() {
-    const id = 42; // TODO: use actual popup id if there is one
-    showPopupIfThereIsNoVisible(id);
+    getNextStoredPopup().then(popupRequest => {
+        if (typeof popupRequest !== "undefined" && typeof popupRequest.id !== "undefined") {
+            showPopupIfThereIsNoVisible(popupRequest.id);
+        }
+    });
 }
 
 function showPopupIfThereIsNoVisible(id) {
@@ -213,23 +216,28 @@ function cancelPopupRequest(request, sendResponse) {
 }
 
 function didAppearPopup(tab, sendResponse) {
-    // TODO: process something if hasSomething — it was not neccesseraly an action button click
-    const message = {didTapExtensionButton: true};
-    browser.tabs.sendMessage(tab.id, message, function(response) {
-        if (typeof response !== "undefined" && typeof response.host !== "undefined") {
-            getLatestConfiguration(response.host).then(currentConfiguration => {
-                const latestConfigurations = currentConfiguration.latestConfigurations;
-                const switchAccountMessage = {
-                    name: "switchAccount",
-                    id: genId(),
-                    provider: "unknown",
-                    body: currentConfiguration,
-                    host: response.host,
-                    favicon: response.favicon
-                };
-                sendResponse(switchAccountMessage);
-                didShowPopup(switchAccountMessage.id);
-                browser.tabs.sendMessage(tab.id, switchAccountMessage);
+    getNextStoredPopup().then(popupRequest => {
+        if (typeof popupRequest !== "undefined") {
+            sendResponse(popupRequest);
+        } else {
+            const message = {didTapExtensionButton: true};
+            browser.tabs.sendMessage(tab.id, message, function(response) {
+                if (typeof response !== "undefined" && typeof response.host !== "undefined") {
+                    getLatestConfiguration(response.host).then(currentConfiguration => {
+                        const latestConfigurations = currentConfiguration.latestConfigurations;
+                        const switchAccountMessage = {
+                            name: "switchAccount",
+                            id: genId(),
+                            provider: "unknown",
+                            body: currentConfiguration,
+                            host: response.host,
+                            favicon: response.favicon
+                        };
+                        sendResponse(switchAccountMessage);
+                        didShowPopup(switchAccountMessage.id);
+                        browser.tabs.sendMessage(tab.id, switchAccountMessage);
+                    });
+                }
             });
         }
     });
