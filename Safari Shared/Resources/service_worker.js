@@ -212,7 +212,11 @@ function cancelPopupRequest(request) {
         subject: "cancelRequest",
     };
     browser.runtime.sendNativeMessage("mac.tokenary.io", cancelResponse);
-    // TODO: send cancel message to inpage
+    browser.tabs.getCurrent((tab) => {
+        if (tab) {
+            browser.tabs.sendMessage(tab.id, cancelResponse);
+        }
+    });
 }
 
 function didAppearPopup(tab, sendResponse) {
