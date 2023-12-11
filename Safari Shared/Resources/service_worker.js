@@ -256,7 +256,14 @@ function hasVisiblePopup() {
 
 function storePopupRequest(popupRequest, sendCancelResponse) {
     const item = {popupRequest: popupRequest, sendCancelResponse: sendCancelResponse};
-    // TODO: add to the end of the queue
+    getPopupsQueue().then(result => {
+        if (Array.isArray(result)) {
+            result.push(item);
+            setPopupsQueue(result);
+        } else {
+            setPopupsQueue([item]);
+        }
+    });
 }
 
 function getNextStoredPopup() {
@@ -288,8 +295,13 @@ function storeCurrentPopupId(id) {
 }
 
 function cleanupStoredPopup(id) {
-    // TODO: remove corresponding item from the queue
-    browser.storage.session.remove("currentPopupId");
+    getPopupsQueue().then(result => {
+        if (Array.isArray(result) && result.length > 0 && result[0].popupRequest.id == id) {
+            result.shift();
+            setPopupsQueue(result);
+            browser.storage.session.remove("currentPopupId");
+        }
+    });
 }
 
 function getPopupsQueue() {
@@ -307,7 +319,13 @@ function setPopupsQueue(queue) {
 }
 
 function cleanupPopupsQueue() {
-    // TODO: use for current and all queued: cancelPopupRequest(pendingPopupRequest, sendPopupCancelResponse);
-    browser.storage.session.remove("popupsQueue");
-    browser.storage.session.remove("currentPopupId");
+    getPopupsQueue().then(result => {
+        if (Array.isArray(result) && result.length > 0) {
+            for (var i = 0; i < result.length; i++) {
+                cancelPopupRequest(result[i].popupRequest, result[i].sendCancelResponse);
+            }
+        }
+        browser.storage.session.remove("popupsQueue");
+        browser.storage.session.remove("currentPopupId");
+    });
 }
