@@ -251,3 +251,63 @@ function hasVisiblePopup() {
         return true;
     }
 }
+
+// MARK: - popup queue storage
+
+function storePopupRequest(popupRequest, sendCancelResponse) {
+    const item = {popupRequest: popupRequest, sendCancelResponse: sendCancelResponse};
+    // TODO: add to the end of the queue
+}
+
+function getNextStoredPopup() {
+    return new Promise((resolve) => {
+        getPopupsQueue().then(result => {
+            if (Array.isArray(result) && result.length > 0) {
+                resolve(result[0]);
+            } else {
+                resolve();
+            }
+        }).catch(() => {
+            resolve();
+        });
+    });
+}
+
+function getCurrentPopupId() {
+    return new Promise((resolve) => {
+        browser.storage.session.get("currentPopupId").then(result => {
+            resolve(result["currentPopupId"]);
+        }).catch(() => {
+            resolve();
+        });
+    });
+}
+
+function storeCurrentPopupId(id) {
+    browser.storage.session.set({ ["currentPopupId"]: id });
+}
+
+function cleanupStoredPopup(id) {
+    // TODO: remove corresponding item from the queue
+    browser.storage.session.remove("currentPopupId");
+}
+
+function getPopupsQueue() {
+    return new Promise((resolve) => {
+        browser.storage.session.get("popupsQueue").then(result => {
+            resolve(result["popupsQueue"]);
+        }).catch(() => {
+            resolve();
+        });
+    });
+}
+
+function setPopupsQueue(queue) {
+    browser.storage.session.set({ ["popupsQueue"]: queue });
+}
+
+function cleanupPopupsQueue() {
+    // TODO: use for current and all queued: cancelPopupRequest(pendingPopupRequest, sendPopupCancelResponse);
+    browser.storage.session.remove("popupsQueue");
+    browser.storage.session.remove("currentPopupId");
+}
