@@ -180,19 +180,19 @@ function showPopupIfThereIsNoVisible(id) {
 
 function didShowPopup(id) {
     storeCurrentPopupId(id);
-    setTimeout( function() { pollPopupStatus(id); }, 420);
+    setTimeout( function() { pollPopupStatus(id); }, 699);
 }
 
 function pollPopupStatus(id) {
-    if (hasVisiblePopup()) {
-        setTimeout( function() { pollPopupStatus(id); }, 420);
-    } else {
-        getCurrentPopupId().then(currentId => {
-            if (id == currentId) {
+    getCurrentPopupId().then(currentId => {
+        if (id == currentId) {
+            if (hasVisiblePopup()) {
+                setTimeout( function() { pollPopupStatus(id); }, 420);
+            } else {
                 didDismissPopup();
             }
-        });
-    }
+        }
+    });
 }
 
 function popupDidProceed(id) {
