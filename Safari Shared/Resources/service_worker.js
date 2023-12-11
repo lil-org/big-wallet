@@ -183,12 +183,11 @@ function pollPopupStatus() {
 }
 
 function popupDidProceed(id) {
-    // TODO: perform cleanup for popup corresponding to id
+    cleanupStoredPopup(id);
 }
 
 function didDismissPopup() {
-    // TODO: cleanup for current and all remove all queued popups
-    // use for current and all queued: cancelPopupRequest(pendingPopupRequest, sendPopupCancelResponse);
+    cleanupPopupsQueue();
 }
 
 function cancelPopupRequest(request, sendResponse) {
