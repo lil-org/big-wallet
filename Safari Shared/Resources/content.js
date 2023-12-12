@@ -131,3 +131,17 @@ function getFavicon() {
 function genId() {
     return new Date().getTime() + Math.floor(Math.random() * 1000);
 }
+
+function didChangeVisibility() {
+    if (document.pendingRequestsIds.size != 0 && document.visibilityState === 'visible') {
+        document.pendingRequestsIds.forEach(id => {
+            const request = {id: id, subject: "getResponse", host: window.location.host};
+            browser.runtime.sendMessage(request).then(response => {
+                sendToInpage(response, id);
+            });
+        });
+    }
+    return true;
+}
+
+document.addEventListener('visibilitychange', didChangeVisibility);
