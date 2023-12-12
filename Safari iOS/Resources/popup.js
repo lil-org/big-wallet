@@ -3,7 +3,7 @@
 const button = document.getElementById('tokenary-button');
 var message = {};
 
-browser.tabs.getCurrent(function(tab) {
+browser.tabs.getCurrent(tab => {
     browser.runtime.sendMessage({subject: 'POPUP_APPEARED', tab: tab}).then((response) => {
         message = response;
         setupButton();

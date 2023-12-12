@@ -97,7 +97,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 // Receive from inpage
-window.addEventListener("message", function(event) {
+window.addEventListener("message", event => {
     if (event.source == window && event.data) {
         if (event.data.direction == "from-page-script") {
             sendMessageToNativeApp(event.data.message);
@@ -109,7 +109,7 @@ window.addEventListener("message", function(event) {
     }
 });
 
-var getFavicon = function() {
+function getFavicon() {
     if (document.favicon) {
         return document.favicon;
     }

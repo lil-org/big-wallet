@@ -180,14 +180,14 @@ function showPopupIfThereIsNoVisible(id) {
 
 function didShowPopup(id) {
     storeCurrentPopupId(id);
-    setTimeout( function() { pollPopupStatus(id); }, 699);
+    setTimeout(() => { pollPopupStatus(id); }, 699);
 }
 
 function pollPopupStatus(id) {
     getCurrentPopupId().then(currentId => {
         if (id == currentId) {
             if (hasVisiblePopup()) {
-                setTimeout( function() { pollPopupStatus(id); }, 420);
+                setTimeout(() => { pollPopupStatus(id); }, 420);
             } else {
                 didDismissPopup();
             }
