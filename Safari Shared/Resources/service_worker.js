@@ -181,7 +181,7 @@ function didShowPopup(id) {
 
 function pollPopupStatus(id) {
     getCurrentPopupId().then(currentId => {
-        if (id == currentId) {
+        if (typeof currentId !== "undefined" && id == currentId) {
             if (hasVisiblePopup()) {
                 setTimeout(() => { pollPopupStatus(id); }, 420);
             } else {

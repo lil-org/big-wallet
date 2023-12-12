@@ -7,7 +7,6 @@ browser.tabs.getCurrent(tab => {
     browser.runtime.sendMessage({subject: 'POPUP_APPEARED', tab: tab}).then((response) => {
         message = response;
         setupButton();
-        pingServiceWorker();
     });
 });
 
@@ -57,9 +56,4 @@ function setupButton() {
     }
 
     button.innerText = title;
-}
-
-function pingServiceWorker() {
-    browser.runtime.sendMessage({subject: 'POPUP_PING'});
-    setTimeout(pingServiceWorker, 420);
 }
