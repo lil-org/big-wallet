@@ -17,7 +17,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
         sendNativeMessage(request, sender, sendResponse);
     } else if (request.subject === "getResponse") {
-        browser.runtime.sendNativeMessage("mac.tokenary.io", request, function(response) {
+        browser.runtime.sendNativeMessage("mac.tokenary.io", request).then(response => {
             sendResponse(response);
             storeConfigurationIfNeeded(request.host, response);
             waitAndShowNextPopupIfNeeded(isMobile);
@@ -51,7 +51,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 function sendNativeMessage(request, sender, sendResponse) {
-    browser.runtime.sendNativeMessage("mac.tokenary.io", request.message, function(response) {
+    browser.runtime.sendNativeMessage("mac.tokenary.io", request.message).then(response => {
         sendResponse(response);
         didCompleteRequest(request.message.id, sender.tab.id);
         storeConfigurationIfNeeded(request.host, response);
@@ -120,9 +120,9 @@ function justShowApp() {
     browser.runtime.sendNativeMessage("mac.tokenary.io", showAppMessage);
 }
 
-browser.action.onClicked.addListener(function(tab) {
+browser.action.onClicked.addListener(tab => {
     const message = {didTapExtensionButton: true};
-    browser.tabs.sendMessage(tab.id, message, function(response) {
+    browser.tabs.sendMessage(tab.id, message).then(response => {
         if (typeof response !== "undefined" && typeof response.host !== "undefined") {
             getLatestConfiguration(response.host).then(currentConfiguration => {
                 const switchAccountMessage = {name: "switchAccount", id: genId(), provider: "unknown", body: currentConfiguration};
@@ -225,7 +225,7 @@ function didAppearPopup(tab, sendResponse) {
             sendResponse(popupRequest);
         } else {
             const message = {didTapExtensionButton: true};
-            browser.tabs.sendMessage(tab.id, message, function(response) {
+            browser.tabs.sendMessage(tab.id, message).then(response => {
                 if (typeof response !== "undefined" && typeof response.host !== "undefined") {
                     getLatestConfiguration(response.host).then(currentConfiguration => {
                         const latestConfigurations = currentConfiguration.latestConfigurations;
