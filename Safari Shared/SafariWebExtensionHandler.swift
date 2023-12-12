@@ -4,6 +4,10 @@ import SafariServices
 
 let SFExtensionMessageKey = "message"
 
+private enum HandlerError: Error {
+    case empty
+}
+
 class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     
     private var context: NSExtensionContext?
@@ -12,8 +16,10 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     func beginRequest(with context: NSExtensionContext) {
         guard let item = context.inputItems[0] as? NSExtensionItem,
               let message = item.userInfo?[SFExtensionMessageKey],
-              let data = try? JSONSerialization.data(withJSONObject: message, options: []) else { return }
-        
+              let data = try? JSONSerialization.data(withJSONObject: message, options: []) else {
+            context.cancelRequest(withError: HandlerError.empty)
+            return
+        }
         let jsonDecoder = JSONDecoder()
         if let internalSafariRequest = try? jsonDecoder.decode(InternalSafariRequest.self, from: data) {
             let id = internalSafariRequest.id
@@ -24,14 +30,18 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     self.context = context
                     respond(with: response)
                     ExtensionBridge.removeResponse(id: id)
+                } else {
+                    context.cancelRequest(withError: HandlerError.empty)
                 }
                 #else
-                break
+                context.cancelRequest(withError: HandlerError.empty)
                 #endif
             case .didCompleteRequest:
                 ExtensionBridge.removeResponse(id: id)
+                context.cancelRequest(withError: HandlerError.empty)
             case .cancelRequest:
                 ExtensionBridge.removeRequest(id: id)
+                context.cancelRequest(withError: HandlerError.empty)
             }
         } else if let query = String(data: data, encoding: .utf8)?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                   let request = SafariRequest(query: query),
@@ -55,6 +65,8 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 #endif
                 poll(id: request.id)
             }
+        } else {
+            context.cancelRequest(withError: HandlerError.empty)
         }
     }
     
@@ -65,6 +77,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             ExtensionBridge.removeResponse(id: id)
             #endif
         } else {
+            // TODO: poll only if it still might be there
             queue.asyncAfter(deadline: .now() + .milliseconds(500)) { [weak self] in
                 self?.poll(id: id)
             }
