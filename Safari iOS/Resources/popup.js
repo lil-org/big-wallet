@@ -24,6 +24,7 @@ button.addEventListener('click', () => {
     });
     browser.runtime.sendMessage({subject: 'POPUP_DID_PROCEED', id: message.id});
     setTimeout(window.close, 437);
+    return true;
 });
 
 function setupButton() {

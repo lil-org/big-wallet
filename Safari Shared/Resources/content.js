@@ -107,6 +107,7 @@ window.addEventListener("message", event => {
             browser.runtime.sendMessage(disconnectRequest);
         }
     }
+    return true;
 });
 
 function getFavicon() {

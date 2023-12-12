@@ -136,6 +136,7 @@ browser.action.onClicked.addListener(tab => {
     if (tab.url == "" && tab.pendingUrl == "") {
         justShowApp();
     }
+    return true;
 });
 
 function genId() {
@@ -260,7 +261,7 @@ function hasVisiblePopup() {
 
 function storePopupRequest(popupRequest) {
     getPopupsQueue().then(result => {
-        if (Array.isArray(result)) {
+        if (typeof result !== "undefined", Array.isArray(result)) {
             result.push(popupRequest);
             setPopupsQueue(result);
         } else {
@@ -272,7 +273,7 @@ function storePopupRequest(popupRequest) {
 function getNextStoredPopup() {
     return new Promise((resolve) => {
         getPopupsQueue().then(result => {
-            if (Array.isArray(result) && result.length > 0) {
+            if (typeof result !== "undefined", Array.isArray(result) && result.length > 0) {
                 resolve(result[0]);
             } else {
                 resolve();
@@ -299,7 +300,7 @@ function storeCurrentPopupId(id) {
 
 function cleanupStoredPopup(id) {
     getPopupsQueue().then(result => {
-        if (Array.isArray(result) && result.length > 0 && result[0].id == id) {
+        if (typeof result !== "undefined", Array.isArray(result) && result.length > 0 && result[0].id == id) {
             result.shift();
             setPopupsQueue(result);
             browser.storage.session.remove("currentPopupId");
@@ -323,7 +324,7 @@ function setPopupsQueue(queue) {
 
 function cleanupPopupsQueue() {
     getPopupsQueue().then(result => {
-        if (Array.isArray(result) && result.length > 0) {
+        if (typeof result !== "undefined", Array.isArray(result) && result.length > 0) {
             for (var i = 0; i < result.length; i++) {
                 cancelPopupRequest(result[i]);
             }
