@@ -28,9 +28,6 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 } else {
                     context.cancelRequest(withError: HandlerError.empty)
                 }
-            case .didCompleteRequest:
-                ExtensionBridge.removeResponse(id: id)
-                context.cancelRequest(withError: HandlerError.empty)
             case .cancelRequest:
                 ExtensionBridge.removeRequest(id: id)
                 context.cancelRequest(withError: HandlerError.empty)

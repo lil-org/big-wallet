@@ -53,7 +53,6 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 function sendNativeMessage(request, sender, sendResponse) {
     browser.runtime.sendNativeMessage("mac.tokenary.io", request.message).then(response => {
         sendResponse(response);
-        didCompleteRequest(request.message.id, sender.tab.id);
         storeConfigurationIfNeeded(request.host, response);
         waitAndShowNextPopupIfNeeded(isMobile);
     }).catch(() => {});
@@ -141,14 +140,6 @@ browser.action.onClicked.addListener(tab => {
 
 function genId() {
     return new Date().getTime() + Math.floor(Math.random() * 1000);
-}
-
-function didCompleteRequest(id, tabId) {
-    if (isMobile) {
-        browser.tabs.update(tabId, { active: true });
-        const request = {id: id, subject: "didCompleteRequest"};
-        browser.runtime.sendNativeMessage("mac.tokenary.io", request).catch(() => {});
-    }
 }
 
 // MARK: - iOS extension popup
