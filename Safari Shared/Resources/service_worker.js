@@ -18,9 +18,11 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendNativeMessage(request, sender, sendResponse);
     } else if (request.subject === "getResponse") {
         browser.runtime.sendNativeMessage("mac.tokenary.io", request).then(response => {
-            sendResponse(response);
-            storeConfigurationIfNeeded(request.host, response);
-            waitAndShowNextPopupIfNeeded(isMobile);
+            if (typeof response !== "undefined") {
+                sendResponse(response);
+                storeConfigurationIfNeeded(request.host, response);
+                waitAndShowNextPopupIfNeeded(isMobile);
+            }
         }).catch(() => {});
     } else if (request.subject === "getLatestConfiguration") {
         getLatestConfiguration(request.host).then(currentConfiguration => {

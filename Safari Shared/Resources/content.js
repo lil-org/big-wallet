@@ -69,6 +69,7 @@ function getLatestConfiguration() {
 }
 
 function sendToInpage(response, id) {
+    if (typeof response === "undefined") { return; }
     if (document.pendingRequestsIds.has(id)) {
         document.pendingRequestsIds.delete(id);
         window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
@@ -137,7 +138,9 @@ function didChangeVisibility() {
         document.pendingRequestsIds.forEach(id => {
             const request = {id: id, subject: "getResponse", host: window.location.host};
             browser.runtime.sendMessage(request).then(response => {
-                sendToInpage(response, id);
+                if (typeof response !== "undefined") {
+                    sendToInpage(response, id);
+                }
             });
         });
     }
@@ -145,3 +148,4 @@ function didChangeVisibility() {
 }
 
 document.addEventListener('visibilitychange', didChangeVisibility);
+window.addEventListener('focus', didChangeVisibility);
