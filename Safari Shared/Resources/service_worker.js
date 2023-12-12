@@ -21,7 +21,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
             sendResponse(response);
             storeConfigurationIfNeeded(request.host, response);
             waitAndShowNextPopupIfNeeded(isMobile);
-        });
+        }).catch(() => {});
     } else if (request.subject === "getLatestConfiguration") {
         getLatestConfiguration(request.host).then(currentConfiguration => {
             sendResponse(currentConfiguration);
@@ -56,7 +56,7 @@ function sendNativeMessage(request, sender, sendResponse) {
         didCompleteRequest(request.message.id, sender.tab.id);
         storeConfigurationIfNeeded(request.host, response);
         waitAndShowNextPopupIfNeeded(isMobile);
-    });
+    }).catch(() => {});
 }
 
 function storeLatestConfiguration(host, configuration) {
@@ -117,7 +117,7 @@ function storeConfigurationIfNeeded(host, response) {
 function justShowApp() {
     const id = genId();
     const showAppMessage = {name: "justShowApp", id: id, provider: "unknown", body: {}, host: ""};
-    browser.runtime.sendNativeMessage("mac.tokenary.io", showAppMessage);
+    browser.runtime.sendNativeMessage("mac.tokenary.io", showAppMessage).catch(() => {});
 }
 
 browser.action.onClicked.addListener(tab => {
@@ -147,7 +147,7 @@ function didCompleteRequest(id, tabId) {
     if (isMobile) {
         browser.tabs.update(tabId, { active: true });
         const request = {id: id, subject: "didCompleteRequest"};
-        browser.runtime.sendNativeMessage("mac.tokenary.io", request);
+        browser.runtime.sendNativeMessage("mac.tokenary.io", request).catch(() => {});
     }
 }
 
@@ -212,7 +212,7 @@ function cancelPopupRequest(request) {
         error: "canceled",
         subject: "cancelRequest",
     };
-    browser.runtime.sendNativeMessage("mac.tokenary.io", cancelResponse);
+    browser.runtime.sendNativeMessage("mac.tokenary.io", cancelResponse).catch(() => {});
     browser.tabs.getCurrent((tab) => {
         if (tab) {
             browser.tabs.sendMessage(tab.id, cancelResponse);
