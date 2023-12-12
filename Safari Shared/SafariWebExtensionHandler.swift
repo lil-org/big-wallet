@@ -23,8 +23,8 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             switch internalSafariRequest.subject {
             case .getResponse:
                 if let response = ExtensionBridge.getResponse(id: id) {
-                    respond(with: response, context: context)
                     ExtensionBridge.removeResponse(id: id)
+                    respond(with: response, context: context)
                 } else {
                     context.cancelRequest(withError: HandlerError.empty)
                 }
