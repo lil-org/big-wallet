@@ -54,9 +54,11 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 function sendNativeMessage(request, sender, sendResponse) {
     browser.runtime.sendNativeMessage("mac.tokenary.io", request.message).then(response => {
-        sendResponse(response);
-        storeConfigurationIfNeeded(request.host, response);
-        waitAndShowNextPopupIfNeeded(isMobile);
+        if (typeof response !== "undefined") {
+            sendResponse(response);
+            storeConfigurationIfNeeded(request.host, response);
+            waitAndShowNextPopupIfNeeded(isMobile);
+        }
     }).catch(() => {});
 }
 
