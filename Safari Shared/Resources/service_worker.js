@@ -239,6 +239,7 @@ function didAppearPopup(tab, sendResponse) {
                             favicon: response.favicon
                         };
                         sendResponse(switchAccountMessage);
+                        storePopupRequest(switchAccountMessage);
                         didShowPopup(switchAccountMessage.id);
                         browser.tabs.sendMessage(tab.id, switchAccountMessage);
                     });
