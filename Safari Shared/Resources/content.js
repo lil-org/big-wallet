@@ -63,6 +63,7 @@ if (shouldInjectProvider()) {
 function getLatestConfiguration() {
     const request = {subject: "getLatestConfiguration", host: window.location.host};
     browser.runtime.sendMessage(request).then((response) => {
+        if (typeof response === "undefined") { return; }
         const id = genId();
         window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
     });
@@ -81,6 +82,7 @@ function sendMessageToNativeApp(message) {
     message.host = window.location.host;
     document.pendingRequestsIds.add(message.id);
     browser.runtime.sendMessage({ subject: "message-to-wallet", message: message, host: window.location.host }).then((response) => {
+        if (typeof response === "undefined") { return; }
         sendToInpage(response, message.id);
     });
 }
