@@ -1,7 +1,9 @@
-// Copyright © 2022 Tokenary. All rights reserved.
+// Copyright © 2023 Tokenary. All rights reserved.
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.subject === "POPUP_DID_PROCEED") {
+    if (request.subject === "POPUP_CHECK") {
+        checkPopupStatus(request.id, sendResponse);
+    } else if (request.subject === "POPUP_DID_PROCEED") {
         popupDidProceed(request.id);
     } else if (request.subject === "POPUP_APPEARED") {
         didAppearPopup(request.tab, sendResponse);
@@ -139,11 +141,24 @@ browser.action.onClicked.addListener(tab => {
 
 // MARK: - iOS extension popup
 
+function checkPopupStatus(id, sendResponse) {
+    getCurrentPopupId().then(currentId => {
+        if (typeof currentId !== "undefined" && id == currentId) {
+            if (hasVisiblePopup()) {
+                sendResponse({ popupStillThere: true });
+            } else {
+                didDismissPopup();
+            }
+        }
+    });
+}
+
 function addToPopupQueue(popupRequest) {
     storePopupRequest(popupRequest);
     showPopupIfThereIsNoVisible(popupRequest.id);
 }
 
+// TODO: call in appropriate moments
 function processPopupQueue() {
     getNextStoredPopup().then(popupRequest => {
         if (typeof popupRequest !== "undefined" && typeof popupRequest.id !== "undefined") {
@@ -188,11 +203,11 @@ function cancelPopupRequest(request) {
 }
 
 function didAppearPopup(tab, sendResponse) {
-    browser.tabs.sendMessage(tab.id, {popupDidAppear: true});
     getNextStoredPopup().then(popupRequest => {
         if (typeof popupRequest !== "undefined") {
             sendResponse(popupRequest);
             removePopupFromQueue(popupRequest.id);
+            browser.tabs.sendMessage(tab.id, {popupDidAppear: true, id: popupRequest.id});
         } else {
             const message = {didTapExtensionButton: true};
             browser.tabs.sendMessage(tab.id, message).then(response => {
@@ -209,6 +224,7 @@ function didAppearPopup(tab, sendResponse) {
                         };
                         sendResponse(switchAccountMessage);
                         didShowPopup(switchAccountMessage.id);
+                        browser.tabs.sendMessage(tab.id, {popupDidAppear: true, id: switchAccountMessage.id});
                         browser.tabs.sendMessage(tab.id, switchAccountMessage);
                     });
                 }
@@ -295,6 +311,7 @@ function setPopupsQueue(queue) {
 }
 
 function cleanupPopupsQueue() {
+    browser.storage.session.remove("currentPopupId");
     getPopupsQueue().then(result => {
         if (typeof result !== "undefined", Array.isArray(result) && result.length > 0) {
             for (var i = 0; i < result.length; i++) {
@@ -302,7 +319,6 @@ function cleanupPopupsQueue() {
             }
         }
         browser.storage.session.remove("popupsQueue");
-        browser.storage.session.remove("currentPopupId");
     });
 }
 

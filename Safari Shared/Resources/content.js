@@ -1,4 +1,4 @@
-// Copyright © 2022 Tokenary. All rights reserved.
+// Copyright © 2023 Tokenary. All rights reserved.
 
 if (!("pendingRequestsIds" in document)) {
     document.pendingRequestsIds = new Set();
@@ -89,7 +89,9 @@ function sendMessageToNativeApp(message) {
 
 // Receive from service-worker
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if ("didTapExtensionButton" in request) {
+    if ("popupDidAppear" in request && "id" in request) {
+        setTimeout(() => pollPopupStatus(request.id), 500);
+    } else if ("didTapExtensionButton" in request) {
         sendResponse({ host: window.location.host, favicon: getFavicon() });
     } else if ("name" in request && request.name == "switchAccount") {
         sendMessageToNativeApp(request);
@@ -152,3 +154,15 @@ function didChangeVisibility() {
 
 document.addEventListener('visibilitychange', didChangeVisibility);
 window.addEventListener('focus', didChangeVisibility);
+
+// MARK: - iOS extension popup
+
+function pollPopupStatus(id) {
+    // TODO: do not poll when document itself is not visible
+    const request = {id: id, subject: "POPUP_CHECK", isMobile: isMobile};
+    browser.runtime.sendMessage(request).then(response => {
+        if (typeof response !== "undefined" && "popupStillThere" in response) {
+            setTimeout(() => pollPopupStatus(id), 500);
+        }
+    });
+}
