@@ -165,6 +165,7 @@
 		2CB3845D27654EB300A189B9 /* images in Resources */ = {isa = PBXBuildFile; fileRef = 2CB3845927654E9700A189B9 /* images */; };
 		2CB4031B281C99C800BAEBEE /* AccountsHeaderRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB4031A281C99C800BAEBEE /* AccountsHeaderRowView.swift */; };
 		2CB4031D281D745D00BAEBEE /* NSTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB4031C281D745D00BAEBEE /* NSTableView.swift */; };
+		2CB7A3F12B29CD82004BEE3A /* macos_specific_content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CB7A3F02B29CD7D004BEE3A /* macos_specific_content.js */; };
 		2CC0CDBE2692027E0072922A /* PriceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC0CDBD2692027E0072922A /* PriceService.swift */; };
 		2CC6EF0D275E64810040CC62 /* UIViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC6EF0C275E64810040CC62 /* UIViewController.swift */; };
 		2CC79DF82AFD4BD6002B5A2D /* TransactionInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC79DF72AFD4BD6002B5A2D /* TransactionInspector.swift */; };
@@ -424,6 +425,7 @@
 		2CB3845927654E9700A189B9 /* images */ = {isa = PBXFileReference; lastKnownFileType = folder; path = images; sourceTree = "<group>"; };
 		2CB4031A281C99C800BAEBEE /* AccountsHeaderRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsHeaderRowView.swift; sourceTree = "<group>"; };
 		2CB4031C281D745D00BAEBEE /* NSTableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSTableView.swift; sourceTree = "<group>"; };
+		2CB7A3F02B29CD7D004BEE3A /* macos_specific_content.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = macos_specific_content.js; sourceTree = "<group>"; };
 		2CBB9FA42AF7B5970047B0CD /* ci_post_clone.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = ci_post_clone.sh; sourceTree = "<group>"; };
 		2CC0CDBD2692027E0072922A /* PriceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceService.swift; sourceTree = "<group>"; };
 		2CC6EF0C275E64810040CC62 /* UIViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIViewController.swift; sourceTree = "<group>"; };
@@ -569,6 +571,7 @@
 			isa = PBXGroup;
 			children = (
 				2C09CBA8273979C1009AD39B /* manifest.json */,
+				2CB7A3F02B29CD7D004BEE3A /* macos_specific_content.js */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -1275,6 +1278,7 @@
 			files = (
 				2CB3845C27654EB300A189B9 /* _locales in Resources */,
 				2CB3845D27654EB300A189B9 /* images in Resources */,
+				2CB7A3F12B29CD82004BEE3A /* macos_specific_content.js in Resources */,
 				2CEFEB16274D5DCA00CE23BD /* inpage.js in Resources */,
 				2C09CBAB273979C1009AD39B /* service_worker.js in Resources */,
 				2C09CBA9273979C1009AD39B /* manifest.json in Resources */,
