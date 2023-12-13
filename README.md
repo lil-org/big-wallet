@@ -1,4 +1,4 @@
-# Tokenary
+# Wallet by (lil.org)[https://lil.org]
 Crypto wallet with a Safari extension for iOS and macOS.
 
 Download on the [App Store](https://tokenary.io/get).
