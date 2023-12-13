@@ -4,7 +4,7 @@ const button = document.getElementById('tokenary-button');
 var message = {};
 
 browser.tabs.getCurrent(tab => {
-    browser.runtime.sendMessage({subject: 'POPUP_APPEARED', tab: tab}).then((response) => {
+    browser.runtime.sendMessage({subject: 'POPUP_APPEARED', tab: tab, isMobile: true}).then((response) => {
         message = response;
         setupButton();
     });
@@ -21,7 +21,7 @@ button.addEventListener('click', () => {
             });
         }
     });
-    browser.runtime.sendMessage({subject: 'POPUP_DID_PROCEED', id: message.id});
+    browser.runtime.sendMessage({subject: 'POPUP_DID_PROCEED', id: message.id, isMobile: true});
     setTimeout(window.close, 437);
     return true;
 });

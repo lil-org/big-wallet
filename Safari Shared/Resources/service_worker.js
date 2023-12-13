@@ -1,15 +1,12 @@
 // Copyright © 2022 Tokenary. All rights reserved.
 
-const isMobile = true; // TODO: setup from platform-specific content script
-
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.subject === "POPUP_PING") {
-    } else if (request.subject === "POPUP_DID_PROCEED") {
+    if (request.subject === "POPUP_DID_PROCEED") {
         popupDidProceed(request.id);
     } else if (request.subject === "POPUP_APPEARED") {
         didAppearPopup(request.tab, sendResponse);
     } else if (request.subject === "message-to-wallet") {
-        if (isMobile) {
+        if (request.isMobile) {
             const name = request.message.name;
             if (name != "switchEthereumChain" && name != "addEthereumChain" && name != "switchAccount") {
                 addToPopupQueue(request.message);
@@ -21,7 +18,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
             if (typeof response !== "undefined") {
                 sendResponse(response);
                 storeConfigurationIfNeeded(request.host, response);
-                waitAndShowNextPopupIfNeeded(isMobile);
+                waitAndShowNextPopupIfNeeded(request.isMobile);
             }
         }).catch(() => {});
     } else if (request.subject === "getLatestConfiguration") {
@@ -57,7 +54,7 @@ function sendNativeMessage(request, sender, sendResponse) {
         if (typeof response !== "undefined") {
             sendResponse(response);
             storeConfigurationIfNeeded(request.host, response);
-            waitAndShowNextPopupIfNeeded(isMobile);
+            waitAndShowNextPopupIfNeeded(request.isMobile);
         }
     }).catch(() => {});
 }
@@ -150,7 +147,7 @@ function genId() {
 
 function waitAndShowNextPopupIfNeeded(isMobile) {
     if (isMobile) {
-        setTimeout(processPopupQueue, 420);
+        setTimeout(processPopupQueue, 420); // TODO: hmmm
     }
 }
 
