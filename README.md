@@ -1,9 +1,11 @@
-# Wallet by [lil.org](https://lil.org)
-Crypto wallet with a Safari extension for iOS and macOS.
+# wallet by [lil.org](https://lil.org)
+crypto wallet with a safari extension for ios and macos
 
-Download on the [App Store](https://tokenary.io/get).
+connect like metamask in safari
 
-## Development
+download on the [app store](https://tokenary.io/get)
+
+## development
 
 * `pod install`
-* Run the Xcode project.
+* run the xcode project
