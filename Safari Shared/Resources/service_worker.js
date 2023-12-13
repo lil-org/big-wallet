@@ -18,7 +18,6 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
             if (typeof response !== "undefined") {
                 sendResponse(response);
                 storeConfigurationIfNeeded(request.host, response);
-                waitAndShowNextPopupIfNeeded(request.isMobile);
             }
         }).catch(() => {});
     } else if (request.subject === "getLatestConfiguration") {
@@ -54,7 +53,6 @@ function sendNativeMessage(request, sender, sendResponse) {
         if (typeof response !== "undefined") {
             sendResponse(response);
             storeConfigurationIfNeeded(request.host, response);
-            waitAndShowNextPopupIfNeeded(request.isMobile);
         }
     }).catch(() => {});
 }
@@ -139,17 +137,7 @@ browser.action.onClicked.addListener(tab => {
     return true;
 });
 
-function genId() {
-    return new Date().getTime() + Math.floor(Math.random() * 1000);
-}
-
 // MARK: - iOS extension popup
-
-function waitAndShowNextPopupIfNeeded(isMobile) {
-    if (isMobile) {
-        setTimeout(processPopupQueue, 420); // TODO: hmmm
-    }
-}
 
 function addToPopupQueue(popupRequest) {
     storePopupRequest(popupRequest);
@@ -173,19 +161,6 @@ function showPopupIfThereIsNoVisible(id) {
 
 function didShowPopup(id) {
     storeCurrentPopupId(id);
-    setTimeout(() => { pollPopupStatus(id); }, 699);
-}
-
-function pollPopupStatus(id) {
-    getCurrentPopupId().then(currentId => {
-        if (typeof currentId !== "undefined" && id == currentId) {
-            if (hasVisiblePopup()) {
-                setTimeout(() => { pollPopupStatus(id); }, 420);
-            } else {
-                didDismissPopup();
-            }
-        }
-    });
 }
 
 function popupDidProceed(id) {
@@ -213,6 +188,7 @@ function cancelPopupRequest(request) {
 }
 
 function didAppearPopup(tab, sendResponse) {
+    // TODO: ask content script to start polling
     getNextStoredPopup().then(popupRequest => {
         if (typeof popupRequest !== "undefined") {
             sendResponse(popupRequest);
@@ -325,4 +301,10 @@ function cleanupPopupsQueue() {
         browser.storage.session.remove("popupsQueue");
         browser.storage.session.remove("currentPopupId");
     });
+}
+
+// MARK: - helpers
+
+function genId() {
+    return new Date().getTime() + Math.floor(Math.random() * 1000);
 }
