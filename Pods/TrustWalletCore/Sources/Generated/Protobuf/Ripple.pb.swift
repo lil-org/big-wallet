@@ -126,6 +126,76 @@ public struct TW_Ripple_Proto_OperationPayment {
   public init() {}
 }
 
+/// https://xrpl.org/escrowcreate.html
+public struct TW_Ripple_Proto_OperationEscrowCreate {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Escrow amount
+  public var amount: Int64 = 0
+
+  /// Beneficiary account
+  public var destination: String = String()
+
+  /// Destination Tag
+  public var destinationTag: Int64 = 0
+
+  /// Escrow expire time
+  public var cancelAfter: Int64 = 0
+
+  /// Escrow release time
+  public var finishAfter: Int64 = 0
+
+  /// Crypto condition
+  /// https://datatracker.ietf.org/doc/html/draft-thomas-crypto-conditions-02#section-8.1
+  public var condition: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// https://xrpl.org/escrowcancel.html
+public struct TW_Ripple_Proto_OperationEscrowCancel {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Funding account
+  public var owner: String = String()
+
+  /// Escrow transaction sequence
+  public var offerSequence: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// https://xrpl.org/escrowfinish.html
+public struct TW_Ripple_Proto_OperationEscrowFinish {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Funding account
+  public var owner: String = String()
+
+  /// Escrow transaction sequence
+  public var offerSequence: Int32 = 0
+
+  /// Crypto condition
+  public var condition: String = String()
+
+  /// Fulfillment matching condition
+  public var fulfillment: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 /// https://xrpl.org/nftokenburn.html 
 public struct TW_Ripple_Proto_OperationNFTokenBurn {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -259,6 +329,30 @@ public struct TW_Ripple_Proto_SigningInput {
     set {operationOneof = .opNftokenCancelOffer(newValue)}
   }
 
+  public var opEscrowCreate: TW_Ripple_Proto_OperationEscrowCreate {
+    get {
+      if case .opEscrowCreate(let v)? = operationOneof {return v}
+      return TW_Ripple_Proto_OperationEscrowCreate()
+    }
+    set {operationOneof = .opEscrowCreate(newValue)}
+  }
+
+  public var opEscrowCancel: TW_Ripple_Proto_OperationEscrowCancel {
+    get {
+      if case .opEscrowCancel(let v)? = operationOneof {return v}
+      return TW_Ripple_Proto_OperationEscrowCancel()
+    }
+    set {operationOneof = .opEscrowCancel(newValue)}
+  }
+
+  public var opEscrowFinish: TW_Ripple_Proto_OperationEscrowFinish {
+    get {
+      if case .opEscrowFinish(let v)? = operationOneof {return v}
+      return TW_Ripple_Proto_OperationEscrowFinish()
+    }
+    set {operationOneof = .opEscrowFinish(newValue)}
+  }
+
   /// Only used by tss chain-integration.
   public var publicKey: Data = Data()
 
@@ -271,6 +365,9 @@ public struct TW_Ripple_Proto_SigningInput {
     case opNftokenCreateOffer(TW_Ripple_Proto_OperationNFTokenCreateOffer)
     case opNftokenAcceptOffer(TW_Ripple_Proto_OperationNFTokenAcceptOffer)
     case opNftokenCancelOffer(TW_Ripple_Proto_OperationNFTokenCancelOffer)
+    case opEscrowCreate(TW_Ripple_Proto_OperationEscrowCreate)
+    case opEscrowCancel(TW_Ripple_Proto_OperationEscrowCancel)
+    case opEscrowFinish(TW_Ripple_Proto_OperationEscrowFinish)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_Ripple_Proto_SigningInput.OneOf_OperationOneof, rhs: TW_Ripple_Proto_SigningInput.OneOf_OperationOneof) -> Bool {
@@ -300,6 +397,18 @@ public struct TW_Ripple_Proto_SigningInput {
       }()
       case (.opNftokenCancelOffer, .opNftokenCancelOffer): return {
         guard case .opNftokenCancelOffer(let l) = lhs, case .opNftokenCancelOffer(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.opEscrowCreate, .opEscrowCreate): return {
+        guard case .opEscrowCreate(let l) = lhs, case .opEscrowCreate(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.opEscrowCancel, .opEscrowCancel): return {
+        guard case .opEscrowCancel(let l) = lhs, case .opEscrowCancel(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.opEscrowFinish, .opEscrowFinish): return {
+        guard case .opEscrowFinish(let l) = lhs, case .opEscrowFinish(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
       default: return false
@@ -492,6 +601,156 @@ extension TW_Ripple_Proto_OperationPayment: SwiftProtobuf.Message, SwiftProtobuf
   }
 }
 
+extension TW_Ripple_Proto_OperationEscrowCreate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".OperationEscrowCreate"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "amount"),
+    2: .same(proto: "destination"),
+    3: .standard(proto: "destination_tag"),
+    4: .standard(proto: "cancel_after"),
+    5: .standard(proto: "finish_after"),
+    6: .same(proto: "condition"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt64Field(value: &self.amount) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.destination) }()
+      case 3: try { try decoder.decodeSingularInt64Field(value: &self.destinationTag) }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self.cancelAfter) }()
+      case 5: try { try decoder.decodeSingularInt64Field(value: &self.finishAfter) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.condition) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.amount != 0 {
+      try visitor.visitSingularInt64Field(value: self.amount, fieldNumber: 1)
+    }
+    if !self.destination.isEmpty {
+      try visitor.visitSingularStringField(value: self.destination, fieldNumber: 2)
+    }
+    if self.destinationTag != 0 {
+      try visitor.visitSingularInt64Field(value: self.destinationTag, fieldNumber: 3)
+    }
+    if self.cancelAfter != 0 {
+      try visitor.visitSingularInt64Field(value: self.cancelAfter, fieldNumber: 4)
+    }
+    if self.finishAfter != 0 {
+      try visitor.visitSingularInt64Field(value: self.finishAfter, fieldNumber: 5)
+    }
+    if !self.condition.isEmpty {
+      try visitor.visitSingularStringField(value: self.condition, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Ripple_Proto_OperationEscrowCreate, rhs: TW_Ripple_Proto_OperationEscrowCreate) -> Bool {
+    if lhs.amount != rhs.amount {return false}
+    if lhs.destination != rhs.destination {return false}
+    if lhs.destinationTag != rhs.destinationTag {return false}
+    if lhs.cancelAfter != rhs.cancelAfter {return false}
+    if lhs.finishAfter != rhs.finishAfter {return false}
+    if lhs.condition != rhs.condition {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Ripple_Proto_OperationEscrowCancel: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".OperationEscrowCancel"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "owner"),
+    2: .standard(proto: "offer_sequence"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.owner) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.offerSequence) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.owner.isEmpty {
+      try visitor.visitSingularStringField(value: self.owner, fieldNumber: 1)
+    }
+    if self.offerSequence != 0 {
+      try visitor.visitSingularInt32Field(value: self.offerSequence, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Ripple_Proto_OperationEscrowCancel, rhs: TW_Ripple_Proto_OperationEscrowCancel) -> Bool {
+    if lhs.owner != rhs.owner {return false}
+    if lhs.offerSequence != rhs.offerSequence {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Ripple_Proto_OperationEscrowFinish: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".OperationEscrowFinish"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "owner"),
+    2: .standard(proto: "offer_sequence"),
+    3: .same(proto: "condition"),
+    4: .same(proto: "fulfillment"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.owner) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.offerSequence) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.condition) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.fulfillment) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.owner.isEmpty {
+      try visitor.visitSingularStringField(value: self.owner, fieldNumber: 1)
+    }
+    if self.offerSequence != 0 {
+      try visitor.visitSingularInt32Field(value: self.offerSequence, fieldNumber: 2)
+    }
+    if !self.condition.isEmpty {
+      try visitor.visitSingularStringField(value: self.condition, fieldNumber: 3)
+    }
+    if !self.fulfillment.isEmpty {
+      try visitor.visitSingularStringField(value: self.fulfillment, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Ripple_Proto_OperationEscrowFinish, rhs: TW_Ripple_Proto_OperationEscrowFinish) -> Bool {
+    if lhs.owner != rhs.owner {return false}
+    if lhs.offerSequence != rhs.offerSequence {return false}
+    if lhs.condition != rhs.condition {return false}
+    if lhs.fulfillment != rhs.fulfillment {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension TW_Ripple_Proto_OperationNFTokenBurn: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OperationNFTokenBurn"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -641,6 +900,9 @@ extension TW_Ripple_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Me
     10: .standard(proto: "op_nftoken_create_offer"),
     11: .standard(proto: "op_nftoken_accept_offer"),
     12: .standard(proto: "op_nftoken_cancel_offer"),
+    16: .standard(proto: "op_escrow_create"),
+    17: .standard(proto: "op_escrow_cancel"),
+    18: .standard(proto: "op_escrow_finish"),
     15: .standard(proto: "public_key"),
   ]
 
@@ -735,6 +997,45 @@ extension TW_Ripple_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Me
         }
       }()
       case 15: try { try decoder.decodeSingularBytesField(value: &self.publicKey) }()
+      case 16: try {
+        var v: TW_Ripple_Proto_OperationEscrowCreate?
+        var hadOneofValue = false
+        if let current = self.operationOneof {
+          hadOneofValue = true
+          if case .opEscrowCreate(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.operationOneof = .opEscrowCreate(v)
+        }
+      }()
+      case 17: try {
+        var v: TW_Ripple_Proto_OperationEscrowCancel?
+        var hadOneofValue = false
+        if let current = self.operationOneof {
+          hadOneofValue = true
+          if case .opEscrowCancel(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.operationOneof = .opEscrowCancel(v)
+        }
+      }()
+      case 18: try {
+        var v: TW_Ripple_Proto_OperationEscrowFinish?
+        var hadOneofValue = false
+        if let current = self.operationOneof {
+          hadOneofValue = true
+          if case .opEscrowFinish(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.operationOneof = .opEscrowFinish(v)
+        }
+      }()
       default: break
       }
     }
@@ -788,10 +1089,25 @@ extension TW_Ripple_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Me
       guard case .opNftokenCancelOffer(let v)? = self.operationOneof else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
     }()
-    case nil: break
+    default: break
     }
     if !self.publicKey.isEmpty {
       try visitor.visitSingularBytesField(value: self.publicKey, fieldNumber: 15)
+    }
+    switch self.operationOneof {
+    case .opEscrowCreate?: try {
+      guard case .opEscrowCreate(let v)? = self.operationOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 16)
+    }()
+    case .opEscrowCancel?: try {
+      guard case .opEscrowCancel(let v)? = self.operationOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 17)
+    }()
+    case .opEscrowFinish?: try {
+      guard case .opEscrowFinish(let v)? = self.operationOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 18)
+    }()
+    default: break
     }
     try unknownFields.traverse(visitor: &visitor)
   }
