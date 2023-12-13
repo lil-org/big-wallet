@@ -180,6 +180,7 @@ function didShowPopup(id) {
 
 function popupDidProceed(id) {
     cleanupCurrentPopupId();
+    removePopupFromQueue(id);
 }
 
 function didDismissPopup() {
@@ -206,7 +207,6 @@ function didAppearPopup(tab, sendResponse) {
     getNextStoredPopup().then(popupRequest => {
         if (typeof popupRequest !== "undefined") {
             sendResponse(popupRequest);
-            removePopupFromQueue(popupRequest.id);
             browser.tabs.sendMessage(tab.id, {popupDidAppear: true, id: popupRequest.id});
         } else {
             const message = {didTapExtensionButton: true};
@@ -223,6 +223,7 @@ function didAppearPopup(tab, sendResponse) {
                             favicon: response.favicon
                         };
                         sendResponse(switchAccountMessage);
+                        storePopupRequest(switchAccountMessage);
                         didShowPopup(switchAccountMessage.id);
                         browser.tabs.sendMessage(tab.id, {popupDidAppear: true, id: switchAccountMessage.id});
                         browser.tabs.sendMessage(tab.id, switchAccountMessage);
@@ -311,7 +312,7 @@ function setPopupsQueue(queue) {
 }
 
 function cleanupPopupsQueue() {
-    browser.storage.session.remove("currentPopupId");
+    cleanupCurrentPopupId();
     getPopupsQueue().then(result => {
         if (typeof result !== "undefined", Array.isArray(result) && result.length > 0) {
             for (var i = 0; i < result.length; i++) {
