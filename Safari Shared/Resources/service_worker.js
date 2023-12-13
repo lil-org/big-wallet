@@ -188,7 +188,7 @@ function cancelPopupRequest(request) {
 }
 
 function didAppearPopup(tab, sendResponse) {
-    // TODO: ask content script to start polling
+    browser.tabs.sendMessage(tab.id, {popupDidAppear: true});
     getNextStoredPopup().then(popupRequest => {
         if (typeof popupRequest !== "undefined") {
             sendResponse(popupRequest);
