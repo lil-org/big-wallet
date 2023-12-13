@@ -1344,7 +1344,7 @@
 		750173C35820349C07178A5CF95B0F87 /* TWFilecoinAddressConverter.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWFilecoinAddressConverter.h; path = include/TrustWalletCore/TWFilecoinAddressConverter.h; sourceTree = "<group>"; };
 		752820D333566556D461186C664F52F9 /* BinaryEncodingVisitor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BinaryEncodingVisitor.swift; path = Sources/SwiftProtobuf/BinaryEncodingVisitor.swift; sourceTree = "<group>"; };
 		753BE363C328A634C50B7CC6B75E5EA2 /* TWNervosProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWNervosProto.h; path = include/TrustWalletCore/TWNervosProto.h; sourceTree = "<group>"; };
-		75FFFAE58702D743AA2517B60E6B0A10 /* WalletCoreCommon.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; path = WalletCoreCommon.xcframework; sourceTree = "<group>"; };
+		75FFFAE58702D743AA2517B60E6B0A10 /* WalletCoreCommon.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = wrapper.xcframework; path = WalletCoreCommon.xcframework; sourceTree = "<group>"; };
 		76A9191ABB4D7BD2B89F5B14BE9907FA /* AVAssetImageDataProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AVAssetImageDataProvider.swift; path = Sources/General/ImageSource/AVAssetImageDataProvider.swift; sourceTree = "<group>"; };
 		775D9FE0C026342366BA1B6A1339E7F0 /* Sui.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Sui.pb.swift; path = Sources/Generated/Protobuf/Sui.pb.swift; sourceTree = "<group>"; };
 		792B8DE3A8EA740C156954EBA50E6C71 /* ImageDataProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ImageDataProvider.swift; path = Sources/General/ImageSource/ImageDataProvider.swift; sourceTree = "<group>"; };
@@ -1381,7 +1381,7 @@
 		8631534B41EB16A2D4532F528E3ECA01 /* TWWavesProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWWavesProto.h; path = include/TrustWalletCore/TWWavesProto.h; sourceTree = "<group>"; };
 		865425C88B5CBF457BA415B27547CAAF /* KeyStore.Error.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KeyStore.Error.swift; path = Sources/KeyStore.Error.swift; sourceTree = "<group>"; };
 		865D92F9483B14071F97F6516F07E38E /* TWStoredKey.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWStoredKey.h; path = include/TrustWalletCore/TWStoredKey.h; sourceTree = "<group>"; };
-		87601A1F0DAC6747565BE384EC2E639A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Sources/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		87601A1F0DAC6747565BE384EC2E639A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Sources/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		886F3524AD0CE136C282038BB836E0A9 /* Addition.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Addition.swift; path = Sources/Addition.swift; sourceTree = "<group>"; };
 		887E99CEBC059806E355F163AE2B1628 /* BigInt-macOS-dummy.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = "BigInt-macOS-dummy.m"; path = "../BigInt-macOS/BigInt-macOS-dummy.m"; sourceTree = "<group>"; };
 		88B72F3E85F1B5A453FF8A781B5B909F /* WebAuthn.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WebAuthn.swift; path = Sources/Generated/WebAuthn.swift; sourceTree = "<group>"; };
@@ -1428,7 +1428,7 @@
 		9D177E738F82045E126407D6D037E91A /* TWIOSTProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWIOSTProto.h; path = include/TrustWalletCore/TWIOSTProto.h; sourceTree = "<group>"; };
 		9D217D668D126AE40460CA35FD06EA0E /* BitcoinFee.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BitcoinFee.swift; path = Sources/Generated/BitcoinFee.swift; sourceTree = "<group>"; };
 		9D805E4E6F945F69ED42EB7D02AA314E /* PublicKeyType.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PublicKeyType.swift; path = Sources/Generated/Enums/PublicKeyType.swift; sourceTree = "<group>"; };
-		9D940727FF8FB9C785EB98E56350EF41 /* Podfile */ = {isa = PBXFileReference; explicitFileType = text.script.ruby; includeInIndex = 1; indentWidth = 2; lastKnownFileType = text; name = Podfile; path = ../Podfile; sourceTree = SOURCE_ROOT; tabWidth = 2; xcLanguageSpecificationIdentifier = xcode.lang.ruby; };
+		9D940727FF8FB9C785EB98E56350EF41 /* Podfile */ = {isa = PBXFileReference; explicitFileType = text.script.ruby; includeInIndex = 1; indentWidth = 2; name = Podfile; path = ../Podfile; sourceTree = SOURCE_ROOT; tabWidth = 2; xcLanguageSpecificationIdentifier = xcode.lang.ruby; };
 		9DA28D27CE4CDA760D691469B73855B5 /* Comparable.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Comparable.swift; path = Sources/Comparable.swift; sourceTree = "<group>"; };
 		9DC6943246D26C9AA7BE3D41D441ED6A /* TWLiquidStakingProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWLiquidStakingProto.h; path = include/TrustWalletCore/TWLiquidStakingProto.h; sourceTree = "<group>"; };
 		9E1546D69D5F2CAF17A226475A18B58F /* DoubleParser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DoubleParser.swift; path = Sources/SwiftProtobuf/DoubleParser.swift; sourceTree = "<group>"; };
@@ -1850,7 +1850,6 @@
 				7552D97A9C80E47003A42951DB72C979 /* Support Files */,
 				5A6498306583B40D5502A4A548D74CC5 /* Types */,
 			);
-			name = TrustWalletCore;
 			path = TrustWalletCore;
 			sourceTree = "<group>";
 		};
@@ -2045,7 +2044,6 @@
 				689BEA9360638EE3FFDB2D5173580B65 /* Words and Bits.swift */,
 				1866938FC8C286B5808CD4F8FD23548C /* Support Files */,
 			);
-			name = BigInt;
 			path = BigInt;
 			sourceTree = "<group>";
 		};
@@ -2150,7 +2148,6 @@
 				D81702FD9A3E32F2A582309FF30EA3AF /* ZigZag.swift */,
 				16FBA4647D9EBC4608490CD6DFFC9F71 /* Support Files */,
 			);
-			name = SwiftProtobuf;
 			path = SwiftProtobuf;
 			sourceTree = "<group>";
 		};
@@ -2508,7 +2505,6 @@
 				AAB1325170E1C9438786C17F0FC8C19C /* Resources */,
 				161C1A8E772FC1DDA824FE4855FFE551 /* Support Files */,
 			);
-			name = Kingfisher;
 			path = Kingfisher;
 			sourceTree = "<group>";
 		};
@@ -3092,7 +3088,7 @@
 			isa = PBXProject;
 			attributes = {
 				LastSwiftUpdateCheck = 1500;
-				LastUpgradeCheck = 1500;
+				LastUpgradeCheck = 1510;
 			};
 			buildConfigurationList = 4821239608C13582E20E6DA73FD5F1F9 /* Build configuration list for PBXProject "Pods" */;
 			compatibilityVersion = "Xcode 12.0";
