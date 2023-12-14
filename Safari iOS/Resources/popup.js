@@ -1,34 +1,28 @@
 // Copyright © 2023 Tokenary. All rights reserved.
 
 const button = document.getElementById('tokenary-button');
-var message = getPendingRequest();
+var message = {};
 
-if (message != null) {
-    setupButton();
-} else {
-    browser.tabs.getCurrent(function(tab) {
-        browser.runtime.sendMessage({subject: 'POPUP_APPEARED', tab: tab}).then((response) => {
-            button.innerText = response;
-        });
+browser.tabs.getCurrent(tab => {
+    browser.runtime.sendMessage({subject: 'POPUP_APPEARED', tab: tab, isMobile: true}).then((response) => {
+        message = response;
+        setupButton();
     });
-}
+});
 
 button.addEventListener('click', () => {
-    var request = message;
-    const fresh = getPendingRequest();
-    if (fresh != null) {
-        request = fresh;
-    }
-    const query = encodeURIComponent(JSON.stringify(request)) + '";';
-    browser.tabs.executeScript({
-      code: 'window.location.href = "https://tokenary.io/extension?query=' + query
+    browser.runtime.sendMessage({subject: 'POPUP_DID_PROCEED', id: message.id, isMobile: true});
+    const query = encodeURIComponent(JSON.stringify(message));
+    browser.tabs.getCurrent((tab) => {
+        if (tab) {
+            browser.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: (query) => { window.location.href = `https://tokenary.io/extension?query=${query}`; },
+            args: [query]
+            });
+        }
     });
-    
-    setTimeout( function() {
-        window.close();
-    }, 420);
-    
-    browser.runtime.sendMessage({subject: 'POPUP_DID_PROCEED', id: request.id});
+    return true;
 });
 
 function setupButton() {
@@ -61,13 +55,4 @@ function setupButton() {
     }
 
     button.innerText = title;
-}
-
-function getPendingRequest() {
-    const bg = browser.extension.getBackgroundPage();
-    if (bg != null) {
-        return bg.pendingPopupRequest;
-    } else {
-        return null;
-    }
 }

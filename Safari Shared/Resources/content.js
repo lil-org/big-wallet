@@ -1,4 +1,4 @@
-// Copyright © 2022 Tokenary. All rights reserved.
+// Copyright © 2023 Tokenary. All rights reserved.
 
 if (!("pendingRequestsIds" in document)) {
     document.pendingRequestsIds = new Set();
@@ -10,18 +10,18 @@ function injectScript() {
         const scriptTag = document.createElement('script');
         scriptTag.setAttribute('async', 'false');
         var request = new XMLHttpRequest();
-        request.open('GET', browser.extension.getURL('inpage.js'), false);
+        request.open('GET', browser.runtime.getURL('inpage.js'), false);
         request.send();
         scriptTag.textContent = request.responseText;
         container.insertBefore(scriptTag, container.children[0]);
         container.removeChild(scriptTag);
     } catch (error) {
-        console.error('Tokenary: Provider injection failed.', error);
+        console.error('tokenary: failed to inject', error);
     }
 }
 
 function shouldInjectProvider() {
-    return (doctypeCheck() && suffixCheck() && documentElementCheck() && !blockedDomainCheck());
+    return (doctypeCheck() && suffixCheck() && documentElementCheck());
 }
 
 function doctypeCheck() {
@@ -51,31 +51,6 @@ function documentElementCheck() {
     return true;
 }
 
-function blockedDomainCheck() {
-    const blockedDomains = [
-        'uscourts.gov',
-        'dropbox.com',
-        'webbyawards.com',
-        'cdn.shopify.com/s/javascripts/tricorder/xtld-read-only-frame.html',
-        'adyen.com',
-        'gravityforms.com',
-        'harbourair.com',
-        'ani.gamer.com.tw',
-        'blueskybooking.com',
-        'sharefile.com',
-    ];
-    const currentUrl = window.location.href;
-    let currentRegex;
-    for (let i = 0; i < blockedDomains.length; i++) {
-        const blockedDomain = blockedDomains[i].replace('.', '\\.');
-        currentRegex = new RegExp(`(?:https?:\\/\\/)(?:(?!${blockedDomain}).)*$`, 'u');
-        if (!currentRegex.test(currentUrl)) {
-            return true;
-        }
-    }
-    return false;
-}
-
 if (shouldInjectProvider()) {
     if (document.readyState != "loading") {
         window.location.reload();
@@ -86,14 +61,16 @@ if (shouldInjectProvider()) {
 }
 
 function getLatestConfiguration() {
-    const request = {subject: "getLatestConfiguration", host: window.location.host};
+    const request = {subject: "getLatestConfiguration", host: window.location.host, isMobile: isMobile};
     browser.runtime.sendMessage(request).then((response) => {
+        if (typeof response === "undefined") { return; }
         const id = genId();
         window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
     });
 }
 
 function sendToInpage(response, id) {
+    if (typeof response === "undefined") { return; }
     if (document.pendingRequestsIds.has(id)) {
         document.pendingRequestsIds.delete(id);
         window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
@@ -104,34 +81,42 @@ function sendMessageToNativeApp(message) {
     message.favicon = getFavicon();
     message.host = window.location.host;
     document.pendingRequestsIds.add(message.id);
-    browser.runtime.sendMessage({ subject: "message-to-wallet", message: message, host: window.location.host }).then((response) => {
+    browser.runtime.sendMessage({ subject: "message-to-wallet", message: message, host: window.location.host, isMobile: isMobile }).then((response) => {
+        if (typeof response === "undefined") { return; }
         sendToInpage(response, message.id);
     });
 }
 
-// Receive from background
+// Receive from service-worker
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if ("didTapExtensionButton" in request) {
-        sendResponse(window.location.host);
+    if ("popupDidAppear" in request && "id" in request) {
+        setTimeout(() => pollPopupStatus(request.id), 500);
+    } else if ("didTapExtensionButton" in request) {
+        sendResponse({ host: window.location.host, favicon: getFavicon() });
     } else if ("name" in request && request.name == "switchAccount") {
         sendMessageToNativeApp(request);
+    } else if ("subject" in request && request.subject == "cancelRequest") {
+        sendToInpage(request, request.id);
     }
+    return true;
 });
 
 // Receive from inpage
-window.addEventListener("message", function(event) {
+window.addEventListener("message", event => {
     if (event.source == window && event.data) {
         if (event.data.direction == "from-page-script") {
             sendMessageToNativeApp(event.data.message);
         } else if (event.data.subject == "disconnect") {
             const disconnectRequest = event.data;
             disconnectRequest.host = window.location.host;
+            disconnectRequest.isMobile = isMobile;
             browser.runtime.sendMessage(disconnectRequest);
         }
     }
+    return true;
 });
 
-var getFavicon = function() {
+function getFavicon() {
     if (document.favicon) {
         return document.favicon;
     }
@@ -151,4 +136,40 @@ var getFavicon = function() {
 
 function genId() {
     return new Date().getTime() + Math.floor(Math.random() * 1000);
+}
+
+function didChangeVisibility() {
+    if (document.pendingRequestsIds.size != 0 && document.visibilityState === 'visible') {
+        if (typeof document.stashedPopupId !== "undefined" && document.stashedPopupId > -1) {
+            pollPopupStatus(document.stashedPopupId);
+            document.stashedPopupId = -1;
+        }
+        document.pendingRequestsIds.forEach(id => {
+            const request = {id: id, subject: "getResponse", host: window.location.host, isMobile: isMobile};
+            browser.runtime.sendMessage(request).then(response => {
+                if (typeof response !== "undefined") {
+                    sendToInpage(response, id);
+                }
+            });
+        });
+    }
+    return true;
+}
+
+document.addEventListener('visibilitychange', didChangeVisibility);
+window.addEventListener('focus', didChangeVisibility);
+
+// MARK: - iOS extension popup
+
+function pollPopupStatus(id) {
+    if (document.visibilityState === 'visible') {
+        const request = {id: id, subject: "POPUP_CHECK", isMobile: isMobile};
+        browser.runtime.sendMessage(request).then(response => {
+            if (typeof response !== "undefined" && "popupStillThere" in response) {
+                setTimeout(() => pollPopupStatus(id), 500);
+            }
+        });
+    } else {
+        document.stashedPopupId = id;
+    }
 }

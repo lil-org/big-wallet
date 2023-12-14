@@ -1,10 +1,10 @@
 {
-    "manifest_version": 2,
+    "manifest_version": 3,
     "default_locale": "en",
     
     "name": "__MSG_extension_name__",
     "description": "__MSG_extension_description__",
-    "version": "2.0.25",
+    "version": "2.0.26",
     
     "icons": {
         "48": "images/icon-48.png",
@@ -15,18 +15,17 @@
     },
     
     "background": {
-        "scripts": [ "background.js", "macos-specific-background.js" ],
-        "persistent": true
+        "service_worker": "service_worker.js"
     },
     
     "content_scripts": [{
         "matches": [ "file://*/*", "http://*/*", "https://*/*" ],
         "run_at": "document_start",
         "all_frames": false,
-        "js": [ "content.js" ]
+        "js": [ "macos_specific_content.js", "content.js" ]
     }],
     
-    "browser_action": {
+    "action": {
         "default_icon": {
             "16": "images/toolbar-icon-16.png",
             "19": "images/toolbar-icon-19.png",
@@ -38,14 +37,17 @@
     "permissions": [
         "nativeMessaging",
         "storage",
-        "https://*.llamarpc.com/",
-        "https://*.infura.io/",
-        "https://*.infura.io/*",
-        "https://*.infura.io/*/*",
-        "https://tokenary.io/*",
-        "https://tokenary.io/*/*",
         "activeTab"
     ],
     
-    "web_accessible_resources": [ "inpage.js" ]
+    "host_permissions": [
+        "https://*.llamarpc.com/",
+        "https://*.infura.io/*",
+        "https://tokenary.io/*"
+    ],
+    
+    "web_accessible_resources": [{
+        "resources": [ "inpage.js" ],
+        "matches": ["<all_urls>"]
+    }]
 }
