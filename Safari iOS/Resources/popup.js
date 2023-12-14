@@ -11,6 +11,7 @@ browser.tabs.getCurrent(tab => {
 });
 
 button.addEventListener('click', () => {
+    browser.runtime.sendMessage({subject: 'POPUP_DID_PROCEED', id: message.id, isMobile: true});
     const query = encodeURIComponent(JSON.stringify(message));
     browser.tabs.getCurrent((tab) => {
         if (tab) {
@@ -21,8 +22,6 @@ button.addEventListener('click', () => {
             });
         }
     });
-    browser.runtime.sendMessage({subject: 'POPUP_DID_PROCEED', id: message.id, isMobile: true});
-    setTimeout(window.close, 437);
     return true;
 });
 
