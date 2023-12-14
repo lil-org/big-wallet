@@ -243,24 +243,13 @@ function hasVisiblePopup() {
     }
 }
 
-// MARK: - popup queue storage
+// MARK: - current popup storage
 
-function storePopupRequest(popupRequest) {
-    getPopupsQueue().then(result => {
-        if (typeof result !== "undefined" && Array.isArray(result)) {
-            result.push(popupRequest);
-            setPopupsQueue(result);
-        } else {
-            setPopupsQueue([popupRequest]);
-        }
-    });
-}
-
-function getNextStoredPopup() {
+function getCurrentPopupRequest() {
     return new Promise((resolve) => {
-        getPopupsQueue().then(result => {
-            if (typeof result !== "undefined" && Array.isArray(result) && result.length > 0) {
-                resolve(result[0]);
+        browser.storage.session.get("currentPopup").then(result => {
+            if (typeof result !== "undefined") {
+                resolve(result["currentPopup"]);
             } else {
                 resolve();
             }
@@ -270,56 +259,22 @@ function getNextStoredPopup() {
     });
 }
 
-function getCurrentPopupId() {
-    return new Promise((resolve) => {
-        browser.storage.session.get("currentPopupId").then(result => {
-            resolve(result["currentPopupId"]);
-        }).catch(() => {
-            resolve();
-        });
-    });
+function storeCurrentPopupRequest(request) {
+    browser.storage.session.set({ ["currentPopup"]: request });
 }
 
-function storeCurrentPopupId(id) {
-    browser.storage.session.set({ ["currentPopupId"]: id });
+function cleanupCurrentPopupRequestOnProceed() {
+    browser.storage.session.remove("currentPopup");
 }
 
-function removePopupFromQueue(id) {
-    getPopupsQueue().then(result => {
-        if (typeof result !== "undefined" && Array.isArray(result) && result.length > 0 && result[0].id == id) {
-            result.shift();
-            setPopupsQueue(result);
+function cleanupCurrentPopupRequestOnDismiss() {
+    getCurrentPopupRequest().then(result => {
+        if (typeof result !== "undefined") {
+            cancelPopupRequest(result);
         }
-    });
-}
-
-function cleanupCurrentPopupId() {
-    browser.storage.session.remove("currentPopupId");
-}
-
-function getPopupsQueue() {
-    return new Promise((resolve) => {
-        browser.storage.session.get("popupsQueue").then(result => {
-            resolve(result["popupsQueue"]);
-        }).catch(() => {
-            resolve();
-        });
-    });
-}
-
-function setPopupsQueue(queue) {
-    browser.storage.session.set({ ["popupsQueue"]: queue });
-}
-
-function cleanupPopupsQueue() {
-    cleanupCurrentPopupId();
-    getPopupsQueue().then(result => {
-        if (typeof result !== "undefined" && Array.isArray(result) && result.length > 0) {
-            for (var i = 0; i < result.length; i++) {
-                cancelPopupRequest(result[i]);
-            }
-        }
-        browser.storage.session.remove("popupsQueue");
+        browser.storage.session.remove("currentPopup");
+    }).catch(() => {
+        browser.storage.session.remove("currentPopup");
     });
 }
 
