@@ -11,7 +11,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.isMobile) {
             const name = request.message.name;
             if (name != "switchEthereumChain" && name != "addEthereumChain" && name != "switchAccount") {
-                addToPopupQueue(request.message);
+                showPopupIfThereIsNoVisible(request.message);
             }
         }
         sendNativeMessage(request, sender, sendResponse);
@@ -142,8 +142,8 @@ browser.action.onClicked.addListener(tab => {
 // MARK: - iOS extension popup
 
 function checkPopupStatus(id, sendResponse) {
-    getCurrentPopupId().then(currentId => {
-        if (typeof currentId !== "undefined" && id == currentId) {
+    getCurrentPopupRequest().then(currentRequest => {
+        if (typeof currentRequest !== "undefined" && id == currentRequest.id) {
             if (hasVisiblePopup()) {
                 sendResponse({ popupStillThere: true });
             } else {
@@ -153,38 +153,21 @@ function checkPopupStatus(id, sendResponse) {
     });
 }
 
-function addToPopupQueue(popupRequest) {
-    storePopupRequest(popupRequest);
-    showPopupIfThereIsNoVisible(popupRequest.id);
-}
-
-// TODO: call in appropriate moments
-function processPopupQueue() {
-    getNextStoredPopup().then(popupRequest => {
-        if (typeof popupRequest !== "undefined" && typeof popupRequest.id !== "undefined") {
-            showPopupIfThereIsNoVisible(popupRequest.id);
+function showPopupIfThereIsNoVisible(popupRequest) {
+    getCurrentPopupRequest().then(result => {
+        if (typeof result === "undefined" && !hasVisiblePopup()) {
+            storeCurrentPopupRequest(popupRequest);
+            browser.action.openPopup();
         }
     });
 }
 
-function showPopupIfThereIsNoVisible(id) {
-    if (!hasVisiblePopup()) {
-        browser.action.openPopup();
-        didShowPopup(id);
-    }
-}
-
-function didShowPopup(id) {
-    storeCurrentPopupId(id);
-}
-
 function popupDidProceed(id) {
-    cleanupCurrentPopupId();
-    removePopupFromQueue(id);
+    cleanupCurrentPopupRequestOnProceed();
 }
 
 function didDismissPopup() {
-    cleanupPopupsQueue();
+    cleanupCurrentPopupRequestOnDismiss();
 }
 
 function cancelPopupRequest(request) {
@@ -204,7 +187,7 @@ function cancelPopupRequest(request) {
 }
 
 function didAppearPopup(tab, sendResponse) {
-    getNextStoredPopup().then(popupRequest => {
+    getCurrentPopupRequest().then(popupRequest => {
         if (typeof popupRequest !== "undefined") {
             sendResponse(popupRequest);
             browser.tabs.sendMessage(tab.id, {popupDidAppear: true, id: popupRequest.id});
@@ -223,8 +206,7 @@ function didAppearPopup(tab, sendResponse) {
                             favicon: response.favicon
                         };
                         sendResponse(switchAccountMessage);
-                        storePopupRequest(switchAccountMessage);
-                        didShowPopup(switchAccountMessage.id);
+                        storeCurrentPopupRequest(switchAccountMessage);
                         browser.tabs.sendMessage(tab.id, {popupDidAppear: true, id: switchAccountMessage.id});
                         browser.tabs.sendMessage(tab.id, switchAccountMessage);
                     });
