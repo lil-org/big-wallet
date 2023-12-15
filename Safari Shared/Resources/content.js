@@ -89,6 +89,7 @@ function sendMessageToNativeApp(message) {
 
 // Receive from service-worker
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    // TODO: always send response
     if ("didTapExtensionButton" in request) {
         sendResponse({ host: window.location.host, favicon: getFavicon() });
     } else if ("name" in request && request.name == "switchAccount") {
@@ -111,7 +112,6 @@ window.addEventListener("message", event => {
             browser.runtime.sendMessage(disconnectRequest).catch(() => {});
         }
     }
-    return true;
 });
 
 function getFavicon() {
@@ -147,7 +147,6 @@ function didChangeVisibility() {
             }).catch(() => {});
         });
     }
-    return true;
 }
 
 document.addEventListener('visibilitychange', didChangeVisibility);

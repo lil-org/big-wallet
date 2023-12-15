@@ -1,6 +1,7 @@
 // Copyright © 2023 Tokenary. All rights reserved.
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    // TODO: always send response
     if (request.subject === "message-to-wallet") {
         sendNativeMessage(request, sender, sendResponse);
         if (request.isMobile) {
@@ -45,6 +46,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 function sendNativeMessage(request, sender, sendResponse) {
+    // TODO: always send response
     browser.runtime.sendNativeMessage("mac.tokenary.io", request.message).then(response => {
         if (typeof response !== "undefined") {
             sendResponse(response);
@@ -116,6 +118,7 @@ function justShowApp() {
 
 browser.action.onClicked.addListener(tab => {
     const message = {didTapExtensionButton: true};
+    // TODO: simplify messaging
     browser.tabs.sendMessage(tab.id, message).then(response => {
         if (typeof response !== "undefined" && typeof response.host !== "undefined") {
             getLatestConfiguration(response.host).then(currentConfiguration => {
@@ -130,7 +133,6 @@ browser.action.onClicked.addListener(tab => {
     if (tab.url == "" && tab.pendingUrl == "") {
         justShowApp();
     }
-    return true;
 });
 
 // MARK: - mobile redirect
