@@ -89,9 +89,7 @@ function sendMessageToNativeApp(message) {
 
 // Receive from service-worker
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if ("popupDidAppear" in request && "id" in request) {
-        setTimeout(() => pollPopupStatus(request.id), 500);
-    } else if ("didTapExtensionButton" in request) {
+    if ("didTapExtensionButton" in request) {
         sendResponse({ host: window.location.host, favicon: getFavicon() });
     } else if ("name" in request && request.name == "switchAccount") {
         sendMessageToNativeApp(request);
@@ -140,10 +138,6 @@ function genId() {
 
 function didChangeVisibility() {
     if (document.pendingRequestsIds.size != 0 && document.visibilityState === 'visible') {
-        if (typeof document.stashedPopupId !== "undefined" && document.stashedPopupId > -1) {
-            pollPopupStatus(document.stashedPopupId);
-            document.stashedPopupId = -1;
-        }
         document.pendingRequestsIds.forEach(id => {
             const request = {id: id, subject: "getResponse", host: window.location.host, isMobile: isMobile};
             browser.runtime.sendMessage(request).then(response => {
@@ -158,18 +152,3 @@ function didChangeVisibility() {
 
 document.addEventListener('visibilitychange', didChangeVisibility);
 window.addEventListener('focus', didChangeVisibility);
-
-// MARK: - iOS extension popup
-
-function pollPopupStatus(id) {
-    if (document.visibilityState === 'visible') {
-        const request = {id: id, subject: "POPUP_CHECK", isMobile: isMobile};
-        browser.runtime.sendMessage(request).then(response => {
-            if (typeof response !== "undefined" && "popupStillThere" in response) {
-                setTimeout(() => pollPopupStatus(id), 500);
-            }
-        });
-    } else {
-        document.stashedPopupId = id;
-    }
-}
