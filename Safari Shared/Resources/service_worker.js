@@ -1,20 +1,14 @@
 // Copyright © 2023 Tokenary. All rights reserved.
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.subject === "POPUP_CHECK") {
-        checkPopupStatus(request.id, sendResponse);
-    } else if (request.subject === "POPUP_DID_PROCEED") {
-        popupDidProceed(request.id);
-    } else if (request.subject === "POPUP_APPEARED") {
-        didAppearPopup(request.tab, sendResponse);
-    } else if (request.subject === "message-to-wallet") {
+    if (request.subject === "message-to-wallet") {
+        sendNativeMessage(request, sender, sendResponse);
         if (request.isMobile) {
             const name = request.message.name;
-            if (name != "switchEthereumChain" && name != "addEthereumChain" && name != "switchAccount") {
-                showPopupIfThereIsNoVisible(request.message);
+            if (name != "switchEthereumChain" && name != "addEthereumChain") {
+                mobileRedirectFor(request.message);
             }
         }
-        sendNativeMessage(request, sender, sendResponse);
     } else if (request.subject === "getResponse") {
         browser.runtime.sendNativeMessage("mac.tokenary.io", request).then(response => {
             if (typeof response !== "undefined") {
@@ -139,124 +133,22 @@ browser.action.onClicked.addListener(tab => {
     return true;
 });
 
-// MARK: - iOS extension popup
+// MARK: - mobile redirect
 
-function checkPopupStatus(id, sendResponse) {
-    getCurrentPopupRequest().then(currentRequest => {
-        if (typeof currentRequest !== "undefined" && id == currentRequest.id) {
-            if (hasVisiblePopup()) {
-                sendResponse({ popupStillThere: true });
-            } else {
-                didDismissPopup();
-            }
-        }
-    });
-}
-
-function showPopupIfThereIsNoVisible(popupRequest) {
-    getCurrentPopupRequest().then(result => {
-        if (typeof result === "undefined" && !hasVisiblePopup()) {
-            storeCurrentPopupRequest(popupRequest);
-            browser.action.openPopup();
-        }
-    });
-}
-
-function popupDidProceed(id) {
-    cleanupCurrentPopupRequestOnProceed();
-}
-
-function didDismissPopup() {
-    cleanupCurrentPopupRequestOnDismiss();
-}
-
-function cancelPopupRequest(request) {
-    const cancelResponse = {
-        id: request.id,
-        provider: request.provider,
-        name: request.name,
-        error: "canceled",
-        subject: "cancelRequest",
-    };
-    browser.runtime.sendNativeMessage("mac.tokenary.io", cancelResponse).catch(() => {});
+function mobileRedirectFor(request) {
+    const query = encodeURIComponent(JSON.stringify(request));
     browser.tabs.getCurrent((tab) => {
         if (tab) {
-            browser.tabs.sendMessage(tab.id, cancelResponse);
-        }
-    });
-}
-
-function didAppearPopup(tab, sendResponse) {
-    getCurrentPopupRequest().then(popupRequest => {
-        if (typeof popupRequest !== "undefined") {
-            sendResponse(popupRequest);
-            browser.tabs.sendMessage(tab.id, {popupDidAppear: true, id: popupRequest.id});
-        } else {
-            const message = {didTapExtensionButton: true};
-            browser.tabs.sendMessage(tab.id, message).then(response => {
-                if (typeof response !== "undefined" && typeof response.host !== "undefined") {
-                    getLatestConfiguration(response.host).then(currentConfiguration => {
-                        const latestConfigurations = currentConfiguration.latestConfigurations;
-                        const switchAccountMessage = {
-                            name: "switchAccount",
-                            id: genId(),
-                            provider: "unknown",
-                            body: currentConfiguration,
-                            host: response.host,
-                            favicon: response.favicon
-                        };
-                        sendResponse(switchAccountMessage);
-                        storeCurrentPopupRequest(switchAccountMessage);
-                        browser.tabs.sendMessage(tab.id, {popupDidAppear: true, id: switchAccountMessage.id});
-                        browser.tabs.sendMessage(tab.id, switchAccountMessage);
-                    });
-                }
+            browser.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: (query) => {
+                    setTimeout(() => {
+                        window.location.href = `https://tokenary.io/extension?query=${query}`;
+                    }, 230);
+                },
+                args: [query]
             });
         }
-    });
-}
-
-function hasVisiblePopup() {
-    const popup = browser.extension.getViews({ type: 'popup' });
-    if (popup.length === 0) {
-        return false;
-    } else if (popup.length > 0) {
-        return true;
-    }
-}
-
-// MARK: - current popup storage
-
-function getCurrentPopupRequest() {
-    return new Promise((resolve) => {
-        browser.storage.session.get("currentPopup").then(result => {
-            if (typeof result !== "undefined") {
-                resolve(result["currentPopup"]);
-            } else {
-                resolve();
-            }
-        }).catch(() => {
-            resolve();
-        });
-    });
-}
-
-function storeCurrentPopupRequest(request) {
-    browser.storage.session.set({ ["currentPopup"]: request });
-}
-
-function cleanupCurrentPopupRequestOnProceed() {
-    browser.storage.session.remove("currentPopup");
-}
-
-function cleanupCurrentPopupRequestOnDismiss() {
-    getCurrentPopupRequest().then(result => {
-        if (typeof result !== "undefined") {
-            cancelPopupRequest(result);
-        }
-        browser.storage.session.remove("currentPopup");
-    }).catch(() => {
-        browser.storage.session.remove("currentPopup");
     });
 }
 
