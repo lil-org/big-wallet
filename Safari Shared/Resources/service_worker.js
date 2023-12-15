@@ -121,7 +121,6 @@ function justShowApp() {
 
 browser.action.onClicked.addListener(tab => {
     const message = {didTapExtensionButton: true};
-    // TODO: simplify messaging
     browser.tabs.sendMessage(tab.id, message).then(response => {
         if (typeof response !== "undefined" && "host" in response) {
             getLatestConfiguration(response.host).then(currentConfiguration => {
