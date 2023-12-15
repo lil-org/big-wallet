@@ -1,7 +1,6 @@
 // Copyright © 2023 Tokenary. All rights reserved.
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    // TODO: always send response
     if (request.subject === "message-to-wallet") {
         sendNativeMessage(request, sender, sendResponse);
         if (request.isMobile) {
@@ -15,12 +14,12 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
             if (typeof response !== "undefined") {
                 sendResponse(response);
                 storeConfigurationIfNeeded(request.host, response);
-            }
-        }).catch(() => {});
+            } else { sendResponse(); }
+        }).catch(() => { sendResponse(); });
     } else if (request.subject === "getLatestConfiguration") {
         getLatestConfiguration(request.host).then(currentConfiguration => {
             sendResponse(currentConfiguration);
-        });
+        }).catch(() => { sendResponse(); });
     } else if (request.subject === "disconnect") {
         const provider = request.provider;
         const host = request.host;
@@ -40,19 +39,23 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
             }
             
             storeLatestConfiguration(host, configurations);
-        });
+            sendResponse();
+        }).catch(() => { sendResponse(); });
+    } else {
+        sendResponse();
     }
     return true;
 });
 
 function sendNativeMessage(request, sender, sendResponse) {
-    // TODO: always send response
     browser.runtime.sendNativeMessage("mac.tokenary.io", request.message).then(response => {
         if (typeof response !== "undefined") {
             sendResponse(response);
             storeConfigurationIfNeeded(request.host, response);
+        } else {
+            sendResponse();
         }
-    }).catch(() => {});
+    }).catch(() => { sendResponse(); });
 }
 
 function storeLatestConfiguration(host, configuration) {
