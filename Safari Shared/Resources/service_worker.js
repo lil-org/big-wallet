@@ -142,7 +142,9 @@ function mobileRedirectFor(request) {
             browser.scripting.executeScript({
                 target: { tabId: tab.id },
                 func: (query) => {
-                    window.location.href = `https://tokenary.io/extension?query=${query}`;
+                    setTimeout(() => {
+                        window.location.href = `https://tokenary.io/extension?query=${query}`;
+                    }, 230);
                 },
                 args: [query]
             });
