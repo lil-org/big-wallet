@@ -120,7 +120,7 @@ browser.action.onClicked.addListener(tab => {
     const message = {didTapExtensionButton: true};
     // TODO: simplify messaging
     browser.tabs.sendMessage(tab.id, message).then(response => {
-        if (typeof response !== "undefined" && typeof response.host !== "undefined") {
+        if (typeof response !== "undefined" && "host" in response) {
             getLatestConfiguration(response.host).then(currentConfiguration => {
                 const switchAccountMessage = {name: "switchAccount", id: genId(), provider: "unknown", body: currentConfiguration};
                 browser.tabs.sendMessage(tab.id, switchAccountMessage);

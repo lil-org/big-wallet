@@ -94,8 +94,12 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ host: window.location.host, favicon: getFavicon() });
     } else if ("name" in request && request.name == "switchAccount") {
         sendMessageToNativeApp(request);
+        sendResponse();
     } else if ("subject" in request && request.subject == "cancelRequest") {
         sendToInpage(request, request.id);
+        sendResponse();
+    } else {
+        sendResponse();
     }
     return true;
 });
