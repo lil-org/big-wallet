@@ -66,7 +66,7 @@ function getLatestConfiguration() {
         if (typeof response === "undefined") { return; }
         const id = genId();
         window.postMessage({direction: "from-content-script", response: response, id: id}, "*");
-    });
+    }).catch(() => {});
 }
 
 function sendToInpage(response, id) {
@@ -84,7 +84,7 @@ function sendMessageToNativeApp(message) {
     browser.runtime.sendMessage({ subject: "message-to-wallet", message: message, host: window.location.host, isMobile: isMobile }).then((response) => {
         if (typeof response === "undefined") { return; }
         sendToInpage(response, message.id);
-    });
+    }).catch(() => {});
 }
 
 // Receive from service-worker
@@ -108,7 +108,7 @@ window.addEventListener("message", event => {
             const disconnectRequest = event.data;
             disconnectRequest.host = window.location.host;
             disconnectRequest.isMobile = isMobile;
-            browser.runtime.sendMessage(disconnectRequest);
+            browser.runtime.sendMessage(disconnectRequest).catch(() => {});
         }
     }
     return true;
@@ -144,7 +144,7 @@ function didChangeVisibility() {
                 if (typeof response !== "undefined") {
                     sendToInpage(response, id);
                 }
-            });
+            }).catch(() => {});
         });
     }
     return true;
