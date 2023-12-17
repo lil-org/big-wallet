@@ -2,6 +2,50 @@
 
 if (!("pendingRequestsIds" in document)) {
     document.pendingRequestsIds = new Set();
+    setup();
+}
+
+function setup() {
+    if (shouldInjectProvider()) {
+        if (document.readyState != "loading") {
+            window.location.reload();
+        } else {
+            injectScript();
+            getLatestConfiguration();
+        }
+    }
+    
+    // Receive from service-worker
+    browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if ("didTapExtensionButton" in request) {
+            sendResponse({ host: window.location.host, favicon: getFavicon() });
+        } else if ("name" in request && request.name == "switchAccount") {
+            sendMessageToNativeApp(request);
+            sendResponse();
+        } else if ("subject" in request && request.subject == "cancelRequest") {
+            sendToInpage(request, request.id);
+            sendResponse();
+        } else {
+            sendResponse();
+        }
+        return true;
+    });
+
+    // Receive from inpage
+    window.addEventListener("message", event => {
+        if (event.source == window && event.data) {
+            if (event.data.direction == "from-page-script") {
+                sendMessageToNativeApp(event.data.message);
+            } else if (event.data.subject == "disconnect") {
+                const disconnectRequest = event.data;
+                disconnectRequest.host = window.location.host;
+                disconnectRequest.isMobile = isMobile;
+                browser.runtime.sendMessage(disconnectRequest).then(() => {}).catch(() => {});
+            }
+        }
+    });
+    
+    document.addEventListener('visibilitychange', didChangeVisibility);
 }
 
 function injectScript() {
@@ -51,15 +95,6 @@ function documentElementCheck() {
     return true;
 }
 
-if (shouldInjectProvider()) {
-    if (document.readyState != "loading") {
-        window.location.reload();
-    } else {
-        injectScript();
-        getLatestConfiguration();
-    }
-}
-
 function getLatestConfiguration() {
     const request = {subject: "getLatestConfiguration", host: window.location.host, isMobile: isMobile};
     browser.runtime.sendMessage(request).then((response) => {
@@ -86,36 +121,6 @@ function sendMessageToNativeApp(message) {
         sendToInpage(response, message.id);
     }).catch(() => {});
 }
-
-// Receive from service-worker
-browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if ("didTapExtensionButton" in request) {
-        sendResponse({ host: window.location.host, favicon: getFavicon() });
-    } else if ("name" in request && request.name == "switchAccount") {
-        sendMessageToNativeApp(request);
-        sendResponse();
-    } else if ("subject" in request && request.subject == "cancelRequest") {
-        sendToInpage(request, request.id);
-        sendResponse();
-    } else {
-        sendResponse();
-    }
-    return true;
-});
-
-// Receive from inpage
-window.addEventListener("message", event => {
-    if (event.source == window && event.data) {
-        if (event.data.direction == "from-page-script") {
-            sendMessageToNativeApp(event.data.message);
-        } else if (event.data.subject == "disconnect") {
-            const disconnectRequest = event.data;
-            disconnectRequest.host = window.location.host;
-            disconnectRequest.isMobile = isMobile;
-            browser.runtime.sendMessage(disconnectRequest).then(() => {}).catch(() => {});
-        }
-    }
-});
 
 function getFavicon() {
     if (document.favicon) {
@@ -151,5 +156,3 @@ function didChangeVisibility() {
         });
     }
 }
-
-document.addEventListener('visibilitychange', didChangeVisibility);
