@@ -153,4 +153,3 @@ function didChangeVisibility() {
 }
 
 document.addEventListener('visibilitychange', didChangeVisibility);
-window.addEventListener('focus', didChangeVisibility);

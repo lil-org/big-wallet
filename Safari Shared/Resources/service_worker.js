@@ -1,20 +1,32 @@
 // Copyright © 2023 Tokenary. All rights reserved.
 
-browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
+function handleOnMessage(request, sender, sendResponse) {
     if (request.subject === "message-to-wallet") {
+        var mobileRedirect = false;
+        if (request.isMobile) {
+            const name = request.message.name;
+            if (name != "switchEthereumChain" && name != "addEthereumChain") {
+                mobileRedirect = true;
+            }
+        }
+        
         browser.runtime.sendNativeMessage("mac.tokenary.io", request.message).then(response => {
             if (typeof response !== "undefined") {
                 sendResponse(response);
                 storeConfigurationIfNeeded(request.host, response);
             } else {
+                if (!mobileRedirect) {
+                    sendResponse();
+                }
+            }
+        }).catch(() => {
+            if (!mobileRedirect) {
                 sendResponse();
             }
-        }).catch(() => { sendResponse(); });
-        if (request.isMobile) {
-            const name = request.message.name;
-            if (name != "switchEthereumChain" && name != "addEthereumChain") {
-                mobileRedirectFor(request.message); // TODO: send response after mobile redirect
-            }
+        });
+        
+        if (mobileRedirect) {
+            mobileRedirectFor(request.message, sendResponse);
         }
     } else if (request.subject === "getResponse") {
         browser.runtime.sendNativeMessage("mac.tokenary.io", request).then(response => {
@@ -52,7 +64,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse();
     }
     return true;
-});
+}
 
 function storeLatestConfiguration(host, configuration) {
     var latestArray = [];
@@ -115,7 +127,7 @@ function justShowApp() {
     browser.runtime.sendNativeMessage("mac.tokenary.io", showAppMessage).catch(() => {});
 }
 
-browser.action.onClicked.addListener(tab => {
+function handleOnClick(tab) {
     const message = {didTapExtensionButton: true};
     browser.tabs.sendMessage(tab.id, message).then(response => {
         if (typeof response !== "undefined" && "host" in response) {
@@ -131,23 +143,22 @@ browser.action.onClicked.addListener(tab => {
     if (tab.url == "" && tab.pendingUrl == "") {
         justShowApp();
     }
-});
+}
 
 // MARK: - mobile redirect
 
-function mobileRedirectFor(request) {
+function mobileRedirectFor(request, sendResponse) {
     const query = encodeURIComponent(JSON.stringify(request));
     browser.tabs.getCurrent((tab) => {
         if (tab) {
             browser.scripting.executeScript({
                 target: { tabId: tab.id },
                 func: (query) => {
-                    setTimeout(() => {
-                        window.location.href = `https://tokenary.io/extension?query=${query}`;
-                    }, 230);
+                    window.location.href = `https://tokenary.io/extension?query=${query}`;
                 },
                 args: [query]
             });
+            sendResponse();
         }
     });
 }
@@ -157,3 +168,10 @@ function mobileRedirectFor(request) {
 function genId() {
     return new Date().getTime() + Math.floor(Math.random() * 1000);
 }
+
+function addListeners() {
+    browser.runtime.onMessage.addListener(handleOnMessage);
+    browser.action.onClicked.addListener(handleOnClick);
+}
+
+addListeners();
