@@ -1,5 +1,5 @@
 {
-    "manifest_version": 3,
+    "manifest_version": 2,
     "default_locale": "en",
     
     "name": "__MSG_extension_name__",
@@ -15,7 +15,8 @@
     },
     
     "background": {
-        "service_worker": "service_worker.js"
+        "scripts": [ "service_worker.js" ],
+        "persistent": false
     },
     
     "content_scripts": [{
@@ -25,7 +26,7 @@
         "js": [ "ios_specific_content.js", "content.js" ]
     }],
     
-    "action": {
+    "browser_action": {
         "default_icon": {
             "16": "images/toolbar-icon-16.png",
             "19": "images/toolbar-icon-19.png",
@@ -35,7 +36,6 @@
     },
     
     "permissions": [
-        "scripting",
         "nativeMessaging",
         "storage",
         "activeTab",
@@ -49,8 +49,5 @@
         "tokenary://*"
     ],
     
-    "web_accessible_resources": [{
-        "resources": [ "inpage.js" ],
-        "matches": ["<all_urls>"]
-    }]
+    "web_accessible_resources": [ "inpage.js" ]
 }

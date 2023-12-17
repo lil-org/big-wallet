@@ -151,13 +151,7 @@ function mobileRedirectFor(request, sendResponse) {
     const query = encodeURIComponent(JSON.stringify(request));
     browser.tabs.getCurrent((tab) => {
         if (tab) {
-            browser.scripting.executeScript({
-                target: { tabId: tab.id },
-                func: (query) => {
-                    window.location.href = `https://tokenary.io/extension?query=${query}`;
-                },
-                args: [query]
-            }).then(() => {}).catch(() => {});
+            browser.tabs.executeScript(tab.id, { code: 'window.location.href = `https://tokenary.io/extension?query=' + query + '`;' });
             sendResponse();
         }
     });
@@ -171,7 +165,7 @@ function genId() {
 
 function addListeners() {
     browser.runtime.onMessage.addListener(handleOnMessage);
-    browser.action.onClicked.addListener(handleOnClick);
+    browser.browserAction.onClicked.addListener(handleOnClick);
 }
 
 addListeners();
