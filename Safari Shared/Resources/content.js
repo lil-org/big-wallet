@@ -112,7 +112,7 @@ window.addEventListener("message", event => {
             const disconnectRequest = event.data;
             disconnectRequest.host = window.location.host;
             disconnectRequest.isMobile = isMobile;
-            browser.runtime.sendMessage(disconnectRequest).catch(() => {});
+            browser.runtime.sendMessage(disconnectRequest).then(() => {}).catch(() => {});
         }
     }
 });

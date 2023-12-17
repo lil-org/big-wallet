@@ -70,7 +70,7 @@ function storeLatestConfiguration(host, configuration) {
     var latestArray = [];
     if (Array.isArray(configuration)) {
         latestArray = configuration;
-        browser.storage.local.set({ [host]: latestArray });
+        browser.storage.local.set({ [host]: latestArray }).then(() => {}).catch(() => {});
     } else if ("provider" in configuration) {
         (async () => {
             const latest = await getLatestConfiguration(host);
@@ -90,7 +90,7 @@ function storeLatestConfiguration(host, configuration) {
             if (shouldAdd) {
                 latestArray.push(configuration);
             }
-            browser.storage.local.set({ [host]: latestArray });
+            browser.storage.local.set({ [host]: latestArray }).then(() => {}).catch(() => {});
         })();
     }
 }
@@ -124,7 +124,7 @@ function storeConfigurationIfNeeded(host, response) {
 function justShowApp() {
     const id = genId();
     const showAppMessage = {name: "justShowApp", id: id, provider: "unknown", body: {}, host: ""};
-    browser.runtime.sendNativeMessage("mac.tokenary.io", showAppMessage).catch(() => {});
+    browser.runtime.sendNativeMessage("mac.tokenary.io", showAppMessage).then(() => {}).catch(() => {});
 }
 
 function handleOnClick(tab) {
@@ -133,12 +133,12 @@ function handleOnClick(tab) {
         if (typeof response !== "undefined" && "host" in response) {
             getLatestConfiguration(response.host).then(currentConfiguration => {
                 const switchAccountMessage = {name: "switchAccount", id: genId(), provider: "unknown", body: currentConfiguration};
-                browser.tabs.sendMessage(tab.id, switchAccountMessage);
+                browser.tabs.sendMessage(tab.id, switchAccountMessage).then(() => {}).catch(() => {});
             });
         } else {
             justShowApp();
         }
-    });
+    }).catch(() => {});
     
     if (tab.url == "" && tab.pendingUrl == "") {
         justShowApp();
@@ -157,7 +157,7 @@ function mobileRedirectFor(request, sendResponse) {
                     window.location.href = `https://tokenary.io/extension?query=${query}`;
                 },
                 args: [query]
-            });
+            }).then(() => {}).catch(() => {});
             sendResponse();
         }
     });
