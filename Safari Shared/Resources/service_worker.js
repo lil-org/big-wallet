@@ -2,11 +2,18 @@
 
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.subject === "message-to-wallet") {
-        sendNativeMessage(request, sender, sendResponse);
+        browser.runtime.sendNativeMessage("mac.tokenary.io", request.message).then(response => {
+            if (typeof response !== "undefined") {
+                sendResponse(response);
+                storeConfigurationIfNeeded(request.host, response);
+            } else {
+                sendResponse();
+            }
+        }).catch(() => { sendResponse(); });
         if (request.isMobile) {
             const name = request.message.name;
             if (name != "switchEthereumChain" && name != "addEthereumChain") {
-                mobileRedirectFor(request.message);
+                mobileRedirectFor(request.message); // TODO: send response after mobile redirect
             }
         }
     } else if (request.subject === "getResponse") {
@@ -46,17 +53,6 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
     return true;
 });
-
-function sendNativeMessage(request, sender, sendResponse) {
-    browser.runtime.sendNativeMessage("mac.tokenary.io", request.message).then(response => {
-        if (typeof response !== "undefined") {
-            sendResponse(response);
-            storeConfigurationIfNeeded(request.host, response);
-        } else {
-            sendResponse();
-        }
-    }).catch(() => { sendResponse(); });
-}
 
 function storeLatestConfiguration(host, configuration) {
     var latestArray = [];
