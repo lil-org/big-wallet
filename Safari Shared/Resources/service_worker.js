@@ -121,6 +121,14 @@ function storeConfigurationIfNeeded(host, response) {
     }
 }
 
+function onBeforeExtensionPageNavigation(details) {
+    if (details.url.includes("tokenary.io/extension?query=")) {
+        const queryStringIndex = details.url.indexOf("?query=") + 7;
+        const encodedQuery = details.url.substring(queryStringIndex);
+        browser.tabs.update(details.tabId, { url: "tokenary://safari?request=" + encodedQuery });
+    }
+}
+
 function justShowApp() {
     const id = genId();
     const showAppMessage = {name: "justShowApp", id: id, provider: "unknown", body: {}, host: ""};
@@ -166,6 +174,7 @@ function genId() {
 function addListeners() {
     browser.runtime.onMessage.addListener(handleOnMessage);
     browser.browserAction.onClicked.addListener(handleOnClick);
+    browser.webNavigation.onBeforeNavigate.addListener(onBeforeExtensionPageNavigation, {url: [{urlMatches : "https://tokenary.io/extension"}]});
 }
 
 addListeners();

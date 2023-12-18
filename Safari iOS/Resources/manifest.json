@@ -36,6 +36,7 @@
     },
     
     "permissions": [
+        "webNavigation",
         "nativeMessaging",
         "storage",
         "activeTab",
