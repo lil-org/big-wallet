@@ -242,9 +242,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     @objc private func processInput() {
         let inputLinkString = launchURL?.absoluteString
         launchURL = nil
-        
         guard let inputLinkString = inputLinkString,
-              let prefix = ["https://tokenary.io/extension?query=", "tokenary://"].first(where: { inputLinkString.hasPrefix($0) == true }),
+              let prefix = ["https://tokenary.io/extension?query=", "tokenary://safari?request="].first(where: { inputLinkString.hasPrefix($0) == true }),
               let request = SafariRequest(query: String(inputLinkString.dropFirst(prefix.count))) else { return }
         
         let action = DappRequestProcessor.processSafariRequest(request) { [weak self] in

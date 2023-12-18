@@ -9,9 +9,12 @@ struct DappRequestProcessor {
     private static let ethereum = Ethereum.shared
     
     static func processSafariRequest(_ request: SafariRequest, completion: @escaping () -> Void) -> DappRequestAction {
-        guard ExtensionBridge.hasRequest(id: request.id) else {
-            respond(to: request, error: Strings.somethingWentWrong, completion: completion)
-            return .none
+        if !ExtensionBridge.hasRequest(id: request.id) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(500)) {
+                if !ExtensionBridge.hasRequest(id: request.id) {
+                    respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+                }
+            }
         }
         
         switch request.body {
