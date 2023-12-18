@@ -1,25 +1,44 @@
 // Copyright © 2023 Tokenary. All rights reserved.
 
-browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
+function handleOnMessage(request, sender, sendResponse) {
     if (request.subject === "message-to-wallet") {
-        sendNativeMessage(request, sender, sendResponse);
+        var mobileRedirect = false;
         if (request.isMobile) {
             const name = request.message.name;
             if (name != "switchEthereumChain" && name != "addEthereumChain") {
-                mobileRedirectFor(request.message);
+                mobileRedirect = true;
             }
+        }
+        
+        browser.runtime.sendNativeMessage("mac.tokenary.io", request.message).then(response => {
+            if (typeof response !== "undefined") {
+                sendResponse(response);
+                storeConfigurationIfNeeded(request.host, response);
+            } else {
+                if (!mobileRedirect) {
+                    sendResponse();
+                }
+            }
+        }).catch(() => {
+            if (!mobileRedirect) {
+                sendResponse();
+            }
+        });
+        
+        if (mobileRedirect) {
+            mobileRedirectFor(request.message, sendResponse);
         }
     } else if (request.subject === "getResponse") {
         browser.runtime.sendNativeMessage("mac.tokenary.io", request).then(response => {
             if (typeof response !== "undefined") {
                 sendResponse(response);
                 storeConfigurationIfNeeded(request.host, response);
-            }
-        }).catch(() => {});
+            } else { sendResponse(); }
+        }).catch(() => { sendResponse(); });
     } else if (request.subject === "getLatestConfiguration") {
         getLatestConfiguration(request.host).then(currentConfiguration => {
             sendResponse(currentConfiguration);
-        });
+        }).catch(() => { sendResponse(); });
     } else if (request.subject === "disconnect") {
         const provider = request.provider;
         const host = request.host;
@@ -39,25 +58,19 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
             }
             
             storeLatestConfiguration(host, configurations);
-        });
+            sendResponse();
+        }).catch(() => { sendResponse(); });
+    } else {
+        sendResponse();
     }
     return true;
-});
-
-function sendNativeMessage(request, sender, sendResponse) {
-    browser.runtime.sendNativeMessage("mac.tokenary.io", request.message).then(response => {
-        if (typeof response !== "undefined") {
-            sendResponse(response);
-            storeConfigurationIfNeeded(request.host, response);
-        }
-    }).catch(() => {});
 }
 
 function storeLatestConfiguration(host, configuration) {
     var latestArray = [];
     if (Array.isArray(configuration)) {
         latestArray = configuration;
-        browser.storage.local.set({ [host]: latestArray });
+        browser.storage.local.set({ [host]: latestArray }).then(() => {}).catch(() => {});
     } else if ("provider" in configuration) {
         (async () => {
             const latest = await getLatestConfiguration(host);
@@ -77,7 +90,7 @@ function storeLatestConfiguration(host, configuration) {
             if (shouldAdd) {
                 latestArray.push(configuration);
             }
-            browser.storage.local.set({ [host]: latestArray });
+            browser.storage.local.set({ [host]: latestArray }).then(() => {}).catch(() => {});
         })();
     }
 }
@@ -111,43 +124,35 @@ function storeConfigurationIfNeeded(host, response) {
 function justShowApp() {
     const id = genId();
     const showAppMessage = {name: "justShowApp", id: id, provider: "unknown", body: {}, host: ""};
-    browser.runtime.sendNativeMessage("mac.tokenary.io", showAppMessage).catch(() => {});
+    browser.runtime.sendNativeMessage("mac.tokenary.io", showAppMessage).then(() => {}).catch(() => {});
 }
 
-browser.action.onClicked.addListener(tab => {
+function handleOnClick(tab) {
     const message = {didTapExtensionButton: true};
     browser.tabs.sendMessage(tab.id, message).then(response => {
-        if (typeof response !== "undefined" && typeof response.host !== "undefined") {
+        if (typeof response !== "undefined" && "host" in response) {
             getLatestConfiguration(response.host).then(currentConfiguration => {
                 const switchAccountMessage = {name: "switchAccount", id: genId(), provider: "unknown", body: currentConfiguration};
-                browser.tabs.sendMessage(tab.id, switchAccountMessage);
+                browser.tabs.sendMessage(tab.id, switchAccountMessage).then(() => {}).catch(() => {});
             });
         } else {
             justShowApp();
         }
-    });
+    }).catch(() => {});
     
     if (tab.url == "" && tab.pendingUrl == "") {
         justShowApp();
     }
-    return true;
-});
+}
 
 // MARK: - mobile redirect
 
-function mobileRedirectFor(request) {
+function mobileRedirectFor(request, sendResponse) {
     const query = encodeURIComponent(JSON.stringify(request));
     browser.tabs.getCurrent((tab) => {
         if (tab) {
-            browser.scripting.executeScript({
-                target: { tabId: tab.id },
-                func: (query) => {
-                    setTimeout(() => {
-                        window.location.href = `https://tokenary.io/extension?query=${query}`;
-                    }, 230);
-                },
-                args: [query]
-            });
+            browser.tabs.executeScript(tab.id, { code: 'window.location.href = `https://tokenary.io/extension?query=' + query + '`;' });
+            sendResponse();
         }
     });
 }
@@ -157,3 +162,10 @@ function mobileRedirectFor(request) {
 function genId() {
     return new Date().getTime() + Math.floor(Math.random() * 1000);
 }
+
+function addListeners() {
+    browser.runtime.onMessage.addListener(handleOnMessage);
+    browser.browserAction.onClicked.addListener(handleOnClick);
+}
+
+addListeners();
