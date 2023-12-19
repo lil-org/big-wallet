@@ -26,10 +26,14 @@ struct DappRequestProcessor {
                 ExtensionBridge.respond(response: ResponseToExtension(for: request))
                 return .justShowApp
             case .switchAccount:
-                let preselectedAccounts = body.providerConfigurations.compactMap { (configuration) -> SpecificWalletAccount? in
+                var preselectedAccounts = body.providerConfigurations.compactMap { (configuration) -> SpecificWalletAccount? in
                     guard let coin = CoinType.correspondingToInpageProvider(configuration.provider) else { return nil }
                     return walletsManager.getSpecificAccount(coin: coin, address: configuration.address)
                 }
+                if preselectedAccounts.isEmpty {
+                    preselectedAccounts = walletsManager.suggestedAccounts()
+                }
+                
                 let chainId = body.providerConfigurations.compactMap { $0.chainId }.first
                 let network = Networks.withChainIdHex(chainId)
                 let initiallyConnectedProviders = Set(body.providerConfigurations.map { $0.provider })
