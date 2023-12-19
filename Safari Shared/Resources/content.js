@@ -38,8 +38,8 @@ function setup() {
             } else if (event.data.subject == "disconnect") {
                 const disconnectRequest = event.data;
                 disconnectRequest.host = window.location.host;
-                disconnectRequest.isMobile = isMobile;
-                disconnectRequest.pageRequiresConfirmation = pageRequiresConfirmation();
+                disconnectRequest.navigate = false;
+                disconnectRequest.confirm = false;
                 browser.runtime.sendMessage(disconnectRequest).then(() => {}).catch(() => {});
             } else if (event.data.subject == "notConfirmed") {
                 document.alwaysConfirm = true;
@@ -113,7 +113,7 @@ function documentElementCheck() {
 }
 
 function getLatestConfiguration() {
-    const request = {subject: "getLatestConfiguration", host: window.location.host, isMobile: isMobile, pageRequiresConfirmation: pageRequiresConfirmation()};
+    const request = {subject: "getLatestConfiguration", host: window.location.host, navigate: false, confirm: false};
     browser.runtime.sendMessage(request).then((response) => {
         if (typeof response === "undefined") { return; }
         const id = genId();
@@ -136,8 +136,8 @@ function sendMessageToNativeApp(message) {
     browser.runtime.sendMessage({ subject: "message-to-wallet",
         message: message,
         host: window.location.host,
-        isMobile: isMobile,
-        pageRequiresConfirmation: pageRequiresConfirmation()}).then((response) => {
+        navigate: requiresNavigation(message.name),
+        confirm: requiresConfirmation(message.name)}).then((response) => {
         if (typeof response === "undefined") { return; }
         sendToInpage(response, message.id);
     }).catch(() => {});
@@ -161,9 +161,18 @@ function getFavicon() {
     return "";
 }
 
-function pageRequiresConfirmation() {
+function requiresConfirmation(name) {
+    if (!isMobile) { return false; }
     const timeDelta = Date.now() - document.loadedAt;
-    return timeDelta < 999 || document.alwaysConfirm;
+    return (timeDelta < 999 || document.alwaysConfirm) && (name == "requestAccounts");
+}
+
+function requiresNavigation(name) {
+    if (isMobile && name != "switchEthereumChain" && name != "addEthereumChain") {
+        return true;
+    } else {
+        return false;
+    }
 }
 
 function genId() {
@@ -173,7 +182,7 @@ function genId() {
 function didChangeVisibility() {
     if (document.pendingRequestsIds.size != 0 && document.visibilityState === 'visible') {
         document.pendingRequestsIds.forEach(id => {
-            const request = {id: id, subject: "getResponse", host: window.location.host, isMobile: isMobile, pageRequiresConfirmation: pageRequiresConfirmation()};
+            const request = {id: id, subject: "getResponse", host: window.location.host, navigate: false, confirm: false};
             browser.runtime.sendMessage(request).then(response => {
                 if (typeof response !== "undefined") {
                     sendToInpage(response, id);

@@ -2,30 +2,22 @@
 
 function handleOnMessage(request, sender, sendResponse) {
     if (request.subject === "message-to-wallet") {
-        var mobileRedirect = false;
-        if (request.isMobile) {
-            const name = request.message.name;
-            if (name != "switchEthereumChain" && name != "addEthereumChain") {
-                mobileRedirect = true;
-            }
-        }
-        
         browser.runtime.sendNativeMessage("mac.tokenary.io", request.message).then(response => {
             if (typeof response !== "undefined") {
                 sendResponse(response);
                 storeConfigurationIfNeeded(request.host, response);
             } else {
-                if (!mobileRedirect) {
+                if (!request.navigate) {
                     sendResponse();
                 }
             }
         }).catch(() => {
-            if (!mobileRedirect) {
+            if (!request.navigate) {
                 sendResponse();
             }
         });
         
-        if (mobileRedirect) {
+        if (request.navigate) {
             mobileRedirectFor(request, sendResponse);
         }
     } else if (request.subject === "getResponse") {
@@ -160,10 +152,9 @@ function handleOnClick(tab) {
 
 function mobileRedirectFor(request, sendResponse) {
     const query = encodeURIComponent(JSON.stringify(request.message));
-    const shouldConfirm = request.message.name == "requestAccounts" && request.pageRequiresConfirmation;
     browser.tabs.getCurrent((tab) => {
         if (tab) {
-            if (shouldConfirm) {
+            if (request.confirm) {
                 const confirmationText = request.message.host + " | connect wallet";
                 browser.tabs.executeScript(tab.id, {
                     code: `
