@@ -78,8 +78,7 @@ function cancelRequest(id, provider) {
         subject: "cancelRequest",
     };
     sendToInpage(cancelMessage, id);
-    // TODO: message background script
-    // browser.runtime.sendNativeMessage("mac.tokenary.io", cancelResponse);
+    browser.runtime.sendMessage(cancelMessage).then(() => {}).catch(() => {});
 }
 
 function shouldInjectProvider() {

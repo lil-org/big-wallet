@@ -35,6 +35,8 @@ function handleOnMessage(request, sender, sendResponse) {
                 storeConfigurationIfNeeded(request.host, response);
             } else { sendResponse(); }
         }).catch(() => { sendResponse(); });
+    } else if (request.subject === "cancelRequest") {
+        browser.runtime.sendNativeMessage("mac.tokenary.io", request).then(() => {}).catch(() => {});
     } else if (request.subject === "getLatestConfiguration") {
         getLatestConfiguration(request.host).then(currentConfiguration => {
             sendResponse(currentConfiguration);
