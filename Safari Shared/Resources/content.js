@@ -134,12 +134,16 @@ function sendToInpage(response, id) {
 }
 
 function sendMessageToNativeApp(message, fromQueue) {
-    const requiresNavigation = requiresNavigation(message.name);
+    const requiresNavigation = requiresNavigationFor(message.name);
     if (isMobile && requiresNavigation && document.navigationBlocked) {
         addRequestToQueue(message);
     } else {
-        if (!fromQueue) { cleanupRequestsQueue(); }
-        document.navigationBlocked = true;
+        if (requiresNavigation) {
+            document.navigationBlocked = true;
+            if (!fromQueue) {
+                cleanupRequestsQueue();
+            }
+        }
         message.favicon = getFavicon();
         message.host = window.location.host;
         document.pendingRequestsIds.add(message.id);
@@ -155,23 +159,26 @@ function sendMessageToNativeApp(message, fromQueue) {
 }
 
 function addRequestToQueue(request) {
-    if (!isMobile) { return; }
-    document.requestsQueue.push(request);
+    if (isMobile) {
+        document.requestsQueue.push(request);
+    }
 }
 
 function processRequestsQueueIfNeeded() {
-    if (!isMobile || requestsQueue.length == 0) { return; }
-    const next = requestsQueue.shift();
-    sendMessageToNativeApp(next, true);
+    if (isMobile && document.requestsQueue.length > 0) {
+        const next = document.requestsQueue.shift();
+        sendMessageToNativeApp(next, true);
+    }
 }
 
 function cleanupRequestsQueue() {
-    if (!isMobile || requestsQueue.length == 0) { return; }
-    for (var i = 0; i < requestsQueue.length; i++) {
-        const request = requestsQueue[i];
-        cancelRequest(request.id, request.provider);
+    if (isMobile && document.requestsQueue.length > 0) {
+        for (var i = 0; i < document.requestsQueue.length; i++) {
+            const request = document.requestsQueue[i];
+            cancelRequest(request.id, request.provider);
+        }
+        document.requestsQueue = [];
     }
-    requestsQueue = [];
 }
 
 function getFavicon() {
@@ -198,7 +205,7 @@ function requiresConfirmation(name) {
     return (timeDelta < 999 || document.alwaysConfirm) && (name == "requestAccounts");
 }
 
-function requiresNavigation(name) {
+function requiresNavigationFor(name) {
     if (isMobile && name != "switchEthereumChain" && name != "addEthereumChain") {
         return true;
     } else {
