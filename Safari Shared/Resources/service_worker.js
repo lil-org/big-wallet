@@ -26,7 +26,7 @@ function handleOnMessage(request, sender, sendResponse) {
         });
         
         if (mobileRedirect) {
-            mobileRedirectFor(request.message, sendResponse);
+            mobileRedirectFor(request, sendResponse);
         }
     } else if (request.subject === "getResponse") {
         browser.runtime.sendNativeMessage("mac.tokenary.io", request).then(response => {
@@ -35,6 +35,9 @@ function handleOnMessage(request, sender, sendResponse) {
                 storeConfigurationIfNeeded(request.host, response);
             } else { sendResponse(); }
         }).catch(() => { sendResponse(); });
+    } else if (request.subject === "cancelRequest") {
+        browser.runtime.sendNativeMessage("mac.tokenary.io", request).then(() => {}).catch(() => {});
+        sendResponse();
     } else if (request.subject === "getLatestConfiguration") {
         getLatestConfiguration(request.host).then(currentConfiguration => {
             sendResponse(currentConfiguration);
@@ -156,10 +159,29 @@ function handleOnClick(tab) {
 // MARK: - mobile redirect
 
 function mobileRedirectFor(request, sendResponse) {
-    const query = encodeURIComponent(JSON.stringify(request));
+    const query = encodeURIComponent(JSON.stringify(request.message));
+    const shouldConfirm = request.message.name == "requestAccounts" && request.pageRequiresConfirmation;
     browser.tabs.getCurrent((tab) => {
         if (tab) {
-            browser.tabs.executeScript(tab.id, { code: 'window.location.href = `https://tokenary.io/extension?query=' + query + '`;' });
+            if (shouldConfirm) {
+                const confirmationText = request.message.host + " | connect wallet";
+                browser.tabs.executeScript(tab.id, {
+                    code: `
+                        var query = '` + query + `';
+                        var confirmationText = '` + confirmationText + `';
+                        var id = ` + request.message.id + `;
+                        var provider = '` + request.message.provider + `';
+                        if (confirm(confirmationText)) {
+                            window.location.href = 'https://tokenary.io/extension?query=' + query;
+                        } else {
+                            const response = {subject: "notConfirmed", id: id, provider: provider};
+                            window.postMessage(response, "*");
+                        }
+                    `
+                });
+            } else {
+                browser.tabs.executeScript(tab.id, { code: 'window.location.href = `https://tokenary.io/extension?query=' + query + '`;' });
+            }
             sendResponse();
         }
     });

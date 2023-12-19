@@ -71,9 +71,10 @@ final class WalletsManager {
         return nil
     }
     
-    func suggestedAccounts(coin: CoinType) -> [SpecificWalletAccount] {
+    func suggestedAccounts(coin: CoinType? = nil) -> [SpecificWalletAccount] {
+        let coinToSelect = coin ?? defaultCoin
         for wallet in wallets {
-            if let account = wallet.accounts.first(where: { $0.coin == coin }) {
+            if let account = wallet.accounts.first(where: { $0.coin == coinToSelect }) {
                 return [SpecificWalletAccount(walletId: wallet.id, account: account)]
             }
         }

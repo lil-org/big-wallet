@@ -2,6 +2,8 @@
 
 if (!("pendingRequestsIds" in document)) {
     document.pendingRequestsIds = new Set();
+    document.loadedAt = Date.now();
+    document.alwaysConfirm = false;
     setup();
 }
 
@@ -22,9 +24,6 @@ function setup() {
         } else if ("name" in request && request.name == "switchAccount") {
             sendMessageToNativeApp(request);
             sendResponse();
-        } else if ("subject" in request && request.subject == "cancelRequest") {
-            sendToInpage(request, request.id);
-            sendResponse();
         } else {
             sendResponse();
         }
@@ -40,7 +39,11 @@ function setup() {
                 const disconnectRequest = event.data;
                 disconnectRequest.host = window.location.host;
                 disconnectRequest.isMobile = isMobile;
+                disconnectRequest.pageRequiresConfirmation = pageRequiresConfirmation();
                 browser.runtime.sendMessage(disconnectRequest).then(() => {}).catch(() => {});
+            } else if (event.data.subject == "notConfirmed") {
+                document.alwaysConfirm = true;
+                cancelRequest(event.data.id, event.data.provider);
             }
         }
     });
@@ -65,6 +68,17 @@ function injectScript() {
     } catch (error) {
         console.error('tokenary: failed to inject', error);
     }
+}
+
+function cancelRequest(id, provider) {
+    const cancelMessage = {
+        id: id,
+        provider: provider,
+        error: "canceled",
+        subject: "cancelRequest",
+    };
+    sendToInpage(cancelMessage, id);
+    browser.runtime.sendMessage(cancelMessage).then(() => {}).catch(() => {});
 }
 
 function shouldInjectProvider() {
@@ -99,7 +113,7 @@ function documentElementCheck() {
 }
 
 function getLatestConfiguration() {
-    const request = {subject: "getLatestConfiguration", host: window.location.host, isMobile: isMobile};
+    const request = {subject: "getLatestConfiguration", host: window.location.host, isMobile: isMobile, pageRequiresConfirmation: pageRequiresConfirmation()};
     browser.runtime.sendMessage(request).then((response) => {
         if (typeof response === "undefined") { return; }
         const id = genId();
@@ -119,7 +133,11 @@ function sendMessageToNativeApp(message) {
     message.favicon = getFavicon();
     message.host = window.location.host;
     document.pendingRequestsIds.add(message.id);
-    browser.runtime.sendMessage({ subject: "message-to-wallet", message: message, host: window.location.host, isMobile: isMobile }).then((response) => {
+    browser.runtime.sendMessage({ subject: "message-to-wallet",
+        message: message,
+        host: window.location.host,
+        isMobile: isMobile,
+        pageRequiresConfirmation: pageRequiresConfirmation()}).then((response) => {
         if (typeof response === "undefined") { return; }
         sendToInpage(response, message.id);
     }).catch(() => {});
@@ -143,6 +161,11 @@ function getFavicon() {
     return "";
 }
 
+function pageRequiresConfirmation() {
+    const timeDelta = Date.now() - document.loadedAt;
+    return timeDelta < 999 || document.alwaysConfirm;
+}
+
 function genId() {
     return new Date().getTime() + Math.floor(Math.random() * 1000);
 }
@@ -150,7 +173,7 @@ function genId() {
 function didChangeVisibility() {
     if (document.pendingRequestsIds.size != 0 && document.visibilityState === 'visible') {
         document.pendingRequestsIds.forEach(id => {
-            const request = {id: id, subject: "getResponse", host: window.location.host, isMobile: isMobile};
+            const request = {id: id, subject: "getResponse", host: window.location.host, isMobile: isMobile, pageRequiresConfirmation: pageRequiresConfirmation()};
             browser.runtime.sendMessage(request).then(response => {
                 if (typeof response !== "undefined") {
                     sendToInpage(response, id);
