@@ -157,9 +157,25 @@ function handleOnClick(tab) {
 
 function mobileRedirectFor(request, sendResponse) {
     const query = encodeURIComponent(JSON.stringify(request));
+    const shouldConfirm = false; // TODO: implement
     browser.tabs.getCurrent((tab) => {
         if (tab) {
-            browser.tabs.executeScript(tab.id, { code: 'window.location.href = `https://tokenary.io/extension?query=' + query + '`;' });
+            if (shouldConfirm) {
+                const confirmationText = request.host + " | connect wallet";
+                browser.tabs.executeScript(tab.id, {
+                    code: `
+                        var query = '` + query + `';
+                        var confirmationText = '` + confirmationText + `';
+                        if (confirm(confirmationText)) {
+                            window.location.href = 'https://tokenary.io/extension?query=' + query;
+                        } else {
+                            console.log('did cancel');
+                        }
+                    `
+                });
+            } else {
+                browser.tabs.executeScript(tab.id, { code: 'window.location.href = `https://tokenary.io/extension?query=' + query + '`;' });
+            }
             sendResponse();
         }
     });
