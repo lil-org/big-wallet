@@ -4,6 +4,8 @@ if (!("pendingRequestsIds" in document)) {
     document.pendingRequestsIds = new Set();
     document.loadedAt = Date.now();
     document.alwaysConfirm = false;
+    document.navigationBlocked = false;
+    document.requestsQueue = [];
     setup();
 }
 
@@ -42,8 +44,10 @@ function setup() {
                 disconnectRequest.confirm = false;
                 browser.runtime.sendMessage(disconnectRequest).then(() => {}).catch(() => {});
             } else if (event.data.subject == "notConfirmed") {
+                document.navigationBlocked = false;
                 document.alwaysConfirm = true;
                 cancelRequest(event.data.id, event.data.provider);
+                cleanupRequestsQueue();
             }
         }
     });
@@ -130,17 +134,36 @@ function sendToInpage(response, id) {
 }
 
 function sendMessageToNativeApp(message) {
-    message.favicon = getFavicon();
-    message.host = window.location.host;
-    document.pendingRequestsIds.add(message.id);
-    browser.runtime.sendMessage({ subject: "message-to-wallet",
-        message: message,
-        host: window.location.host,
-        navigate: requiresNavigation(message.name),
-        confirm: requiresConfirmation(message.name)}).then((response) => {
-        if (typeof response === "undefined") { return; }
-        sendToInpage(response, message.id);
-    }).catch(() => {});
+    const requiresNavigation = requiresNavigation(message.name);
+    if (isMobile && requiresNavigation && document.navigationBlocked) {
+        addRequestToQueue(message);
+    } else {
+        document.navigationBlocked = true;
+        message.favicon = getFavicon();
+        message.host = window.location.host;
+        document.pendingRequestsIds.add(message.id);
+        browser.runtime.sendMessage({ subject: "message-to-wallet",
+            message: message,
+            host: window.location.host,
+            navigate: requiresNavigation,
+            confirm: requiresConfirmation(message.name)}).then((response) => {
+            if (typeof response === "undefined") { return; }
+            sendToInpage(response, message.id);
+        }).catch(() => {});
+    }
+}
+
+function addRequestToQueue(request) {
+    // TODO: implement
+}
+
+function processRequestsQueueIfNeeded() {
+    if (requestsQueue.length == 0) { return; }
+    // TODO: implement
+}
+
+function cleanupRequestsQueue() {
+    // TODO: cancel all
 }
 
 function getFavicon() {
@@ -180,7 +203,12 @@ function genId() {
 }
 
 function didChangeVisibility() {
-    if (document.pendingRequestsIds.size != 0 && document.visibilityState === 'visible') {
+    const isVisible = document.visibilityState === 'visible';
+    if (isMobile && document.navigationBlocked && isVisible) {
+        document.navigationBlocked = false;
+        processRequestsQueueIfNeeded();
+    }
+    if (document.pendingRequestsIds.size != 0 && isVisible) {
         document.pendingRequestsIds.forEach(id => {
             const request = {id: id, subject: "getResponse", host: window.location.host, navigate: false, confirm: false};
             browser.runtime.sendMessage(request).then(response => {
