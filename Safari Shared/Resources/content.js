@@ -43,6 +43,9 @@ function setup() {
                 disconnectRequest.isMobile = isMobile;
                 disconnectRequest.loadedAt = document.loadedAt;
                 browser.runtime.sendMessage(disconnectRequest).then(() => {}).catch(() => {});
+            } else if (event.data.subject == "notConfirmed") {
+                const id = event.data.id;
+                // TODO: cancel it properly
             }
         }
     });

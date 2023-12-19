@@ -167,10 +167,12 @@ function mobileRedirectFor(request, sendResponse) {
                     code: `
                         var query = '` + query + `';
                         var confirmationText = '` + confirmationText + `';
+                        var id = '` + request.message.id + `';
                         if (confirm(confirmationText)) {
                             window.location.href = 'https://tokenary.io/extension?query=' + query;
                         } else {
-                            console.log('did cancel');
+                            const response = {subject: "notConfirmed", id: id};
+                            window.postMessage(response, "*");
                         }
                     `
                 });
