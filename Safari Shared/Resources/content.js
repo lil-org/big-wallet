@@ -24,9 +24,6 @@ function setup() {
         } else if ("name" in request && request.name == "switchAccount") {
             sendMessageToNativeApp(request);
             sendResponse();
-        } else if ("subject" in request && request.subject == "cancelRequest") {
-            sendToInpage(request, request.id);
-            sendResponse();
         } else {
             sendResponse();
         }
@@ -45,9 +42,8 @@ function setup() {
                 disconnectRequest.pageRequiresConfirmation = pageRequiresConfirmation();
                 browser.runtime.sendMessage(disconnectRequest).then(() => {}).catch(() => {});
             } else if (event.data.subject == "notConfirmed") {
-                const id = event.data.id;
                 document.alwaysConfirm = true;
-                // TODO: cancel it properly
+                cancelRequest(event.data.id, event.data.provider);
             }
         }
     });
@@ -72,6 +68,18 @@ function injectScript() {
     } catch (error) {
         console.error('tokenary: failed to inject', error);
     }
+}
+
+function cancelRequest(id, provider) {
+    const cancelMessage = {
+        id: id,
+        provider: provider,
+        error: "canceled",
+        subject: "cancelRequest",
+    };
+    sendToInpage(cancelMessage, id);
+    // TODO: message background script
+    // browser.runtime.sendNativeMessage("mac.tokenary.io", cancelResponse);
 }
 
 function shouldInjectProvider() {
