@@ -24,7 +24,7 @@ function setup() {
         if ("didTapExtensionButton" in request) {
             sendResponse({ host: window.location.host, favicon: getFavicon() });
         } else if ("name" in request && request.name == "switchAccount") {
-            sendMessageToNativeApp(request);
+            sendMessageToNativeApp(request, false);
             sendResponse();
         } else {
             sendResponse();
@@ -36,7 +36,7 @@ function setup() {
     window.addEventListener("message", event => {
         if (event.source == window && event.data) {
             if (event.data.direction == "from-page-script") {
-                sendMessageToNativeApp(event.data.message);
+                sendMessageToNativeApp(event.data.message, false);
             } else if (event.data.subject == "disconnect") {
                 const disconnectRequest = event.data;
                 disconnectRequest.host = window.location.host;
@@ -133,11 +133,12 @@ function sendToInpage(response, id) {
     }
 }
 
-function sendMessageToNativeApp(message) {
+function sendMessageToNativeApp(message, fromQueue) {
     const requiresNavigation = requiresNavigation(message.name);
     if (isMobile && requiresNavigation && document.navigationBlocked) {
         addRequestToQueue(message);
     } else {
+        if (!fromQueue) { cleanupRequestsQueue(); }
         document.navigationBlocked = true;
         message.favicon = getFavicon();
         message.host = window.location.host;
@@ -154,16 +155,18 @@ function sendMessageToNativeApp(message) {
 }
 
 function addRequestToQueue(request) {
+    if (!isMobile) { return; }
     document.requestsQueue.push(request);
 }
 
 function processRequestsQueueIfNeeded() {
-    if (requestsQueue.length == 0) { return; }
+    if (!isMobile || requestsQueue.length == 0) { return; }
     const next = requestsQueue.shift();
-    sendMessageToNativeApp(next);
+    sendMessageToNativeApp(next, true);
 }
 
 function cleanupRequestsQueue() {
+    if (!isMobile || requestsQueue.length == 0) { return; }
     for (var i = 0; i < requestsQueue.length; i++) {
         const request = requestsQueue[i];
         cancelRequest(request.id, request.provider);
