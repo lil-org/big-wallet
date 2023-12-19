@@ -157,7 +157,7 @@ function handleOnClick(tab) {
 
 function mobileRedirectFor(request, sendResponse) {
     const query = encodeURIComponent(JSON.stringify(request));
-    const shouldConfirm = false; // TODO: implement
+    const shouldConfirm = request.name == "requestAccounts"; // TODO: check for time as well
     browser.tabs.getCurrent((tab) => {
         if (tab) {
             if (shouldConfirm) {
