@@ -2,6 +2,7 @@
 
 if (!("pendingRequestsIds" in document)) {
     document.pendingRequestsIds = new Set();
+    document.loadedAt = Date.now();
     setup();
 }
 
@@ -40,6 +41,7 @@ function setup() {
                 const disconnectRequest = event.data;
                 disconnectRequest.host = window.location.host;
                 disconnectRequest.isMobile = isMobile;
+                disconnectRequest.loadedAt = document.loadedAt;
                 browser.runtime.sendMessage(disconnectRequest).then(() => {}).catch(() => {});
             }
         }
@@ -99,7 +101,7 @@ function documentElementCheck() {
 }
 
 function getLatestConfiguration() {
-    const request = {subject: "getLatestConfiguration", host: window.location.host, isMobile: isMobile};
+    const request = {subject: "getLatestConfiguration", host: window.location.host, isMobile: isMobile, loadedAt: document.loadedAt};
     browser.runtime.sendMessage(request).then((response) => {
         if (typeof response === "undefined") { return; }
         const id = genId();
@@ -119,7 +121,11 @@ function sendMessageToNativeApp(message) {
     message.favicon = getFavicon();
     message.host = window.location.host;
     document.pendingRequestsIds.add(message.id);
-    browser.runtime.sendMessage({ subject: "message-to-wallet", message: message, host: window.location.host, isMobile: isMobile }).then((response) => {
+    browser.runtime.sendMessage({ subject: "message-to-wallet",
+        message: message,
+        host: window.location.host,
+        isMobile: isMobile,
+        loadedAt: document.loadedAt}).then((response) => {
         if (typeof response === "undefined") { return; }
         sendToInpage(response, message.id);
     }).catch(() => {});
@@ -150,7 +156,7 @@ function genId() {
 function didChangeVisibility() {
     if (document.pendingRequestsIds.size != 0 && document.visibilityState === 'visible') {
         document.pendingRequestsIds.forEach(id => {
-            const request = {id: id, subject: "getResponse", host: window.location.host, isMobile: isMobile};
+            const request = {id: id, subject: "getResponse", host: window.location.host, isMobile: isMobile, loadedAt: document.loadedAt};
             browser.runtime.sendMessage(request).then(response => {
                 if (typeof response !== "undefined") {
                     sendToInpage(response, id);

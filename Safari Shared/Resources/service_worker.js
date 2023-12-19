@@ -26,7 +26,7 @@ function handleOnMessage(request, sender, sendResponse) {
         });
         
         if (mobileRedirect) {
-            mobileRedirectFor(request.message, sendResponse);
+            mobileRedirectFor(request, sendResponse);
         }
     } else if (request.subject === "getResponse") {
         browser.runtime.sendNativeMessage("mac.tokenary.io", request).then(response => {
@@ -156,12 +156,13 @@ function handleOnClick(tab) {
 // MARK: - mobile redirect
 
 function mobileRedirectFor(request, sendResponse) {
-    const query = encodeURIComponent(JSON.stringify(request));
-    const shouldConfirm = request.name == "requestAccounts"; // TODO: check for time as well
+    const query = encodeURIComponent(JSON.stringify(request.message));
+    const timeDelta = Date.now() - request.loadedAt;
+    const shouldConfirm = request.message.name == "requestAccounts" && timeDelta < 999;
     browser.tabs.getCurrent((tab) => {
         if (tab) {
             if (shouldConfirm) {
-                const confirmationText = request.host + " | connect wallet";
+                const confirmationText = request.message.host + " | connect wallet";
                 browser.tabs.executeScript(tab.id, {
                     code: `
                         var query = '` + query + `';
