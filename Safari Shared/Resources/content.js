@@ -166,6 +166,12 @@ function addRequestToQueue(request) {
 
 function processRequestsQueueIfNeeded() {
     if (isMobile && document.requestsQueue.length > 0) {
+        setTimeout(processNextItemInQueue, 999);
+    }
+}
+
+function processNextItemInQueue() {
+    if (document.requestsQueue.length > 0) {
         const next = document.requestsQueue.shift();
         sendMessageToNativeApp(next, true);
     }
