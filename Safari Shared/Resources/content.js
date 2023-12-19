@@ -154,16 +154,21 @@ function sendMessageToNativeApp(message) {
 }
 
 function addRequestToQueue(request) {
-    // TODO: implement
+    document.requestsQueue.push(request);
 }
 
 function processRequestsQueueIfNeeded() {
     if (requestsQueue.length == 0) { return; }
-    // TODO: implement
+    const next = requestsQueue.shift();
+    sendMessageToNativeApp(next);
 }
 
 function cleanupRequestsQueue() {
-    // TODO: cancel all
+    for (var i = 0; i < requestsQueue.length; i++) {
+        const request = requestsQueue[i];
+        cancelRequest(request.id, request.provider);
+    }
+    requestsQueue = [];
 }
 
 function getFavicon() {
