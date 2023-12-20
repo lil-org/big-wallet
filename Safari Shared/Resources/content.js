@@ -138,7 +138,7 @@ function sendMessageToNativeApp(message, fromQueue) {
     if (isMobile && requiresNavigation && document.navigationBlocked) {
         addRequestToQueue(message);
     } else {
-        if (requiresNavigation) {
+        if (isMobile && requiresNavigation) {
             document.navigationBlocked = true;
             if (!fromQueue) {
                 cleanupRequestsQueue();
@@ -206,9 +206,12 @@ function getFavicon() {
 }
 
 function requiresConfirmation(name) {
-    if (!isMobile) { return false; }
-    const timeDelta = Date.now() - document.loadedAt;
-    return (timeDelta < 999 || document.alwaysConfirm) && (name == "requestAccounts");
+    if (isMobile) {
+        const timeDelta = Date.now() - document.loadedAt;
+        return (timeDelta < 999 || document.alwaysConfirm) && (name == "requestAccounts");
+    } else {
+        return false;
+    }
 }
 
 function requiresNavigationFor(name) {
