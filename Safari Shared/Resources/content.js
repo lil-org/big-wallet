@@ -230,20 +230,26 @@ function pollWhenVisible() {
     
 }
 
+function getPendingResponses() {
+    document.pendingRequestsIds.forEach(id => {
+        const request = {id: id, subject: "getResponse", host: window.location.host, navigate: false, confirm: false};
+        browser.runtime.sendMessage(request).then(response => {
+            if (typeof response !== "undefined") {
+                sendToInpage(response, id);
+            }
+        }).catch(() => {});
+    });
+}
+
 function didChangeVisibility() {
-    const isVisible = document.visibilityState === 'visible';
-    if (isMobile && document.navigationBlocked && isVisible) {
-        document.navigationBlocked = false;
-        processRequestsQueueIfNeeded();
-    }
-    if (document.pendingRequestsIds.size != 0 && isVisible) {
-        document.pendingRequestsIds.forEach(id => {
-            const request = {id: id, subject: "getResponse", host: window.location.host, navigate: false, confirm: false};
-            browser.runtime.sendMessage(request).then(response => {
-                if (typeof response !== "undefined") {
-                    sendToInpage(response, id);
-                }
-            }).catch(() => {});
-        });
+    if (document.visibilityState === 'visible') {
+        if (document.pendingRequestsIds.size != 0) {
+            getPendingResponses();
+        }
+        
+        if (isMobile && document.navigationBlocked) {
+            document.navigationBlocked = false;
+            processRequestsQueueIfNeeded();
+        }
     }
 }
