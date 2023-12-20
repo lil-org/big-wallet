@@ -6,6 +6,7 @@ if (!("pendingRequestsIds" in document)) {
     document.alwaysConfirm = false;
     document.navigationBlocked = false;
     document.requestsQueue = [];
+    document.isPollingResponses = false;
     setup();
 }
 
@@ -227,7 +228,16 @@ function genId() {
 }
 
 function pollWhenVisible() {
-    
+    if (!document.isPollingResponses) {
+        document.isPollingResponses = true;
+        setTimeout(() => {
+            document.isPollingResponses = false;
+            if (document.visibilityState === 'visible' && document.pendingRequestsIds.size != 0) {
+                getPendingResponses();
+                pollWhenVisible();
+            }
+        }, 888);
+    }
 }
 
 function getPendingResponses() {
@@ -236,6 +246,10 @@ function getPendingResponses() {
         browser.runtime.sendMessage(request).then(response => {
             if (typeof response !== "undefined") {
                 sendToInpage(response, id);
+                if (isMobile && document.navigationBlocked) {
+                    document.navigationBlocked = false;
+                    processRequestsQueueIfNeeded();
+                }
             }
         }).catch(() => {});
     });
@@ -245,6 +259,7 @@ function didChangeVisibility() {
     if (document.visibilityState === 'visible') {
         if (document.pendingRequestsIds.size != 0) {
             getPendingResponses();
+            pollWhenVisible()
         }
         
         if (isMobile && document.navigationBlocked) {
