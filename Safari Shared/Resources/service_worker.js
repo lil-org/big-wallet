@@ -187,7 +187,7 @@ function genId() {
 function addListeners() {
     browser.runtime.onMessage.addListener(handleOnMessage);
     browser.browserAction.onClicked.addListener(handleOnClick);
-    browser.webNavigation.onBeforeNavigate.addListener(onBeforeExtensionPageNavigation, {url: [{urlMatches : "https://tokenary.io/extension"}]});
+    browser.webNavigation.onBeforeNavigate.addListener(onBeforeExtensionPageNavigation, {url: [{urlMatches : "https://(www\.)?tokenary\.io/extension"}]});
 }
 
 addListeners();
