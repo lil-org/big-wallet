@@ -6,6 +6,8 @@ if (!("pendingRequestsIds" in document)) {
     document.alwaysConfirm = false;
     document.navigationBlocked = false;
     document.requestsQueue = [];
+    document.isPollingResponses = false;
+    document.navigationDate = 0;
     setup();
 }
 
@@ -45,6 +47,7 @@ function setup() {
                 browser.runtime.sendMessage(disconnectRequest).then(() => {}).catch(() => {});
             } else if (event.data.subject == "notConfirmed") {
                 document.navigationBlocked = false;
+                document.navigationDate = 0;
                 document.alwaysConfirm = true;
                 cancelRequest(event.data.id, event.data.provider);
                 cleanupRequestsQueue();
@@ -53,9 +56,6 @@ function setup() {
     });
     
     document.addEventListener('visibilitychange', didChangeVisibility);
-    if (!isMobile) {
-        window.addEventListener('focus', didChangeVisibility);
-    }
 }
 
 function injectScript() {
@@ -133,29 +133,41 @@ function sendToInpage(response, id) {
     }
 }
 
+function didNavigateJustNow() {
+    const timeDelta = Date.now() - document.navigationDate;
+    return timeDelta < 999;
+}
+
 function sendMessageToNativeApp(message, fromQueue) {
     const requiresNavigation = requiresNavigationFor(message.name);
-    if (isMobile && requiresNavigation && document.navigationBlocked) {
-        addRequestToQueue(message);
-    } else {
-        if (isMobile && requiresNavigation) {
-            document.navigationBlocked = true;
-            if (!fromQueue) {
-                cleanupRequestsQueue();
-            }
+    if (isMobile && requiresNavigation && (document.navigationBlocked || document.visibilityState != 'visible')) {
+        if (didNavigateJustNow() || fromQueue || document.visibilityState != 'visible') {
+            addRequestToQueue(message);
+            return;
         }
-        message.favicon = getFavicon();
-        message.host = window.location.host;
-        document.pendingRequestsIds.add(message.id);
-        browser.runtime.sendMessage({ subject: "message-to-wallet",
-            message: message,
-            host: window.location.host,
-            navigate: requiresNavigation,
-            confirm: requiresConfirmation(message.name)}).then((response) => {
-            if (typeof response === "undefined") { return; }
-            sendToInpage(response, message.id);
-        }).catch(() => {});
     }
+    
+    if (isMobile && requiresNavigation) {
+        document.navigationBlocked = true;
+        document.navigationDate = Date.now();
+        if (!fromQueue) {
+            cleanupRequestsQueue();
+        }
+    }
+    message.favicon = getFavicon();
+    message.host = window.location.host;
+    document.pendingRequestsIds.add(message.id);
+    browser.runtime.sendMessage({ subject: "message-to-wallet",
+        message: message,
+        host: window.location.host,
+        navigate: requiresNavigation,
+        confirm: requiresConfirmation(message.name)}).then((response) => {
+            if (typeof response === "undefined") {
+                pollWhenVisible();
+            } else {
+                sendToInpage(response, message.id);
+            }
+        }).catch(() => { pollWhenVisible(); });
 }
 
 function addRequestToQueue(request) {
@@ -226,20 +238,46 @@ function genId() {
     return new Date().getTime() + Math.floor(Math.random() * 1000);
 }
 
-function didChangeVisibility() {
-    const isVisible = document.visibilityState === 'visible';
-    if (isMobile && document.navigationBlocked && isVisible) {
-        document.navigationBlocked = false;
-        processRequestsQueueIfNeeded();
+function pollWhenVisible() {
+    if (!document.isPollingResponses) {
+        document.isPollingResponses = true;
+        setTimeout(() => {
+            document.isPollingResponses = false;
+            if (document.visibilityState === 'visible' && document.pendingRequestsIds.size != 0) {
+                getPendingResponses();
+                pollWhenVisible();
+            }
+        }, 888);
     }
-    if (document.pendingRequestsIds.size != 0 && isVisible) {
-        document.pendingRequestsIds.forEach(id => {
-            const request = {id: id, subject: "getResponse", host: window.location.host, navigate: false, confirm: false};
-            browser.runtime.sendMessage(request).then(response => {
-                if (typeof response !== "undefined") {
-                    sendToInpage(response, id);
+}
+
+function getPendingResponses() {
+    document.pendingRequestsIds.forEach(id => {
+        const request = {id: id, subject: "getResponse", host: window.location.host, navigate: false, confirm: false};
+        browser.runtime.sendMessage(request).then(response => {
+            if (typeof response !== "undefined") {
+                sendToInpage(response, id);
+                if (isMobile && document.navigationBlocked) {
+                    document.navigationBlocked = false;
+                    document.navigationDate = 0;
+                    processRequestsQueueIfNeeded();
                 }
-            }).catch(() => {});
-        });
+            }
+        }).catch(() => {});
+    });
+}
+
+function didChangeVisibility() {
+    if (document.visibilityState === 'visible') {
+        if (document.pendingRequestsIds.size != 0) {
+            getPendingResponses();
+            pollWhenVisible()
+        }
+        
+        if (isMobile) {
+            document.navigationBlocked = false;
+            document.navigationDate = 0;
+            processRequestsQueueIfNeeded();
+        }
     }
 }
