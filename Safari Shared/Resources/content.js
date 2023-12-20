@@ -7,6 +7,7 @@ if (!("pendingRequestsIds" in document)) {
     document.navigationBlocked = false;
     document.requestsQueue = [];
     document.isPollingResponses = false;
+    document.navigationDate = 0;
     setup();
 }
 
@@ -46,6 +47,7 @@ function setup() {
                 browser.runtime.sendMessage(disconnectRequest).then(() => {}).catch(() => {});
             } else if (event.data.subject == "notConfirmed") {
                 document.navigationBlocked = false;
+                document.navigationDate = 0;
                 document.alwaysConfirm = true;
                 cancelRequest(event.data.id, event.data.provider);
                 cleanupRequestsQueue();
@@ -131,32 +133,41 @@ function sendToInpage(response, id) {
     }
 }
 
+function didNavigateJustNow() {
+    const timeDelta = Date.now() - document.navigationDate;
+    return timeDelta < 999;
+}
+
 function sendMessageToNativeApp(message, fromQueue) {
     const requiresNavigation = requiresNavigationFor(message.name);
     if (isMobile && requiresNavigation && document.navigationBlocked) {
-        addRequestToQueue(message);
-    } else {
-        if (isMobile && requiresNavigation) {
-            document.navigationBlocked = true;
-            if (!fromQueue) {
-                cleanupRequestsQueue();
-            }
+        if (didNavigateJustNow() || fromQueue) {
+            addRequestToQueue(message);
+            return;
         }
-        message.favicon = getFavicon();
-        message.host = window.location.host;
-        document.pendingRequestsIds.add(message.id);
-        browser.runtime.sendMessage({ subject: "message-to-wallet",
-            message: message,
-            host: window.location.host,
-            navigate: requiresNavigation,
-            confirm: requiresConfirmation(message.name)}).then((response) => {
-                if (typeof response === "undefined") {
-                    pollWhenVisible();
-                } else {
-                    sendToInpage(response, message.id);
-                }
-            }).catch(() => { pollWhenVisible(); });
     }
+    
+    if (isMobile && requiresNavigation) {
+        document.navigationBlocked = true;
+        document.navigationDate = Date.now();
+        if (!fromQueue) {
+            cleanupRequestsQueue();
+        }
+    }
+    message.favicon = getFavicon();
+    message.host = window.location.host;
+    document.pendingRequestsIds.add(message.id);
+    browser.runtime.sendMessage({ subject: "message-to-wallet",
+        message: message,
+        host: window.location.host,
+        navigate: requiresNavigation,
+        confirm: requiresConfirmation(message.name)}).then((response) => {
+            if (typeof response === "undefined") {
+                pollWhenVisible();
+            } else {
+                sendToInpage(response, message.id);
+            }
+        }).catch(() => { pollWhenVisible(); });
 }
 
 function addRequestToQueue(request) {
@@ -248,6 +259,7 @@ function getPendingResponses() {
                 sendToInpage(response, id);
                 if (isMobile && document.navigationBlocked) {
                     document.navigationBlocked = false;
+                    document.navigationDate = 0;
                     processRequestsQueueIfNeeded();
                 }
             }
@@ -264,6 +276,7 @@ function didChangeVisibility() {
         
         if (isMobile && document.navigationBlocked) {
             document.navigationBlocked = false;
+            document.navigationDate = 0;
             processRequestsQueueIfNeeded();
         }
     }
