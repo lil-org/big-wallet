@@ -149,9 +149,12 @@ function sendMessageToNativeApp(message, fromQueue) {
             host: window.location.host,
             navigate: requiresNavigation,
             confirm: requiresConfirmation(message.name)}).then((response) => {
-            if (typeof response === "undefined") { return; }
-            sendToInpage(response, message.id);
-        }).catch(() => {});
+                if (typeof response === "undefined") {
+                    pollWhenVisible();
+                } else {
+                    sendToInpage(response, message.id);
+                }
+            }).catch(() => { pollWhenVisible(); });
     }
 }
 
@@ -221,6 +224,10 @@ function requiresNavigationFor(name) {
 
 function genId() {
     return new Date().getTime() + Math.floor(Math.random() * 1000);
+}
+
+function pollWhenVisible() {
+    
 }
 
 function didChangeVisibility() {
