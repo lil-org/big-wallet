@@ -53,9 +53,6 @@ function setup() {
     });
     
     document.addEventListener('visibilitychange', didChangeVisibility);
-    if (!isMobile) {
-        window.addEventListener('focus', didChangeVisibility);
-    }
 }
 
 function injectScript() {
