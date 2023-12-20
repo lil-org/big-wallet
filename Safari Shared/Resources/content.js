@@ -140,8 +140,8 @@ function didNavigateJustNow() {
 
 function sendMessageToNativeApp(message, fromQueue) {
     const requiresNavigation = requiresNavigationFor(message.name);
-    if (isMobile && requiresNavigation && document.navigationBlocked) {
-        if (didNavigateJustNow() || fromQueue) {
+    if (isMobile && requiresNavigation && (document.navigationBlocked || document.visibilityState != 'visible')) {
+        if (didNavigateJustNow() || fromQueue || document.visibilityState != 'visible') {
             addRequestToQueue(message);
             return;
         }
@@ -274,7 +274,7 @@ function didChangeVisibility() {
             pollWhenVisible()
         }
         
-        if (isMobile && document.navigationBlocked) {
+        if (isMobile) {
             document.navigationBlocked = false;
             document.navigationDate = 0;
             processRequestsQueueIfNeeded();
