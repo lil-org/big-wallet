@@ -4,6 +4,8 @@ if (!("pendingRequestsIds" in document)) {
     document.pendingRequestsIds = new Set();
     document.loadedAt = Date.now();
     document.alwaysConfirm = false;
+    document.navigationBlocked = false;
+    document.requestsQueue = [];
     setup();
 }
 
@@ -22,7 +24,7 @@ function setup() {
         if ("didTapExtensionButton" in request) {
             sendResponse({ host: window.location.host, favicon: getFavicon() });
         } else if ("name" in request && request.name == "switchAccount") {
-            sendMessageToNativeApp(request);
+            sendMessageToNativeApp(request, false);
             sendResponse();
         } else {
             sendResponse();
@@ -34,16 +36,18 @@ function setup() {
     window.addEventListener("message", event => {
         if (event.source == window && event.data) {
             if (event.data.direction == "from-page-script") {
-                sendMessageToNativeApp(event.data.message);
+                sendMessageToNativeApp(event.data.message, false);
             } else if (event.data.subject == "disconnect") {
                 const disconnectRequest = event.data;
                 disconnectRequest.host = window.location.host;
-                disconnectRequest.isMobile = isMobile;
-                disconnectRequest.pageRequiresConfirmation = pageRequiresConfirmation();
+                disconnectRequest.navigate = false;
+                disconnectRequest.confirm = false;
                 browser.runtime.sendMessage(disconnectRequest).then(() => {}).catch(() => {});
             } else if (event.data.subject == "notConfirmed") {
+                document.navigationBlocked = false;
                 document.alwaysConfirm = true;
                 cancelRequest(event.data.id, event.data.provider);
+                cleanupRequestsQueue();
             }
         }
     });
@@ -113,7 +117,7 @@ function documentElementCheck() {
 }
 
 function getLatestConfiguration() {
-    const request = {subject: "getLatestConfiguration", host: window.location.host, isMobile: isMobile, pageRequiresConfirmation: pageRequiresConfirmation()};
+    const request = {subject: "getLatestConfiguration", host: window.location.host, navigate: false, confirm: false};
     browser.runtime.sendMessage(request).then((response) => {
         if (typeof response === "undefined") { return; }
         const id = genId();
@@ -129,18 +133,58 @@ function sendToInpage(response, id) {
     }
 }
 
-function sendMessageToNativeApp(message) {
-    message.favicon = getFavicon();
-    message.host = window.location.host;
-    document.pendingRequestsIds.add(message.id);
-    browser.runtime.sendMessage({ subject: "message-to-wallet",
-        message: message,
-        host: window.location.host,
-        isMobile: isMobile,
-        pageRequiresConfirmation: pageRequiresConfirmation()}).then((response) => {
-        if (typeof response === "undefined") { return; }
-        sendToInpage(response, message.id);
-    }).catch(() => {});
+function sendMessageToNativeApp(message, fromQueue) {
+    const requiresNavigation = requiresNavigationFor(message.name);
+    if (isMobile && requiresNavigation && document.navigationBlocked) {
+        addRequestToQueue(message);
+    } else {
+        if (isMobile && requiresNavigation) {
+            document.navigationBlocked = true;
+            if (!fromQueue) {
+                cleanupRequestsQueue();
+            }
+        }
+        message.favicon = getFavicon();
+        message.host = window.location.host;
+        document.pendingRequestsIds.add(message.id);
+        browser.runtime.sendMessage({ subject: "message-to-wallet",
+            message: message,
+            host: window.location.host,
+            navigate: requiresNavigation,
+            confirm: requiresConfirmation(message.name)}).then((response) => {
+            if (typeof response === "undefined") { return; }
+            sendToInpage(response, message.id);
+        }).catch(() => {});
+    }
+}
+
+function addRequestToQueue(request) {
+    if (isMobile) {
+        document.requestsQueue.push(request);
+    }
+}
+
+function processRequestsQueueIfNeeded() {
+    if (isMobile && document.requestsQueue.length > 0) {
+        setTimeout(processNextItemInQueue, 999);
+    }
+}
+
+function processNextItemInQueue() {
+    if (document.requestsQueue.length > 0) {
+        const next = document.requestsQueue.shift();
+        sendMessageToNativeApp(next, true);
+    }
+}
+
+function cleanupRequestsQueue() {
+    if (isMobile && document.requestsQueue.length > 0) {
+        for (var i = 0; i < document.requestsQueue.length; i++) {
+            const request = document.requestsQueue[i];
+            cancelRequest(request.id, request.provider);
+        }
+        document.requestsQueue = [];
+    }
 }
 
 function getFavicon() {
@@ -161,9 +205,21 @@ function getFavicon() {
     return "";
 }
 
-function pageRequiresConfirmation() {
-    const timeDelta = Date.now() - document.loadedAt;
-    return timeDelta < 999 || document.alwaysConfirm;
+function requiresConfirmation(name) {
+    if (isMobile) {
+        const timeDelta = Date.now() - document.loadedAt;
+        return (timeDelta < 999 || document.alwaysConfirm) && (name == "requestAccounts");
+    } else {
+        return false;
+    }
+}
+
+function requiresNavigationFor(name) {
+    if (isMobile && name != "switchEthereumChain" && name != "addEthereumChain") {
+        return true;
+    } else {
+        return false;
+    }
 }
 
 function genId() {
@@ -171,9 +227,14 @@ function genId() {
 }
 
 function didChangeVisibility() {
-    if (document.pendingRequestsIds.size != 0 && document.visibilityState === 'visible') {
+    const isVisible = document.visibilityState === 'visible';
+    if (isMobile && document.navigationBlocked && isVisible) {
+        document.navigationBlocked = false;
+        processRequestsQueueIfNeeded();
+    }
+    if (document.pendingRequestsIds.size != 0 && isVisible) {
         document.pendingRequestsIds.forEach(id => {
-            const request = {id: id, subject: "getResponse", host: window.location.host, isMobile: isMobile, pageRequiresConfirmation: pageRequiresConfirmation()};
+            const request = {id: id, subject: "getResponse", host: window.location.host, navigate: false, confirm: false};
             browser.runtime.sendMessage(request).then(response => {
                 if (typeof response !== "undefined") {
                     sendToInpage(response, id);
