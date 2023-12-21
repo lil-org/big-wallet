@@ -44,7 +44,9 @@ announceProvider();
 // - MARK: Process content script messages
 
 window.addEventListener("message", function(event) {
-    if (event.source == window && event.data && event.data.direction == "from-content-script") {
+    if (event.source == window && event.data && event.data.direction == "rpc-back") {
+        console.log("got it back inpage", event.data); // TODO: respond via rpc server
+    } else if (event.source == window && event.data && event.data.direction == "from-content-script") {
         const response = event.data.response;
         const id = event.data.id;
         
