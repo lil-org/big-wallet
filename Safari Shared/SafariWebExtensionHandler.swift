@@ -21,6 +21,12 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         if let internalSafariRequest = try? jsonDecoder.decode(InternalSafariRequest.self, from: data) {
             let id = internalSafariRequest.id
             switch internalSafariRequest.subject {
+            case .rpc:
+                if let body = internalSafariRequest.body {
+                    respond(with: ["yo": body], context: context) // TODO: make rpc request
+                } else {
+                    context.cancelRequest(withError: HandlerError.empty)
+                }
             case .getResponse:
                 if let response = ExtensionBridge.getResponse(id: id) {
                     ExtensionBridge.removeResponse(id: id)
