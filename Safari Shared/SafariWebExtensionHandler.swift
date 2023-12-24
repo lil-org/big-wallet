@@ -23,7 +23,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             switch internalSafariRequest.subject {
             case .rpc:
                 if let body = internalSafariRequest.body {
-                    respond(with: ["yo": body], context: context) // TODO: make rpc request
+                    rpcRequest(body: body, context: context)
                 } else {
                     context.cancelRequest(withError: HandlerError.empty)
                 }
@@ -62,6 +62,11 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         } else {
             context.cancelRequest(withError: HandlerError.empty)
         }
+    }
+    
+    private func rpcRequest(body: String, context: NSExtensionContext) {
+        // TODO: make rpc request
+        respond(with: ["yo": body], context: context)
     }
     
     private func respond(with response: [String: Any], context: NSExtensionContext) {
