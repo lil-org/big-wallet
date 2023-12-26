@@ -73,8 +73,8 @@ class TokenaryEthereum extends EventEmitter {
             window.tokenary.eth.emit("accountsChanged", addresses);
         }
         
-        if (window.tokenary.eth.rpc.rpcUrl != rpcUrl) {
-            this.rpc = new RPCServer(rpcUrl);
+        if (window.tokenary.eth.rpc.chainId != chainId) {
+            this.rpc = new RPCServer(chainId);
         }
         
         if (window.tokenary.eth.chainId != chainId) {
@@ -89,7 +89,7 @@ class TokenaryEthereum extends EventEmitter {
     
     setConfig(config) {
         this.chainId = config.chainId;
-        this.rpc = new RPCServer(config.rpcUrl);
+        this.rpc = new RPCServer(config.chainId);
         this.setAddress(config.address);
         this.networkVersion = this.net_version();
     }
