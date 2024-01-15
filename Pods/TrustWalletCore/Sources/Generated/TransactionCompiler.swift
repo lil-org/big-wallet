@@ -1,8 +1,6 @@
-// Copyright © 2017-2023 Trust Wallet.
+// SPDX-License-Identifier: Apache-2.0
 //
-// This file is part of Trust. The full Trust copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
+// Copyright © 2017 Trust Wallet.
 //
 // This is a GENERATED FILE, changes made here WILL BE LOST.
 //
@@ -11,45 +9,6 @@ import Foundation
 
 /// Non-core transaction utility methods, like building a transaction using an external signature.
 public struct TransactionCompiler {
-
-    /// Builds a coin-specific SigningInput (proto object) from a simple transaction.
-    ///
-    /// \deprecated `TWTransactionCompilerBuildInput` will be removed soon.
-    /// - Parameter coin: coin type.
-    /// - Parameter from: sender of the transaction.
-    /// - Parameter to: receiver of the transaction.
-    /// - Parameter amount: transaction amount in string
-    /// - Parameter asset: optional asset name, like "BNB"
-    /// - Parameter memo: optional memo
-    /// - Parameter chainId: optional chainId to override default
-    /// - Returns: serialized data of the SigningInput proto object.
-    public static func buildInput(coinType: CoinType, from: String, to: String, amount: String, asset: String, memo: String, chainId: String) -> Data {
-        let fromString = TWStringCreateWithNSString(from)
-        defer {
-            TWStringDelete(fromString)
-        }
-        let toString = TWStringCreateWithNSString(to)
-        defer {
-            TWStringDelete(toString)
-        }
-        let amountString = TWStringCreateWithNSString(amount)
-        defer {
-            TWStringDelete(amountString)
-        }
-        let assetString = TWStringCreateWithNSString(asset)
-        defer {
-            TWStringDelete(assetString)
-        }
-        let memoString = TWStringCreateWithNSString(memo)
-        defer {
-            TWStringDelete(memoString)
-        }
-        let chainIdString = TWStringCreateWithNSString(chainId)
-        defer {
-            TWStringDelete(chainIdString)
-        }
-        return TWDataNSData(TWTransactionCompilerBuildInput(TWCoinType(rawValue: coinType.rawValue), fromString, toString, amountString, assetString, memoString, chainIdString))
-    }
 
     /// Obtains pre-signing hashes of a transaction.
     ///

@@ -128,6 +128,8 @@
 #import "TWTronProto.h"
 #import "TWUtxoProto.h"
 #import "TWVeChainProto.h"
+#import "TWWalletConnectProto.h"
+#import "TWWalletConnectRequest.h"
 #import "TWWavesProto.h"
 #import "TWWebAuthn.h"
 #import "TWZilliqaProto.h"
