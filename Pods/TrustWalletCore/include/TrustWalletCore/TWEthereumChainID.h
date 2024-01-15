@@ -1,8 +1,6 @@
-// Copyright © 2017-2023 Trust Wallet.
+// SPDX-License-Identifier: Apache-2.0
 //
-// This file is part of Trust. The full Trust copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
+// Copyright © 2017 Trust Wallet.
 //
 // This is a GENERATED FILE from \registry.json, changes made here WILL BE LOST.
 //
@@ -20,6 +18,7 @@ enum TWEthereumChainID {
     TWEthereumChainIDEthereum = 1,
     TWEthereumChainIDClassic = 61,
     TWEthereumChainIDRootstock = 30,
+    TWEthereumChainIDManta = 169,
     TWEthereumChainIDPoa = 99,
     TWEthereumChainIDOpbnb = 204,
     TWEthereumChainIDTfuelevm = 361,

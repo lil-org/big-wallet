@@ -890,6 +890,12 @@ public struct TW_Binance_Proto_SigningOutput {
   /// error description in case of error
   public var errorMessage: String = String()
 
+  /// Signature bytes.
+  public var signature: Data = Data()
+
+  /// Signature JSON string.
+  public var signatureJson: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -2503,6 +2509,8 @@ extension TW_Binance_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
     1: .same(proto: "encoded"),
     2: .same(proto: "error"),
     3: .standard(proto: "error_message"),
+    4: .same(proto: "signature"),
+    5: .standard(proto: "signature_json"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -2514,6 +2522,8 @@ extension TW_Binance_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
       case 1: try { try decoder.decodeSingularBytesField(value: &self.encoded) }()
       case 2: try { try decoder.decodeSingularEnumField(value: &self.error) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
+      case 4: try { try decoder.decodeSingularBytesField(value: &self.signature) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.signatureJson) }()
       default: break
       }
     }
@@ -2529,6 +2539,12 @@ extension TW_Binance_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
     if !self.errorMessage.isEmpty {
       try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 3)
     }
+    if !self.signature.isEmpty {
+      try visitor.visitSingularBytesField(value: self.signature, fieldNumber: 4)
+    }
+    if !self.signatureJson.isEmpty {
+      try visitor.visitSingularStringField(value: self.signatureJson, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -2536,6 +2552,8 @@ extension TW_Binance_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
     if lhs.encoded != rhs.encoded {return false}
     if lhs.error != rhs.error {return false}
     if lhs.errorMessage != rhs.errorMessage {return false}
+    if lhs.signature != rhs.signature {return false}
+    if lhs.signatureJson != rhs.signatureJson {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
