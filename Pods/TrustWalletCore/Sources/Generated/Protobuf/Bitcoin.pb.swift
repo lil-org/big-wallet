@@ -337,10 +337,33 @@ public struct TW_Bitcoin_Proto_SigningInput {
     set {_uniqueStorage()._time = newValue}
   }
 
+  /// Deprecated. Consider using `Bitcoin.Proto.SigningInput.signing_v2` instead.
   public var isItBrcOperation: Bool {
     get {return _storage._isItBrcOperation}
     set {_uniqueStorage()._isItBrcOperation = newValue}
   }
+
+  /// If set, uses Bitcoin 2.0 Planning protocol.
+  /// As a result, `Bitcoin.Proto.TransactionPlan.planning_result_v2` is set.
+  public var planningV2: TW_BitcoinV2_Proto_ComposePlan {
+    get {return _storage._planningV2 ?? TW_BitcoinV2_Proto_ComposePlan()}
+    set {_uniqueStorage()._planningV2 = newValue}
+  }
+  /// Returns true if `planningV2` has been explicitly set.
+  public var hasPlanningV2: Bool {return _storage._planningV2 != nil}
+  /// Clears the value of `planningV2`. Subsequent reads from it will return its default value.
+  public mutating func clearPlanningV2() {_uniqueStorage()._planningV2 = nil}
+
+  /// If set, uses Bitcoin 2.0 Signing protocol.
+  /// As a result, `Bitcoin.Proto.SigningOutput.signing_result_v2` is set.
+  public var signingV2: TW_BitcoinV2_Proto_SigningInput {
+    get {return _storage._signingV2 ?? TW_BitcoinV2_Proto_SigningInput()}
+    set {_uniqueStorage()._signingV2 = newValue}
+  }
+  /// Returns true if `signingV2` has been explicitly set.
+  public var hasSigningV2: Bool {return _storage._signingV2 != nil}
+  /// Clears the value of `signingV2`. Subsequent reads from it will return its default value.
+  public mutating func clearSigningV2() {_uniqueStorage()._signingV2 = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -385,9 +408,22 @@ public struct TW_Bitcoin_Proto_TransactionPlan {
   /// zen preblockheight
   public var preblockheight: Int64 = 0
 
+  /// Result of a transaction planning using the Bitcoin 2.0 protocol.
+  /// Set if `Bitcoin.Proto.SigningInput.planning_v2` used.
+  public var planningResultV2: TW_BitcoinV2_Proto_TransactionPlan {
+    get {return _planningResultV2 ?? TW_BitcoinV2_Proto_TransactionPlan()}
+    set {_planningResultV2 = newValue}
+  }
+  /// Returns true if `planningResultV2` has been explicitly set.
+  public var hasPlanningResultV2: Bool {return self._planningResultV2 != nil}
+  /// Clears the value of `planningResultV2`. Subsequent reads from it will return its default value.
+  public mutating func clearPlanningResultV2() {self._planningResultV2 = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _planningResultV2: TW_BitcoinV2_Proto_TransactionPlan? = nil
 }
 
 /// Result containing the signed and encoded transaction.
@@ -399,31 +435,54 @@ public struct TW_Bitcoin_Proto_SigningOutput {
 
   /// Resulting transaction.
   public var transaction: TW_Bitcoin_Proto_Transaction {
-    get {return _transaction ?? TW_Bitcoin_Proto_Transaction()}
-    set {_transaction = newValue}
+    get {return _storage._transaction ?? TW_Bitcoin_Proto_Transaction()}
+    set {_uniqueStorage()._transaction = newValue}
   }
   /// Returns true if `transaction` has been explicitly set.
-  public var hasTransaction: Bool {return self._transaction != nil}
+  public var hasTransaction: Bool {return _storage._transaction != nil}
   /// Clears the value of `transaction`. Subsequent reads from it will return its default value.
-  public mutating func clearTransaction() {self._transaction = nil}
+  public mutating func clearTransaction() {_uniqueStorage()._transaction = nil}
 
   /// Signed and encoded transaction bytes.
-  public var encoded: Data = Data()
+  public var encoded: Data {
+    get {return _storage._encoded}
+    set {_uniqueStorage()._encoded = newValue}
+  }
 
   /// Transaction ID (hash)
-  public var transactionID: String = String()
+  public var transactionID: String {
+    get {return _storage._transactionID}
+    set {_uniqueStorage()._transactionID = newValue}
+  }
 
   /// Optional error
-  public var error: TW_Common_Proto_SigningError = .ok
+  public var error: TW_Common_Proto_SigningError {
+    get {return _storage._error}
+    set {_uniqueStorage()._error = newValue}
+  }
 
   /// error description
-  public var errorMessage: String = String()
+  public var errorMessage: String {
+    get {return _storage._errorMessage}
+    set {_uniqueStorage()._errorMessage = newValue}
+  }
+
+  /// Result of a transaction signing using the Bitcoin 2.0 protocol.
+  /// Set if `Bitcoin.Proto.SigningInput.signing_v2` used.
+  public var signingResultV2: TW_BitcoinV2_Proto_SigningOutput {
+    get {return _storage._signingResultV2 ?? TW_BitcoinV2_Proto_SigningOutput()}
+    set {_uniqueStorage()._signingResultV2 = newValue}
+  }
+  /// Returns true if `signingResultV2` has been explicitly set.
+  public var hasSigningResultV2: Bool {return _storage._signingResultV2 != nil}
+  /// Clears the value of `signingResultV2`. Subsequent reads from it will return its default value.
+  public mutating func clearSigningResultV2() {_uniqueStorage()._signingResultV2 = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _transaction: TW_Bitcoin_Proto_Transaction? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 //// Pre-image hash to be used for signing
@@ -788,6 +847,8 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
     16: .standard(proto: "disable_dust_filter"),
     17: .same(proto: "time"),
     18: .standard(proto: "is_it_brc_operation"),
+    20: .standard(proto: "planning_v2"),
+    21: .standard(proto: "signing_v2"),
   ]
 
   fileprivate class _StorageClass {
@@ -809,6 +870,8 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
     var _disableDustFilter: Bool = false
     var _time: UInt32 = 0
     var _isItBrcOperation: Bool = false
+    var _planningV2: TW_BitcoinV2_Proto_ComposePlan? = nil
+    var _signingV2: TW_BitcoinV2_Proto_SigningInput? = nil
 
     static let defaultInstance = _StorageClass()
 
@@ -833,6 +896,8 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
       _disableDustFilter = source._disableDustFilter
       _time = source._time
       _isItBrcOperation = source._isItBrcOperation
+      _planningV2 = source._planningV2
+      _signingV2 = source._signingV2
     }
   }
 
@@ -869,6 +934,8 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
         case 16: try { try decoder.decodeSingularBoolField(value: &_storage._disableDustFilter) }()
         case 17: try { try decoder.decodeSingularUInt32Field(value: &_storage._time) }()
         case 18: try { try decoder.decodeSingularBoolField(value: &_storage._isItBrcOperation) }()
+        case 20: try { try decoder.decodeSingularMessageField(value: &_storage._planningV2) }()
+        case 21: try { try decoder.decodeSingularMessageField(value: &_storage._signingV2) }()
         default: break
         }
       }
@@ -935,6 +1002,12 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
       if _storage._isItBrcOperation != false {
         try visitor.visitSingularBoolField(value: _storage._isItBrcOperation, fieldNumber: 18)
       }
+      try { if let v = _storage._planningV2 {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 20)
+      } }()
+      try { if let v = _storage._signingV2 {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 21)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -962,6 +1035,8 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
         if _storage._disableDustFilter != rhs_storage._disableDustFilter {return false}
         if _storage._time != rhs_storage._time {return false}
         if _storage._isItBrcOperation != rhs_storage._isItBrcOperation {return false}
+        if _storage._planningV2 != rhs_storage._planningV2 {return false}
+        if _storage._signingV2 != rhs_storage._signingV2 {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -984,6 +1059,7 @@ extension TW_Bitcoin_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf
     8: .standard(proto: "output_op_return"),
     9: .same(proto: "preblockhash"),
     10: .same(proto: "preblockheight"),
+    12: .standard(proto: "planning_result_v2"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1002,12 +1078,17 @@ extension TW_Bitcoin_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf
       case 8: try { try decoder.decodeSingularBytesField(value: &self.outputOpReturn) }()
       case 9: try { try decoder.decodeSingularBytesField(value: &self.preblockhash) }()
       case 10: try { try decoder.decodeSingularInt64Field(value: &self.preblockheight) }()
+      case 12: try { try decoder.decodeSingularMessageField(value: &self._planningResultV2) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if self.amount != 0 {
       try visitor.visitSingularInt64Field(value: self.amount, fieldNumber: 1)
     }
@@ -1038,6 +1119,9 @@ extension TW_Bitcoin_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf
     if self.preblockheight != 0 {
       try visitor.visitSingularInt64Field(value: self.preblockheight, fieldNumber: 10)
     }
+    try { if let v = self._planningResultV2 {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1052,6 +1136,7 @@ extension TW_Bitcoin_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf
     if lhs.outputOpReturn != rhs.outputOpReturn {return false}
     if lhs.preblockhash != rhs.preblockhash {return false}
     if lhs.preblockheight != rhs.preblockheight {return false}
+    if lhs._planningResultV2 != rhs._planningResultV2 {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1065,53 +1150,101 @@ extension TW_Bitcoin_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._
     3: .standard(proto: "transaction_id"),
     4: .same(proto: "error"),
     5: .standard(proto: "error_message"),
+    7: .standard(proto: "signing_result_v2"),
   ]
 
+  fileprivate class _StorageClass {
+    var _transaction: TW_Bitcoin_Proto_Transaction? = nil
+    var _encoded: Data = Data()
+    var _transactionID: String = String()
+    var _error: TW_Common_Proto_SigningError = .ok
+    var _errorMessage: String = String()
+    var _signingResultV2: TW_BitcoinV2_Proto_SigningOutput? = nil
+
+    static let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _transaction = source._transaction
+      _encoded = source._encoded
+      _transactionID = source._transactionID
+      _error = source._error
+      _errorMessage = source._errorMessage
+      _signingResultV2 = source._signingResultV2
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._transaction) }()
-      case 2: try { try decoder.decodeSingularBytesField(value: &self.encoded) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.transactionID) }()
-      case 4: try { try decoder.decodeSingularEnumField(value: &self.error) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._transaction) }()
+        case 2: try { try decoder.decodeSingularBytesField(value: &_storage._encoded) }()
+        case 3: try { try decoder.decodeSingularStringField(value: &_storage._transactionID) }()
+        case 4: try { try decoder.decodeSingularEnumField(value: &_storage._error) }()
+        case 5: try { try decoder.decodeSingularStringField(value: &_storage._errorMessage) }()
+        case 7: try { try decoder.decodeSingularMessageField(value: &_storage._signingResultV2) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._transaction {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    if !self.encoded.isEmpty {
-      try visitor.visitSingularBytesField(value: self.encoded, fieldNumber: 2)
-    }
-    if !self.transactionID.isEmpty {
-      try visitor.visitSingularStringField(value: self.transactionID, fieldNumber: 3)
-    }
-    if self.error != .ok {
-      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 4)
-    }
-    if !self.errorMessage.isEmpty {
-      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 5)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._transaction {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      if !_storage._encoded.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._encoded, fieldNumber: 2)
+      }
+      if !_storage._transactionID.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._transactionID, fieldNumber: 3)
+      }
+      if _storage._error != .ok {
+        try visitor.visitSingularEnumField(value: _storage._error, fieldNumber: 4)
+      }
+      if !_storage._errorMessage.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._errorMessage, fieldNumber: 5)
+      }
+      try { if let v = _storage._signingResultV2 {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Bitcoin_Proto_SigningOutput, rhs: TW_Bitcoin_Proto_SigningOutput) -> Bool {
-    if lhs._transaction != rhs._transaction {return false}
-    if lhs.encoded != rhs.encoded {return false}
-    if lhs.transactionID != rhs.transactionID {return false}
-    if lhs.error != rhs.error {return false}
-    if lhs.errorMessage != rhs.errorMessage {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._transaction != rhs_storage._transaction {return false}
+        if _storage._encoded != rhs_storage._encoded {return false}
+        if _storage._transactionID != rhs_storage._transactionID {return false}
+        if _storage._error != rhs_storage._error {return false}
+        if _storage._errorMessage != rhs_storage._errorMessage {return false}
+        if _storage._signingResultV2 != rhs_storage._signingResultV2 {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
