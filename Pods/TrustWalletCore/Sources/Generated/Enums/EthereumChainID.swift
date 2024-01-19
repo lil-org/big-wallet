@@ -1,8 +1,6 @@
-// Copyright © 2017-2023 Trust Wallet.
+// SPDX-License-Identifier: Apache-2.0
 //
-// This file is part of Trust. The full Trust copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
+// Copyright © 2017 Trust Wallet.
 //
 // This is a GENERATED FILE, changes made here WILL BE LOST.
 //
@@ -13,6 +11,7 @@ public enum EthereumChainID: UInt32, CaseIterable {
     case ethereum = 1
     case classic = 61
     case rootstock = 30
+    case manta = 169
     case poa = 99
     case opbnb = 204
     case tfuelevm = 361
