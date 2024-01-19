@@ -187,9 +187,7 @@ function genId() {
 function addListeners() {
     browser.runtime.onMessage.addListener(handleOnMessage);
     browser.browserAction.onClicked.addListener(handleOnClick);
-    
-    // TODO: see if it constantly causes deeplink fallback on a fresh device installs
-    // browser.webNavigation.onBeforeNavigate.addListener(onBeforeExtensionPageNavigation, {url: [{urlMatches : "https://(www\.)?tokenary\.io/extension"}]});
+    browser.webNavigation.onBeforeNavigate.addListener(onBeforeExtensionPageNavigation, {url: [{urlMatches : "https://(www\.)?tokenary\.io/extension"}]});
 }
 
 addListeners();
