@@ -22,7 +22,7 @@ class TokenaryEthereum extends EventEmitter {
     
     constructor() {
         super();
-        const config = {address: "", chainId: "0x1", rpcUrl: "https://eth.llamarpc.com"};
+        const config = {address: "", chainId: "0x1"};
         this.setConfig(config);
         this.idMapping = new IdMapping();
         this.callbacks = new Map();
@@ -66,7 +66,7 @@ class TokenaryEthereum extends EventEmitter {
         this.ready = !!address;
     }
     
-    updateAccount(eventName, addresses, chainId, rpcUrl) {
+    updateAccount(eventName, addresses, chainId) {
         window.tokenary.eth.setAddress(addresses[0]);
         
         if (eventName == "switchAccount") {
@@ -346,7 +346,7 @@ class TokenaryEthereum extends EventEmitter {
         if (response.name == "didLoadLatestConfiguration") {
             this.didGetLatestConfiguration = true;
             if (response.chainId) {
-                this.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
+                this.updateAccount(response.name, response.results, response.chainId);
             }
             
             for(let payload of this.pendingPayloads) {
@@ -362,14 +362,14 @@ class TokenaryEthereum extends EventEmitter {
         } else if ("results" in response) {
             if (response.name == "switchEthereumChain" || response.name == "addEthereumChain") {
                 // Calling it before sending response matters for some dapps
-                this.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
+                this.updateAccount(response.name, response.results, response.chainId);
             }
             if (response.name != "switchAccount") {
                 this.sendResponse(id, response.results);
             }
             if (response.name == "requestAccounts" || response.name == "switchAccount") {
                 // Calling it after sending response matters for some dapps
-                this.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
+                this.updateAccount(response.name, response.results, response.chainId);
             }
         } else if ("error" in response) {
             this.sendError(id, response.error);
