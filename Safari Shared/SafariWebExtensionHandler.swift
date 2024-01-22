@@ -22,8 +22,8 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             let id = internalSafariRequest.id
             switch internalSafariRequest.subject {
             case .rpc:
-                if let body = internalSafariRequest.body {
-                    rpcRequest(body: body, context: context)
+                if let body = internalSafariRequest.body, let chainId = internalSafariRequest.chainId {
+                    rpcRequest(chainId: chainId, body: body, context: context)
                 } else {
                     context.cancelRequest(withError: HandlerError.empty)
                 }
@@ -64,9 +64,30 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         }
     }
     
-    private func rpcRequest(body: String, context: NSExtensionContext) {
-        // TODO: make rpc request
-        respond(with: ["yo": body], context: context)
+    private func rpcRequest(chainId: String, body: String, context: NSExtensionContext) {
+        guard let chainIdNumber = Int(hexString: chainId),
+              let rpcURLString = Nodes.getNode(chainId: chainIdNumber),
+              let url = URL(string: rpcURLString),
+              let httpBody = body.data(using: .utf8) else {
+            // TODO: respond with error
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body.data(using: .utf8)
+        
+        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            if let data = data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                self?.respond(with: json, context: context)
+            } else {
+                // TODO: respond with error
+                self?.respond(with: ["yo": "body", "chainId": chainId, "result": "gg"], context: context)
+            }
+        }
+        task.resume()
     }
     
     private func respond(with response: [String: Any], context: NSExtensionContext) {
