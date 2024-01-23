@@ -77,7 +77,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = body.data(using: .utf8)
+        request.httpBody = httpBody
         
         let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             if let data = data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
