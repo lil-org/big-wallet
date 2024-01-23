@@ -395,6 +395,7 @@ class TokenaryEthereum extends EventEmitter {
         if (callback) {
             wrapResult ? callback(null, data) : callback(null, data.result);
             this.callbacks.delete(id);
+            this.wrapResults.delete(id);
         } else {
             console.log(`callback id: ${id} not found`);
         }
@@ -406,6 +407,7 @@ class TokenaryEthereum extends EventEmitter {
         if (callback) {
             callback(error instanceof Error ? error : new Error(error), null);
             this.callbacks.delete(id);
+            this.wrapResults.delete(id);
         }
     }
 }
