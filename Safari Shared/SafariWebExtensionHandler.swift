@@ -82,6 +82,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             if let data = data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 self?.respond(with: json, context: context)
+                // TODO: id is missing when there is an error
             } else {
                 // TODO: respond with error
                 self?.respond(with: ["yo": "body", "chainId": chainId, "result": "gg"], context: context)

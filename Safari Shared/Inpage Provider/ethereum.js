@@ -199,16 +199,9 @@ class TokenaryEthereum extends EventEmitter {
                 case "eth_newPendingTransactionFilter":
                 case "eth_uninstallFilter":
                 case "eth_subscribe":
-                    throw new ProviderRpcError(4200, `Tokenary does not support calling ${payload.method}. Please use your own solution`);
+                    throw new ProviderRpcError(4200, `tiny wallet does not support ${payload.method}`);
                 default:
-                    this.callbacks.delete(payload.id);
-                    this.wrapResults.delete(payload.id);
-                    return this.rpc
-                    .call(payload)
-                    .then((response) => {
-                        wrapResult ? resolve(response) : resolve(response.result);
-                    })
-                    .catch(reject);
+                    return this.rpc.call(payload);
             }
         });
     }
@@ -394,13 +387,13 @@ class TokenaryEthereum extends EventEmitter {
         let callback = this.callbacks.get(id);
         let wrapResult = this.wrapResults.get(id);
         let data = { jsonrpc: "2.0", id: originId };
-        if (result !== null && result.jsonrpc && result.result) {
+        if (result !== null && result.result) {
             data.result = result.result;
         } else {
             data.result = result;
         }
         if (callback) {
-            wrapResult ? callback(null, data) : callback(null, result);
+            wrapResult ? callback(null, data) : callback(null, data.result);
             this.callbacks.delete(id);
         } else {
             console.log(`callback id: ${id} not found`);
