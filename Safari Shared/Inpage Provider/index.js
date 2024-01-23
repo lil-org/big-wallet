@@ -1,4 +1,4 @@
-// Copyright © 2021 Tokenary. All rights reserved.
+// ∅ 2024 lil org
 // Rewrite of index.js from trust-web3-provider.
 
 "use strict";

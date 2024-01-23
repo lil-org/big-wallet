@@ -1,4 +1,4 @@
-// Copyright © 2023 Tokenary. All rights reserved.
+// ∅ 2024 lil org
 
 if (!("pendingRequestsIds" in document)) {
     document.pendingRequestsIds = new Set();
