@@ -45,8 +45,8 @@ announceProvider();
 
 window.addEventListener("message", function(event) {
     if (event.source == window && event.data && event.data.direction == "rpc-back") {
-        // TODO: check event.data.response is there
         // TODO: make sure error is delivered as well
+        
         console.log("rpc back", event.data.response);
         provider.sendResponse(event.data.response.id, event.data.response);
     } else if (event.source == window && event.data && event.data.direction == "from-content-script") {

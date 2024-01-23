@@ -23,7 +23,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             switch internalSafariRequest.subject {
             case .rpc:
                 if let body = internalSafariRequest.body, let chainId = internalSafariRequest.chainId {
-                    rpcRequest(chainId: chainId, body: body, context: context)
+                    rpcRequest(id: id, chainId: chainId, body: body, context: context)
                 } else {
                     context.cancelRequest(withError: HandlerError.empty)
                 }
@@ -64,7 +64,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         }
     }
     
-    private func rpcRequest(chainId: String, body: String, context: NSExtensionContext) {
+    private func rpcRequest(id: Int, chainId: String, body: String, context: NSExtensionContext) {
         guard let chainIdNumber = Int(hexString: chainId),
               let rpcURLString = Nodes.getNode(chainId: chainIdNumber),
               let url = URL(string: rpcURLString),
@@ -80,9 +80,9 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         request.httpBody = httpBody
         
         let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            if let data = data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let data = data, var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                if json["id"] == nil { json["id"] = id }
                 self?.respond(with: json, context: context)
-                // TODO: id is missing when there is an error
             } else {
                 // TODO: respond with error
                 self?.respond(with: ["yo": "body", "chainId": chainId, "result": "gg"], context: context)
