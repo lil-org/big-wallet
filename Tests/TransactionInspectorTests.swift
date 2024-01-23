@@ -1,4 +1,4 @@
-// Copyright © 2023 Tokenary. All rights reserved.
+// ∅ 2024 lil org
 
 import XCTest
 #if os(iOS)

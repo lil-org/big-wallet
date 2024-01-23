@@ -1,4 +1,4 @@
-// Copyright © 2021 Tokenary. All rights reserved.
+// ∅ 2024 lil org
 
 import UIKit
 import LocalAuthentication

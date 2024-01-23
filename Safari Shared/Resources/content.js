@@ -1,4 +1,4 @@
-// Copyright © 2023 Tokenary. All rights reserved.
+// ∅ 2024 lil org
 
 if (!("pendingRequestsIds" in document)) {
     document.pendingRequestsIds = new Set();
@@ -37,7 +37,11 @@ function setup() {
     // Receive from inpage
     window.addEventListener("message", event => {
         if (event.source == window && event.data) {
-            if (event.data.direction == "from-page-script") {
+            if (event.data.direction == "rpc") {
+                browser.runtime.sendMessage(event.data.message).then(response => {
+                    window.postMessage({direction: "rpc-back", response: response}, "*");
+                }).catch(() => {});
+            } else if (event.data.direction == "from-page-script") {
                 sendMessageToNativeApp(event.data.message, false);
             } else if (event.data.subject == "disconnect") {
                 const disconnectRequest = event.data;

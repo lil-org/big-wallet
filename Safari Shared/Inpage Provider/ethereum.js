@@ -1,4 +1,4 @@
-// Copyright © 2022 Tokenary. All rights reserved.
+// ∅ 2024 lil org
 // Rewrite of index.js from trust-web3-provider.
 
 "use strict";
@@ -22,7 +22,7 @@ class TokenaryEthereum extends EventEmitter {
     
     constructor() {
         super();
-        const config = {address: "", chainId: "0x1", rpcUrl: "https://eth.llamarpc.com"};
+        const config = {address: "", chainId: "0x1"};
         this.setConfig(config);
         this.idMapping = new IdMapping();
         this.callbacks = new Map();
@@ -66,15 +66,15 @@ class TokenaryEthereum extends EventEmitter {
         this.ready = !!address;
     }
     
-    updateAccount(eventName, addresses, chainId, rpcUrl) {
+    updateAccount(eventName, addresses, chainId) {
         window.tokenary.eth.setAddress(addresses[0]);
         
         if (eventName == "switchAccount") {
             window.tokenary.eth.emit("accountsChanged", addresses);
         }
         
-        if (window.tokenary.eth.rpc.rpcUrl != rpcUrl) {
-            this.rpc = new RPCServer(rpcUrl);
+        if (window.tokenary.eth.rpc.chainId != chainId) {
+            this.rpc = new RPCServer(chainId);
         }
         
         if (window.tokenary.eth.chainId != chainId) {
@@ -89,7 +89,7 @@ class TokenaryEthereum extends EventEmitter {
     
     setConfig(config) {
         this.chainId = config.chainId;
-        this.rpc = new RPCServer(config.rpcUrl);
+        this.rpc = new RPCServer(config.chainId);
         this.setAddress(config.address);
         this.networkVersion = this.net_version();
     }
@@ -199,16 +199,9 @@ class TokenaryEthereum extends EventEmitter {
                 case "eth_newPendingTransactionFilter":
                 case "eth_uninstallFilter":
                 case "eth_subscribe":
-                    throw new ProviderRpcError(4200, `Tokenary does not support calling ${payload.method}. Please use your own solution`);
+                    throw new ProviderRpcError(4200, `tiny wallet does not support ${payload.method}`);
                 default:
-                    this.callbacks.delete(payload.id);
-                    this.wrapResults.delete(payload.id);
-                    return this.rpc
-                    .call(payload)
-                    .then((response) => {
-                        wrapResult ? resolve(response) : resolve(response.result);
-                    })
-                    .catch(reject);
+                    return this.rpc.call(payload);
             }
         });
     }
@@ -346,7 +339,7 @@ class TokenaryEthereum extends EventEmitter {
         if (response.name == "didLoadLatestConfiguration") {
             this.didGetLatestConfiguration = true;
             if (response.chainId) {
-                this.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
+                this.updateAccount(response.name, response.results, response.chainId);
             }
             
             for(let payload of this.pendingPayloads) {
@@ -362,14 +355,14 @@ class TokenaryEthereum extends EventEmitter {
         } else if ("results" in response) {
             if (response.name == "switchEthereumChain" || response.name == "addEthereumChain") {
                 // Calling it before sending response matters for some dapps
-                this.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
+                this.updateAccount(response.name, response.results, response.chainId);
             }
             if (response.name != "switchAccount") {
                 this.sendResponse(id, response.results);
             }
             if (response.name == "requestAccounts" || response.name == "switchAccount") {
                 // Calling it after sending response matters for some dapps
-                this.updateAccount(response.name, response.results, response.chainId, response.rpcURL);
+                this.updateAccount(response.name, response.results, response.chainId);
             }
         } else if ("error" in response) {
             this.sendError(id, response.error);
@@ -394,14 +387,15 @@ class TokenaryEthereum extends EventEmitter {
         let callback = this.callbacks.get(id);
         let wrapResult = this.wrapResults.get(id);
         let data = { jsonrpc: "2.0", id: originId };
-        if (result !== null && result.jsonrpc && result.result) {
+        if (result !== null && result.result) {
             data.result = result.result;
         } else {
             data.result = result;
         }
         if (callback) {
-            wrapResult ? callback(null, data) : callback(null, result);
+            wrapResult ? callback(null, data) : callback(null, data.result);
             this.callbacks.delete(id);
+            this.wrapResults.delete(id);
         } else {
             console.log(`callback id: ${id} not found`);
         }
@@ -413,6 +407,7 @@ class TokenaryEthereum extends EventEmitter {
         if (callback) {
             callback(error instanceof Error ? error : new Error(error), null);
             this.callbacks.delete(id);
+            this.wrapResults.delete(id);
         }
     }
 }

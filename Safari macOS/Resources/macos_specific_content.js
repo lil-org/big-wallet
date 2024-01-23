@@ -1,3 +1,3 @@
-// Copyright © 2023 Tokenary. All rights reserved.
+// ∅ 2024 lil org
 
 const isMobile = false;

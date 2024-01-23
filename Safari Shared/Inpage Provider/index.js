@@ -1,4 +1,4 @@
-// Copyright © 2021 Tokenary. All rights reserved.
+// ∅ 2024 lil org
 // Rewrite of index.js from trust-web3-provider.
 
 "use strict";
@@ -44,7 +44,9 @@ announceProvider();
 // - MARK: Process content script messages
 
 window.addEventListener("message", function(event) {
-    if (event.source == window && event.data && event.data.direction == "from-content-script") {
+    if (event.source == window && event.data && event.data.direction == "rpc-back") {
+        provider.processTokenaryResponse(event.data.response.id, event.data.response);
+    } else if (event.source == window && event.data && event.data.direction == "from-content-script") {
         const response = event.data.response;
         const id = event.data.id;
         

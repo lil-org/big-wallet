@@ -1,7 +1,13 @@
-// Copyright © 2023 Tokenary. All rights reserved.
+// ∅ 2024 lil org
 
 function handleOnMessage(request, sender, sendResponse) {
-    if (request.subject === "message-to-wallet") {
+    if (request.subject === "rpc") {
+        browser.runtime.sendNativeMessage("mac.tokenary.io", request).then(response => {
+            if (typeof response !== "undefined") {
+                sendResponse(response);
+            } else { sendResponse(); }
+        }).catch(() => { sendResponse(); });
+    } else if (request.subject === "message-to-wallet") {
         browser.runtime.sendNativeMessage("mac.tokenary.io", request.message).then(response => {
             if (typeof response !== "undefined") {
                 sendResponse(response);

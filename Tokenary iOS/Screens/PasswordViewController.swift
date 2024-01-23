@@ -1,4 +1,4 @@
-// Copyright © 2021 Tokenary. All rights reserved.
+// ∅ 2024 lil org
 
 import UIKit
 
@@ -48,7 +48,7 @@ class PasswordViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         if mode != .enter {
-            passwordTextField.becomeFirstResponder()
+            focusOnPasswordTextField()
         }
     }
     
@@ -89,7 +89,14 @@ class PasswordViewController: UIViewController {
     private func didFailLocalAuthentication() {
         navigationController?.setNavigationBarHidden(false, animated: false)
         initialOverlayView.isHidden = true
-        passwordTextField.becomeFirstResponder()
+        focusOnPasswordTextField()
+    }
+    
+    func focusOnPasswordTextField() {
+        // TODO: remove temporary delay used to fix vision pro crash
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(1000)) { [weak self] in
+            self?.passwordTextField.becomeFirstResponder()
+        }
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {

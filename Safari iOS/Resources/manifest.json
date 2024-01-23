@@ -42,13 +42,6 @@
         "activeTab",
         "tabs"
     ],
-
-    "host_permissions": [
-        "https://*.llamarpc.com/",
-        "https://*.infura.io/*",
-        "https://tokenary.io/*",
-        "tokenary://*"
-    ],
     
     "web_accessible_resources": [ "inpage.js" ]
 }

@@ -1,4 +1,4 @@
-// Copyright © 2021 Tokenary. All rights reserved.
+// ∅ 2024 lil org
 
 import SafariServices
 
@@ -21,6 +21,12 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         if let internalSafariRequest = try? jsonDecoder.decode(InternalSafariRequest.self, from: data) {
             let id = internalSafariRequest.id
             switch internalSafariRequest.subject {
+            case .rpc:
+                if let body = internalSafariRequest.body, let chainId = internalSafariRequest.chainId {
+                    rpcRequest(id: id, chainId: chainId, body: body, context: context)
+                } else {
+                    context.cancelRequest(withError: HandlerError.empty)
+                }
             case .getResponse:
                 if let response = ExtensionBridge.getResponse(id: id) {
                     ExtensionBridge.removeResponse(id: id)
@@ -56,6 +62,32 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         } else {
             context.cancelRequest(withError: HandlerError.empty)
         }
+    }
+    
+    private func rpcRequest(id: Int, chainId: String, body: String, context: NSExtensionContext) {
+        guard let chainIdNumber = Int(hexString: chainId),
+              let rpcURLString = Nodes.getNode(chainId: chainIdNumber),
+              let url = URL(string: rpcURLString),
+              let httpBody = body.data(using: .utf8) else {
+            respond(with: ["id": id, "error": "something went wrong"], context: context)
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = httpBody
+        
+        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            if let data = data, var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                if json["id"] == nil { json["id"] = id }
+                self?.respond(with: json, context: context)
+            } else {
+                self?.respond(with: ["id": id, "error": "something went wrong"], context: context)
+            }
+        }
+        task.resume()
     }
     
     private func respond(with response: [String: Any], context: NSExtensionContext) {
