@@ -31,7 +31,8 @@ public enum TW_Utxo_Proto_Error: SwiftProtobuf.Enum {
   case missingSighashMethod // = 6
   case failedEncoding // = 7
   case insufficientInputs // = 8
-  case missingChangeScriptPubkey // = 9
+  case noOutputsSpecified // = 9
+  case missingChangeScriptPubkey // = 10
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -49,7 +50,8 @@ public enum TW_Utxo_Proto_Error: SwiftProtobuf.Enum {
     case 6: self = .missingSighashMethod
     case 7: self = .failedEncoding
     case 8: self = .insufficientInputs
-    case 9: self = .missingChangeScriptPubkey
+    case 9: self = .noOutputsSpecified
+    case 10: self = .missingChangeScriptPubkey
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -65,7 +67,8 @@ public enum TW_Utxo_Proto_Error: SwiftProtobuf.Enum {
     case .missingSighashMethod: return 6
     case .failedEncoding: return 7
     case .insufficientInputs: return 8
-    case .missingChangeScriptPubkey: return 9
+    case .noOutputsSpecified: return 9
+    case .missingChangeScriptPubkey: return 10
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -86,6 +89,7 @@ extension TW_Utxo_Proto_Error: CaseIterable {
     .missingSighashMethod,
     .failedEncoding,
     .insufficientInputs,
+    .noOutputsSpecified,
     .missingChangeScriptPubkey,
   ]
 }
@@ -95,36 +99,36 @@ extension TW_Utxo_Proto_Error: CaseIterable {
 public enum TW_Utxo_Proto_InputSelector: SwiftProtobuf.Enum {
   public typealias RawValue = Int
 
-  /// Use all the inputs provided in the given order.
-  case useAll // = 0
+  /// Automatically select enough inputs in an ascending order to cover the
+  /// outputs of the transaction.
+  case selectAscending // = 0
 
   /// Automatically select enough inputs in the given order to cover the
   /// outputs of the transaction.
   case selectInOrder // = 1
 
-  /// Automatically select enough inputs in an ascending order to cover the
-  /// outputs of the transaction.
-  case selectAscending // = 2
+  /// Use all the inputs provided in the given order.
+  case useAll // = 10
   case UNRECOGNIZED(Int)
 
   public init() {
-    self = .useAll
+    self = .selectAscending
   }
 
   public init?(rawValue: Int) {
     switch rawValue {
-    case 0: self = .useAll
+    case 0: self = .selectAscending
     case 1: self = .selectInOrder
-    case 2: self = .selectAscending
+    case 10: self = .useAll
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
 
   public var rawValue: Int {
     switch self {
-    case .useAll: return 0
+    case .selectAscending: return 0
     case .selectInOrder: return 1
-    case .selectAscending: return 2
+    case .useAll: return 10
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -136,9 +140,9 @@ public enum TW_Utxo_Proto_InputSelector: SwiftProtobuf.Enum {
 extension TW_Utxo_Proto_InputSelector: CaseIterable {
   // The compiler won't synthesize support with the UNRECOGNIZED case.
   public static var allCases: [TW_Utxo_Proto_InputSelector] = [
-    .useAll,
-    .selectInOrder,
     .selectAscending,
+    .selectInOrder,
+    .useAll,
   ]
 }
 
@@ -301,7 +305,7 @@ public struct TW_Utxo_Proto_SigningInput {
   public var outputs: [TW_Utxo_Proto_TxOut] = []
 
   /// How inputs should be selected.
-  public var inputSelector: TW_Utxo_Proto_InputSelector = .useAll
+  public var inputSelector: TW_Utxo_Proto_InputSelector = .selectAscending
 
   /// The base unit per weight. In the case of Bitcoin, that would refer to
   /// satoshis by vbyte ("satVb").
@@ -529,6 +533,9 @@ public struct TW_Utxo_Proto_TxInClaim {
   /// The index of the referenced output.
   public var vout: UInt32 = 0
 
+  /// The value of this input, such as satoshis.
+  public var value: UInt64 = 0
+
   /// The sequence number (TODO).
   public var sequence: UInt32 = 0
 
@@ -584,15 +591,16 @@ extension TW_Utxo_Proto_Error: SwiftProtobuf._ProtoNameProviding {
     6: .same(proto: "Error_missing_sighash_method"),
     7: .same(proto: "Error_failed_encoding"),
     8: .same(proto: "Error_insufficient_inputs"),
-    9: .same(proto: "Error_missing_change_script_pubkey"),
+    9: .same(proto: "Error_no_outputs_specified"),
+    10: .same(proto: "Error_missing_change_script_pubkey"),
   ]
 }
 
 extension TW_Utxo_Proto_InputSelector: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    0: .same(proto: "UseAll"),
+    0: .same(proto: "SelectAscending"),
     1: .same(proto: "SelectInOrder"),
-    2: .same(proto: "SelectAscending"),
+    10: .same(proto: "UseAll"),
   ]
 }
 
@@ -666,7 +674,7 @@ extension TW_Utxo_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mess
     if !self.outputs.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.outputs, fieldNumber: 4)
     }
-    if self.inputSelector != .useAll {
+    if self.inputSelector != .selectAscending {
       try visitor.visitSingularEnumField(value: self.inputSelector, fieldNumber: 5)
     }
     if self.weightBase != 0 {
@@ -1050,9 +1058,10 @@ extension TW_Utxo_Proto_TxInClaim: SwiftProtobuf.Message, SwiftProtobuf._Message
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "txid"),
     2: .same(proto: "vout"),
-    3: .same(proto: "sequence"),
-    4: .standard(proto: "script_sig"),
-    5: .standard(proto: "witness_items"),
+    3: .same(proto: "value"),
+    4: .same(proto: "sequence"),
+    5: .standard(proto: "script_sig"),
+    6: .standard(proto: "witness_items"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1063,9 +1072,10 @@ extension TW_Utxo_Proto_TxInClaim: SwiftProtobuf.Message, SwiftProtobuf._Message
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.txid) }()
       case 2: try { try decoder.decodeSingularUInt32Field(value: &self.vout) }()
-      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.sequence) }()
-      case 4: try { try decoder.decodeSingularBytesField(value: &self.scriptSig) }()
-      case 5: try { try decoder.decodeRepeatedBytesField(value: &self.witnessItems) }()
+      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.value) }()
+      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.sequence) }()
+      case 5: try { try decoder.decodeSingularBytesField(value: &self.scriptSig) }()
+      case 6: try { try decoder.decodeRepeatedBytesField(value: &self.witnessItems) }()
       default: break
       }
     }
@@ -1078,14 +1088,17 @@ extension TW_Utxo_Proto_TxInClaim: SwiftProtobuf.Message, SwiftProtobuf._Message
     if self.vout != 0 {
       try visitor.visitSingularUInt32Field(value: self.vout, fieldNumber: 2)
     }
+    if self.value != 0 {
+      try visitor.visitSingularUInt64Field(value: self.value, fieldNumber: 3)
+    }
     if self.sequence != 0 {
-      try visitor.visitSingularUInt32Field(value: self.sequence, fieldNumber: 3)
+      try visitor.visitSingularUInt32Field(value: self.sequence, fieldNumber: 4)
     }
     if !self.scriptSig.isEmpty {
-      try visitor.visitSingularBytesField(value: self.scriptSig, fieldNumber: 4)
+      try visitor.visitSingularBytesField(value: self.scriptSig, fieldNumber: 5)
     }
     if !self.witnessItems.isEmpty {
-      try visitor.visitRepeatedBytesField(value: self.witnessItems, fieldNumber: 5)
+      try visitor.visitRepeatedBytesField(value: self.witnessItems, fieldNumber: 6)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1093,6 +1106,7 @@ extension TW_Utxo_Proto_TxInClaim: SwiftProtobuf.Message, SwiftProtobuf._Message
   public static func ==(lhs: TW_Utxo_Proto_TxInClaim, rhs: TW_Utxo_Proto_TxInClaim) -> Bool {
     if lhs.txid != rhs.txid {return false}
     if lhs.vout != rhs.vout {return false}
+    if lhs.value != rhs.value {return false}
     if lhs.sequence != rhs.sequence {return false}
     if lhs.scriptSig != rhs.scriptSig {return false}
     if lhs.witnessItems != rhs.witnessItems {return false}

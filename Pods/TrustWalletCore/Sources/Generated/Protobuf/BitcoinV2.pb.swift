@@ -33,6 +33,7 @@ public enum TW_BitcoinV2_Proto_Error: SwiftProtobuf.Enum {
   case utxoMissingSighashMethod // = 7
   case utxoFailedEncoding // = 8
   case utxoInsufficientInputs // = 9
+  case utxoNoOutputsSpecified // = 43
   case utxoMissingChangeScriptPubkey // = 10
 
   /// `tw_bitcoin` related errors.
@@ -120,6 +121,7 @@ public enum TW_BitcoinV2_Proto_Error: SwiftProtobuf.Enum {
     case 40: self = .ordinalPayloadTooLarge
     case 41: self = .missingInscription
     case 42: self = .missingTaggedOutput
+    case 43: self = .utxoNoOutputsSpecified
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -169,6 +171,7 @@ public enum TW_BitcoinV2_Proto_Error: SwiftProtobuf.Enum {
     case .ordinalPayloadTooLarge: return 40
     case .missingInscription: return 41
     case .missingTaggedOutput: return 42
+    case .utxoNoOutputsSpecified: return 43
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -189,6 +192,7 @@ extension TW_BitcoinV2_Proto_Error: CaseIterable {
     .utxoMissingSighashMethod,
     .utxoFailedEncoding,
     .utxoInsufficientInputs,
+    .utxoNoOutputsSpecified,
     .utxoMissingChangeScriptPubkey,
     .zeroSequenceNotEnabled,
     .unmatchedInputSignatureCount,
@@ -259,7 +263,7 @@ public struct TW_BitcoinV2_Proto_SigningInput {
   public var outputs: [TW_BitcoinV2_Proto_Output] = []
 
   /// How the inputs should be selected.
-  public var inputSelector: TW_Utxo_Proto_InputSelector = .useAll
+  public var inputSelector: TW_Utxo_Proto_InputSelector = .selectAscending
 
   /// (optional) The amount of satoshis per vbyte ("satVb"), used for fee calculation.
   public var feePerVb: UInt64 = 0
@@ -610,7 +614,7 @@ public struct TW_BitcoinV2_Proto_Input {
     public var ticker: String = String()
 
     /// The BRC20 token transfer amount.
-    public var transferAmount: UInt64 = 0
+    public var transferAmount: String = String()
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -945,7 +949,7 @@ public struct TW_BitcoinV2_Proto_Output {
     public var ticker: String = String()
 
     /// The BRC20 token transfer amount.
-    public var transferAmount: UInt64 = 0
+    public var transferAmount: String = String()
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1421,6 +1425,7 @@ extension TW_BitcoinV2_Proto_Error: SwiftProtobuf._ProtoNameProviding {
     40: .same(proto: "Error_ordinal_payload_too_large"),
     41: .same(proto: "Error_missing_inscription"),
     42: .same(proto: "Error_missing_tagged_output"),
+    43: .same(proto: "Error_utxo_no_outputs_specified"),
   ]
 }
 
@@ -1480,7 +1485,7 @@ extension TW_BitcoinV2_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf.
     if !self.outputs.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.outputs, fieldNumber: 6)
     }
-    if self.inputSelector != .useAll {
+    if self.inputSelector != .selectAscending {
       try visitor.visitSingularEnumField(value: self.inputSelector, fieldNumber: 7)
     }
     if self.feePerVb != 0 {
@@ -1984,7 +1989,7 @@ extension TW_BitcoinV2_Proto_Input.InputBrc20Inscription: SwiftProtobuf.Message,
       case 1: try { try decoder.decodeSingularBoolField(value: &self.onePrevout) }()
       case 2: try { try decoder.decodeSingularBytesField(value: &self.inscribeTo) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.ticker) }()
-      case 4: try { try decoder.decodeSingularUInt64Field(value: &self.transferAmount) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.transferAmount) }()
       default: break
       }
     }
@@ -2000,8 +2005,8 @@ extension TW_BitcoinV2_Proto_Input.InputBrc20Inscription: SwiftProtobuf.Message,
     if !self.ticker.isEmpty {
       try visitor.visitSingularStringField(value: self.ticker, fieldNumber: 3)
     }
-    if self.transferAmount != 0 {
-      try visitor.visitSingularUInt64Field(value: self.transferAmount, fieldNumber: 4)
+    if !self.transferAmount.isEmpty {
+      try visitor.visitSingularStringField(value: self.transferAmount, fieldNumber: 4)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -2444,7 +2449,7 @@ extension TW_BitcoinV2_Proto_Output.OutputBrc20Inscription: SwiftProtobuf.Messag
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.inscribeTo) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.ticker) }()
-      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.transferAmount) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.transferAmount) }()
       default: break
       }
     }
@@ -2457,8 +2462,8 @@ extension TW_BitcoinV2_Proto_Output.OutputBrc20Inscription: SwiftProtobuf.Messag
     if !self.ticker.isEmpty {
       try visitor.visitSingularStringField(value: self.ticker, fieldNumber: 2)
     }
-    if self.transferAmount != 0 {
-      try visitor.visitSingularUInt64Field(value: self.transferAmount, fieldNumber: 3)
+    if !self.transferAmount.isEmpty {
+      try visitor.visitSingularStringField(value: self.transferAmount, fieldNumber: 3)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -2952,7 +2957,7 @@ extension TW_BitcoinV2_Proto_ComposePlan.ComposeBrc20Plan: SwiftProtobuf.Message
   fileprivate class _StorageClass {
     var _privateKey: Data = Data()
     var _inputs: [TW_BitcoinV2_Proto_Input] = []
-    var _inputSelector: TW_Utxo_Proto_InputSelector = .useAll
+    var _inputSelector: TW_Utxo_Proto_InputSelector = .selectAscending
     var _taggedOutput: TW_BitcoinV2_Proto_Output? = nil
     var _inscription: TW_BitcoinV2_Proto_Input.InputBrc20Inscription? = nil
     var _feePerVb: UInt64 = 0
@@ -3016,7 +3021,7 @@ extension TW_BitcoinV2_Proto_ComposePlan.ComposeBrc20Plan: SwiftProtobuf.Message
       if !_storage._inputs.isEmpty {
         try visitor.visitRepeatedMessageField(value: _storage._inputs, fieldNumber: 2)
       }
-      if _storage._inputSelector != .useAll {
+      if _storage._inputSelector != .selectAscending {
         try visitor.visitSingularEnumField(value: _storage._inputSelector, fieldNumber: 3)
       }
       try { if let v = _storage._taggedOutput {
