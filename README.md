@@ -1,5 +1,7 @@
 # tiny wallet by [lil.org](https://lil.org)
-crypto wallet with a safari extension for ios and macos
+crypto wallet with a safari extension
+
+ios / macos / visionos
 
 connect like metamask in safari
 
