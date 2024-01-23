@@ -69,7 +69,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
               let rpcURLString = Nodes.getNode(chainId: chainIdNumber),
               let url = URL(string: rpcURLString),
               let httpBody = body.data(using: .utf8) else {
-            // TODO: respond with error
+            respond(with: ["id": id, "error": "something went wrong"], context: context)
             return
         }
         
@@ -84,8 +84,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 if json["id"] == nil { json["id"] = id }
                 self?.respond(with: json, context: context)
             } else {
-                // TODO: respond with error
-                self?.respond(with: ["yo": "body", "chainId": chainId, "result": "gg"], context: context)
+                self?.respond(with: ["id": id, "error": "something went wrong"], context: context)
             }
         }
         task.resume()
