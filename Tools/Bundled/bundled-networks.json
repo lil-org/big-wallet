@@ -18,6 +18,10 @@
     "n" : "Cronos",
     "s" : "CRO"
   },
+  "40" : {
+    "n" : "Telos EVM Mainnet",
+    "s" : "TLOS"
+  },
   "56" : {
     "n" : "BNB Chain",
     "o" : true,
@@ -62,6 +66,10 @@
     "n" : "Polygon",
     "o" : true,
     "s" : "MATIC"
+  },
+  "169" : {
+    "n" : "Manta Pacific Mainnet",
+    "s" : "ETH"
   },
   "200" : {
     "n" : "Arbitrum on xDai",
@@ -183,10 +191,22 @@
     "o" : true,
     "s" : "ETH"
   },
+  "9001" : {
+    "n" : "Evmos",
+    "s" : "EVMOS"
+  },
   "10200" : {
     "n" : "Gnosis Chiado",
     "s" : "xDai",
     "t" : true
+  },
+  "11235" : {
+    "n" : "Haqq Network",
+    "s" : "ISLM"
+  },
+  "13371" : {
+    "n" : "Immutable zkEVM",
+    "s" : "IMX"
   },
   "42161" : {
     "n" : "Arbitrum",
@@ -201,6 +221,10 @@
   "42220" : {
     "n" : "Celo",
     "s" : "CELO"
+  },
+  "42766" : {
+    "n" : "ZKFair Mainnet",
+    "s" : "USDC"
   },
   "43113" : {
     "n" : "Avalanche Fuji",
@@ -220,6 +244,10 @@
     "n" : "Celo Alfajores Testnet",
     "s" : "CELO",
     "t" : true
+  },
+  "56288" : {
+    "n" : "Boba BNB Mainnet",
+    "s" : "BOBA"
   },
   "58008" : {
     "n" : "Public Goods Network Sepolia",
@@ -283,6 +311,16 @@
   },
   "11155111" : {
     "n" : "Sepolia",
+    "s" : "ETH",
+    "t" : true
+  },
+  "11155420" : {
+    "n" : "OP Sepolia Testnet",
+    "s" : "ETH",
+    "t" : true
+  },
+  "68840142" : {
+    "n" : "Frame Testnet",
     "s" : "ETH",
     "t" : true
   },

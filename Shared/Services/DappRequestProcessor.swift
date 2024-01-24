@@ -49,9 +49,7 @@ struct DappRequestProcessor {
                             let account = specificWalletAccount.account
                             switch account.coin {
                             case .ethereum:
-                                let responseBody = ResponseToExtension.Ethereum(results: [account.address],
-                                                                                chainId: chain.chainIdHexString,
-                                                                                rpcURL: chain.nodeURLString)
+                                let responseBody = ResponseToExtension.Ethereum(results: [account.address], chainId: chain.chainIdHexString)
                                 specificProviderBodies.append(.ethereum(responseBody))
                             default:
                                 fatalError("Can't select that coin")
@@ -92,7 +90,7 @@ struct DappRequestProcessor {
                                              network: nil,
                                              source: .safariExtension) { chain, specificWalletAccounts in
                 if let chain = chain, let specificWalletAccount = specificWalletAccounts?.first, specificWalletAccount.account.coin == .ethereum {
-                    let responseBody = ResponseToExtension.Ethereum(results: [specificWalletAccount.account.address], chainId: chain.chainIdHexString, rpcURL: chain.nodeURLString)
+                    let responseBody = ResponseToExtension.Ethereum(results: [specificWalletAccount.account.address], chainId: chain.chainIdHexString)
                     respond(to: request, body: .ethereum(responseBody), completion: completion)
                 } else {
                     respond(to: request, error: Strings.canceled, completion: completion)
