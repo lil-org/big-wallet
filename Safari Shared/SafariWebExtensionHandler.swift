@@ -43,9 +43,9 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                   let url = URL(string: "tokenary://safari?request=\(query)") {
             if case let .ethereum(ethereumRequest) = request.body,
                ethereumRequest.method == .switchEthereumChain || ethereumRequest.method == .addEthereumChain {
-                if let switchToChainId = ethereumRequest.switchToChainId, let rpcURL = Nodes.getNode(chainId: switchToChainId) {
+                if let switchToChainId = ethereumRequest.switchToChainId, Nodes.knowsNode(chainId: switchToChainId) {
                     let chainId = String.hex(switchToChainId, withPrefix: true)
-                    let responseBody = ResponseToExtension.Ethereum(results: [ethereumRequest.address], chainId: chainId, rpcURL: rpcURL)
+                    let responseBody = ResponseToExtension.Ethereum(results: [ethereumRequest.address], chainId: chainId)
                     let response = ResponseToExtension(for: request, body: .ethereum(responseBody))
                     respond(with: response.json, context: context)
                 } else {

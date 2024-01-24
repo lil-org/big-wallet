@@ -14,6 +14,10 @@ struct Nodes {
         }
     }()
     
+    static func knowsNode(chainId: Int) -> Bool {
+        return getNode(chainId: chainId) != nil
+    }
+    
     static func getNode(chainId: Int) -> String? {
         let https = "https://"
         if let infura = BundledNodes.infura[chainId], let infuraKey = infuraKey {

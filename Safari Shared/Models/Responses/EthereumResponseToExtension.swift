@@ -9,21 +9,19 @@ extension ResponseToExtension {
         let result: String?
         let results: [String]?
         let chainId: String?
-        let rpcURL: String?
         
         init(result: String) {
-            self.init(result: result, results: nil, chainId: nil, rpcURL: nil)
+            self.init(result: result, results: nil, chainId: nil)
         }
         
-        init(results: [String], chainId: String, rpcURL: String) {
-            self.init(result: nil, results: results, chainId: chainId, rpcURL: rpcURL)
+        init(results: [String], chainId: String) {
+            self.init(result: nil, results: results, chainId: chainId)
         }
         
-        private init(result: String?, results: [String]?, chainId: String?, rpcURL: String?) {
+        private init(result: String?, results: [String]?, chainId: String?) {
             self.result = result
             self.results = results
             self.chainId = chainId
-            self.rpcURL = rpcURL
         }
         
     }
