@@ -172,6 +172,7 @@ struct DappRequestProcessor {
                 respond(to: request, error: Strings.failedToVerify, completion: completion)
             }
         case .addEthereumChain, .switchEthereumChain, .watchAsset:
+            // TODO: process .addEthereumChain
             respond(to: request, error: Strings.somethingWentWrong, completion: completion)
         }
         return .none

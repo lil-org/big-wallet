@@ -41,8 +41,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         } else if let query = String(data: data, encoding: .utf8)?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                   let request = SafariRequest(query: query),
                   let url = URL(string: "tokenary://safari?request=\(query)") {
-            if case let .ethereum(ethereumRequest) = request.body,
-               ethereumRequest.method == .switchEthereumChain || ethereumRequest.method == .addEthereumChain {
+            if case let .ethereum(ethereumRequest) = request.body, ethereumRequest.method == .switchEthereumChain {
                 if let switchToChainId = ethereumRequest.switchToChainId, Nodes.knowsNode(chainId: switchToChainId) {
                     let chainId = String.hex(switchToChainId, withPrefix: true)
                     let responseBody = ResponseToExtension.Ethereum(results: [ethereumRequest.address], chainId: chainId)
@@ -53,6 +52,8 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     respond(with: response.json, context: context)
                 }
             } else {
+                // TODO: ethereumRequest.method == .addEthereumChain
+                // TODO: navigate for new chains, switch otherwise just switch chain
                 ExtensionBridge.makeRequest(id: request.id)
                 #if os(macOS)
                 NSWorkspace.shared.open(url)
