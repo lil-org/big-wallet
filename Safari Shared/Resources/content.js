@@ -231,7 +231,8 @@ function requiresConfirmation(name) {
 }
 
 function requiresNavigationFor(name) {
-    if (isMobile && name != "switchEthereumChain" && name != "addEthereumChain") {
+    if (isMobile && name != "switchEthereumChain") {
+        // TODO: should not navigate on "addEthereumChain" called for a known chain
         return true;
     } else {
         return false;
