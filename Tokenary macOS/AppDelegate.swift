@@ -10,6 +10,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let priceService = PriceService.shared
     private let configurationService = ConfigurationService.shared
     private let walletsManager = WalletsManager.shared
+    private let currentInstanceId = UUID().uuidString
     
     private var didFinishLaunching = false
     private var initialExternalRequest: Agent.ExternalRequest?
@@ -43,6 +44,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             initialExternalRequest = nil
             agent.showInitialScreen(externalRequest: externalRequest)
         }
+        
+        DistributedNotificationCenter.default().post(name: .mustTerminate, object: currentInstanceId)
+        DistributedNotificationCenter.default().addObserver(self, selector: #selector(terminateInstance(_:)), name: .mustTerminate, object: nil, suspensionBehavior: .deliverImmediately)
     }
     
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -68,6 +72,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             agent.showInitialScreen(externalRequest: externalRequest)
         } else {
             initialExternalRequest = externalRequest
+        }
+    }
+    
+    func applicationWillTerminate(_ aNotification: Notification) {
+        DistributedNotificationCenter.default().removeObserver(self)
+    }
+    
+    @objc func terminateInstance(_ notification: Notification) {
+        guard let senderId = notification.object as? String else { return }
+        if senderId != currentInstanceId {
+            NSApplication.shared.terminate(nil)
         }
     }
     
