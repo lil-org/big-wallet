@@ -82,6 +82,9 @@ struct DappRequestProcessor {
         lazy var privateKey = walletsManager.getPrivateKey(coin: .ethereum, address: ethereumRequest.address)
         
         switch ethereumRequest.method {
+        case .addEthereumChain:
+            let chainToAdd = EthereumNetworkFromDapp.from(ethereumRequest.parameters)
+            return .justShowApp // TODO: show add chain screen
         case .requestAccounts:
             let action = SelectAccountAction(peer: peerMeta,
                                              coinType: .ethereum,
@@ -171,8 +174,7 @@ struct DappRequestProcessor {
             } else {
                 respond(to: request, error: Strings.failedToVerify, completion: completion)
             }
-        case .addEthereumChain, .switchEthereumChain, .watchAsset:
-            // TODO: process .addEthereumChain
+        case .switchEthereumChain, .watchAsset:
             respond(to: request, error: Strings.somethingWentWrong, completion: completion)
         }
         return .none
