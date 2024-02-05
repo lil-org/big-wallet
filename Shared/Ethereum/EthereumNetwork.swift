@@ -19,6 +19,7 @@ struct EthereumNetwork: Codable, Equatable, Hashable {
     
 }
 
+// TODO: make EthereumNetworkFromDapp compatible with EthereumNetwork
 struct EthereumNetworkFromDapp: Codable {
     var chainId: String
     var rpcUrls: [String]
