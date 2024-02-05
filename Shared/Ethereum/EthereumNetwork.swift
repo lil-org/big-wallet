@@ -18,3 +18,29 @@ struct EthereumNetwork: Codable, Equatable, Hashable {
     static let ethMainnetChainId = 1
     
 }
+
+// TODO: make EthereumNetworkFromDapp compatible with EthereumNetwork
+struct EthereumNetworkFromDapp: Codable {
+    var chainId: String
+    var rpcUrls: [String]
+    var blockExplorerUrls: [String]
+    var nativeCurrency: Currency
+    var chainName: String
+    
+    struct Currency: Codable {
+        var decimals: Int
+        var name: String
+        var symbol: String
+    }
+    
+    static func from(_ dict: [String: Any]?) -> EthereumNetworkFromDapp? {
+        if let dict = dict,
+           let data = try? JSONSerialization.data(withJSONObject: dict),
+           let network = try? JSONDecoder().decode(EthereumNetworkFromDapp.self, from: data) {
+            return network
+        } else {
+            return nil
+        }
+    }
+    
+}
