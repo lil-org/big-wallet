@@ -240,9 +240,32 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     @objc private func processInput() {
-        // TODO: process buy links
         let inputLinkString = launchURL?.absoluteString
         launchURL = nil
+        
+        // TODO: process properly
+        if inputLinkString?.contains("farcap.vercel.app") == true {
+            let alert = UIAlertController(title: "buy $degen", message: nil, preferredStyle: .alert)
+            let okAction = UIAlertAction(title: "ok", style: .default) { _ in
+                UIApplication.shared.openSafari()
+            }
+            let cancelAction = UIAlertAction(title: "cancel", style: .cancel) { _ in
+                UIApplication.shared.openSafari()
+            }
+            alert.addAction(cancelAction)
+            alert.addAction(okAction)
+            
+            var presentFrom: UIViewController = self
+            while let presented = presentFrom.presentedViewController, !(presented is UIAlertController) {
+                presentFrom = presented
+            }
+            if let oldAlert = presentFrom.presentedViewController as? UIAlertController {
+                oldAlert.dismiss(animated: false)
+            }
+            presentFrom.present(alert, animated: true)
+            return
+        }
+        
         guard let inputLinkString = inputLinkString,
               let prefix = ["https://tokenary.io/extension?query=",
                             "tokenary://safari?request=",

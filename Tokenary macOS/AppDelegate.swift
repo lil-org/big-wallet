@@ -60,6 +60,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func processInput(url: String?) {
+        // TODO: process properly
+        if url?.contains("farcap.vercel.app") == true {
+            
+            let alert = Alert()
+            alert.messageText = "buy degen"
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: Strings.ok)
+            alert.addButton(withTitle: Strings.cancel)
+            _ = alert.runModal()
+            Window.activateBrowser(specific: .unknown)
+            return
+        }
         // TODO: process https://farcap.vercel.app/buy/0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed?amount=0.01
         // TODO: process only allowed addresses https://github.com/rockfridrich/farcap/blob/main/app/data.tsx
         guard let url = url else { return }
