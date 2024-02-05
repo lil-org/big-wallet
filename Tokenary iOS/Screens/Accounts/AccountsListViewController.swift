@@ -240,6 +240,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     @objc private func processInput() {
+        // TODO: process buy links
         let inputLinkString = launchURL?.absoluteString
         launchURL = nil
         guard let inputLinkString = inputLinkString,
