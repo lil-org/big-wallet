@@ -405,6 +405,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let xAction = UIAlertAction(title: Strings.viewOnX.withEllipsis, style: .default) { _ in
             UIApplication.shared.open(URL.x)
         }
+        let warpcastAction = UIAlertAction(title: Strings.viewOnWarpcast.withEllipsis, style: .default) { _ in
+            UIApplication.shared.open(URL.warpcast)
+        }
         let githubAction = UIAlertAction(title: Strings.viewOnGithub.withEllipsis, style: .default) { _ in
             UIApplication.shared.open(URL.github)
         }
@@ -415,6 +418,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             UIApplication.shared.open(URL.iosSafariGuide)
         }
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
+        actionSheet.addAction(warpcastAction)
         actionSheet.addAction(xAction)
         actionSheet.addAction(githubAction)
         actionSheet.addAction(emailAction)
