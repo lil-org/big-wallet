@@ -238,6 +238,8 @@ struct DappRequestProcessor {
                 } else {
                     respond(to: request, error: Strings.failedToSend, completion: completion)
                 }
+            } else {
+                completion()
             }
         }
     }
