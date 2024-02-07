@@ -61,15 +61,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func processInput(url: String?) {
         guard let url = url else { return }
-        if let buyRequest = FrameBuyRequest(from: url) {
-            let alert = Alert()
-            alert.messageText = "buy degen"
-            alert.alertStyle = .informational
-            alert.addButton(withTitle: Strings.ok)
-            alert.addButton(withTitle: Strings.cancel)
-            _ = alert.runModal()
-            Window.activateBrowser(specific: .unknown)
-            return
+        if let txRequest = DirectTransactionRequest(from: url) {
+            processExternalRequest(.direct(txRequest))
         } else {
             let safariPrefix = "tokenary://safari?request="
             if url.hasPrefix(safariPrefix), let request = SafariRequest(query: String(url.dropFirst(safariPrefix.count))) {

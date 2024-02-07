@@ -244,39 +244,24 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         launchURL = nil
         
         guard let inputLinkString = inputLinkString else { return }
-        if let buyRequest = FrameBuyRequest(from: inputLinkString) {
-            let alert = UIAlertController(title: "buy $degen", message: nil, preferredStyle: .alert)
-            let okAction = UIAlertAction(title: "ok", style: .default) { _ in
-                if UIApplication.shared.canOpenURL(.farcasterScheme) {
-                    UIApplication.shared.open(.farcasterScheme)
-                } else {
-                    UIApplication.shared.openSafari()
-                }
-            }
-            let cancelAction = UIAlertAction(title: "cancel", style: .cancel) { _ in
-                UIApplication.shared.openSafari()
-            }
-            alert.addAction(cancelAction)
-            alert.addAction(okAction)
-            
-            var presentFrom: UIViewController = self
-            while let presented = presentFrom.presentedViewController, !(presented is UIAlertController) {
-                presentFrom = presented
-            }
-            if let oldAlert = presentFrom.presentedViewController as? UIAlertController {
-                oldAlert.dismiss(animated: false)
-            }
-            presentFrom.present(alert, animated: true)
-            return
-        }
         
-        guard let prefix = ["https://tokenary.io/extension?query=",
+        let action: DappRequestAction
+        let id: Int
+        if let txRequest = DirectTransactionRequest(from: inputLinkString) {
+            id = txRequest.id
+            action = DappRequestProcessor.processDirectTransactionRequest(txRequest) {
+                // TODO: add completion
+            }
+        } else if let prefix = ["https://tokenary.io/extension?query=",
                             "tokenary://safari?request=",
                             "https://www.tokenary.io/extension?query="].first(where: { inputLinkString.hasPrefix($0) == true }),
-              let request = SafariRequest(query: String(inputLinkString.dropFirst(prefix.count))) else { return }
-        
-        let action = DappRequestProcessor.processSafariRequest(request) { [weak self] in
-            self?.openSafari(requestId: request.id)
+                  let request = SafariRequest(query: String(inputLinkString.dropFirst(prefix.count))) {
+            id = request.id
+            action = DappRequestProcessor.processSafariRequest(request) { [weak self] in
+                self?.openSafari(requestId: request.id)
+            }
+        } else {
+            return
         }
         
         switch action {
@@ -285,7 +270,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         case .selectAccount(let action), .switchAccount(let action):
             let selectAccountViewController = instantiate(AccountsListViewController.self, from: .main)
             selectAccountViewController.selectAccountAction = action
-            presentForSafariRequest(selectAccountViewController.inNavigationController, id: request.id)
+            presentForExternalRequest(selectAccountViewController.inNavigationController, id: id)
         case .approveMessage(let action):
             let approveViewController = ApproveViewController.with(subject: action.subject,
                                                                    provider: action.provider,
@@ -293,18 +278,25 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                                                                    meta: action.meta,
                                                                    peerMeta: action.peerMeta,
                                                                    completion: action.completion)
-            presentForSafariRequest(approveViewController.inNavigationController, id: request.id)
+            presentForExternalRequest(approveViewController.inNavigationController, id: id)
         case .approveTransaction(let action):
             let approveTransactionViewController = ApproveTransactionViewController.with(transaction: action.transaction,
                                                                                          chain: action.chain,
                                                                                          account: action.account,
                                                                                          peerMeta: action.peerMeta,
                                                                                          completion: action.completion)
-            presentForSafariRequest(approveTransactionViewController.inNavigationController, id: request.id)
+            presentForExternalRequest(approveTransactionViewController.inNavigationController, id: id)
+        case .showMessage(let message):
+            let alert = UIAlertController(title: message, message: nil, preferredStyle: .alert)
+            let okAction = UIAlertAction(title: Strings.ok, style: .default) { [weak self] _ in
+                self?.openFarcasterOrSafari() // TODO: remove from here, should be activated with action completion instead
+            }
+            alert.addAction(okAction)
+            presentForExternalRequest(alert, id: id)
         }
     }
     
-    private func presentForSafariRequest(_ viewController: UIViewController, id: Int) {
+    private func presentForExternalRequest(_ viewController: UIViewController, id: Int) {
         var presentFrom: UIViewController = self
         while let presented = presentFrom.presentedViewController, !(presented is UIAlertController) {
             presentFrom = presented
@@ -314,6 +306,15 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
         presentFrom.present(viewController, animated: true)
         toDismissAfterResponse[id] = viewController
+    }
+    
+    private func openFarcasterOrSafari() {
+        // TODO: dismiss like openSafari does
+        if UIApplication.shared.canOpenURL(.farcasterScheme) {
+            UIApplication.shared.open(.farcasterScheme)
+        } else {
+            UIApplication.shared.openSafari()
+        }
     }
     
     private func openSafari(requestId: Int) {

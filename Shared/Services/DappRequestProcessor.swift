@@ -8,6 +8,33 @@ struct DappRequestProcessor {
     private static let walletsManager = WalletsManager.shared
     private static let ethereum = Ethereum.shared
     
+    static func processDirectTransactionRequest(_ request: DirectTransactionRequest, completion: @escaping () -> Void) -> DappRequestAction {
+        return .showMessage("$degen")
+        // TODO: implement
+//        if let transaction = ethereumRequest.transaction,
+//           let chainId = ethereumRequest.currentChainId,
+//           let chain = Networks.withChainId(chainId),
+//           let account = account,
+//           let privateKey = privateKey {
+//            let action = SendTransactionAction(provider: request.provider,
+//                                               transaction: transaction,
+//                                               chain: chain,
+//                                               account: account,
+//                                               peerMeta: peerMeta) { transaction in
+//                if let transaction = transaction {
+//                    sendTransaction(privateKey: privateKey, transaction: transaction, network: chain, request: request, completion: completion)
+//                } else {
+//                    respond(to: request, error: Strings.canceled, completion: completion)
+//                }
+//            }
+//            return .approveTransaction(action)
+//        } else {
+//            respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+//        }
+//        
+//        return .approveTransaction(<#T##SendTransactionAction#>)
+    }
+    
     static func processSafariRequest(_ request: SafariRequest, completion: @escaping () -> Void) -> DappRequestAction {
         if !ExtensionBridge.hasRequest(id: request.id) {
             DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(500)) {

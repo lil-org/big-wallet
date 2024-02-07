@@ -2,7 +2,8 @@
 
 import Foundation
 
-struct FrameBuyRequest: Codable {
+struct DirectTransactionRequest: Codable {
+    let id: Int
     let to: String
     let from: String
     let data: String
@@ -16,7 +17,7 @@ struct FrameBuyRequest: Codable {
     let amountFrom: String
 }
 
-extension FrameBuyRequest {
+extension DirectTransactionRequest {
     
     init?(from urlString: String) {
         guard let url = URL(string: urlString),
@@ -26,13 +27,15 @@ extension FrameBuyRequest {
             return nil
         }
         
-        let parameters = queryItems.reduce(into: [String: String]()) { (result, item) in
+        var parameters = queryItems.reduce(into: [String: Any]()) { (result, item) in
             result[item.name] = item.value ?? ""
         }
         
+        parameters["id"] = Int.random(in: 1..<Int.max)
+        
         do {
             let data = try JSONSerialization.data(withJSONObject: parameters, options: [])
-            self = try JSONDecoder().decode(FrameBuyRequest.self, from: data)
+            self = try JSONDecoder().decode(DirectTransactionRequest.self, from: data)
         } catch { return nil }
     }
     

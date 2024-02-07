@@ -9,6 +9,7 @@ class Agent: NSObject {
     
     enum ExternalRequest {
         case safari(SafariRequest)
+        case direct(DirectTransactionRequest)
     }
     
     static let shared = Agent()
@@ -65,9 +66,8 @@ class Agent: NSObject {
         
         let request = externalRequest ?? initialExternalRequest
         initialExternalRequest = nil
-        
-        if case let .safari(request) = request {
-            processSafariRequest(request)
+        if let request = request {
+            processExternalRequest(request)
         } else {
             let accountsList = instantiate(AccountsListViewController.self)
             let windowController = Window.showNew(closeOthers: accountsList.selectAccountAction == nil)
@@ -242,12 +242,21 @@ class Agent: NSObject {
         }
     }
 
-    private func processSafariRequest(_ safariRequest: SafariRequest) {
+    private func processExternalRequest(_ request: ExternalRequest) {
         var windowNumber: Int?
-        let action = DappRequestProcessor.processSafariRequest(safariRequest) {
-            Window.closeWindowAndActivateNext(idToClose: windowNumber, specificBrowser: .safari)
+        let action: DappRequestAction
+        
+        switch request {
+        case .safari(let safariRequest):
+            action = DappRequestProcessor.processSafariRequest(safariRequest) {
+                Window.closeWindowAndActivateNext(idToClose: windowNumber, specificBrowser: .safari)
+            }
+        case .direct(let directTransactionRequest):
+            action = DappRequestProcessor.processDirectTransactionRequest(directTransactionRequest) {
+                // TODO: completion
+            }
         }
-
+        
         switch action {
         case .none:
             break
@@ -277,6 +286,13 @@ class Agent: NSObject {
             windowNumber = windowController.window?.windowNumber
             let accountsList = instantiate(AccountsListViewController.self)
             windowController.contentViewController = accountsList
+        case .showMessage(let message):
+            let alert = Alert()
+            alert.messageText = message
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: Strings.ok)
+            _ = alert.runModal()
+            Window.activateBrowser(specific: .unknown) // TODO: remove from here, should be activated with action completion instead
         }
     }
     
