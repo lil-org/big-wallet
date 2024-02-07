@@ -126,10 +126,8 @@ class ApproveTransactionViewController: UIViewController {
             cellModels.append(.gasPriceSlider)
         }
         
-        if let interpretation = transaction.interpretation {
-            cellModels.append(.text(text: interpretation, oneLine: false, pro: true))
-        } else if let data = transaction.nonEmptyDataWithLabel {
-            cellModels.append(.text(text: data, oneLine: false, pro: true))
+        if let diplayDataInterpretation = transaction.diplayDataInterpretation {
+            cellModels.append(.text(text: diplayDataInterpretation, oneLine: false, pro: true))
         }
         
         sectionModels[0] = cellModels
