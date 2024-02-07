@@ -12,12 +12,12 @@ struct DirectTransactionRequest: Codable {
     let gas: String
     let gasPrice: String
     let id: String
-    let outToken: String
-    let inToken: String
-    let inTicker: String
-    let outTicker: String
-    let inAmount: String
-    let outAmount: String
+    let outputToken: String
+    let inputToken: String
+    let inputTicker: String
+    let outputTicker: String
+    let inputAmount: String
+    let outputAmount: String
     let chainId: String
     let signature: String
 }
@@ -55,7 +55,7 @@ extension DirectTransactionRequest {
                                       value: hexValue,
                                       data: data,
                                       interpretation: nil,
-                                      externalInterpretation: "\(Strings.swap) \(inAmount) \(inTicker) <> \(outAmount) \(outTicker)")
+                                      externalInterpretation: "\(Strings.swap) \(inputAmount) \(inputTicker) <> \(outputAmount) \(outputTicker)")
         return transaction
     }
     
