@@ -6,7 +6,6 @@
 	<array>
 		<string>applinks:tokenary.io</string>
 		<string>applinks:www.tokenary.io</string>
-		<string>applinks:farcap.vercel.app</string>
 		<string>applinks:yo.finance</string>
 	</array>
 	<key>com.apple.developer.icloud-container-identifiers</key>

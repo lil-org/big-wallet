@@ -26,7 +26,7 @@ extension DirectTransactionRequest {
     
     init?(from urlString: String) {
         guard let url = URL(string: urlString),
-              let host = url.host, ["farcap.vercel.app", "yo.finance"].contains(host), // TODO: remove vercel
+              let host = url.host, ["yo.finance"].contains(host),
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let queryItems = components.queryItems else {
             return nil
