@@ -248,7 +248,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let action: DappRequestAction
         let id: Int
         if let txRequest = DirectTransactionRequest(from: inputLinkString) {
-            id = txRequest.id
+            id = txRequest.requestId
             action = DappRequestProcessor.processDirectTransactionRequest(txRequest) { [weak self] in
                 self?.redirectBack(requestId: id, tryFarcaster: true)
             }

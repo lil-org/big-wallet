@@ -12,7 +12,8 @@ struct DirectTransactionRequest: Codable {
     let gas: String
     let gasPrice: String
     let id: String
-    let token: String
+    let outToken: String
+    let inToken: String
     let inTicker: String
     let outTicker: String
     let inAmount: String
