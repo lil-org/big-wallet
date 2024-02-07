@@ -28,10 +28,15 @@ extension DirectTransactionRequest {
         guard let url = URL(string: urlString),
               let host = url.host, ["yo.finance"].contains(host),
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              let queryItems = components.queryItems else {
+              let queryItems = components.queryItems,
+              let query = url.query,
+              let range = query.range(of: "&signature=") else {
             return nil
         }
         
+        let input = String(query[..<range.lowerBound])
+        let signature = String(query[range.upperBound...])
+        guard Ethereum.shared.validateYoFinance(input: input, signature: signature) else { return nil }
         var parameters = queryItems.reduce(into: [String: Any]()) { (result, item) in
             result[item.name] = item.value ?? ""
         }
