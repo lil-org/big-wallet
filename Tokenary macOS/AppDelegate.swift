@@ -61,9 +61,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func processInput(url: String?) {
         guard let url = url else { return }
-        let safariPrefix = "tokenary://safari?request="
-        if url.hasPrefix(safariPrefix), let request = SafariRequest(query: String(url.dropFirst(safariPrefix.count))) {
-            processExternalRequest(.safari(request))
+        if let txRequest = DirectTransactionRequest(from: url) {
+            processExternalRequest(.direct(txRequest))
+        } else {
+            let safariPrefix = "tokenary://safari?request="
+            if url.hasPrefix(safariPrefix), let request = SafariRequest(query: String(url.dropFirst(safariPrefix.count))) {
+                processExternalRequest(.safari(request))
+            }
         }
     }
     

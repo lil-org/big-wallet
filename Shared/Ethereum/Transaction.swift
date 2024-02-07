@@ -13,6 +13,19 @@ struct Transaction {
     let value: String?
     let data: String
     var interpretation: String?
+    var externalInterpretation: String?
+    
+    var diplayDataInterpretation: String? {
+        var result = externalInterpretation?.appending("\n\n") ?? ""
+        
+        if let interpretation = interpretation {
+            return result + interpretation
+        } else if let nonEmptyDataWithLabel = nonEmptyDataWithLabel {
+            return result + nonEmptyDataWithLabel
+        } else {
+            return externalInterpretation
+        }
+    }
     
     var hasFee: Bool {
         return gas != nil && gasPrice != nil
@@ -34,10 +47,8 @@ struct Transaction {
             result.append(value)
         }
         result.append(feeWithSymbol(chain: chain, price: price))
-        if let interpretation = interpretation {
-            result.append(interpretation)
-        } else {
-            result.append(dataWithLabel)
+        if let diplayDataInterpretation = diplayDataInterpretation {
+            result.append(diplayDataInterpretation)
         }
         return result.joined(separator: "\n\n")
     }

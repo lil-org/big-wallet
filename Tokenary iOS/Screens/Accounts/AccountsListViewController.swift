@@ -242,14 +242,26 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     @objc private func processInput() {
         let inputLinkString = launchURL?.absoluteString
         launchURL = nil
-        guard let inputLinkString = inputLinkString,
-              let prefix = ["https://tokenary.io/extension?query=",
+        
+        guard let inputLinkString = inputLinkString else { return }
+        
+        let action: DappRequestAction
+        let id: Int
+        if let txRequest = DirectTransactionRequest(from: inputLinkString) {
+            id = txRequest.requestId
+            action = DappRequestProcessor.processDirectTransactionRequest(txRequest) { [weak self] in
+                self?.redirectBack(requestId: id, tryFarcaster: true)
+            }
+        } else if let prefix = ["https://tokenary.io/extension?query=",
                             "tokenary://safari?request=",
                             "https://www.tokenary.io/extension?query="].first(where: { inputLinkString.hasPrefix($0) == true }),
-              let request = SafariRequest(query: String(inputLinkString.dropFirst(prefix.count))) else { return }
-        
-        let action = DappRequestProcessor.processSafariRequest(request) { [weak self] in
-            self?.openSafari(requestId: request.id)
+                  let request = SafariRequest(query: String(inputLinkString.dropFirst(prefix.count))) {
+            id = request.id
+            action = DappRequestProcessor.processSafariRequest(request) { [weak self] in
+                self?.redirectBack(requestId: id, tryFarcaster: false)
+            }
+        } else {
+            return
         }
         
         switch action {
@@ -258,7 +270,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         case .selectAccount(let action), .switchAccount(let action):
             let selectAccountViewController = instantiate(AccountsListViewController.self, from: .main)
             selectAccountViewController.selectAccountAction = action
-            presentForSafariRequest(selectAccountViewController.inNavigationController, id: request.id)
+            presentForExternalRequest(selectAccountViewController.inNavigationController, id: id)
         case .approveMessage(let action):
             let approveViewController = ApproveViewController.with(subject: action.subject,
                                                                    provider: action.provider,
@@ -266,18 +278,25 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                                                                    meta: action.meta,
                                                                    peerMeta: action.peerMeta,
                                                                    completion: action.completion)
-            presentForSafariRequest(approveViewController.inNavigationController, id: request.id)
+            presentForExternalRequest(approveViewController.inNavigationController, id: id)
         case .approveTransaction(let action):
             let approveTransactionViewController = ApproveTransactionViewController.with(transaction: action.transaction,
                                                                                          chain: action.chain,
                                                                                          account: action.account,
                                                                                          peerMeta: action.peerMeta,
                                                                                          completion: action.completion)
-            presentForSafariRequest(approveTransactionViewController.inNavigationController, id: request.id)
+            presentForExternalRequest(approveTransactionViewController.inNavigationController, id: id)
+        case let .showMessage(message, subtitle, completion):
+            let alert = UIAlertController(title: message, message: subtitle, preferredStyle: .alert)
+            let okAction = UIAlertAction(title: Strings.ok, style: .default) { _ in
+                completion?()
+            }
+            alert.addAction(okAction)
+            presentForExternalRequest(alert, id: id)
         }
     }
     
-    private func presentForSafariRequest(_ viewController: UIViewController, id: Int) {
+    private func presentForExternalRequest(_ viewController: UIViewController, id: Int) {
         var presentFrom: UIViewController = self
         while let presented = presentFrom.presentedViewController, !(presented is UIAlertController) {
             presentFrom = presented
@@ -289,8 +308,13 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         toDismissAfterResponse[id] = viewController
     }
     
-    private func openSafari(requestId: Int) {
-        UIApplication.shared.openSafari()
+    private func redirectBack(requestId: Int, tryFarcaster: Bool) {
+        if tryFarcaster && UIApplication.shared.canOpenURL(.farcasterScheme) {
+            UIApplication.shared.open(.farcasterScheme)
+        } else {
+            UIApplication.shared.openSafari()
+        }
+        
         let isFullscreen = view.bounds.width == UIScreen.main.bounds.width
         toDismissAfterResponse[requestId]?.dismiss(animated: !isFullscreen)
         toDismissAfterResponse.removeValue(forKey: requestId)
@@ -381,6 +405,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let xAction = UIAlertAction(title: Strings.viewOnX.withEllipsis, style: .default) { _ in
             UIApplication.shared.open(URL.x)
         }
+        let warpcastAction = UIAlertAction(title: Strings.viewOnWarpcast.withEllipsis, style: .default) { _ in
+            UIApplication.shared.open(URL.warpcast)
+        }
         let githubAction = UIAlertAction(title: Strings.viewOnGithub.withEllipsis, style: .default) { _ in
             UIApplication.shared.open(URL.github)
         }
@@ -391,6 +418,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             UIApplication.shared.open(URL.iosSafariGuide)
         }
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
+        actionSheet.addAction(warpcastAction)
         actionSheet.addAction(xAction)
         actionSheet.addAction(githubAction)
         actionSheet.addAction(emailAction)

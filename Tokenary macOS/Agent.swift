@@ -9,6 +9,7 @@ class Agent: NSObject {
     
     enum ExternalRequest {
         case safari(SafariRequest)
+        case direct(DirectTransactionRequest)
     }
     
     static let shared = Agent()
@@ -65,9 +66,8 @@ class Agent: NSObject {
         
         let request = externalRequest ?? initialExternalRequest
         initialExternalRequest = nil
-        
-        if case let .safari(request) = request {
-            processSafariRequest(request)
+        if let request = request {
+            processExternalRequest(request)
         } else {
             let accountsList = instantiate(AccountsListViewController.self)
             let windowController = Window.showNew(closeOthers: accountsList.selectAccountAction == nil)
@@ -111,6 +111,7 @@ class Agent: NSObject {
         let safariItem = NSMenuItem(title: Strings.enableSafariExtension.withEllipsis, action: #selector(enableSafariExtension), keyEquivalent: "")
         let mailItem = NSMenuItem(title: Strings.dropUsALine.withEllipsis, action: #selector(didSelectMailMenuItem), keyEquivalent: "")
         let githubItem = NSMenuItem(title: Strings.viewOnGithub.withEllipsis, action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
+        let warpcastItem = NSMenuItem(title: Strings.viewOnWarpcast.withEllipsis, action: #selector(didSelectWarpcastMenuItem), keyEquivalent: "")
         let xItem = NSMenuItem(title: Strings.viewOnX.withEllipsis, action: #selector(didSelectXMenuItem), keyEquivalent: "")
         let quitItem = NSMenuItem(title: Strings.quit, action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
         showItem.attributedTitle = NSAttributedString(string: "👀 " + Strings.showTokenary, attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
@@ -118,6 +119,7 @@ class Agent: NSObject {
         showItem.target = self
         safariItem.target = self
         githubItem.target = self
+        warpcastItem.target = self
         xItem.target = self
         mailItem.target = self
         quitItem.target = self
@@ -127,6 +129,7 @@ class Agent: NSObject {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(safariItem)
         menu.addItem(NSMenuItem.separator())
+        menu.addItem(warpcastItem)
         menu.addItem(xItem)
         menu.addItem(githubItem)
         menu.addItem(mailItem)
@@ -155,6 +158,10 @@ class Agent: NSObject {
     
     @objc private func didSelectXMenuItem() {
         NSWorkspace.shared.open(URL.x)
+    }
+    
+    @objc private func didSelectWarpcastMenuItem() {
+        NSWorkspace.shared.open(URL.warpcast)
     }
     
     @objc private func didSelectGitHubMenuItem() {
@@ -235,12 +242,21 @@ class Agent: NSObject {
         }
     }
 
-    private func processSafariRequest(_ safariRequest: SafariRequest) {
+    private func processExternalRequest(_ request: ExternalRequest) {
         var windowNumber: Int?
-        let action = DappRequestProcessor.processSafariRequest(safariRequest) {
-            Window.closeWindowAndActivateNext(idToClose: windowNumber, specificBrowser: .safari)
+        let action: DappRequestAction
+        
+        switch request {
+        case .safari(let safariRequest):
+            action = DappRequestProcessor.processSafariRequest(safariRequest) {
+                Window.closeWindowAndActivateNext(idToClose: windowNumber, specificBrowser: .safari)
+            }
+        case .direct(let directTransactionRequest):
+            action = DappRequestProcessor.processDirectTransactionRequest(directTransactionRequest) {
+                Window.closeWindowAndActivateNext(idToClose: windowNumber, specificBrowser: .unknown)
+            }
         }
-
+        
         switch action {
         case .none:
             break
@@ -270,6 +286,14 @@ class Agent: NSObject {
             windowNumber = windowController.window?.windowNumber
             let accountsList = instantiate(AccountsListViewController.self)
             windowController.contentViewController = accountsList
+        case let .showMessage(message, subtitle, completion):
+            let alert = Alert()
+            alert.messageText = message
+            alert.informativeText = subtitle
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: Strings.ok)
+            _ = alert.runModal()
+            completion?()
         }
     }
     

@@ -23,6 +23,7 @@ struct Strings {
     static let enableSafariExtension = "Enable Safari extension"
     static let dropUsALine = "Drop us a line"
     static let viewOnGithub = "View on GitHub"
+    static let viewOnWarpcast = "View on Warpcast"
     static let viewOnX = "View on 𝕏"
     static let walletConnectClientDescription = "Crypto wallet for macOS"
     static let start = "Start"
@@ -102,5 +103,7 @@ struct Strings {
     static let customNonce = "custom nonce"
     static let customGasPrice = "custom gas price"
     static let resetTo = "reset to"
+    static let addWalletAndTryAgain = "add wallet and try again 🫡"
+    static let swap = "swap"
     
 }

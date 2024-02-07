@@ -89,7 +89,7 @@ struct Window {
         Agent.shared.setupStatusBarItem()
     }
     
-    private static func activateBrowser(specific browser: Browser?) {
+    static func activateBrowser(specific browser: Browser?) {
         if let browser = browser, browser != .unknown {
             activateBrowser(browser)
             return
