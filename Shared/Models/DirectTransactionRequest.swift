@@ -54,7 +54,8 @@ extension DirectTransactionRequest {
                                       gas: gas,
                                       value: hexValue,
                                       data: data,
-                                      interpretation: nil) // TODO: use external interpretation
+                                      interpretation: nil,
+                                      externalInterpretation: "\(Strings.swap) \(inAmount) \(inTicker) <> \(outAmount) \(outTicker)")
         return transaction
     }
     

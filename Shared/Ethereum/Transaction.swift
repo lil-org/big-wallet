@@ -13,6 +13,7 @@ struct Transaction {
     let value: String?
     let data: String
     var interpretation: String?
+    var externalInterpretation: String?
     
     var hasFee: Bool {
         return gas != nil && gasPrice != nil
