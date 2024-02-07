@@ -286,13 +286,14 @@ class Agent: NSObject {
             windowNumber = windowController.window?.windowNumber
             let accountsList = instantiate(AccountsListViewController.self)
             windowController.contentViewController = accountsList
-        case let .showMessage(message, completion):
+        case let .showMessage(message, subtitle, completion):
             let alert = Alert()
             alert.messageText = message
+            alert.informativeText = subtitle
             alert.alertStyle = .informational
             alert.addButton(withTitle: Strings.ok)
             _ = alert.runModal()
-            completion()
+            completion?()
         }
     }
     

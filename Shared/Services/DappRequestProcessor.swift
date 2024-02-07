@@ -13,8 +13,8 @@ struct DappRequestProcessor {
         lazy var account = walletsManager.getAccount(coin: .ethereum, address: request.from)
         lazy var privateKey = walletsManager.getPrivateKey(coin: .ethereum, address: request.from)
         let transaction = request.createTransaction()
-        let chainId = 8453 // TODO: use the one from the link
-        if let chain = Networks.withChainId(chainId),
+        if let chainId = Int(request.chainId),
+           let chain = Networks.withChainId(chainId),
            let account = account,
            let privateKey = privateKey {
             let action = SendTransactionAction(provider: .ethereum,
@@ -30,7 +30,7 @@ struct DappRequestProcessor {
             }
             return .approveTransaction(action)
         } else {
-            return .showMessage(message: Strings.addWallet, completion: completion) // TODO: make it clear that a specific wallet is required here
+            return .showMessage(message: Strings.addWalletAndTryAgain, subtitle: transaction.from, completion: nil)
         }
     }
     

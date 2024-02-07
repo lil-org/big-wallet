@@ -286,10 +286,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                                                                                          peerMeta: action.peerMeta,
                                                                                          completion: action.completion)
             presentForExternalRequest(approveTransactionViewController.inNavigationController, id: id)
-        case let .showMessage(message, completion):
-            let alert = UIAlertController(title: message, message: nil, preferredStyle: .alert)
+        case let .showMessage(message, subtitle, completion):
+            let alert = UIAlertController(title: message, message: subtitle, preferredStyle: .alert)
             let okAction = UIAlertAction(title: Strings.ok, style: .default) { _ in
-                completion()
+                completion?()
             }
             alert.addAction(okAction)
             presentForExternalRequest(alert, id: id)
