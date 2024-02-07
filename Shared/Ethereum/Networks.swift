@@ -13,6 +13,14 @@ struct Networks {
         return allBundledDict[chainId]
     }
     
+    static func explorerURL(chainId: Int, hash: String) -> URL? {
+        if let explorer = withChainId(chainId)?.explorer, let url = URL(string: explorer + "/tx/\(hash)") {
+            return url
+        } else {
+            return nil
+        }
+    }
+    
     static func withChainIdHex(_ chainIdHex: String?) -> EthereumNetwork? {
         guard let chainIdHex = chainIdHex, let id = Int(hexString: chainIdHex) else { return nil }
         return allBundledDict[id]
@@ -48,7 +56,8 @@ struct Networks {
                                               symbol: value.symbol,
                                               nodeURLString: node,
                                               isTestnet: value.isTest,
-                                              mightShowPrice: value.okToShowPriceForSymbol)
+                                              mightShowPrice: value.okToShowPriceForSymbol,
+                                              explorer: value.blockExplorer)
                 return (key, network)
             }
             let dict = [Int: EthereumNetwork](uniqueKeysWithValues: mapped)

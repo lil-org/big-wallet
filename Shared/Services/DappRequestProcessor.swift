@@ -8,7 +8,7 @@ struct DappRequestProcessor {
     private static let walletsManager = WalletsManager.shared
     private static let ethereum = Ethereum.shared
     
-    static func processDirectTransactionRequest(_ request: DirectTransactionRequest, completion: @escaping () -> Void) -> DappRequestAction {
+    static func processDirectTransactionRequest(_ request: DirectTransactionRequest, completion: @escaping (String?) -> Void) -> DappRequestAction {
         let peerMeta = PeerMeta(title: "yo.finance", iconURLString: "https://i.seadn.io/s/raw/files/978b1936da9b8ac1f4cb2ab0bf3c48d9.png")
         lazy var account = walletsManager.getAccount(coin: .ethereum, address: request.from)
         lazy var privateKey = walletsManager.getPrivateKey(coin: .ethereum, address: request.from)
@@ -25,7 +25,7 @@ struct DappRequestProcessor {
                 if let transaction = transaction {
                     sendTransaction(privateKey: privateKey, transaction: transaction, network: chain, respondTo: nil, completion: completion)
                 } else {
-                    completion()
+                    completion(nil)
                 }
             }
             return .approveTransaction(action)
@@ -34,7 +34,7 @@ struct DappRequestProcessor {
         }
     }
     
-    static func processSafariRequest(_ request: SafariRequest, completion: @escaping () -> Void) -> DappRequestAction {
+    static func processSafariRequest(_ request: SafariRequest, completion: @escaping (String?) -> Void) -> DappRequestAction {
         if !ExtensionBridge.hasRequest(id: request.id) {
             DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(500)) {
                 if !ExtensionBridge.hasRequest(id: request.id) {
@@ -102,7 +102,7 @@ struct DappRequestProcessor {
         }
     }
     
-    private static func process(request: SafariRequest, ethereumRequest: SafariRequest.Ethereum, completion: @escaping () -> Void) -> DappRequestAction {
+    private static func process(request: SafariRequest, ethereumRequest: SafariRequest.Ethereum, completion: @escaping (String?) -> Void) -> DappRequestAction {
         let peerMeta = request.peerMeta
         lazy var account = walletsManager.getAccount(coin: .ethereum, address: ethereumRequest.address)
         lazy var privateKey = walletsManager.getPrivateKey(coin: .ethereum, address: ethereumRequest.address)
@@ -206,7 +206,7 @@ struct DappRequestProcessor {
         return .none
     }
     
-    private static func signTypedData(privateKey: PrivateKey, raw: String, request: SafariRequest, completion: () -> Void) {
+    private static func signTypedData(privateKey: PrivateKey, raw: String, request: SafariRequest, completion: (String?) -> Void) {
         if let signed = try? ethereum.sign(typedData: raw, privateKey: privateKey) {
             respond(to: request, body: .ethereum(.init(result: signed)), completion: completion)
         } else {
@@ -214,7 +214,7 @@ struct DappRequestProcessor {
         }
     }
     
-    private static func signMessage(privateKey: PrivateKey, data: Data, request: SafariRequest, completion: () -> Void) {
+    private static func signMessage(privateKey: PrivateKey, data: Data, request: SafariRequest, completion: (String?) -> Void) {
         if let signed = try? ethereum.sign(data: data, privateKey: privateKey) {
             respond(to: request, body: .ethereum(.init(result: signed)), completion: completion)
         } else {
@@ -222,7 +222,7 @@ struct DappRequestProcessor {
         }
     }
     
-    private static func signPersonalMessage(privateKey: PrivateKey, data: Data, request: SafariRequest, completion: () -> Void) {
+    private static func signPersonalMessage(privateKey: PrivateKey, data: Data, request: SafariRequest, completion: (String?) -> Void) {
         if let signed = try? ethereum.signPersonalMessage(data: data, privateKey: privateKey) {
             respond(to: request, body: .ethereum(.init(result: signed)), completion: completion)
         } else {
@@ -230,7 +230,7 @@ struct DappRequestProcessor {
         }
     }
      
-    private static func sendTransaction(privateKey: PrivateKey, transaction: Transaction, network: EthereumNetwork, respondTo: SafariRequest?, completion: @escaping () -> Void) {
+    private static func sendTransaction(privateKey: PrivateKey, transaction: Transaction, network: EthereumNetwork, respondTo: SafariRequest?, completion: @escaping (String?) -> Void) {
         ethereum.send(transaction: transaction, privateKey: privateKey, network: network) { hash in
             if let request = respondTo {
                 if let hash = hash {
@@ -239,24 +239,24 @@ struct DappRequestProcessor {
                     respond(to: request, error: Strings.failedToSend, completion: completion)
                 }
             } else {
-                completion()
+                completion(hash)
             }
         }
     }
     
-    private static func respond(to safariRequest: SafariRequest, body: ResponseToExtension.Body, completion: () -> Void) {
+    private static func respond(to safariRequest: SafariRequest, body: ResponseToExtension.Body, completion: (String?) -> Void) {
         let response = ResponseToExtension(for: safariRequest, body: body)
         sendResponse(response, completion: completion)
     }
     
-    private static func respond(to safariRequest: SafariRequest, error: String, completion: () -> Void) {
+    private static func respond(to safariRequest: SafariRequest, error: String, completion: (String?) -> Void) {
         let response = ResponseToExtension(for: safariRequest, error: error)
         sendResponse(response, completion: completion)
     }
     
-    private static func sendResponse(_ response: ResponseToExtension, completion: () -> Void) {
+    private static func sendResponse(_ response: ResponseToExtension, completion: (String?) -> Void) {
         ExtensionBridge.respond(response: response)
-        completion()
+        completion(nil)
     }
     
 }
