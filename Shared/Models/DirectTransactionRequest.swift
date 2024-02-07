@@ -1,6 +1,7 @@
 // ∅ 2024 lil org
 
 import Foundation
+import BigInt
 
 struct DirectTransactionRequest: Codable {
     let id: Int
@@ -37,6 +38,20 @@ extension DirectTransactionRequest {
             let data = try JSONSerialization.data(withJSONObject: parameters, options: [])
             self = try JSONDecoder().decode(DirectTransactionRequest.self, from: data)
         } catch { return nil }
+    }
+    
+    func createTransaction() -> Transaction {
+        let hexValue = String.hex(BigInt(stringLiteral: value))
+        let transaction = Transaction(id: UUID(),
+                                      from: from,
+                                      to: to,
+                                      nonce: nil,
+                                      gasPrice: gasPrice,
+                                      gas: gas,
+                                      value: hexValue,
+                                      data: data,
+                                      interpretation: nil) // TODO: use external interpretation
+        return transaction
     }
     
 }

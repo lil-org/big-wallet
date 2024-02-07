@@ -9,30 +9,29 @@ struct DappRequestProcessor {
     private static let ethereum = Ethereum.shared
     
     static func processDirectTransactionRequest(_ request: DirectTransactionRequest, completion: @escaping () -> Void) -> DappRequestAction {
-        return .showMessage(message: "$degen", completion: completion)
-        // TODO: implement
-//        if let transaction = ethereumRequest.transaction,
-//           let chainId = ethereumRequest.currentChainId,
-//           let chain = Networks.withChainId(chainId),
-//           let account = account,
-//           let privateKey = privateKey {
-//            let action = SendTransactionAction(provider: request.provider,
-//                                               transaction: transaction,
-//                                               chain: chain,
-//                                               account: account,
-//                                               peerMeta: peerMeta) { transaction in
-//                if let transaction = transaction {
-//                    sendTransaction(privateKey: privateKey, transaction: transaction, network: chain, request: request, completion: completion)
-//                } else {
-//                    respond(to: request, error: Strings.canceled, completion: completion)
-//                }
-//            }
-//            return .approveTransaction(action)
-//        } else {
-//            respond(to: request, error: Strings.somethingWentWrong, completion: completion)
-//        }
-//        
-//        return .approveTransaction(<#T##SendTransactionAction#>)
+        let peerMeta = PeerMeta(title: "yo.finance", iconURLString: "https://i.seadn.io/s/raw/files/978b1936da9b8ac1f4cb2ab0bf3c48d9.png")
+        lazy var account = walletsManager.getAccount(coin: .ethereum, address: request.from)
+        lazy var privateKey = walletsManager.getPrivateKey(coin: .ethereum, address: request.from)
+        let transaction = request.createTransaction()
+        let chainId = 8453 // TODO: use the one from the link
+        if let chain = Networks.withChainId(chainId),
+           let account = account,
+           let privateKey = privateKey {
+            let action = SendTransactionAction(provider: .ethereum,
+                                               transaction: transaction,
+                                               chain: chain,
+                                               account: account,
+                                               peerMeta: peerMeta) { transaction in
+                if let transaction = transaction {
+                    sendTransaction(privateKey: privateKey, transaction: transaction, network: chain, respondTo: nil, completion: completion)
+                } else {
+                    completion()
+                }
+            }
+            return .approveTransaction(action)
+        } else {
+            return .showMessage(message: Strings.addWallet, completion: completion) // TODO: make it clear that a specific wallet is required here
+        }
     }
     
     static func processSafariRequest(_ request: SafariRequest, completion: @escaping () -> Void) -> DappRequestAction {
@@ -185,7 +184,7 @@ struct DappRequestProcessor {
                                                    account: account,
                                                    peerMeta: peerMeta) { transaction in
                     if let transaction = transaction {
-                        sendTransaction(privateKey: privateKey, transaction: transaction, network: chain, request: request, completion: completion)
+                        sendTransaction(privateKey: privateKey, transaction: transaction, network: chain, respondTo: request, completion: completion)
                     } else {
                         respond(to: request, error: Strings.canceled, completion: completion)
                     }
@@ -231,12 +230,14 @@ struct DappRequestProcessor {
         }
     }
      
-    private static func sendTransaction(privateKey: PrivateKey, transaction: Transaction, network: EthereumNetwork, request: SafariRequest, completion: @escaping () -> Void) {
+    private static func sendTransaction(privateKey: PrivateKey, transaction: Transaction, network: EthereumNetwork, respondTo: SafariRequest?, completion: @escaping () -> Void) {
         ethereum.send(transaction: transaction, privateKey: privateKey, network: network) { hash in
-            if let hash = hash {
-                DappRequestProcessor.respond(to: request, body: .ethereum(.init(result: hash)), completion: completion)
-            } else {
-                respond(to: request, error: Strings.failedToSend, completion: completion)
+            if let request = respondTo {
+                if let hash = hash {
+                    DappRequestProcessor.respond(to: request, body: .ethereum(.init(result: hash)), completion: completion)
+                } else {
+                    respond(to: request, error: Strings.failedToSend, completion: completion)
+                }
             }
         }
     }
