@@ -6,7 +6,7 @@ import WalletCore
 enum DappRequestAction {
     case none
     case justShowApp
-    case showMessage(String)
+    case showMessage(message: String, completion: () -> Void)
     case switchAccount(SelectAccountAction)
     case selectAccount(SelectAccountAction)
     case approveMessage(SignMessageAction)

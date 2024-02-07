@@ -253,7 +253,7 @@ class Agent: NSObject {
             }
         case .direct(let directTransactionRequest):
             action = DappRequestProcessor.processDirectTransactionRequest(directTransactionRequest) {
-                // TODO: completion
+                Window.closeWindowAndActivateNext(idToClose: windowNumber, specificBrowser: .unknown)
             }
         }
         
@@ -286,13 +286,13 @@ class Agent: NSObject {
             windowNumber = windowController.window?.windowNumber
             let accountsList = instantiate(AccountsListViewController.self)
             windowController.contentViewController = accountsList
-        case .showMessage(let message):
+        case let .showMessage(message, completion):
             let alert = Alert()
             alert.messageText = message
             alert.alertStyle = .informational
             alert.addButton(withTitle: Strings.ok)
             _ = alert.runModal()
-            Window.activateBrowser(specific: .unknown) // TODO: remove from here, should be activated with action completion instead
+            completion()
         }
     }
     

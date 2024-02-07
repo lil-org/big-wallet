@@ -9,7 +9,7 @@ struct DappRequestProcessor {
     private static let ethereum = Ethereum.shared
     
     static func processDirectTransactionRequest(_ request: DirectTransactionRequest, completion: @escaping () -> Void) -> DappRequestAction {
-        return .showMessage("$degen")
+        return .showMessage(message: "$degen", completion: completion)
         // TODO: implement
 //        if let transaction = ethereumRequest.transaction,
 //           let chainId = ethereumRequest.currentChainId,

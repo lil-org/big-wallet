@@ -249,8 +249,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let id: Int
         if let txRequest = DirectTransactionRequest(from: inputLinkString) {
             id = txRequest.id
-            action = DappRequestProcessor.processDirectTransactionRequest(txRequest) {
-                // TODO: add completion
+            action = DappRequestProcessor.processDirectTransactionRequest(txRequest) { [weak self] in
+                self?.redirectBack(requestId: id, tryFarcaster: true)
             }
         } else if let prefix = ["https://tokenary.io/extension?query=",
                             "tokenary://safari?request=",
@@ -258,7 +258,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                   let request = SafariRequest(query: String(inputLinkString.dropFirst(prefix.count))) {
             id = request.id
             action = DappRequestProcessor.processSafariRequest(request) { [weak self] in
-                self?.openSafari(requestId: request.id)
+                self?.redirectBack(requestId: id, tryFarcaster: false)
             }
         } else {
             return
@@ -286,10 +286,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                                                                                          peerMeta: action.peerMeta,
                                                                                          completion: action.completion)
             presentForExternalRequest(approveTransactionViewController.inNavigationController, id: id)
-        case .showMessage(let message):
+        case let .showMessage(message, completion):
             let alert = UIAlertController(title: message, message: nil, preferredStyle: .alert)
-            let okAction = UIAlertAction(title: Strings.ok, style: .default) { [weak self] _ in
-                self?.openFarcasterOrSafari() // TODO: remove from here, should be activated with action completion instead
+            let okAction = UIAlertAction(title: Strings.ok, style: .default) { _ in
+                completion()
             }
             alert.addAction(okAction)
             presentForExternalRequest(alert, id: id)
@@ -308,17 +308,13 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         toDismissAfterResponse[id] = viewController
     }
     
-    private func openFarcasterOrSafari() {
-        // TODO: dismiss like openSafari does
-        if UIApplication.shared.canOpenURL(.farcasterScheme) {
+    private func redirectBack(requestId: Int, tryFarcaster: Bool) {
+        if tryFarcaster && UIApplication.shared.canOpenURL(.farcasterScheme) {
             UIApplication.shared.open(.farcasterScheme)
         } else {
             UIApplication.shared.openSafari()
         }
-    }
-    
-    private func openSafari(requestId: Int) {
-        UIApplication.shared.openSafari()
+        
         let isFullscreen = view.bounds.width == UIScreen.main.bounds.width
         toDismissAfterResponse[requestId]?.dismiss(animated: !isFullscreen)
         toDismissAfterResponse.removeValue(forKey: requestId)
