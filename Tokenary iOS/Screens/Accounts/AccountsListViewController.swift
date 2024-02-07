@@ -244,10 +244,14 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         launchURL = nil
         
         // TODO: process properly
-        if inputLinkString?.contains("farcap.vercel.app") == true {
+        if inputLinkString?.contains("yo.finance") == true || inputLinkString?.contains("farcap.vercel.app") == true {
             let alert = UIAlertController(title: "buy $degen", message: nil, preferredStyle: .alert)
             let okAction = UIAlertAction(title: "ok", style: .default) { _ in
-                UIApplication.shared.openSafari()
+                if UIApplication.shared.canOpenURL(.farcasterScheme) {
+                    UIApplication.shared.open(.farcasterScheme)
+                } else {
+                    UIApplication.shared.openSafari()
+                }
             }
             let cancelAction = UIAlertAction(title: "cancel", style: .cancel) { _ in
                 UIApplication.shared.openSafari()
