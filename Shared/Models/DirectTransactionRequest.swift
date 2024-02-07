@@ -4,18 +4,21 @@ import Foundation
 import BigInt
 
 struct DirectTransactionRequest: Codable {
-    let id: Int
+    let requestId: Int
     let to: String
     let from: String
     let data: String
     let value: String
     let gas: String
     let gasPrice: String
-    let swap: String
+    let id: String
     let token: String
-    let ticker: String
-    let amountTo: String
-    let amountFrom: String
+    let inTicker: String
+    let outTicker: String
+    let inAmount: String
+    let outAmount: String
+    let chainId: String
+    let signature: String
 }
 
 extension DirectTransactionRequest {
@@ -32,7 +35,7 @@ extension DirectTransactionRequest {
             result[item.name] = item.value ?? ""
         }
         
-        parameters["id"] = Int.random(in: 1..<Int.max)
+        parameters["requestId"] = Int.random(in: 1..<Int.max)
         
         do {
             let data = try JSONSerialization.data(withJSONObject: parameters, options: [])
