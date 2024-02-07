@@ -1,363 +1,435 @@
 {
   "1" : {
+    "b" : "https://etherscan.io",
     "n" : "Ethereum",
     "o" : true,
     "s" : "ETH"
   },
   "5" : {
+    "b" : "https://goerli.etherscan.io",
     "n" : "Goerli",
     "s" : "ETH",
     "t" : true
   },
   "10" : {
+    "b" : "https://optimistic.etherscan.io",
     "n" : "Optimism",
     "o" : true,
     "s" : "ETH"
   },
   "25" : {
+    "b" : "https://explorer.cronos.org",
     "n" : "Cronos",
     "s" : "CRO"
   },
   "40" : {
+    "b" : "https://teloscan.io",
     "n" : "Telos EVM Mainnet",
     "s" : "TLOS"
   },
   "56" : {
+    "b" : "https://bscscan.com",
     "n" : "BNB Chain",
     "o" : true,
     "s" : "BNB"
   },
   "66" : {
+    "b" : "https://www.oklink.com/en/okc",
     "n" : "OKTC",
     "s" : "OKT"
   },
   "69" : {
+    "b" : "https://kovan-optimistic.etherscan.io",
     "n" : "Optimism Kovan",
     "s" : "ETH",
     "t" : true
   },
   "77" : {
+    "b" : "https://blockscout.com/poa/sokol",
     "n" : "POA Network Sokol",
     "s" : "SPOA",
     "t" : true
   },
   "97" : {
+    "b" : "https://testnet.bscscan.com",
     "n" : "BNB Chain Testnet",
     "s" : "tBNB",
     "t" : true
   },
   "99" : {
+    "b" : "https://blockscout.com/poa/core",
     "n" : "POA Network",
     "s" : "POA"
   },
   "100" : {
+    "b" : "https://gnosisscan.io",
     "n" : "Gnosis",
     "s" : "xDai"
   },
   "122" : {
+    "b" : "https://explorer.fuse.io",
     "n" : "Fuse",
     "s" : "FUSE"
   },
   "128" : {
+    "b" : "https://hecoinfo.com",
     "n" : "Huobi ECO Chain",
     "s" : "HT"
   },
   "137" : {
+    "b" : "https://polygonscan.com",
     "n" : "Polygon",
     "o" : true,
     "s" : "MATIC"
   },
   "169" : {
+    "b" : "https://pacific-explorer.manta.network",
     "n" : "Manta Pacific Mainnet",
     "s" : "ETH"
   },
   "200" : {
+    "b" : "https://blockscout.com/xdai/arbitrum",
     "n" : "Arbitrum on xDai",
     "s" : "xDai"
   },
   "204" : {
+    "b" : "https://mainnet.opbnbscan.com",
     "n" : "opBNB",
     "o" : true,
     "s" : "BNB"
   },
   "250" : {
+    "b" : "https://ftmscan.com",
     "n" : "Fantom Opera",
     "o" : true,
     "s" : "FTM"
   },
   "280" : {
+    "b" : "https://goerli.explorer.zksync.io",
     "n" : "zkSync Era Testnet",
     "s" : "ETH",
     "t" : true
   },
   "288" : {
+    "b" : "https://bobascan.com",
     "n" : "Boba",
     "o" : true,
     "s" : "ETH"
   },
   "314" : {
+    "b" : "https://filfox.info/en",
     "n" : "Filecoin",
     "s" : "FIL"
   },
   "324" : {
+    "b" : "https://explorer.zksync.io",
     "n" : "zkSync Era",
     "o" : true,
     "s" : "ETH"
   },
   "338" : {
+    "b" : "https://explorer.cronos.org/testnet",
     "n" : "Cronos Testnet",
     "s" : "TCRO",
     "t" : true
   },
   "420" : {
+    "b" : "https://optimism-goerli.blockscout.com",
     "n" : "Optimism Goerli",
     "s" : "ETH",
     "t" : true
   },
   "424" : {
+    "b" : "https://explorer.publicgoods.network",
     "n" : "Public Goods Network",
     "o" : true,
     "s" : "ETH"
   },
   "1001" : {
+    "b" : "https://scope.klaytn.com",
     "n" : "Klaytn Baobab",
     "s" : "KLAY",
     "t" : true
   },
   "1088" : {
+    "b" : "https://andromeda-explorer.metis.io",
     "n" : "Metis Andromeda",
     "s" : "METIS"
   },
   "1101" : {
+    "b" : "https://zkevm.polygonscan.com",
     "n" : "Polygon zkEVM",
     "o" : true,
     "s" : "ETH"
   },
   "1284" : {
+    "b" : "https://moonbeam.moonscan.io",
     "n" : "Moonbeam",
     "s" : "GLMR"
   },
   "1285" : {
+    "b" : "https://moonriver.moonscan.io",
     "n" : "Moonriver",
     "s" : "MOVR"
   },
   "1442" : {
+    "b" : "https://explorer.public.zkevm-test.net",
     "n" : "Polygon zkEVM Testnet",
     "s" : "ETH",
     "t" : true
   },
   "2221" : {
+    "b" : "http://testnet.kavascan.com",
     "n" : "Kava Testnet",
     "s" : "TKAVA",
     "t" : true
   },
   "2222" : {
+    "b" : "https://kavascan.com",
     "n" : "Kava",
     "s" : "KAVA"
   },
   "4002" : {
+    "b" : "https://testnet.ftmscan.com",
     "n" : "Fantom Testnet",
     "s" : "FTM",
     "t" : true
   },
   "4337" : {
+    "b" : "https://subnets.avax.network/beam",
     "n" : "Beam",
     "s" : "BEAM"
   },
   "5000" : {
+    "b" : "https://explorer.mantle.xyz",
     "n" : "Mantle",
     "s" : "MNT"
   },
   "5001" : {
+    "b" : "https://explorer.testnet.mantle.xyz",
     "n" : "Mantle Testnet",
     "s" : "MNT",
     "t" : true
   },
   "5611" : {
+    "b" : "https://opbnb-testnet.bscscan.com",
     "n" : "opBNB Testnet",
     "s" : "tBNB",
     "t" : true
   },
   "7700" : {
+    "b" : "https://evm.explorer.canto.io",
     "n" : "Canto",
     "s" : "CANTO"
   },
   "8217" : {
+    "b" : "https://scope.klaytn.com",
     "n" : "Klaytn",
     "s" : "KLAY"
   },
   "8453" : {
+    "b" : "https://basescan.org",
     "n" : "Base",
     "o" : true,
     "s" : "ETH"
   },
   "9001" : {
+    "b" : "https://escan.live",
     "n" : "Evmos",
     "s" : "EVMOS"
   },
   "10200" : {
+    "b" : "https://blockscout.chiadochain.net",
     "n" : "Gnosis Chiado",
     "s" : "xDai",
     "t" : true
   },
   "11235" : {
+    "b" : "https://explorer.haqq.network",
     "n" : "Haqq Network",
     "s" : "ISLM"
   },
   "13371" : {
+    "b" : "https://explorer.immutable.com",
     "n" : "Immutable zkEVM",
     "s" : "IMX"
   },
   "42161" : {
+    "b" : "https://arbiscan.io",
     "n" : "Arbitrum",
     "o" : true,
     "s" : "ETH"
   },
   "42170" : {
+    "b" : "https://nova-explorer.arbitrum.io",
     "n" : "Arbitrum Nova",
     "o" : true,
     "s" : "ETH"
   },
   "42220" : {
+    "b" : "https://celoscan.io",
     "n" : "Celo",
     "s" : "CELO"
   },
   "42766" : {
+    "b" : "https://scan.zkfair.io",
     "n" : "ZKFair Mainnet",
     "s" : "USDC"
   },
   "43113" : {
+    "b" : "https://testnet.snowtrace.io",
     "n" : "Avalanche Fuji",
     "s" : "AVAX",
     "t" : true
   },
   "43114" : {
+    "b" : "https://snowtrace.io",
     "n" : "Avalanche",
     "o" : true,
     "s" : "AVAX"
   },
   "43288" : {
+    "b" : "https://blockexplorer.avax.boba.network",
     "n" : "Boba Avax",
     "s" : "BOBA"
   },
   "44787" : {
+    "b" : "https://alfajores.celoscan.io",
     "n" : "Celo Alfajores Testnet",
     "s" : "CELO",
     "t" : true
   },
   "56288" : {
+    "b" : "https://blockexplorer.bnb.boba.network",
     "n" : "Boba BNB Mainnet",
     "s" : "BOBA"
   },
   "58008" : {
+    "b" : "https://explorer.sepolia.publicgoods.network",
     "n" : "Public Goods Network Sepolia",
     "s" : "ETH",
     "t" : true
   },
   "59140" : {
+    "b" : "https://goerli.lineascan.build",
     "n" : "Linea Testnet",
     "s" : "ETH",
     "t" : true
   },
   "59144" : {
+    "b" : "https://lineascan.build",
     "n" : "Linea",
     "o" : true,
     "s" : "ETH"
   },
-  "64240" : {
-    "n" : "Fantom Sonic Open",
-    "s" : "FTM",
-    "t" : true
-  },
   "80001" : {
+    "b" : "https://mumbai.polygonscan.com",
     "n" : "Polygon Mumbai",
     "s" : "MATIC",
     "t" : true
   },
   "84531" : {
+    "b" : "https://goerli.basescan.org",
     "n" : "Base Goerli",
     "s" : "ETH",
     "t" : true
   },
   "84532" : {
+    "b" : "https://base-sepolia.blockscout.com",
     "n" : "Base Sepolia",
     "s" : "ETH",
     "t" : true
   },
   "421613" : {
+    "b" : "https://goerli.arbiscan.io",
     "n" : "Arbitrum Goerli",
     "s" : "AGOR",
     "t" : true
   },
   "421614" : {
+    "b" : "https://sepolia-explorer.arbitrum.io",
     "n" : "Arbitrum Sepolia",
     "s" : "ETH",
     "t" : true
   },
   "534351" : {
+    "b" : "https://sepolia.scrollscan.com",
     "n" : "Scroll Sepolia",
     "s" : "ETH",
     "t" : true
   },
   "534352" : {
+    "b" : "https://scrollscan.com",
     "n" : "Scroll",
     "o" : true,
     "s" : "ETH"
   },
   "7777777" : {
+    "b" : "https://explorer.zora.energy",
     "n" : "Zora",
     "o" : true,
     "s" : "ETH"
   },
   "11155111" : {
+    "b" : "https://sepolia.etherscan.io",
     "n" : "Sepolia",
     "s" : "ETH",
     "t" : true
   },
   "11155420" : {
+    "b" : "https://optimism-sepolia.blockscout.com",
     "n" : "OP Sepolia Testnet",
     "s" : "ETH",
     "t" : true
   },
   "68840142" : {
+    "b" : "https://explorer.testnet.frame.xyz",
     "n" : "Frame Testnet",
     "s" : "ETH",
     "t" : true
   },
   "245022926" : {
+    "b" : "https://devnet.neonscan.org",
     "n" : "Neon EVM DevNet",
     "s" : "NEON",
     "t" : true
   },
   "245022934" : {
+    "b" : "https://neonscan.org",
     "n" : "Neon EVM",
     "s" : "NEON"
   },
   "999999999" : {
+    "b" : "https://sepolia.explorer.zora.energy",
     "n" : "Zora Sepolia",
     "s" : "ETH",
     "t" : true
   },
   "1313161554" : {
+    "b" : "https://aurorascan.dev",
     "n" : "Aurora",
     "o" : true,
     "s" : "ETH"
   },
   "1313161555" : {
+    "b" : "https://testnet.aurorascan.dev",
     "n" : "Aurora Testnet",
     "s" : "ETH",
     "t" : true
   },
   "1666600000" : {
+    "b" : "https://explorer.harmony.one",
     "n" : "Harmony",
     "s" : "ONE"
   },
   "11297108099" : {
+    "b" : "https://testnet.palm.chainlens.com",
     "n" : "Palm Testnet",
     "s" : "PALM",
     "t" : true
   },
   "11297108109" : {
+    "b" : "https://palm.chainlens.com",
     "n" : "Palm",
     "s" : "PALM"
   }
