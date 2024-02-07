@@ -249,15 +249,20 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let id: Int
         if let txRequest = DirectTransactionRequest(from: inputLinkString) {
             id = txRequest.requestId
-            action = DappRequestProcessor.processDirectTransactionRequest(txRequest) { [weak self] in
-                self?.redirectBack(requestId: id, tryFarcaster: true)
+            action = DappRequestProcessor.processDirectTransactionRequest(txRequest) { [weak self] hash in
+                if let hash = hash, let chainId = Int(txRequest.chainId), let url = Networks.explorerURL(chainId: chainId, hash: hash) {
+                    UIApplication.shared.open(url)
+                    self?.closePopups(requestId: id)
+                } else {
+                    self?.redirectBack(requestId: id, tryFarcaster: true)
+                }
             }
         } else if let prefix = ["https://tokenary.io/extension?query=",
                             "tokenary://safari?request=",
                             "https://www.tokenary.io/extension?query="].first(where: { inputLinkString.hasPrefix($0) == true }),
                   let request = SafariRequest(query: String(inputLinkString.dropFirst(prefix.count))) {
             id = request.id
-            action = DappRequestProcessor.processSafariRequest(request) { [weak self] in
+            action = DappRequestProcessor.processSafariRequest(request) { [weak self] hash in
                 self?.redirectBack(requestId: id, tryFarcaster: false)
             }
         } else {
@@ -314,7 +319,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         } else {
             UIApplication.shared.openSafari()
         }
-        
+        closePopups(requestId: requestId)
+    }
+    
+    private func closePopups(requestId: Int) {
         let isFullscreen = view.bounds.width == UIScreen.main.bounds.width
         toDismissAfterResponse[requestId]?.dismiss(animated: !isFullscreen)
         toDismissAfterResponse.removeValue(forKey: requestId)

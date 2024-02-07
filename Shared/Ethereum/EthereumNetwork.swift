@@ -10,6 +10,7 @@ struct EthereumNetwork: Codable, Equatable, Hashable {
     let nodeURLString: String
     let isTestnet: Bool
     let mightShowPrice: Bool
+    let explorer: String
     
     var symbolIsETH: Bool { return symbol == "ETH" }
     var chainIdHexString: String { String.hex(chainId, withPrefix: true) }
