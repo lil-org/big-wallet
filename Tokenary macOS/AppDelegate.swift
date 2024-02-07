@@ -60,8 +60,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func processInput(url: String?) {
-        // TODO: process properly
-        if url?.contains("yo.finance") == true || url?.contains("farcap.vercel.app") == true {
+        guard let url = url else { return }
+        if let buyRequest = FrameBuyRequest(from: url) {
             let alert = Alert()
             alert.messageText = "buy degen"
             alert.alertStyle = .informational
@@ -70,13 +70,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             _ = alert.runModal()
             Window.activateBrowser(specific: .unknown)
             return
-        }
-        // TODO: process https://yo.finance/purchaseRedirect/0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed with parameters
-        // TODO: process only allowed addresses https://github.com/rockfridrich/farcap/blob/main/app/data.tsx
-        guard let url = url else { return }
-        let safariPrefix = "tokenary://safari?request="
-        if url.hasPrefix(safariPrefix), let request = SafariRequest(query: String(url.dropFirst(safariPrefix.count))) {
-            processExternalRequest(.safari(request))
+        } else {
+            let safariPrefix = "tokenary://safari?request="
+            if url.hasPrefix(safariPrefix), let request = SafariRequest(query: String(url.dropFirst(safariPrefix.count))) {
+                processExternalRequest(.safari(request))
+            }
         }
     }
     

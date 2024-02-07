@@ -243,8 +243,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let inputLinkString = launchURL?.absoluteString
         launchURL = nil
         
-        // TODO: process properly
-        if inputLinkString?.contains("yo.finance") == true || inputLinkString?.contains("farcap.vercel.app") == true {
+        guard let inputLinkString = inputLinkString else { return }
+        if let buyRequest = FrameBuyRequest(from: inputLinkString) {
             let alert = UIAlertController(title: "buy $degen", message: nil, preferredStyle: .alert)
             let okAction = UIAlertAction(title: "ok", style: .default) { _ in
                 if UIApplication.shared.canOpenURL(.farcasterScheme) {
@@ -270,8 +270,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             return
         }
         
-        guard let inputLinkString = inputLinkString,
-              let prefix = ["https://tokenary.io/extension?query=",
+        guard let prefix = ["https://tokenary.io/extension?query=",
                             "tokenary://safari?request=",
                             "https://www.tokenary.io/extension?query="].first(where: { inputLinkString.hasPrefix($0) == true }),
               let request = SafariRequest(query: String(inputLinkString.dropFirst(prefix.count))) else { return }
