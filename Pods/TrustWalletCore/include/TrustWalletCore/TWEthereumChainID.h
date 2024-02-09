@@ -61,6 +61,7 @@ enum TWEthereumChainID {
     TWEthereumChainIDArbitrumnova = 42170,
     TWEthereumChainIDArbitrum = 42161,
     TWEthereumChainIDSmartchain = 56,
+    TWEthereumChainIDZetaevm = 7000,
     TWEthereumChainIDNeon = 245022934,
     TWEthereumChainIDAurora = 1313161554,
 };

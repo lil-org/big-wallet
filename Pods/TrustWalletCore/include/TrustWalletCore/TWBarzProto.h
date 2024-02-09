@@ -9,3 +9,5 @@
 #include "TWData.h"
 
 typedef TWData *_Nonnull TW_Barz_Proto_ContractAddressInput;
+typedef TWData *_Nonnull TW_Barz_Proto_FacetCut;
+typedef TWData *_Nonnull TW_Barz_Proto_DiamondCutInput;

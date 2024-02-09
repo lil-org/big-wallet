@@ -54,6 +54,7 @@ public enum EthereumChainID: UInt32, CaseIterable {
     case arbitrumnova = 42170
     case arbitrum = 42161
     case smartchain = 56
+    case zetaevm = 7000
     case neon = 245022934
     case aurora = 1313161554
 }

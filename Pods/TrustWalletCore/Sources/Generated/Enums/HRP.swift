@@ -45,27 +45,29 @@ public enum HRP: UInt32, CaseIterable, CustomStringConvertible  {
     case osmosis = 33
     case terraV2 = 34
     case coreum = 35
-    case nativeCanto = 36
-    case sommelier = 37
-    case fetchAI = 38
-    case mars = 39
-    case umee = 40
-    case quasar = 41
-    case persistence = 42
-    case akash = 43
-    case noble = 44
-    case sei = 45
-    case stargaze = 46
-    case nativeEvmos = 47
-    case tia = 48
-    case juno = 49
-    case tbinance = 50
-    case stride = 51
-    case axelar = 52
-    case crescent = 53
-    case kujira = 54
-    case comdex = 55
-    case neutron = 56
+    case nativeZetaChain = 36
+    case nativeCanto = 37
+    case sommelier = 38
+    case fetchAI = 39
+    case mars = 40
+    case umee = 41
+    case quasar = 42
+    case persistence = 43
+    case akash = 44
+    case noble = 45
+    case sei = 46
+    case stargaze = 47
+    case nativeEvmos = 48
+    case tia = 49
+    case dydx = 50
+    case juno = 51
+    case tbinance = 52
+    case stride = 53
+    case axelar = 54
+    case crescent = 55
+    case kujira = 56
+    case comdex = 57
+    case neutron = 58
 
     public var description: String {
         switch self {
@@ -105,6 +107,7 @@ public enum HRP: UInt32, CaseIterable, CustomStringConvertible  {
         case .osmosis: return "osmo"
         case .terraV2: return "terra"
         case .coreum: return "core"
+        case .nativeZetaChain: return "zeta"
         case .nativeCanto: return "canto"
         case .sommelier: return "somm"
         case .fetchAI: return "fetch"
@@ -118,6 +121,7 @@ public enum HRP: UInt32, CaseIterable, CustomStringConvertible  {
         case .stargaze: return "stars"
         case .nativeEvmos: return "evmos"
         case .tia: return "celestia"
+        case .dydx: return "dydx"
         case .juno: return "juno"
         case .tbinance: return "tbnb"
         case .stride: return "stride"

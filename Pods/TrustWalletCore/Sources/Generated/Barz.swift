@@ -67,6 +67,36 @@ public struct Barz {
         return TWDataNSData(TWBarzGetFormattedSignature(signatureData, challengeData, authenticatorDataData, clientDataJSONString))
     }
 
+    /// Returns the final hash to be signed by Barz for signing messages & typed data
+    ///
+    /// - Parameter msgHash: Original msgHash
+    /// - Parameter barzAddress: The address of Barz wallet signing the message
+    /// - Parameter chainId: The chainId of the network the verification will happen
+    /// - Returns: The final hash to be signed
+    public static func getPrefixedMsgHash(msgHash: Data, barzAddress: String, chainId: UInt32) -> Data {
+        let msgHashData = TWDataCreateWithNSData(msgHash)
+        defer {
+            TWDataDelete(msgHashData)
+        }
+        let barzAddressString = TWStringCreateWithNSString(barzAddress)
+        defer {
+            TWStringDelete(barzAddressString)
+        }
+        return TWDataNSData(TWBarzGetPrefixedMsgHash(msgHashData, barzAddressString, chainId))
+    }
+
+    /// Returns the encoded diamondCut function call for Barz contract upgrades
+    ///
+    /// - Parameter input: The serialized data of DiamondCutInput
+    /// - Returns: The encoded bytes of diamondCut function call
+    public static func getDiamondCutCode(input: Data) -> Data {
+        let inputData = TWDataCreateWithNSData(input)
+        defer {
+            TWDataDelete(inputData)
+        }
+        return TWDataNSData(TWBarzGetDiamondCutCode(inputData))
+    }
+
 
     init() {
     }

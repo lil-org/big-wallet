@@ -14,5 +14,6 @@ typedef TWData *_Nonnull TW_Cosmos_Proto_Height;
 typedef TWData *_Nonnull TW_Cosmos_Proto_THORChainAsset;
 typedef TWData *_Nonnull TW_Cosmos_Proto_THORChainCoin;
 typedef TWData *_Nonnull TW_Cosmos_Proto_Message;
+typedef TWData *_Nonnull TW_Cosmos_Proto_SignerInfo;
 typedef TWData *_Nonnull TW_Cosmos_Proto_SigningInput;
 typedef TWData *_Nonnull TW_Cosmos_Proto_SigningOutput;

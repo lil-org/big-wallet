@@ -5,7 +5,7 @@ ios / macos / visionos
 
 connect like metamask in safari
 
-download on the [app store](https://tokenary.io/get)
+download on the [app store](https://lil.org/get)
 
 ## development
 
