@@ -5,7 +5,7 @@ import Foundation
 let semaphore = DispatchSemaphore(value: 0)
 
 let projectDir = FileManager.default.currentDirectoryPath
-let base = "\(projectDir)/tools/"
+let base = "\(projectDir)/Tools/"
 
 let bundledNetworksFileURL = URL(fileURLWithPath: base + "bundled/bundled-networks.json")
 let bundledNodesFileURL = URL(fileURLWithPath: base + "bundled/BundledNodes.swift")
@@ -52,7 +52,11 @@ fetchChains { chains in
     var updatedNodes = currentNodes
     
     newChains.forEach { chain in
-        updatedNetworks[chain.chainId] = BundledNetwork(name: chain.name, symbol: chain.nativeCurrency.symbol, isTest: true, okToShowPriceForSymbol: false)
+        updatedNetworks[chain.chainId] = BundledNetwork(name: chain.name,
+                                                        symbol: chain.nativeCurrency.symbol,
+                                                        isTest: true,
+                                                        okToShowPriceForSymbol: false,
+                                                        blockExplorer: chain.explorers!.first!.url)
         updatedNodes[String(chain.chainId)] = String(chain.rpc.first(where: { $0.hasPrefix(https) })!.dropFirst(https.count))
     }
     
