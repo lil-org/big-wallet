@@ -39,7 +39,7 @@ struct Strings {
     static let repeatPassword = "Repeat Password"
     static let enterPassword = "Enter Password"
     static let copyAddress = "Copy address"
-    static let viewOnBlockscan = "View on Blockscan"
+    static let viewOn = "View on"
     static let viewOnSolanaExplorer = "View on Solana explorer"
     static let testnets = "Testnets"
     static let backUpNewWallet = "Back up new wallet"

@@ -527,11 +527,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let copyAddressAction = UIAlertAction(title: Strings.copyAddress, style: .default) { _ in
             UIPasteboard.general.string = account.address
         }
-        
-        let explorerAction = UIAlertAction(title: account.coin.viewOnExplorerTitle, style: .default) { _ in
-            UIApplication.shared.open(account.coin.explorerURL(address: account.address))
-        }
-        
         let showKeyTitle = wallet.isMnemonic ? Strings.showSecretWords : Strings.showPrivateKey
         let showKeyAction = UIAlertAction(title: showKeyTitle, style: .default) { [weak self] _ in
             self?.didTapExportWallet(wallet)
@@ -548,8 +543,14 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
         
+        for (name, url) in account.coin.explorersFor(address: account.address) {
+            let explorerAction = UIAlertAction(title: name, style: .default) { _ in
+                UIApplication.shared.open(url)
+            }
+            actionSheet.addAction(explorerAction)
+        }
+        
         actionSheet.addAction(copyAddressAction)
-        actionSheet.addAction(explorerAction)
         actionSheet.addAction(showKeyAction)
         actionSheet.addAction(removeAction)
         actionSheet.addAction(cancelAction)

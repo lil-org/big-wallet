@@ -364,11 +364,10 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-    @objc private func didClickViewOnExplorer(_ sender: AnyObject) {
-        let row = tableView.deselectedRow
-        guard let account = accountForRow(row) else { return }
-        let address = account.address
-        NSWorkspace.shared.open(account.coin.explorerURL(address: address))
+    @objc private func didClickViewOnExplorer(_ sender: NSMenuItem) {
+        if let url = sender.representedObject as? URL {
+            NSWorkspace.shared.open(url)
+        }
     }
     
     @objc private func didClickCopyAddress(_ sender: AnyObject) {
@@ -579,7 +578,14 @@ extension AccountsListViewController: TableViewMenuSource {
         menu.addItem(nameItem)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: Strings.copyAddress, action: #selector(didClickCopyAddress(_:)), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: account.coin.viewOnExplorerTitle, action: #selector(didClickViewOnExplorer(_:)), keyEquivalent: ""))
+        menu.addItem(.separator())
+        
+        for (name, url) in account.coin.explorersFor(address: account.address) {
+            let menuItem = NSMenuItem(title: name, action: #selector(didClickViewOnExplorer(_:)), keyEquivalent: "")
+            menuItem.representedObject = url
+            menu.addItem(menuItem)
+        }
+        
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: wallet.isMnemonic ? Strings.showSecretWords : Strings.showPrivateKey, action: #selector(didClickShowKey(_:)), keyEquivalent: ""))
         
