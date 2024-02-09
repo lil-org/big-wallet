@@ -116,6 +116,96 @@ extension TW_Cosmos_Proto_SigningMode: CaseIterable {
 
 #endif  // swift(>=4.2)
 
+public enum TW_Cosmos_Proto_TxHasher: SwiftProtobuf.Enum {
+  public typealias RawValue = Int
+
+  /// For Cosmos chain, `Sha256` is used by default.
+  case useDefault // = 0
+  case sha256 // = 1
+  case keccak256 // = 2
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .useDefault
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .useDefault
+    case 1: self = .sha256
+    case 2: self = .keccak256
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .useDefault: return 0
+    case .sha256: return 1
+    case .keccak256: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+}
+
+#if swift(>=4.2)
+
+extension TW_Cosmos_Proto_TxHasher: CaseIterable {
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static var allCases: [TW_Cosmos_Proto_TxHasher] = [
+    .useDefault,
+    .sha256,
+    .keccak256,
+  ]
+}
+
+#endif  // swift(>=4.2)
+
+public enum TW_Cosmos_Proto_SignerPublicKeyType: SwiftProtobuf.Enum {
+  public typealias RawValue = Int
+
+  /// Default public key type.
+  case secp256K1 // = 0
+
+  /// Mostly used in Cosmos chains with EVM support.
+  case secp256K1Extended // = 1
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .secp256K1
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .secp256K1
+    case 1: self = .secp256K1Extended
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .secp256K1: return 0
+    case .secp256K1Extended: return 1
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+}
+
+#if swift(>=4.2)
+
+extension TW_Cosmos_Proto_SignerPublicKeyType: CaseIterable {
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static var allCases: [TW_Cosmos_Proto_SignerPublicKeyType] = [
+    .secp256K1,
+    .secp256K1Extended,
+  ]
+}
+
+#endif  // swift(>=4.2)
+
 /// A denomination and an amount
 public struct TW_Cosmos_Proto_Amount {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -1249,6 +1339,25 @@ extension TW_Cosmos_Proto_Message.VoteOption: CaseIterable {
 
 #endif  // swift(>=4.2)
 
+/// Custom Signer info required to sign a transaction and generate a broadcast JSON message.
+public struct TW_Cosmos_Proto_SignerInfo {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Public key type used to sign a transaction.
+  /// It can be different from the value from `registry.json`.
+  public var publicKeyType: TW_Cosmos_Proto_SignerPublicKeyType = .secp256K1
+
+  public var jsonType: String = String()
+
+  public var protobufType: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 /// Input data necessary to create a signed transaction.
 public struct TW_Cosmos_Proto_SigningInput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -1291,11 +1400,27 @@ public struct TW_Cosmos_Proto_SigningInput {
 
   public var publicKey: Data = Data()
 
+  public var txHasher: TW_Cosmos_Proto_TxHasher = .useDefault
+
+  /// Optional. If set, use a different Signer info when signing the transaction.
+  public var signerInfo: TW_Cosmos_Proto_SignerInfo {
+    get {return _signerInfo ?? TW_Cosmos_Proto_SignerInfo()}
+    set {_signerInfo = newValue}
+  }
+  /// Returns true if `signerInfo` has been explicitly set.
+  public var hasSignerInfo: Bool {return self._signerInfo != nil}
+  /// Clears the value of `signerInfo`. Subsequent reads from it will return its default value.
+  public mutating func clearSignerInfo() {self._signerInfo = nil}
+
+  /// Optional timeout_height
+  public var timeoutHeight: UInt64 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _fee: TW_Cosmos_Proto_Fee? = nil
+  fileprivate var _signerInfo: TW_Cosmos_Proto_SignerInfo? = nil
 }
 
 /// Result containing the signed and encoded transaction.
@@ -1343,6 +1468,21 @@ extension TW_Cosmos_Proto_SigningMode: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     0: .same(proto: "JSON"),
     1: .same(proto: "Protobuf"),
+  ]
+}
+
+extension TW_Cosmos_Proto_TxHasher: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "UseDefault"),
+    1: .same(proto: "Sha256"),
+    2: .same(proto: "Keccak256"),
+  ]
+}
+
+extension TW_Cosmos_Proto_SignerPublicKeyType: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "Secp256k1"),
+    1: .same(proto: "Secp256k1Extended"),
   ]
 }
 
@@ -3235,6 +3375,50 @@ extension TW_Cosmos_Proto_Message.MsgStrideLiquidStakingRedeem: SwiftProtobuf.Me
   }
 }
 
+extension TW_Cosmos_Proto_SignerInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SignerInfo"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "public_key_type"),
+    2: .standard(proto: "json_type"),
+    3: .standard(proto: "protobuf_type"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.publicKeyType) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.jsonType) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.protobufType) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.publicKeyType != .secp256K1 {
+      try visitor.visitSingularEnumField(value: self.publicKeyType, fieldNumber: 1)
+    }
+    if !self.jsonType.isEmpty {
+      try visitor.visitSingularStringField(value: self.jsonType, fieldNumber: 2)
+    }
+    if !self.protobufType.isEmpty {
+      try visitor.visitSingularStringField(value: self.protobufType, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cosmos_Proto_SignerInfo, rhs: TW_Cosmos_Proto_SignerInfo) -> Bool {
+    if lhs.publicKeyType != rhs.publicKeyType {return false}
+    if lhs.jsonType != rhs.jsonType {return false}
+    if lhs.protobufType != rhs.protobufType {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension TW_Cosmos_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SigningInput"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -3248,6 +3432,9 @@ extension TW_Cosmos_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Me
     8: .same(proto: "messages"),
     9: .same(proto: "mode"),
     10: .standard(proto: "public_key"),
+    11: .standard(proto: "tx_hasher"),
+    12: .standard(proto: "signer_info"),
+    13: .standard(proto: "timeout_height"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -3266,6 +3453,9 @@ extension TW_Cosmos_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Me
       case 8: try { try decoder.decodeRepeatedMessageField(value: &self.messages) }()
       case 9: try { try decoder.decodeSingularEnumField(value: &self.mode) }()
       case 10: try { try decoder.decodeSingularBytesField(value: &self.publicKey) }()
+      case 11: try { try decoder.decodeSingularEnumField(value: &self.txHasher) }()
+      case 12: try { try decoder.decodeSingularMessageField(value: &self._signerInfo) }()
+      case 13: try { try decoder.decodeSingularUInt64Field(value: &self.timeoutHeight) }()
       default: break
       }
     }
@@ -3306,6 +3496,15 @@ extension TW_Cosmos_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Me
     if !self.publicKey.isEmpty {
       try visitor.visitSingularBytesField(value: self.publicKey, fieldNumber: 10)
     }
+    if self.txHasher != .useDefault {
+      try visitor.visitSingularEnumField(value: self.txHasher, fieldNumber: 11)
+    }
+    try { if let v = self._signerInfo {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+    } }()
+    if self.timeoutHeight != 0 {
+      try visitor.visitSingularUInt64Field(value: self.timeoutHeight, fieldNumber: 13)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -3320,6 +3519,9 @@ extension TW_Cosmos_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Me
     if lhs.messages != rhs.messages {return false}
     if lhs.mode != rhs.mode {return false}
     if lhs.publicKey != rhs.publicKey {return false}
+    if lhs.txHasher != rhs.txHasher {return false}
+    if lhs._signerInfo != rhs._signerInfo {return false}
+    if lhs.timeoutHeight != rhs.timeoutHeight {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

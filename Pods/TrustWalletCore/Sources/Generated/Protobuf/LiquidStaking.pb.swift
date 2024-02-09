@@ -442,39 +442,42 @@ public struct TW_LiquidStaking_Proto_Output {
 
   /// Status of the liquid staking operation
   public var status: TW_LiquidStaking_Proto_Status {
-    get {return _status ?? TW_LiquidStaking_Proto_Status()}
-    set {_status = newValue}
+    get {return _storage._status ?? TW_LiquidStaking_Proto_Status()}
+    set {_uniqueStorage()._status = newValue}
   }
   /// Returns true if `status` has been explicitly set.
-  public var hasStatus: Bool {return self._status != nil}
+  public var hasStatus: Bool {return _storage._status != nil}
   /// Clears the value of `status`. Subsequent reads from it will return its default value.
-  public mutating func clearStatus() {self._status = nil}
+  public mutating func clearStatus() {_uniqueStorage()._status = nil}
 
   /// Unsigned transaction input - needs to be completed and signed
-  public var signingInputOneof: TW_LiquidStaking_Proto_Output.OneOf_SigningInputOneof? = nil
+  public var signingInputOneof: OneOf_SigningInputOneof? {
+    get {return _storage._signingInputOneof}
+    set {_uniqueStorage()._signingInputOneof = newValue}
+  }
 
   public var ethereum: TW_Ethereum_Proto_SigningInput {
     get {
-      if case .ethereum(let v)? = signingInputOneof {return v}
+      if case .ethereum(let v)? = _storage._signingInputOneof {return v}
       return TW_Ethereum_Proto_SigningInput()
     }
-    set {signingInputOneof = .ethereum(newValue)}
+    set {_uniqueStorage()._signingInputOneof = .ethereum(newValue)}
   }
 
   public var cosmos: TW_Cosmos_Proto_SigningInput {
     get {
-      if case .cosmos(let v)? = signingInputOneof {return v}
+      if case .cosmos(let v)? = _storage._signingInputOneof {return v}
       return TW_Cosmos_Proto_SigningInput()
     }
-    set {signingInputOneof = .cosmos(newValue)}
+    set {_uniqueStorage()._signingInputOneof = .cosmos(newValue)}
   }
 
   public var aptos: TW_Aptos_Proto_SigningInput {
     get {
-      if case .aptos(let v)? = signingInputOneof {return v}
+      if case .aptos(let v)? = _storage._signingInputOneof {return v}
       return TW_Aptos_Proto_SigningInput()
     }
-    set {signingInputOneof = .aptos(newValue)}
+    set {_uniqueStorage()._signingInputOneof = .aptos(newValue)}
   }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -511,7 +514,7 @@ public struct TW_LiquidStaking_Proto_Output {
 
   public init() {}
 
-  fileprivate var _status: TW_LiquidStaking_Proto_Status? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -905,86 +908,120 @@ extension TW_LiquidStaking_Proto_Output: SwiftProtobuf.Message, SwiftProtobuf._M
     4: .same(proto: "aptos"),
   ]
 
+  fileprivate class _StorageClass {
+    var _status: TW_LiquidStaking_Proto_Status? = nil
+    var _signingInputOneof: TW_LiquidStaking_Proto_Output.OneOf_SigningInputOneof?
+
+    static let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _status = source._status
+      _signingInputOneof = source._signingInputOneof
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._status) }()
-      case 2: try {
-        var v: TW_Ethereum_Proto_SigningInput?
-        var hadOneofValue = false
-        if let current = self.signingInputOneof {
-          hadOneofValue = true
-          if case .ethereum(let m) = current {v = m}
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._status) }()
+        case 2: try {
+          var v: TW_Ethereum_Proto_SigningInput?
+          var hadOneofValue = false
+          if let current = _storage._signingInputOneof {
+            hadOneofValue = true
+            if case .ethereum(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._signingInputOneof = .ethereum(v)
+          }
+        }()
+        case 3: try {
+          var v: TW_Cosmos_Proto_SigningInput?
+          var hadOneofValue = false
+          if let current = _storage._signingInputOneof {
+            hadOneofValue = true
+            if case .cosmos(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._signingInputOneof = .cosmos(v)
+          }
+        }()
+        case 4: try {
+          var v: TW_Aptos_Proto_SigningInput?
+          var hadOneofValue = false
+          if let current = _storage._signingInputOneof {
+            hadOneofValue = true
+            if case .aptos(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._signingInputOneof = .aptos(v)
+          }
+        }()
+        default: break
         }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.signingInputOneof = .ethereum(v)
-        }
-      }()
-      case 3: try {
-        var v: TW_Cosmos_Proto_SigningInput?
-        var hadOneofValue = false
-        if let current = self.signingInputOneof {
-          hadOneofValue = true
-          if case .cosmos(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.signingInputOneof = .cosmos(v)
-        }
-      }()
-      case 4: try {
-        var v: TW_Aptos_Proto_SigningInput?
-        var hadOneofValue = false
-        if let current = self.signingInputOneof {
-          hadOneofValue = true
-          if case .aptos(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.signingInputOneof = .aptos(v)
-        }
-      }()
-      default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._status {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    switch self.signingInputOneof {
-    case .ethereum?: try {
-      guard case .ethereum(let v)? = self.signingInputOneof else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-    }()
-    case .cosmos?: try {
-      guard case .cosmos(let v)? = self.signingInputOneof else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-    }()
-    case .aptos?: try {
-      guard case .aptos(let v)? = self.signingInputOneof else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
-    }()
-    case nil: break
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._status {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      switch _storage._signingInputOneof {
+      case .ethereum?: try {
+        guard case .ethereum(let v)? = _storage._signingInputOneof else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+      }()
+      case .cosmos?: try {
+        guard case .cosmos(let v)? = _storage._signingInputOneof else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+      }()
+      case .aptos?: try {
+        guard case .aptos(let v)? = _storage._signingInputOneof else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+      }()
+      case nil: break
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_LiquidStaking_Proto_Output, rhs: TW_LiquidStaking_Proto_Output) -> Bool {
-    if lhs._status != rhs._status {return false}
-    if lhs.signingInputOneof != rhs.signingInputOneof {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._status != rhs_storage._status {return false}
+        if _storage._signingInputOneof != rhs_storage._signingInputOneof {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

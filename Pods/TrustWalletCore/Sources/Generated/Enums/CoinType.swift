@@ -159,4 +159,7 @@ public enum CoinType: UInt32, CaseIterable {
     case internetComputer = 223
     case tia = 21000118
     case mantaPacific = 169
+    case nativeZetaChain = 10007000
+    case zetaEVM = 20007000
+    case dydx = 22000118
 }

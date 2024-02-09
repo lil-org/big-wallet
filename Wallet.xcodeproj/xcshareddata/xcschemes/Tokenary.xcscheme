@@ -14,10 +14,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "2C5FF96E26C84F7B00B32ACC"
-               BuildableName = "Tokenary iOS.app"
-               BlueprintName = "Tokenary iOS"
-               ReferencedContainer = "container:Tokenary.xcodeproj">
+               BlueprintIdentifier = "2C19953B2674C4B900A8E370"
+               BuildableName = "Wallet macOS.app"
+               BlueprintName = "Wallet macOS"
+               ReferencedContainer = "container:Wallet.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -26,10 +26,11 @@
       buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-      shouldUseLaunchSchemeArgsEnv = "YES">
+      shouldUseLaunchSchemeArgsEnv = "YES"
+      systemAttachmentLifetime = "keepNever">
       <TestPlans>
          <TestPlanReference
-            reference = "container:Tests iOS/Tokenary iOS.xctestplan"
+            reference = "container:Tests macOS/Tokenary.xctestplan"
             default = "YES">
          </TestPlanReference>
       </TestPlans>
@@ -48,10 +49,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "2C5FF96E26C84F7B00B32ACC"
-            BuildableName = "Tokenary iOS.app"
-            BlueprintName = "Tokenary iOS"
-            ReferencedContainer = "container:Tokenary.xcodeproj">
+            BlueprintIdentifier = "2C19953B2674C4B900A8E370"
+            BuildableName = "Wallet macOS.app"
+            BlueprintName = "Wallet macOS"
+            ReferencedContainer = "container:Wallet.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -65,10 +66,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "2C5FF96E26C84F7B00B32ACC"
-            BuildableName = "Tokenary iOS.app"
-            BlueprintName = "Tokenary iOS"
-            ReferencedContainer = "container:Tokenary.xcodeproj">
+            BlueprintIdentifier = "2C19953B2674C4B900A8E370"
+            BuildableName = "Wallet macOS.app"
+            BlueprintName = "Wallet macOS"
+            ReferencedContainer = "container:Wallet.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

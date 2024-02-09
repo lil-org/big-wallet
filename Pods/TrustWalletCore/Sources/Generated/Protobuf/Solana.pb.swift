@@ -496,6 +496,10 @@ public struct TW_Solana_Proto_SigningOutput {
   /// The unsigned transaction
   public var unsignedTx: String = String()
 
+  /// The encoded message. Can be used to estimate a transaction fee required to execute the message.
+  /// Please note that this is set only on `SolanaTransaction.updateBlockhashAndSign`, but no on `AnySigner.sign`.
+  public var messageEncoded: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1397,6 +1401,7 @@ extension TW_Solana_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._M
     2: .same(proto: "error"),
     3: .standard(proto: "error_message"),
     4: .standard(proto: "unsigned_tx"),
+    5: .standard(proto: "message_encoded"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1409,6 +1414,7 @@ extension TW_Solana_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._M
       case 2: try { try decoder.decodeSingularEnumField(value: &self.error) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.unsignedTx) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.messageEncoded) }()
       default: break
       }
     }
@@ -1427,6 +1433,9 @@ extension TW_Solana_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._M
     if !self.unsignedTx.isEmpty {
       try visitor.visitSingularStringField(value: self.unsignedTx, fieldNumber: 4)
     }
+    if !self.messageEncoded.isEmpty {
+      try visitor.visitSingularStringField(value: self.messageEncoded, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1435,6 +1444,7 @@ extension TW_Solana_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._M
     if lhs.error != rhs.error {return false}
     if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unsignedTx != rhs.unsignedTx {return false}
+    if lhs.messageEncoded != rhs.messageEncoded {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

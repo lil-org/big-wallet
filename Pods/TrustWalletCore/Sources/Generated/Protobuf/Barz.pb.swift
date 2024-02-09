@@ -24,6 +24,51 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+/// FacetCutAction represents the action to be performed for a FacetCut
+public enum TW_Barz_Proto_FacetCutAction: SwiftProtobuf.Enum {
+  public typealias RawValue = Int
+  case add // = 0
+  case replace // = 1
+  case remove // = 2
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .add
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .add
+    case 1: self = .replace
+    case 2: self = .remove
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .add: return 0
+    case .replace: return 1
+    case .remove: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+}
+
+#if swift(>=4.2)
+
+extension TW_Barz_Proto_FacetCutAction: CaseIterable {
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static var allCases: [TW_Barz_Proto_FacetCutAction] = [
+    .add,
+    .replace,
+    .remove,
+  ]
+}
+
+#endif  // swift(>=4.2)
+
 /// Input parameters for calculating a counterfactual address for ERC-4337 based smart contract wallet
 public struct TW_Barz_Proto_ContractAddressInput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -59,9 +104,57 @@ public struct TW_Barz_Proto_ContractAddressInput {
   public init() {}
 }
 
+/// FacetCut represents a single operation to be performed on a facet
+public struct TW_Barz_Proto_FacetCut {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// The address of the facet
+  public var facetAddress: String = String()
+
+  /// The action to perform
+  public var action: TW_Barz_Proto_FacetCutAction = .add
+
+  /// List of function selectors, each is bytes4
+  public var functionSelectors: [Data] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// DiamondCutInput represents the input parameters for a diamondCut operation
+public struct TW_Barz_Proto_DiamondCutInput {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// List of facet cuts to apply
+  public var facetCuts: [TW_Barz_Proto_FacetCut] = []
+
+  /// Address to call with `init` data after applying cuts
+  public var initAddress: String = String()
+
+  /// Data to pass to `init` function call
+  public var initData: Data = Data()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate let _protobuf_package = "TW.Barz.Proto"
+
+extension TW_Barz_Proto_FacetCutAction: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "ADD"),
+    1: .same(proto: "REPLACE"),
+    2: .same(proto: "REMOVE"),
+  ]
+}
 
 extension TW_Barz_Proto_ContractAddressInput: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ContractAddressInput"
@@ -138,6 +231,94 @@ extension TW_Barz_Proto_ContractAddressInput: SwiftProtobuf.Message, SwiftProtob
     if lhs.bytecode != rhs.bytecode {return false}
     if lhs.publicKey != rhs.publicKey {return false}
     if lhs.salt != rhs.salt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Barz_Proto_FacetCut: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".FacetCut"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "facet_address"),
+    2: .same(proto: "action"),
+    3: .standard(proto: "function_selectors"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.facetAddress) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.action) }()
+      case 3: try { try decoder.decodeRepeatedBytesField(value: &self.functionSelectors) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.facetAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.facetAddress, fieldNumber: 1)
+    }
+    if self.action != .add {
+      try visitor.visitSingularEnumField(value: self.action, fieldNumber: 2)
+    }
+    if !self.functionSelectors.isEmpty {
+      try visitor.visitRepeatedBytesField(value: self.functionSelectors, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Barz_Proto_FacetCut, rhs: TW_Barz_Proto_FacetCut) -> Bool {
+    if lhs.facetAddress != rhs.facetAddress {return false}
+    if lhs.action != rhs.action {return false}
+    if lhs.functionSelectors != rhs.functionSelectors {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Barz_Proto_DiamondCutInput: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DiamondCutInput"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "facet_cuts"),
+    2: .standard(proto: "init_address"),
+    3: .standard(proto: "init_data"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.facetCuts) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.initAddress) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.initData) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.facetCuts.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.facetCuts, fieldNumber: 1)
+    }
+    if !self.initAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.initAddress, fieldNumber: 2)
+    }
+    if !self.initData.isEmpty {
+      try visitor.visitSingularBytesField(value: self.initData, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Barz_Proto_DiamondCutInput, rhs: TW_Barz_Proto_DiamondCutInput) -> Bool {
+    if lhs.facetCuts != rhs.facetCuts {return false}
+    if lhs.initAddress != rhs.initAddress {return false}
+    if lhs.initData != rhs.initData {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

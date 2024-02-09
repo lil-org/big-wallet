@@ -107,6 +107,10 @@ public enum TW_Utxo_Proto_InputSelector: SwiftProtobuf.Enum {
   /// outputs of the transaction.
   case selectInOrder // = 1
 
+  /// Automatically select enough inputs in an descending order to cover the
+  /// outputs of the transaction.
+  case selectDescending // = 2
+
   /// Use all the inputs provided in the given order.
   case useAll // = 10
   case UNRECOGNIZED(Int)
@@ -119,6 +123,7 @@ public enum TW_Utxo_Proto_InputSelector: SwiftProtobuf.Enum {
     switch rawValue {
     case 0: self = .selectAscending
     case 1: self = .selectInOrder
+    case 2: self = .selectDescending
     case 10: self = .useAll
     default: self = .UNRECOGNIZED(rawValue)
     }
@@ -128,6 +133,7 @@ public enum TW_Utxo_Proto_InputSelector: SwiftProtobuf.Enum {
     switch self {
     case .selectAscending: return 0
     case .selectInOrder: return 1
+    case .selectDescending: return 2
     case .useAll: return 10
     case .UNRECOGNIZED(let i): return i
     }
@@ -142,6 +148,7 @@ extension TW_Utxo_Proto_InputSelector: CaseIterable {
   public static var allCases: [TW_Utxo_Proto_InputSelector] = [
     .selectAscending,
     .selectInOrder,
+    .selectDescending,
     .useAll,
   ]
 }
@@ -600,6 +607,7 @@ extension TW_Utxo_Proto_InputSelector: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     0: .same(proto: "SelectAscending"),
     1: .same(proto: "SelectInOrder"),
+    2: .same(proto: "SelectDescending"),
     10: .same(proto: "UseAll"),
   ]
 }

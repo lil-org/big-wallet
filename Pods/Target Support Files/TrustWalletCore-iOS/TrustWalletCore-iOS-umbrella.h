@@ -104,6 +104,7 @@
 #import "TWSegwitAddress.h"
 #import "TWSolanaAddress.h"
 #import "TWSolanaProto.h"
+#import "TWSolanaTransaction.h"
 #import "TWSS58AddressType.h"
 #import "TWStarkExMessageSigner.h"
 #import "TWStarkWare.h"
