@@ -2,9 +2,9 @@
 
 import XCTest
 #if os(iOS)
-@testable import Tokenary_iOS
+@testable import Wallet_iOS
 #elseif os(macOS)
-@testable import Tokenary
+@testable import Wallet_macOS
 #endif
 
 final class TransactionInspectorTests: XCTestCase {
