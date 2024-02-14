@@ -99,6 +99,11 @@
 		2C773F63274523DC007B04E7 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
 		2C78F8282683BDCC00C10670 /* Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C78F8272683BDCC00C10670 /* Alert.swift */; };
 		2C797E7E267BB88800F2CE2D /* WelcomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */; };
+		2C7A8CDF2B7CD98A00683E15 /* UniformTypeIdentifiers.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2C7A8CDE2B7CD98A00683E15 /* UniformTypeIdentifiers.framework */; };
+		2C7A8CE22B7CD98A00683E15 /* Media.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C7A8CE12B7CD98A00683E15 /* Media.xcassets */; };
+		2C7A8CE42B7CD98A00683E15 /* ActionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A8CE32B7CD98A00683E15 /* ActionViewController.swift */; };
+		2C7A8CE72B7CD98A00683E15 /* MainInterface.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C7A8CE52B7CD98A00683E15 /* MainInterface.storyboard */; };
+		2C7A8CEB2B7CD98A00683E15 /* Mint iOS.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2C7A8CDD2B7CD98A00683E15 /* Mint iOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2C7A94C12B73B5B60030B684 /* DirectTransactionRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A94C02B73B5B60030B684 /* DirectTransactionRequest.swift */; };
 		2C7A94C22B73B5B60030B684 /* DirectTransactionRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A94C02B73B5B60030B684 /* DirectTransactionRequest.swift */; };
 		2C86125A2B76BDF200B22794 /* TransactionInspectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03EB892B069BFD00EF61F5 /* TransactionInspectorTests.swift */; };
@@ -249,6 +254,13 @@
 			remoteGlobalIDString = 2C09CB9E273979C1009AD39B;
 			remoteInfo = Safari;
 		};
+		2C7A8CE92B7CD98A00683E15 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2C1995342674C4B900A8E370 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2C7A8CDC2B7CD98A00683E15;
+			remoteInfo = "Mint iOS";
+		};
 		2C8612482B76BDBF00B22794 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 2C1995342674C4B900A8E370 /* Project object */;
@@ -291,6 +303,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				2CCEB84527594E2A00768473 /* Safari iOS.appex in Embed Foundation Extensions */,
+				2C7A8CEB2B7CD98A00683E15 /* Mint iOS.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -378,6 +391,12 @@
 		2C773F61274523DC007B04E7 /* ResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseToExtension.swift; sourceTree = "<group>"; };
 		2C78F8272683BDCC00C10670 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alert.swift; sourceTree = "<group>"; };
 		2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeViewController.swift; sourceTree = "<group>"; };
+		2C7A8CDD2B7CD98A00683E15 /* Mint iOS.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Mint iOS.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		2C7A8CDE2B7CD98A00683E15 /* UniformTypeIdentifiers.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UniformTypeIdentifiers.framework; path = System/Library/Frameworks/UniformTypeIdentifiers.framework; sourceTree = SDKROOT; };
+		2C7A8CE12B7CD98A00683E15 /* Media.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Media.xcassets; sourceTree = "<group>"; };
+		2C7A8CE32B7CD98A00683E15 /* ActionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionViewController.swift; sourceTree = "<group>"; };
+		2C7A8CE62B7CD98A00683E15 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/MainInterface.storyboard; sourceTree = "<group>"; };
+		2C7A8CE82B7CD98A00683E15 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C7A94C02B73B5B60030B684 /* DirectTransactionRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectTransactionRequest.swift; sourceTree = "<group>"; };
 		2C8612442B76BDBF00B22794 /* Tests macOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Tests macOS.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C8612512B76BDDC00B22794 /* Tests iOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Tests iOS.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -491,6 +510,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2C7A8CDA2B7CD98A00683E15 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2C7A8CDF2B7CD98A00683E15 /* UniformTypeIdentifiers.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2C8612412B76BDBF00B22794 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -587,6 +614,7 @@
 				2C03EB742B069B5A00EF61F5 /* Tests iOS */,
 				2C03EB812B069BC900EF61F5 /* Tests macOS */,
 				2CBB9FA32AF7B5970047B0CD /* ci_scripts */,
+				2C7A8CE02B7CD98A00683E15 /* Mint iOS */,
 				2C19953D2674C4B900A8E370 /* Products */,
 				AA97AE0C21DC8732F06C98F1 /* Pods */,
 				D66A976372772850C3C45413 /* Frameworks */,
@@ -603,6 +631,7 @@
 				2CED86A22AF00BC9006F9E26 /* Tools */,
 				2C8612442B76BDBF00B22794 /* Tests macOS.xctest */,
 				2C8612512B76BDDC00B22794 /* Tests iOS.xctest */,
+				2C7A8CDD2B7CD98A00683E15 /* Mint iOS.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -735,6 +764,17 @@
 				2C96D38E2762317300687301 /* AccountTableViewCell.xib */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		2C7A8CE02B7CD98A00683E15 /* Mint iOS */ = {
+			isa = PBXGroup;
+			children = (
+				2C7A8CE12B7CD98A00683E15 /* Media.xcassets */,
+				2C7A8CE32B7CD98A00683E15 /* ActionViewController.swift */,
+				2C7A8CE52B7CD98A00683E15 /* MainInterface.storyboard */,
+				2C7A8CE82B7CD98A00683E15 /* Info.plist */,
+			);
+			path = "Mint iOS";
 			sourceTree = "<group>";
 		};
 		2C8944D02AEC34F2006A711F /* Utilities */ = {
@@ -1051,6 +1091,7 @@
 			children = (
 				8F09E09B7F90D2B239B8F5A8 /* Pods_Wallet_iOS.framework */,
 				1BE40268920D003B911361DA /* Pods_Wallet_macOS.framework */,
+				2C7A8CDE2B7CD98A00683E15 /* UniformTypeIdentifiers.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -1116,11 +1157,29 @@
 			);
 			dependencies = (
 				2CCEB84427594E2A00768473 /* PBXTargetDependency */,
+				2C7A8CEA2B7CD98A00683E15 /* PBXTargetDependency */,
 			);
 			name = "Wallet iOS";
 			productName = "Encrypted Ink iOS";
 			productReference = 2C5FF96F26C84F7B00B32ACC /* Wallet iOS.app */;
 			productType = "com.apple.product-type.application";
+		};
+		2C7A8CDC2B7CD98A00683E15 /* Mint iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2C7A8CEE2B7CD98A00683E15 /* Build configuration list for PBXNativeTarget "Mint iOS" */;
+			buildPhases = (
+				2C7A8CD92B7CD98A00683E15 /* Sources */,
+				2C7A8CDA2B7CD98A00683E15 /* Frameworks */,
+				2C7A8CDB2B7CD98A00683E15 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Mint iOS";
+			productName = "Mint iOS";
+			productReference = 2C7A8CDD2B7CD98A00683E15 /* Mint iOS.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		2C8612432B76BDBF00B22794 /* Tests macOS */ = {
 			isa = PBXNativeTarget;
@@ -1212,6 +1271,9 @@
 					2C5FF96E26C84F7B00B32ACC = {
 						CreatedOnToolsVersion = 12.5.1;
 					};
+					2C7A8CDC2B7CD98A00683E15 = {
+						CreatedOnToolsVersion = 15.2;
+					};
 					2C8612432B76BDBF00B22794 = {
 						CreatedOnToolsVersion = 15.2;
 						TestTargetID = 2C19953B2674C4B900A8E370;
@@ -1248,6 +1310,7 @@
 				2CED86A12AF00BC9006F9E26 /* Tools */,
 				2C8612432B76BDBF00B22794 /* Tests macOS */,
 				2C8612502B76BDDC00B22794 /* Tests iOS */,
+				2C7A8CDC2B7CD98A00683E15 /* Mint iOS */,
 			);
 		};
 /* End PBXProject section */
@@ -1295,6 +1358,15 @@
 				2C5FF97B26C84F7C00B32ACC /* Assets.xcassets in Resources */,
 				2C5FF97926C84F7B00B32ACC /* Main.storyboard in Resources */,
 				2C6F6D5D2827434800D6E8FB /* PreviewAccountTableViewCell.xib in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2C7A8CDB2B7CD98A00683E15 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2C7A8CE22B7CD98A00683E15 /* Media.xcassets in Resources */,
+				2C7A8CE72B7CD98A00683E15 /* MainInterface.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1747,6 +1819,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2C7A8CD92B7CD98A00683E15 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2C7A8CE42B7CD98A00683E15 /* ActionViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2C8612402B76BDBF00B22794 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -1809,6 +1889,11 @@
 			target = 2C09CB9E273979C1009AD39B /* Safari macOS */;
 			targetProxy = 2C09CBB6273979C1009AD39B /* PBXContainerItemProxy */;
 		};
+		2C7A8CEA2B7CD98A00683E15 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2C7A8CDC2B7CD98A00683E15 /* Mint iOS */;
+			targetProxy = 2C7A8CE92B7CD98A00683E15 /* PBXContainerItemProxy */;
+		};
 		2C8612492B76BDBF00B22794 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 2C19953B2674C4B900A8E370 /* Wallet macOS */;
@@ -1849,6 +1934,14 @@
 				2C5FF97D26C84F7C00B32ACC /* Base */,
 			);
 			name = LaunchScreen.storyboard;
+			sourceTree = "<group>";
+		};
+		2C7A8CE52B7CD98A00683E15 /* MainInterface.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				2C7A8CE62B7CD98A00683E15 /* Base */,
+			);
+			name = MainInterface.storyboard;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */
@@ -2168,6 +2261,78 @@
 			};
 			name = Release;
 		};
+		2C7A8CEC2B7CD98A00683E15 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Mint iOS/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Mint iOS";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "mac.tokenary.io.Mint-iOS";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		2C7A8CED2B7CD98A00683E15 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Mint iOS/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Mint iOS";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "mac.tokenary.io.Mint-iOS";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		2C86124B2B76BDBF00B22794 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -2427,6 +2592,15 @@
 			buildConfigurations = (
 				2C5FF98126C84F7C00B32ACC /* Debug */,
 				2C5FF98226C84F7C00B32ACC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2C7A8CEE2B7CD98A00683E15 /* Build configuration list for PBXNativeTarget "Mint iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2C7A8CEC2B7CD98A00683E15 /* Debug */,
+				2C7A8CED2B7CD98A00683E15 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
