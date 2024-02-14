@@ -100,7 +100,6 @@
 		2C78F8282683BDCC00C10670 /* Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C78F8272683BDCC00C10670 /* Alert.swift */; };
 		2C797E7E267BB88800F2CE2D /* WelcomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */; };
 		2C7A8CDF2B7CD98A00683E15 /* UniformTypeIdentifiers.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2C7A8CDE2B7CD98A00683E15 /* UniformTypeIdentifiers.framework */; };
-		2C7A8CE22B7CD98A00683E15 /* Media.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C7A8CE12B7CD98A00683E15 /* Media.xcassets */; };
 		2C7A8CE42B7CD98A00683E15 /* ActionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A8CE32B7CD98A00683E15 /* ActionViewController.swift */; };
 		2C7A8CE72B7CD98A00683E15 /* MainInterface.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C7A8CE52B7CD98A00683E15 /* MainInterface.storyboard */; };
 		2C7A8CEB2B7CD98A00683E15 /* Mint iOS.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2C7A8CDD2B7CD98A00683E15 /* Mint iOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -393,7 +392,6 @@
 		2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeViewController.swift; sourceTree = "<group>"; };
 		2C7A8CDD2B7CD98A00683E15 /* Mint iOS.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Mint iOS.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C7A8CDE2B7CD98A00683E15 /* UniformTypeIdentifiers.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UniformTypeIdentifiers.framework; path = System/Library/Frameworks/UniformTypeIdentifiers.framework; sourceTree = SDKROOT; };
-		2C7A8CE12B7CD98A00683E15 /* Media.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Media.xcassets; sourceTree = "<group>"; };
 		2C7A8CE32B7CD98A00683E15 /* ActionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionViewController.swift; sourceTree = "<group>"; };
 		2C7A8CE62B7CD98A00683E15 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/MainInterface.storyboard; sourceTree = "<group>"; };
 		2C7A8CE82B7CD98A00683E15 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -769,7 +767,6 @@
 		2C7A8CE02B7CD98A00683E15 /* Mint iOS */ = {
 			isa = PBXGroup;
 			children = (
-				2C7A8CE12B7CD98A00683E15 /* Media.xcassets */,
 				2C7A8CE32B7CD98A00683E15 /* ActionViewController.swift */,
 				2C7A8CE52B7CD98A00683E15 /* MainInterface.storyboard */,
 				2C7A8CE82B7CD98A00683E15 /* Info.plist */,
@@ -1365,7 +1362,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2C7A8CE22B7CD98A00683E15 /* Media.xcassets in Resources */,
 				2C7A8CE72B7CD98A00683E15 /* MainInterface.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -2264,6 +2260,7 @@
 		2C7A8CEC2B7CD98A00683E15 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CODE_SIGN_STYLE = Automatic;
@@ -2273,7 +2270,7 @@
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Mint iOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Mint iOS";
+				INFOPLIST_KEY_CFBundleDisplayName = "Mint on Zora";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -2300,6 +2297,7 @@
 		2C7A8CED2B7CD98A00683E15 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CODE_SIGN_STYLE = Automatic;
@@ -2309,7 +2307,7 @@
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Mint iOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Mint iOS";
+				INFOPLIST_KEY_CFBundleDisplayName = "Mint on Zora";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
