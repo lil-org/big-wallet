@@ -58,11 +58,16 @@ class ActionViewController: UIViewController {
     }
     
     private func suggestRetry(data: Data, type: String) {
+        statusLabel.isHidden = true
+        activityIndicator.stopAnimating()
+        
         let alert = UIAlertController(title: "something went wrong", message: nil, preferredStyle: .alert)
         let cancel = UIAlertAction(title: "cancel", style: .cancel) { [weak self] _ in
             self?.allDone()
         }
         let retry = UIAlertAction(title: "retry", style: .default) { [weak self] _ in
+            self?.statusLabel.isHidden = false
+            self?.activityIndicator.startAnimating()
             self?.uploadImage(data: data, type: type)
         }
         alert.addAction(cancel)
