@@ -16,9 +16,10 @@ class ActionViewController: UIViewController {
                 if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
                     provider.loadItem(forTypeIdentifier: UTType.image.identifier, options: nil, completionHandler: { [weak self] (imageURL, error) in
                         DispatchQueue.main.async {
-                            if let imageURL = imageURL as? URL {
-                                self?.imageView.image = UIImage(data: try! Data(contentsOf: imageURL))
+                            if let imageURL = imageURL as? URL, let data = try? Data(contentsOf: imageURL) {
+                                self?.imageView.image = UIImage(data: data)
                                 self?.statusLabel.text = imageURL.mimeType
+                                self?.uploadImage(data: data, type: imageURL.mimeType)
                             }
                         }
                     })
@@ -28,13 +29,11 @@ class ActionViewController: UIViewController {
         }
     }
     
-    // TODO: cleanup
     private func uploadImage(data: Data, type: String) {
         let boundary = "----WebKitFormBoundaryn3JBuHDuzWcHa9BR"
         var request = URLRequest(url: URL(string: "https://ipfs-uploader.zora.co/api/v0/add?stream-channels=true&cid-version=1&progress=false")!)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        
         var body = Data()
         body.append(Data("--\(boundary)\r\n".utf8))
         body.append(Data("Content-Disposition: form-data; name=\"file\"; filename=\"fresh\"\r\n".utf8))
@@ -42,32 +41,52 @@ class ActionViewController: UIViewController {
         body.append(data)
         body.append(Data("\r\n--\(boundary)--\r\n".utf8))
         request.httpBody = body
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
-            guard let data = data,
+        let task = URLSession.shared.dataTask(with: request) { [weak self] responseData, response, error in
+            guard let responseData = responseData,
                   error == nil,
-                  let ipfsResponse = try? JSONDecoder().decode(IPFSResponse.self, from: data),
-                  let url = URL(string: "https://zora.co/create?image=ipfs://\(ipfsResponse.hash)") else { return }
-            
+                  let ipfsResponse = try? JSONDecoder().decode(IPFSResponse.self, from: responseData),
+                  let url = URL(string: "https://zora.co/create?image=ipfs://\(ipfsResponse.hash)") else {
+                DispatchQueue.main.async { self?.suggestRetry(data: data, type: type) }
+                return
+            }
             DispatchQueue.main.async {
-                // TODO: redirect
-                self.extensionContext!.completeRequest(returningItems: [], completionHandler: nil)
+                self?.openURL(url)
+                self?.extensionContext!.completeRequest(returningItems: [], completionHandler: nil)
             }
         }
         task.resume()
     }
     
-    // TODO: cleanup
+    private func suggestRetry(data: Data, type: String) {
+        let alert = UIAlertController(title: "something went wrong", message: nil, preferredStyle: .alert)
+        let cancel = UIAlertAction(title: "cancel", style: .cancel) { [weak self] _ in
+            self?.allDone()
+        }
+        let retry = UIAlertAction(title: "retry", style: .default) { [weak self] _ in
+            self?.uploadImage(data: data, type: type)
+        }
+        alert.addAction(cancel)
+        alert.addAction(retry)
+        present(alert, animated: true)
+    }
+    
+    private func allDone() {
+        extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
+    }
+    
     @IBAction func done() {
-        guard let customURL = URL(string: "https://google.com") else { return }
+        allDone()
+    }
+    
+    private func openURL(_ url: URL) {
         var responder: UIResponder? = self
         while responder != nil {
             if let application = responder as? UIApplication {
-                application.open(customURL)
+                application.open(url)
                 break
             }
             responder = responder?.next
         }
-        extensionContext!.completeRequest(returningItems: [], completionHandler: nil)
     }
     
 }
