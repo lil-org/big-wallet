@@ -51,7 +51,7 @@ class ActionViewController: UIViewController {
             }
             DispatchQueue.main.async {
                 self?.openURL(url)
-                self?.extensionContext!.completeRequest(returningItems: [], completionHandler: nil)
+                self?.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
             }
         }
         task.resume()
