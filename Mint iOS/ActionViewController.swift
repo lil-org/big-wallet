@@ -6,19 +6,19 @@ import UniformTypeIdentifiers
 
 class ActionViewController: UIViewController {
     
-    @IBOutlet weak var statusLabel: UILabel!
     @IBOutlet weak var imageView: UIImageView!
+    @IBOutlet weak var statusLabel: UILabel!
+    @IBOutlet weak var activityIndicator: UIActivityIndicatorView!
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        for item in self.extensionContext!.inputItems as! [NSExtensionItem] {
-            for provider in item.attachments! {
+        for item in (extensionContext?.inputItems as? [NSExtensionItem]) ?? [] {
+            for provider in item.attachments ?? [] {
                 if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
                     provider.loadItem(forTypeIdentifier: UTType.image.identifier, options: nil, completionHandler: { [weak self] (imageURL, error) in
                         DispatchQueue.main.async {
                             if let imageURL = imageURL as? URL, let data = try? Data(contentsOf: imageURL) {
                                 self?.imageView.image = UIImage(data: data)
-                                self?.statusLabel.text = imageURL.mimeType
                                 self?.uploadImage(data: data, type: imageURL.mimeType)
                             }
                         }
