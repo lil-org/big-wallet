@@ -35,6 +35,12 @@
                                     <constraint firstAttribute="height" constant="100" id="pbb-NC-P3z"/>
                                 </constraints>
                             </imageView>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" misplaced="YES" text="Label" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="57h-aZ-cfz">
+                                <rect key="frame" x="123" y="217" width="42" height="21"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                <nil key="textColor"/>
+                                <nil key="highlightedColor"/>
+                            </label>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="VVe-Uw-JpX"/>
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
@@ -43,6 +49,8 @@
                             <constraint firstItem="NOA-Dm-cuz" firstAttribute="leading" secondItem="VVe-Uw-JpX" secondAttribute="leading" id="HxO-8t-aoh"/>
                             <constraint firstItem="VVe-Uw-JpX" firstAttribute="trailing" secondItem="9ga-4F-77Z" secondAttribute="trailing" id="Ozw-Hg-0yh"/>
                             <constraint firstItem="9ga-4F-77Z" firstAttribute="leading" secondItem="VVe-Uw-JpX" secondAttribute="leading" id="XH5-ld-ONA"/>
+                            <constraint firstItem="57h-aZ-cfz" firstAttribute="centerX" secondItem="VVe-Uw-JpX" secondAttribute="centerX" id="Zzh-Ei-2UO"/>
+                            <constraint firstItem="57h-aZ-cfz" firstAttribute="centerY" secondItem="VVe-Uw-JpX" secondAttribute="centerY" id="dNM-lB-SNu"/>
                             <constraint firstItem="VVe-Uw-JpX" firstAttribute="bottom" secondItem="9ga-4F-77Z" secondAttribute="bottom" id="eQg-nn-Zy4"/>
                             <constraint firstItem="NOA-Dm-cuz" firstAttribute="top" secondItem="VVe-Uw-JpX" secondAttribute="top" id="we0-1t-bgp"/>
                         </constraints>
@@ -51,6 +59,7 @@
                     <size key="freeformSize" width="320" height="528"/>
                     <connections>
                         <outlet property="imageView" destination="9ga-4F-77Z" id="5y6-5w-9QO"/>
+                        <outlet property="statusLabel" destination="57h-aZ-cfz" id="SpL-N8-LKE"/>
                         <outlet property="view" destination="zMn-AG-sqS" id="Qma-de-2ek"/>
                     </connections>
                 </viewController>

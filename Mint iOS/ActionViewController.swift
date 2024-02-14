@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 
 class ActionViewController: UIViewController {
     
+    @IBOutlet weak var statusLabel: UILabel!
     @IBOutlet weak var imageView: UIImageView!
     
     override func viewDidLoad() {
@@ -17,6 +18,7 @@ class ActionViewController: UIViewController {
                         DispatchQueue.main.async {
                             if let imageURL = imageURL as? URL {
                                 self?.imageView.image = UIImage(data: try! Data(contentsOf: imageURL))
+                                self?.statusLabel.text = imageURL.mimeType
                             }
                         }
                     })
@@ -24,38 +26,6 @@ class ActionViewController: UIViewController {
                 }
             }
         }
-    }
-    
-    // TODO: cleanup
-    private func loadAndUploadImageData(provider: NSItemProvider, type: UTType) {
-        provider.loadItem(forTypeIdentifier: type.identifier, options: nil) { (item, error) in
-            if let error = error {
-                // Handle error
-                print("Error loading image: \(error.localizedDescription)")
-                return
-            }
-            
-            // Convert NSURL to URL (if applicable) and then to UIImage
-            if let url = item as? URL, let imageData = try? Data(contentsOf: url) {
-                // Determine image format (JPEG or PNG) and prepare for uploading
-                let imageType = type.identifier == UTType.jpeg.identifier ? "jpeg" : "png"
-                self.uploadImage(data: imageData, type: imageType)
-            } else if let image = item as? UIImage, let imageData = self.convertImageToData(image: image, type: type) {
-                // Image is directly received as UIImage, convert to Data
-                let imageType = type.identifier == UTType.jpeg.identifier ? "jpeg" : "png"
-                self.uploadImage(data: imageData, type: imageType)
-            }
-        }
-    }
-    
-    // TODO: cleanup
-    private func convertImageToData(image: UIImage, type: UTType) -> Data? {
-        if type == .jpeg {
-            return image.jpegData(compressionQuality: 1.0)
-        } else if type == .png {
-            return image.pngData()
-        }
-        return nil
     }
     
     // TODO: cleanup
@@ -100,16 +70,4 @@ class ActionViewController: UIViewController {
         extensionContext!.completeRequest(returningItems: [], completionHandler: nil)
     }
     
-}
-
-private struct IPFSResponse: Codable {
-    let name: String
-    let hash: String
-    let size: String
-    
-    enum CodingKeys: String, CodingKey {
-        case name = "Name"
-        case hash = "Hash"
-        case size = "Size"
-    }
 }

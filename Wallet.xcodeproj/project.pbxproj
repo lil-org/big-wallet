@@ -103,6 +103,9 @@
 		2C7A8CE42B7CD98A00683E15 /* ActionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A8CE32B7CD98A00683E15 /* ActionViewController.swift */; };
 		2C7A8CE72B7CD98A00683E15 /* MainInterface.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C7A8CE52B7CD98A00683E15 /* MainInterface.storyboard */; };
 		2C7A8CEB2B7CD98A00683E15 /* Mint iOS.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2C7A8CDD2B7CD98A00683E15 /* Mint iOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		2C7A8CEF2B7CF22E00683E15 /* URL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D39727623EC600687301 /* URL.swift */; };
+		2C7A8CF12B7CF25100683E15 /* IPFSResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A8CF02B7CF25100683E15 /* IPFSResponse.swift */; };
+		2C7A8CF22B7CF25100683E15 /* IPFSResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A8CF02B7CF25100683E15 /* IPFSResponse.swift */; };
 		2C7A94C12B73B5B60030B684 /* DirectTransactionRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A94C02B73B5B60030B684 /* DirectTransactionRequest.swift */; };
 		2C7A94C22B73B5B60030B684 /* DirectTransactionRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A94C02B73B5B60030B684 /* DirectTransactionRequest.swift */; };
 		2C86125A2B76BDF200B22794 /* TransactionInspectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03EB892B069BFD00EF61F5 /* TransactionInspectorTests.swift */; };
@@ -395,6 +398,7 @@
 		2C7A8CE32B7CD98A00683E15 /* ActionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionViewController.swift; sourceTree = "<group>"; };
 		2C7A8CE62B7CD98A00683E15 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/MainInterface.storyboard; sourceTree = "<group>"; };
 		2C7A8CE82B7CD98A00683E15 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		2C7A8CF02B7CF25100683E15 /* IPFSResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IPFSResponse.swift; sourceTree = "<group>"; };
 		2C7A94C02B73B5B60030B684 /* DirectTransactionRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectTransactionRequest.swift; sourceTree = "<group>"; };
 		2C8612442B76BDBF00B22794 /* Tests macOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Tests macOS.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C8612512B76BDDC00B22794 /* Tests iOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Tests iOS.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -1011,6 +1015,7 @@
 				0D059AD126C2796200EE3023 /* ApprovalSubject.swift */,
 				2C09FC652828331D00DE9C27 /* PlatformSpecificImage.swift */,
 				2C4297272ADEDCBD0044357A /* PeerMeta.swift */,
+				2C7A8CF02B7CF25100683E15 /* IPFSResponse.swift */,
 				2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */,
 				0DC850E626B73A5900809E82 /* AuthenticationReason.swift */,
 				2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */,
@@ -1803,6 +1808,7 @@
 				2C40709427667A8600AB3D55 /* ImageWithLabelTableViewCell.swift in Sources */,
 				2CB0BC4A2B13AA5100603E68 /* Secrets.swift in Sources */,
 				2C728B5E2AFBE7EA00E4DD47 /* NetworksListView.swift in Sources */,
+				2C7A8CF12B7CF25100683E15 /* IPFSResponse.swift in Sources */,
 				2C5FF97226C84F7B00B32ACC /* AppDelegate.swift in Sources */,
 				2C89D26927BADCA9006C0C8D /* DappRequestAction.swift in Sources */,
 				2CF255A8275A48BB00AE54B9 /* NetworkMonitor.swift in Sources */,
@@ -1820,6 +1826,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				2C7A8CE42B7CD98A00683E15 /* ActionViewController.swift in Sources */,
+				2C7A8CEF2B7CF22E00683E15 /* URL.swift in Sources */,
+				2C7A8CF22B7CF25100683E15 /* IPFSResponse.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
