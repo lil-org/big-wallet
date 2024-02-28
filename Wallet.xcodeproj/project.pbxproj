@@ -1305,8 +1305,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				2C19953B2674C4B900A8E370 /* Wallet macOS */,
 				2C5FF96E26C84F7B00B32ACC /* Wallet iOS */,
+				2C19953B2674C4B900A8E370 /* Wallet macOS */,
 				2C09CB9E273979C1009AD39B /* Safari macOS */,
 				2CCEB82C27594E2A00768473 /* Safari iOS */,
 				2CED86A12AF00BC9006F9E26 /* Tools */,
