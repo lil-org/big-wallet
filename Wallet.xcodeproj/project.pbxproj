@@ -1588,7 +1588,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "#!/bin/bash\n\nif pgrep -x \"Tokenary\" > /dev/null\nthen\n    killall Tokenary\nfi\n";
+			shellScript = "#!/bin/bash\n\nif pgrep -x \"Wallet\" > /dev/null\nthen\n    killall Walet\nfi\n";
 			showEnvVarsInLog = 0;
 		};
 		D666E08D9C8205A813CD888C /* [CP] Embed Pods Frameworks */ = {
