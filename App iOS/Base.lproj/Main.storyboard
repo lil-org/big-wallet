@@ -12,7 +12,7 @@
         <!--Password View Controller-->
         <scene sceneID="tne-QT-ifu">
             <objects>
-                <viewController storyboardIdentifier="PasswordViewController" id="BYZ-38-t0r" customClass="PasswordViewController" customModule="Tokenary_iOS" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="PasswordViewController" id="BYZ-38-t0r" customClass="PasswordViewController" customModule="Wallet_iOS" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" id="8bC-Xf-vdC">
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
@@ -109,7 +109,7 @@
         <!--Accounts List View Controller-->
         <scene sceneID="mSZ-kB-3m9">
             <objects>
-                <viewController storyboardIdentifier="AccountsListViewController" automaticallyAdjustsScrollViewInsets="NO" id="onX-Y1-KVr" customClass="AccountsListViewController" customModule="Tokenary_iOS" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="AccountsListViewController" automaticallyAdjustsScrollViewInsets="NO" id="onX-Y1-KVr" customClass="AccountsListViewController" customModule="Wallet_iOS" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" id="K92-L8-Bkg">
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
@@ -262,7 +262,7 @@
         <!--Import View Controller-->
         <scene sceneID="9bY-hK-sVB">
             <objects>
-                <viewController storyboardIdentifier="ImportViewController" automaticallyAdjustsScrollViewInsets="NO" id="ffW-KB-fbn" customClass="ImportViewController" customModule="Tokenary_iOS" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="ImportViewController" automaticallyAdjustsScrollViewInsets="NO" id="ffW-KB-fbn" customClass="ImportViewController" customModule="Wallet_iOS" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" id="RB2-xW-81M">
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
@@ -340,7 +340,7 @@ Label</string>
         <!--Approve View Controller-->
         <scene sceneID="RWl-cv-71R">
             <objects>
-                <viewController storyboardIdentifier="ApproveViewController" id="bCJ-7J-W3b" customClass="ApproveViewController" customModule="Tokenary_iOS" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="ApproveViewController" id="bCJ-7J-W3b" customClass="ApproveViewController" customModule="Wallet_iOS" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" id="mif-5d-Da0">
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
@@ -438,7 +438,7 @@ Label</string>
         <!--Approve Transaction View Controller-->
         <scene sceneID="xZY-AW-CuA">
             <objects>
-                <viewController storyboardIdentifier="ApproveTransactionViewController" id="rpE-yl-N9f" customClass="ApproveTransactionViewController" customModule="Tokenary_iOS" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="ApproveTransactionViewController" id="rpE-yl-N9f" customClass="ApproveTransactionViewController" customModule="Wallet_iOS" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" id="df0-YO-SS0">
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
@@ -518,7 +518,7 @@ Label</string>
         <!--Edit Accounts View Controller-->
         <scene sceneID="N4G-eD-7DH">
             <objects>
-                <viewController storyboardIdentifier="EditAccountsViewController" id="4YK-hI-ui9" customClass="EditAccountsViewController" customModule="Tokenary_iOS" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="EditAccountsViewController" id="4YK-hI-ui9" customClass="EditAccountsViewController" customModule="Wallet_iOS" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" id="foU-MZ-nbG">
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
