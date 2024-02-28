@@ -2212,7 +2212,7 @@
 				CURRENT_PROJECT_VERSION = 0;
 				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				INFOPLIST_FILE = "App iOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Wallet;
+				INFOPLIST_KEY_CFBundleDisplayName = "tiny wallet";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -2244,7 +2244,7 @@
 				CURRENT_PROJECT_VERSION = 0;
 				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				INFOPLIST_FILE = "App iOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Wallet;
+				INFOPLIST_KEY_CFBundleDisplayName = "tiny wallet";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
