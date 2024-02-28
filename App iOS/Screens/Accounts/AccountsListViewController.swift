@@ -134,7 +134,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         processInput()
-        requestAnUpdateIfNeeded()
         didAppear = true
         DispatchQueue.main.async { [weak self] in
             let heightBefore = self?.navigationController?.navigationBar.frame.height ?? 0
@@ -147,20 +146,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                 }
             }
         }
-    }
-    
-    private func requestAnUpdateIfNeeded() {
-        let configurationService = ConfigurationService.shared
-        guard !didAppear, configurationService.shouldPromptToUpdate else { return }
-        configurationService.didPromptToUpdate()
-        let alert = UIAlertController(title: Strings.thisAppVersionIsNoLongerSupported, message: Strings.pleaseGetANewOne, preferredStyle: .alert)
-        let notNowAction = UIAlertAction(title: Strings.notNow, style: .destructive)
-        let okAction = UIAlertAction(title: Strings.ok, style: .default) { _ in
-            UIApplication.shared.open(URL.updateApp)
-        }
-        alert.addAction(notNowAction)
-        alert.addAction(okAction)
-        present(alert, animated: true)
     }
     
     private func scrollToTheFirst(_ specificWalletAccounts: Set<SpecificWalletAccount>) {
