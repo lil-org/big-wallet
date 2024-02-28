@@ -64,7 +64,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let txRequest = DirectTransactionRequest(from: url) {
             processExternalRequest(.direct(txRequest))
         } else {
-            let safariPrefix = "tokenary://safari?request="
+            let safariPrefix = "tinywallet://safari?request="
             if url.hasPrefix(safariPrefix), let request = SafariRequest(query: String(url.dropFirst(safariPrefix.count))) {
                 processExternalRequest(.safari(request))
             }

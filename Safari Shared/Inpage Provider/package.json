@@ -9,11 +9,11 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+ssh://git@github.com/lilorg/tokenary.git"
+        "url": "git+ssh://git@github.com/lil-org/tiny-wallet.git"
     },
     "keywords": [],
-    "author": "tokenary <yo@lil.org>",
-    "license": "MIT",
+    "author": "lil org <yo@lil.org>",
+    "license": "CC0-1.0",
     "dependencies": {
         "buffer": "^5.6.0",
         "events": "^3.2.0",

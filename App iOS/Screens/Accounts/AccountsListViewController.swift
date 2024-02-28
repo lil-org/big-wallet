@@ -31,7 +31,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private var network = Networks.ethereum
     var selectAccountAction: SelectAccountAction?
     
-    private var wallets: [TokenaryWallet] {
+    private var wallets: [WalletContainer] {
         return walletsManager.wallets
     }
     
@@ -88,7 +88,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         if forWalletSelection {
             navigationItem.leftBarButtonItem = cancelItem
         }
-        configureDataState(.noData, description: Strings.tokenaryIsEmpty, buttonTitle: Strings.addWallet) { [weak self] in
+        configureDataState(.noData, description: Strings.tinyWalletIsEmpty, buttonTitle: Strings.addWallet) { [weak self] in
             self?.addWallet()
         }
         dataStateShouldMoveWithKeyboard(false)
@@ -167,7 +167,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
     }
     
-    private func walletForIndexPath(_ indexPath: IndexPath) -> TokenaryWallet {
+    private func walletForIndexPath(_ indexPath: IndexPath) -> WalletContainer {
         let section = sections[indexPath.section]
         let items = section.items
         
@@ -242,9 +242,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                     self?.redirectBack(requestId: id, tryFarcaster: true)
                 }
             }
-        } else if let prefix = ["https://tokenary.io/extension?query=",
-                            "tokenary://safari?request=",
-                            "https://www.tokenary.io/extension?query="].first(where: { inputLinkString.hasPrefix($0) == true }),
+        } else if let prefix = ["https://lil.org/extension?query=",
+                                "tinywallet://safari?request="].first(where: { inputLinkString.hasPrefix($0) == true }),
                   let request = SafariRequest(query: String(inputLinkString.dropFirst(prefix.count))) {
             id = request.id
             action = DappRequestProcessor.processSafariRequest(request) { [weak self] hash in
@@ -393,7 +392,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     @objc private func preferencesButtonTapped() {
-        let actionSheet = UIAlertController(title: "❤️ " + Strings.tokenary.uppercased() + " ⭐️", message: nil, preferredStyle: .actionSheet)
+        let actionSheet = UIAlertController(title: "❤️ " + Strings.tinyWallet.uppercased() + " ⭐️", message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.barButtonItem = preferencesItem
         let xAction = UIAlertAction(title: Strings.viewOnX.withEllipsis, style: .default) { _ in
             UIApplication.shared.open(URL.x)
@@ -453,7 +452,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         showKey(wallet: wallet, mnemonic: true)
     }
     
-    private func showKey(wallet: TokenaryWallet, mnemonic: Bool) {
+    private func showKey(wallet: WalletContainer, mnemonic: Bool) {
         let secret: String
         if mnemonic, let mnemonicString = try? walletsManager.exportMnemonic(wallet: wallet) {
             secret = mnemonicString
@@ -478,7 +477,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(importViewController.inNavigationController, animated: true)
     }
     
-    private func showActionsForWallet(wallet: TokenaryWallet, headerView: AccountsHeaderView) {
+    private func showActionsForWallet(wallet: WalletContainer, headerView: AccountsHeaderView) {
         let actionSheet = UIAlertController(title: Strings.multicoinWallet, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.sourceView = headerView
         
@@ -505,7 +504,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(actionSheet, animated: true)
     }
     
-    private func showActionsForAccount(_ account: Account, wallet: TokenaryWallet, cell: UITableViewCell?) {
+    private func showActionsForAccount(_ account: Account, wallet: WalletContainer, cell: UITableViewCell?) {
         let actionSheet = UIAlertController(title: account.coin.name, message: account.address, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.sourceView = cell
         
@@ -542,7 +541,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(actionSheet, animated: true)
     }
     
-    private func attemptToRemoveAccount(_ account: Account, fromWallet wallet: TokenaryWallet) {
+    private func attemptToRemoveAccount(_ account: Account, fromWallet wallet: WalletContainer) {
         guard wallet.accounts.count > 1 else {
             warnOnLastAccountRemovalAttempt(wallet: wallet)
             return
@@ -555,7 +554,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
     }
     
-    private func warnOnLastAccountRemovalAttempt(wallet: TokenaryWallet) {
+    private func warnOnLastAccountRemovalAttempt(wallet: WalletContainer) {
         let alert = UIAlertController(title: Strings.removingTheLastAccount, message: nil, preferredStyle: .alert)
         
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
@@ -569,7 +568,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(alert, animated: true)
     }
     
-    private func askBeforeRemoving(wallet: TokenaryWallet) {
+    private func askBeforeRemoving(wallet: WalletContainer) {
         let alert = UIAlertController(title: Strings.removedWalletsCantBeRecovered, message: nil, preferredStyle: .alert)
         let removeAction = UIAlertAction(title: Strings.removeAnyway, style: .destructive) { [weak self] _ in
             LocalAuthentication.attempt(reason: Strings.removeWallet, presentPasswordAlertFrom: self, passwordReason: Strings.toRemoveWallet) { success in
@@ -584,12 +583,12 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(alert, animated: true)
     }
     
-    private func removeWallet(_ wallet: TokenaryWallet) {
+    private func removeWallet(_ wallet: WalletContainer) {
         try? walletsManager.delete(wallet: wallet)
         reloadData()
     }
     
-    private func didTapExportWallet(_ wallet: TokenaryWallet) {
+    private func didTapExportWallet(_ wallet: WalletContainer) {
         let isMnemonic = wallet.isMnemonic
         let title = isMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
         let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)

@@ -1,10 +1,10 @@
 {
     "extension_name": {
-        "message": "Tokenary",
+        "message": "tiny wallet",
         "description": "The display name for the extension."
     },
     "extension_description": {
-        "message": "Crypto Wallet",
+        "message": "crypto wallet",
         "description": "Description of what the extension does."
     }
 }

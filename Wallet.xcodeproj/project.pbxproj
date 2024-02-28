@@ -57,8 +57,8 @@
 		2C2AA1D628AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D428AFB1AD00E35DBF /* MultipleResponseToExtension.swift */; };
 		2C2AA1D728AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D428AFB1AD00E35DBF /* MultipleResponseToExtension.swift */; };
 		2C2AA1D828AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D428AFB1AD00E35DBF /* MultipleResponseToExtension.swift */; };
-		2C3024FC28C1193100C304ED /* TokenaryAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3024FB28C1193100C304ED /* TokenaryAccount.swift */; };
-		2C3024FD28C1193100C304ED /* TokenaryAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3024FB28C1193100C304ED /* TokenaryAccount.swift */; };
+		2C3024FC28C1193100C304ED /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3024FB28C1193100C304ED /* Account.swift */; };
+		2C3024FD28C1193100C304ED /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3024FB28C1193100C304ED /* Account.swift */; };
 		2C3B7F022756A08600931264 /* Identifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3B7F012756A08600931264 /* Identifiers.swift */; };
 		2C40709027667A6600AB3D55 /* MultilineLabelTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C40708E27667A6600AB3D55 /* MultilineLabelTableViewCell.swift */; };
 		2C40709127667A6600AB3D55 /* MultilineLabelTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C40708F27667A6600AB3D55 /* MultilineLabelTableViewCell.xib */; };
@@ -185,7 +185,7 @@
 		2CC8C5B4276A96760083FB1B /* Haptic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8C5B3276A96760083FB1B /* Haptic.swift */; };
 		2CCEB83727594E2A00768473 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 2CCEB83627594E2A00768473 /* manifest.json */; };
 		2CCEB84527594E2A00768473 /* Safari iOS.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2CCEB82D27594E2A00768473 /* Safari iOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		2CD0669126B5537B00728C20 /* TokenaryWallet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668B26B2142000728C20 /* TokenaryWallet.swift */; };
+		2CD0669126B5537B00728C20 /* WalletContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668B26B2142000728C20 /* WalletContainer.swift */; };
 		2CD0669226B5537B00728C20 /* WalletsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668926B213E500728C20 /* WalletsManager.swift */; };
 		2CD0B3F526A0DAA900488D92 /* NSPasteboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0B3F426A0DAA900488D92 /* NSPasteboard.swift */; };
 		2CD0B3F726AC619900488D92 /* AddAccountOptionCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0B3F626AC619900488D92 /* AddAccountOptionCellView.swift */; };
@@ -223,7 +223,7 @@
 		2CF25598275A46D600AE54B9 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C492689F01700D0926A /* Strings.swift */; };
 		2CF2559B275A46E700AE54B9 /* AuthenticationReason.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC850E626B73A5900809E82 /* AuthenticationReason.swift */; };
 		2CF2559C275A477F00AE54B9 /* ApprovalSubject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D059AD126C2796200EE3023 /* ApprovalSubject.swift */; };
-		2CF2559D275A479800AE54B9 /* TokenaryWallet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668B26B2142000728C20 /* TokenaryWallet.swift */; };
+		2CF2559D275A479800AE54B9 /* WalletContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668B26B2142000728C20 /* WalletContainer.swift */; };
 		2CF2559E275A479800AE54B9 /* WalletsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668926B213E500728C20 /* WalletsManager.swift */; };
 		2CF255A0275A47DD00AE54B9 /* Bundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6706A4267A6BFE006AAEF2 /* Bundle.swift */; };
 		2CF255A1275A47DD00AE54B9 /* Notification.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03D1D4269B428C00EF10EA /* Notification.swift */; };
@@ -339,7 +339,7 @@
 		2C1995432674C4BA00A8E370 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2C1995462674C4BA00A8E370 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		2C1995482674C4BA00A8E370 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		2C1995492674C4BA00A8E370 /* Tokenary.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Tokenary.entitlements; sourceTree = "<group>"; };
+		2C1995492674C4BA00A8E370 /* Wallet macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Wallet macOS.entitlements"; sourceTree = "<group>"; };
 		2C1995552674D0F300A8E370 /* Ethereum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ethereum.swift; sourceTree = "<group>"; };
 		2C209B642AF7B3BC00FF9012 /* Secrets.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Secrets.plist; sourceTree = "<group>"; };
 		2C264BBB27B2F25E00234393 /* SafariRequest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SafariRequest.swift; sourceTree = "<group>"; };
@@ -350,7 +350,7 @@
 		2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DappRequestProcessor.swift; sourceTree = "<group>"; };
 		2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecificWalletAccount.swift; sourceTree = "<group>"; };
 		2C2AA1D428AFB1AD00E35DBF /* MultipleResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipleResponseToExtension.swift; sourceTree = "<group>"; };
-		2C3024FB28C1193100C304ED /* TokenaryAccount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenaryAccount.swift; sourceTree = "<group>"; };
+		2C3024FB28C1193100C304ED /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		2C3B7F012756A08600931264 /* Identifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Identifiers.swift; sourceTree = "<group>"; };
 		2C40708E27667A6600AB3D55 /* MultilineLabelTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultilineLabelTableViewCell.swift; sourceTree = "<group>"; };
 		2C40708F27667A6600AB3D55 /* MultilineLabelTableViewCell.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = MultilineLabelTableViewCell.xib; sourceTree = "<group>"; };
@@ -457,14 +457,14 @@
 		2CCEB83627594E2A00768473 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
 		2CCEB84227594E2A00768473 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2CD0668926B213E500728C20 /* WalletsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsManager.swift; sourceTree = "<group>"; };
-		2CD0668B26B2142000728C20 /* TokenaryWallet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenaryWallet.swift; sourceTree = "<group>"; };
+		2CD0668B26B2142000728C20 /* WalletContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletContainer.swift; sourceTree = "<group>"; };
 		2CD0B3F426A0DAA900488D92 /* NSPasteboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSPasteboard.swift; sourceTree = "<group>"; };
 		2CD0B3F626AC619900488D92 /* AddAccountOptionCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddAccountOptionCellView.swift; sourceTree = "<group>"; };
 		2CD7FC8C2B1115AE00659439 /* EditTransactionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditTransactionView.swift; sourceTree = "<group>"; };
 		2CDAB3712675B3F0009F8B97 /* PasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordViewController.swift; sourceTree = "<group>"; };
 		2CE059362763D60A0042D844 /* KeyboardObserver.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KeyboardObserver.swift; sourceTree = "<group>"; };
 		2CE059382763F3FF0042D844 /* CGFloat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CGFloat.swift; sourceTree = "<group>"; };
-		2CE059482764169E0042D844 /* Tokenary iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Tokenary iOS.entitlements"; sourceTree = "<group>"; };
+		2CE059482764169E0042D844 /* Wallet iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Wallet iOS.entitlements"; sourceTree = "<group>"; };
 		2CE0594B2764DF9A0042D844 /* Safari iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Safari iOS.entitlements"; sourceTree = "<group>"; };
 		2CE3D011267F73C00032A62E /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
 		2CED86A22AF00BC9006F9E26 /* Tools */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = Tools; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -662,7 +662,7 @@
 			isa = PBXGroup;
 			children = (
 				2C1995482674C4BA00A8E370 /* Info.plist */,
-				2C1995492674C4BA00A8E370 /* Tokenary.entitlements */,
+				2C1995492674C4BA00A8E370 /* Wallet macOS.entitlements */,
 			);
 			path = "Supporting Files";
 			sourceTree = "<group>";
@@ -728,7 +728,7 @@
 		2C5FF97026C84F7B00B32ACC /* App iOS */ = {
 			isa = PBXGroup;
 			children = (
-				2CE059482764169E0042D844 /* Tokenary iOS.entitlements */,
+				2CE059482764169E0042D844 /* Wallet iOS.entitlements */,
 				2C5FF97126C84F7B00B32ACC /* AppDelegate.swift */,
 				2C5FF97326C84F7B00B32ACC /* SceneDelegate.swift */,
 				2C96D394276237F600687301 /* Library */,
@@ -962,8 +962,8 @@
 			isa = PBXGroup;
 			children = (
 				2CD0668926B213E500728C20 /* WalletsManager.swift */,
-				2CD0668B26B2142000728C20 /* TokenaryWallet.swift */,
-				2C3024FB28C1193100C304ED /* TokenaryAccount.swift */,
+				2CD0668B26B2142000728C20 /* WalletContainer.swift */,
+				2C3024FB28C1193100C304ED /* Account.swift */,
 			);
 			path = Wallets;
 			sourceTree = "<group>";
@@ -1659,7 +1659,7 @@
 			files = (
 				2CB4031B281C99C800BAEBEE /* AccountsHeaderRowView.swift in Sources */,
 				2C728B612AFBFAF100E4DD47 /* Image.swift in Sources */,
-				2C3024FC28C1193100C304ED /* TokenaryAccount.swift in Sources */,
+				2C3024FC28C1193100C304ED /* Account.swift in Sources */,
 				2C901C4A2689F01700D0926A /* Strings.swift in Sources */,
 				2C2AA1D228AD1DC100E35DBF /* SpecificWalletAccount.swift in Sources */,
 				2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */,
@@ -1671,7 +1671,7 @@
 				2C773F62274523DC007B04E7 /* ResponseToExtension.swift in Sources */,
 				0DC850E726B73A5900809E82 /* AuthenticationReason.swift in Sources */,
 				2CAA412526C7CD93009F3535 /* ReviewRequester.swift in Sources */,
-				2CD0669126B5537B00728C20 /* TokenaryWallet.swift in Sources */,
+				2CD0669126B5537B00728C20 /* WalletContainer.swift in Sources */,
 				2C8944CB2AEB0C10006A711F /* EthereumRPC.swift in Sources */,
 				2C89D26827BADCA9006C0C8D /* DappRequestAction.swift in Sources */,
 				2C7A94C12B73B5B60030B684 /* DirectTransactionRequest.swift in Sources */,
@@ -1742,7 +1742,7 @@
 			files = (
 				2C6F6D5A28273FE500D6E8FB /* EditAccountsViewController.swift in Sources */,
 				2CF255BA275A749300AE54B9 /* ApproveViewController.swift in Sources */,
-				2C3024FD28C1193100C304ED /* TokenaryAccount.swift in Sources */,
+				2C3024FD28C1193100C304ED /* Account.swift in Sources */,
 				2CD7FC8E2B1115AE00659439 /* EditTransactionView.swift in Sources */,
 				2C96D3962762380400687301 /* ButtonWithExtendedArea.swift in Sources */,
 				2C264BC227B2F2C100234393 /* EthereumSafariRequest.swift in Sources */,
@@ -1759,7 +1759,7 @@
 				2C73215B2AEE8F5200AA8A71 /* ConfigurationService.swift in Sources */,
 				2CF25597275A46D300AE54B9 /* Defaults.swift in Sources */,
 				2CF255A2275A47DD00AE54B9 /* String.swift in Sources */,
-				2CF2559D275A479800AE54B9 /* TokenaryWallet.swift in Sources */,
+				2CF2559D275A479800AE54B9 /* WalletContainer.swift in Sources */,
 				2CC8C5B4276A96760083FB1B /* Haptic.swift in Sources */,
 				2CF255AB275A48CF00AE54B9 /* Ethereum.swift in Sources */,
 				2C8944CF2AEC34EB006A711F /* Blockies.swift in Sources */,
@@ -1960,7 +1960,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 42;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari macOS/Info.plist";
@@ -1977,7 +1977,7 @@
 					"-framework",
 					SafariServices,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io.Safari;
+				PRODUCT_BUNDLE_IDENTIFIER = org.lil.wallet.Safari;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
@@ -1995,7 +1995,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 42;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari macOS/Info.plist";
@@ -2012,7 +2012,7 @@
 					"-framework",
 					SafariServices,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io.Safari;
+				PRODUCT_BUNDLE_IDENTIFIER = org.lil.wallet.Safari;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
@@ -2145,24 +2145,24 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = "$(inherited)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "App macOS/Supporting Files/Tokenary.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "App macOS/Supporting Files/Wallet macOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 42;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "$(SRCROOT)/App macOS/Supporting Files/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Tokenary;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
+				INFOPLIST_KEY_CFBundleDisplayName = Wallet;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				MARKETING_VERSION = 2.0.31;
-				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
+				PRODUCT_BUNDLE_IDENTIFIER = org.lil.wallet;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
@@ -2176,24 +2176,24 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = "$(inherited)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "App macOS/Supporting Files/Tokenary.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "App macOS/Supporting Files/Wallet macOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 42;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "$(SRCROOT)/App macOS/Supporting Files/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Tokenary;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
+				INFOPLIST_KEY_CFBundleDisplayName = Wallet;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				MARKETING_VERSION = 2.0.31;
-				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
+				PRODUCT_BUNDLE_IDENTIFIER = org.lil.wallet;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
@@ -2207,13 +2207,13 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = "$(inherited)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "App iOS/Tokenary iOS.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "App iOS/Wallet iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 42;
-				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				INFOPLIST_FILE = "App iOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Tokenary;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
+				INFOPLIST_KEY_CFBundleDisplayName = Wallet;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -2221,7 +2221,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				MARKETING_VERSION = 2.0.31;
-				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
+				PRODUCT_BUNDLE_IDENTIFIER = org.lil.wallet;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -2239,13 +2239,13 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = "$(inherited)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "App iOS/Tokenary iOS.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "App iOS/Wallet iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 42;
-				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				INFOPLIST_FILE = "App iOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Tokenary;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
+				INFOPLIST_KEY_CFBundleDisplayName = Wallet;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -2253,7 +2253,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				MARKETING_VERSION = 2.0.31;
-				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io;
+				PRODUCT_BUNDLE_IDENTIFIER = org.lil.wallet;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -2273,7 +2273,7 @@
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 42;
-				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -2288,7 +2288,7 @@
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MARKETING_VERSION = 2.0.31;
-				PRODUCT_BUNDLE_IDENTIFIER = "mac.tokenary.io.Mint-iOS";
+				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.wallet.Mint-iOS";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -2310,7 +2310,7 @@
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 42;
-				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -2325,7 +2325,7 @@
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MARKETING_VERSION = 2.0.31;
-				PRODUCT_BUNDLE_IDENTIFIER = "mac.tokenary.io.Mint-iOS";
+				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.wallet.Mint-iOS";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -2347,7 +2347,7 @@
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -2355,7 +2355,7 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.2;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.Tests-macOS";
+				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.wallet.Tests-macOS";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
@@ -2375,7 +2375,7 @@
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -2383,7 +2383,7 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.2;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.Tests-macOS";
+				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.wallet.Tests-macOS";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
@@ -2402,7 +2402,7 @@
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -2410,7 +2410,7 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.2;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.Tests-iOS";
+				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.wallet.Tests-iOS";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
@@ -2430,7 +2430,7 @@
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -2438,7 +2438,7 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.2;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.Tests-iOS";
+				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.wallet.Tests-iOS";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
@@ -2456,7 +2456,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Safari iOS/Safari iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 42;
-				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari iOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Safari iOS";
@@ -2473,7 +2473,7 @@
 					"-framework",
 					SafariServices,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io.Safari;
+				PRODUCT_BUNDLE_IDENTIFIER = org.lil.wallet.Safari;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -2494,7 +2494,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 42;
-				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari iOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Safari iOS";
@@ -2511,7 +2511,7 @@
 					"-framework",
 					SafariServices,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = mac.tokenary.io.Safari;
+				PRODUCT_BUNDLE_IDENTIFIER = org.lil.wallet.Safari;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;
@@ -2533,7 +2533,7 @@
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CODE_SIGN_STYLE = Automatic;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
@@ -2552,7 +2552,7 @@
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CODE_SIGN_STYLE = Automatic;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = XWNXDSM6BU;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;

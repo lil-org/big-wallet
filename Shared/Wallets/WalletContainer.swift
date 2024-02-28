@@ -4,7 +4,7 @@
 import Foundation
 import WalletCore
 
-final class TokenaryWallet: Hashable, Equatable {
+final class WalletContainer: Hashable, Equatable {
 
     let id: String
     var key: StoredKey
@@ -43,7 +43,7 @@ final class TokenaryWallet: Hashable, Equatable {
         hasher.combine(id)
     }
 
-    static func == (lhs: TokenaryWallet, rhs: TokenaryWallet) -> Bool {
+    static func == (lhs: WalletContainer, rhs: WalletContainer) -> Bool {
         return lhs.id == rhs.id
     }
     

@@ -17,7 +17,7 @@ struct Keychain {
         case wallet(id: String)
         case raw(key: String)
         
-        private static let commonPrefix = "io.tokenary.macos."
+        private static let commonPrefix = "org.lil.wallet."
         private static let walletPrefix = "wallet."
         private static let fullWalletPrefix = commonPrefix + walletPrefix
         private static let fullWalletPrefixCount = fullWalletPrefix.count
