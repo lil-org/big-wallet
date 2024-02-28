@@ -26,16 +26,6 @@
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>CFBundleURLName</key>
-			<string>wc</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>wc</string>
-			</array>
-		</dict>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Viewer</string>
-			<key>CFBundleURLName</key>
 			<string>tinywallet</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
@@ -48,7 +38,7 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSApplicationCategoryType</key>
-	<string>public.app-category.finance</string>
+	<string>public.app-category.utilities</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>farcaster</string>
