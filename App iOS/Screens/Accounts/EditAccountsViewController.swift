@@ -10,10 +10,10 @@ class EditAccountsViewController: UIViewController {
         var isEnabled: Bool
     }
     
-    var wallet: TokenaryWallet!
+    var wallet: WalletContainer!
     private let walletsManager = WalletsManager.shared
     private var cellModels = [PreviewAccountCellModel]()
-    private let previewAccountsQueue = DispatchQueue(label: "mac.tokenary.io.accounts", qos: .userInitiated)
+    private let previewAccountsQueue = DispatchQueue(label: "org.lil.wallet.accounts", qos: .userInitiated)
     private var page = 1
     private var requestedPreviewFor: Int?
     private var lastPreviewDate = Date()

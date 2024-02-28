@@ -2,13 +2,13 @@
 
 function handleOnMessage(request, sender, sendResponse) {
     if (request.subject === "rpc") {
-        browser.runtime.sendNativeMessage("mac.tokenary.io", request).then(response => {
+        browser.runtime.sendNativeMessage("org.lil.wallet", request).then(response => {
             if (typeof response !== "undefined") {
                 sendResponse(response);
             } else { sendResponse(); }
         }).catch(() => { sendResponse(); });
     } else if (request.subject === "message-to-wallet") {
-        browser.runtime.sendNativeMessage("mac.tokenary.io", request.message).then(response => {
+        browser.runtime.sendNativeMessage("org.lil.wallet", request.message).then(response => {
             if (typeof response !== "undefined") {
                 sendResponse(response);
                 storeConfigurationIfNeeded(request.host, response);
@@ -27,14 +27,14 @@ function handleOnMessage(request, sender, sendResponse) {
             mobileRedirectFor(request, sendResponse);
         }
     } else if (request.subject === "getResponse") {
-        browser.runtime.sendNativeMessage("mac.tokenary.io", request).then(response => {
+        browser.runtime.sendNativeMessage("org.lil.wallet", request).then(response => {
             if (typeof response !== "undefined") {
                 sendResponse(response);
                 storeConfigurationIfNeeded(request.host, response);
             } else { sendResponse(); }
         }).catch(() => { sendResponse(); });
     } else if (request.subject === "cancelRequest") {
-        browser.runtime.sendNativeMessage("mac.tokenary.io", request).then(() => {}).catch(() => {});
+        browser.runtime.sendNativeMessage("org.lil.wallet", request).then(() => {}).catch(() => {});
         sendResponse();
     } else if (request.subject === "getLatestConfiguration") {
         getLatestConfiguration(request.host).then(currentConfiguration => {
@@ -123,17 +123,17 @@ function storeConfigurationIfNeeded(host, response) {
 }
 
 function onBeforeExtensionPageNavigation(details) {
-    if (details.url.includes("tokenary.io/extension?query=")) {
+    if (details.url.includes("lil.org/extension?query=")) {
         const queryStringIndex = details.url.indexOf("?query=") + 7;
         const encodedQuery = details.url.substring(queryStringIndex);
-        browser.tabs.update(details.tabId, { url: "tokenary://safari?request=" + encodedQuery });
+        browser.tabs.update(details.tabId, { url: "tinywallet://safari?request=" + encodedQuery });
     }
 }
 
 function justShowApp() {
     const id = genId();
     const showAppMessage = {name: "justShowApp", id: id, provider: "unknown", body: {}, host: ""};
-    browser.runtime.sendNativeMessage("mac.tokenary.io", showAppMessage).then(() => {}).catch(() => {});
+    browser.runtime.sendNativeMessage("org.lil.wallet", showAppMessage).then(() => {}).catch(() => {});
 }
 
 function handleOnClick(tab) {
@@ -169,7 +169,7 @@ function mobileRedirectFor(request, sendResponse) {
                         var id = ` + request.message.id + `;
                         var provider = '` + request.message.provider + `';
                         if (confirm(confirmationText)) {
-                            window.location.href = 'https://tokenary.io/extension?query=' + query;
+                            window.location.href = 'https://lil.org/extension?query=' + query;
                         } else {
                             const response = {subject: "notConfirmed", id: id, provider: provider};
                             window.postMessage(response, "*");
@@ -177,7 +177,7 @@ function mobileRedirectFor(request, sendResponse) {
                     `
                 });
             } else {
-                browser.tabs.executeScript(tab.id, { code: 'window.location.href = `https://tokenary.io/extension?query=' + query + '`;' });
+                browser.tabs.executeScript(tab.id, { code: 'window.location.href = `https://lil.org/extension?query=' + query + '`;' });
             }
             sendResponse();
         }
@@ -193,7 +193,7 @@ function genId() {
 function addListeners() {
     browser.runtime.onMessage.addListener(handleOnMessage);
     browser.browserAction.onClicked.addListener(handleOnClick);
-    browser.webNavigation.onBeforeNavigate.addListener(onBeforeExtensionPageNavigation, {url: [{urlMatches : "https://(www\.)?tokenary\.io/extension"}]});
+    browser.webNavigation.onBeforeNavigate.addListener(onBeforeExtensionPageNavigation, {url: [{urlMatches : "https://(www\.)?lil\.org/extension"}]});
 }
 
 addListeners();

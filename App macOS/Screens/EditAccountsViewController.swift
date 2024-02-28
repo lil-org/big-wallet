@@ -5,7 +5,7 @@ import WalletCore
 
 class EditAccountsViewController: NSViewController {
     
-    var wallet: TokenaryWallet!
+    var wallet: WalletContainer!
     var getBackToRect: CGRect?
     var selectAccountAction: SelectAccountAction?
     
@@ -16,7 +16,7 @@ class EditAccountsViewController: NSViewController {
     
     private let walletsManager = WalletsManager.shared
     private var cellModels = [PreviewAccountCellModel]()
-    private let previewAccountsQueue = DispatchQueue(label: "mac.tokenary.io.accounts", qos: .userInitiated)
+    private let previewAccountsQueue = DispatchQueue(label: "org.lil.wallet.accounts", qos: .userInitiated)
     private var page = 1
     private var requestedPreviewFor: Int?
     private var lastPreviewDate = Date()

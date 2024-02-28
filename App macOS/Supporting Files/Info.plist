@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Tokenary</string>
+	<string>Wallet</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIconFile</key>
@@ -26,20 +26,10 @@
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>CFBundleURLName</key>
-			<string>wc</string>
+			<string>tinywallet</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>wc</string>
-			</array>
-		</dict>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Viewer</string>
-			<key>CFBundleURLName</key>
-			<string>tokenary</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>tokenary</string>
+				<string>tinywallet</string>
 			</array>
 		</dict>
 	</array>
@@ -48,7 +38,7 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSApplicationCategoryType</key>
-	<string>public.app-category.finance</string>
+	<string>public.app-category.utilities</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>farcaster</string>

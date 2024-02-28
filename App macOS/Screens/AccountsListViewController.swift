@@ -75,7 +75,7 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-    private var wallets: [TokenaryWallet] {
+    private var wallets: [WalletContainer] {
         return walletsManager.wallets
     }
     
@@ -104,23 +104,6 @@ class AccountsListViewController: NSViewController {
             if let coin = selectAccountAction?.coinType, walletsManager.suggestedAccounts(coin: coin).isEmpty, !wallets.isEmpty {
                 Alert.showWithMessage(String(format: Strings.addAccountToConnect, arguments: [coin.name]), style: .informational)
             }
-            requestAnUpdateIfNeeded()
-        }
-    }
-    
-    private func requestAnUpdateIfNeeded() {
-        let configurationService = ConfigurationService.shared
-        guard configurationService.shouldPromptToUpdate else { return }
-        configurationService.didPromptToUpdate()
-        
-        let alert = Alert()
-        alert.messageText = Strings.thisAppVersionIsNoLongerSupported
-        alert.informativeText = Strings.pleaseGetANewOne
-        alert.alertStyle = .critical
-        alert.addButton(withTitle: Strings.ok)
-        alert.addButton(withTitle: Strings.notNow)
-        if alert.runModal() == .alertFirstButtonReturn {
-            NSWorkspace.shared.open(URL.updateApp)
         }
     }
     
@@ -336,7 +319,7 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-    private func walletForRow(_ row: Int) -> TokenaryWallet? {
+    private func walletForRow(_ row: Int) -> WalletContainer? {
         guard row >= 0 else { return nil }
         let item = cellModels[row]
         switch item {
@@ -399,7 +382,7 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-    private func warnOnLastAccountRemovalAttempt(wallet: TokenaryWallet) {
+    private func warnOnLastAccountRemovalAttempt(wallet: WalletContainer) {
         let alert = Alert()
         alert.messageText = Strings.removingTheLastAccount
         alert.alertStyle = .critical
@@ -411,7 +394,7 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-    private func warnBeforeRemoving(wallet: TokenaryWallet) {
+    private func warnBeforeRemoving(wallet: WalletContainer) {
         let alert = Alert()
         alert.messageText = Strings.removedWalletsCantBeRecovered
         alert.alertStyle = .critical
@@ -427,7 +410,7 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-    private func removeWallet(_ wallet: TokenaryWallet) {
+    private func removeWallet(_ wallet: WalletContainer) {
         try? walletsManager.delete(wallet: wallet)
     }
     
@@ -445,7 +428,7 @@ class AccountsListViewController: NSViewController {
         warnBeforeShowingKey(wallet: wallet)
     }
     
-    private func warnBeforeShowingKey(wallet: TokenaryWallet) {
+    private func warnBeforeShowingKey(wallet: WalletContainer) {
         let alert = Alert()
         alert.messageText = wallet.isMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
         alert.alertStyle = .critical
@@ -462,7 +445,7 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-    private func showKey(wallet: TokenaryWallet) {
+    private func showKey(wallet: WalletContainer) {
         let secret: String
         if wallet.isMnemonic, let mnemonicString = try? walletsManager.exportMnemonic(wallet: wallet) {
             secret = mnemonicString
@@ -560,7 +543,7 @@ extension AccountsListViewController: TableViewMenuSource {
 
         let item = cellModels[row]
         let account: Account
-        let wallet: TokenaryWallet
+        let wallet: WalletContainer
         
         switch item {
         case .mnemonicWalletHeader, .privateKeyWalletsHeader, .addAccountOption:
@@ -634,7 +617,7 @@ extension AccountsListViewController: NSTableViewDelegate {
         guard tableView.selectedRow < 0 else { return false }
         let model = cellModels[row]
         
-        let wallet: TokenaryWallet
+        let wallet: WalletContainer
         let account: Account
         
         switch model {

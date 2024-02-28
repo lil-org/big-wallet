@@ -5,12 +5,11 @@ import UniformTypeIdentifiers
 
 extension URL {
     
-    static let x = URL(string: "https://tokenary.io/x")!
-    static let warpcast = URL(string: "https://warpcast.com/org")!
-    static let github = URL(string: "https://tokenary.io/github")!
-    static let email = URL(string: "mailto:support@tokenary.io")!
-    static let iosSafariGuide = URL(string: "https://tokenary.io/guide-ios")!
-    static let updateApp = URL(string: "https://lil.org/update")!
+    static let x = URL(string: "https://x.lil.org")!
+    static let warpcast = URL(string: "https://f.lil.org")!
+    static let github = URL(string: "https://g.lil.org")!
+    static let email = URL(string: "mailto:support@lil.org")!
+    static let iosSafariGuide = URL(string: "https://lil.org/guide-ios")!
     static let farcasterScheme = URL(string: "farcaster://")!
     
     var mimeType: String {

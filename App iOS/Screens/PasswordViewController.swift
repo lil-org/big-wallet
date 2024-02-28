@@ -77,7 +77,7 @@ class PasswordViewController: UIViewController {
     }
     
     private func askForLocalAuthentication() {
-        LocalAuthentication.attempt(reason: Strings.enterTokenary, presentPasswordAlertFrom: nil, passwordReason: nil) { [weak self] success in
+        LocalAuthentication.attempt(reason: Strings.enterWallet, presentPasswordAlertFrom: nil, passwordReason: nil) { [weak self] success in
             if success {
                 self?.showAccountsList()
             } else {

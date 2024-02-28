@@ -10,7 +10,7 @@ import IdMapping from "./id_mapping";
 import { EventEmitter } from "events";
 import isUtf8 from "isutf8";
 
-class TokenaryEthereum extends EventEmitter {
+class TinyWalletEthereum extends EventEmitter {
     
     _metamask = {
         isUnlocked: () => {
@@ -31,7 +31,7 @@ class TokenaryEthereum extends EventEmitter {
         this._isConnected = true;
         this._initialized = true;
         this._isUnlocked = true;
-        this.isTokenary = true;
+        this.isTinyWallet = true;
         this.emitConnect(config.chainId);
         this.didEmitConnectAfterSubscription = false;
         this.didGetLatestConfiguration = false;
@@ -41,22 +41,22 @@ class TokenaryEthereum extends EventEmitter {
         this.on = (...args) => {
             if (args[0] == "connect") {
                 setTimeout( function() {
-                    if (!window.tokenary.eth.didEmitConnectAfterSubscription) {
-                        window.tokenary.eth.emitConnect(window.tokenary.eth.chainId);
-                        window.tokenary.eth.didEmitConnectAfterSubscription = true;
+                    if (!window.tinywallet.eth.didEmitConnectAfterSubscription) {
+                        window.tinywallet.eth.emitConnect(window.tinywallet.eth.chainId);
+                        window.tinywallet.eth.didEmitConnectAfterSubscription = true;
                     }
                 }, 1);
             }
             return originalOn.apply(this, args);
         };
         
-        setTimeout( function() { window.tokenary.eth.emit("_initialized"); }, 1);
+        setTimeout( function() { window.tinywallet.eth.emit("_initialized"); }, 1);
     }
     
     externalDisconnect() {
         this.setAddress("");
-        window.tokenary.eth.emit("disconnect");
-        window.tokenary.eth.emit("accountsChanged", []);
+        window.tinywallet.eth.emit("disconnect");
+        window.tinywallet.eth.emit("accountsChanged", []);
     }
     
     setAddress(address) {
@@ -67,22 +67,22 @@ class TokenaryEthereum extends EventEmitter {
     }
     
     updateAccount(eventName, addresses, chainId) {
-        window.tokenary.eth.setAddress(addresses[0]);
+        window.tinywallet.eth.setAddress(addresses[0]);
         
         if (eventName == "switchAccount") {
-            window.tokenary.eth.emit("accountsChanged", addresses);
+            window.tinywallet.eth.emit("accountsChanged", addresses);
         }
         
-        if (window.tokenary.eth.rpc.chainId != chainId) {
+        if (window.tinywallet.eth.rpc.chainId != chainId) {
             this.rpc = new RPCServer(chainId);
         }
         
-        if (window.tokenary.eth.chainId != chainId) {
-            window.tokenary.eth.chainId = chainId;
-            window.tokenary.eth.networkVersion = this.net_version();
+        if (window.tinywallet.eth.chainId != chainId) {
+            window.tinywallet.eth.chainId = chainId;
+            window.tinywallet.eth.networkVersion = this.net_version();
             if (eventName != "didLoadLatestConfiguration") {
-                window.tokenary.eth.emit("chainChanged", chainId);
-                window.tokenary.eth.emit("networkChanged", window.tokenary.eth.net_version());
+                window.tinywallet.eth.emit("chainChanged", chainId);
+                window.tinywallet.eth.emit("networkChanged", window.tinywallet.eth.net_version());
             }
         }
     }
@@ -96,8 +96,8 @@ class TokenaryEthereum extends EventEmitter {
     
     request(payload) {
         var that = this;
-        if (!(this instanceof TokenaryEthereum)) {
-            that = window.tokenary.eth;
+        if (!(this instanceof TinyWalletEthereum)) {
+            that = window.tinywallet.eth;
         }
         return that._request(payload, false);
     }
@@ -111,7 +111,7 @@ class TokenaryEthereum extends EventEmitter {
     }
     
     enable() {
-        if (!window.tokenary.eth.address) { // avoid double accounts request in uniswap
+        if (!window.tinywallet.eth.address) { // avoid double accounts request in uniswap
             return this.request({ method: "eth_requestAccounts", params: [] });
         } else {
             return this.request({ method: "eth_accounts", params: [] });
@@ -120,8 +120,8 @@ class TokenaryEthereum extends EventEmitter {
     
     send(payload, callback) {
         var that = this;
-        if (!(this instanceof TokenaryEthereum)) {
-            that = window.tokenary.eth;
+        if (!(this instanceof TinyWalletEthereum)) {
+            that = window.tinywallet.eth;
         }
         var requestPayload = {};
         if (typeof payload.method !== "undefined") {
@@ -143,8 +143,8 @@ class TokenaryEthereum extends EventEmitter {
     
     sendAsync(payload, callback) {
         var that = this;
-        if (!(this instanceof TokenaryEthereum)) {
-            that = window.tokenary.eth;
+        if (!(this instanceof TinyWalletEthereum)) {
+            that = window.tinywallet.eth;
         }
         if (Array.isArray(payload)) {
             Promise.all(payload.map(that._request.bind(that)))
@@ -335,7 +335,7 @@ class TokenaryEthereum extends EventEmitter {
         this.postMessage("addEthereumChain", payload.id, payload.params[0]);
     }
     
-    processTokenaryResponse(id, response) {
+    processTinyWalletResponse(id, response) {
         if (response.name == "didLoadLatestConfiguration") {
             this.didGetLatestConfiguration = true;
             if (response.chainId) {
@@ -376,7 +376,7 @@ class TokenaryEthereum extends EventEmitter {
                 address: this.address,
                 chainId: this.chainId
             };
-            window.tokenary.postMessage(handler, id, object, "ethereum");
+            window.tinywallet.postMessage(handler, id, object, "ethereum");
         } else {
             this.sendError(id, new ProviderRpcError(4100, "provider is not ready"));
         }
@@ -412,4 +412,4 @@ class TokenaryEthereum extends EventEmitter {
     }
 }
 
-module.exports = TokenaryEthereum;
+module.exports = TinyWalletEthereum;
