@@ -1486,7 +1486,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ -f \"${HOME}/Developer/secrets/tokenary/Secrets.plist\" ]; then\n    cp -f \"${HOME}/Developer/secrets/tokenary/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nelse\n    echo \"warning: 🟢🔴 YO BUNDLING EMPTY SECRETS\"\n    cp -f \"$SRCROOT/Shared/Supporting Files/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nfi\n";
+			shellScript = "if [ -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" ]; then\n    cp -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nelse\n    echo \"warning: 🟢🔴 YO BUNDLING EMPTY SECRETS\"\n    cp -f \"$SRCROOT/Shared/Supporting Files/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nfi\n";
 			showEnvVarsInLog = 0;
 		};
 		2CB0BC4E2B13B2E300603E68 /* ShellScript */ = {
@@ -1507,7 +1507,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ -f \"${HOME}/Developer/secrets/tokenary/Secrets.plist\" ]; then\n    cp -f \"${HOME}/Developer/secrets/tokenary/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nelse\n    echo \"warning: 🟢🔴 YO BUNDLING EMPTY SECRETS\"\n    cp -f \"$SRCROOT/Shared/Supporting Files/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nfi\n";
+			shellScript = "if [ -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" ]; then\n    cp -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nelse\n    echo \"warning: 🟢🔴 YO BUNDLING EMPTY SECRETS\"\n    cp -f \"$SRCROOT/Shared/Supporting Files/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nfi\n";
 			showEnvVarsInLog = 0;
 		};
 		2CB0BC4F2B13B30600603E68 /* ShellScript */ = {
@@ -1528,7 +1528,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ -f \"${HOME}/Developer/secrets/tokenary/Secrets.plist\" ]; then\n    cp -f \"${HOME}/Developer/secrets/tokenary/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nelse\n    echo \"warning: 🟢🔴 YO BUNDLING EMPTY SECRETS\"\n    cp -f \"$SRCROOT/Shared/Supporting Files/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nfi\n";
+			shellScript = "if [ -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" ]; then\n    cp -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nelse\n    echo \"warning: 🟢🔴 YO BUNDLING EMPTY SECRETS\"\n    cp -f \"$SRCROOT/Shared/Supporting Files/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nfi\n";
 			showEnvVarsInLog = 0;
 		};
 		2CB0BC502B13B32100603E68 /* ShellScript */ = {
@@ -1549,7 +1549,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ -f \"${HOME}/Developer/secrets/tokenary/Secrets.plist\" ]; then\n    cp -f \"${HOME}/Developer/secrets/tokenary/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nelse\n    echo \"warning: 🟢🔴 YO BUNDLING EMPTY SECRETS\"\n    cp -f \"$SRCROOT/Shared/Supporting Files/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nfi\n";
+			shellScript = "if [ -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" ]; then\n    cp -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nelse\n    echo \"warning: 🟢🔴 YO BUNDLING EMPTY SECRETS\"\n    cp -f \"$SRCROOT/Shared/Supporting Files/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nfi\n";
 			showEnvVarsInLog = 0;
 		};
 		2CB3844927654C8D00A189B9 /* ShellScript */ = {
