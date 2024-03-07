@@ -98,6 +98,11 @@
     "o" : true,
     "s" : "BNB"
   },
+  "238" : {
+    "b" : "https://scan.blastblockchain.com",
+    "n" : "Blast",
+    "s" : "ETH"
+  },
   "250" : {
     "b" : "https://ftmscan.com",
     "n" : "Fantom Opera",

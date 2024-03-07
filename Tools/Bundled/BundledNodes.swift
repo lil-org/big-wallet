@@ -21,6 +21,7 @@ struct BundledNodes {
         169: "pacific-rpc.manta.network/http",
         200: "arbitrum.xdaichain.com/",
         204: "opbnb-mainnet-rpc.bnbchain.org",
+        238: "rpc.blastblockchain.com",
         250: "rpc.ftm.tools",
         280: "testnet.era.zksync.dev",
         288: "mainnet.boba.network",
