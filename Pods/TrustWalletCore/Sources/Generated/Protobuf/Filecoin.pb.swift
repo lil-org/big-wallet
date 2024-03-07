@@ -81,16 +81,16 @@ public struct TW_Filecoin_Proto_SigningInput {
   /// Transaction nonce.
   public var nonce: UInt64 = 0
 
-  /// Transfer value (uint256, serialized little endian)
+  /// Transfer value (uint256, serialized big endian)
   public var value: Data = Data()
 
   /// Gas limit.
   public var gasLimit: Int64 = 0
 
-  /// Gas fee cap (uint256, serialized little endian)
+  /// Gas fee cap (uint256, serialized big endian)
   public var gasFeeCap: Data = Data()
 
-  /// Gas premium (uint256, serialized little endian)
+  /// Gas premium (uint256, serialized big endian)
   public var gasPremium: Data = Data()
 
   /// Message params.

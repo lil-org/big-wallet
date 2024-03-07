@@ -90,10 +90,10 @@ public struct TW_EOS_Proto_SigningInput {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Chain id (uint256, serialized little endian)
+  /// Chain id (uint256, serialized big endian)
   public var chainID: Data = Data()
 
-  /// Reference Block Id (uint256, serialized little endian)
+  /// Reference Block Id (uint256, serialized big endian)
   public var referenceBlockID: Data = Data()
 
   /// Timestamp on the reference block

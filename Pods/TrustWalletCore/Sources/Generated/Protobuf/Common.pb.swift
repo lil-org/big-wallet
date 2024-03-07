@@ -105,6 +105,9 @@ public enum TW_Common_Proto_SigningError: SwiftProtobuf.Enum {
 
   /// Operation not supported for the chain.
   case errorNotSupported // = 24
+
+  /// Requested amount is too low (less dust).
+  case errorDustAmountRequested // = 25
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -138,6 +141,7 @@ public enum TW_Common_Proto_SigningError: SwiftProtobuf.Enum {
     case 22: self = .errorInvalidParams
     case 23: self = .errorInvalidRequestedTokenAmount
     case 24: self = .errorNotSupported
+    case 25: self = .errorDustAmountRequested
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -169,6 +173,7 @@ public enum TW_Common_Proto_SigningError: SwiftProtobuf.Enum {
     case .errorInvalidParams: return 22
     case .errorInvalidRequestedTokenAmount: return 23
     case .errorNotSupported: return 24
+    case .errorDustAmountRequested: return 25
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -205,6 +210,7 @@ extension TW_Common_Proto_SigningError: CaseIterable {
     .errorInvalidParams,
     .errorInvalidRequestedTokenAmount,
     .errorNotSupported,
+    .errorDustAmountRequested,
   ]
 }
 
@@ -239,5 +245,6 @@ extension TW_Common_Proto_SigningError: SwiftProtobuf._ProtoNameProviding {
     22: .same(proto: "Error_invalid_params"),
     23: .same(proto: "Error_invalid_requested_token_amount"),
     24: .same(proto: "Error_not_supported"),
+    25: .same(proto: "Error_dust_amount_requested"),
   ]
 }

@@ -32,16 +32,16 @@ public struct TW_Theta_Proto_SigningInput {
   //// Recipient address
   public var toAddress: String = String()
 
-  //// Theta token amount to send in wei (uint256, serialized little endian)
+  //// Theta token amount to send in wei (uint256, serialized big endian)
   public var thetaAmount: Data = Data()
 
-  //// TFuel token amount to send in wei (uint256, serialized little endian)
+  //// TFuel token amount to send in wei (uint256, serialized big endian)
   public var tfuelAmount: Data = Data()
 
   //// Sequence number of the transaction for the sender address
   public var sequence: UInt64 = 0
 
-  //// Fee amount in TFuel wei for the transaction (uint256, serialized little endian)
+  //// Fee amount in TFuel wei for the transaction (uint256, serialized big endian)
   public var fee: Data = Data()
 
   //// The secret private key used for signing (32 bytes).

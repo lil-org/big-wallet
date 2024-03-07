@@ -64,7 +64,7 @@ public struct TW_NULS_Proto_TransactionCoinTo {
   /// ID of the asset
   public var assetsID: UInt32 = 0
 
-  /// transaction amount (uint256, serialized little endian)
+  /// transaction amount (uint256, serialized big endian)
   public var idAmount: Data = Data()
 
   /// lock time
@@ -157,7 +157,7 @@ public struct TW_NULS_Proto_SigningInput {
   /// Destination address
   public var to: String = String()
 
-  /// Transfer amount (uint256, serialized little endian)
+  /// Transfer amount (uint256, serialized big endian)
   public var amount: Data = Data()
 
   /// Chain ID

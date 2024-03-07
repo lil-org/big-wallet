@@ -224,7 +224,7 @@ public struct TW_Polkadot_Proto_Balance {
     /// destination address
     public var toAddress: String = String()
 
-    /// amount (uint256, serialized little endian)
+    /// amount (uint256, serialized big endian)
     public var value: Data = Data()
 
     /// max 32 chars
@@ -490,7 +490,7 @@ public struct TW_Polkadot_Proto_Staking {
     /// controller ID (optional)
     public var controller: String = String()
 
-    /// amount (uint256, serialized little endian)
+    /// amount (uint256, serialized big endian)
     public var value: Data = Data()
 
     /// destination for rewards
@@ -522,7 +522,7 @@ public struct TW_Polkadot_Proto_Staking {
     /// controller ID (optional)
     public var controller: String = String()
 
-    /// amount (uint256, serialized little endian)
+    /// amount (uint256, serialized big endian)
     public var value: Data = Data()
 
     /// destination for rewards
@@ -554,7 +554,7 @@ public struct TW_Polkadot_Proto_Staking {
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
-    /// amount (uint256, serialized little endian)
+    /// amount (uint256, serialized big endian)
     public var value: Data = Data()
 
     /// call indices
@@ -580,7 +580,7 @@ public struct TW_Polkadot_Proto_Staking {
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
-    /// amount (uint256, serialized little endian)
+    /// amount (uint256, serialized big endian)
     public var value: Data = Data()
 
     /// call indices
@@ -606,7 +606,7 @@ public struct TW_Polkadot_Proto_Staking {
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
-    /// amount (uint256, serialized little endian)
+    /// amount (uint256, serialized big endian)
     public var value: Data = Data()
 
     /// call indices
@@ -683,7 +683,7 @@ public struct TW_Polkadot_Proto_Staking {
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
-    /// amount (uint256, serialized little endian)
+    /// amount (uint256, serialized big endian)
     public var value: Data = Data()
 
     /// call indices

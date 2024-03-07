@@ -49,7 +49,7 @@ public struct TW_Cardano_Proto_TokenAmount {
   /// The name of the asset (within the policy)
   public var assetName: String = String()
 
-  /// The amount (uint256, serialized little endian)
+  /// The amount (uint256, serialized big endian)
   public var amount: Data = Data()
 
   /// The name of the asset (hex encoded). Ignored if `asset_name` is set

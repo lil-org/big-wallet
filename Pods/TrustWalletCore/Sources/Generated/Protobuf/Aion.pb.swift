@@ -26,19 +26,19 @@ public struct TW_Aion_Proto_SigningInput {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Nonce (uint256, serialized little endian)
+  /// Nonce (uint256, serialized big endian)
   public var nonce: Data = Data()
 
-  /// Gas price (uint256, serialized little endian)
+  /// Gas price (uint256, serialized big endian)
   public var gasPrice: Data = Data()
 
-  /// Gas limit (uint256, serialized little endian)
+  /// Gas limit (uint256, serialized big endian)
   public var gasLimit: Data = Data()
 
   /// Recipient's address.
   public var toAddress: String = String()
 
-  /// Amount to send in wei (uint256, serialized little endian)
+  /// Amount to send in wei (uint256, serialized big endian)
   public var amount: Data = Data()
 
   /// Optional payload

@@ -365,7 +365,44 @@ public struct TW_Bitcoin_Proto_SigningInput {
   /// Clears the value of `signingV2`. Subsequent reads from it will return its default value.
   public mutating func clearSigningV2() {_uniqueStorage()._signingV2 = nil}
 
+  /// One of the "Dust" amount policies.
+  /// Later, we plan to add support for `DynamicDust` policy with a `min_relay_fee` amount.
+  public var dustPolicy: OneOf_DustPolicy? {
+    get {return _storage._dustPolicy}
+    set {_uniqueStorage()._dustPolicy = newValue}
+  }
+
+  /// Use a constant "Dust" threshold.
+  public var fixedDustThreshold: Int64 {
+    get {
+      if case .fixedDustThreshold(let v)? = _storage._dustPolicy {return v}
+      return 0
+    }
+    set {_uniqueStorage()._dustPolicy = .fixedDustThreshold(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  /// One of the "Dust" amount policies.
+  /// Later, we plan to add support for `DynamicDust` policy with a `min_relay_fee` amount.
+  public enum OneOf_DustPolicy: Equatable {
+    /// Use a constant "Dust" threshold.
+    case fixedDustThreshold(Int64)
+
+  #if !swift(>=4.1)
+    public static func ==(lhs: TW_Bitcoin_Proto_SigningInput.OneOf_DustPolicy, rhs: TW_Bitcoin_Proto_SigningInput.OneOf_DustPolicy) -> Bool {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch (lhs, rhs) {
+      case (.fixedDustThreshold, .fixedDustThreshold): return {
+        guard case .fixedDustThreshold(let l) = lhs, case .fixedDustThreshold(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      }
+    }
+  #endif
+  }
 
   public init() {}
 
@@ -849,6 +886,7 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
     18: .standard(proto: "is_it_brc_operation"),
     20: .standard(proto: "planning_v2"),
     21: .standard(proto: "signing_v2"),
+    24: .standard(proto: "fixed_dust_threshold"),
   ]
 
   fileprivate class _StorageClass {
@@ -872,6 +910,7 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
     var _isItBrcOperation: Bool = false
     var _planningV2: TW_BitcoinV2_Proto_ComposePlan? = nil
     var _signingV2: TW_BitcoinV2_Proto_SigningInput? = nil
+    var _dustPolicy: TW_Bitcoin_Proto_SigningInput.OneOf_DustPolicy?
 
     static let defaultInstance = _StorageClass()
 
@@ -898,6 +937,7 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
       _isItBrcOperation = source._isItBrcOperation
       _planningV2 = source._planningV2
       _signingV2 = source._signingV2
+      _dustPolicy = source._dustPolicy
     }
   }
 
@@ -936,6 +976,14 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
         case 18: try { try decoder.decodeSingularBoolField(value: &_storage._isItBrcOperation) }()
         case 20: try { try decoder.decodeSingularMessageField(value: &_storage._planningV2) }()
         case 21: try { try decoder.decodeSingularMessageField(value: &_storage._signingV2) }()
+        case 24: try {
+          var v: Int64?
+          try decoder.decodeSingularInt64Field(value: &v)
+          if let v = v {
+            if _storage._dustPolicy != nil {try decoder.handleConflictingOneOf()}
+            _storage._dustPolicy = .fixedDustThreshold(v)
+          }
+        }()
         default: break
         }
       }
@@ -1008,6 +1056,9 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
       try { if let v = _storage._signingV2 {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 21)
       } }()
+      try { if case .fixedDustThreshold(let v)? = _storage._dustPolicy {
+        try visitor.visitSingularInt64Field(value: v, fieldNumber: 24)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1037,6 +1088,7 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
         if _storage._isItBrcOperation != rhs_storage._isItBrcOperation {return false}
         if _storage._planningV2 != rhs_storage._planningV2 {return false}
         if _storage._signingV2 != rhs_storage._signingV2 {return false}
+        if _storage._dustPolicy != rhs_storage._dustPolicy {return false}
         return true
       }
       if !storagesAreEqual {return false}

@@ -256,7 +256,7 @@ public struct TW_Ethereum_Proto_Transaction {
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
-    /// Amount to send in wei (uint256, serialized little endian)
+    /// Amount to send in wei (uint256, serialized big endian)
     public var amount: Data = Data()
 
     /// Optional payload data
@@ -276,7 +276,7 @@ public struct TW_Ethereum_Proto_Transaction {
     /// destination address (string)
     public var to: String = String()
 
-    /// Amount to send (uint256, serialized little endian)
+    /// Amount to send (uint256, serialized big endian)
     public var amount: Data = Data()
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -293,7 +293,7 @@ public struct TW_Ethereum_Proto_Transaction {
     /// Target of the approval
     public var spender: String = String()
 
-    /// Amount to send (uint256, serialized little endian)
+    /// Amount to send (uint256, serialized big endian)
     public var amount: Data = Data()
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -313,7 +313,7 @@ public struct TW_Ethereum_Proto_Transaction {
     /// Destination address
     public var to: String = String()
 
-    /// ID of the token (uint256, serialized little endian)
+    /// ID of the token (uint256, serialized big endian)
     public var tokenID: Data = Data()
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -333,10 +333,10 @@ public struct TW_Ethereum_Proto_Transaction {
     /// Destination address
     public var to: String = String()
 
-    /// ID of the token (uint256, serialized little endian)
+    /// ID of the token (uint256, serialized big endian)
     public var tokenID: Data = Data()
 
-    /// The amount of tokens being transferred (uint256, serialized little endian)
+    /// The amount of tokens being transferred (uint256, serialized big endian)
     public var value: Data = Data()
 
     public var data: Data = Data()
@@ -352,7 +352,7 @@ public struct TW_Ethereum_Proto_Transaction {
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
-    /// Amount to send in wei (uint256, serialized little endian)
+    /// Amount to send in wei (uint256, serialized big endian)
     public var amount: Data = Data()
 
     /// Contract call payload data
@@ -381,7 +381,7 @@ public struct TW_Ethereum_Proto_Transaction {
       /// Recipient addresses.
       public var address: String = String()
 
-      /// Amounts to send in wei (uint256, serialized little endian)
+      /// Amounts to send in wei (uint256, serialized big endian)
       public var amount: Data = Data()
 
       /// Contract call payloads data
@@ -434,13 +434,13 @@ public struct TW_Ethereum_Proto_SigningInput {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Chain identifier (uint256, serialized little endian)
+  /// Chain identifier (uint256, serialized big endian)
   public var chainID: Data {
     get {return _storage._chainID}
     set {_uniqueStorage()._chainID = newValue}
   }
 
-  /// Nonce (uint256, serialized little endian)
+  /// Nonce (uint256, serialized big endian)
   public var nonce: Data {
     get {return _storage._nonce}
     set {_uniqueStorage()._nonce = newValue}
@@ -453,27 +453,27 @@ public struct TW_Ethereum_Proto_SigningInput {
     set {_uniqueStorage()._txMode = newValue}
   }
 
-  /// Gas price (uint256, serialized little endian)
+  /// Gas price (uint256, serialized big endian)
   /// Relevant for legacy transactions only (disregarded for enveloped/EIP1559)
   public var gasPrice: Data {
     get {return _storage._gasPrice}
     set {_uniqueStorage()._gasPrice = newValue}
   }
 
-  /// Gas limit (uint256, serialized little endian)
+  /// Gas limit (uint256, serialized big endian)
   public var gasLimit: Data {
     get {return _storage._gasLimit}
     set {_uniqueStorage()._gasLimit = newValue}
   }
 
-  /// Maximum optional inclusion fee (aka tip) (uint256, serialized little endian)
+  /// Maximum optional inclusion fee (aka tip) (uint256, serialized big endian)
   /// Relevant for enveloped/EIP1559 transactions only, tx_mode=Enveloped, (disregarded for legacy)
   public var maxInclusionFeePerGas: Data {
     get {return _storage._maxInclusionFeePerGas}
     set {_uniqueStorage()._maxInclusionFeePerGas = newValue}
   }
 
-  /// Maximum fee (uint256, serialized little endian)
+  /// Maximum fee (uint256, serialized big endian)
   /// Relevant for enveloped/EIP1559 transactions only, tx_mode=Enveloped, (disregarded for legacy)
   public var maxFeePerGas: Data {
     get {return _storage._maxFeePerGas}
@@ -528,7 +528,7 @@ public struct TW_Ethereum_Proto_SigningOutput {
   /// Signed and encoded transaction bytes.
   public var encoded: Data = Data()
 
-  /// The V, R, S components of the resulting signature, (each uint256, serialized little endian)
+  /// The V, R, S components of the resulting signature, (each uint256, serialized big endian)
   public var v: Data = Data()
 
   public var r: Data = Data()

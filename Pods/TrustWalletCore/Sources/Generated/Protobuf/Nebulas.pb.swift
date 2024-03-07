@@ -29,25 +29,25 @@ public struct TW_Nebulas_Proto_SigningInput {
   /// sender's address.
   public var fromAddress: String = String()
 
-  /// Chain identifier (uint256, serialized little endian)
+  /// Chain identifier (uint256, serialized big endian)
   public var chainID: Data = Data()
 
-  /// Nonce (uint256, serialized little endian)
+  /// Nonce (uint256, serialized big endian)
   public var nonce: Data = Data()
 
-  /// Gas price (uint256, serialized little endian)
+  /// Gas price (uint256, serialized big endian)
   public var gasPrice: Data = Data()
 
-  /// Gas limit (uint256, serialized little endian)
+  /// Gas limit (uint256, serialized big endian)
   public var gasLimit: Data = Data()
 
   /// Recipient's address.
   public var toAddress: String = String()
 
-  /// Amount to send in wei, 1 NAS = 10^18 Wei (uint256, serialized little endian)
+  /// Amount to send in wei, 1 NAS = 10^18 Wei (uint256, serialized big endian)
   public var amount: Data = Data()
 
-  /// Timestamp to create transaction (uint256, serialized little endian)
+  /// Timestamp to create transaction (uint256, serialized big endian)
   public var timestamp: Data = Data()
 
   /// Optional payload
@@ -111,7 +111,7 @@ public struct TW_Nebulas_Proto_RawTransaction {
   /// destination address
   public var to: Data = Data()
 
-  /// amount (uint256, serialized little endian)
+  /// amount (uint256, serialized big endian)
   public var value: Data = Data()
 
   /// Nonce (should be larger than in the last transaction of the account)
@@ -133,10 +133,10 @@ public struct TW_Nebulas_Proto_RawTransaction {
   /// chain ID (4 bytes)
   public var chainID: UInt32 = 0
 
-  /// gas price (uint256, serialized little endian)
+  /// gas price (uint256, serialized big endian)
   public var gasPrice: Data = Data()
 
-  /// gas limit (uint256, serialized little endian)
+  /// gas limit (uint256, serialized big endian)
   public var gasLimit: Data = Data()
 
   /// algorithm

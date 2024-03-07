@@ -32,10 +32,10 @@ public struct TW_Aeternity_Proto_SigningInput {
   /// Address of the recipient with "ak_" prefix
   public var toAddress: String = String()
 
-  /// Amount (uint256, serialized little endian)
+  /// Amount (uint256, serialized big endian)
   public var amount: Data = Data()
 
-  /// Fee amount (uint256, serialized little endian)
+  /// Fee amount (uint256, serialized big endian)
   public var fee: Data = Data()
 
   /// Message, optional

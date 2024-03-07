@@ -76,7 +76,7 @@ public struct TW_Zilliqa_Proto_Transaction {
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
-    /// Amount to send (uint256, serialized little endian)
+    /// Amount to send (uint256, serialized big endian)
     public var amount: Data = Data()
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -90,7 +90,7 @@ public struct TW_Zilliqa_Proto_Transaction {
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
-    /// Amount to send (uint256, serialized little endian)
+    /// Amount to send (uint256, serialized big endian)
     public var amount: Data = Data()
 
     /// Smart contract code

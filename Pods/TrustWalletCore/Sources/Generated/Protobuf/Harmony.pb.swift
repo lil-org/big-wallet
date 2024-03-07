@@ -26,7 +26,7 @@ public struct TW_Harmony_Proto_SigningInput {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Chain identifier (uint256, serialized little endian)
+  /// Chain identifier (uint256, serialized big endian)
   public var chainID: Data = Data()
 
   /// The secret private key used for signing (32 bytes).
@@ -114,28 +114,28 @@ public struct TW_Harmony_Proto_TransactionMessage {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Nonce (uint256, serialized little endian)
+  /// Nonce (uint256, serialized big endian)
   public var nonce: Data = Data()
 
-  /// Gas price (uint256, serialized little endian)
+  /// Gas price (uint256, serialized big endian)
   public var gasPrice: Data = Data()
 
-  /// Gas limit (uint256, serialized little endian)
+  /// Gas limit (uint256, serialized big endian)
   public var gasLimit: Data = Data()
 
   /// Recipient's address.
   public var toAddress: String = String()
 
-  /// Amount to send in wei (uint256, serialized little endian)
+  /// Amount to send in wei (uint256, serialized big endian)
   public var amount: Data = Data()
 
   /// Optional payload
   public var payload: Data = Data()
 
-  /// From shard ID (uint256, serialized little endian)
+  /// From shard ID (uint256, serialized big endian)
   public var fromShardID: Data = Data()
 
-  /// To Shard ID (uint256, serialized little endian)
+  /// To Shard ID (uint256, serialized big endian)
   public var toShardID: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -195,19 +195,19 @@ public struct TW_Harmony_Proto_StakingMessage {
     set {_uniqueStorage()._stakeMsg = .collectRewards(newValue)}
   }
 
-  /// Nonce (uint256, serialized little endian)
+  /// Nonce (uint256, serialized big endian)
   public var nonce: Data {
     get {return _storage._nonce}
     set {_uniqueStorage()._nonce = newValue}
   }
 
-  /// Gas price (uint256, serialized little endian)
+  /// Gas price (uint256, serialized big endian)
   public var gasPrice: Data {
     get {return _storage._gasPrice}
     set {_uniqueStorage()._gasPrice = newValue}
   }
 
-  /// Gas limit (uint256, serialized little endian)
+  /// Gas limit (uint256, serialized big endian)
   public var gasLimit: Data {
     get {return _storage._gasLimit}
     set {_uniqueStorage()._gasLimit = newValue}
@@ -466,7 +466,7 @@ public struct TW_Harmony_Proto_DirectiveDelegate {
   /// Validator address
   public var validatorAddress: String = String()
 
-  /// Delegate amount (uint256, serialized little endian)
+  /// Delegate amount (uint256, serialized big endian)
   public var amount: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -486,7 +486,7 @@ public struct TW_Harmony_Proto_DirectiveUndelegate {
   /// Validator address
   public var validatorAddress: String = String()
 
-  /// Undelegate amount (uint256, serialized little endian)
+  /// Undelegate amount (uint256, serialized big endian)
   public var amount: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()

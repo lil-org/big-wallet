@@ -29,7 +29,7 @@ public struct TW_VeChain_Proto_Clause {
   //// Recipient address.
   public var to: String = String()
 
-  //// Transaction amount (uint256, serialized little endian)
+  //// Transaction amount (uint256, serialized big endian)
   public var value: Data = Data()
 
   //// Payload data.

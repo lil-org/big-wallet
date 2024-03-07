@@ -32,7 +32,7 @@ public struct TW_Icon_Proto_SigningInput {
   /// Recipient address.
   public var toAddress: String = String()
 
-  /// Transfer amount (uint256, serialized little endian)
+  /// Transfer amount (uint256, serialized big endian)
   public var value: Data = Data()
 
   /// The amount of step to send with the transaction.
