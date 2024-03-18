@@ -20,6 +20,46 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+public enum TW_Solana_Proto_Encoding: SwiftProtobuf.Enum {
+  public typealias RawValue = Int
+  case base58 // = 0
+  case base64 // = 1
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .base58
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .base58
+    case 1: self = .base64
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .base58: return 0
+    case .base64: return 1
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+}
+
+#if swift(>=4.2)
+
+extension TW_Solana_Proto_Encoding: CaseIterable {
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static var allCases: [TW_Solana_Proto_Encoding] = [
+    .base58,
+    .base64,
+  ]
+}
+
+#endif  // swift(>=4.2)
+
 /// Transfer transaction
 public struct TW_Solana_Proto_Transfer {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -273,6 +313,238 @@ public struct TW_Solana_Proto_AdvanceNonceAccount {
   public init() {}
 }
 
+public struct TW_Solana_Proto_PubkeySignature {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var pubkey: String = String()
+
+  /// base58 encoded signature.
+  public var signature: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct TW_Solana_Proto_RawMessage {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Transaction signatures.
+  /// If private keys are set in `SigningInput`, corresponding signatures will be overriden.
+  /// It's also possible some or all the signatures are be used to compile a transaction if corresponding private keys are not set.
+  public var signatures: [TW_Solana_Proto_PubkeySignature] = []
+
+  public var message: TW_Solana_Proto_RawMessage.OneOf_Message? = nil
+
+  public var legacy: TW_Solana_Proto_RawMessage.MessageLegacy {
+    get {
+      if case .legacy(let v)? = message {return v}
+      return TW_Solana_Proto_RawMessage.MessageLegacy()
+    }
+    set {message = .legacy(newValue)}
+  }
+
+  public var v0: TW_Solana_Proto_RawMessage.MessageV0 {
+    get {
+      if case .v0(let v)? = message {return v}
+      return TW_Solana_Proto_RawMessage.MessageV0()
+    }
+    set {message = .v0(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public enum OneOf_Message: Equatable {
+    case legacy(TW_Solana_Proto_RawMessage.MessageLegacy)
+    case v0(TW_Solana_Proto_RawMessage.MessageV0)
+
+  #if !swift(>=4.1)
+    public static func ==(lhs: TW_Solana_Proto_RawMessage.OneOf_Message, rhs: TW_Solana_Proto_RawMessage.OneOf_Message) -> Bool {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch (lhs, rhs) {
+      case (.legacy, .legacy): return {
+        guard case .legacy(let l) = lhs, case .legacy(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.v0, .v0): return {
+        guard case .v0(let l) = lhs, case .v0(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      default: return false
+      }
+    }
+  #endif
+  }
+
+  public struct MessageHeader {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    public var numRequiredSignatures: UInt32 = 0
+
+    public var numReadonlySignedAccounts: UInt32 = 0
+
+    public var numReadonlyUnsignedAccounts: UInt32 = 0
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
+  public struct Instruction {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    public var programID: UInt32 = 0
+
+    public var accounts: [UInt32] = []
+
+    public var programData: Data = Data()
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
+  public struct MessageAddressTableLookup {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    public var accountKey: String = String()
+
+    public var writableIndexes: [UInt32] = []
+
+    public var readonlyIndexes: [UInt32] = []
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
+  public struct MessageLegacy {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    public var header: TW_Solana_Proto_RawMessage.MessageHeader {
+      get {return _header ?? TW_Solana_Proto_RawMessage.MessageHeader()}
+      set {_header = newValue}
+    }
+    /// Returns true if `header` has been explicitly set.
+    public var hasHeader: Bool {return self._header != nil}
+    /// Clears the value of `header`. Subsequent reads from it will return its default value.
+    public mutating func clearHeader() {self._header = nil}
+
+    public var accountKeys: [String] = []
+
+    /// Relatively recent block hash (base58 encoded).
+    public var recentBlockhash: String = String()
+
+    public var instructions: [TW_Solana_Proto_RawMessage.Instruction] = []
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+
+    fileprivate var _header: TW_Solana_Proto_RawMessage.MessageHeader? = nil
+  }
+
+  public struct MessageV0 {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    public var header: TW_Solana_Proto_RawMessage.MessageHeader {
+      get {return _header ?? TW_Solana_Proto_RawMessage.MessageHeader()}
+      set {_header = newValue}
+    }
+    /// Returns true if `header` has been explicitly set.
+    public var hasHeader: Bool {return self._header != nil}
+    /// Clears the value of `header`. Subsequent reads from it will return its default value.
+    public mutating func clearHeader() {self._header = nil}
+
+    public var accountKeys: [String] = []
+
+    /// Relatively recent block hash (base58 encoded).
+    public var recentBlockhash: String = String()
+
+    public var instructions: [TW_Solana_Proto_RawMessage.Instruction] = []
+
+    public var addressTableLookups: [TW_Solana_Proto_RawMessage.MessageAddressTableLookup] = []
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+
+    fileprivate var _header: TW_Solana_Proto_RawMessage.MessageHeader? = nil
+  }
+
+  public init() {}
+}
+
+public struct TW_Solana_Proto_DecodingTransactionOutput {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Decoded transaction info.
+  public var transaction: TW_Solana_Proto_RawMessage {
+    get {return _transaction ?? TW_Solana_Proto_RawMessage()}
+    set {_transaction = newValue}
+  }
+  /// Returns true if `transaction` has been explicitly set.
+  public var hasTransaction: Bool {return self._transaction != nil}
+  /// Clears the value of `transaction`. Subsequent reads from it will return its default value.
+  public mutating func clearTransaction() {self._transaction = nil}
+
+  /// Error code, 0 is ok, other codes will be treated as errors
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  /// Error code description
+  public var errorMessage: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _transaction: TW_Solana_Proto_RawMessage? = nil
+}
+
+/// Specific compute unit limit that the transaction is allowed to consume.
+public struct TW_Solana_Proto_PriorityFeePrice {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var price: UInt64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Compute unit price in "micro-lamports" to pay a higher transaction fee for higher transaction prioritization.
+public struct TW_Solana_Proto_PriorityFeeLimit {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var limit: UInt32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 /// Input data necessary to create a signed transaction.
 public struct TW_Solana_Proto_SigningInput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -280,123 +552,186 @@ public struct TW_Solana_Proto_SigningInput {
   // methods supported on all messages.
 
   /// The secret private key used for signing (32 bytes).
-  public var privateKey: Data = Data()
+  public var privateKey: Data {
+    get {return _storage._privateKey}
+    set {_uniqueStorage()._privateKey = newValue}
+  }
 
   /// Relatively recent block hash
-  public var recentBlockhash: String = String()
+  public var recentBlockhash: String {
+    get {return _storage._recentBlockhash}
+    set {_uniqueStorage()._recentBlockhash = newValue}
+  }
 
-  public var v0Msg: Bool = false
+  public var v0Msg: Bool {
+    get {return _storage._v0Msg}
+    set {_uniqueStorage()._v0Msg = newValue}
+  }
 
   /// Payload message
-  public var transactionType: TW_Solana_Proto_SigningInput.OneOf_TransactionType? = nil
+  public var transactionType: OneOf_TransactionType? {
+    get {return _storage._transactionType}
+    set {_uniqueStorage()._transactionType = newValue}
+  }
 
   public var transferTransaction: TW_Solana_Proto_Transfer {
     get {
-      if case .transferTransaction(let v)? = transactionType {return v}
+      if case .transferTransaction(let v)? = _storage._transactionType {return v}
       return TW_Solana_Proto_Transfer()
     }
-    set {transactionType = .transferTransaction(newValue)}
+    set {_uniqueStorage()._transactionType = .transferTransaction(newValue)}
   }
 
   public var delegateStakeTransaction: TW_Solana_Proto_DelegateStake {
     get {
-      if case .delegateStakeTransaction(let v)? = transactionType {return v}
+      if case .delegateStakeTransaction(let v)? = _storage._transactionType {return v}
       return TW_Solana_Proto_DelegateStake()
     }
-    set {transactionType = .delegateStakeTransaction(newValue)}
+    set {_uniqueStorage()._transactionType = .delegateStakeTransaction(newValue)}
   }
 
   public var deactivateStakeTransaction: TW_Solana_Proto_DeactivateStake {
     get {
-      if case .deactivateStakeTransaction(let v)? = transactionType {return v}
+      if case .deactivateStakeTransaction(let v)? = _storage._transactionType {return v}
       return TW_Solana_Proto_DeactivateStake()
     }
-    set {transactionType = .deactivateStakeTransaction(newValue)}
+    set {_uniqueStorage()._transactionType = .deactivateStakeTransaction(newValue)}
   }
 
   public var deactivateAllStakeTransaction: TW_Solana_Proto_DeactivateAllStake {
     get {
-      if case .deactivateAllStakeTransaction(let v)? = transactionType {return v}
+      if case .deactivateAllStakeTransaction(let v)? = _storage._transactionType {return v}
       return TW_Solana_Proto_DeactivateAllStake()
     }
-    set {transactionType = .deactivateAllStakeTransaction(newValue)}
+    set {_uniqueStorage()._transactionType = .deactivateAllStakeTransaction(newValue)}
   }
 
   public var withdrawTransaction: TW_Solana_Proto_WithdrawStake {
     get {
-      if case .withdrawTransaction(let v)? = transactionType {return v}
+      if case .withdrawTransaction(let v)? = _storage._transactionType {return v}
       return TW_Solana_Proto_WithdrawStake()
     }
-    set {transactionType = .withdrawTransaction(newValue)}
+    set {_uniqueStorage()._transactionType = .withdrawTransaction(newValue)}
   }
 
   public var withdrawAllTransaction: TW_Solana_Proto_WithdrawAllStake {
     get {
-      if case .withdrawAllTransaction(let v)? = transactionType {return v}
+      if case .withdrawAllTransaction(let v)? = _storage._transactionType {return v}
       return TW_Solana_Proto_WithdrawAllStake()
     }
-    set {transactionType = .withdrawAllTransaction(newValue)}
+    set {_uniqueStorage()._transactionType = .withdrawAllTransaction(newValue)}
   }
 
   public var createTokenAccountTransaction: TW_Solana_Proto_CreateTokenAccount {
     get {
-      if case .createTokenAccountTransaction(let v)? = transactionType {return v}
+      if case .createTokenAccountTransaction(let v)? = _storage._transactionType {return v}
       return TW_Solana_Proto_CreateTokenAccount()
     }
-    set {transactionType = .createTokenAccountTransaction(newValue)}
+    set {_uniqueStorage()._transactionType = .createTokenAccountTransaction(newValue)}
   }
 
   public var tokenTransferTransaction: TW_Solana_Proto_TokenTransfer {
     get {
-      if case .tokenTransferTransaction(let v)? = transactionType {return v}
+      if case .tokenTransferTransaction(let v)? = _storage._transactionType {return v}
       return TW_Solana_Proto_TokenTransfer()
     }
-    set {transactionType = .tokenTransferTransaction(newValue)}
+    set {_uniqueStorage()._transactionType = .tokenTransferTransaction(newValue)}
   }
 
   public var createAndTransferTokenTransaction: TW_Solana_Proto_CreateAndTransferToken {
     get {
-      if case .createAndTransferTokenTransaction(let v)? = transactionType {return v}
+      if case .createAndTransferTokenTransaction(let v)? = _storage._transactionType {return v}
       return TW_Solana_Proto_CreateAndTransferToken()
     }
-    set {transactionType = .createAndTransferTokenTransaction(newValue)}
+    set {_uniqueStorage()._transactionType = .createAndTransferTokenTransaction(newValue)}
   }
 
   public var createNonceAccount: TW_Solana_Proto_CreateNonceAccount {
     get {
-      if case .createNonceAccount(let v)? = transactionType {return v}
+      if case .createNonceAccount(let v)? = _storage._transactionType {return v}
       return TW_Solana_Proto_CreateNonceAccount()
     }
-    set {transactionType = .createNonceAccount(newValue)}
+    set {_uniqueStorage()._transactionType = .createNonceAccount(newValue)}
   }
 
   public var withdrawNonceAccount: TW_Solana_Proto_WithdrawNonceAccount {
     get {
-      if case .withdrawNonceAccount(let v)? = transactionType {return v}
+      if case .withdrawNonceAccount(let v)? = _storage._transactionType {return v}
       return TW_Solana_Proto_WithdrawNonceAccount()
     }
-    set {transactionType = .withdrawNonceAccount(newValue)}
+    set {_uniqueStorage()._transactionType = .withdrawNonceAccount(newValue)}
   }
 
   public var advanceNonceAccount: TW_Solana_Proto_AdvanceNonceAccount {
     get {
-      if case .advanceNonceAccount(let v)? = transactionType {return v}
+      if case .advanceNonceAccount(let v)? = _storage._transactionType {return v}
       return TW_Solana_Proto_AdvanceNonceAccount()
     }
-    set {transactionType = .advanceNonceAccount(newValue)}
+    set {_uniqueStorage()._transactionType = .advanceNonceAccount(newValue)}
   }
 
   /// Required for building pre-signing hash of a transaction
-  public var sender: String = String()
+  public var sender: String {
+    get {return _storage._sender}
+    set {_uniqueStorage()._sender = newValue}
+  }
 
   /// Required for using durable transaction nonce
-  public var nonceAccount: String = String()
+  public var nonceAccount: String {
+    get {return _storage._nonceAccount}
+    set {_uniqueStorage()._nonceAccount = newValue}
+  }
 
   /// Optional external fee payer private key. support: TokenTransfer, CreateAndTransferToken
-  public var feePayerPrivateKey: Data = Data()
+  public var feePayerPrivateKey: Data {
+    get {return _storage._feePayerPrivateKey}
+    set {_uniqueStorage()._feePayerPrivateKey = newValue}
+  }
 
   /// Optional external fee payer. support: TokenTransfer, CreateAndTransferToken
-  public var feePayer: String = String()
+  public var feePayer: String {
+    get {return _storage._feePayer}
+    set {_uniqueStorage()._feePayer = newValue}
+  }
+
+  /// Optional message plan. For signing an already prepared message.
+  public var rawMessage: TW_Solana_Proto_RawMessage {
+    get {return _storage._rawMessage ?? TW_Solana_Proto_RawMessage()}
+    set {_uniqueStorage()._rawMessage = newValue}
+  }
+  /// Returns true if `rawMessage` has been explicitly set.
+  public var hasRawMessage: Bool {return _storage._rawMessage != nil}
+  /// Clears the value of `rawMessage`. Subsequent reads from it will return its default value.
+  public mutating func clearRawMessage() {_uniqueStorage()._rawMessage = nil}
+
+  /// Output transaction encoding.
+  public var txEncoding: TW_Solana_Proto_Encoding {
+    get {return _storage._txEncoding}
+    set {_uniqueStorage()._txEncoding = newValue}
+  }
+
+  /// Optional. Set a specific compute unit limit that the transaction is allowed to consume.
+  /// https://solana.com/docs/intro/transaction_fees#prioritization-fee
+  public var priorityFeePrice: TW_Solana_Proto_PriorityFeePrice {
+    get {return _storage._priorityFeePrice ?? TW_Solana_Proto_PriorityFeePrice()}
+    set {_uniqueStorage()._priorityFeePrice = newValue}
+  }
+  /// Returns true if `priorityFeePrice` has been explicitly set.
+  public var hasPriorityFeePrice: Bool {return _storage._priorityFeePrice != nil}
+  /// Clears the value of `priorityFeePrice`. Subsequent reads from it will return its default value.
+  public mutating func clearPriorityFeePrice() {_uniqueStorage()._priorityFeePrice = nil}
+
+  /// Optional. Set a compute unit price in "micro-lamports" to pay a higher transaction
+  /// fee for higher transaction prioritization.
+  /// https://solana.com/docs/intro/transaction_fees#prioritization-fee
+  public var priorityFeeLimit: TW_Solana_Proto_PriorityFeeLimit {
+    get {return _storage._priorityFeeLimit ?? TW_Solana_Proto_PriorityFeeLimit()}
+    set {_uniqueStorage()._priorityFeeLimit = newValue}
+  }
+  /// Returns true if `priorityFeeLimit` has been explicitly set.
+  public var hasPriorityFeeLimit: Bool {return _storage._priorityFeeLimit != nil}
+  /// Clears the value of `priorityFeeLimit`. Subsequent reads from it will return its default value.
+  public mutating func clearPriorityFeeLimit() {_uniqueStorage()._priorityFeeLimit = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -476,6 +811,8 @@ public struct TW_Solana_Proto_SigningInput {
   }
 
   public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 /// Result containing the signed and encoded transaction.
@@ -493,12 +830,11 @@ public struct TW_Solana_Proto_SigningOutput {
   /// error code description
   public var errorMessage: String = String()
 
-  /// The unsigned transaction
+  /// The encoded message. Can be used to estimate a transaction fee required to execute the message.
   public var unsignedTx: String = String()
 
-  /// The encoded message. Can be used to estimate a transaction fee required to execute the message.
-  /// Please note that this is set only on `SolanaTransaction.updateBlockhashAndSign`, but no on `AnySigner.sign`.
-  public var messageEncoded: String = String()
+  /// Transaction signatures (may include external signatures).
+  public var signatures: [TW_Solana_Proto_PubkeySignature] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -511,10 +847,10 @@ public struct TW_Solana_Proto_PreSigningOutput {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  //// Signer list
+  /// Signer list
   public var signers: [Data] = []
 
-  //// Pre-image data. There is no hashing for Solana presign image
+  /// Pre-image data. There is no hashing for Solana presign image
   public var data: Data = Data()
 
   /// Error code, 0 is ok, other codes will be treated as errors
@@ -531,6 +867,13 @@ public struct TW_Solana_Proto_PreSigningOutput {
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate let _protobuf_package = "TW.Solana.Proto"
+
+extension TW_Solana_Proto_Encoding: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "Base58"),
+    1: .same(proto: "Base64"),
+  ]
+}
 
 extension TW_Solana_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Transfer"
@@ -1104,6 +1447,478 @@ extension TW_Solana_Proto_AdvanceNonceAccount: SwiftProtobuf.Message, SwiftProto
   }
 }
 
+extension TW_Solana_Proto_PubkeySignature: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PubkeySignature"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "pubkey"),
+    2: .same(proto: "signature"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.pubkey) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.signature) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.pubkey.isEmpty {
+      try visitor.visitSingularStringField(value: self.pubkey, fieldNumber: 1)
+    }
+    if !self.signature.isEmpty {
+      try visitor.visitSingularStringField(value: self.signature, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Solana_Proto_PubkeySignature, rhs: TW_Solana_Proto_PubkeySignature) -> Bool {
+    if lhs.pubkey != rhs.pubkey {return false}
+    if lhs.signature != rhs.signature {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Solana_Proto_RawMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RawMessage"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "signatures"),
+    2: .same(proto: "legacy"),
+    3: .same(proto: "v0"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.signatures) }()
+      case 2: try {
+        var v: TW_Solana_Proto_RawMessage.MessageLegacy?
+        var hadOneofValue = false
+        if let current = self.message {
+          hadOneofValue = true
+          if case .legacy(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.message = .legacy(v)
+        }
+      }()
+      case 3: try {
+        var v: TW_Solana_Proto_RawMessage.MessageV0?
+        var hadOneofValue = false
+        if let current = self.message {
+          hadOneofValue = true
+          if case .v0(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.message = .v0(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.signatures.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.signatures, fieldNumber: 1)
+    }
+    switch self.message {
+    case .legacy?: try {
+      guard case .legacy(let v)? = self.message else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case .v0?: try {
+      guard case .v0(let v)? = self.message else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Solana_Proto_RawMessage, rhs: TW_Solana_Proto_RawMessage) -> Bool {
+    if lhs.signatures != rhs.signatures {return false}
+    if lhs.message != rhs.message {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Solana_Proto_RawMessage.MessageHeader: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Solana_Proto_RawMessage.protoMessageName + ".MessageHeader"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "num_required_signatures"),
+    2: .standard(proto: "num_readonly_signed_accounts"),
+    3: .standard(proto: "num_readonly_unsigned_accounts"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.numRequiredSignatures) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.numReadonlySignedAccounts) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.numReadonlyUnsignedAccounts) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.numRequiredSignatures != 0 {
+      try visitor.visitSingularUInt32Field(value: self.numRequiredSignatures, fieldNumber: 1)
+    }
+    if self.numReadonlySignedAccounts != 0 {
+      try visitor.visitSingularUInt32Field(value: self.numReadonlySignedAccounts, fieldNumber: 2)
+    }
+    if self.numReadonlyUnsignedAccounts != 0 {
+      try visitor.visitSingularUInt32Field(value: self.numReadonlyUnsignedAccounts, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Solana_Proto_RawMessage.MessageHeader, rhs: TW_Solana_Proto_RawMessage.MessageHeader) -> Bool {
+    if lhs.numRequiredSignatures != rhs.numRequiredSignatures {return false}
+    if lhs.numReadonlySignedAccounts != rhs.numReadonlySignedAccounts {return false}
+    if lhs.numReadonlyUnsignedAccounts != rhs.numReadonlyUnsignedAccounts {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Solana_Proto_RawMessage.Instruction: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Solana_Proto_RawMessage.protoMessageName + ".Instruction"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "program_id"),
+    2: .same(proto: "accounts"),
+    3: .standard(proto: "program_data"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.programID) }()
+      case 2: try { try decoder.decodeRepeatedUInt32Field(value: &self.accounts) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.programData) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.programID != 0 {
+      try visitor.visitSingularUInt32Field(value: self.programID, fieldNumber: 1)
+    }
+    if !self.accounts.isEmpty {
+      try visitor.visitPackedUInt32Field(value: self.accounts, fieldNumber: 2)
+    }
+    if !self.programData.isEmpty {
+      try visitor.visitSingularBytesField(value: self.programData, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Solana_Proto_RawMessage.Instruction, rhs: TW_Solana_Proto_RawMessage.Instruction) -> Bool {
+    if lhs.programID != rhs.programID {return false}
+    if lhs.accounts != rhs.accounts {return false}
+    if lhs.programData != rhs.programData {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Solana_Proto_RawMessage.MessageAddressTableLookup: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Solana_Proto_RawMessage.protoMessageName + ".MessageAddressTableLookup"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "account_key"),
+    2: .standard(proto: "writable_indexes"),
+    3: .standard(proto: "readonly_indexes"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.accountKey) }()
+      case 2: try { try decoder.decodeRepeatedUInt32Field(value: &self.writableIndexes) }()
+      case 3: try { try decoder.decodeRepeatedUInt32Field(value: &self.readonlyIndexes) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.accountKey.isEmpty {
+      try visitor.visitSingularStringField(value: self.accountKey, fieldNumber: 1)
+    }
+    if !self.writableIndexes.isEmpty {
+      try visitor.visitPackedUInt32Field(value: self.writableIndexes, fieldNumber: 2)
+    }
+    if !self.readonlyIndexes.isEmpty {
+      try visitor.visitPackedUInt32Field(value: self.readonlyIndexes, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Solana_Proto_RawMessage.MessageAddressTableLookup, rhs: TW_Solana_Proto_RawMessage.MessageAddressTableLookup) -> Bool {
+    if lhs.accountKey != rhs.accountKey {return false}
+    if lhs.writableIndexes != rhs.writableIndexes {return false}
+    if lhs.readonlyIndexes != rhs.readonlyIndexes {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Solana_Proto_RawMessage.MessageLegacy: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Solana_Proto_RawMessage.protoMessageName + ".MessageLegacy"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "header"),
+    2: .standard(proto: "account_keys"),
+    3: .standard(proto: "recent_blockhash"),
+    4: .same(proto: "instructions"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._header) }()
+      case 2: try { try decoder.decodeRepeatedStringField(value: &self.accountKeys) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.recentBlockhash) }()
+      case 4: try { try decoder.decodeRepeatedMessageField(value: &self.instructions) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._header {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if !self.accountKeys.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.accountKeys, fieldNumber: 2)
+    }
+    if !self.recentBlockhash.isEmpty {
+      try visitor.visitSingularStringField(value: self.recentBlockhash, fieldNumber: 3)
+    }
+    if !self.instructions.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.instructions, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Solana_Proto_RawMessage.MessageLegacy, rhs: TW_Solana_Proto_RawMessage.MessageLegacy) -> Bool {
+    if lhs._header != rhs._header {return false}
+    if lhs.accountKeys != rhs.accountKeys {return false}
+    if lhs.recentBlockhash != rhs.recentBlockhash {return false}
+    if lhs.instructions != rhs.instructions {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Solana_Proto_RawMessage.MessageV0: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Solana_Proto_RawMessage.protoMessageName + ".MessageV0"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "header"),
+    2: .standard(proto: "account_keys"),
+    3: .standard(proto: "recent_blockhash"),
+    4: .same(proto: "instructions"),
+    5: .standard(proto: "address_table_lookups"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._header) }()
+      case 2: try { try decoder.decodeRepeatedStringField(value: &self.accountKeys) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.recentBlockhash) }()
+      case 4: try { try decoder.decodeRepeatedMessageField(value: &self.instructions) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.addressTableLookups) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._header {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if !self.accountKeys.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.accountKeys, fieldNumber: 2)
+    }
+    if !self.recentBlockhash.isEmpty {
+      try visitor.visitSingularStringField(value: self.recentBlockhash, fieldNumber: 3)
+    }
+    if !self.instructions.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.instructions, fieldNumber: 4)
+    }
+    if !self.addressTableLookups.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.addressTableLookups, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Solana_Proto_RawMessage.MessageV0, rhs: TW_Solana_Proto_RawMessage.MessageV0) -> Bool {
+    if lhs._header != rhs._header {return false}
+    if lhs.accountKeys != rhs.accountKeys {return false}
+    if lhs.recentBlockhash != rhs.recentBlockhash {return false}
+    if lhs.instructions != rhs.instructions {return false}
+    if lhs.addressTableLookups != rhs.addressTableLookups {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Solana_Proto_DecodingTransactionOutput: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DecodingTransactionOutput"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "transaction"),
+    2: .same(proto: "error"),
+    3: .standard(proto: "error_message"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._transaction) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._transaction {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 2)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Solana_Proto_DecodingTransactionOutput, rhs: TW_Solana_Proto_DecodingTransactionOutput) -> Bool {
+    if lhs._transaction != rhs._transaction {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Solana_Proto_PriorityFeePrice: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PriorityFeePrice"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "price"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.price) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.price != 0 {
+      try visitor.visitSingularUInt64Field(value: self.price, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Solana_Proto_PriorityFeePrice, rhs: TW_Solana_Proto_PriorityFeePrice) -> Bool {
+    if lhs.price != rhs.price {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Solana_Proto_PriorityFeeLimit: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PriorityFeeLimit"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    2: .same(proto: "limit"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.limit) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.limit != 0 {
+      try visitor.visitSingularUInt32Field(value: self.limit, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Solana_Proto_PriorityFeeLimit, rhs: TW_Solana_Proto_PriorityFeeLimit) -> Bool {
+    if lhs.limit != rhs.limit {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension TW_Solana_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SigningInput"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -1126,269 +1941,347 @@ extension TW_Solana_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Me
     15: .standard(proto: "nonce_account"),
     17: .standard(proto: "fee_payer_private_key"),
     18: .standard(proto: "fee_payer"),
+    20: .standard(proto: "raw_message"),
+    21: .standard(proto: "tx_encoding"),
+    22: .standard(proto: "priority_fee_price"),
+    23: .standard(proto: "priority_fee_limit"),
   ]
 
+  fileprivate class _StorageClass {
+    var _privateKey: Data = Data()
+    var _recentBlockhash: String = String()
+    var _v0Msg: Bool = false
+    var _transactionType: TW_Solana_Proto_SigningInput.OneOf_TransactionType?
+    var _sender: String = String()
+    var _nonceAccount: String = String()
+    var _feePayerPrivateKey: Data = Data()
+    var _feePayer: String = String()
+    var _rawMessage: TW_Solana_Proto_RawMessage? = nil
+    var _txEncoding: TW_Solana_Proto_Encoding = .base58
+    var _priorityFeePrice: TW_Solana_Proto_PriorityFeePrice? = nil
+    var _priorityFeeLimit: TW_Solana_Proto_PriorityFeeLimit? = nil
+
+    static let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _privateKey = source._privateKey
+      _recentBlockhash = source._recentBlockhash
+      _v0Msg = source._v0Msg
+      _transactionType = source._transactionType
+      _sender = source._sender
+      _nonceAccount = source._nonceAccount
+      _feePayerPrivateKey = source._feePayerPrivateKey
+      _feePayer = source._feePayer
+      _rawMessage = source._rawMessage
+      _txEncoding = source._txEncoding
+      _priorityFeePrice = source._priorityFeePrice
+      _priorityFeeLimit = source._priorityFeeLimit
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularBytesField(value: &self.privateKey) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.recentBlockhash) }()
-      case 3: try { try decoder.decodeSingularBoolField(value: &self.v0Msg) }()
-      case 4: try {
-        var v: TW_Solana_Proto_Transfer?
-        var hadOneofValue = false
-        if let current = self.transactionType {
-          hadOneofValue = true
-          if case .transferTransaction(let m) = current {v = m}
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularBytesField(value: &_storage._privateKey) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._recentBlockhash) }()
+        case 3: try { try decoder.decodeSingularBoolField(value: &_storage._v0Msg) }()
+        case 4: try {
+          var v: TW_Solana_Proto_Transfer?
+          var hadOneofValue = false
+          if let current = _storage._transactionType {
+            hadOneofValue = true
+            if case .transferTransaction(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionType = .transferTransaction(v)
+          }
+        }()
+        case 5: try {
+          var v: TW_Solana_Proto_DelegateStake?
+          var hadOneofValue = false
+          if let current = _storage._transactionType {
+            hadOneofValue = true
+            if case .delegateStakeTransaction(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionType = .delegateStakeTransaction(v)
+          }
+        }()
+        case 6: try {
+          var v: TW_Solana_Proto_DeactivateStake?
+          var hadOneofValue = false
+          if let current = _storage._transactionType {
+            hadOneofValue = true
+            if case .deactivateStakeTransaction(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionType = .deactivateStakeTransaction(v)
+          }
+        }()
+        case 7: try {
+          var v: TW_Solana_Proto_DeactivateAllStake?
+          var hadOneofValue = false
+          if let current = _storage._transactionType {
+            hadOneofValue = true
+            if case .deactivateAllStakeTransaction(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionType = .deactivateAllStakeTransaction(v)
+          }
+        }()
+        case 8: try {
+          var v: TW_Solana_Proto_WithdrawStake?
+          var hadOneofValue = false
+          if let current = _storage._transactionType {
+            hadOneofValue = true
+            if case .withdrawTransaction(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionType = .withdrawTransaction(v)
+          }
+        }()
+        case 9: try {
+          var v: TW_Solana_Proto_WithdrawAllStake?
+          var hadOneofValue = false
+          if let current = _storage._transactionType {
+            hadOneofValue = true
+            if case .withdrawAllTransaction(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionType = .withdrawAllTransaction(v)
+          }
+        }()
+        case 10: try {
+          var v: TW_Solana_Proto_CreateTokenAccount?
+          var hadOneofValue = false
+          if let current = _storage._transactionType {
+            hadOneofValue = true
+            if case .createTokenAccountTransaction(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionType = .createTokenAccountTransaction(v)
+          }
+        }()
+        case 11: try {
+          var v: TW_Solana_Proto_TokenTransfer?
+          var hadOneofValue = false
+          if let current = _storage._transactionType {
+            hadOneofValue = true
+            if case .tokenTransferTransaction(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionType = .tokenTransferTransaction(v)
+          }
+        }()
+        case 12: try {
+          var v: TW_Solana_Proto_CreateAndTransferToken?
+          var hadOneofValue = false
+          if let current = _storage._transactionType {
+            hadOneofValue = true
+            if case .createAndTransferTokenTransaction(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionType = .createAndTransferTokenTransaction(v)
+          }
+        }()
+        case 13: try {
+          var v: TW_Solana_Proto_CreateNonceAccount?
+          var hadOneofValue = false
+          if let current = _storage._transactionType {
+            hadOneofValue = true
+            if case .createNonceAccount(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionType = .createNonceAccount(v)
+          }
+        }()
+        case 14: try { try decoder.decodeSingularStringField(value: &_storage._sender) }()
+        case 15: try { try decoder.decodeSingularStringField(value: &_storage._nonceAccount) }()
+        case 16: try {
+          var v: TW_Solana_Proto_WithdrawNonceAccount?
+          var hadOneofValue = false
+          if let current = _storage._transactionType {
+            hadOneofValue = true
+            if case .withdrawNonceAccount(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionType = .withdrawNonceAccount(v)
+          }
+        }()
+        case 17: try { try decoder.decodeSingularBytesField(value: &_storage._feePayerPrivateKey) }()
+        case 18: try { try decoder.decodeSingularStringField(value: &_storage._feePayer) }()
+        case 19: try {
+          var v: TW_Solana_Proto_AdvanceNonceAccount?
+          var hadOneofValue = false
+          if let current = _storage._transactionType {
+            hadOneofValue = true
+            if case .advanceNonceAccount(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionType = .advanceNonceAccount(v)
+          }
+        }()
+        case 20: try { try decoder.decodeSingularMessageField(value: &_storage._rawMessage) }()
+        case 21: try { try decoder.decodeSingularEnumField(value: &_storage._txEncoding) }()
+        case 22: try { try decoder.decodeSingularMessageField(value: &_storage._priorityFeePrice) }()
+        case 23: try { try decoder.decodeSingularMessageField(value: &_storage._priorityFeeLimit) }()
+        default: break
         }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionType = .transferTransaction(v)
-        }
-      }()
-      case 5: try {
-        var v: TW_Solana_Proto_DelegateStake?
-        var hadOneofValue = false
-        if let current = self.transactionType {
-          hadOneofValue = true
-          if case .delegateStakeTransaction(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionType = .delegateStakeTransaction(v)
-        }
-      }()
-      case 6: try {
-        var v: TW_Solana_Proto_DeactivateStake?
-        var hadOneofValue = false
-        if let current = self.transactionType {
-          hadOneofValue = true
-          if case .deactivateStakeTransaction(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionType = .deactivateStakeTransaction(v)
-        }
-      }()
-      case 7: try {
-        var v: TW_Solana_Proto_DeactivateAllStake?
-        var hadOneofValue = false
-        if let current = self.transactionType {
-          hadOneofValue = true
-          if case .deactivateAllStakeTransaction(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionType = .deactivateAllStakeTransaction(v)
-        }
-      }()
-      case 8: try {
-        var v: TW_Solana_Proto_WithdrawStake?
-        var hadOneofValue = false
-        if let current = self.transactionType {
-          hadOneofValue = true
-          if case .withdrawTransaction(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionType = .withdrawTransaction(v)
-        }
-      }()
-      case 9: try {
-        var v: TW_Solana_Proto_WithdrawAllStake?
-        var hadOneofValue = false
-        if let current = self.transactionType {
-          hadOneofValue = true
-          if case .withdrawAllTransaction(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionType = .withdrawAllTransaction(v)
-        }
-      }()
-      case 10: try {
-        var v: TW_Solana_Proto_CreateTokenAccount?
-        var hadOneofValue = false
-        if let current = self.transactionType {
-          hadOneofValue = true
-          if case .createTokenAccountTransaction(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionType = .createTokenAccountTransaction(v)
-        }
-      }()
-      case 11: try {
-        var v: TW_Solana_Proto_TokenTransfer?
-        var hadOneofValue = false
-        if let current = self.transactionType {
-          hadOneofValue = true
-          if case .tokenTransferTransaction(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionType = .tokenTransferTransaction(v)
-        }
-      }()
-      case 12: try {
-        var v: TW_Solana_Proto_CreateAndTransferToken?
-        var hadOneofValue = false
-        if let current = self.transactionType {
-          hadOneofValue = true
-          if case .createAndTransferTokenTransaction(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionType = .createAndTransferTokenTransaction(v)
-        }
-      }()
-      case 13: try {
-        var v: TW_Solana_Proto_CreateNonceAccount?
-        var hadOneofValue = false
-        if let current = self.transactionType {
-          hadOneofValue = true
-          if case .createNonceAccount(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionType = .createNonceAccount(v)
-        }
-      }()
-      case 14: try { try decoder.decodeSingularStringField(value: &self.sender) }()
-      case 15: try { try decoder.decodeSingularStringField(value: &self.nonceAccount) }()
-      case 16: try {
-        var v: TW_Solana_Proto_WithdrawNonceAccount?
-        var hadOneofValue = false
-        if let current = self.transactionType {
-          hadOneofValue = true
-          if case .withdrawNonceAccount(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionType = .withdrawNonceAccount(v)
-        }
-      }()
-      case 17: try { try decoder.decodeSingularBytesField(value: &self.feePayerPrivateKey) }()
-      case 18: try { try decoder.decodeSingularStringField(value: &self.feePayer) }()
-      case 19: try {
-        var v: TW_Solana_Proto_AdvanceNonceAccount?
-        var hadOneofValue = false
-        if let current = self.transactionType {
-          hadOneofValue = true
-          if case .advanceNonceAccount(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionType = .advanceNonceAccount(v)
-        }
-      }()
-      default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.privateKey.isEmpty {
-      try visitor.visitSingularBytesField(value: self.privateKey, fieldNumber: 1)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if !_storage._privateKey.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._privateKey, fieldNumber: 1)
+      }
+      if !_storage._recentBlockhash.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._recentBlockhash, fieldNumber: 2)
+      }
+      if _storage._v0Msg != false {
+        try visitor.visitSingularBoolField(value: _storage._v0Msg, fieldNumber: 3)
+      }
+      switch _storage._transactionType {
+      case .transferTransaction?: try {
+        guard case .transferTransaction(let v)? = _storage._transactionType else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+      }()
+      case .delegateStakeTransaction?: try {
+        guard case .delegateStakeTransaction(let v)? = _storage._transactionType else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+      }()
+      case .deactivateStakeTransaction?: try {
+        guard case .deactivateStakeTransaction(let v)? = _storage._transactionType else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+      }()
+      case .deactivateAllStakeTransaction?: try {
+        guard case .deactivateAllStakeTransaction(let v)? = _storage._transactionType else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+      }()
+      case .withdrawTransaction?: try {
+        guard case .withdrawTransaction(let v)? = _storage._transactionType else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+      }()
+      case .withdrawAllTransaction?: try {
+        guard case .withdrawAllTransaction(let v)? = _storage._transactionType else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+      }()
+      case .createTokenAccountTransaction?: try {
+        guard case .createTokenAccountTransaction(let v)? = _storage._transactionType else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
+      }()
+      case .tokenTransferTransaction?: try {
+        guard case .tokenTransferTransaction(let v)? = _storage._transactionType else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
+      }()
+      case .createAndTransferTokenTransaction?: try {
+        guard case .createAndTransferTokenTransaction(let v)? = _storage._transactionType else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+      }()
+      case .createNonceAccount?: try {
+        guard case .createNonceAccount(let v)? = _storage._transactionType else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
+      }()
+      default: break
+      }
+      if !_storage._sender.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._sender, fieldNumber: 14)
+      }
+      if !_storage._nonceAccount.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._nonceAccount, fieldNumber: 15)
+      }
+      try { if case .withdrawNonceAccount(let v)? = _storage._transactionType {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 16)
+      } }()
+      if !_storage._feePayerPrivateKey.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._feePayerPrivateKey, fieldNumber: 17)
+      }
+      if !_storage._feePayer.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._feePayer, fieldNumber: 18)
+      }
+      try { if case .advanceNonceAccount(let v)? = _storage._transactionType {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 19)
+      } }()
+      try { if let v = _storage._rawMessage {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 20)
+      } }()
+      if _storage._txEncoding != .base58 {
+        try visitor.visitSingularEnumField(value: _storage._txEncoding, fieldNumber: 21)
+      }
+      try { if let v = _storage._priorityFeePrice {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 22)
+      } }()
+      try { if let v = _storage._priorityFeeLimit {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 23)
+      } }()
     }
-    if !self.recentBlockhash.isEmpty {
-      try visitor.visitSingularStringField(value: self.recentBlockhash, fieldNumber: 2)
-    }
-    if self.v0Msg != false {
-      try visitor.visitSingularBoolField(value: self.v0Msg, fieldNumber: 3)
-    }
-    switch self.transactionType {
-    case .transferTransaction?: try {
-      guard case .transferTransaction(let v)? = self.transactionType else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
-    }()
-    case .delegateStakeTransaction?: try {
-      guard case .delegateStakeTransaction(let v)? = self.transactionType else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
-    }()
-    case .deactivateStakeTransaction?: try {
-      guard case .deactivateStakeTransaction(let v)? = self.transactionType else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
-    }()
-    case .deactivateAllStakeTransaction?: try {
-      guard case .deactivateAllStakeTransaction(let v)? = self.transactionType else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
-    }()
-    case .withdrawTransaction?: try {
-      guard case .withdrawTransaction(let v)? = self.transactionType else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
-    }()
-    case .withdrawAllTransaction?: try {
-      guard case .withdrawAllTransaction(let v)? = self.transactionType else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
-    }()
-    case .createTokenAccountTransaction?: try {
-      guard case .createTokenAccountTransaction(let v)? = self.transactionType else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
-    }()
-    case .tokenTransferTransaction?: try {
-      guard case .tokenTransferTransaction(let v)? = self.transactionType else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
-    }()
-    case .createAndTransferTokenTransaction?: try {
-      guard case .createAndTransferTokenTransaction(let v)? = self.transactionType else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
-    }()
-    case .createNonceAccount?: try {
-      guard case .createNonceAccount(let v)? = self.transactionType else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
-    }()
-    default: break
-    }
-    if !self.sender.isEmpty {
-      try visitor.visitSingularStringField(value: self.sender, fieldNumber: 14)
-    }
-    if !self.nonceAccount.isEmpty {
-      try visitor.visitSingularStringField(value: self.nonceAccount, fieldNumber: 15)
-    }
-    try { if case .withdrawNonceAccount(let v)? = self.transactionType {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 16)
-    } }()
-    if !self.feePayerPrivateKey.isEmpty {
-      try visitor.visitSingularBytesField(value: self.feePayerPrivateKey, fieldNumber: 17)
-    }
-    if !self.feePayer.isEmpty {
-      try visitor.visitSingularStringField(value: self.feePayer, fieldNumber: 18)
-    }
-    try { if case .advanceNonceAccount(let v)? = self.transactionType {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 19)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Solana_Proto_SigningInput, rhs: TW_Solana_Proto_SigningInput) -> Bool {
-    if lhs.privateKey != rhs.privateKey {return false}
-    if lhs.recentBlockhash != rhs.recentBlockhash {return false}
-    if lhs.v0Msg != rhs.v0Msg {return false}
-    if lhs.transactionType != rhs.transactionType {return false}
-    if lhs.sender != rhs.sender {return false}
-    if lhs.nonceAccount != rhs.nonceAccount {return false}
-    if lhs.feePayerPrivateKey != rhs.feePayerPrivateKey {return false}
-    if lhs.feePayer != rhs.feePayer {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._privateKey != rhs_storage._privateKey {return false}
+        if _storage._recentBlockhash != rhs_storage._recentBlockhash {return false}
+        if _storage._v0Msg != rhs_storage._v0Msg {return false}
+        if _storage._transactionType != rhs_storage._transactionType {return false}
+        if _storage._sender != rhs_storage._sender {return false}
+        if _storage._nonceAccount != rhs_storage._nonceAccount {return false}
+        if _storage._feePayerPrivateKey != rhs_storage._feePayerPrivateKey {return false}
+        if _storage._feePayer != rhs_storage._feePayer {return false}
+        if _storage._rawMessage != rhs_storage._rawMessage {return false}
+        if _storage._txEncoding != rhs_storage._txEncoding {return false}
+        if _storage._priorityFeePrice != rhs_storage._priorityFeePrice {return false}
+        if _storage._priorityFeeLimit != rhs_storage._priorityFeeLimit {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1401,7 +2294,7 @@ extension TW_Solana_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._M
     2: .same(proto: "error"),
     3: .standard(proto: "error_message"),
     4: .standard(proto: "unsigned_tx"),
-    5: .standard(proto: "message_encoded"),
+    5: .same(proto: "signatures"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1414,7 +2307,7 @@ extension TW_Solana_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._M
       case 2: try { try decoder.decodeSingularEnumField(value: &self.error) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.unsignedTx) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.messageEncoded) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.signatures) }()
       default: break
       }
     }
@@ -1433,8 +2326,8 @@ extension TW_Solana_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._M
     if !self.unsignedTx.isEmpty {
       try visitor.visitSingularStringField(value: self.unsignedTx, fieldNumber: 4)
     }
-    if !self.messageEncoded.isEmpty {
-      try visitor.visitSingularStringField(value: self.messageEncoded, fieldNumber: 5)
+    if !self.signatures.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.signatures, fieldNumber: 5)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1444,7 +2337,7 @@ extension TW_Solana_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._M
     if lhs.error != rhs.error {return false}
     if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unsignedTx != rhs.unsignedTx {return false}
-    if lhs.messageEncoded != rhs.messageEncoded {return false}
+    if lhs.signatures != rhs.signatures {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

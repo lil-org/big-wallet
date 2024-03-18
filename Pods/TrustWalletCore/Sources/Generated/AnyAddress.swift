@@ -152,6 +152,10 @@ public final class AnyAddress: Address {
         rawValue = TWAnyAddressCreateWithPublicKeyFilecoinAddressType(publicKey.rawValue, TWFilecoinAddressType(rawValue: filecoinAddressType.rawValue))
     }
 
+    public init(publicKey: PublicKey, firoAddressType: FiroAddressType) {
+        rawValue = TWAnyAddressCreateWithPublicKeyFiroAddressType(publicKey.rawValue, TWFiroAddressType(rawValue: firoAddressType.rawValue))
+    }
+
     deinit {
         TWAnyAddressDelete(rawValue)
     }

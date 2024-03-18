@@ -219,6 +219,19 @@ public struct TW_Bitcoin_Proto_OutputAddress {
   public init() {}
 }
 
+/// Optional index of a corresponding output in the transaction.
+public struct TW_Bitcoin_Proto_OutputIndex {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var index: UInt32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 /// Input data necessary to create a signed transaction.
 public struct TW_Bitcoin_Proto_SigningInput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -312,6 +325,17 @@ public struct TW_Bitcoin_Proto_SigningInput {
     get {return _storage._outputOpReturn}
     set {_uniqueStorage()._outputOpReturn = newValue}
   }
+
+  /// Optional index of the OP_RETURN output in the transaction.
+  /// If not set, OP_RETURN output will be pushed as the latest output.
+  public var outputOpReturnIndex: TW_Bitcoin_Proto_OutputIndex {
+    get {return _storage._outputOpReturnIndex ?? TW_Bitcoin_Proto_OutputIndex()}
+    set {_uniqueStorage()._outputOpReturnIndex = newValue}
+  }
+  /// Returns true if `outputOpReturnIndex` has been explicitly set.
+  public var hasOutputOpReturnIndex: Bool {return _storage._outputOpReturnIndex != nil}
+  /// Clears the value of `outputOpReturnIndex`. Subsequent reads from it will return its default value.
+  public mutating func clearOutputOpReturnIndex() {_uniqueStorage()._outputOpReturnIndex = nil}
 
   /// Optional additional destination addresses, additional to first to_address output
   public var extraOutputs: [TW_Bitcoin_Proto_OutputAddress] {
@@ -439,6 +463,17 @@ public struct TW_Bitcoin_Proto_TransactionPlan {
   /// Optional zero-amount, OP_RETURN output
   public var outputOpReturn: Data = Data()
 
+  /// Optional index of the OP_RETURN output in the transaction.
+  /// If not set, OP_RETURN output will be pushed as the latest output.
+  public var outputOpReturnIndex: TW_Bitcoin_Proto_OutputIndex {
+    get {return _outputOpReturnIndex ?? TW_Bitcoin_Proto_OutputIndex()}
+    set {_outputOpReturnIndex = newValue}
+  }
+  /// Returns true if `outputOpReturnIndex` has been explicitly set.
+  public var hasOutputOpReturnIndex: Bool {return self._outputOpReturnIndex != nil}
+  /// Clears the value of `outputOpReturnIndex`. Subsequent reads from it will return its default value.
+  public mutating func clearOutputOpReturnIndex() {self._outputOpReturnIndex = nil}
+
   /// zen & bitcoin diamond preblockhash
   public var preblockhash: Data = Data()
 
@@ -460,6 +495,7 @@ public struct TW_Bitcoin_Proto_TransactionPlan {
 
   public init() {}
 
+  fileprivate var _outputOpReturnIndex: TW_Bitcoin_Proto_OutputIndex? = nil
   fileprivate var _planningResultV2: TW_BitcoinV2_Proto_TransactionPlan? = nil
 }
 
@@ -863,6 +899,38 @@ extension TW_Bitcoin_Proto_OutputAddress: SwiftProtobuf.Message, SwiftProtobuf._
   }
 }
 
+extension TW_Bitcoin_Proto_OutputIndex: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".OutputIndex"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "index"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.index) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.index != 0 {
+      try visitor.visitSingularUInt32Field(value: self.index, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Bitcoin_Proto_OutputIndex, rhs: TW_Bitcoin_Proto_OutputIndex) -> Bool {
+    if lhs.index != rhs.index {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SigningInput"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -879,6 +947,7 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
     11: .same(proto: "plan"),
     12: .standard(proto: "lock_time"),
     13: .standard(proto: "output_op_return"),
+    26: .standard(proto: "output_op_return_index"),
     14: .standard(proto: "extra_outputs"),
     15: .standard(proto: "use_max_utxo"),
     16: .standard(proto: "disable_dust_filter"),
@@ -903,6 +972,7 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
     var _plan: TW_Bitcoin_Proto_TransactionPlan? = nil
     var _lockTime: UInt32 = 0
     var _outputOpReturn: Data = Data()
+    var _outputOpReturnIndex: TW_Bitcoin_Proto_OutputIndex? = nil
     var _extraOutputs: [TW_Bitcoin_Proto_OutputAddress] = []
     var _useMaxUtxo: Bool = false
     var _disableDustFilter: Bool = false
@@ -930,6 +1000,7 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
       _plan = source._plan
       _lockTime = source._lockTime
       _outputOpReturn = source._outputOpReturn
+      _outputOpReturnIndex = source._outputOpReturnIndex
       _extraOutputs = source._extraOutputs
       _useMaxUtxo = source._useMaxUtxo
       _disableDustFilter = source._disableDustFilter
@@ -984,6 +1055,7 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
             _storage._dustPolicy = .fixedDustThreshold(v)
           }
         }()
+        case 26: try { try decoder.decodeSingularMessageField(value: &_storage._outputOpReturnIndex) }()
         default: break
         }
       }
@@ -1059,6 +1131,9 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
       try { if case .fixedDustThreshold(let v)? = _storage._dustPolicy {
         try visitor.visitSingularInt64Field(value: v, fieldNumber: 24)
       } }()
+      try { if let v = _storage._outputOpReturnIndex {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 26)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1081,6 +1156,7 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
         if _storage._plan != rhs_storage._plan {return false}
         if _storage._lockTime != rhs_storage._lockTime {return false}
         if _storage._outputOpReturn != rhs_storage._outputOpReturn {return false}
+        if _storage._outputOpReturnIndex != rhs_storage._outputOpReturnIndex {return false}
         if _storage._extraOutputs != rhs_storage._extraOutputs {return false}
         if _storage._useMaxUtxo != rhs_storage._useMaxUtxo {return false}
         if _storage._disableDustFilter != rhs_storage._disableDustFilter {return false}
@@ -1109,6 +1185,7 @@ extension TW_Bitcoin_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf
     6: .standard(proto: "branch_id"),
     7: .same(proto: "error"),
     8: .standard(proto: "output_op_return"),
+    14: .standard(proto: "output_op_return_index"),
     9: .same(proto: "preblockhash"),
     10: .same(proto: "preblockheight"),
     12: .standard(proto: "planning_result_v2"),
@@ -1131,6 +1208,7 @@ extension TW_Bitcoin_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf
       case 9: try { try decoder.decodeSingularBytesField(value: &self.preblockhash) }()
       case 10: try { try decoder.decodeSingularInt64Field(value: &self.preblockheight) }()
       case 12: try { try decoder.decodeSingularMessageField(value: &self._planningResultV2) }()
+      case 14: try { try decoder.decodeSingularMessageField(value: &self._outputOpReturnIndex) }()
       default: break
       }
     }
@@ -1174,6 +1252,9 @@ extension TW_Bitcoin_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf
     try { if let v = self._planningResultV2 {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
     } }()
+    try { if let v = self._outputOpReturnIndex {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 14)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1186,6 +1267,7 @@ extension TW_Bitcoin_Proto_TransactionPlan: SwiftProtobuf.Message, SwiftProtobuf
     if lhs.branchID != rhs.branchID {return false}
     if lhs.error != rhs.error {return false}
     if lhs.outputOpReturn != rhs.outputOpReturn {return false}
+    if lhs._outputOpReturnIndex != rhs._outputOpReturnIndex {return false}
     if lhs.preblockhash != rhs.preblockhash {return false}
     if lhs.preblockheight != rhs.preblockheight {return false}
     if lhs._planningResultV2 != rhs._planningResultV2 {return false}

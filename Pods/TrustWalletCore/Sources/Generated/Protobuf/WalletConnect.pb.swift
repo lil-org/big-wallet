@@ -64,6 +64,9 @@ public enum TW_WalletConnect_Proto_Method: SwiftProtobuf.Enum {
 
   /// cosmos_signAmino
   case cosmosSignAmino // = 1
+
+  /// solana_signTransaction
+  case solanaSignTransaction // = 2
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -74,6 +77,7 @@ public enum TW_WalletConnect_Proto_Method: SwiftProtobuf.Enum {
     switch rawValue {
     case 0: self = .unknown
     case 1: self = .cosmosSignAmino
+    case 2: self = .solanaSignTransaction
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -82,6 +86,7 @@ public enum TW_WalletConnect_Proto_Method: SwiftProtobuf.Enum {
     switch self {
     case .unknown: return 0
     case .cosmosSignAmino: return 1
+    case .solanaSignTransaction: return 2
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -95,6 +100,7 @@ extension TW_WalletConnect_Proto_Method: CaseIterable {
   public static var allCases: [TW_WalletConnect_Proto_Method] = [
     .unknown,
     .cosmosSignAmino,
+    .solanaSignTransaction,
   ]
 }
 
@@ -151,11 +157,20 @@ public struct TW_WalletConnect_Proto_ParseRequestOutput {
     set {_uniqueStorage()._signingInputOneof = .binance(newValue)}
   }
 
+  public var solana: TW_Solana_Proto_SigningInput {
+    get {
+      if case .solana(let v)? = _storage._signingInputOneof {return v}
+      return TW_Solana_Proto_SigningInput()
+    }
+    set {_uniqueStorage()._signingInputOneof = .solana(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// Prepared unsigned transaction input, on the source chain. Some fields must be completed, and it has to be signed.
   public enum OneOf_SigningInputOneof: Equatable {
     case binance(TW_Binance_Proto_SigningInput)
+    case solana(TW_Solana_Proto_SigningInput)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_WalletConnect_Proto_ParseRequestOutput.OneOf_SigningInputOneof, rhs: TW_WalletConnect_Proto_ParseRequestOutput.OneOf_SigningInputOneof) -> Bool {
@@ -167,6 +182,11 @@ public struct TW_WalletConnect_Proto_ParseRequestOutput {
         guard case .binance(let l) = lhs, case .binance(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
+      case (.solana, .solana): return {
+        guard case .solana(let l) = lhs, case .solana(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      default: return false
       }
     }
   #endif
@@ -191,6 +211,7 @@ extension TW_WalletConnect_Proto_Method: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     0: .same(proto: "Unknown"),
     1: .same(proto: "CosmosSignAmino"),
+    2: .same(proto: "SolanaSignTransaction"),
   ]
 }
 
@@ -244,6 +265,7 @@ extension TW_WalletConnect_Proto_ParseRequestOutput: SwiftProtobuf.Message, Swif
     1: .same(proto: "error"),
     2: .standard(proto: "error_message"),
     3: .same(proto: "binance"),
+    4: .same(proto: "solana"),
   ]
 
   fileprivate class _StorageClass {
@@ -292,6 +314,19 @@ extension TW_WalletConnect_Proto_ParseRequestOutput: SwiftProtobuf.Message, Swif
             _storage._signingInputOneof = .binance(v)
           }
         }()
+        case 4: try {
+          var v: TW_Solana_Proto_SigningInput?
+          var hadOneofValue = false
+          if let current = _storage._signingInputOneof {
+            hadOneofValue = true
+            if case .solana(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._signingInputOneof = .solana(v)
+          }
+        }()
         default: break
         }
       }
@@ -310,9 +345,17 @@ extension TW_WalletConnect_Proto_ParseRequestOutput: SwiftProtobuf.Message, Swif
       if !_storage._errorMessage.isEmpty {
         try visitor.visitSingularStringField(value: _storage._errorMessage, fieldNumber: 2)
       }
-      try { if case .binance(let v)? = _storage._signingInputOneof {
+      switch _storage._signingInputOneof {
+      case .binance?: try {
+        guard case .binance(let v)? = _storage._signingInputOneof else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-      } }()
+      }()
+      case .solana?: try {
+        guard case .solana(let v)? = _storage._signingInputOneof else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+      }()
+      case nil: break
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }

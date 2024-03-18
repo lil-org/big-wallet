@@ -8,6 +8,7 @@ public typealias BitcoinOutPoint = TW_Bitcoin_Proto_OutPoint
 public typealias BitcoinTransactionOutput = TW_Bitcoin_Proto_TransactionOutput
 public typealias BitcoinUnspentTransaction = TW_Bitcoin_Proto_UnspentTransaction
 public typealias BitcoinOutputAddress = TW_Bitcoin_Proto_OutputAddress
+public typealias BitcoinOutputIndex = TW_Bitcoin_Proto_OutputIndex
 public typealias BitcoinSigningInput = TW_Bitcoin_Proto_SigningInput
 public typealias BitcoinTransactionPlan = TW_Bitcoin_Proto_TransactionPlan
 public typealias BitcoinSigningOutput = TW_Bitcoin_Proto_SigningOutput
