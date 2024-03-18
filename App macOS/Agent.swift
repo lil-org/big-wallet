@@ -107,14 +107,14 @@ class Agent: NSObject {
     lazy private var statusBarMenu: NSMenu = {
         let menu = NSMenu(title: Strings.tinyWallet)
         
-        let showItem = NSMenuItem(title: Strings.showWallet, action: #selector(didSelectShowMenuItem), keyEquivalent: "")
+        let showItem = NSMenuItem(title: Strings.showWallets, action: #selector(didSelectShowMenuItem), keyEquivalent: "")
         let safariItem = NSMenuItem(title: Strings.enableSafariExtension.withEllipsis, action: #selector(enableSafariExtension), keyEquivalent: "")
         let mailItem = NSMenuItem(title: Strings.dropUsALine.withEllipsis, action: #selector(didSelectMailMenuItem), keyEquivalent: "")
         let githubItem = NSMenuItem(title: Strings.viewOnGithub.withEllipsis, action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
         let warpcastItem = NSMenuItem(title: Strings.viewOnWarpcast.withEllipsis, action: #selector(didSelectWarpcastMenuItem), keyEquivalent: "")
         let xItem = NSMenuItem(title: Strings.viewOnX.withEllipsis, action: #selector(didSelectXMenuItem), keyEquivalent: "")
         let quitItem = NSMenuItem(title: Strings.quit, action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
-        showItem.attributedTitle = NSAttributedString(string: "👀 " + Strings.showWallet, attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
+        showItem.attributedTitle = NSAttributedString(string: Strings.showWallets, attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
         
         showItem.target = self
         safariItem.target = self
