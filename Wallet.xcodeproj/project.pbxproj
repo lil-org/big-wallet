@@ -1122,7 +1122,6 @@
 			buildConfigurationList = 2C19954C2674C4BA00A8E370 /* Build configuration list for PBXNativeTarget "Wallet" */;
 			buildPhases = (
 				059265992FD4C394A26E0768 /* [CP] Check Pods Manifest.lock */,
-				2CF9B4072B0FC04500B220DF /* ShellScript */,
 				2C1995382674C4B900A8E370 /* Sources */,
 				2C1995392674C4B900A8E370 /* Frameworks */,
 				2CB0BC4D2B13B2B800603E68 /* Run Script */,
@@ -1567,25 +1566,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "YARN_PATH=$(command -v yarn)\n\nif [ -z \"$YARN_PATH\" ]; then\n    echo \"warning: install yarn to make changes to the inpage script\"\nelse\n    FILE=/usr/lib/bin/yarn\n    if [ -f \"$FILE\" ]; then\n        export PATH=/usr/lib/bin:$PATH\n    else\n        export PATH=/opt/homebrew/bin:$PATH\n    fi\n\n    cd \"$PROJECT_DIR\"/Safari\\ Shared/Inpage\\ Provider\n    yarn run prebuild\n    yarn run build\nfi\n";
-			showEnvVarsInLog = 0;
-		};
-		2CF9B4072B0FC04500B220DF /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "#!/bin/bash\n\nif pgrep -x \"Wallet\" > /dev/null\nthen\n    killall Walet\nfi\n";
 			showEnvVarsInLog = 0;
 		};
 		D666E08D9C8205A813CD888C /* [CP] Embed Pods Frameworks */ = {
