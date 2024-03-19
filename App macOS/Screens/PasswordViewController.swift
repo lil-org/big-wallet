@@ -38,8 +38,7 @@ class PasswordViewController: NSViewController {
         switchToMode(mode)
         
         if let reason = reason, reason != .start {
-            // TODO: move to strings
-            reasonLabel.stringValue = "to " + reason.title.lowercased()
+            reasonLabel.stringValue = "\(Strings.to) " + reason.title.lowercased()
         } else {
             reasonLabel.stringValue = ""
         }

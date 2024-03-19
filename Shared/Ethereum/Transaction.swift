@@ -3,8 +3,6 @@
 import Foundation
 import BigInt
 
-// TODO: get strings out of here
-
 struct Transaction {
     var id = UUID()
     let from: String
@@ -64,17 +62,17 @@ struct Transaction {
     }
     
     var dataWithLabel: String {
-        return "Data: \(data)"
+        return "\(Strings.data): \(data)"
     }
     
     func gasPriceWithLabel(chain: EthereumNetwork) -> String {
         let gwei: String
         if let gasPriceGwei = gasPriceGwei {
-            gwei = String(gasPriceGwei) + (chain.symbolIsETH ? " Gwei" : "")
+            gwei = String(gasPriceGwei) + (chain.symbolIsETH ? " \(Strings.gwei)" : "")
         } else {
             gwei = Strings.calculating
         }
-        return "Gas price: " + gwei
+        return "\(Strings.gasPrice): \(gwei)"
     }
     
     func feeWithSymbol(chain: EthereumNetwork, price: Double?) -> String {
@@ -88,7 +86,7 @@ struct Transaction {
         } else {
             feeString = Strings.calculating
         }
-        return "Fee: " + feeString
+        return "\(Strings.fee): " + feeString
     }
     
     mutating func setCustomNonce(value: UInt) {
@@ -115,7 +113,7 @@ struct Transaction {
         guard let value = value, let value = BigInt(hexString: value) else { return nil }
         let costString = chain.mightShowPrice ? cost(value: value, price: price) : ""
         let valueString = "\(value.eth()) \(chain.symbol)" + costString
-        return withLabel ? "Value: " + valueString : valueString
+        return withLabel ? "\(Strings.value): " + valueString : valueString
     }
     
     private func cost(value: BigInt, price: Double?) -> String {

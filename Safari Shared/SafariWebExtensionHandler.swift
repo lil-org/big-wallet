@@ -50,8 +50,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     let response = ResponseToExtension(for: request, body: .ethereum(responseBody))
                     respond(with: response.json, context: context)
                 } else {
-                    // TODO: to strings or smth
-                    let response = ResponseToExtension(for: request, error: "Failed to switch chain")
+                    let response = ResponseToExtension(for: request, error: "failed to switch chain")
                     respond(with: response.json, context: context)
                 }
             } else {
