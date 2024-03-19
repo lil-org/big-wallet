@@ -1,10 +1,10 @@
 {
     "extension_name": {
-        "message": "tiny wallet",
+        "message": "Wallet",
         "description": "the display name for the extension"
     },
     "extension_description": {
-        "message": "crypto wallet",
+        "message": "connect like metamask in safari",
         "description": "description of what the extension does"
     }
 }
