@@ -24,6 +24,8 @@ struct DirectTransactionRequest: Codable {
 
 extension DirectTransactionRequest {
     
+    // TODO: remove yo finance
+    
     init?(from urlString: String) {
         guard let url = URL(string: urlString),
               let host = url.host, ["yo.finance"].contains(host),

@@ -3,6 +3,8 @@
 import Foundation
 import BigInt
 
+// TODO: get strings out of here
+
 struct Transaction {
     var id = UUID()
     let from: String
@@ -16,7 +18,7 @@ struct Transaction {
     var externalInterpretation: String?
     
     var diplayDataInterpretation: String? {
-        var result = externalInterpretation?.appending("\n\n") ?? ""
+        let result = externalInterpretation?.appending("\n\n") ?? ""
         
         if let interpretation = interpretation {
             return result + interpretation

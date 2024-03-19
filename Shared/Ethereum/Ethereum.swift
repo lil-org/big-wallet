@@ -32,6 +32,7 @@ struct Ethereum {
         return try sign(data: data, privateKey: privateKey, addPrefix: true)
     }
     
+    // TODO: remove yo finance
     func validateYoFinance(input: String, signature: String) -> Bool {
         let yoFinance = "0x331ee8a68834c58084E00276E76A923A002Fa6cf"
         if let inputData = input.data(using: .utf8),

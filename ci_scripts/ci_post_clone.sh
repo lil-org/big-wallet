@@ -6,7 +6,7 @@ rm -rf ../Pods
 PLIST_PATH="Secrets.plist"
 
 if [ -z "${INFURA_KEY}" ]; then
-    echo "Error: The INFURA_KEY environment variable is not set or empty."
+    echo "error: the INFURA_KEY environment variable is not set or empty"
     exit 1
 fi
 

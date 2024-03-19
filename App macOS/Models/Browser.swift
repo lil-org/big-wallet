@@ -11,7 +11,6 @@ enum Browser: String, CaseIterable {
     case brave = "com.brave.Browser"
     case firefox = "org.mozilla.firefox"
     case vivaldi = "com.vivaldi.Vivaldi"
-    case yandex = "ru.yandex.desktop.yandex-browser"
     case unknown = "com.unknown.browser.stub"
     
     static let allBundleIds = Set(Browser.allCases.map { $0.rawValue })

@@ -61,6 +61,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func processInput(url: String?) {
         guard let url = url else { return }
+        // TODO: remove yo finance
         if let txRequest = DirectTransactionRequest(from: url) {
             processExternalRequest(.direct(txRequest))
         } else {

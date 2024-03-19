@@ -3,6 +3,8 @@
 import Foundation
 import WalletCore
 
+// TODO: remove yo finance
+
 struct DappRequestProcessor {
     
     private static let walletsManager = WalletsManager.shared
@@ -109,7 +111,7 @@ struct DappRequestProcessor {
         
         switch ethereumRequest.method {
         case .addEthereumChain:
-            let chainToAdd = EthereumNetworkFromDapp.from(ethereumRequest.parameters)
+            let _ = EthereumNetworkFromDapp.from(ethereumRequest.parameters)
             return .justShowApp // TODO: show add chain screen
         case .requestAccounts:
             let action = SelectAccountAction(peer: peerMeta,

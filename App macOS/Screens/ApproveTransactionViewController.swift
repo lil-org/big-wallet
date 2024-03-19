@@ -107,7 +107,7 @@ class ApproveTransactionViewController: NSViewController {
         enableSpeedConfigurationIfNeeded()
         updateTextView()
         if didEnableSpeedConfiguration, let gwei = transaction.gasPriceGwei {
-            gweiLabel.stringValue = "\(gwei) Gwei"
+            gweiLabel.stringValue = "\(gwei) Gwei" // TODO: to strings
         }
     }
     
