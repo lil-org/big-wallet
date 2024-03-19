@@ -82,6 +82,9 @@ class AccountsListViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        primaryButton.title = Strings.connect
+        secondaryButton.title = Strings.cancel
+        
         validateSelectedAccounts()
         reloadHeader()
         updateBottomButtons()

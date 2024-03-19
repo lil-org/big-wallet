@@ -795,8 +795,10 @@ DQ
                         </constraints>
                     </view>
                     <connections>
+                        <outlet property="cancelButton" destination="h7j-aQ-ZXs" id="dtE-TG-Rff"/>
                         <outlet property="okButton" destination="t6z-sy-JB9" id="qrY-Ga-zC6"/>
                         <outlet property="textField" destination="YPY-7C-6mv" id="8L3-RD-eXJ"/>
+                        <outlet property="titleTextField" destination="feM-MO-Msf" id="qOe-wM-FSC"/>
                     </connections>
                 </viewController>
                 <customObject id="rPt-NT-nkU" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
@@ -1125,10 +1127,10 @@ DQ
                                         <buttonCell key="cell" type="push" title="ok" bezelStyle="rounded" alignment="center" controlSize="large" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="aLn-BL-hyz">
                                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="system"/>
-                                            <connections>
-                                                <action selector="actionButtonTapped:" target="Wjt-h2-yE1" id="gIx-Nt-9Zo"/>
-                                            </connections>
                                         </buttonCell>
+                                        <connections>
+                                            <action selector="actionButtonTapped:" target="Wjt-h2-yE1" id="HRf-LW-H4H"/>
+                                        </connections>
                                     </button>
                                 </subviews>
                                 <visibilityPriorities>
@@ -1153,6 +1155,7 @@ DQ
                         </constraints>
                     </view>
                     <connections>
+                        <outlet property="okButton" destination="R7c-Oj-Adu" id="EZk-PV-lcR"/>
                         <outlet property="progressIndicator" destination="3Sg-wL-Ebc" id="kHI-NG-jxf"/>
                         <outlet property="titleLabel" destination="GMd-25-PjD" id="TDO-cq-wb2"/>
                     </connections>
@@ -1305,6 +1308,7 @@ DQ
                     </view>
                     <connections>
                         <outlet property="buttonsStackView" destination="Oc8-WJ-ABp" id="lCM-bE-aIl"/>
+                        <outlet property="cancelButton" destination="orP-ex-jdo" id="5ZQ-qT-aed"/>
                         <outlet property="metaTextView" destination="nek-dW-Y7v" id="tX9-hL-ZQD"/>
                         <outlet property="okButton" destination="xdD-3r-3YP" id="f8Z-et-2Th"/>
                         <outlet property="peerLogoImageView" destination="q4c-q5-CsH" id="ndd-hX-A0S"/>
@@ -1482,6 +1486,7 @@ DQ
                         </constraints>
                     </view>
                     <connections>
+                        <outlet property="getStartedButton" destination="ADG-H0-CZa" id="yjq-eF-L4z"/>
                         <outlet property="messageLabel" destination="BvK-xX-gxC" id="1F3-ae-gz2"/>
                         <outlet property="titleLabel" destination="vxh-AZ-Ll4" id="JEh-av-Oj4"/>
                     </connections>
@@ -1701,6 +1706,7 @@ DQ
                         </constraints>
                     </view>
                     <connections>
+                        <outlet property="cancelButton" destination="sUu-V8-fLA" id="J4U-gM-spX"/>
                         <outlet property="fastSpeedLabel" destination="WJV-V3-GWm" id="lzX-wu-MdJ"/>
                         <outlet property="gweiLabel" destination="xby-TM-Wec" id="3LN-nr-WNA"/>
                         <outlet property="infoTextViewBottomConstraint" destination="fxj-xB-6jl" id="f2p-uL-Wac"/>
@@ -1897,6 +1903,7 @@ DQ
                         </constraints>
                     </view>
                     <connections>
+                        <outlet property="cancelButton" destination="Jtf-rz-QKY" id="b2S-Qk-ylK"/>
                         <outlet property="okButton" destination="Uo7-Nz-7jr" id="Ha5-nr-yz3"/>
                         <outlet property="tableView" destination="JM4-ya-UH4" id="YWf-Av-bQa"/>
                         <outlet property="titleLabel" destination="oHl-So-oUC" id="kOc-C0-c6y"/>

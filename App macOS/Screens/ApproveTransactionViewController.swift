@@ -13,6 +13,7 @@ class ApproveTransactionViewController: NSViewController {
     @IBOutlet weak var titleLabel: NSTextField!
     @IBOutlet var metaTextView: NSTextView!
     @IBOutlet weak var okButton: NSButton!
+    @IBOutlet weak var cancelButton: NSButton!
     @IBOutlet weak var speedSlider: NSSlider!
     @IBOutlet weak var slowSpeedLabel: NSTextField!
     @IBOutlet weak var fastSpeedLabel: NSTextField!
@@ -51,6 +52,10 @@ class ApproveTransactionViewController: NSViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        okButton.title = Strings.ok
+        cancelButton.title = Strings.cancel
+        
         priceService.update()
         titleLabel.stringValue = Strings.sendTransaction
         setSpeedConfigurationViews(enabled: false)

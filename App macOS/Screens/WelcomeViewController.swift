@@ -12,12 +12,16 @@ class WelcomeViewController: NSViewController {
     
     @IBOutlet weak var titleLabel: NSTextField!
     @IBOutlet weak var messageLabel: NSTextField!
+    @IBOutlet weak var getStartedButton: NSButton!
     
     private var completion: ((Bool) -> Void)?
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        titleLabel.stringValue = Strings.tinyWallet
         messageLabel.stringValue = Strings.welcomeScreenText
+        getStartedButton.title = Strings.getStarted
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {

@@ -113,5 +113,6 @@ struct Strings {
     static let uploading = "uploading"
     static let connect = "connect"
     static let paste = "paste"
+    static let getStarted = "get started"
     
 }

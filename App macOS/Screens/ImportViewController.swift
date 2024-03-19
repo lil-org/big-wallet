@@ -9,16 +9,22 @@ class ImportViewController: NSViewController {
     var selectAccountAction: SelectAccountAction?
     private var inputValidationResult = WalletsManager.InputValidationResult.invalid
     
+    @IBOutlet weak var titleTextField: NSTextField!
     @IBOutlet weak var textField: NSTextField! {
         didSet {
             textField.delegate = self
             textField.placeholderString = Strings.importWalletTextFieldPlaceholder
         }
     }
+    
+    @IBOutlet weak var cancelButton: NSButton!
     @IBOutlet weak var okButton: NSButton!
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        cancelButton.title = Strings.cancel
+        okButton.title = Strings.ok
+        titleTextField.stringValue = Strings.importWallet.replacingOccurrences(of: " ", with: "\n")
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {

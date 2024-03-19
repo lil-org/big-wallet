@@ -14,10 +14,12 @@ class WaitingViewController: NSViewController {
     
     @IBOutlet weak var progressIndicator: NSProgressIndicator!
     @IBOutlet weak var titleLabel: NSTextField!
+    @IBOutlet weak var okButton: NSButton!
     
     override func viewDidLoad() {
         super.viewDidLoad()
         titleLabel.stringValue = reason
+        okButton.title = Strings.ok
         progressIndicator.startAnimation(nil)
     }
 

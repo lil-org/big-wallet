@@ -9,6 +9,7 @@ class ApproveViewController: NSViewController {
     @IBOutlet weak var titleLabel: NSTextField!
     @IBOutlet var metaTextView: NSTextView!
     @IBOutlet weak var okButton: NSButton!
+    @IBOutlet weak var cancelButton: NSButton!
     @IBOutlet weak var peerNameLabel: NSTextField!
     @IBOutlet weak var peerLogoImageView: NSImageView! {
         didSet {
@@ -42,6 +43,10 @@ class ApproveViewController: NSViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        okButton.title = Strings.ok
+        cancelButton.title = Strings.cancel
+        
         titleLabel.stringValue = approveTitle
         updateDisplayedMeta()
         if let peer = peerMeta {

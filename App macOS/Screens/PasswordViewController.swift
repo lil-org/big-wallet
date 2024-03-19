@@ -35,6 +35,10 @@ class PasswordViewController: NSViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        cancelButton.title = Strings.cancel
+        okButton.title = Strings.ok
+        
         switchToMode(mode)
         
         if let reason = reason, reason != .start {

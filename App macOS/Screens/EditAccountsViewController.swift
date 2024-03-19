@@ -29,11 +29,18 @@ class EditAccountsViewController: NSViewController {
             tableView.dataSource = self
         }
     }
-    @IBOutlet weak var okButton: NSButton!
+    
     @IBOutlet weak var titleLabel: NSTextField!
+    @IBOutlet weak var okButton: NSButton!
+    @IBOutlet weak var cancelButton: NSButton!
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        okButton.title = Strings.ok
+        cancelButton.title = Strings.cancel
+        titleLabel.stringValue = Strings.editAccounts.replacingOccurrences(of: " ", with: "\n")
+        
         enabledUndiscoveredAccounts = wallet.accounts
         guard let previewAccounts = try? walletsManager.previewAccounts(wallet: wallet, page: 0) else { return }
         appendPreviewAccounts(previewAccounts)
