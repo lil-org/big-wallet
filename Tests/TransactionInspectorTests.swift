@@ -4,7 +4,7 @@ import XCTest
 #if os(iOS)
 @testable import Wallet_iOS
 #elseif os(macOS)
-@testable import Wallet_macOS
+@testable import Wallet
 #endif
 
 final class TransactionInspectorTests: XCTestCase {
