@@ -23,12 +23,12 @@
                                     <constraint firstAttribute="height" constant="52" id="oXJ-UU-xY9"/>
                                 </constraints>
                                 <state key="normal" title="Button"/>
-                                <buttonConfiguration key="configuration" style="filled" title="OK"/>
+                                <buttonConfiguration key="configuration" style="filled" title="ok"/>
                                 <connections>
                                     <action selector="okButtonTapped:" destination="BYZ-38-t0r" eventType="touchUpInside" id="xFV-4N-cdW"/>
                                 </connections>
                             </button>
-                            <textField opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" borderStyle="roundedRect" placeholder="Password" textAlignment="center" minimumFontSize="17" translatesAutoresizingMaskIntoConstraints="NO" id="J71-Q3-V0j">
+                            <textField opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" borderStyle="roundedRect" placeholder="password" textAlignment="center" minimumFontSize="17" translatesAutoresizingMaskIntoConstraints="NO" id="J71-Q3-V0j">
                                 <rect key="frame" x="16" y="68" width="382" height="52"/>
                                 <constraints>
                                     <constraint firstAttribute="height" constant="52" id="cMF-A5-cKP"/>

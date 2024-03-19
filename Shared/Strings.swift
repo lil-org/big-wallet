@@ -30,6 +30,7 @@ struct Strings {
     static let removeWallet = "remove wallet"
     static let showPrivateKey = "show private key"
     static let showSecretWords = "show secret words"
+    static let password = "password"
     static let enterKeystorePassword = "enter keystore password"
     static let importWalletTextFieldPlaceholder = "options:\n\n• private key\n• secret words\n• keystore"
     static let failedToImportWallet = "failed to import wallet"

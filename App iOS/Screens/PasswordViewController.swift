@@ -16,6 +16,7 @@ class PasswordViewController: UIViewController {
         didSet {
             passwordTextField.delegate = self
             passwordTextField.addTarget(self, action: #selector(textFieldChanged), for: .editingChanged)
+            passwordTextField.placeholder = Strings.password
         }
     }
     
@@ -26,6 +27,7 @@ class PasswordViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        okButton.setTitle(Strings.ok, for: .normal)
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
         navigationItem.backButtonDisplayMode = .minimal
