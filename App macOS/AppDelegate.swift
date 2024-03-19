@@ -61,14 +61,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func processInput(url: String?) {
         guard let url = url else { return }
-        // TODO: remove yo finance
-        if let txRequest = DirectTransactionRequest(from: url) {
-            processExternalRequest(.direct(txRequest))
-        } else {
-            let safariPrefix = "tinywallet://safari?request="
-            if url.hasPrefix(safariPrefix), let request = SafariRequest(query: String(url.dropFirst(safariPrefix.count))) {
-                processExternalRequest(.safari(request))
-            }
+        let safariPrefix = "tinywallet://safari?request="
+        if url.hasPrefix(safariPrefix), let request = SafariRequest(query: String(url.dropFirst(safariPrefix.count))) {
+            processExternalRequest(.safari(request))
         }
     }
     

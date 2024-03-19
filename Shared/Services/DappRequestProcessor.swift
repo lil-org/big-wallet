@@ -3,38 +3,10 @@
 import Foundation
 import WalletCore
 
-// TODO: remove yo finance
-
 struct DappRequestProcessor {
     
     private static let walletsManager = WalletsManager.shared
     private static let ethereum = Ethereum.shared
-    
-    static func processDirectTransactionRequest(_ request: DirectTransactionRequest, completion: @escaping (String?) -> Void) -> DappRequestAction {
-        let peerMeta = PeerMeta(title: "yo.finance", iconURLString: "https://i.seadn.io/s/raw/files/978b1936da9b8ac1f4cb2ab0bf3c48d9.png")
-        lazy var account = walletsManager.getAccount(coin: .ethereum, address: request.from)
-        lazy var privateKey = walletsManager.getPrivateKey(coin: .ethereum, address: request.from)
-        let transaction = request.createTransaction()
-        if let chainId = Int(request.chainId),
-           let chain = Networks.withChainId(chainId),
-           let account = account,
-           let privateKey = privateKey {
-            let action = SendTransactionAction(provider: .ethereum,
-                                               transaction: transaction,
-                                               chain: chain,
-                                               account: account,
-                                               peerMeta: peerMeta) { transaction in
-                if let transaction = transaction {
-                    sendTransaction(privateKey: privateKey, transaction: transaction, network: chain, respondTo: nil, completion: completion)
-                } else {
-                    completion(nil)
-                }
-            }
-            return .approveTransaction(action)
-        } else {
-            return .showMessage(message: Strings.addWalletAndTryAgain, subtitle: transaction.from, completion: nil)
-        }
-    }
     
     static func processSafariRequest(_ request: SafariRequest, completion: @escaping (String?) -> Void) -> DappRequestAction {
         if !ExtensionBridge.hasRequest(id: request.id) {

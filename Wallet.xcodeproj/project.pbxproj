@@ -106,8 +106,6 @@
 		2C7A8CEF2B7CF22E00683E15 /* URL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D39727623EC600687301 /* URL.swift */; };
 		2C7A8CF12B7CF25100683E15 /* IPFSResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A8CF02B7CF25100683E15 /* IPFSResponse.swift */; };
 		2C7A8CF22B7CF25100683E15 /* IPFSResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A8CF02B7CF25100683E15 /* IPFSResponse.swift */; };
-		2C7A94C12B73B5B60030B684 /* DirectTransactionRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A94C02B73B5B60030B684 /* DirectTransactionRequest.swift */; };
-		2C7A94C22B73B5B60030B684 /* DirectTransactionRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A94C02B73B5B60030B684 /* DirectTransactionRequest.swift */; };
 		2C86125A2B76BDF200B22794 /* TransactionInspectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03EB892B069BFD00EF61F5 /* TransactionInspectorTests.swift */; };
 		2C86125B2B76BDF300B22794 /* TransactionInspectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03EB892B069BFD00EF61F5 /* TransactionInspectorTests.swift */; };
 		2C86125C2B76BE2500B22794 /* Tests_macOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03EB822B069BC900EF61F5 /* Tests_macOS.swift */; };
@@ -399,7 +397,6 @@
 		2C7A8CE62B7CD98A00683E15 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/MainInterface.storyboard; sourceTree = "<group>"; };
 		2C7A8CE82B7CD98A00683E15 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C7A8CF02B7CF25100683E15 /* IPFSResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IPFSResponse.swift; sourceTree = "<group>"; };
-		2C7A94C02B73B5B60030B684 /* DirectTransactionRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectTransactionRequest.swift; sourceTree = "<group>"; };
 		2C8612442B76BDBF00B22794 /* Tests macOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Tests macOS.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C8612512B76BDDC00B22794 /* Tests iOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Tests iOS.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C8944C42AEAFF97006A711F /* FixedWidthInteger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FixedWidthInteger.swift; sourceTree = "<group>"; };
@@ -1011,7 +1008,6 @@
 			isa = PBXGroup;
 			children = (
 				2C90E62127B2ED2D00C8991E /* SafariRequest+Helpers.swift */,
-				2C7A94C02B73B5B60030B684 /* DirectTransactionRequest.swift */,
 				0D059AD126C2796200EE3023 /* ApprovalSubject.swift */,
 				2C09FC652828331D00DE9C27 /* PlatformSpecificImage.swift */,
 				2C4297272ADEDCBD0044357A /* PeerMeta.swift */,
@@ -1674,7 +1670,6 @@
 				2CD0669126B5537B00728C20 /* WalletContainer.swift in Sources */,
 				2C8944CB2AEB0C10006A711F /* EthereumRPC.swift in Sources */,
 				2C89D26827BADCA9006C0C8D /* DappRequestAction.swift in Sources */,
-				2C7A94C12B73B5B60030B684 /* DirectTransactionRequest.swift in Sources */,
 				2C3B7F022756A08600931264 /* Identifiers.swift in Sources */,
 				2C9F0B6826BDCB2E008FA3D6 /* EthereumNetwork.swift in Sources */,
 				2C03D1D2269B407900EF10EA /* NetworkMonitor.swift in Sources */,
@@ -1776,7 +1771,6 @@
 				2CED86C02AF25C32006F9E26 /* Networks.swift in Sources */,
 				2CF255AE275A48CF00AE54B9 /* Transaction.swift in Sources */,
 				2C96D38F2762317300687301 /* AccountTableViewCell.swift in Sources */,
-				2C7A94C22B73B5B60030B684 /* DirectTransactionRequest.swift in Sources */,
 				2C264BEC27B6B50700234393 /* DappRequestProcessor.swift in Sources */,
 				2CF255A1275A47DD00AE54B9 /* Notification.swift in Sources */,
 				2C4297292ADEDCBD0044357A /* PeerMeta.swift in Sources */,

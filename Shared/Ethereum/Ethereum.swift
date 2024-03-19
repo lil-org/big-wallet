@@ -32,20 +32,6 @@ struct Ethereum {
         return try sign(data: data, privateKey: privateKey, addPrefix: true)
     }
     
-    // TODO: remove yo finance
-    func validateYoFinance(input: String, signature: String) -> Bool {
-        let yoFinance = "0x331ee8a68834c58084E00276E76A923A002Fa6cf"
-        if let inputData = input.data(using: .utf8),
-           let hash = prefixedDataHash(data: inputData),
-           let signatureData = Data(hexString: signature),
-           let publicKey = PublicKey.recover(signature: signatureData, message: hash) {
-            let address = CoinType.ethereum.deriveAddressFromPublicKey(publicKey: publicKey)
-            return address == yoFinance
-        } else {
-            return false
-        }
-    }
-    
     func recover(signature: Data, message: Data) -> String? {
         guard let hash = prefixedDataHash(data: message),
               let publicKey = PublicKey.recover(signature: signature, message: hash),
