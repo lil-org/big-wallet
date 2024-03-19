@@ -57,7 +57,7 @@ struct NetworksListView: View {
         Section(header: title.map { Text($0) }) {
             ForEach(networks, id: \.self) { network in
                 HStack {
-                    Text(network.name)
+                    Text(network.name.lowercased())
                     Spacer()
                     if selectedNetwork?.chainId == network.chainId {
                         Image.checkmark.foregroundStyle(.tint)
