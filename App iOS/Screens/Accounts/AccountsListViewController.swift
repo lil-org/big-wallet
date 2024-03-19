@@ -84,7 +84,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         isModalInPresentation = true
         let addItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addWallet))
         let preferencesItem = UIBarButtonItem(image: Images.preferences, style: UIBarButtonItem.Style.plain, target: self, action: #selector(preferencesButtonTapped))
-        let cancelItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancelButtonTapped))
+        let cancelItem = UIBarButtonItem(title: Strings.cancel, style: .plain, target: self, action: #selector(cancelButtonTapped))
         self.addWalletItem = addItem
         self.preferencesItem = preferencesItem
         navigationItem.rightBarButtonItems = forWalletSelection ? [addItem] : [addItem, preferencesItem]

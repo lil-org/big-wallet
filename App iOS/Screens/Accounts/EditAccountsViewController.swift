@@ -38,7 +38,7 @@ class EditAccountsViewController: UIViewController {
         navigationItem.title = Strings.editAccounts
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
-        navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(dismissAnimated))
+        navigationItem.leftBarButtonItem = UIBarButtonItem(title: Strings.cancel, style: .plain, target: self, action: #selector(dismissAnimated))
         enabledUndiscoveredAccounts = wallet.accounts
         guard let previewAccounts = try? walletsManager.previewAccounts(wallet: wallet, page: 0) else { return }
         appendPreviewAccounts(previewAccounts)
