@@ -61,6 +61,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        primaryButton.setTitle(Strings.connect, for: .normal)
+        secondaryButton.setTitle(Strings.cancel, for: .normal)
+        
         if walletsManager.wallets.isEmpty {
             walletsManager.start()
         }

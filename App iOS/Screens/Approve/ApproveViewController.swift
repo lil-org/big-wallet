@@ -46,6 +46,8 @@ class ApproveViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        okButton.setTitle(Strings.ok, for: .normal)
+        cancelButton.setTitle(Strings.cancel, for: .normal)
         navigationItem.title = approveTitle
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always

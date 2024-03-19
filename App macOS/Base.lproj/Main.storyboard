@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.Cocoa.Storyboard.XIB" version="3.0" toolsVersion="22505" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
+<document type="com.apple.InterfaceBuilder3.Cocoa.Storyboard.XIB" version="3.0" toolsVersion="32700.99.1234" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
     <dependencies>
         <deployment identifier="macosx"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="22505"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="22689"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <scenes>
@@ -722,7 +722,7 @@
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
-                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="feM-MO-Msf" userLabel="Import Wallet">
+                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="feM-MO-Msf" userLabel="Import Wallet">
                                 <rect key="frame" x="14" y="258" width="222" height="68"/>
                                 <textFieldCell key="cell" controlSize="large" alignment="center" id="bI7-hT-bS8">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
@@ -811,7 +811,7 @@ DQ
                         <rect key="frame" x="0.0" y="0.0" width="250" height="412"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
-                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" textCompletion="NO" translatesAutoresizingMaskIntoConstraints="NO" id="dkh-kG-EFj">
+                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" textCompletion="NO" translatesAutoresizingMaskIntoConstraints="NO" id="dkh-kG-EFj">
                                 <rect key="frame" x="53" y="354" width="144" height="34"/>
                                 <textFieldCell key="cell" controlSize="large" enabled="NO" allowsUndo="NO" alignment="center" title="Accounts" id="9No-vQ-vBK">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
@@ -862,7 +862,7 @@ DQ
                                                                                 </userDefinedRuntimeAttribute>
                                                                             </userDefinedRuntimeAttributes>
                                                                         </imageView>
-                                                                        <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="sef-hl-iPV">
+                                                                        <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="sef-hl-iPV">
                                                                             <rect key="frame" x="34" y="8" width="62" height="25"/>
                                                                             <textFieldCell key="cell" lineBreakMode="clipping" alignment="center" title="Label" id="2a6-9c-AzV">
                                                                                 <font key="font" metaFont="systemBold" size="21"/>
@@ -919,7 +919,7 @@ DQ
                                                             <rect key="frame" x="0.0" y="80" width="248" height="40"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
-                                                                <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="BpB-tc-JdP">
+                                                                <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="BpB-tc-JdP">
                                                                     <rect key="frame" x="18" y="8" width="224" height="25"/>
                                                                     <textFieldCell key="cell" lineBreakMode="clipping" alignment="left" title="Label" id="FAR-3U-VR0">
                                                                         <font key="font" metaFont="systemBold" size="21"/>
@@ -980,7 +980,7 @@ DQ
                                                 </constraints>
                                                 <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyDown" id="9eJ-C5-e6g"/>
                                             </imageView>
-                                            <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Khi-cn-EGb">
+                                            <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Khi-cn-EGb">
                                                 <rect key="frame" x="20" y="0.0" width="101" height="16"/>
                                                 <textFieldCell key="cell" lineBreakMode="truncatingTail" title="Unknown dapp" id="CM5-MZ-VQq">
                                                     <font key="font" metaFont="systemBold"/>
@@ -1109,7 +1109,7 @@ DQ
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
-                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="GMd-25-PjD">
+                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="GMd-25-PjD">
                                 <rect key="frame" x="14" y="292" width="222" height="34"/>
                                 <textFieldCell key="cell" controlSize="large" alignment="center" title="Waiting" id="Ab0-0l-hhQ">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
@@ -1169,7 +1169,7 @@ DQ
                         <rect key="frame" x="0.0" y="0.0" width="250" height="372"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
-                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="PdV-Nr-oOY">
+                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="PdV-Nr-oOY">
                                 <rect key="frame" x="14" y="292" width="222" height="34"/>
                                 <textFieldCell key="cell" controlSize="large" alignment="center" title="Approve" id="wVk-Ux-kpU">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
@@ -1265,7 +1265,7 @@ DQ
                                         </constraints>
                                         <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyDown" id="eOs-XT-voj"/>
                                     </imageView>
-                                    <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="LKE-ra-fan">
+                                    <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="LKE-ra-fan">
                                         <rect key="frame" x="20" y="0.0" width="101" height="16"/>
                                         <textFieldCell key="cell" lineBreakMode="truncatingTail" title="Unknown dapp" id="lo2-i6-DId">
                                             <font key="font" metaFont="systemBold"/>
@@ -1325,7 +1325,7 @@ DQ
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
-                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Gdw-Q4-bo0">
+                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Gdw-Q4-bo0">
                                 <rect key="frame" x="14" y="258" width="222" height="68"/>
                                 <textFieldCell key="cell" controlSize="large" alignment="center" title="Create Password" id="8sq-L4-gvS">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
@@ -1372,7 +1372,7 @@ DQ
                                     <real value="3.4028234663852886e+38"/>
                                 </customSpacing>
                             </stackView>
-                            <secureTextField focusRingType="none" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="bsj-p7-maG">
+                            <secureTextField verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="bsj-p7-maG">
                                 <rect key="frame" x="45" y="177" width="160" height="20"/>
                                 <constraints>
                                     <constraint firstAttribute="width" constant="160" id="PLH-bk-GPE"/>
@@ -1386,7 +1386,7 @@ DQ
                                     </allowedInputSourceLocales>
                                 </secureTextFieldCell>
                             </secureTextField>
-                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="H35-O5-AZi">
+                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="H35-O5-AZi">
                                 <rect key="frame" x="18" y="234" width="214" height="16"/>
                                 <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="Multiline Label" id="5g8-hW-z0n">
                                     <font key="font" metaFont="system"/>
@@ -1429,7 +1429,7 @@ DQ
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
-                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="vxh-AZ-Ll4">
+                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="vxh-AZ-Ll4">
                                 <rect key="frame" x="14" y="292" width="222" height="34"/>
                                 <textFieldCell key="cell" controlSize="large" alignment="center" title="tiny wallet" id="dja-pE-CfV">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
@@ -1461,7 +1461,7 @@ DQ
                                     <real value="3.4028234663852886e+38"/>
                                 </customSpacing>
                             </stackView>
-                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="BvK-xX-gxC">
+                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="BvK-xX-gxC">
                                 <rect key="frame" x="26" y="162" width="198" height="50"/>
                                 <textFieldCell key="cell" controlSize="large" alignment="center" title="Sign crypto transactions." id="4kF-cy-CbK">
                                     <font key="font" metaFont="systemBold" size="21"/>
@@ -1498,7 +1498,7 @@ DQ
                         <rect key="frame" x="0.0" y="0.0" width="250" height="407"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
-                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="g2G-lh-X1F">
+                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="g2G-lh-X1F">
                                 <rect key="frame" x="14" y="327" width="222" height="34"/>
                                 <textFieldCell key="cell" controlSize="large" alignment="center" title="Approve" id="t64-oP-3Nm">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
@@ -1586,7 +1586,7 @@ DQ
                             <stackView distribution="fillProportionally" orientation="horizontal" alignment="centerY" spacing="4" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="pLD-2z-PFP">
                                 <rect key="frame" x="45" y="86" width="160" height="16"/>
                                 <subviews>
-                                    <textField focusRingType="none" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="Jcz-Um-efA">
+                                    <textField verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="Jcz-Um-efA">
                                         <rect key="frame" x="-2" y="0.0" width="24" height="16"/>
                                         <constraints>
                                             <constraint firstAttribute="width" constant="20" id="Vdv-zQ-pVQ"/>
@@ -1604,7 +1604,7 @@ DQ
                                             <action selector="sliderValueChanged:" target="eky-J7-eog" id="iz9-9b-wNa"/>
                                         </connections>
                                     </slider>
-                                    <textField focusRingType="none" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="WJV-V3-GWm">
+                                    <textField verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="WJV-V3-GWm">
                                         <rect key="frame" x="138" y="0.0" width="24" height="16"/>
                                         <textFieldCell key="cell" controlSize="large" lineBreakMode="clipping" alignment="right" title="🐇" id="aKB-6P-OIS">
                                             <font key="font" metaFont="system"/>
@@ -1639,7 +1639,7 @@ DQ
                                         </constraints>
                                         <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyDown" id="DGI-qz-sBc"/>
                                     </imageView>
-                                    <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Ji7-6C-gUp">
+                                    <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Ji7-6C-gUp">
                                         <rect key="frame" x="20" y="0.0" width="101" height="16"/>
                                         <textFieldCell key="cell" lineBreakMode="truncatingTail" title="Unknown dapp" id="csk-3U-RLL">
                                             <font key="font" metaFont="systemBold"/>
@@ -1657,7 +1657,7 @@ DQ
                                     <real value="3.4028234663852886e+38"/>
                                 </customSpacing>
                             </stackView>
-                            <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="xby-TM-Wec">
+                            <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="xby-TM-Wec">
                                 <rect key="frame" x="28" y="111" width="194" height="14"/>
                                 <textFieldCell key="cell" lineBreakMode="truncatingTail" alignment="center" id="606-Ge-1Pk">
                                     <font key="font" metaFont="smallSystem"/>
@@ -1726,7 +1726,7 @@ DQ
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
-                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="oHl-So-oUC" userLabel="Title Label">
+                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="oHl-So-oUC" userLabel="Title Label">
                                 <rect key="frame" x="14" y="258" width="222" height="68"/>
                                 <textFieldCell key="cell" controlSize="large" alignment="center" id="PuW-b2-Okp">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
@@ -1803,7 +1803,7 @@ DQ
                                                             <rect key="frame" x="0.0" y="0.0" width="208" height="32"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
-                                                                <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="4Mf-qK-XmB">
+                                                                <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="4Mf-qK-XmB">
                                                                     <rect key="frame" x="48" y="8" width="41" height="16"/>
                                                                     <textFieldCell key="cell" lineBreakMode="clipping" alignment="center" title="Label" id="SM6-6l-KvR">
                                                                         <font key="font" metaFont="system"/>
@@ -1834,7 +1834,7 @@ DQ
                                                                         </userDefinedRuntimeAttribute>
                                                                     </userDefinedRuntimeAttributes>
                                                                 </imageView>
-                                                                <textField focusRingType="none" horizontalHuggingPriority="500" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="sqT-CS-5ih">
+                                                                <textField horizontalHuggingPriority="500" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="sqT-CS-5ih">
                                                                     <rect key="frame" x="3" y="11" width="20" height="11"/>
                                                                     <constraints>
                                                                         <constraint firstAttribute="width" relation="lessThanOrEqual" constant="23" id="OcV-Wo-7SP"/>

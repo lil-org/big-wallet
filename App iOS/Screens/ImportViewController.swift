@@ -29,6 +29,10 @@ class ImportViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        okButton.setTitle(Strings.ok, for: .normal)
+        pasteButton.setTitle(Strings.paste, for: .normal)
+        
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
         navigationItem.title = Strings.importWallet

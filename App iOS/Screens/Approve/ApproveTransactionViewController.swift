@@ -56,6 +56,10 @@ class ApproveTransactionViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        okButton.setTitle(Strings.ok, for: .normal)
+        cancelButton.setTitle(Strings.cancel, for: .normal)
+        
         priceService.update()
         navigationItem.title = Strings.sendTransaction
         navigationController?.navigationBar.prefersLargeTitles = true

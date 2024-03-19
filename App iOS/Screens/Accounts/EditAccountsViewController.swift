@@ -34,7 +34,7 @@ class EditAccountsViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
+        okButton.setTitle(Strings.ok, for: .normal)
         navigationItem.title = Strings.editAccounts
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
