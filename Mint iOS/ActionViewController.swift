@@ -16,6 +16,7 @@ class ActionViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        navigationItem.leftBarButtonItem?.title = Strings.cancel
         for item in (extensionContext?.inputItems as? [NSExtensionItem]) ?? [] {
             for provider in item.attachments ?? [] {
                 if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {

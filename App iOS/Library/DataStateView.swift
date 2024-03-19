@@ -65,7 +65,7 @@ class DataStateView: UIView {
     @IBOutlet private weak var button: UIButton!
     @IBOutlet private weak var activityIndicatorDescriptionLabel: UILabel! {
         didSet {
-            activityIndicatorDescriptionLabel.text = Strings.loading.uppercased()
+            activityIndicatorDescriptionLabel.text = Strings.loading
         }
     }
     

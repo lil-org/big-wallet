@@ -21,7 +21,7 @@
                                 <rect key="frame" x="0.0" y="59" width="320" height="44"/>
                                 <items>
                                     <navigationItem id="3HJ-uW-3hn">
-                                        <barButtonItem key="leftBarButtonItem" style="done" systemItem="cancel" id="WYi-yp-eM6">
+                                        <barButtonItem key="leftBarButtonItem" title="cancel" style="done" id="WYi-yp-eM6">
                                             <connections>
                                                 <action selector="done" destination="ObA-dk-sSI" id="Qdu-qn-U6V"/>
                                             </connections>

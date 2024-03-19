@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="22155" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="g1z-ip-YNf">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="32700.99.1234" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="g1z-ip-YNf">
     <device id="retina6_1" orientation="portrait" appearance="light"/>
     <dependencies>
         <deployment identifier="iOS"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="22131"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="22684"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="System colors in document resources" minToolsVersion="11.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
@@ -183,7 +183,7 @@
                                                 <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="QNJ-MC-LUC">
                                                     <rect key="frame" x="0.0" y="0.0" width="145" height="52"/>
                                                     <state key="normal" title="Button"/>
-                                                    <buttonConfiguration key="configuration" style="gray" title="Cancel"/>
+                                                    <buttonConfiguration key="configuration" style="gray" title="cancel"/>
                                                     <connections>
                                                         <action selector="secondaryButtonTapped:" destination="onX-Y1-KVr" eventType="touchUpInside" id="m4W-RW-tnY"/>
                                                     </connections>
@@ -205,7 +205,7 @@
                                                         <constraint firstAttribute="height" constant="52" id="r8Z-Ps-Bvb"/>
                                                     </constraints>
                                                     <state key="normal" title="Button"/>
-                                                    <buttonConfiguration key="configuration" style="filled" title="Connect"/>
+                                                    <buttonConfiguration key="configuration" style="filled" title="connect"/>
                                                     <connections>
                                                         <action selector="primaryButtonTapped:" destination="onX-Y1-KVr" eventType="touchUpInside" id="2lh-8j-Mku"/>
                                                     </connections>
@@ -273,7 +273,7 @@
                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="p0E-uf-Bib">
                                         <rect key="frame" x="0.0" y="0.0" width="181" height="52"/>
                                         <state key="normal" title="Button"/>
-                                        <buttonConfiguration key="configuration" style="gray" title="Paste"/>
+                                        <buttonConfiguration key="configuration" style="gray" title="paste"/>
                                         <connections>
                                             <action selector="pasteButtonTapped:" destination="ffW-KB-fbn" eventType="touchUpInside" id="IBU-jB-T9i"/>
                                         </connections>
@@ -284,7 +284,7 @@
                                             <constraint firstAttribute="height" constant="52" id="dil-Mm-o5U"/>
                                         </constraints>
                                         <state key="normal" title="Button"/>
-                                        <buttonConfiguration key="configuration" style="filled" title="OK"/>
+                                        <buttonConfiguration key="configuration" style="filled" title="ok"/>
                                         <connections>
                                             <action selector="okButtonTapped:" destination="ffW-KB-fbn" eventType="touchUpInside" id="Gz9-4B-QaZ"/>
                                         </connections>
@@ -361,7 +361,7 @@ Label</string>
                                                 <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="aN2-HV-QcX">
                                                     <rect key="frame" x="0.0" y="0.0" width="181" height="52"/>
                                                     <state key="normal" title="Button"/>
-                                                    <buttonConfiguration key="configuration" style="gray" title="Cancel"/>
+                                                    <buttonConfiguration key="configuration" style="gray" title="cancel"/>
                                                     <connections>
                                                         <action selector="cancelButtonTapped:" destination="bCJ-7J-W3b" eventType="touchUpInside" id="P9o-pI-ccV"/>
                                                     </connections>
@@ -372,7 +372,7 @@ Label</string>
                                                         <constraint firstAttribute="height" constant="52" id="6Vd-bC-TuE"/>
                                                     </constraints>
                                                     <state key="normal" title="Button"/>
-                                                    <buttonConfiguration key="configuration" style="filled" title="OK"/>
+                                                    <buttonConfiguration key="configuration" style="filled" title="ok"/>
                                                     <connections>
                                                         <action selector="okButtonTapped:" destination="bCJ-7J-W3b" eventType="touchUpInside" id="f3R-zH-HtZ"/>
                                                     </connections>
@@ -459,7 +459,7 @@ Label</string>
                                                 <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Et1-Ry-8qe">
                                                     <rect key="frame" x="0.0" y="0.0" width="181" height="52"/>
                                                     <state key="normal" title="Button"/>
-                                                    <buttonConfiguration key="configuration" style="gray" title="Cancel"/>
+                                                    <buttonConfiguration key="configuration" style="gray" title="cancel"/>
                                                     <connections>
                                                         <action selector="cancelButtonTapped:" destination="rpE-yl-N9f" eventType="touchUpInside" id="1lL-YQ-uhy"/>
                                                     </connections>
@@ -470,7 +470,7 @@ Label</string>
                                                         <constraint firstAttribute="height" constant="52" id="6E3-uE-78g"/>
                                                     </constraints>
                                                     <state key="normal" title="Button"/>
-                                                    <buttonConfiguration key="configuration" style="filled" title="OK"/>
+                                                    <buttonConfiguration key="configuration" style="filled" title="ok"/>
                                                     <connections>
                                                         <action selector="okButtonTapped:" destination="rpE-yl-N9f" eventType="touchUpInside" id="HQh-dn-EcK"/>
                                                     </connections>
@@ -542,7 +542,7 @@ Label</string>
                                                         <constraint firstAttribute="height" constant="52" id="FWG-PV-Buo"/>
                                                     </constraints>
                                                     <state key="normal" title="Button"/>
-                                                    <buttonConfiguration key="configuration" style="tinted" title="OK"/>
+                                                    <buttonConfiguration key="configuration" style="tinted" title="ok"/>
                                                     <connections>
                                                         <action selector="okButtonTapped:" destination="4YK-hI-ui9" eventType="touchUpInside" id="Eak-OV-BoX"/>
                                                     </connections>
@@ -591,13 +591,13 @@ Label</string>
             <color white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>
         <systemColor name="secondaryLabelColor">
-            <color red="0.23529411764705882" green="0.23529411764705882" blue="0.2627450980392157" alpha="0.59999999999999998" colorSpace="custom" customColorSpace="sRGB"/>
+            <color red="0.23529411759999999" green="0.23529411759999999" blue="0.26274509800000001" alpha="0.59999999999999998" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
         <systemColor name="systemBackgroundColor">
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>
         <systemColor name="systemFillColor">
-            <color red="0.47058823529411764" green="0.47058823529411764" blue="0.50196078431372548" alpha="0.20000000000000001" colorSpace="custom" customColorSpace="sRGB"/>
+            <color red="0.47058823529999999" green="0.47058823529999999" blue="0.50196078430000002" alpha="0.20000000000000001" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
     </resources>
 </document>
