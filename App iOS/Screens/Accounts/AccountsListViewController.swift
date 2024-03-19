@@ -384,7 +384,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     @objc private func preferencesButtonTapped() {
-        let actionSheet = UIAlertController(title: "❤️ " + Strings.tinyWallet.uppercased() + " ⭐️", message: nil, preferredStyle: .actionSheet)
+        let actionSheet = UIAlertController(title: "❤️ " + Strings.tinyWallet + " ⭐️", message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.barButtonItem = preferencesItem
         let xAction = UIAlertAction(title: Strings.viewOnX.withEllipsis, style: .default) { _ in
             UIApplication.shared.open(URL.x)
