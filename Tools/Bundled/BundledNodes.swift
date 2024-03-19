@@ -63,7 +63,7 @@ struct BundledNodes {
         59140: "rpc.goerli.linea.build",
         59144: "rpc.linea.build",
         64240: "rpcapi.sonic.fantom.network/",
-        80001: "rpc-mumbai.maticvigil.com",
+        80001: "rpc.ankr.com/polygon_mumbai",
         84531: "goerli.base.org",
         84532: "sepolia.base.org",
         421613: "goerli-rollup.arbitrum.io/rpc",
