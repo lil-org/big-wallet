@@ -84,9 +84,7 @@ struct Strings {
     static let removingTheLastAccount = "Removing the last account removes the wallet as well"
     static let selectNetworkOptionally = "Select network (optionally)"
     static let isSelected = "Selected"
-    
     static let data = "Data"
-    
     static let viewOnNearExplorer = "View on Near explorer"
     static let sendingTransaction = "Sending a transaction"
     static let disconnect = "Disconnect"
@@ -111,5 +109,7 @@ struct Strings {
     static let fee = "fee"
     static let value = "value"
     static let to = "to"
+    static let retry = "retry"
+    static let uploading = "uploading"
     
 }

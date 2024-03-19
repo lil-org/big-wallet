@@ -232,18 +232,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         
         let action: DappRequestAction
         let id: Int
-        if let txRequest = DirectTransactionRequest(from: inputLinkString) {
-            id = txRequest.requestId
-            action = DappRequestProcessor.processDirectTransactionRequest(txRequest) { [weak self] hash in
-                if let hash = hash, let chainId = Int(txRequest.chainId), let url = Networks.explorerURL(chainId: chainId, hash: hash) {
-                    UIApplication.shared.open(url)
-                    self?.closePopups(requestId: id)
-                } else {
-                    self?.redirectBack(requestId: id, tryFarcaster: true)
-                }
-            }
-        } else if let prefix = ["https://lil.org/extension?query=",
-                                "tinywallet://safari?request="].first(where: { inputLinkString.hasPrefix($0) == true }),
+        if let prefix = ["https://lil.org/extension?query=", "tinywallet://safari?request="].first(where: { inputLinkString.hasPrefix($0) == true }),
                   let request = SafariRequest(query: String(inputLinkString.dropFirst(prefix.count))) {
             id = request.id
             action = DappRequestProcessor.processSafariRequest(request) { [weak self] hash in

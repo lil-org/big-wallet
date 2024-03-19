@@ -82,6 +82,7 @@
 		2C5FF97E26C84F7C00B32ACC /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C5FF97C26C84F7C00B32ACC /* LaunchScreen.storyboard */; };
 		2C603D0226B6E13F00956955 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
 		2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6706A4267A6BFE006AAEF2 /* Bundle.swift */; };
+		2C6A0A932BA9AF3A0066C881 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C492689F01700D0926A /* Strings.swift */; };
 		2C6B964C26B9D92500D2C819 /* NSColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6B964B26B9D92500D2C819 /* NSColor.swift */; };
 		2C6B964F26B9D98C00D2C819 /* Colors.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C6B964E26B9D98C00D2C819 /* Colors.xcassets */; };
 		2C6F6D5A28273FE500D6E8FB /* EditAccountsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5928273FE500D6E8FB /* EditAccountsViewController.swift */; };
@@ -1821,6 +1822,7 @@
 			files = (
 				2C7A8CE42B7CD98A00683E15 /* ActionViewController.swift in Sources */,
 				2C7A8CEF2B7CF22E00683E15 /* URL.swift in Sources */,
+				2C6A0A932BA9AF3A0066C881 /* Strings.swift in Sources */,
 				2C7A8CF22B7CF25100683E15 /* IPFSResponse.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -9,7 +9,6 @@ class Agent: NSObject {
     
     enum ExternalRequest {
         case safari(SafariRequest)
-        case direct(DirectTransactionRequest)
     }
     
     static let shared = Agent()
@@ -250,13 +249,6 @@ class Agent: NSObject {
         case .safari(let safariRequest):
             action = DappRequestProcessor.processSafariRequest(safariRequest) { _ in
                 Window.closeWindowAndActivateNext(idToClose: windowNumber, specificBrowser: .safari)
-            }
-        case .direct(let directTransactionRequest):
-            action = DappRequestProcessor.processDirectTransactionRequest(directTransactionRequest) { hash in
-                Window.closeWindowAndActivateNext(idToClose: windowNumber, specificBrowser: .unknown)
-                if let hash = hash, let chainId = Int(directTransactionRequest.chainId), let url = Networks.explorerURL(chainId: chainId, hash: hash) {
-                    NSWorkspace.shared.open(url)
-                }
             }
         }
         

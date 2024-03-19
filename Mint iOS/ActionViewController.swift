@@ -7,7 +7,11 @@ import UniformTypeIdentifiers
 class ActionViewController: UIViewController {
     
     @IBOutlet weak var imageView: UIImageView!
-    @IBOutlet weak var statusLabel: UILabel!
+    @IBOutlet weak var statusLabel: UILabel! {
+        didSet {
+            statusLabel.text = Strings.uploading
+        }
+    }
     @IBOutlet weak var activityIndicator: UIActivityIndicatorView!
     
     override func viewDidLoad() {
@@ -60,12 +64,11 @@ class ActionViewController: UIViewController {
     private func suggestRetry(data: Data, type: String) {
         statusLabel.isHidden = true
         activityIndicator.stopAnimating()
-        
-        let alert = UIAlertController(title: "something went wrong", message: nil, preferredStyle: .alert)
-        let cancel = UIAlertAction(title: "cancel", style: .cancel) { [weak self] _ in
+        let alert = UIAlertController(title: Strings.somethingWentWrong, message: nil, preferredStyle: .alert)
+        let cancel = UIAlertAction(title: Strings.cancel, style: .cancel) { [weak self] _ in
             self?.allDone()
         }
-        let retry = UIAlertAction(title: "retry", style: .default) { [weak self] _ in
+        let retry = UIAlertAction(title: Strings.retry, style: .default) { [weak self] _ in
             self?.statusLabel.isHidden = false
             self?.activityIndicator.startAnimating()
             self?.uploadImage(data: data, type: type)
