@@ -7,11 +7,11 @@ extension CoinType {
     var name: String {
         switch self {
         case .solana:
-            return "Solana"
+            return "solana"
         case .ethereum:
-            return "Ethereum & L2s"
+            return "ethereum"
         case .near:
-            return "NEAR"
+            return "near"
         default:
             fatalError(Strings.somethingWentWrong)
         }
@@ -23,9 +23,9 @@ extension CoinType {
             return [(Strings.viewOnSolanaExplorer, URL(string: "https://explorer.solana.com/address/\(address)")!)]
         case .ethereum:
             return [
-                (Strings.viewOn + " " + "Etherscan", URL(string: "https://etherscan.io/address/\(address)")!),
-                (Strings.viewOn + " " + "Superscan", URL(string: "https://superscan.network/address/\(address)")!),
-                (Strings.viewOn + " " + "Blockscan", URL(string: "https://blockscan.com/address/\(address)")!)
+                (Strings.viewOn + " " + "etherscan", URL(string: "https://etherscan.io/address/\(address)")!),
+                (Strings.viewOn + " " + "superscan", URL(string: "https://superscan.network/address/\(address)")!),
+                (Strings.viewOn + " " + "blockscan", URL(string: "https://blockscan.com/address/\(address)")!)
             ]
         case .near:
             return [(Strings.viewOnNearExplorer, URL(string: "https://explorer.near.org/accounts/\(address)")!)]
