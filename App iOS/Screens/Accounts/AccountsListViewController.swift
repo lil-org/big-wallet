@@ -35,6 +35,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         return walletsManager.wallets
     }
     
+    private var forWalletSelection: Bool {
+        return selectAccountAction != nil
+    }
+    
     private var didAppear = false
     private var toDismissAfterResponse = [Int: UIViewController]()
     private var preferencesItem: UIBarButtonItem?
@@ -68,19 +72,20 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             walletsManager.start()
         }
         
-        let forWalletSelection = selectAccountAction != nil
         if forWalletSelection {
             if selectAccountAction?.initiallyConnectedProviders.isEmpty ?? true {
                 navigationItem.title = Strings.selectAccount
             } else {
                 navigationItem.title = Strings.switchAccount
             }
+            
         } else {
-            navigationItem.title = Strings.wallets
+            navigationItem.title = nil
         }
         
-        navigationController?.navigationBar.prefersLargeTitles = true
-        navigationItem.largeTitleDisplayMode = .always
+        navigationController?.navigationBar.prefersLargeTitles = forWalletSelection
+        navigationItem.largeTitleDisplayMode = forWalletSelection ? .always : .never
+        
         isModalInPresentation = true
         let addItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addWallet))
         let preferencesItem = UIBarButtonItem(image: Images.preferences, style: UIBarButtonItem.Style.plain, target: self, action: #selector(preferencesButtonTapped))
@@ -138,14 +143,16 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         super.viewWillAppear(animated)
         processInput()
         didAppear = true
-        DispatchQueue.main.async { [weak self] in
-            let heightBefore = self?.navigationController?.navigationBar.frame.height ?? 0
-            self?.navigationController?.navigationBar.sizeToFit()
-            let heightAfter = self?.navigationController?.navigationBar.frame.height ?? 0
-            if self?.initialContentOffset == nil && self?.sections.isEmpty == false {
-                self?.initialContentOffset = (self?.tableView.contentOffset.y ?? 0) + heightBefore - heightAfter
-                if let selectedAccounts = self?.selectAccountAction?.selectedAccounts {
-                    self?.scrollToTheFirst(selectedAccounts)
+        if forWalletSelection {
+            DispatchQueue.main.async { [weak self] in
+                let heightBefore = self?.navigationController?.navigationBar.frame.height ?? 0
+                self?.navigationController?.navigationBar.sizeToFit()
+                let heightAfter = self?.navigationController?.navigationBar.frame.height ?? 0
+                if self?.initialContentOffset == nil && self?.sections.isEmpty == false {
+                    self?.initialContentOffset = (self?.tableView.contentOffset.y ?? 0) + heightBefore - heightAfter
+                    if let selectedAccounts = self?.selectAccountAction?.selectedAccounts {
+                        self?.scrollToTheFirst(selectedAccounts)
+                    }
                 }
             }
         }
