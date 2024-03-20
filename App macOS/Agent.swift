@@ -107,11 +107,11 @@ class Agent: NSObject {
         let menu = NSMenu(title: Strings.tinyWallet)
         
         let showItem = NSMenuItem(title: Strings.showWallets, action: #selector(didSelectShowMenuItem), keyEquivalent: "")
-        let safariItem = NSMenuItem(title: Strings.enableSafariExtension.withEllipsis, action: #selector(enableSafariExtension), keyEquivalent: "")
-        let mailItem = NSMenuItem(title: Strings.dropUsALine.withEllipsis, action: #selector(didSelectMailMenuItem), keyEquivalent: "")
-        let githubItem = NSMenuItem(title: Strings.viewOnGithub.withEllipsis, action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
-        let warpcastItem = NSMenuItem(title: Strings.viewOnWarpcast.withEllipsis, action: #selector(didSelectWarpcastMenuItem), keyEquivalent: "")
-        let xItem = NSMenuItem(title: Strings.viewOnX.withEllipsis, action: #selector(didSelectXMenuItem), keyEquivalent: "")
+        let safariItem = NSMenuItem(title: Strings.enableSafariExtension, action: #selector(enableSafariExtension), keyEquivalent: "")
+        let mailItem = NSMenuItem(title: Strings.dropUsALine, action: #selector(didSelectMailMenuItem), keyEquivalent: "")
+        let githubItem = NSMenuItem(title: Strings.viewOnGithub, action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
+        let warpcastItem = NSMenuItem(title: Strings.viewOnWarpcast, action: #selector(didSelectWarpcastMenuItem), keyEquivalent: "")
+        let xItem = NSMenuItem(title: Strings.viewOnX, action: #selector(didSelectXMenuItem), keyEquivalent: "")
         let quitItem = NSMenuItem(title: Strings.quit, action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
         showItem.attributedTitle = NSAttributedString(string: Strings.showWallets, attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold)])
         
@@ -129,9 +129,9 @@ class Agent: NSObject {
         menu.addItem(safariItem)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(warpcastItem)
-        menu.addItem(xItem)
         menu.addItem(githubItem)
         menu.addItem(mailItem)
+        menu.addItem(xItem)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(quitItem)
         return menu

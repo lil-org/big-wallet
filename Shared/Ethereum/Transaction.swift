@@ -70,7 +70,7 @@ struct Transaction {
         if let gasPriceGwei = gasPriceGwei {
             gwei = String(gasPriceGwei) + (chain.symbolIsETH ? " \(Strings.gwei)" : "")
         } else {
-            gwei = Strings.calculating
+            gwei = Strings.calculating.withEllipsis
         }
         return "\(Strings.gasPrice): \(gwei)"
     }
@@ -84,7 +84,7 @@ struct Transaction {
             let costString = chain.mightShowPrice ? cost(value: fee, price: price) : ""
             feeString = fee.eth(shortest: true) + " \(chain.symbol)" + costString
         } else {
-            feeString = Strings.calculating
+            feeString = Strings.calculating.withEllipsis
         }
         return "\(Strings.fee): " + feeString
     }

@@ -390,26 +390,26 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     @objc private func preferencesButtonTapped() {
         let actionSheet = UIAlertController(title: Strings.tinyWallet, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.barButtonItem = preferencesItem
-        let xAction = UIAlertAction(title: Strings.viewOnX.withEllipsis, style: .default) { _ in
+        let xAction = UIAlertAction(title: Strings.viewOnX, style: .default) { _ in
             UIApplication.shared.open(URL.x)
         }
-        let warpcastAction = UIAlertAction(title: Strings.viewOnWarpcast.withEllipsis, style: .default) { _ in
+        let warpcastAction = UIAlertAction(title: Strings.viewOnWarpcast, style: .default) { _ in
             UIApplication.shared.open(URL.warpcast)
         }
-        let githubAction = UIAlertAction(title: Strings.viewOnGithub.withEllipsis, style: .default) { _ in
+        let githubAction = UIAlertAction(title: Strings.viewOnGithub, style: .default) { _ in
             UIApplication.shared.open(URL.github)
         }
-        let emailAction = UIAlertAction(title: Strings.dropUsALine.withEllipsis, style: .default) { _ in
+        let emailAction = UIAlertAction(title: Strings.dropUsALine, style: .default) { _ in
             UIApplication.shared.open(URL.email)
         }
-        let howToEnableSafariExtension = UIAlertAction(title: Strings.howToEnableSafariExtension, style: .default) { _ in
+        let howToEnableSafariExtension = UIAlertAction(title: Strings.enableSafariExtension, style: .default) { _ in
             UIApplication.shared.open(URL.iosSafariGuide)
         }
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
-        actionSheet.addAction(warpcastAction)
         actionSheet.addAction(xAction)
-        actionSheet.addAction(githubAction)
         actionSheet.addAction(emailAction)
+        actionSheet.addAction(githubAction)
+        actionSheet.addAction(warpcastAction)
         actionSheet.addAction(howToEnableSafariExtension)
         actionSheet.addAction(cancelAction)
         present(actionSheet, animated: true)

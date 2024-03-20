@@ -152,9 +152,9 @@ class AccountsListViewController: NSViewController {
         let canSelectAccount = selectAccountAction != nil && !wallets.isEmpty
         if canSelectAccount {
             if selectAccountAction?.initiallyConnectedProviders.isEmpty ?? true {
-                titleLabel.stringValue = Strings.selectAccountTwoLines
+                titleLabel.stringValue = Strings.selectAccount.replacingOccurrences(of: " ", with: "\n")
             } else {
-                titleLabel.stringValue = Strings.switchAccountTwoLines
+                titleLabel.stringValue = Strings.switchAccount.replacingOccurrences(of: " ", with: "\n")
             }
         } else {
             titleLabel.stringValue = Strings.wallets
