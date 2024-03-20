@@ -79,7 +79,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                 navigationItem.title = Strings.switchAccount
             }
         } else {
-            navigationItem.title =  UITraitCollection.current.userInterfaceStyle == .dark ? "◻️" : "◼️"
+            navigationItem.title = Strings.wallets
         }
         
         navigationController?.navigationBar.prefersLargeTitles = forWalletSelection
