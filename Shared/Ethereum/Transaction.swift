@@ -42,7 +42,7 @@ struct Transaction {
     }
     
     func description(chain: EthereumNetwork, price: Double?) -> String {
-        var result = ["🌐 " + chain.name.lowercased()]
+        var result = ["🌐 " + chain.name]
         if let value = valueWithSymbol(chain: chain, price: price, withLabel: false) {
             result.append(value)
         }
