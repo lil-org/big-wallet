@@ -52,7 +52,7 @@ struct DappRequestProcessor {
                                 let responseBody = ResponseToExtension.Ethereum(results: [account.address], chainId: chain.chainIdHexString)
                                 specificProviderBodies.append(.ethereum(responseBody))
                             default:
-                                fatalError("Can't select that coin")
+                                fatalError("can't select that coin")
                             }
                         }
                         
