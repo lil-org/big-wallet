@@ -78,9 +78,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             } else {
                 navigationItem.title = Strings.switchAccount
             }
-            
         } else {
-            navigationItem.title = nil
+            navigationItem.title =  UITraitCollection.current.userInterfaceStyle == .dark ? "◻️" : "◼️"
         }
         
         navigationController?.navigationBar.prefersLargeTitles = forWalletSelection
@@ -96,7 +95,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         if forWalletSelection {
             navigationItem.leftBarButtonItem = cancelItem
         }
-        configureDataState(.noData, description: Strings.tinyWalletIsEmpty, buttonTitle: Strings.addWallet) { [weak self] in
+        configureDataState(.noData, description: Strings.nothingThere, buttonTitle: Strings.addWallet) { [weak self] in
             self?.addWallet()
         }
         dataStateShouldMoveWithKeyboard(false)

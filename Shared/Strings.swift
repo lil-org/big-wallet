@@ -72,7 +72,7 @@ struct Strings {
     static let tryAgain = "try again"
     static let noData = "there is no data yet"
     static let refresh = "refresh"
-    static let tinyWalletIsEmpty = "tiny wallet is empty"
+    static let nothingThere = "nothing there"
     static let pleaseTypeAtLeast = "please type at least 4 characters"
     static let unknownWebsite = "unknown website ⚠️"
     static let calculating = "calculating..."
