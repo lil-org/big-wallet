@@ -82,8 +82,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             navigationItem.title = Strings.wallets
         }
         
-        navigationController?.navigationBar.prefersLargeTitles = forWalletSelection
-        navigationItem.largeTitleDisplayMode = forWalletSelection ? .always : .never
+        navigationController?.navigationBar.prefersLargeTitles = true
+        navigationItem.largeTitleDisplayMode = .always
         
         isModalInPresentation = true
         let addItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addWallet))
@@ -142,16 +142,14 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         super.viewWillAppear(animated)
         processInput()
         didAppear = true
-        if forWalletSelection {
-            DispatchQueue.main.async { [weak self] in
-                let heightBefore = self?.navigationController?.navigationBar.frame.height ?? 0
-                self?.navigationController?.navigationBar.sizeToFit()
-                let heightAfter = self?.navigationController?.navigationBar.frame.height ?? 0
-                if self?.initialContentOffset == nil && self?.sections.isEmpty == false {
-                    self?.initialContentOffset = (self?.tableView.contentOffset.y ?? 0) + heightBefore - heightAfter
-                    if let selectedAccounts = self?.selectAccountAction?.selectedAccounts {
-                        self?.scrollToTheFirst(selectedAccounts)
-                    }
+        DispatchQueue.main.async { [weak self] in
+            let heightBefore = self?.navigationController?.navigationBar.frame.height ?? 0
+            self?.navigationController?.navigationBar.sizeToFit()
+            let heightAfter = self?.navigationController?.navigationBar.frame.height ?? 0
+            if self?.initialContentOffset == nil && self?.sections.isEmpty == false {
+                self?.initialContentOffset = (self?.tableView.contentOffset.y ?? 0) + heightBefore - heightAfter
+                if let selectedAccounts = self?.selectAccountAction?.selectedAccounts {
+                    self?.scrollToTheFirst(selectedAccounts)
                 }
             }
         }
