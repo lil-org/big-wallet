@@ -74,12 +74,12 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         
         if forWalletSelection {
             if selectAccountAction?.initiallyConnectedProviders.isEmpty ?? true {
-                navigationItem.title = Strings.selectAccount
+                navigationItem.title = Strings.selectAccount.uppercased()
             } else {
-                navigationItem.title = Strings.switchAccount
+                navigationItem.title = Strings.switchAccount.uppercased()
             }
         } else {
-            navigationItem.title = Strings.wallets
+            navigationItem.title = Strings.wallets.uppercased()
         }
         
         navigationController?.navigationBar.prefersLargeTitles = true
@@ -390,9 +390,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     @objc private func preferencesButtonTapped() {
         let actionSheet = UIAlertController(title: Strings.tinyWallet, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.barButtonItem = preferencesItem
-        let xAction = UIAlertAction(title: Strings.viewOnX, style: .default) { _ in
-            UIApplication.shared.open(URL.x)
-        }
         let warpcastAction = UIAlertAction(title: Strings.viewOnWarpcast, style: .default) { _ in
             UIApplication.shared.open(URL.warpcast)
         }
@@ -406,7 +403,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             UIApplication.shared.open(URL.iosSafariGuide)
         }
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
-        actionSheet.addAction(xAction)
         actionSheet.addAction(emailAction)
         actionSheet.addAction(githubAction)
         actionSheet.addAction(warpcastAction)
