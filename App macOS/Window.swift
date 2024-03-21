@@ -10,37 +10,40 @@ struct Window {
         if closeOthers {
             closeAll()
         }
+        
         let windowController = new
         activate(windowController)
         
-        if let frame = windowController.window?.frame {
-            let stepX: CGFloat = 18
-            let stepY: CGFloat = 16
-            
-            let topLeft = CGPoint(x: frame.minX, y: frame.maxY)
-            var validCascadeIndexes = [Int]()
-            
-            let validateActiveSpace = windowController.window?.isOnActiveSpace == true
-            for otherWindow in NSApplication.shared.windows where otherWindow !== windowController.window {
-                if validateActiveSpace, !otherWindow.isOnActiveSpace { continue }
-                let otherTopLeft = CGPoint(x: otherWindow.frame.minX, y: otherWindow.frame.maxY)
+        if !closeOthers {
+            if let frame = windowController.window?.frame {
+                let stepX: CGFloat = 18
+                let stepY: CGFloat = 16
                 
-                let deltaX = otherTopLeft.x - topLeft.x
-                let deltaY = otherTopLeft.y - topLeft.y
+                let topLeft = CGPoint(x: frame.minX, y: frame.maxY)
+                var validCascadeIndexes = [Int]()
                 
-                if deltaX.truncatingRemainder(dividingBy: stepX).isZero, deltaY.truncatingRemainder(dividingBy: stepY).isZero {
-                    let xIndex = deltaX / stepX
-                    let yIndex = deltaY / stepY
-                    if xIndex == yIndex {
-                        validCascadeIndexes.append(Int(xIndex))
+                let validateActiveSpace = windowController.window?.isOnActiveSpace == true
+                for otherWindow in NSApplication.shared.windows where otherWindow !== windowController.window {
+                    if validateActiveSpace, !otherWindow.isOnActiveSpace { continue }
+                    let otherTopLeft = CGPoint(x: otherWindow.frame.minX, y: otherWindow.frame.maxY)
+                    
+                    let deltaX = otherTopLeft.x - topLeft.x
+                    let deltaY = otherTopLeft.y - topLeft.y
+                    
+                    if deltaX.truncatingRemainder(dividingBy: stepX).isZero, deltaY.truncatingRemainder(dividingBy: stepY).isZero {
+                        let xIndex = deltaX / stepX
+                        let yIndex = deltaY / stepY
+                        if xIndex == yIndex {
+                            validCascadeIndexes.append(Int(xIndex))
+                        }
                     }
                 }
-            }
-            
-            if let previousCascadeIndex = validCascadeIndexes.max() {
-                let cascadeIndex = CGFloat(previousCascadeIndex + 1)
-                let newTopLeft = CGPoint(x: topLeft.x + stepX * cascadeIndex, y: topLeft.y + stepY * cascadeIndex)
-                windowController.window?.setFrameTopLeftPoint(newTopLeft)
+                
+                if let previousCascadeIndex = validCascadeIndexes.max() {
+                    let cascadeIndex = CGFloat(previousCascadeIndex + 1)
+                    let newTopLeft = CGPoint(x: topLeft.x + stepX * cascadeIndex, y: topLeft.y + stepY * cascadeIndex)
+                    windowController.window?.setFrameTopLeftPoint(newTopLeft)
+                }
             }
         }
         
