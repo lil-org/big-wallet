@@ -16,7 +16,7 @@ struct Strings {
     static let failedToSign = "failed to sign"
     static let failedToSwitchChain = "failed to switch chain"
     static let tinyWallet = "tiny wallet"
-    static let showWallets = "❒ show wallets"
+    static let showWallets = "show wallets"
     static let enterWallet = "enter wallet"
     static let quit = "quit"
     static let quitTinyWallet = "quit wallet?"

@@ -183,12 +183,10 @@ class AccountsListViewController: NSViewController {
     
     @IBAction func addButtonTapped(_ sender: NSButton) {
         let menu = sender.menu
-        
-        let createItem = NSMenuItem(title: "", action: #selector(didClickCreateAccount), keyEquivalent: "")
-        let importItem = NSMenuItem(title: "", action: #selector(didClickImportAccount), keyEquivalent: "")
-        let font = NSFont.systemFont(ofSize: 23)
-        createItem.attributedTitle = NSAttributedString(string: AddAccountOption.createNew.title, attributes: [.font: font])
-        importItem.attributedTitle = NSAttributedString(string: AddAccountOption.importExisting.title, attributes: [.font: font])
+        let createItem = NSMenuItem(title: AddAccountOption.createNew.title, action: #selector(didClickCreateAccount), keyEquivalent: "")
+        let importItem = NSMenuItem(title: AddAccountOption.importExisting.title, action: #selector(didClickImportAccount), keyEquivalent: "")
+        importItem.target = self
+        createItem.target = self
         menu?.addItem(createItem)
         menu?.addItem(.separator())
         menu?.addItem(importItem)
