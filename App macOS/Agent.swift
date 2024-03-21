@@ -106,29 +106,32 @@ class Agent: NSObject {
     lazy private var statusBarMenu: NSMenu = {
         let menu = NSMenu(title: Strings.tinyWallet)
         
-        let showItem = NSMenuItem(title: Strings.showWallets.capitalized, action: #selector(didSelectShowMenuItem), keyEquivalent: "")
+        let showItem = NSMenuItem(title: Strings.showWallets, action: #selector(didSelectShowMenuItem), keyEquivalent: "")
         let safariItem = NSMenuItem(title: Strings.enableSafariExtension, action: #selector(enableSafariExtension), keyEquivalent: "")
         let mailItem = NSMenuItem(title: Strings.dropUsALine, action: #selector(didSelectMailMenuItem), keyEquivalent: "")
         let githubItem = NSMenuItem(title: Strings.viewOnGithub, action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
         let warpcastItem = NSMenuItem(title: Strings.viewOnWarpcast, action: #selector(didSelectWarpcastMenuItem), keyEquivalent: "")
+        let xItem = NSMenuItem(title: Strings.viewOnX, action: #selector(didSelectXMenuItem), keyEquivalent: "")
         let quitItem = NSMenuItem(title: Strings.quit, action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
-        showItem.attributedTitle = NSAttributedString(string: Strings.showWallets.capitalized, attributes: [.font: NSFont.systemFont(ofSize: 23, weight: .bold)])
+        showItem.attributedTitle = NSAttributedString(string: Strings.showWallets, attributes: [.font: NSFont.systemFont(ofSize: 23)])
         
         showItem.target = self
         safariItem.target = self
         githubItem.target = self
         warpcastItem.target = self
+        xItem.target = self
         mailItem.target = self
         quitItem.target = self
         
         menu.delegate = self
         menu.addItem(showItem)
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(safariItem)
-        menu.addItem(NSMenuItem.separator())
         menu.addItem(warpcastItem)
         menu.addItem(githubItem)
+        menu.addItem(xItem)
         menu.addItem(mailItem)
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(safariItem)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(quitItem)
         return menu

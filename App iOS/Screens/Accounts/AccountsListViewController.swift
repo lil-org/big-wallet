@@ -390,6 +390,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     @objc private func preferencesButtonTapped() {
         let actionSheet = UIAlertController(title: Strings.tinyWallet, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.barButtonItem = preferencesItem
+        let xAction = UIAlertAction(title: Strings.viewOnX, style: .default) { _ in
+            UIApplication.shared.open(URL.x)
+        }
         let warpcastAction = UIAlertAction(title: Strings.viewOnWarpcast, style: .default) { _ in
             UIApplication.shared.open(URL.warpcast)
         }
@@ -403,9 +406,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             UIApplication.shared.open(URL.iosSafariGuide)
         }
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
-        actionSheet.addAction(emailAction)
-        actionSheet.addAction(githubAction)
         actionSheet.addAction(warpcastAction)
+        actionSheet.addAction(githubAction)
+        actionSheet.addAction(xAction)
+        actionSheet.addAction(emailAction)
         actionSheet.addAction(howToEnableSafariExtension)
         actionSheet.addAction(cancelAction)
         present(actionSheet, animated: true)
