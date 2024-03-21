@@ -9,7 +9,7 @@ struct Strings {
     static let signPersonalMessage = "sign personal message"
     static let signTypedData = "sign typed data"
     static let cancel = "cancel"
-    static let ok = "OK"
+    static let ok = "ok"
     static let connecting = "connecting"
     static let somethingWentWrong = "something went wrong"
     static let failedToSend = "failed to send"
