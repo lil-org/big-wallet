@@ -83,8 +83,6 @@
 		2C603D0226B6E13F00956955 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
 		2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6706A4267A6BFE006AAEF2 /* Bundle.swift */; };
 		2C6A0A932BA9AF3A0066C881 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C492689F01700D0926A /* Strings.swift */; };
-		2C6B964C26B9D92500D2C819 /* NSColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6B964B26B9D92500D2C819 /* NSColor.swift */; };
-		2C6B964F26B9D98C00D2C819 /* Colors.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C6B964E26B9D98C00D2C819 /* Colors.xcassets */; };
 		2C6F6D5A28273FE500D6E8FB /* EditAccountsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5928273FE500D6E8FB /* EditAccountsViewController.swift */; };
 		2C6F6D5D2827434800D6E8FB /* PreviewAccountTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5B2827434800D6E8FB /* PreviewAccountTableViewCell.xib */; };
 		2C6F6D5E2827434800D6E8FB /* PreviewAccountTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5C2827434800D6E8FB /* PreviewAccountTableViewCell.swift */; };
@@ -380,8 +378,6 @@
 		2C5FF97F26C84F7C00B32ACC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C603D0126B6E13F00956955 /* String.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = String.swift; sourceTree = "<group>"; };
 		2C6706A4267A6BFE006AAEF2 /* Bundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bundle.swift; sourceTree = "<group>"; };
-		2C6B964B26B9D92500D2C819 /* NSColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSColor.swift; sourceTree = "<group>"; };
-		2C6B964E26B9D98C00D2C819 /* Colors.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Colors.xcassets; sourceTree = "<group>"; };
 		2C6F6D5928273FE500D6E8FB /* EditAccountsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditAccountsViewController.swift; sourceTree = "<group>"; };
 		2C6F6D5B2827434800D6E8FB /* PreviewAccountTableViewCell.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = PreviewAccountTableViewCell.xib; sourceTree = "<group>"; };
 		2C6F6D5C2827434800D6E8FB /* PreviewAccountTableViewCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PreviewAccountTableViewCell.swift; sourceTree = "<group>"; };
@@ -641,7 +637,6 @@
 				2C8A09E5267595C200993638 /* Views */,
 				2C1995432674C4BA00A8E370 /* Assets.xcassets */,
 				2C5C82A02822B9F0007D9488 /* Content */,
-				2C6B964E26B9D98C00D2C819 /* Colors.xcassets */,
 				2C1995452674C4BA00A8E370 /* Main.storyboard */,
 				2C208AA126813497005BA500 /* Supporting Files */,
 			);
@@ -736,7 +731,6 @@
 		2C6706A7267A6C04006AAEF2 /* Extensions */ = {
 			isa = PBXGroup;
 			children = (
-				2C6B964B26B9D92500D2C819 /* NSColor.swift */,
 				2C4B72CA2B0E7EA800113087 /* NSViewController.swift */,
 				2CFAE56928BE6292001D0799 /* NSImage.swift */,
 				2CD0B3F426A0DAA900488D92 /* NSPasteboard.swift */,
@@ -1333,7 +1327,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				2CED86C12AF26114006F9E26 /* bundled-networks.json in Resources */,
-				2C6B964F26B9D98C00D2C819 /* Colors.xcassets in Resources */,
 				2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */,
 				2C1995472674C4BA00A8E370 /* Main.storyboard in Resources */,
 				2C4768AE2826ECE5005E8D4D /* SharedAssets.xcassets in Resources */,
@@ -1656,7 +1649,6 @@
 				2C03D1D2269B407900EF10EA /* NetworkMonitor.swift in Sources */,
 				2C8ED8DC2AEADDC400818D74 /* BigInt.swift in Sources */,
 				2C8A09E326757FC000993638 /* AccountCellView.swift in Sources */,
-				2C6B964C26B9D92500D2C819 /* NSColor.swift in Sources */,
 				2C603D0226B6E13F00956955 /* String.swift in Sources */,
 				2CED86C32AF262E6006F9E26 /* Nodes.swift in Sources */,
 				2C264BC127B2F2C100234393 /* EthereumSafariRequest.swift in Sources */,

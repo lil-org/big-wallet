@@ -38,7 +38,7 @@ class AccountCellView: NSTableRowView {
     
     func blink() {
         let initialBackgroundColor = backgroundColor
-        backgroundColor = .inkGreen
+        backgroundColor = .systemBlue.withAlphaComponent(0.4)
         NSAnimationContext.runAnimationGroup { [weak self] context in
             context.duration = 1.2
             context.timingFunction = CAMediaTimingFunction(name: CAMediaTimingFunctionName.easeOut)
