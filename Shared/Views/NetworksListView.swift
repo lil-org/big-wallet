@@ -19,7 +19,7 @@ struct NetworksListView: View {
             VStack {
                 list()
             }
-            .navigationBarTitle(Strings.selectNetwork.uppercased(), displayMode: .large)
+            .navigationBarTitle(Strings.selectNetwork.capitalized, displayMode: .large)
             .navigationBarItems(leading: Button(action: {
                 completion(selectedNetwork)
                 presentationMode.wrappedValue.dismiss() }) {

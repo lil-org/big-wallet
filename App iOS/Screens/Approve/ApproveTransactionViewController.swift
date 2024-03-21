@@ -61,7 +61,7 @@ class ApproveTransactionViewController: UIViewController {
         cancelButton.setTitle(Strings.cancel, for: .normal)
         
         priceService.update()
-        navigationItem.title = Strings.sendTransaction.uppercased()
+        navigationItem.title = Strings.sendTransaction.capitalized
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
         navigationItem.rightBarButtonItem = UIBarButtonItem(image: Images.preferences, style: .plain, target: self, action: #selector(editTransactionButtonTapped))

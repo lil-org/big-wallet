@@ -106,13 +106,13 @@ class Agent: NSObject {
     lazy private var statusBarMenu: NSMenu = {
         let menu = NSMenu(title: Strings.tinyWallet)
         
-        let showItem = NSMenuItem(title: Strings.showWallets.uppercased(), action: #selector(didSelectShowMenuItem), keyEquivalent: "")
+        let showItem = NSMenuItem(title: Strings.showWallets.capitalized, action: #selector(didSelectShowMenuItem), keyEquivalent: "")
         let safariItem = NSMenuItem(title: Strings.enableSafariExtension, action: #selector(enableSafariExtension), keyEquivalent: "")
         let mailItem = NSMenuItem(title: Strings.dropUsALine, action: #selector(didSelectMailMenuItem), keyEquivalent: "")
         let githubItem = NSMenuItem(title: Strings.viewOnGithub, action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
         let warpcastItem = NSMenuItem(title: Strings.viewOnWarpcast, action: #selector(didSelectWarpcastMenuItem), keyEquivalent: "")
         let quitItem = NSMenuItem(title: Strings.quit, action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
-        showItem.attributedTitle = NSAttributedString(string: Strings.showWallets.uppercased(), attributes: [.font: NSFont.systemFont(ofSize: 23, weight: .bold)])
+        showItem.attributedTitle = NSAttributedString(string: Strings.showWallets.capitalized, attributes: [.font: NSFont.systemFont(ofSize: 23, weight: .bold)])
         
         showItem.target = self
         safariItem.target = self

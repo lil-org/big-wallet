@@ -48,7 +48,7 @@ class ApproveViewController: UIViewController {
         super.viewDidLoad()
         okButton.setTitle(Strings.ok, for: .normal)
         cancelButton.setTitle(Strings.cancel, for: .normal)
-        navigationItem.title = approveTitle.uppercased()
+        navigationItem.title = approveTitle.capitalized
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
         isModalInPresentation = true

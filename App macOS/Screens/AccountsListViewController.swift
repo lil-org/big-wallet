@@ -152,12 +152,12 @@ class AccountsListViewController: NSViewController {
         let canSelectAccount = selectAccountAction != nil && !wallets.isEmpty
         if canSelectAccount {
             if selectAccountAction?.initiallyConnectedProviders.isEmpty ?? true {
-                titleLabel.stringValue = Strings.selectAccount.replacingOccurrences(of: " ", with: "\n").uppercased()
+                titleLabel.stringValue = Strings.selectAccount.replacingOccurrences(of: " ", with: "\n").capitalized
             } else {
-                titleLabel.stringValue = Strings.switchAccount.replacingOccurrences(of: " ", with: "\n").uppercased()
+                titleLabel.stringValue = Strings.switchAccount.replacingOccurrences(of: " ", with: "\n").capitalized
             }
         } else {
-            titleLabel.stringValue = Strings.wallets.uppercased()
+            titleLabel.stringValue = Strings.wallets.capitalized
         }
         
         addButton.isHidden = wallets.isEmpty
