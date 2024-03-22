@@ -1,7 +1,28 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-
+    "isVisionPro" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "device" : {
+              "applevision" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "isVisionPro"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "isNotVisionPro"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   },
   "version" : "1.0"
 }

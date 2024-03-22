@@ -95,9 +95,12 @@ class PasswordViewController: UIViewController {
     }
     
     func focusOnPasswordTextField() {
-        // TODO: remove temporary delay used to fix vision pro crash
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(1000)) { [weak self] in
-            self?.passwordTextField.becomeFirstResponder()
+        if Strings.isVisionPro {
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(1000)) { [weak self] in
+                self?.passwordTextField.becomeFirstResponder()
+            }
+        } else {
+            passwordTextField.becomeFirstResponder()
         }
     }
     
