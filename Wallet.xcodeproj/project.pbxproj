@@ -200,6 +200,9 @@
 		2CE0594527640EF10042D844 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
 		2CE0594627640F470042D844 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC89470269A334A00879245 /* UserDefaults.swift */; };
 		2CE3D012267F73C00032A62E /* Transaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D011267F73C00032A62E /* Transaction.swift */; };
+		2CE9A7782BADC59C00579BF7 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 2CE9A7772BADC59C00579BF7 /* Localizable.xcstrings */; };
+		2CE9A7792BADC59C00579BF7 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 2CE9A7772BADC59C00579BF7 /* Localizable.xcstrings */; };
+		2CE9A77A2BADC59C00579BF7 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 2CE9A7772BADC59C00579BF7 /* Localizable.xcstrings */; };
 		2CED86A52AF00BC9006F9E26 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86A42AF00BC9006F9E26 /* main.swift */; };
 		2CED86B02AF0167F006F9E26 /* EIP155ChainData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86AF2AF0167F006F9E26 /* EIP155ChainData.swift */; };
 		2CED86B32AF01F99006F9E26 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
@@ -461,6 +464,7 @@
 		2CE059482764169E0042D844 /* Wallet iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Wallet iOS.entitlements"; sourceTree = "<group>"; };
 		2CE0594B2764DF9A0042D844 /* Safari iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Safari iOS.entitlements"; sourceTree = "<group>"; };
 		2CE3D011267F73C00032A62E /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
+		2CE9A7772BADC59C00579BF7 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		2CED86A22AF00BC9006F9E26 /* Tools */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = Tools; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CED86A42AF00BC9006F9E26 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		2CED86A92AF00F56006F9E26 /* bundled-networks.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "bundled-networks.json"; sourceTree = "<group>"; };
@@ -897,8 +901,6 @@
 		2CCEB7A127592A1F00768473 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
-				2C901C492689F01700D0926A /* Strings.swift */,
-				2C528A15267FA8EB00CA3ADD /* Defaults.swift */,
 				2C8A09C2267513A700993638 /* Ethereum */,
 				2CF255A4275A483600AE54B9 /* Services */,
 				2CF2559F275A47B600AE54B9 /* Extensions */,
@@ -1033,6 +1035,7 @@
 		2CF255A4275A483600AE54B9 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				2C528A15267FA8EB00CA3ADD /* Defaults.swift */,
 				2C03D1D1269B407900EF10EA /* NetworkMonitor.swift */,
 				2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */,
 				2CAA412426C7CD93009F3535 /* ReviewRequester.swift */,
@@ -1052,6 +1055,8 @@
 				2CB0BC482B13AA5100603E68 /* Secrets.swift */,
 				2CF16E522AF523A40098F996 /* .gitignore */,
 				2C209B642AF7B3BC00FF9012 /* Secrets.plist */,
+				2C901C492689F01700D0926A /* Strings.swift */,
+				2CE9A7772BADC59C00579BF7 /* Localizable.xcstrings */,
 				2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */,
 			);
 			path = "Supporting Files";
@@ -1327,6 +1332,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2CED86C12AF26114006F9E26 /* bundled-networks.json in Resources */,
+				2CE9A7782BADC59C00579BF7 /* Localizable.xcstrings in Resources */,
 				2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */,
 				2C1995472674C4BA00A8E370 /* Main.storyboard in Resources */,
 				2C4768AE2826ECE5005E8D4D /* SharedAssets.xcassets in Resources */,
@@ -1343,6 +1349,7 @@
 				2C40709527667A8600AB3D55 /* ImageWithLabelTableViewCell.xib in Resources */,
 				2C4768AF2826ECE5005E8D4D /* SharedAssets.xcassets in Resources */,
 				2CC8C5A32767D3B30083FB1B /* GasPriceSliderTableViewCell.xib in Resources */,
+				2CE9A7792BADC59C00579BF7 /* Localizable.xcstrings in Resources */,
 				2C40709127667A6600AB3D55 /* MultilineLabelTableViewCell.xib in Resources */,
 				2C09FC5F2828078C00DE9C27 /* AccountsHeaderView.xib in Resources */,
 				2C96D3902762317300687301 /* AccountTableViewCell.xib in Resources */,
@@ -1356,6 +1363,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2CE9A77A2BADC59C00579BF7 /* Localizable.xcstrings in Resources */,
 				2C7A8CE72B7CD98A00683E15 /* MainInterface.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
