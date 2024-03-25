@@ -105,6 +105,9 @@ struct Strings {
     static let connect = "connect"
     static let paste = "paste"
     static let getStarted = "get started"
+    
+    // MARK: - Helpers
+    
     static let isVisionPro = loc("isVisionPro") == "isVisionPro"
     
     private static func loc(_ string: String.LocalizationValue) -> String {

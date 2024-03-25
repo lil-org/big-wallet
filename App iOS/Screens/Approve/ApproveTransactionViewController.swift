@@ -61,7 +61,7 @@ class ApproveTransactionViewController: UIViewController {
         cancelButton.setTitle(Strings.cancel, for: .normal)
         
         priceService.update()
-        navigationItem.title = Strings.sendTransaction.capitalized
+        navigationItem.title = Strings.sendTransaction
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
         navigationItem.rightBarButtonItem = UIBarButtonItem(image: Images.preferences, style: .plain, target: self, action: #selector(editTransactionButtonTapped))
@@ -116,7 +116,7 @@ class ApproveTransactionViewController: UIViewController {
         var cellModels: [CellModel] = [
             .textWithImage(text: peerMeta?.name ?? Strings.unknownWebsite, extraText: nil, imageURL: peerMeta?.iconURLString, image: nil),
             .textWithImage(text: account.croppedAddress, extraText: balance, imageURL: nil, image: account.image),
-            .textWithImage(text: chain.name.lowercased(), extraText: nil, imageURL: nil, image: Images.network)
+            .textWithImage(text: chain.name, extraText: nil, imageURL: nil, image: Images.network)
         ]
         
         let price = priceService.forNetwork(chain)

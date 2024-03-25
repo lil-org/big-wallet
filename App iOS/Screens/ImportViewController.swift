@@ -35,7 +35,7 @@ class ImportViewController: UIViewController {
         
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
-        navigationItem.title = Strings.importWallet.capitalized
+        navigationItem.title = Strings.importWallet
         navigationItem.leftBarButtonItem = UIBarButtonItem(title: Strings.cancel, style: .plain, target: self, action: #selector(dismissAnimated))
         
         okButton.configurationUpdateHandler = { [weak self] button in

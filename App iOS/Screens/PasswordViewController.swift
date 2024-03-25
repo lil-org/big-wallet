@@ -70,11 +70,11 @@ class PasswordViewController: UIViewController {
         self.mode = mode
         switch mode {
         case .create:
-            navigationItem.title = Strings.createPassword.capitalized
+            navigationItem.title = Strings.createPassword
         case .repeatAfterCreate:
-            navigationItem.title = Strings.repeatPassword.capitalized
+            navigationItem.title = Strings.repeatPassword
         case .enter:
-            navigationItem.title = Strings.enterPassword.capitalized
+            navigationItem.title = Strings.enterPassword
         }
     }
     

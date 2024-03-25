@@ -19,7 +19,7 @@ struct NetworksListView: View {
             VStack {
                 list()
             }
-            .navigationBarTitle(Strings.selectNetwork.capitalized, displayMode: .large)
+            .navigationBarTitle(Strings.selectNetwork, displayMode: .large)
             .navigationBarItems(leading: Button(action: {
                 completion(selectedNetwork)
                 presentationMode.wrappedValue.dismiss() }) {
@@ -57,7 +57,7 @@ struct NetworksListView: View {
         Section(header: title.map { Text($0) }) {
             ForEach(networks, id: \.self) { network in
                 HStack {
-                    Text(network.name.lowercased())
+                    Text(network.name)
                     Spacer()
                     if selectedNetwork?.chainId == network.chainId {
                         Image.checkmark.foregroundStyle(.tint)

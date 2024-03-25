@@ -74,12 +74,12 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         
         if forWalletSelection {
             if selectAccountAction?.initiallyConnectedProviders.isEmpty ?? true {
-                navigationItem.title = Strings.selectAccount.capitalized
+                navigationItem.title = Strings.selectAccount
             } else {
-                navigationItem.title = Strings.switchAccount.capitalized
+                navigationItem.title = Strings.switchAccount
             }
         } else {
-            navigationItem.title = Strings.wallets.capitalized
+            navigationItem.title = Strings.wallets
         }
         
         navigationController?.navigationBar.prefersLargeTitles = true
