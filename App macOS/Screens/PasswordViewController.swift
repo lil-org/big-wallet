@@ -36,6 +36,7 @@ class PasswordViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        passwordTextField.placeholderString = Strings.password
         cancelButton.title = Strings.cancel
         okButton.title = Strings.ok
         

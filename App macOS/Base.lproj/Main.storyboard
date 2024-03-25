@@ -675,7 +675,7 @@
                         <outlet property="delegate" destination="Voe-Tx-rLC" id="PrD-fu-P6m"/>
                     </connections>
                 </application>
-                <customObject id="Voe-Tx-rLC" customClass="AppDelegate" customModule="Wallet_macOS" customModuleProvider="target"/>
+                <customObject id="Voe-Tx-rLC" customClass="AppDelegate" customModule="Wallet" customModuleProvider="target"/>
                 <customObject id="YLy-65-1bz" customClass="NSFontManager"/>
                 <customObject id="Ady-hI-5gd" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
             </objects>
@@ -717,7 +717,7 @@
         <!--Import View Controller-->
         <scene sceneID="hIz-AP-VOD">
             <objects>
-                <viewController storyboardIdentifier="ImportViewController" id="XfG-lQ-9wD" customClass="ImportViewController" customModule="Wallet_macOS" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="ImportViewController" id="XfG-lQ-9wD" customClass="ImportViewController" customModule="Wallet" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="m2S-Jp-Qdl">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
@@ -808,7 +808,7 @@ DQ
         <!--Accounts List View Controller-->
         <scene sceneID="o7E-xn-hDh">
             <objects>
-                <viewController storyboardIdentifier="AccountsListViewController" id="29s-Rd-OUf" customClass="AccountsListViewController" customModule="Wallet_macOS" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="AccountsListViewController" id="29s-Rd-OUf" customClass="AccountsListViewController" customModule="Wallet" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="Yjc-Zm-uZY">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="412"/>
                         <autoresizingMask key="autoresizingMask"/>
@@ -827,7 +827,7 @@ DQ
                                     <rect key="frame" x="1" y="1" width="248" height="278"/>
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <subviews>
-                                        <tableView verticalHuggingPriority="750" allowsExpansionToolTips="YES" columnAutoresizingStyle="none" tableStyle="plain" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" typeSelect="NO" rowHeight="40" rowSizeStyle="automatic" viewBased="YES" id="glA-FK-Kdd" customClass="RightClickTableView" customModule="Wallet_macOS" customModuleProvider="target">
+                                        <tableView verticalHuggingPriority="750" allowsExpansionToolTips="YES" columnAutoresizingStyle="none" tableStyle="plain" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" typeSelect="NO" rowHeight="40" rowSizeStyle="automatic" viewBased="YES" id="glA-FK-Kdd" customClass="RightClickTableView" customModule="Wallet" customModuleProvider="target">
                                             <rect key="frame" x="0.0" y="0.0" width="248" height="278"/>
                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                             <color key="backgroundColor" name="controlBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -844,7 +844,7 @@ DQ
                                                         <color key="backgroundColor" name="controlBackgroundColor" catalog="System" colorSpace="catalog"/>
                                                     </textFieldCell>
                                                     <prototypeCellViews>
-                                                        <tableCellView identifier="AccountCellView" id="Lp1-Zy-70c" customClass="AccountCellView" customModule="Wallet_macOS" customModuleProvider="target">
+                                                        <tableCellView identifier="AccountCellView" id="Lp1-Zy-70c" customClass="AccountCellView" customModule="Wallet" customModuleProvider="target">
                                                             <rect key="frame" x="0.0" y="0.0" width="248" height="40"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
@@ -893,7 +893,7 @@ DQ
                                                                 <outlet property="addressTextField" destination="sef-hl-iPV" id="aGb-wC-t98"/>
                                                             </connections>
                                                         </tableCellView>
-                                                        <tableCellView identifier="AccountsHeaderRowView" id="HeR-ji-8cK" customClass="AccountsHeaderRowView" customModule="Wallet_macOS" customModuleProvider="target">
+                                                        <tableCellView identifier="AccountsHeaderRowView" id="HeR-ji-8cK" customClass="AccountsHeaderRowView" customModule="Wallet" customModuleProvider="target">
                                                             <rect key="frame" x="0.0" y="40" width="248" height="40"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
@@ -917,7 +917,7 @@ DQ
                                                                 <outlet property="titleButton" destination="VIM-Pg-2r3" id="KF2-28-nzL"/>
                                                             </connections>
                                                         </tableCellView>
-                                                        <tableCellView identifier="AddAccountOptionCellView" id="1KM-PS-nEo" customClass="AddAccountOptionCellView" customModule="Wallet_macOS" customModuleProvider="target">
+                                                        <tableCellView identifier="AddAccountOptionCellView" id="1KM-PS-nEo" customClass="AddAccountOptionCellView" customModule="Wallet" customModuleProvider="target">
                                                             <rect key="frame" x="0.0" y="80" width="248" height="40"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
@@ -1106,7 +1106,7 @@ DQ
         <!--Waiting View Controller-->
         <scene sceneID="xkb-7p-mUK">
             <objects>
-                <viewController storyboardIdentifier="WaitingViewController" id="Wjt-h2-yE1" customClass="WaitingViewController" customModule="Wallet_macOS" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="WaitingViewController" id="Wjt-h2-yE1" customClass="WaitingViewController" customModule="Wallet" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="DVX-Gd-m4U">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
@@ -1167,7 +1167,7 @@ DQ
         <!--Approve View Controller-->
         <scene sceneID="aMM-KY-BR7">
             <objects>
-                <viewController storyboardIdentifier="ApproveViewController" id="A70-cr-SWr" customClass="ApproveViewController" customModule="Wallet_macOS" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="ApproveViewController" id="A70-cr-SWr" customClass="ApproveViewController" customModule="Wallet" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="xvx-vV-OZe">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="372"/>
                         <autoresizingMask key="autoresizingMask"/>
@@ -1324,7 +1324,7 @@ DQ
         <!--Password View Controller-->
         <scene sceneID="Riu-mP-tQs">
             <objects>
-                <viewController storyboardIdentifier="PasswordViewController" id="KMi-XY-mOg" customClass="PasswordViewController" customModule="Wallet_macOS" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="PasswordViewController" id="KMi-XY-mOg" customClass="PasswordViewController" customModule="Wallet" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="Efz-OH-wm2">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
@@ -1428,7 +1428,7 @@ DQ
         <!--Welcome View Controller-->
         <scene sceneID="xdv-om-uKF">
             <objects>
-                <viewController storyboardIdentifier="WelcomeViewController" id="42G-F4-o1P" customClass="WelcomeViewController" customModule="Wallet_macOS" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="WelcomeViewController" id="42G-F4-o1P" customClass="WelcomeViewController" customModule="Wallet" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="n8I-Pv-qZV">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
@@ -1498,7 +1498,7 @@ DQ
         <!--Approve Transaction View Controller-->
         <scene sceneID="WAJ-YX-5QJ">
             <objects>
-                <viewController storyboardIdentifier="ApproveTransactionViewController" id="eky-J7-eog" customClass="ApproveTransactionViewController" customModule="Wallet_macOS" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="ApproveTransactionViewController" id="eky-J7-eog" customClass="ApproveTransactionViewController" customModule="Wallet" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="SAE-QE-uez">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="407"/>
                         <autoresizingMask key="autoresizingMask"/>
@@ -1727,7 +1727,7 @@ DQ
         <!--Edit Accounts View Controller-->
         <scene sceneID="PtW-Bw-c7x">
             <objects>
-                <viewController storyboardIdentifier="EditAccountsViewController" id="tNa-Gh-bIQ" customClass="EditAccountsViewController" customModule="Wallet_macOS" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="EditAccountsViewController" id="tNa-Gh-bIQ" customClass="EditAccountsViewController" customModule="Wallet" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="IWe-oX-N42">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
@@ -1787,7 +1787,7 @@ DQ
                                     <rect key="frame" x="1" y="1" width="208" height="148"/>
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <subviews>
-                                        <tableView verticalHuggingPriority="750" allowsExpansionToolTips="YES" tableStyle="plain" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" typeSelect="NO" rowHeight="32" rowSizeStyle="automatic" viewBased="YES" id="JM4-ya-UH4" customClass="RightClickTableView" customModule="Wallet_macOS" customModuleProvider="target">
+                                        <tableView verticalHuggingPriority="750" allowsExpansionToolTips="YES" tableStyle="plain" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" typeSelect="NO" rowHeight="32" rowSizeStyle="automatic" viewBased="YES" id="JM4-ya-UH4" customClass="RightClickTableView" customModule="Wallet" customModuleProvider="target">
                                             <rect key="frame" x="0.0" y="0.0" width="208" height="148"/>
                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                             <color key="backgroundColor" name="controlBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -1805,7 +1805,7 @@ DQ
                                                     </textFieldCell>
                                                     <tableColumnResizingMask key="resizingMask" resizeWithTable="YES"/>
                                                     <prototypeCellViews>
-                                                        <tableCellView identifier="PreviewAccountCellView" id="qLR-M4-6xB" customClass="PreviewAccountCellView" customModule="Wallet_macOS" customModuleProvider="target">
+                                                        <tableCellView identifier="PreviewAccountCellView" id="qLR-M4-6xB" customClass="PreviewAccountCellView" customModule="Wallet" customModuleProvider="target">
                                                             <rect key="frame" x="0.0" y="0.0" width="208" height="32"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
