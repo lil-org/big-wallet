@@ -126,12 +126,12 @@ class Agent: NSObject {
         menu.delegate = self
         menu.addItem(showItem)
         menu.addItem(NSMenuItem.separator())
+        menu.addItem(safariItem)
+        menu.addItem(NSMenuItem.separator())
         menu.addItem(warpcastItem)
         menu.addItem(githubItem)
         menu.addItem(xItem)
         menu.addItem(mailItem)
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(safariItem)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(quitItem)
         return menu
