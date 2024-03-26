@@ -406,11 +406,11 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             UIApplication.shared.open(URL.iosSafariGuide)
         }
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
+        actionSheet.addAction(howToEnableSafariExtension)
         actionSheet.addAction(warpcastAction)
         actionSheet.addAction(githubAction)
-        actionSheet.addAction(xAction)
         actionSheet.addAction(emailAction)
-        actionSheet.addAction(howToEnableSafariExtension)
+        actionSheet.addAction(xAction)
         actionSheet.addAction(cancelAction)
         present(actionSheet, animated: true)
     }

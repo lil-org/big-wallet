@@ -130,8 +130,8 @@ class Agent: NSObject {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(warpcastItem)
         menu.addItem(githubItem)
-        menu.addItem(xItem)
         menu.addItem(mailItem)
+        menu.addItem(xItem)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(quitItem)
         return menu
