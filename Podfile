@@ -7,7 +7,7 @@ def shared_pods
   pod 'TrustWalletCore'
 end
 
-target 'Wallet macOS' do
+target 'Wallet' do
   platform :osx, '12.0'
   shared_pods
 end

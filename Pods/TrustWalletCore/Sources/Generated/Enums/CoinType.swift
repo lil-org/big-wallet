@@ -162,4 +162,5 @@ public enum CoinType: UInt32, CaseIterable {
     case nativeZetaChain = 10007000
     case zetaEVM = 20007000
     case dydx = 22000118
+    case merlin = 4200
 }
