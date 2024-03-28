@@ -1,6 +1,7 @@
 // ∅ 2024 lil org
 
 import Cocoa
+import WalletCore
 
 class ApproveViewController: NSViewController {
     
@@ -22,15 +23,17 @@ class ApproveViewController: NSViewController {
     private var subject: ApprovalSubject!
     private var approveTitle: String!
     private var meta: String!
+    private var account: Account!
     private var completion: ((Bool) -> Void)!
     private var didCallCompletion = false
     private var peerMeta: PeerMeta?
     
-    static func with(subject: ApprovalSubject, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
+    static func with(subject: ApprovalSubject, meta: String, account: Account, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
         let new = instantiate(ApproveViewController.self)
         new.completion = completion
         new.subject = subject
         new.meta = meta
+        new.account = account
         new.approveTitle = subject.title
         new.peerMeta = peerMeta
         return new
@@ -77,7 +80,14 @@ class ApproveViewController: NSViewController {
     }
     
     private func updateDisplayedMeta() {
-        metaTextView.string = meta
+        let fullString = NSMutableAttributedString(attributedString: account.accountImageAttachmentString)
+        fullString.insert(NSAttributedString(string: " ", attributes: [.font: NSFont.systemFont(ofSize: 5)]), at: 0)
+        let addressString = NSAttributedString(string: " " + account.croppedAddress + "\n\n",
+                                               attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.labelColor])
+        let metaString = NSAttributedString(string: meta, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.labelColor])
+        fullString.append(addressString)
+        fullString.append(metaString)
+        metaTextView.textStorage?.setAttributedString(fullString)
     }
     
     private func callCompletion(result: Bool) {

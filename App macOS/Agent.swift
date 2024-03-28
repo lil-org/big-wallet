@@ -88,9 +88,9 @@ class Agent: NSObject {
         windowController.contentViewController = approveViewController
     }
     
-    func showApprove(windowController: NSWindowController, browser: Browser?, subject: ApprovalSubject, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) {
+    func showApprove(windowController: NSWindowController, browser: Browser?, subject: ApprovalSubject, meta: String, account: Account, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) {
         let window = windowController.window
-        let approveViewController = ApproveViewController.with(subject: subject, meta: meta, peerMeta: peerMeta) { [weak self, weak window] result in
+        let approveViewController = ApproveViewController.with(subject: subject, meta: meta, account: account, peerMeta: peerMeta) { [weak self, weak window] result in
             if result {
                 self?.askAuthentication(on: window, getBackTo: window?.contentViewController, browser: browser, onStart: false, reason: subject.asAuthenticationReason) { success in
                     completion(success)
@@ -271,7 +271,7 @@ class Agent: NSObject {
         case .approveMessage(let action):
             let windowController = Window.showNew(closeOthers: false)
             windowNumber = windowController.window?.windowNumber
-            showApprove(windowController: windowController, browser: .safari, subject: action.subject, meta: action.meta, peerMeta: action.peerMeta, completion: action.completion)
+            showApprove(windowController: windowController, browser: .safari, subject: action.subject, meta: action.meta, account: action.account, peerMeta: action.peerMeta, completion: action.completion)
         case .approveTransaction(let action):
             let windowController = Window.showNew(closeOthers: false)
             windowNumber = windowController.window?.windowNumber
