@@ -117,7 +117,7 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     private var displayedMetaAndBalance = ("", "")
-    private lazy var accountImageAttachmentString = account.accountImageAttachmentString
+    private lazy var accountImageAttachmentString = NSAttributedString.accountImageAttachment(account: account)
     
     private func updateTextView() {
         let meta = transaction.description(chain: chain, price: priceService.forNetwork(chain))

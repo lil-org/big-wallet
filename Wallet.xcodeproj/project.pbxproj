@@ -63,6 +63,7 @@
 		2C40709127667A6600AB3D55 /* MultilineLabelTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C40708F27667A6600AB3D55 /* MultilineLabelTableViewCell.xib */; };
 		2C40709427667A8600AB3D55 /* ImageWithLabelTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C40709227667A8600AB3D55 /* ImageWithLabelTableViewCell.swift */; };
 		2C40709527667A8600AB3D55 /* ImageWithLabelTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C40709327667A8600AB3D55 /* ImageWithLabelTableViewCell.xib */; };
+		2C420DF12BB5EA69004F1D56 /* NSAttributedString.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C420DF02BB5EA69004F1D56 /* NSAttributedString.swift */; };
 		2C4297282ADEDCBD0044357A /* PeerMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4297272ADEDCBD0044357A /* PeerMeta.swift */; };
 		2C4297292ADEDCBD0044357A /* PeerMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4297272ADEDCBD0044357A /* PeerMeta.swift */; };
 		2C4768A728258627005E8D4D /* EditAccountsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4768A628258627005E8D4D /* EditAccountsViewController.swift */; };
@@ -355,6 +356,7 @@
 		2C40708F27667A6600AB3D55 /* MultilineLabelTableViewCell.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = MultilineLabelTableViewCell.xib; sourceTree = "<group>"; };
 		2C40709227667A8600AB3D55 /* ImageWithLabelTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageWithLabelTableViewCell.swift; sourceTree = "<group>"; };
 		2C40709327667A8600AB3D55 /* ImageWithLabelTableViewCell.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = ImageWithLabelTableViewCell.xib; sourceTree = "<group>"; };
+		2C420DF02BB5EA69004F1D56 /* NSAttributedString.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSAttributedString.swift; sourceTree = "<group>"; };
 		2C4297272ADEDCBD0044357A /* PeerMeta.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PeerMeta.swift; sourceTree = "<group>"; };
 		2C452ECF2B0EDB8F0017CE2C /* utils.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = utils.js; path = "Inpage Provider/utils.js"; sourceTree = "<group>"; };
 		2C452ED02B0EDB8F0017CE2C /* yarn.lock */ = {isa = PBXFileReference; lastKnownFileType = text; name = yarn.lock; path = "Inpage Provider/yarn.lock"; sourceTree = "<group>"; };
@@ -740,6 +742,7 @@
 				2C4B72CA2B0E7EA800113087 /* NSViewController.swift */,
 				2CFAE56928BE6292001D0799 /* NSImage.swift */,
 				2CD0B3F426A0DAA900488D92 /* NSPasteboard.swift */,
+				2C420DF02BB5EA69004F1D56 /* NSAttributedString.swift */,
 				2CB4031C281D745D00BAEBEE /* NSTableView.swift */,
 			);
 			path = Extensions;
@@ -1661,6 +1664,7 @@
 				2C03D1D2269B407900EF10EA /* NetworkMonitor.swift in Sources */,
 				2C8ED8DC2AEADDC400818D74 /* BigInt.swift in Sources */,
 				2C8A09E326757FC000993638 /* AccountCellView.swift in Sources */,
+				2C420DF12BB5EA69004F1D56 /* NSAttributedString.swift in Sources */,
 				2C603D0226B6E13F00956955 /* String.swift in Sources */,
 				2CED86C32AF262E6006F9E26 /* Nodes.swift in Sources */,
 				2C264BC127B2F2C100234393 /* EthereumSafariRequest.swift in Sources */,

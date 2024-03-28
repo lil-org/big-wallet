@@ -1,6 +1,7 @@
 // ∅ 2024 lil org
 
 import Cocoa
+import WalletCore
 
 extension NSImage {
     

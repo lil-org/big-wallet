@@ -100,8 +100,8 @@ class EditAccountsViewController: NSViewController {
     }
     
     private func previewMoreAccounts() {
-        guard Date().timeIntervalSince(lastPreviewDate) > 1.31 else {
-            previewAccountsQueue.asyncAfter(deadline: .now() + .milliseconds(1310)) { [weak self] in
+        guard Date().timeIntervalSince(lastPreviewDate) > 0.23 else {
+            previewAccountsQueue.asyncAfter(deadline: .now() + .milliseconds(230)) { [weak self] in
                 self?.previewMoreAccounts()
             }
             return
@@ -153,7 +153,7 @@ extension EditAccountsViewController: NSTableViewDataSource {
         let rowView = tableView.makeViewOfType(PreviewAccountCellView.self, owner: self)
         rowView.setup(title: model.account.croppedAddress, index: row, image: model.account.image, isEnabled: model.isEnabled, delegate: self)
         
-        if row == cellModels.count - 1 {
+        if row >= cellModels.count - 20 {
             previewMoreAccountsIfNeeded()
         }
         

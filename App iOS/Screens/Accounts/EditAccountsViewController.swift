@@ -93,8 +93,8 @@ class EditAccountsViewController: UIViewController {
     }
     
     private func previewMoreAccounts() {
-        guard Date().timeIntervalSince(lastPreviewDate) > 1.31 else {
-            previewAccountsQueue.asyncAfter(deadline: .now() + .milliseconds(1310)) { [weak self] in
+        guard Date().timeIntervalSince(lastPreviewDate) > 0.23 else {
+            previewAccountsQueue.asyncAfter(deadline: .now() + .milliseconds(230)) { [weak self] in
                 self?.previewMoreAccounts()
             }
             return
@@ -120,7 +120,7 @@ class EditAccountsViewController: UIViewController {
 extension EditAccountsViewController: UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
-        if indexPath.row == cellModels.count - 1 {
+        if indexPath.row >= cellModels.count - 20 {
             previewMoreAccountsIfNeeded()
         }
     }
