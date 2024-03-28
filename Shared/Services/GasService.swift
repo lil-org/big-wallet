@@ -33,7 +33,7 @@ class GasService {
     }
     
     private func getMessage() {
-        let url = URL(string: "https://etherchain.org/api/gasnow")!
+        let url = URL(string: "https://beaconcha.in/api/v1/execution/gasnow")!
         let dataTask = urlSession.dataTask(with: url) { [weak self] (data, _, _) in
             if let data = data, let info = try? self?.jsonDecoder.decode(Message.self, from: data).data {
                 DispatchQueue.main.async {
