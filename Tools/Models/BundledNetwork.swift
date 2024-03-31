@@ -30,7 +30,7 @@ struct BundledNetwork: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decode(String.self, forKey: .name)
         symbol = try container.decode(String.self, forKey: .symbol)
-        blockExplorer = try container.decode(String.self, forKey: .blockExplorer)
+        blockExplorer = try container.decodeIfPresent(String.self, forKey: .blockExplorer)
         isTest = try container.decodeIfPresent(Bool.self, forKey: .isTest) ?? false
         if isTest {
             okToShowPriceForSymbol = false
@@ -43,7 +43,11 @@ struct BundledNetwork: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(name, forKey: .name)
         try container.encode(symbol, forKey: .symbol)
-        try container.encode(blockExplorer, forKey: .blockExplorer)
+        
+        if let blockExplorer = blockExplorer {
+            try container.encode(blockExplorer, forKey: .blockExplorer)
+        }
+        
         if isTest { try container.encode(isTest, forKey: .isTest) }
         if okToShowPriceForSymbol { try container.encode(okToShowPriceForSymbol, forKey: .okToShowPriceForSymbol) }
     }

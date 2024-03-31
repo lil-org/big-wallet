@@ -405,10 +405,8 @@
     "s" : "NEON"
   },
   "666666666" : {
-    "b" : null,
     "n" : "Degen Chain",
     "s" : "DEGEN",
-    "t" : false
   },
   "999999999" : {
     "b" : "https://sepolia.explorer.zora.energy",
