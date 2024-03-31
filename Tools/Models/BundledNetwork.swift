@@ -8,7 +8,7 @@ struct BundledNetwork: Codable {
     let symbol: String
     let isTest: Bool
     let okToShowPriceForSymbol: Bool
-    let blockExplorer: String
+    let blockExplorer: String?
     
     private enum CodingKeys: String, CodingKey {
         case name = "n"
@@ -18,7 +18,7 @@ struct BundledNetwork: Codable {
         case blockExplorer = "b"
     }
     
-    init(name: String, symbol: String, isTest: Bool, okToShowPriceForSymbol: Bool, blockExplorer: String) {
+    init(name: String, symbol: String, isTest: Bool, okToShowPriceForSymbol: Bool, blockExplorer: String?) {
         self.name = name
         self.symbol = symbol
         self.isTest = isTest

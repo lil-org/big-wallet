@@ -76,6 +76,7 @@ struct BundledNodes {
         68840142: "rpc.testnet.frame.xyz/http",
         245022926: "devnet.neonevm.org",
         245022934: "neon-proxy-mainnet.solana.p2p.org/",
+        666666666: "rpc.degen.tips",
         999999999: "sepolia.rpc.zora.energy",
         1313161554: "mainnet.aurora.dev",
         1313161555: "testnet.aurora.dev/",

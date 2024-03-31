@@ -30,7 +30,7 @@ fetchChains { chains in
     let currentNodes = try! JSONDecoder().decode([String: String].self, from: currentNodesData)
     
     let currentIds = Set(currentNetworks.keys)
-    let newChainsIds = Set([238])
+    let newChainsIds = Set([666666666])
     
     let newChains = chains.filter { chain in
         let isEIP3091 = chain.explorers?.contains(where: { $0.standard == "EIP3091" }) == true
@@ -56,7 +56,7 @@ fetchChains { chains in
                                                         symbol: chain.nativeCurrency.symbol,
                                                         isTest: true,
                                                         okToShowPriceForSymbol: false,
-                                                        blockExplorer: chain.explorers!.first!.url)
+                                                        blockExplorer: chain.explorers?.first?.url)
         updatedNodes[String(chain.chainId)] = String(chain.rpc.first(where: { $0.hasPrefix(https) })!.dropFirst(https.count))
     }
     
