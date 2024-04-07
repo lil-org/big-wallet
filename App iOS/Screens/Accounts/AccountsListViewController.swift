@@ -243,7 +243,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                   let request = SafariRequest(query: String(inputLinkString.dropFirst(prefix.count))) {
             id = request.id
             action = DappRequestProcessor.processSafariRequest(request) { [weak self] hash in
-                self?.redirectBack(requestId: id, tryFarcaster: false)
+                self?.redirectBack(requestId: id)
             }
         } else {
             return
@@ -293,12 +293,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         toDismissAfterResponse[id] = viewController
     }
     
-    private func redirectBack(requestId: Int, tryFarcaster: Bool) {
-        if tryFarcaster && UIApplication.shared.canOpenURL(.farcasterScheme) {
-            UIApplication.shared.open(.farcasterScheme)
-        } else {
-            UIApplication.shared.openSafari()
-        }
+    private func redirectBack(requestId: Int) {
+        UIApplication.shared.openSafari()
         closePopups(requestId: requestId)
     }
     

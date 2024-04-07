@@ -10,7 +10,6 @@ extension URL {
     static let github = URL(string: "https://g.lil.org")!
     static let email = URL(string: "mailto:support@lil.org")!
     static let iosSafariGuide = URL(string: "https://lil.org/guide-ios")!
-    static let farcasterScheme = URL(string: "farcaster://")!
     
     var mimeType: String {
         if let typeIdentifier = (try? resourceValues(forKeys: [.typeIdentifierKey]))?.typeIdentifier,
