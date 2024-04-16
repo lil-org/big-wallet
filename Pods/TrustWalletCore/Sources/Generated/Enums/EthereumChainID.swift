@@ -22,6 +22,7 @@ public enum EthereumChainID: UInt32, CaseIterable {
     case okc = 66
     case thundertoken = 108
     case cfxevm = 1030
+    case lightlink = 1890
     case merlin = 4200
     case mantle = 5000
     case gochain = 60
@@ -30,6 +31,7 @@ public enum EthereumChainID: UInt32, CaseIterable {
     case meter = 82
     case celo = 42220
     case linea = 59144
+    case blast = 81457
     case scroll = 534352
     case wanchain = 888
     case cronos = 25

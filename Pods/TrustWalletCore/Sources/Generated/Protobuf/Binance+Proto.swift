@@ -20,6 +20,7 @@ public typealias BinanceTransferOut = TW_Binance_Proto_TransferOut
 public typealias BinanceSideChainDelegate = TW_Binance_Proto_SideChainDelegate
 public typealias BinanceSideChainRedelegate = TW_Binance_Proto_SideChainRedelegate
 public typealias BinanceSideChainUndelegate = TW_Binance_Proto_SideChainUndelegate
+public typealias BinanceSideChainStakeMigration = TW_Binance_Proto_SideChainStakeMigration
 public typealias BinanceTimeLockOrder = TW_Binance_Proto_TimeLockOrder
 public typealias BinanceTimeRelockOrder = TW_Binance_Proto_TimeRelockOrder
 public typealias BinanceTimeUnlockOrder = TW_Binance_Proto_TimeUnlockOrder

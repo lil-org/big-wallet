@@ -511,6 +511,37 @@ public struct TW_Binance_Proto_SideChainUndelegate {
   fileprivate var _amount: TW_Binance_Proto_SendOrder.Token? = nil
 }
 
+/// Message for BNB Beacon Chain -> BSC Stake Migration.
+/// https://github.com/bnb-chain/javascript-sdk/blob/26f6db8b67326e6214e74203ff90c89777b592a1/src/types/msg/stake/stakeMigrationMsg.ts#L13-L18
+public struct TW_Binance_Proto_SideChainStakeMigration {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var validatorSrcAddr: Data = Data()
+
+  public var validatorDstAddr: Data = Data()
+
+  public var delegatorAddr: Data = Data()
+
+  public var refundAddr: Data = Data()
+
+  public var amount: TW_Binance_Proto_SendOrder.Token {
+    get {return _amount ?? TW_Binance_Proto_SendOrder.Token()}
+    set {_amount = newValue}
+  }
+  /// Returns true if `amount` has been explicitly set.
+  public var hasAmount: Bool {return self._amount != nil}
+  /// Clears the value of `amount`. Subsequent reads from it will return its default value.
+  public mutating func clearAmount() {self._amount = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _amount: TW_Binance_Proto_SendOrder.Token? = nil
+}
+
 /// Message for TimeLock order
 public struct TW_Binance_Proto_TimeLockOrder {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -760,6 +791,14 @@ public struct TW_Binance_Proto_SigningInput {
     set {orderOneof = .timeUnlockOrder(newValue)}
   }
 
+  public var sideStakeMigrationOrder: TW_Binance_Proto_SideChainStakeMigration {
+    get {
+      if case .sideStakeMigrationOrder(let v)? = orderOneof {return v}
+      return TW_Binance_Proto_SideChainStakeMigration()
+    }
+    set {orderOneof = .sideStakeMigrationOrder(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// Payload message
@@ -783,6 +822,7 @@ public struct TW_Binance_Proto_SigningInput {
     case timeLockOrder(TW_Binance_Proto_TimeLockOrder)
     case timeRelockOrder(TW_Binance_Proto_TimeRelockOrder)
     case timeUnlockOrder(TW_Binance_Proto_TimeUnlockOrder)
+    case sideStakeMigrationOrder(TW_Binance_Proto_SideChainStakeMigration)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_Binance_Proto_SigningInput.OneOf_OrderOneof, rhs: TW_Binance_Proto_SigningInput.OneOf_OrderOneof) -> Bool {
@@ -864,6 +904,10 @@ public struct TW_Binance_Proto_SigningInput {
       }()
       case (.timeUnlockOrder, .timeUnlockOrder): return {
         guard case .timeUnlockOrder(let l) = lhs, case .timeUnlockOrder(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.sideStakeMigrationOrder, .sideStakeMigrationOrder): return {
+        guard case .sideStakeMigrationOrder(let l) = lhs, case .sideStakeMigrationOrder(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
       default: return false
@@ -1947,6 +1991,66 @@ extension TW_Binance_Proto_SideChainUndelegate: SwiftProtobuf.Message, SwiftProt
   }
 }
 
+extension TW_Binance_Proto_SideChainStakeMigration: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SideChainStakeMigration"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "validator_src_addr"),
+    2: .standard(proto: "validator_dst_addr"),
+    3: .standard(proto: "delegator_addr"),
+    4: .standard(proto: "refund_addr"),
+    5: .same(proto: "amount"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.validatorSrcAddr) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.validatorDstAddr) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.delegatorAddr) }()
+      case 4: try { try decoder.decodeSingularBytesField(value: &self.refundAddr) }()
+      case 5: try { try decoder.decodeSingularMessageField(value: &self._amount) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.validatorSrcAddr.isEmpty {
+      try visitor.visitSingularBytesField(value: self.validatorSrcAddr, fieldNumber: 1)
+    }
+    if !self.validatorDstAddr.isEmpty {
+      try visitor.visitSingularBytesField(value: self.validatorDstAddr, fieldNumber: 2)
+    }
+    if !self.delegatorAddr.isEmpty {
+      try visitor.visitSingularBytesField(value: self.delegatorAddr, fieldNumber: 3)
+    }
+    if !self.refundAddr.isEmpty {
+      try visitor.visitSingularBytesField(value: self.refundAddr, fieldNumber: 4)
+    }
+    try { if let v = self._amount {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Binance_Proto_SideChainStakeMigration, rhs: TW_Binance_Proto_SideChainStakeMigration) -> Bool {
+    if lhs.validatorSrcAddr != rhs.validatorSrcAddr {return false}
+    if lhs.validatorDstAddr != rhs.validatorDstAddr {return false}
+    if lhs.delegatorAddr != rhs.delegatorAddr {return false}
+    if lhs.refundAddr != rhs.refundAddr {return false}
+    if lhs._amount != rhs._amount {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension TW_Binance_Proto_TimeLockOrder: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TimeLockOrder"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -2119,6 +2223,7 @@ extension TW_Binance_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
     24: .standard(proto: "time_lock_order"),
     25: .standard(proto: "time_relock_order"),
     26: .standard(proto: "time_unlock_order"),
+    27: .standard(proto: "side_stake_migration_order"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -2380,6 +2485,19 @@ extension TW_Binance_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
           self.orderOneof = .timeUnlockOrder(v)
         }
       }()
+      case 27: try {
+        var v: TW_Binance_Proto_SideChainStakeMigration?
+        var hadOneofValue = false
+        if let current = self.orderOneof {
+          hadOneofValue = true
+          if case .sideStakeMigrationOrder(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.orderOneof = .sideStakeMigrationOrder(v)
+        }
+      }()
       default: break
       }
     }
@@ -2484,6 +2602,10 @@ extension TW_Binance_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
     case .timeUnlockOrder?: try {
       guard case .timeUnlockOrder(let v)? = self.orderOneof else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 26)
+    }()
+    case .sideStakeMigrationOrder?: try {
+      guard case .sideStakeMigrationOrder(let v)? = self.orderOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 27)
     }()
     case nil: break
     }

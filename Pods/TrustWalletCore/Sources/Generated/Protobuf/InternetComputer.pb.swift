@@ -76,6 +76,8 @@ public struct TW_InternetComputer_Proto_Transaction {
 
     public var currentTimestampNanos: UInt64 = 0
 
+    public var permittedDrift: UInt64 = 0
+
     public var unknownFields = SwiftProtobuf.UnknownStorage()
 
     public init() {}
@@ -186,6 +188,7 @@ extension TW_InternetComputer_Proto_Transaction.Transfer: SwiftProtobuf.Message,
     2: .same(proto: "amount"),
     3: .same(proto: "memo"),
     4: .standard(proto: "current_timestamp_nanos"),
+    5: .standard(proto: "permitted_drift"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -198,6 +201,7 @@ extension TW_InternetComputer_Proto_Transaction.Transfer: SwiftProtobuf.Message,
       case 2: try { try decoder.decodeSingularUInt64Field(value: &self.amount) }()
       case 3: try { try decoder.decodeSingularUInt64Field(value: &self.memo) }()
       case 4: try { try decoder.decodeSingularUInt64Field(value: &self.currentTimestampNanos) }()
+      case 5: try { try decoder.decodeSingularUInt64Field(value: &self.permittedDrift) }()
       default: break
       }
     }
@@ -216,6 +220,9 @@ extension TW_InternetComputer_Proto_Transaction.Transfer: SwiftProtobuf.Message,
     if self.currentTimestampNanos != 0 {
       try visitor.visitSingularUInt64Field(value: self.currentTimestampNanos, fieldNumber: 4)
     }
+    if self.permittedDrift != 0 {
+      try visitor.visitSingularUInt64Field(value: self.permittedDrift, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -224,6 +231,7 @@ extension TW_InternetComputer_Proto_Transaction.Transfer: SwiftProtobuf.Message,
     if lhs.amount != rhs.amount {return false}
     if lhs.memo != rhs.memo {return false}
     if lhs.currentTimestampNanos != rhs.currentTimestampNanos {return false}
+    if lhs.permittedDrift != rhs.permittedDrift {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

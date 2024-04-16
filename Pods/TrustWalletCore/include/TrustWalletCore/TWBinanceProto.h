@@ -26,6 +26,7 @@ typedef TWData *_Nonnull TW_Binance_Proto_TransferOut;
 typedef TWData *_Nonnull TW_Binance_Proto_SideChainDelegate;
 typedef TWData *_Nonnull TW_Binance_Proto_SideChainRedelegate;
 typedef TWData *_Nonnull TW_Binance_Proto_SideChainUndelegate;
+typedef TWData *_Nonnull TW_Binance_Proto_SideChainStakeMigration;
 typedef TWData *_Nonnull TW_Binance_Proto_TimeLockOrder;
 typedef TWData *_Nonnull TW_Binance_Proto_TimeRelockOrder;
 typedef TWData *_Nonnull TW_Binance_Proto_TimeUnlockOrder;
