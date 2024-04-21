@@ -115,6 +115,30 @@ public struct TW_FIO_Proto_Action {
     set {messageOneof = .newFundsRequestMessage(newValue)}
   }
 
+  public var removePubAddressMessage: TW_FIO_Proto_Action.RemovePubAddress {
+    get {
+      if case .removePubAddressMessage(let v)? = messageOneof {return v}
+      return TW_FIO_Proto_Action.RemovePubAddress()
+    }
+    set {messageOneof = .removePubAddressMessage(newValue)}
+  }
+
+  public var removeAllPubAddressesMessage: TW_FIO_Proto_Action.RemoveAllPubAddress {
+    get {
+      if case .removeAllPubAddressesMessage(let v)? = messageOneof {return v}
+      return TW_FIO_Proto_Action.RemoveAllPubAddress()
+    }
+    set {messageOneof = .removeAllPubAddressesMessage(newValue)}
+  }
+
+  public var addBundledTransactionsMessage: TW_FIO_Proto_Action.AddBundledTransactions {
+    get {
+      if case .addBundledTransactionsMessage(let v)? = messageOneof {return v}
+      return TW_FIO_Proto_Action.AddBundledTransactions()
+    }
+    set {messageOneof = .addBundledTransactionsMessage(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// Payload message
@@ -124,6 +148,9 @@ public struct TW_FIO_Proto_Action {
     case transferMessage(TW_FIO_Proto_Action.Transfer)
     case renewFioAddressMessage(TW_FIO_Proto_Action.RenewFioAddress)
     case newFundsRequestMessage(TW_FIO_Proto_Action.NewFundsRequest)
+    case removePubAddressMessage(TW_FIO_Proto_Action.RemovePubAddress)
+    case removeAllPubAddressesMessage(TW_FIO_Proto_Action.RemoveAllPubAddress)
+    case addBundledTransactionsMessage(TW_FIO_Proto_Action.AddBundledTransactions)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_FIO_Proto_Action.OneOf_MessageOneof, rhs: TW_FIO_Proto_Action.OneOf_MessageOneof) -> Bool {
@@ -149,6 +176,18 @@ public struct TW_FIO_Proto_Action {
       }()
       case (.newFundsRequestMessage, .newFundsRequestMessage): return {
         guard case .newFundsRequestMessage(let l) = lhs, case .newFundsRequestMessage(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.removePubAddressMessage, .removePubAddressMessage): return {
+        guard case .removePubAddressMessage(let l) = lhs, case .removePubAddressMessage(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.removeAllPubAddressesMessage, .removeAllPubAddressesMessage): return {
+        guard case .removeAllPubAddressesMessage(let l) = lhs, case .removeAllPubAddressesMessage(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.addBundledTransactionsMessage, .addBundledTransactionsMessage): return {
+        guard case .addBundledTransactionsMessage(let l) = lhs, case .addBundledTransactionsMessage(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
       default: return false
@@ -189,6 +228,45 @@ public struct TW_FIO_Proto_Action {
 
     /// List of public addresses to be registered, ex. {{"BTC", "bc1qv...7v"},{"BNB", "bnb1ts3...9s"}}
     public var publicAddresses: [TW_FIO_Proto_PublicAddress] = []
+
+    /// Max fee to spend, can be obtained using get_fee API.
+    public var fee: UInt64 = 0
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
+  /// Action for removing public chain addresses from a FIO name; remove_pub_address
+  /// Note: actor is not needed, computed from private key
+  public struct RemovePubAddress {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    /// The FIO name already registered to the owner. Ex.: "alice@trust"
+    public var fioAddress: String = String()
+
+    /// List of public addresses to be unregistered, ex. {{"BTC", "bc1qv...7v"},{"BNB", "bnb1ts3...9s"}}
+    public var publicAddresses: [TW_FIO_Proto_PublicAddress] = []
+
+    /// Max fee to spend, can be obtained using get_fee API.
+    public var fee: UInt64 = 0
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
+  /// Action for removing public chain addresses from a FIO name; remove_pub_address
+  /// Note: actor is not needed, computed from private key
+  public struct RemoveAllPubAddress {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    /// The FIO name already registered to the owner. Ex.: "alice@trust"
+    public var fioAddress: String = String()
 
     /// Max fee to spend, can be obtained using get_fee API.
     public var fee: UInt64 = 0
@@ -274,6 +352,26 @@ public struct TW_FIO_Proto_Action {
     public init() {}
 
     fileprivate var _content: TW_FIO_Proto_NewFundsContent? = nil
+  }
+
+  /// Action for adding `100 * bundle_sets` bundled transactions to the supplied FIO Handle. When bundles are purchased one or more sets of bundled transactions are added to the existing count.
+  public struct AddBundledTransactions {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    /// The FIO name already registered to the owner. Ex.: "alice@trust"
+    public var fioAddress: String = String()
+
+    /// Number of bundled sets. One set is 100 bundled transactions.
+    public var bundleSets: UInt64 = 0
+
+    /// Max fee to spend, can be obtained using get_fee API.
+    public var fee: UInt64 = 0
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
   }
 
   public init() {}
@@ -370,6 +468,9 @@ public struct TW_FIO_Proto_SigningOutput {
 
   /// error code description
   public var errorMessage: String = String()
+
+  /// Performed action name, ex. "addaddress", "remaddress", "trnsfiopubky" etc.
+  public var actionName: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -488,6 +589,9 @@ extension TW_FIO_Proto_Action: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
     3: .standard(proto: "transfer_message"),
     4: .standard(proto: "renew_fio_address_message"),
     5: .standard(proto: "new_funds_request_message"),
+    6: .standard(proto: "remove_pub_address_message"),
+    7: .standard(proto: "remove_all_pub_addresses_message"),
+    8: .standard(proto: "add_bundled_transactions_message"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -561,6 +665,45 @@ extension TW_FIO_Proto_Action: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
           self.messageOneof = .newFundsRequestMessage(v)
         }
       }()
+      case 6: try {
+        var v: TW_FIO_Proto_Action.RemovePubAddress?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .removePubAddressMessage(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .removePubAddressMessage(v)
+        }
+      }()
+      case 7: try {
+        var v: TW_FIO_Proto_Action.RemoveAllPubAddress?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .removeAllPubAddressesMessage(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .removeAllPubAddressesMessage(v)
+        }
+      }()
+      case 8: try {
+        var v: TW_FIO_Proto_Action.AddBundledTransactions?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .addBundledTransactionsMessage(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .addBundledTransactionsMessage(v)
+        }
+      }()
       default: break
       }
     }
@@ -591,6 +734,18 @@ extension TW_FIO_Proto_Action: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
     case .newFundsRequestMessage?: try {
       guard case .newFundsRequestMessage(let v)? = self.messageOneof else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    }()
+    case .removePubAddressMessage?: try {
+      guard case .removePubAddressMessage(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    }()
+    case .removeAllPubAddressesMessage?: try {
+      guard case .removeAllPubAddressesMessage(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+    }()
+    case .addBundledTransactionsMessage?: try {
+      guard case .addBundledTransactionsMessage(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
     }()
     case nil: break
     }
@@ -686,6 +841,88 @@ extension TW_FIO_Proto_Action.AddPubAddress: SwiftProtobuf.Message, SwiftProtobu
   public static func ==(lhs: TW_FIO_Proto_Action.AddPubAddress, rhs: TW_FIO_Proto_Action.AddPubAddress) -> Bool {
     if lhs.fioAddress != rhs.fioAddress {return false}
     if lhs.publicAddresses != rhs.publicAddresses {return false}
+    if lhs.fee != rhs.fee {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_FIO_Proto_Action.RemovePubAddress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_FIO_Proto_Action.protoMessageName + ".RemovePubAddress"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "fio_address"),
+    2: .standard(proto: "public_addresses"),
+    3: .same(proto: "fee"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.fioAddress) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.publicAddresses) }()
+      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.fee) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.fioAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.fioAddress, fieldNumber: 1)
+    }
+    if !self.publicAddresses.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.publicAddresses, fieldNumber: 2)
+    }
+    if self.fee != 0 {
+      try visitor.visitSingularUInt64Field(value: self.fee, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_FIO_Proto_Action.RemovePubAddress, rhs: TW_FIO_Proto_Action.RemovePubAddress) -> Bool {
+    if lhs.fioAddress != rhs.fioAddress {return false}
+    if lhs.publicAddresses != rhs.publicAddresses {return false}
+    if lhs.fee != rhs.fee {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_FIO_Proto_Action.RemoveAllPubAddress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_FIO_Proto_Action.protoMessageName + ".RemoveAllPubAddress"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "fio_address"),
+    3: .same(proto: "fee"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.fioAddress) }()
+      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.fee) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.fioAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.fioAddress, fieldNumber: 1)
+    }
+    if self.fee != 0 {
+      try visitor.visitSingularUInt64Field(value: self.fee, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_FIO_Proto_Action.RemoveAllPubAddress, rhs: TW_FIO_Proto_Action.RemoveAllPubAddress) -> Bool {
+    if lhs.fioAddress != rhs.fioAddress {return false}
     if lhs.fee != rhs.fee {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -834,6 +1071,50 @@ extension TW_FIO_Proto_Action.NewFundsRequest: SwiftProtobuf.Message, SwiftProto
     if lhs.payerFioAddress != rhs.payerFioAddress {return false}
     if lhs.payeeFioName != rhs.payeeFioName {return false}
     if lhs._content != rhs._content {return false}
+    if lhs.fee != rhs.fee {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_FIO_Proto_Action.AddBundledTransactions: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_FIO_Proto_Action.protoMessageName + ".AddBundledTransactions"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "fio_address"),
+    2: .standard(proto: "bundle_sets"),
+    3: .same(proto: "fee"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.fioAddress) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.bundleSets) }()
+      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.fee) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.fioAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.fioAddress, fieldNumber: 1)
+    }
+    if self.bundleSets != 0 {
+      try visitor.visitSingularUInt64Field(value: self.bundleSets, fieldNumber: 2)
+    }
+    if self.fee != 0 {
+      try visitor.visitSingularUInt64Field(value: self.fee, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_FIO_Proto_Action.AddBundledTransactions, rhs: TW_FIO_Proto_Action.AddBundledTransactions) -> Bool {
+    if lhs.fioAddress != rhs.fioAddress {return false}
+    if lhs.bundleSets != rhs.bundleSets {return false}
     if lhs.fee != rhs.fee {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -998,6 +1279,7 @@ extension TW_FIO_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mess
     1: .same(proto: "json"),
     2: .same(proto: "error"),
     3: .standard(proto: "error_message"),
+    4: .standard(proto: "action_name"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1009,6 +1291,7 @@ extension TW_FIO_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mess
       case 1: try { try decoder.decodeSingularStringField(value: &self.json) }()
       case 2: try { try decoder.decodeSingularEnumField(value: &self.error) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.actionName) }()
       default: break
       }
     }
@@ -1024,6 +1307,9 @@ extension TW_FIO_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mess
     if !self.errorMessage.isEmpty {
       try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 3)
     }
+    if !self.actionName.isEmpty {
+      try visitor.visitSingularStringField(value: self.actionName, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1031,6 +1317,7 @@ extension TW_FIO_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._Mess
     if lhs.json != rhs.json {return false}
     if lhs.error != rhs.error {return false}
     if lhs.errorMessage != rhs.errorMessage {return false}
+    if lhs.actionName != rhs.actionName {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
