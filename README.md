@@ -1,4 +1,4 @@
-# tiny wallet by [lil.org](https://lil.org)
+# big wallet by [lil.org](https://lil.org)
 crypto wallet with a safari extension
 
 ios / macos / visionos
