@@ -25,6 +25,7 @@ public enum EthereumChainID: UInt32, CaseIterable {
     case lightlink = 1890
     case merlin = 4200
     case mantle = 5000
+    case bouncebit = 6001
     case gochain = 60
     case zeneon = 7332
     case base = 8453
