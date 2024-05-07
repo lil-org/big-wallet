@@ -843,12 +843,12 @@
         }
       }
     },
-    "tiny wallet" : {
+    "big wallet" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tiny wallet"
+            "value" : "big wallet"
           }
         }
       }

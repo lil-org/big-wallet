@@ -239,7 +239,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         
         let action: DappRequestAction
         let id: Int
-        if let prefix = ["https://lil.org/extension?query=", "tinywallet://safari?request="].first(where: { inputLinkString.hasPrefix($0) == true }),
+        if let prefix = ["https://lil.org/extension?query=", "bigwallet://safari?request="].first(where: { inputLinkString.hasPrefix($0) == true }),
                   let request = SafariRequest(query: String(inputLinkString.dropFirst(prefix.count))) {
             id = request.id
             action = DappRequestProcessor.processSafariRequest(request) { [weak self] hash in
@@ -384,7 +384,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     @objc private func preferencesButtonTapped() {
-        let actionSheet = UIAlertController(title: Strings.tinyWallet, message: nil, preferredStyle: .actionSheet)
+        let actionSheet = UIAlertController(title: Strings.bigWallet, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.barButtonItem = preferencesItem
         let xAction = UIAlertAction(title: Strings.viewOnX, style: .default) { _ in
             UIApplication.shared.open(URL.x)

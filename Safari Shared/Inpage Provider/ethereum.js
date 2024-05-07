@@ -10,7 +10,7 @@ import IdMapping from "./id_mapping";
 import { EventEmitter } from "events";
 import isUtf8 from "isutf8";
 
-class TinyWalletEthereum extends EventEmitter {
+class BigWalletEthereum extends EventEmitter {
     
     _metamask = {
         isUnlocked: () => {
@@ -31,7 +31,7 @@ class TinyWalletEthereum extends EventEmitter {
         this._isConnected = true;
         this._initialized = true;
         this._isUnlocked = true;
-        this.isTinyWallet = true;
+        this.isBigWallet = true;
         this.emitConnect(config.chainId);
         this.didEmitConnectAfterSubscription = false;
         this.didGetLatestConfiguration = false;
@@ -41,22 +41,22 @@ class TinyWalletEthereum extends EventEmitter {
         this.on = (...args) => {
             if (args[0] == "connect") {
                 setTimeout( function() {
-                    if (!window.tinywallet.eth.didEmitConnectAfterSubscription) {
-                        window.tinywallet.eth.emitConnect(window.tinywallet.eth.chainId);
-                        window.tinywallet.eth.didEmitConnectAfterSubscription = true;
+                    if (!window.bigwallet.eth.didEmitConnectAfterSubscription) {
+                        window.bigwallet.eth.emitConnect(window.bigwallet.eth.chainId);
+                        window.bigwallet.eth.didEmitConnectAfterSubscription = true;
                     }
                 }, 1);
             }
             return originalOn.apply(this, args);
         };
         
-        setTimeout( function() { window.tinywallet.eth.emit("_initialized"); }, 1);
+        setTimeout( function() { window.bigwallet.eth.emit("_initialized"); }, 1);
     }
     
     externalDisconnect() {
         this.setAddress("");
-        window.tinywallet.eth.emit("disconnect");
-        window.tinywallet.eth.emit("accountsChanged", []);
+        window.bigwallet.eth.emit("disconnect");
+        window.bigwallet.eth.emit("accountsChanged", []);
     }
     
     setAddress(address) {
@@ -67,22 +67,22 @@ class TinyWalletEthereum extends EventEmitter {
     }
     
     updateAccount(eventName, addresses, chainId) {
-        window.tinywallet.eth.setAddress(addresses[0]);
+        window.bigwallet.eth.setAddress(addresses[0]);
         
         if (eventName == "switchAccount") {
-            window.tinywallet.eth.emit("accountsChanged", addresses);
+            window.bigwallet.eth.emit("accountsChanged", addresses);
         }
         
-        if (window.tinywallet.eth.rpc.chainId != chainId) {
+        if (window.bigwallet.eth.rpc.chainId != chainId) {
             this.rpc = new RPCServer(chainId);
         }
         
-        if (window.tinywallet.eth.chainId != chainId) {
-            window.tinywallet.eth.chainId = chainId;
-            window.tinywallet.eth.networkVersion = this.net_version();
+        if (window.bigwallet.eth.chainId != chainId) {
+            window.bigwallet.eth.chainId = chainId;
+            window.bigwallet.eth.networkVersion = this.net_version();
             if (eventName != "didLoadLatestConfiguration") {
-                window.tinywallet.eth.emit("chainChanged", chainId);
-                window.tinywallet.eth.emit("networkChanged", window.tinywallet.eth.net_version());
+                window.bigwallet.eth.emit("chainChanged", chainId);
+                window.bigwallet.eth.emit("networkChanged", window.bigwallet.eth.net_version());
             }
         }
     }
@@ -96,8 +96,8 @@ class TinyWalletEthereum extends EventEmitter {
     
     request(payload) {
         var that = this;
-        if (!(this instanceof TinyWalletEthereum)) {
-            that = window.tinywallet.eth;
+        if (!(this instanceof BigWalletEthereum)) {
+            that = window.bigwallet.eth;
         }
         return that._request(payload, false);
     }
@@ -111,7 +111,7 @@ class TinyWalletEthereum extends EventEmitter {
     }
     
     enable() {
-        if (!window.tinywallet.eth.address) { // avoid double accounts request in uniswap
+        if (!window.bigwallet.eth.address) { // avoid double accounts request in uniswap
             return this.request({ method: "eth_requestAccounts", params: [] });
         } else {
             return this.request({ method: "eth_accounts", params: [] });
@@ -120,8 +120,8 @@ class TinyWalletEthereum extends EventEmitter {
     
     send(payload, callback) {
         var that = this;
-        if (!(this instanceof TinyWalletEthereum)) {
-            that = window.tinywallet.eth;
+        if (!(this instanceof BigWalletEthereum)) {
+            that = window.bigwallet.eth;
         }
         var requestPayload = {};
         if (typeof payload.method !== "undefined") {
@@ -143,8 +143,8 @@ class TinyWalletEthereum extends EventEmitter {
     
     sendAsync(payload, callback) {
         var that = this;
-        if (!(this instanceof TinyWalletEthereum)) {
-            that = window.tinywallet.eth;
+        if (!(this instanceof BigWalletEthereum)) {
+            that = window.bigwallet.eth;
         }
         if (Array.isArray(payload)) {
             Promise.all(payload.map(that._request.bind(that)))
@@ -199,7 +199,7 @@ class TinyWalletEthereum extends EventEmitter {
                 case "eth_newPendingTransactionFilter":
                 case "eth_uninstallFilter":
                 case "eth_subscribe":
-                    throw new ProviderRpcError(4200, `tiny wallet does not support ${payload.method}`);
+                    throw new ProviderRpcError(4200, `big wallet does not support ${payload.method}`);
                 default:
                     return this.rpc.call(payload);
             }
@@ -335,7 +335,7 @@ class TinyWalletEthereum extends EventEmitter {
         this.postMessage("addEthereumChain", payload.id, payload.params[0]);
     }
     
-    processTinyWalletResponse(id, response) {
+    processBigWalletResponse(id, response) {
         if (response.name == "didLoadLatestConfiguration") {
             this.didGetLatestConfiguration = true;
             if (response.chainId) {
@@ -376,7 +376,7 @@ class TinyWalletEthereum extends EventEmitter {
                 address: this.address,
                 chainId: this.chainId
             };
-            window.tinywallet.postMessage(handler, id, object, "ethereum");
+            window.bigwallet.postMessage(handler, id, object, "ethereum");
         } else {
             this.sendError(id, new ProviderRpcError(4100, "provider is not ready"));
         }
@@ -412,4 +412,4 @@ class TinyWalletEthereum extends EventEmitter {
     }
 }
 
-module.exports = TinyWalletEthereum;
+module.exports = BigWalletEthereum;

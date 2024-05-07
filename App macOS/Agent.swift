@@ -104,7 +104,7 @@ class Agent: NSObject {
     }
     
     lazy private var statusBarMenu: NSMenu = {
-        let menu = NSMenu(title: Strings.tinyWallet)
+        let menu = NSMenu(title: Strings.bigWallet)
         
         let showItem = NSMenuItem(title: Strings.showWallets, action: #selector(didSelectShowMenuItem), keyEquivalent: "")
         let safariItem = NSMenuItem(title: Strings.enableSafariExtension, action: #selector(enableSafariExtension), keyEquivalent: "")
@@ -140,7 +140,7 @@ class Agent: NSObject {
     func warnBeforeQuitting(updateStatusBarAfterwards: Bool = false) {
         Window.activateWindow(nil)
         let alert = Alert()
-        alert.messageText = Strings.quitTinyWallet
+        alert.messageText = Strings.quitWallet
         alert.alertStyle = .warning
         alert.addButton(withTitle: Strings.ok)
         alert.addButton(withTitle: Strings.cancel)

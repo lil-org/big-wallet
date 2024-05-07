@@ -19,7 +19,7 @@ class WelcomeViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        titleLabel.stringValue = Strings.tinyWallet
+        titleLabel.stringValue = Strings.bigWallet
         messageLabel.stringValue = Strings.welcomeScreenText
         getStartedButton.title = Strings.getStarted
     }

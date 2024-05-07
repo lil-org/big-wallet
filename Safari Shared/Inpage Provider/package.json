@@ -9,7 +9,7 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+ssh://git@github.com/lil-org/tiny-wallet.git"
+        "url": "git+ssh://git@github.com/lil-org/big-wallet.git"
     },
     "keywords": [],
     "author": "lil org <yo@lil.org>",

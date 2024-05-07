@@ -74,7 +74,7 @@ function injectScript() {
         container.insertBefore(scriptTag, container.children[0]);
         container.removeChild(scriptTag);
     } catch (error) {
-        console.error('tiny wallet: failed to inject', error);
+        console.error('big wallet: failed to inject', error);
     }
 }
 

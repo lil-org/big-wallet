@@ -126,7 +126,7 @@ function onBeforeExtensionPageNavigation(details) {
     if (details.url.includes("lil.org/extension?query=")) {
         const queryStringIndex = details.url.indexOf("?query=") + 7;
         const encodedQuery = details.url.substring(queryStringIndex);
-        browser.tabs.update(details.tabId, { url: "tinywallet://safari?request=" + encodedQuery });
+        browser.tabs.update(details.tabId, { url: "bigwallet://safari?request=" + encodedQuery });
     }
 }
 

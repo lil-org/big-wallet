@@ -15,7 +15,7 @@ class ConfigurationService {
     }
 
     private func getInfuraKeysFromCloudKit(completion: @escaping ([String]) -> Void) {
-        let container = CKContainer(identifier: "iCloud.tinywallet")
+        let container = CKContainer(identifier: "iCloud.tinywallet") // TODO: recreate icloud container
         let publicDatabase = container.publicCloudDatabase
         let predicate = NSPredicate(value: true)
         let query = CKQuery(recordType: "Config", predicate: predicate)

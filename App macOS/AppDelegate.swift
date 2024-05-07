@@ -61,7 +61,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func processInput(url: String?) {
         guard let url = url else { return }
-        let safariPrefix = "tinywallet://safari?request="
+        let safariPrefix = "bigwallet://safari?request="
         if url.hasPrefix(safariPrefix), let request = SafariRequest(query: String(url.dropFirst(safariPrefix.count))) {
             processExternalRequest(.safari(request))
         }

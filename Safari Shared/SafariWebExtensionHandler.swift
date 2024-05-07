@@ -40,7 +40,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             }
         } else if let query = String(data: data, encoding: .utf8)?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                   let request = SafariRequest(query: query),
-                  let url = URL(string: "tinywallet://safari?request=\(query)") {
+                  let url = URL(string: "bigwallet://safari?request=\(query)") {
             if case let .ethereum(ethereumRequest) = request.body,
                ethereumRequest.method == .switchEthereumChain || ethereumRequest.method == .addEthereumChain {
                 // TODO: different processing for addEthereumChain
