@@ -30,6 +30,7 @@ struct BundledNodes {
         338: "evm-t3.cronos.org",
         420: "goerli.optimism.io",
         424: "rpc.publicgoods.network",
+        690: "rpc.redstonechain.com",
         1001: "api.baobab.klaytn.net:8651",
         1088: "andromeda.metis.io/?owner=1088",
         1101: "zkevm-rpc.com",

@@ -150,6 +150,11 @@
     "o" : true,
     "s" : "ETH"
   },
+  "690" : {
+    "b" : "https://explorer.redstone.xyz",
+    "n" : "Redstone",
+    "s" : "ETH",
+  },
   "1001" : {
     "b" : "https://scope.klaytn.com",
     "n" : "Klaytn Baobab",
@@ -406,7 +411,7 @@
   },
   "666666666" : {
     "n" : "Degen Chain",
-    "s" : "DEGEN",
+    "s" : "DEGEN"
   },
   "999999999" : {
     "b" : "https://sepolia.explorer.zora.energy",
