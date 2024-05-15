@@ -3,6 +3,9 @@ build/
 DerivedData
 .idea/
 
+## Specific
+WalletCoreCommon.xcframework/
+
 ## Various settings
 *.pbxuser
 !default.pbxuser
@@ -20,7 +23,13 @@ xcuserdata
 *.xcuserstate
 .DS_Store
 
-WalletCoreCommon.xcframework/
+# Fastlane artifacts
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output
+fastlane/README.md
+fastlane/build
+fastlane/metadata/review_information/phone_number.txt
 
 # Bundler
 .bundle

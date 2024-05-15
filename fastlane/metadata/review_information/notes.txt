@@ -1,0 +1,7 @@
+1. create password
+2. import account 1010010010101010010101001010101001010101001010100101010100101011
+3. enable safari extension
+4. open https://metamask.github.io/test-dapp/
+5. click "connect"
+6. select account
+7. try "personal sign" or "eth sign"

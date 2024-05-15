@@ -1,0 +1,24 @@
+lane :deliver_all do
+
+  update_fastlane
+  
+  platform :ios do
+    deliver(
+      metadata_path: "./fastlane/metadata",
+      screenshots_path: "./fastlane/screenshots/ios",
+      overwrite_screenshots: true,
+      platform: "ios",
+      run_precheck_before_submit: false,
+    )
+  end
+
+  platform :mac do
+    deliver(
+      metadata_path: "./fastlane/metadata",
+      screenshots_path: "./fastlane/screenshots/macos",
+      overwrite_screenshots: true, 
+      platform: "osx",
+      run_precheck_before_submit: false,
+    )
+  end
+end
