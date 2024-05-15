@@ -492,6 +492,371 @@
 		2CF255B5275A746000AE54B9 /* AccountsListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsListViewController.swift; sourceTree = "<group>"; };
 		2CF255B7275A748300AE54B9 /* ApproveTransactionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveTransactionViewController.swift; sourceTree = "<group>"; };
 		2CF255B9275A749300AE54B9 /* ApproveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveViewController.swift; sourceTree = "<group>"; };
+		2CF9642B2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF9642C2BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF9642D2BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF9642E2BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF9642F2BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF964302BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF964312BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF964322BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF964332BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF964342BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF964362BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF964372BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF964382BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF964392BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF9643A2BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF9643B2BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF9643C2BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF9643D2BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF9643E2BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF9643F2BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF964412BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF964422BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF964432BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF964442BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF964452BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF964462BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF964472BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF964482BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF964492BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF9644A2BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF9644C2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF9644D2BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF9644E2BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF9644F2BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF964502BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF964512BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF964522BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF964532BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF964542BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF964552BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF964572BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF964582BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF964592BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF9645A2BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF9645B2BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF9645C2BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF9645D2BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF9645E2BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF9645F2BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF964602BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF964622BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF964632BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF964642BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF964652BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF964662BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF964672BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF964682BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF964692BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF9646A2BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF9646B2BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF9646D2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF9646E2BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF9646F2BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF964702BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF964712BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF964722BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF964732BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF964742BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF964752BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF964762BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF964782BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF964792BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF9647A2BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF9647B2BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF9647C2BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF9647D2BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF9647E2BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF9647F2BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF964802BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF964812BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF964832BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF964842BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF964852BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF964862BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF964872BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF964882BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF964892BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF9648A2BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF9648B2BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF9648C2BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF9648E2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF9648F2BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF964902BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF964912BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF964922BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF964932BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF964942BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF964952BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF964962BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF964972BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF964992BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF9649A2BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF9649B2BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF9649C2BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF9649D2BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF9649E2BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF9649F2BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF964A02BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF964A12BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF964A22BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF964A42BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF964A52BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF964A62BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF964A72BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF964A82BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF964A92BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF964AA2BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF964AB2BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF964AC2BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF964AD2BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF964AF2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF964B02BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF964B12BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF964B22BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF964B32BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF964B42BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF964B52BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF964B62BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF964B72BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF964B82BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF964BA2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF964BB2BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF964BC2BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF964BD2BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF964BE2BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF964BF2BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF964C02BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF964C12BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF964C22BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF964C32BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF964C52BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF964C62BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF964C72BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF964C82BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF964C92BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF964CA2BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF964CB2BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF964CC2BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF964CD2BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF964CE2BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF964D02BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF964D12BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF964D22BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF964D32BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF964D42BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF964D52BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF964D62BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF964D72BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF964D82BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF964D92BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF964DB2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF964DC2BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF964DD2BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF964DE2BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF964DF2BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF964E02BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF964E12BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF964E22BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF964E32BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF964E42BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF964E62BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF964E72BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF964E82BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF964E92BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF964EA2BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF964EB2BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF964EC2BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF964ED2BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF964EE2BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF964EF2BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF964F12BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF964F22BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF964F32BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF964F42BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF964F52BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF964F62BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF964F72BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF964F82BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF964F92BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF964FA2BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF964FC2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF964FD2BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF964FE2BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF964FF2BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF965002BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF965012BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF965022BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF965032BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF965042BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF965052BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF965072BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF965082BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF965092BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF9650A2BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF9650B2BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF9650C2BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF9650D2BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF9650E2BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF9650F2BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF965102BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF965122BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF965132BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF965142BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF965152BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF965162BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF965172BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF965182BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF965192BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF9651A2BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF9651B2BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF9651D2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF9651E2BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF9651F2BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF965202BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF965212BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF965222BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF965232BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF965242BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF965252BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF965262BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF965282BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF965292BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF9652A2BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF9652B2BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF9652C2BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF9652D2BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF9652E2BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF9652F2BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF965302BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF965312BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF965332BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF965342BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF965352BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF965362BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF965372BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF965382BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF965392BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF9653A2BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF9653B2BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF9653C2BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF9653E2BF4D778001E9D1B /* demo_password.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = demo_password.txt; sourceTree = "<group>"; };
+		2CF9653F2BF4D778001E9D1B /* demo_user.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = demo_user.txt; sourceTree = "<group>"; };
+		2CF965402BF4D778001E9D1B /* email_address.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = email_address.txt; sourceTree = "<group>"; };
+		2CF965412BF4D778001E9D1B /* first_name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = first_name.txt; sourceTree = "<group>"; };
+		2CF965422BF4D778001E9D1B /* last_name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = last_name.txt; sourceTree = "<group>"; };
+		2CF965432BF4D778001E9D1B /* notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = notes.txt; sourceTree = "<group>"; };
+		2CF965442BF4D778001E9D1B /* phone_number.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = phone_number.txt; sourceTree = "<group>"; };
+		2CF965462BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF965472BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF965482BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF965492BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF9654A2BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF9654B2BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF9654C2BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF9654D2BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF9654E2BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF9654F2BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF965512BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF965522BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF965532BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF965542BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF965552BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF965562BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF965572BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF965582BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF965592BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF9655A2BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF9655C2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF9655D2BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF9655E2BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF9655F2BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF965602BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF965612BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF965622BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF965632BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF965642BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF965652BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF965672BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF965682BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF965692BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF9656A2BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF9656B2BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF9656C2BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF9656D2BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF9656E2BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF9656F2BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF965702BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF965722BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF965732BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF965742BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF965752BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF965762BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF965772BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF965782BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF965792BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF9657A2BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF9657B2BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF9657D2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF9657E2BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF9657F2BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF965802BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF965812BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF965822BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF965832BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF965842BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF965852BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF965862BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF965882BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF965892BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF9658A2BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF9658B2BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF9658C2BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF9658D2BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF9658E2BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF9658F2BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF965902BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF965912BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF965932BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF965942BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF965952BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF965962BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF965972BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF965982BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF965992BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF9659A2BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF9659B2BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF9659C2BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF9659E2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = apple_tv_privacy_policy.txt; sourceTree = "<group>"; };
+		2CF9659F2BF4D778001E9D1B /* description.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description.txt; sourceTree = "<group>"; };
+		2CF965A02BF4D778001E9D1B /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
+		2CF965A12BF4D778001E9D1B /* marketing_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = marketing_url.txt; sourceTree = "<group>"; };
+		2CF965A22BF4D778001E9D1B /* name.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = name.txt; sourceTree = "<group>"; };
+		2CF965A32BF4D778001E9D1B /* privacy_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = privacy_url.txt; sourceTree = "<group>"; };
+		2CF965A42BF4D778001E9D1B /* promotional_text.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = promotional_text.txt; sourceTree = "<group>"; };
+		2CF965A52BF4D778001E9D1B /* release_notes.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes.txt; sourceTree = "<group>"; };
+		2CF965A62BF4D778001E9D1B /* subtitle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle.txt; sourceTree = "<group>"; };
+		2CF965A72BF4D778001E9D1B /* support_url.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = support_url.txt; sourceTree = "<group>"; };
+		2CF965A92BF4D778001E9D1B /* copyright.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = copyright.txt; sourceTree = "<group>"; };
+		2CF965AA2BF4D778001E9D1B /* primary_category.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = primary_category.txt; sourceTree = "<group>"; };
+		2CF965AB2BF4D778001E9D1B /* primary_first_sub_category.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = primary_first_sub_category.txt; sourceTree = "<group>"; };
+		2CF965AC2BF4D778001E9D1B /* primary_second_sub_category.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = primary_second_sub_category.txt; sourceTree = "<group>"; };
+		2CF965AD2BF4D778001E9D1B /* secondary_category.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = secondary_category.txt; sourceTree = "<group>"; };
+		2CF965AE2BF4D778001E9D1B /* secondary_first_sub_category.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = secondary_first_sub_category.txt; sourceTree = "<group>"; };
+		2CF965AF2BF4D778001E9D1B /* secondary_second_sub_category.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = secondary_second_sub_category.txt; sourceTree = "<group>"; };
+		2CF965B12BF4D778001E9D1B /* 0_APP_IPAD_PRO_3GEN_129_0.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 0_APP_IPAD_PRO_3GEN_129_0.png; sourceTree = "<group>"; };
+		2CF965B22BF4D778001E9D1B /* 0_APP_IPAD_PRO_129_0.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 0_APP_IPAD_PRO_129_0.png; sourceTree = "<group>"; };
+		2CF965B32BF4D778001E9D1B /* 0_APP_IPHONE_55_0.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 0_APP_IPHONE_55_0.png; sourceTree = "<group>"; };
+		2CF965B42BF4D778001E9D1B /* 0_APP_IPHONE_67_0.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 0_APP_IPHONE_67_0.png; sourceTree = "<group>"; };
+		2CF965B52BF4D778001E9D1B /* 1_APP_IPHONE_55_1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 1_APP_IPHONE_55_1.png; sourceTree = "<group>"; };
+		2CF965B62BF4D778001E9D1B /* 1_APP_IPHONE_67_1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 1_APP_IPHONE_67_1.png; sourceTree = "<group>"; };
+		2CF965B72BF4D778001E9D1B /* 2_APP_IPHONE_55_2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 2_APP_IPHONE_55_2.png; sourceTree = "<group>"; };
+		2CF965B82BF4D778001E9D1B /* 2_APP_IPHONE_67_2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 2_APP_IPHONE_67_2.png; sourceTree = "<group>"; };
+		2CF965BB2BF4D778001E9D1B /* 0_APP_DESKTOP_0.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 0_APP_DESKTOP_0.png; sourceTree = "<group>"; };
+		2CF965BF2BF4D778001E9D1B /* Appfile */ = {isa = PBXFileReference; lastKnownFileType = text; path = Appfile; sourceTree = "<group>"; };
+		2CF965C02BF4D778001E9D1B /* Fastfile */ = {isa = PBXFileReference; lastKnownFileType = text; path = Fastfile; sourceTree = "<group>"; };
 		2CFAE56928BE6292001D0799 /* NSImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSImage.swift; sourceTree = "<group>"; };
 		2CFDDF4D2765417D00F89019 /* ios_specific_content.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = ios_specific_content.js; sourceTree = "<group>"; };
 		4C3C9F0F204C74B31E1B84B8 /* Pods-Wallet iOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Wallet iOS.release.xcconfig"; path = "Target Support Files/Pods-Wallet iOS/Pods-Wallet iOS.release.xcconfig"; sourceTree = "<group>"; };
@@ -630,6 +995,7 @@
 				2CE02C7B2BAA0F6700381D70 /* Tests macOS */,
 				2CBB9FA32AF7B5970047B0CD /* ci_scripts */,
 				2C7A8CE02B7CD98A00683E15 /* Mint iOS */,
+				2CF965C42BF4D778001E9D1B /* fastlane */,
 				2C622BC22BF3C52F0003B932 /* Translate */,
 				2C19953D2674C4B900A8E370 /* Products */,
 				AA97AE0C21DC8732F06C98F1 /* Pods */,
@@ -1105,6 +1471,706 @@
 				2C8E88A1275FA596003EB8DB /* ImportViewController.swift */,
 			);
 			path = Screens;
+			sourceTree = "<group>";
+		};
+		2CF964352BF4D778001E9D1B /* ar-SA */ = {
+			isa = PBXGroup;
+			children = (
+				2CF9642B2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF9642C2BF4D778001E9D1B /* description.txt */,
+				2CF9642D2BF4D778001E9D1B /* keywords.txt */,
+				2CF9642E2BF4D778001E9D1B /* marketing_url.txt */,
+				2CF9642F2BF4D778001E9D1B /* name.txt */,
+				2CF964302BF4D778001E9D1B /* privacy_url.txt */,
+				2CF964312BF4D778001E9D1B /* promotional_text.txt */,
+				2CF964322BF4D778001E9D1B /* release_notes.txt */,
+				2CF964332BF4D778001E9D1B /* subtitle.txt */,
+				2CF964342BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = "ar-SA";
+			sourceTree = "<group>";
+		};
+		2CF964402BF4D778001E9D1B /* ca */ = {
+			isa = PBXGroup;
+			children = (
+				2CF964362BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF964372BF4D778001E9D1B /* description.txt */,
+				2CF964382BF4D778001E9D1B /* keywords.txt */,
+				2CF964392BF4D778001E9D1B /* marketing_url.txt */,
+				2CF9643A2BF4D778001E9D1B /* name.txt */,
+				2CF9643B2BF4D778001E9D1B /* privacy_url.txt */,
+				2CF9643C2BF4D778001E9D1B /* promotional_text.txt */,
+				2CF9643D2BF4D778001E9D1B /* release_notes.txt */,
+				2CF9643E2BF4D778001E9D1B /* subtitle.txt */,
+				2CF9643F2BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = ca;
+			sourceTree = "<group>";
+		};
+		2CF9644B2BF4D778001E9D1B /* cs */ = {
+			isa = PBXGroup;
+			children = (
+				2CF964412BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF964422BF4D778001E9D1B /* description.txt */,
+				2CF964432BF4D778001E9D1B /* keywords.txt */,
+				2CF964442BF4D778001E9D1B /* marketing_url.txt */,
+				2CF964452BF4D778001E9D1B /* name.txt */,
+				2CF964462BF4D778001E9D1B /* privacy_url.txt */,
+				2CF964472BF4D778001E9D1B /* promotional_text.txt */,
+				2CF964482BF4D778001E9D1B /* release_notes.txt */,
+				2CF964492BF4D778001E9D1B /* subtitle.txt */,
+				2CF9644A2BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = cs;
+			sourceTree = "<group>";
+		};
+		2CF964562BF4D778001E9D1B /* da */ = {
+			isa = PBXGroup;
+			children = (
+				2CF9644C2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF9644D2BF4D778001E9D1B /* description.txt */,
+				2CF9644E2BF4D778001E9D1B /* keywords.txt */,
+				2CF9644F2BF4D778001E9D1B /* marketing_url.txt */,
+				2CF964502BF4D778001E9D1B /* name.txt */,
+				2CF964512BF4D778001E9D1B /* privacy_url.txt */,
+				2CF964522BF4D778001E9D1B /* promotional_text.txt */,
+				2CF964532BF4D778001E9D1B /* release_notes.txt */,
+				2CF964542BF4D778001E9D1B /* subtitle.txt */,
+				2CF964552BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = da;
+			sourceTree = "<group>";
+		};
+		2CF964612BF4D778001E9D1B /* de-DE */ = {
+			isa = PBXGroup;
+			children = (
+				2CF964572BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF964582BF4D778001E9D1B /* description.txt */,
+				2CF964592BF4D778001E9D1B /* keywords.txt */,
+				2CF9645A2BF4D778001E9D1B /* marketing_url.txt */,
+				2CF9645B2BF4D778001E9D1B /* name.txt */,
+				2CF9645C2BF4D778001E9D1B /* privacy_url.txt */,
+				2CF9645D2BF4D778001E9D1B /* promotional_text.txt */,
+				2CF9645E2BF4D778001E9D1B /* release_notes.txt */,
+				2CF9645F2BF4D778001E9D1B /* subtitle.txt */,
+				2CF964602BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = "de-DE";
+			sourceTree = "<group>";
+		};
+		2CF9646C2BF4D778001E9D1B /* el */ = {
+			isa = PBXGroup;
+			children = (
+				2CF964622BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF964632BF4D778001E9D1B /* description.txt */,
+				2CF964642BF4D778001E9D1B /* keywords.txt */,
+				2CF964652BF4D778001E9D1B /* marketing_url.txt */,
+				2CF964662BF4D778001E9D1B /* name.txt */,
+				2CF964672BF4D778001E9D1B /* privacy_url.txt */,
+				2CF964682BF4D778001E9D1B /* promotional_text.txt */,
+				2CF964692BF4D778001E9D1B /* release_notes.txt */,
+				2CF9646A2BF4D778001E9D1B /* subtitle.txt */,
+				2CF9646B2BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = el;
+			sourceTree = "<group>";
+		};
+		2CF964772BF4D778001E9D1B /* en-US */ = {
+			isa = PBXGroup;
+			children = (
+				2CF9646D2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF9646E2BF4D778001E9D1B /* description.txt */,
+				2CF9646F2BF4D778001E9D1B /* keywords.txt */,
+				2CF964702BF4D778001E9D1B /* marketing_url.txt */,
+				2CF964712BF4D778001E9D1B /* name.txt */,
+				2CF964722BF4D778001E9D1B /* privacy_url.txt */,
+				2CF964732BF4D778001E9D1B /* promotional_text.txt */,
+				2CF964742BF4D778001E9D1B /* release_notes.txt */,
+				2CF964752BF4D778001E9D1B /* subtitle.txt */,
+				2CF964762BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = "en-US";
+			sourceTree = "<group>";
+		};
+		2CF964822BF4D778001E9D1B /* es-ES */ = {
+			isa = PBXGroup;
+			children = (
+				2CF964782BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF964792BF4D778001E9D1B /* description.txt */,
+				2CF9647A2BF4D778001E9D1B /* keywords.txt */,
+				2CF9647B2BF4D778001E9D1B /* marketing_url.txt */,
+				2CF9647C2BF4D778001E9D1B /* name.txt */,
+				2CF9647D2BF4D778001E9D1B /* privacy_url.txt */,
+				2CF9647E2BF4D778001E9D1B /* promotional_text.txt */,
+				2CF9647F2BF4D778001E9D1B /* release_notes.txt */,
+				2CF964802BF4D778001E9D1B /* subtitle.txt */,
+				2CF964812BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = "es-ES";
+			sourceTree = "<group>";
+		};
+		2CF9648D2BF4D778001E9D1B /* es-MX */ = {
+			isa = PBXGroup;
+			children = (
+				2CF964832BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF964842BF4D778001E9D1B /* description.txt */,
+				2CF964852BF4D778001E9D1B /* keywords.txt */,
+				2CF964862BF4D778001E9D1B /* marketing_url.txt */,
+				2CF964872BF4D778001E9D1B /* name.txt */,
+				2CF964882BF4D778001E9D1B /* privacy_url.txt */,
+				2CF964892BF4D778001E9D1B /* promotional_text.txt */,
+				2CF9648A2BF4D778001E9D1B /* release_notes.txt */,
+				2CF9648B2BF4D778001E9D1B /* subtitle.txt */,
+				2CF9648C2BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = "es-MX";
+			sourceTree = "<group>";
+		};
+		2CF964982BF4D778001E9D1B /* fi */ = {
+			isa = PBXGroup;
+			children = (
+				2CF9648E2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF9648F2BF4D778001E9D1B /* description.txt */,
+				2CF964902BF4D778001E9D1B /* keywords.txt */,
+				2CF964912BF4D778001E9D1B /* marketing_url.txt */,
+				2CF964922BF4D778001E9D1B /* name.txt */,
+				2CF964932BF4D778001E9D1B /* privacy_url.txt */,
+				2CF964942BF4D778001E9D1B /* promotional_text.txt */,
+				2CF964952BF4D778001E9D1B /* release_notes.txt */,
+				2CF964962BF4D778001E9D1B /* subtitle.txt */,
+				2CF964972BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = fi;
+			sourceTree = "<group>";
+		};
+		2CF964A32BF4D778001E9D1B /* fr-FR */ = {
+			isa = PBXGroup;
+			children = (
+				2CF964992BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF9649A2BF4D778001E9D1B /* description.txt */,
+				2CF9649B2BF4D778001E9D1B /* keywords.txt */,
+				2CF9649C2BF4D778001E9D1B /* marketing_url.txt */,
+				2CF9649D2BF4D778001E9D1B /* name.txt */,
+				2CF9649E2BF4D778001E9D1B /* privacy_url.txt */,
+				2CF9649F2BF4D778001E9D1B /* promotional_text.txt */,
+				2CF964A02BF4D778001E9D1B /* release_notes.txt */,
+				2CF964A12BF4D778001E9D1B /* subtitle.txt */,
+				2CF964A22BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = "fr-FR";
+			sourceTree = "<group>";
+		};
+		2CF964AE2BF4D778001E9D1B /* he */ = {
+			isa = PBXGroup;
+			children = (
+				2CF964A42BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF964A52BF4D778001E9D1B /* description.txt */,
+				2CF964A62BF4D778001E9D1B /* keywords.txt */,
+				2CF964A72BF4D778001E9D1B /* marketing_url.txt */,
+				2CF964A82BF4D778001E9D1B /* name.txt */,
+				2CF964A92BF4D778001E9D1B /* privacy_url.txt */,
+				2CF964AA2BF4D778001E9D1B /* promotional_text.txt */,
+				2CF964AB2BF4D778001E9D1B /* release_notes.txt */,
+				2CF964AC2BF4D778001E9D1B /* subtitle.txt */,
+				2CF964AD2BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = he;
+			sourceTree = "<group>";
+		};
+		2CF964B92BF4D778001E9D1B /* hi */ = {
+			isa = PBXGroup;
+			children = (
+				2CF964AF2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF964B02BF4D778001E9D1B /* description.txt */,
+				2CF964B12BF4D778001E9D1B /* keywords.txt */,
+				2CF964B22BF4D778001E9D1B /* marketing_url.txt */,
+				2CF964B32BF4D778001E9D1B /* name.txt */,
+				2CF964B42BF4D778001E9D1B /* privacy_url.txt */,
+				2CF964B52BF4D778001E9D1B /* promotional_text.txt */,
+				2CF964B62BF4D778001E9D1B /* release_notes.txt */,
+				2CF964B72BF4D778001E9D1B /* subtitle.txt */,
+				2CF964B82BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = hi;
+			sourceTree = "<group>";
+		};
+		2CF964C42BF4D778001E9D1B /* hr */ = {
+			isa = PBXGroup;
+			children = (
+				2CF964BA2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF964BB2BF4D778001E9D1B /* description.txt */,
+				2CF964BC2BF4D778001E9D1B /* keywords.txt */,
+				2CF964BD2BF4D778001E9D1B /* marketing_url.txt */,
+				2CF964BE2BF4D778001E9D1B /* name.txt */,
+				2CF964BF2BF4D778001E9D1B /* privacy_url.txt */,
+				2CF964C02BF4D778001E9D1B /* promotional_text.txt */,
+				2CF964C12BF4D778001E9D1B /* release_notes.txt */,
+				2CF964C22BF4D778001E9D1B /* subtitle.txt */,
+				2CF964C32BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = hr;
+			sourceTree = "<group>";
+		};
+		2CF964CF2BF4D778001E9D1B /* hu */ = {
+			isa = PBXGroup;
+			children = (
+				2CF964C52BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF964C62BF4D778001E9D1B /* description.txt */,
+				2CF964C72BF4D778001E9D1B /* keywords.txt */,
+				2CF964C82BF4D778001E9D1B /* marketing_url.txt */,
+				2CF964C92BF4D778001E9D1B /* name.txt */,
+				2CF964CA2BF4D778001E9D1B /* privacy_url.txt */,
+				2CF964CB2BF4D778001E9D1B /* promotional_text.txt */,
+				2CF964CC2BF4D778001E9D1B /* release_notes.txt */,
+				2CF964CD2BF4D778001E9D1B /* subtitle.txt */,
+				2CF964CE2BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = hu;
+			sourceTree = "<group>";
+		};
+		2CF964DA2BF4D778001E9D1B /* id */ = {
+			isa = PBXGroup;
+			children = (
+				2CF964D02BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF964D12BF4D778001E9D1B /* description.txt */,
+				2CF964D22BF4D778001E9D1B /* keywords.txt */,
+				2CF964D32BF4D778001E9D1B /* marketing_url.txt */,
+				2CF964D42BF4D778001E9D1B /* name.txt */,
+				2CF964D52BF4D778001E9D1B /* privacy_url.txt */,
+				2CF964D62BF4D778001E9D1B /* promotional_text.txt */,
+				2CF964D72BF4D778001E9D1B /* release_notes.txt */,
+				2CF964D82BF4D778001E9D1B /* subtitle.txt */,
+				2CF964D92BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = id;
+			sourceTree = "<group>";
+		};
+		2CF964E52BF4D778001E9D1B /* it */ = {
+			isa = PBXGroup;
+			children = (
+				2CF964DB2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF964DC2BF4D778001E9D1B /* description.txt */,
+				2CF964DD2BF4D778001E9D1B /* keywords.txt */,
+				2CF964DE2BF4D778001E9D1B /* marketing_url.txt */,
+				2CF964DF2BF4D778001E9D1B /* name.txt */,
+				2CF964E02BF4D778001E9D1B /* privacy_url.txt */,
+				2CF964E12BF4D778001E9D1B /* promotional_text.txt */,
+				2CF964E22BF4D778001E9D1B /* release_notes.txt */,
+				2CF964E32BF4D778001E9D1B /* subtitle.txt */,
+				2CF964E42BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = it;
+			sourceTree = "<group>";
+		};
+		2CF964F02BF4D778001E9D1B /* ja */ = {
+			isa = PBXGroup;
+			children = (
+				2CF964E62BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF964E72BF4D778001E9D1B /* description.txt */,
+				2CF964E82BF4D778001E9D1B /* keywords.txt */,
+				2CF964E92BF4D778001E9D1B /* marketing_url.txt */,
+				2CF964EA2BF4D778001E9D1B /* name.txt */,
+				2CF964EB2BF4D778001E9D1B /* privacy_url.txt */,
+				2CF964EC2BF4D778001E9D1B /* promotional_text.txt */,
+				2CF964ED2BF4D778001E9D1B /* release_notes.txt */,
+				2CF964EE2BF4D778001E9D1B /* subtitle.txt */,
+				2CF964EF2BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = ja;
+			sourceTree = "<group>";
+		};
+		2CF964FB2BF4D778001E9D1B /* ko */ = {
+			isa = PBXGroup;
+			children = (
+				2CF964F12BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF964F22BF4D778001E9D1B /* description.txt */,
+				2CF964F32BF4D778001E9D1B /* keywords.txt */,
+				2CF964F42BF4D778001E9D1B /* marketing_url.txt */,
+				2CF964F52BF4D778001E9D1B /* name.txt */,
+				2CF964F62BF4D778001E9D1B /* privacy_url.txt */,
+				2CF964F72BF4D778001E9D1B /* promotional_text.txt */,
+				2CF964F82BF4D778001E9D1B /* release_notes.txt */,
+				2CF964F92BF4D778001E9D1B /* subtitle.txt */,
+				2CF964FA2BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = ko;
+			sourceTree = "<group>";
+		};
+		2CF965062BF4D778001E9D1B /* ms */ = {
+			isa = PBXGroup;
+			children = (
+				2CF964FC2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF964FD2BF4D778001E9D1B /* description.txt */,
+				2CF964FE2BF4D778001E9D1B /* keywords.txt */,
+				2CF964FF2BF4D778001E9D1B /* marketing_url.txt */,
+				2CF965002BF4D778001E9D1B /* name.txt */,
+				2CF965012BF4D778001E9D1B /* privacy_url.txt */,
+				2CF965022BF4D778001E9D1B /* promotional_text.txt */,
+				2CF965032BF4D778001E9D1B /* release_notes.txt */,
+				2CF965042BF4D778001E9D1B /* subtitle.txt */,
+				2CF965052BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = ms;
+			sourceTree = "<group>";
+		};
+		2CF965112BF4D778001E9D1B /* nl-NL */ = {
+			isa = PBXGroup;
+			children = (
+				2CF965072BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF965082BF4D778001E9D1B /* description.txt */,
+				2CF965092BF4D778001E9D1B /* keywords.txt */,
+				2CF9650A2BF4D778001E9D1B /* marketing_url.txt */,
+				2CF9650B2BF4D778001E9D1B /* name.txt */,
+				2CF9650C2BF4D778001E9D1B /* privacy_url.txt */,
+				2CF9650D2BF4D778001E9D1B /* promotional_text.txt */,
+				2CF9650E2BF4D778001E9D1B /* release_notes.txt */,
+				2CF9650F2BF4D778001E9D1B /* subtitle.txt */,
+				2CF965102BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = "nl-NL";
+			sourceTree = "<group>";
+		};
+		2CF9651C2BF4D778001E9D1B /* no */ = {
+			isa = PBXGroup;
+			children = (
+				2CF965122BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF965132BF4D778001E9D1B /* description.txt */,
+				2CF965142BF4D778001E9D1B /* keywords.txt */,
+				2CF965152BF4D778001E9D1B /* marketing_url.txt */,
+				2CF965162BF4D778001E9D1B /* name.txt */,
+				2CF965172BF4D778001E9D1B /* privacy_url.txt */,
+				2CF965182BF4D778001E9D1B /* promotional_text.txt */,
+				2CF965192BF4D778001E9D1B /* release_notes.txt */,
+				2CF9651A2BF4D778001E9D1B /* subtitle.txt */,
+				2CF9651B2BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = no;
+			sourceTree = "<group>";
+		};
+		2CF965272BF4D778001E9D1B /* pl */ = {
+			isa = PBXGroup;
+			children = (
+				2CF9651D2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF9651E2BF4D778001E9D1B /* description.txt */,
+				2CF9651F2BF4D778001E9D1B /* keywords.txt */,
+				2CF965202BF4D778001E9D1B /* marketing_url.txt */,
+				2CF965212BF4D778001E9D1B /* name.txt */,
+				2CF965222BF4D778001E9D1B /* privacy_url.txt */,
+				2CF965232BF4D778001E9D1B /* promotional_text.txt */,
+				2CF965242BF4D778001E9D1B /* release_notes.txt */,
+				2CF965252BF4D778001E9D1B /* subtitle.txt */,
+				2CF965262BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = pl;
+			sourceTree = "<group>";
+		};
+		2CF965322BF4D778001E9D1B /* pt-BR */ = {
+			isa = PBXGroup;
+			children = (
+				2CF965282BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF965292BF4D778001E9D1B /* description.txt */,
+				2CF9652A2BF4D778001E9D1B /* keywords.txt */,
+				2CF9652B2BF4D778001E9D1B /* marketing_url.txt */,
+				2CF9652C2BF4D778001E9D1B /* name.txt */,
+				2CF9652D2BF4D778001E9D1B /* privacy_url.txt */,
+				2CF9652E2BF4D778001E9D1B /* promotional_text.txt */,
+				2CF9652F2BF4D778001E9D1B /* release_notes.txt */,
+				2CF965302BF4D778001E9D1B /* subtitle.txt */,
+				2CF965312BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = "pt-BR";
+			sourceTree = "<group>";
+		};
+		2CF9653D2BF4D778001E9D1B /* pt-PT */ = {
+			isa = PBXGroup;
+			children = (
+				2CF965332BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF965342BF4D778001E9D1B /* description.txt */,
+				2CF965352BF4D778001E9D1B /* keywords.txt */,
+				2CF965362BF4D778001E9D1B /* marketing_url.txt */,
+				2CF965372BF4D778001E9D1B /* name.txt */,
+				2CF965382BF4D778001E9D1B /* privacy_url.txt */,
+				2CF965392BF4D778001E9D1B /* promotional_text.txt */,
+				2CF9653A2BF4D778001E9D1B /* release_notes.txt */,
+				2CF9653B2BF4D778001E9D1B /* subtitle.txt */,
+				2CF9653C2BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = "pt-PT";
+			sourceTree = "<group>";
+		};
+		2CF965452BF4D778001E9D1B /* review_information */ = {
+			isa = PBXGroup;
+			children = (
+				2CF9653E2BF4D778001E9D1B /* demo_password.txt */,
+				2CF9653F2BF4D778001E9D1B /* demo_user.txt */,
+				2CF965402BF4D778001E9D1B /* email_address.txt */,
+				2CF965412BF4D778001E9D1B /* first_name.txt */,
+				2CF965422BF4D778001E9D1B /* last_name.txt */,
+				2CF965432BF4D778001E9D1B /* notes.txt */,
+				2CF965442BF4D778001E9D1B /* phone_number.txt */,
+			);
+			path = review_information;
+			sourceTree = "<group>";
+		};
+		2CF965502BF4D778001E9D1B /* ro */ = {
+			isa = PBXGroup;
+			children = (
+				2CF965462BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF965472BF4D778001E9D1B /* description.txt */,
+				2CF965482BF4D778001E9D1B /* keywords.txt */,
+				2CF965492BF4D778001E9D1B /* marketing_url.txt */,
+				2CF9654A2BF4D778001E9D1B /* name.txt */,
+				2CF9654B2BF4D778001E9D1B /* privacy_url.txt */,
+				2CF9654C2BF4D778001E9D1B /* promotional_text.txt */,
+				2CF9654D2BF4D778001E9D1B /* release_notes.txt */,
+				2CF9654E2BF4D778001E9D1B /* subtitle.txt */,
+				2CF9654F2BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = ro;
+			sourceTree = "<group>";
+		};
+		2CF9655B2BF4D778001E9D1B /* ru */ = {
+			isa = PBXGroup;
+			children = (
+				2CF965512BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF965522BF4D778001E9D1B /* description.txt */,
+				2CF965532BF4D778001E9D1B /* keywords.txt */,
+				2CF965542BF4D778001E9D1B /* marketing_url.txt */,
+				2CF965552BF4D778001E9D1B /* name.txt */,
+				2CF965562BF4D778001E9D1B /* privacy_url.txt */,
+				2CF965572BF4D778001E9D1B /* promotional_text.txt */,
+				2CF965582BF4D778001E9D1B /* release_notes.txt */,
+				2CF965592BF4D778001E9D1B /* subtitle.txt */,
+				2CF9655A2BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = ru;
+			sourceTree = "<group>";
+		};
+		2CF965662BF4D778001E9D1B /* sk */ = {
+			isa = PBXGroup;
+			children = (
+				2CF9655C2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF9655D2BF4D778001E9D1B /* description.txt */,
+				2CF9655E2BF4D778001E9D1B /* keywords.txt */,
+				2CF9655F2BF4D778001E9D1B /* marketing_url.txt */,
+				2CF965602BF4D778001E9D1B /* name.txt */,
+				2CF965612BF4D778001E9D1B /* privacy_url.txt */,
+				2CF965622BF4D778001E9D1B /* promotional_text.txt */,
+				2CF965632BF4D778001E9D1B /* release_notes.txt */,
+				2CF965642BF4D778001E9D1B /* subtitle.txt */,
+				2CF965652BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = sk;
+			sourceTree = "<group>";
+		};
+		2CF965712BF4D778001E9D1B /* sv */ = {
+			isa = PBXGroup;
+			children = (
+				2CF965672BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF965682BF4D778001E9D1B /* description.txt */,
+				2CF965692BF4D778001E9D1B /* keywords.txt */,
+				2CF9656A2BF4D778001E9D1B /* marketing_url.txt */,
+				2CF9656B2BF4D778001E9D1B /* name.txt */,
+				2CF9656C2BF4D778001E9D1B /* privacy_url.txt */,
+				2CF9656D2BF4D778001E9D1B /* promotional_text.txt */,
+				2CF9656E2BF4D778001E9D1B /* release_notes.txt */,
+				2CF9656F2BF4D778001E9D1B /* subtitle.txt */,
+				2CF965702BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = sv;
+			sourceTree = "<group>";
+		};
+		2CF9657C2BF4D778001E9D1B /* th */ = {
+			isa = PBXGroup;
+			children = (
+				2CF965722BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF965732BF4D778001E9D1B /* description.txt */,
+				2CF965742BF4D778001E9D1B /* keywords.txt */,
+				2CF965752BF4D778001E9D1B /* marketing_url.txt */,
+				2CF965762BF4D778001E9D1B /* name.txt */,
+				2CF965772BF4D778001E9D1B /* privacy_url.txt */,
+				2CF965782BF4D778001E9D1B /* promotional_text.txt */,
+				2CF965792BF4D778001E9D1B /* release_notes.txt */,
+				2CF9657A2BF4D778001E9D1B /* subtitle.txt */,
+				2CF9657B2BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = th;
+			sourceTree = "<group>";
+		};
+		2CF965872BF4D778001E9D1B /* tr */ = {
+			isa = PBXGroup;
+			children = (
+				2CF9657D2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF9657E2BF4D778001E9D1B /* description.txt */,
+				2CF9657F2BF4D778001E9D1B /* keywords.txt */,
+				2CF965802BF4D778001E9D1B /* marketing_url.txt */,
+				2CF965812BF4D778001E9D1B /* name.txt */,
+				2CF965822BF4D778001E9D1B /* privacy_url.txt */,
+				2CF965832BF4D778001E9D1B /* promotional_text.txt */,
+				2CF965842BF4D778001E9D1B /* release_notes.txt */,
+				2CF965852BF4D778001E9D1B /* subtitle.txt */,
+				2CF965862BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = tr;
+			sourceTree = "<group>";
+		};
+		2CF965922BF4D778001E9D1B /* uk */ = {
+			isa = PBXGroup;
+			children = (
+				2CF965882BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF965892BF4D778001E9D1B /* description.txt */,
+				2CF9658A2BF4D778001E9D1B /* keywords.txt */,
+				2CF9658B2BF4D778001E9D1B /* marketing_url.txt */,
+				2CF9658C2BF4D778001E9D1B /* name.txt */,
+				2CF9658D2BF4D778001E9D1B /* privacy_url.txt */,
+				2CF9658E2BF4D778001E9D1B /* promotional_text.txt */,
+				2CF9658F2BF4D778001E9D1B /* release_notes.txt */,
+				2CF965902BF4D778001E9D1B /* subtitle.txt */,
+				2CF965912BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = uk;
+			sourceTree = "<group>";
+		};
+		2CF9659D2BF4D778001E9D1B /* vi */ = {
+			isa = PBXGroup;
+			children = (
+				2CF965932BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF965942BF4D778001E9D1B /* description.txt */,
+				2CF965952BF4D778001E9D1B /* keywords.txt */,
+				2CF965962BF4D778001E9D1B /* marketing_url.txt */,
+				2CF965972BF4D778001E9D1B /* name.txt */,
+				2CF965982BF4D778001E9D1B /* privacy_url.txt */,
+				2CF965992BF4D778001E9D1B /* promotional_text.txt */,
+				2CF9659A2BF4D778001E9D1B /* release_notes.txt */,
+				2CF9659B2BF4D778001E9D1B /* subtitle.txt */,
+				2CF9659C2BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = vi;
+			sourceTree = "<group>";
+		};
+		2CF965A82BF4D778001E9D1B /* zh-Hans */ = {
+			isa = PBXGroup;
+			children = (
+				2CF9659E2BF4D778001E9D1B /* apple_tv_privacy_policy.txt */,
+				2CF9659F2BF4D778001E9D1B /* description.txt */,
+				2CF965A02BF4D778001E9D1B /* keywords.txt */,
+				2CF965A12BF4D778001E9D1B /* marketing_url.txt */,
+				2CF965A22BF4D778001E9D1B /* name.txt */,
+				2CF965A32BF4D778001E9D1B /* privacy_url.txt */,
+				2CF965A42BF4D778001E9D1B /* promotional_text.txt */,
+				2CF965A52BF4D778001E9D1B /* release_notes.txt */,
+				2CF965A62BF4D778001E9D1B /* subtitle.txt */,
+				2CF965A72BF4D778001E9D1B /* support_url.txt */,
+			);
+			path = "zh-Hans";
+			sourceTree = "<group>";
+		};
+		2CF965B02BF4D778001E9D1B /* metadata */ = {
+			isa = PBXGroup;
+			children = (
+				2CF964352BF4D778001E9D1B /* ar-SA */,
+				2CF964402BF4D778001E9D1B /* ca */,
+				2CF9644B2BF4D778001E9D1B /* cs */,
+				2CF964562BF4D778001E9D1B /* da */,
+				2CF964612BF4D778001E9D1B /* de-DE */,
+				2CF9646C2BF4D778001E9D1B /* el */,
+				2CF964772BF4D778001E9D1B /* en-US */,
+				2CF964822BF4D778001E9D1B /* es-ES */,
+				2CF9648D2BF4D778001E9D1B /* es-MX */,
+				2CF964982BF4D778001E9D1B /* fi */,
+				2CF964A32BF4D778001E9D1B /* fr-FR */,
+				2CF964AE2BF4D778001E9D1B /* he */,
+				2CF964B92BF4D778001E9D1B /* hi */,
+				2CF964C42BF4D778001E9D1B /* hr */,
+				2CF964CF2BF4D778001E9D1B /* hu */,
+				2CF964DA2BF4D778001E9D1B /* id */,
+				2CF964E52BF4D778001E9D1B /* it */,
+				2CF964F02BF4D778001E9D1B /* ja */,
+				2CF964FB2BF4D778001E9D1B /* ko */,
+				2CF965062BF4D778001E9D1B /* ms */,
+				2CF965112BF4D778001E9D1B /* nl-NL */,
+				2CF9651C2BF4D778001E9D1B /* no */,
+				2CF965272BF4D778001E9D1B /* pl */,
+				2CF965322BF4D778001E9D1B /* pt-BR */,
+				2CF9653D2BF4D778001E9D1B /* pt-PT */,
+				2CF965452BF4D778001E9D1B /* review_information */,
+				2CF965502BF4D778001E9D1B /* ro */,
+				2CF9655B2BF4D778001E9D1B /* ru */,
+				2CF965662BF4D778001E9D1B /* sk */,
+				2CF965712BF4D778001E9D1B /* sv */,
+				2CF9657C2BF4D778001E9D1B /* th */,
+				2CF965872BF4D778001E9D1B /* tr */,
+				2CF965922BF4D778001E9D1B /* uk */,
+				2CF9659D2BF4D778001E9D1B /* vi */,
+				2CF965A82BF4D778001E9D1B /* zh-Hans */,
+				2CF965A92BF4D778001E9D1B /* copyright.txt */,
+				2CF965AA2BF4D778001E9D1B /* primary_category.txt */,
+				2CF965AB2BF4D778001E9D1B /* primary_first_sub_category.txt */,
+				2CF965AC2BF4D778001E9D1B /* primary_second_sub_category.txt */,
+				2CF965AD2BF4D778001E9D1B /* secondary_category.txt */,
+				2CF965AE2BF4D778001E9D1B /* secondary_first_sub_category.txt */,
+				2CF965AF2BF4D778001E9D1B /* secondary_second_sub_category.txt */,
+			);
+			path = metadata;
+			sourceTree = "<group>";
+		};
+		2CF965B92BF4D778001E9D1B /* en-US */ = {
+			isa = PBXGroup;
+			children = (
+				2CF965B12BF4D778001E9D1B /* 0_APP_IPAD_PRO_3GEN_129_0.png */,
+				2CF965B22BF4D778001E9D1B /* 0_APP_IPAD_PRO_129_0.png */,
+				2CF965B32BF4D778001E9D1B /* 0_APP_IPHONE_55_0.png */,
+				2CF965B42BF4D778001E9D1B /* 0_APP_IPHONE_67_0.png */,
+				2CF965B52BF4D778001E9D1B /* 1_APP_IPHONE_55_1.png */,
+				2CF965B62BF4D778001E9D1B /* 1_APP_IPHONE_67_1.png */,
+				2CF965B72BF4D778001E9D1B /* 2_APP_IPHONE_55_2.png */,
+				2CF965B82BF4D778001E9D1B /* 2_APP_IPHONE_67_2.png */,
+			);
+			path = "en-US";
+			sourceTree = "<group>";
+		};
+		2CF965BA2BF4D778001E9D1B /* ios */ = {
+			isa = PBXGroup;
+			children = (
+				2CF965B92BF4D778001E9D1B /* en-US */,
+			);
+			path = ios;
+			sourceTree = "<group>";
+		};
+		2CF965BC2BF4D778001E9D1B /* en-US */ = {
+			isa = PBXGroup;
+			children = (
+				2CF965BB2BF4D778001E9D1B /* 0_APP_DESKTOP_0.png */,
+			);
+			path = "en-US";
+			sourceTree = "<group>";
+		};
+		2CF965BD2BF4D778001E9D1B /* macos */ = {
+			isa = PBXGroup;
+			children = (
+				2CF965BC2BF4D778001E9D1B /* en-US */,
+			);
+			path = macos;
+			sourceTree = "<group>";
+		};
+		2CF965BE2BF4D778001E9D1B /* screenshots */ = {
+			isa = PBXGroup;
+			children = (
+				2CF965BA2BF4D778001E9D1B /* ios */,
+				2CF965BD2BF4D778001E9D1B /* macos */,
+			);
+			path = screenshots;
+			sourceTree = "<group>";
+		};
+		2CF965C42BF4D778001E9D1B /* fastlane */ = {
+			isa = PBXGroup;
+			children = (
+				2CF965B02BF4D778001E9D1B /* metadata */,
+				2CF965BE2BF4D778001E9D1B /* screenshots */,
+				2CF965BF2BF4D778001E9D1B /* Appfile */,
+				2CF965C02BF4D778001E9D1B /* Fastfile */,
+			);
+			path = fastlane;
 			sourceTree = "<group>";
 		};
 		AA97AE0C21DC8732F06C98F1 /* Pods */ = {
