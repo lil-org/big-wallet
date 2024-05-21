@@ -104,8 +104,8 @@
 		2C7A8CE72B7CD98A00683E15 /* MainInterface.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C7A8CE52B7CD98A00683E15 /* MainInterface.storyboard */; };
 		2C7A8CEB2B7CD98A00683E15 /* Mint iOS.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2C7A8CDD2B7CD98A00683E15 /* Mint iOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2C7A8CEF2B7CF22E00683E15 /* URL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D39727623EC600687301 /* URL.swift */; };
-		2C7A8CF12B7CF25100683E15 /* IPFSResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A8CF02B7CF25100683E15 /* IPFSResponse.swift */; };
-		2C7A8CF22B7CF25100683E15 /* IPFSResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A8CF02B7CF25100683E15 /* IPFSResponse.swift */; };
+		2C7A8CF12B7CF25100683E15 /* IpfsResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A8CF02B7CF25100683E15 /* IpfsResponse.swift */; };
+		2C7A8CF22B7CF25100683E15 /* IpfsResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A8CF02B7CF25100683E15 /* IpfsResponse.swift */; };
 		2C86125B2B76BDF300B22794 /* TransactionInspectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03EB892B069BFD00EF61F5 /* TransactionInspectorTests.swift */; };
 		2C86125D2B76BE2800B22794 /* Tests_iOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03EB752B069B5A00EF61F5 /* Tests_iOS.swift */; };
 		2C8944C52AEAFF97006A711F /* FixedWidthInteger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944C42AEAFF97006A711F /* FixedWidthInteger.swift */; };
@@ -409,7 +409,7 @@
 		2C7A8CE32B7CD98A00683E15 /* ActionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionViewController.swift; sourceTree = "<group>"; };
 		2C7A8CE62B7CD98A00683E15 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/MainInterface.storyboard; sourceTree = "<group>"; };
 		2C7A8CE82B7CD98A00683E15 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		2C7A8CF02B7CF25100683E15 /* IPFSResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IPFSResponse.swift; sourceTree = "<group>"; };
+		2C7A8CF02B7CF25100683E15 /* IpfsResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IpfsResponse.swift; sourceTree = "<group>"; };
 		2C8612512B76BDDC00B22794 /* Tests iOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Tests iOS.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C8944C42AEAFF97006A711F /* FixedWidthInteger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FixedWidthInteger.swift; sourceTree = "<group>"; };
 		2C8944CA2AEB0C10006A711F /* EthereumRPC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumRPC.swift; sourceTree = "<group>"; };
@@ -1408,7 +1408,7 @@
 				0D059AD126C2796200EE3023 /* ApprovalSubject.swift */,
 				2C09FC652828331D00DE9C27 /* PlatformSpecificImage.swift */,
 				2C4297272ADEDCBD0044357A /* PeerMeta.swift */,
-				2C7A8CF02B7CF25100683E15 /* IPFSResponse.swift */,
+				2C7A8CF02B7CF25100683E15 /* IpfsResponse.swift */,
 				2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */,
 				0DC850E626B73A5900809E82 /* AuthenticationReason.swift */,
 				2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */,
@@ -2940,7 +2940,7 @@
 				2C40709427667A8600AB3D55 /* ImageWithLabelTableViewCell.swift in Sources */,
 				2CB0BC4A2B13AA5100603E68 /* Secrets.swift in Sources */,
 				2C728B5E2AFBE7EA00E4DD47 /* NetworksListView.swift in Sources */,
-				2C7A8CF12B7CF25100683E15 /* IPFSResponse.swift in Sources */,
+				2C7A8CF12B7CF25100683E15 /* IpfsResponse.swift in Sources */,
 				2C5FF97226C84F7B00B32ACC /* AppDelegate.swift in Sources */,
 				2C89D26927BADCA9006C0C8D /* DappRequestAction.swift in Sources */,
 				2CF255A8275A48BB00AE54B9 /* NetworkMonitor.swift in Sources */,
@@ -2968,7 +2968,7 @@
 				2C7A8CE42B7CD98A00683E15 /* ActionViewController.swift in Sources */,
 				2C7A8CEF2B7CF22E00683E15 /* URL.swift in Sources */,
 				2C6A0A932BA9AF3A0066C881 /* Strings.swift in Sources */,
-				2C7A8CF22B7CF25100683E15 /* IPFSResponse.swift in Sources */,
+				2C7A8CF22B7CF25100683E15 /* IpfsResponse.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

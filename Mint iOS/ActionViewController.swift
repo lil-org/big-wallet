@@ -49,8 +49,8 @@ class ActionViewController: UIViewController {
         let task = URLSession.shared.dataTask(with: request) { [weak self] responseData, response, error in
             guard let responseData = responseData,
                   error == nil,
-                  let ipfsResponse = try? JSONDecoder().decode(IPFSResponse.self, from: responseData),
-                  let url = URL(string: "https://zora.co/create?image=ipfs://\(ipfsResponse.hash)") else {
+                  let ipfsResponse = try? JSONDecoder().decode(IpfsResponse.self, from: responseData),
+                  let url = URL(string: "https://zora.co/create?image=ipfs://\(ipfsResponse.cid)") else {
                 DispatchQueue.main.async { self?.suggestRetry(data: data, type: type) }
                 return
             }
