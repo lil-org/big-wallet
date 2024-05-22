@@ -1,4 +1,4 @@
-lane :deliver_all do
+lane :deliver_all_metadata do
 
   update_fastlane
   
@@ -23,18 +23,36 @@ lane :deliver_all do
   end
 end
 
+lane :release_all do
+
+  update_fastlane
+  
+  platform :ios do
+    gym(scheme: "Wallet iOS", output_directory: "fastlane/build", clean: true)
+    deliver(
+      metadata_path: "./fastlane/metadata",
+      screenshots_path: "./fastlane/screenshots/ios",
+      overwrite_screenshots: true,
+      platform: "ios",
+      run_precheck_before_submit: false,
+    )
+  end
+
+  platform :mac do
+    gym(scheme: "Wallet", output_directory: "fastlane/build", clean: true)
+    deliver(
+      metadata_path: "./fastlane/metadata",
+      screenshots_path: "./fastlane/screenshots/macos",
+      overwrite_screenshots: true, 
+      platform: "osx",
+      run_precheck_before_submit: false,
+    )
+  end
+end
+
 default_platform(:mac)
 
 platform :mac do
-
-  lane :build do
-    gym(scheme: "Wallet", output_directory: "fastlane/build", clean: true)
-  end
-
-  lane :release do
-    build
-    # deliver # https://docs.fastlane.tools/actions/upload_to_app_store/ # todo
-  end
 
   lane :dev do
     gym(
