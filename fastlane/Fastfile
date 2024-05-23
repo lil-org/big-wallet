@@ -23,6 +23,10 @@ lane :deliver_all_metadata do
   end
 end
 
+lane :clean do
+  sh "rm -rf #{File.expand_path('build')}"
+end
+
 lane :release_all do
 
   update_fastlane
@@ -50,6 +54,8 @@ lane :release_all do
       force: true,
     )
   end
+
+  clean
 end
 
 default_platform(:mac)
