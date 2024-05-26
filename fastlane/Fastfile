@@ -1,6 +1,17 @@
-lane :deliver_all_metadata do
+lane :update_and_login do
+  local_fastlane_password = ENV['FASTLANE_PASSWORD']
+  ENV['FASTLANE_PASSWORD'] = nil
+
+  require 'spaceship'
+  Spaceship::Tunes.login('ivan@ivan.lol')
 
   update_fastlane
+  ENV['FASTLANE_PASSWORD'] = local_fastlane_password
+end
+
+lane :deliver_all_metadata do
+
+  update_and_login
   
   platform :ios do
     deliver(
@@ -31,10 +42,7 @@ end
 
 lane :release_all do
 
-  require 'spaceship'
-  Spaceship::Tunes.login('ivan@ivan.lol')
-
-  update_fastlane
+  update_and_login
   
   platform :ios do
     gym(scheme: "Wallet iOS", output_directory: "fastlane/build", clean: true)
