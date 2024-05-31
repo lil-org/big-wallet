@@ -153,7 +153,7 @@
   "690" : {
     "b" : "https://explorer.redstone.xyz",
     "n" : "Redstone",
-    "s" : "ETH",
+    "s" : "ETH"
   },
   "1001" : {
     "b" : "https://scope.klaytn.com",
@@ -338,6 +338,12 @@
     "s" : "MATIC",
     "t" : true
   },
+  "80002" : {
+    "b" : "https://www.oklink.com/amoy",
+    "n" : "Amoy",
+    "s" : "MATIC",
+    "t" : true
+  },
   "84531" : {
     "b" : "https://goerli.basescan.org",
     "n" : "Base Goerli",
@@ -349,6 +355,11 @@
     "n" : "Base Sepolia",
     "s" : "ETH",
     "t" : true
+  },
+  "167000" : {
+    "b" : "https://taikoscan.io",
+    "n" : "Taiko Mainnet",
+    "s" : "ETH"
   },
   "421613" : {
     "b" : "https://goerli.arbiscan.io",
