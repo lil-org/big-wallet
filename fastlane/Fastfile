@@ -1,6 +1,9 @@
   lane :bump do |options|
     new_version = options[:version]
     sh("sed -i '' -e 's/MARKETING_VERSION \\= [^\\;]*\\;/MARKETING_VERSION = #{new_version};/' ../Wallet.xcodeproj/project.pbxproj")
+    sh("sed -i '' -e 's/\"version\": \"[^\"]*\"/\"version\": \"#{new_version}\"/' ../Safari\\ macOS/Resources/manifest.json")
+    sh("sed -i '' -e 's/\"version\": \"[^\"]*\"/\"version\": \"#{new_version}\"/' ../Safari\\ iOS/Resources/manifest.json")
+
     increment_version_number(version_number: new_version)
     increment_build_number()
 
