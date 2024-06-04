@@ -5,7 +5,7 @@
     increment_build_number()
 
     commit_version_bump(
-      message: "bump version to #{new_version} #{get_build_number}",
+      message: "bump version to #{new_version} (#{get_build_number})",
       force: true
     )
   
