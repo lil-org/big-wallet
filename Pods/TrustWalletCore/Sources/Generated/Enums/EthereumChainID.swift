@@ -34,6 +34,7 @@ public enum EthereumChainID: UInt32, CaseIterable {
     case linea = 59144
     case blast = 81457
     case scroll = 534352
+    case zklinknova = 810180
     case wanchain = 888
     case cronos = 25
     case optimism = 10

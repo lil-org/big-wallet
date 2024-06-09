@@ -41,6 +41,7 @@ enum TWEthereumChainID {
     TWEthereumChainIDLinea = 59144,
     TWEthereumChainIDBlast = 81457,
     TWEthereumChainIDScroll = 534352,
+    TWEthereumChainIDZklinknova = 810180,
     TWEthereumChainIDWanchain = 888,
     TWEthereumChainIDCronos = 25,
     TWEthereumChainIDOptimism = 10,
