@@ -478,6 +478,7 @@
 		2CE059482764169E0042D844 /* Wallet iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Wallet iOS.entitlements"; sourceTree = "<group>"; };
 		2CE0594B2764DF9A0042D844 /* Safari iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Safari iOS.entitlements"; sourceTree = "<group>"; };
 		2CE3D011267F73C00032A62E /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
+		2CE9841D2C1872E1003B6A5D /* Media.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Media.xcassets; sourceTree = "<group>"; };
 		2CE9A7772BADC59C00579BF7 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		2CED86A22AF00BC9006F9E26 /* Tools */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = Tools; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CED86A42AF00BC9006F9E26 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
@@ -1116,6 +1117,7 @@
 				2CF255BB275A74A400AE54B9 /* Screens */,
 				2C5FF97726C84F7B00B32ACC /* Main.storyboard */,
 				2C5FF97A26C84F7C00B32ACC /* Assets.xcassets */,
+				2CE9841D2C1872E1003B6A5D /* Media.xcassets */,
 				2C8E88A0275F99D4003EB8DB /* Content */,
 				2C5FF97C26C84F7C00B32ACC /* LaunchScreen.storyboard */,
 				2C5FF97F26C84F7C00B32ACC /* Info.plist */,
