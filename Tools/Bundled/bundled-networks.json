@@ -385,6 +385,11 @@
     "o" : true,
     "s" : "ETH"
   },
+  "810180" : {
+    "b" : "https://explorer.zklink.io",
+    "n" : "zkLink Nova Mainnet",
+    "s" : "ETH",
+  },
   "7777777" : {
     "b" : "https://explorer.zora.energy",
     "n" : "Zora",

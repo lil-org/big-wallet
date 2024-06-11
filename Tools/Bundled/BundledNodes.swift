@@ -73,6 +73,7 @@ struct BundledNodes {
         421614: "sepolia-rollup.arbitrum.io/rpc",
         534351: "sepolia-rpc.scroll.io",
         534352: "rpc.scroll.io",
+        810180: "rpc.zklink.io",
         7777777: "rpc.zora.energy/",
         11155111: "rpc.sepolia.org",
         11155420: "sepolia.optimism.io",
