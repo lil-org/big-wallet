@@ -1,7 +1,7 @@
-big wallet is an open source crypto wallet with a safari extension
+Big Wallet on avoimen lähdekoodin kryptovaluuttalompakko, jolla on Safari-laajennus
 
-connect a wallet on any website in safari by clicking a metamask button
+Yhdistä lompakko mille tahansa verkkosivustolle Safarissa napsauttamalla Metamask-painiketta
 
-supports ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, and more!
+Tukee Ethereumia, Zoraa, Basea, Polygonia, Binance Smart Chainia, Optimismia, Arbitrumia, Avalanchia ja paljon muuta!
 
-wallets are securely stored in a keychain
+Lompakot tallennetaan turvallisesti avainrenkaaseen

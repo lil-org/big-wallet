@@ -1,1 +1,1 @@
-web3 browser extension
+tiện ích mở rộng trình duyệt web3

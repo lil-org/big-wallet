@@ -1,7 +1,7 @@
-big wallet is an open source crypto wallet with a safari extension
+Big Wallet je open source krypto peňaženka s rozšírením pre Safari
 
-connect a wallet on any website in safari by clicking a metamask button
+Pripojte peňaženku na akejkoľvek webovej stránke v Safari kliknutím na tlačidlo Metamask
 
-supports ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, and more!
+Podporuje Ethereum, Zora, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche a ďalšie!
 
-wallets are securely stored in a keychain
+Kľúče peňaženiek sú bezpečne uložené na kľúčenke

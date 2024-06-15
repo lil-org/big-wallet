@@ -1,7 +1,7 @@
-big wallet is an open source crypto wallet with a safari extension
+Big Wallet הוא ארנק קריפטו בקוד פתוח עם הרחבה לדפדפן ספארי
 
-connect a wallet on any website in safari by clicking a metamask button
+חבר את הארנק בכל אתר בספארי על ידי לחיצה על כפתור מתאמאסק
 
-supports ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, and more!
+תומך באת'ריאום, זורה, בייס, פוליגון, בינאנס סמארט צ'יין, אופטימיזם, ארביטראם, אוולנש ועוד!
 
-wallets are securely stored in a keychain
+הארנקים מאוחסנים באופן מאובטח במחזיק המפתחות

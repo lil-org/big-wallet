@@ -1,1 +1,1 @@
-trust,safari wallet,crypto,binance,coinbase,metamask,phantom,glow,ether,eth,zora,metamask safari
+ميتاماسك سفاري, ثقة, محفظة سفاري, العملات الرقمية,بينانس,كوين بيس,ميتاماسك,فانتوم,وهج,إيثريوم,إيث,زو

@@ -1,1 +1,1 @@
-trust,safari wallet,crypto,binance,coinbase,metamask,phantom,glow,ether,eth,zora,metamask safari
+metamask safari,เทรสท์,กระเป๋าเงิน safari,คริปโต,ไบแนนซ์,coinbase,metamask,แฟนทอม,เงินอีเธอ,r,eth,zora

@@ -1,7 +1,7 @@
-big wallet is an open source crypto wallet with a safari extension
+Big Wallet是一个开源的加密货币钱包，带有Safari扩展
 
-connect a wallet on any website in safari by clicking a metamask button
+只需点击Metamask按钮，即可在Safari的任何网站上连接钱包
 
-supports ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, and more!
+支持以太坊，Zora，Base，Polygon，币安智能链，Optimism，Arbitrum，Avalanche等多款网络！
 
-wallets are securely stored in a keychain
+钱包都在密钥链中安全存储

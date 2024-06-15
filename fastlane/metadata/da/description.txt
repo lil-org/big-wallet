@@ -1,7 +1,7 @@
-big wallet is an open source crypto wallet with a safari extension
+Big Wallet er en open source krypto-tegnebog med en Safari-udvidelse
 
-connect a wallet on any website in safari by clicking a metamask button
+Tilslut en tegnebog på ethvert website i Safari ved at klikke på en Metamask-knap
 
-supports ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, and more!
+Understøtter Ethereum, Zora, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche, og mere!
 
-wallets are securely stored in a keychain
+Tegnebøger er sikkert opbevaret i en nøglering

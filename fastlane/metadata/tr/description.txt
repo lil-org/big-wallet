@@ -1,7 +1,7 @@
-big wallet is an open source crypto wallet with a safari extension
+Big Wallet, Safari eklentisiyle birlikte gelen açık kaynaklı bir kripto cüzdanıdır
 
-connect a wallet on any website in safari by clicking a metamask button
+Safarideki herhangi bir web sitesinde cüzdanı bir metamask düğmesine tıklayarak bağlayın
 
-supports ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, and more!
+Ethereum, Zora, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche ve daha pek çok mecrayı destekler!
 
-wallets are securely stored in a keychain
+Cüzdanlar, anahtar zincirinde güvenli bir şekilde saklanır

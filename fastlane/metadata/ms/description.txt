@@ -1,7 +1,7 @@
-big wallet is an open source crypto wallet with a safari extension
+Big Wallet adalah dompet krypto sumber terbuka dengan ekstensi safari 
 
-connect a wallet on any website in safari by clicking a metamask button
+Sambungkan dompet pada mana-mana laman web di safari dengan mengklik butang metamask 
 
-supports ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, and more!
+Menyokong ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, dan banyak lagi!
 
-wallets are securely stored in a keychain
+Dompet disimpan dengan selamat dalam keychain

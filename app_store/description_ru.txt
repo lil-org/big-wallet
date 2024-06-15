@@ -1,0 +1,7 @@
+big wallet — это опен-сорс кошелек с расширением для сафари
+
+подключайте кошелек на любом сайте, где можно подключить метамаск
+
+работает на ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, и на других сетях
+
+зашифрованные ключи безопасно хранятся в keychain

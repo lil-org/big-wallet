@@ -1,7 +1,7 @@
-big wallet is an open source crypto wallet with a safari extension
+बिग वॉलेट एक ओपन सोर्स क्रिप्टो वॉलेट है जिसमें सफारी एक्सटेंशन शामिल है। 
 
-connect a wallet on any website in safari by clicking a metamask button
+सफारी में किसी भी वेबसाइट पर वॉलेट कनेक्ट करें, मेटामास्क बटन पर क्लिक करके। 
 
-supports ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, and more!
+यह Ethereum, Zora, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche, और अधिक का समर्थन करता है! 
 
-wallets are securely stored in a keychain
+वॉलेट्स कुंजी बंदियों में सुरक्षित रूप से संग्रहीत होते हैं।

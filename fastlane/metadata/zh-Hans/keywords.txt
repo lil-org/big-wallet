@@ -1,1 +1,1 @@
-trust,safari wallet,crypto,binance,coinbase,metamask,phantom,glow,ether,eth,zora,metamask safari
+metamask safari,信任,钱包,加密,币安,coinbase,metamask,幻影,发光,以太,以太坊,zora

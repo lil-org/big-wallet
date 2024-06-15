@@ -1,1 +1,1 @@
-web3 browser extension
+web3 ブラウザー拡張機能

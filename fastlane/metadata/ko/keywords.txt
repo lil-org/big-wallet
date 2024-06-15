@@ -1,1 +1,1 @@
-trust,safari wallet,crypto,binance,coinbase,metamask,phantom,glow,ether,eth,zora,metamask safari
+메타마스크 사파리,트러스트,사파리 지갑,크립토,바이낸스,코인베이스,메타마스크,팬텀,글로우,이더,이더리움,조라

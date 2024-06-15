@@ -1,1 +1,1 @@
-trust,safari wallet,crypto,binance,coinbase,metamask,phantom,glow,ether,eth,zora,metamask safari
+metamask safari,vertrouw,safari portemonnee,crypto,binance,coinbase,metamask,fantoom,gloed,ether,eth

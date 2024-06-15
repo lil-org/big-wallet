@@ -1,1 +1,1 @@
-web3 browser extension
+extensie web3 pentru browser

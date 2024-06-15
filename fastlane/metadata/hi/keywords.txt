@@ -1,1 +1,1 @@
-trust,safari wallet,crypto,binance,coinbase,metamask,phantom,glow,ether,eth,zora,metamask safari
+मेटामास्क सफारी,विश्वास,सफारी वॉलेट,क्रिप्टो,बिनांस,कॉइनबेस,मेटामास्क,भूत,प्रकाश,ईथर,ईथ,ज़ोरा
