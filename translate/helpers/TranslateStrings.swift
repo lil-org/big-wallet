@@ -21,6 +21,12 @@ func translateAllStrings(_ model: AI.Model) {
 func processSpecificString(_ model: AI.Model, key: String, dict: [String: Any], completion: @escaping ([String: Any]) -> Void) {
     let hash = (dict["comment"] as? String) ?? ""
     let localizations = dict["localizations"] as! [String: Any]
+    
+    guard !isUtilityDoNotTouch(hash) else {
+        completion(dict)
+        return
+    }
+    
     let english = read(language: .english, from: localizations)!
     let russian = read(language: .russian, from: localizations)!
     let newTargetHash = StringTask(model: model, language: .japanese, englishText: english, russianText: russian).hash
@@ -73,6 +79,10 @@ func formatLocalizationsDict(_ input: [Language: String]) -> [String: Any] {
     }
     
     return output
+}
+
+func isUtilityDoNotTouch(_ comment: String) -> Bool {
+    return comment == "IS_UTILITY_STRING_DO_NOT_TRANSLATE"
 }
 
 func read(language: Language, from localizations: [String: Any]) -> String? {

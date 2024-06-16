@@ -372,6 +372,7 @@
       }
     },
     "isVisionPro" : {
+      "comment" : "IS_UTILITY_STRING_DO_NOT_TRANSLATE",
       "localizations" : {
         "en" : {
           "variations" : {

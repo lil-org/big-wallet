@@ -32,8 +32,8 @@ struct AI {
     
     static func translate(task: Task, completion: @escaping (String) -> Void) {
         sendRequest(model: task.model, prompt: task.prompt) { response in
-            completion(response!)
             print("✅ \(task.description)")
+            completion(response!)
         }
     }
     
