@@ -8,6 +8,12 @@
             "state" : "translated",
             "value" : "Add %@ account to connect"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавьте %@ аккаунт, чтобы подключиться"
+          }
         }
       }
     },
@@ -17,6 +23,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Add Wallet"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить кошелек"
           }
         }
       }
@@ -28,6 +40,12 @@
             "state" : "translated",
             "value" : "Approve Transaction"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подтвердить транзакцию"
+          }
         }
       }
     },
@@ -38,12 +56,24 @@
             "state" : "translated",
             "value" : "Back up new wallet"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохраните резервную копию кошелька"
+          }
         }
       }
     },
     "big wallet" : {
       "localizations" : {
         "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "big wallet"
+          }
+        },
+        "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "big wallet"
@@ -58,6 +88,12 @@
             "state" : "translated",
             "value" : "Calculating"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Считаем"
+          }
         }
       }
     },
@@ -67,6 +103,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cancel"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отмена"
           }
         }
       }
@@ -78,6 +120,12 @@
             "state" : "translated",
             "value" : "Canceled"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отменили"
+          }
         }
       }
     },
@@ -87,6 +135,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Connect"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подключиться"
           }
         }
       }
@@ -98,6 +152,12 @@
             "state" : "translated",
             "value" : "Connecting"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подключаемся"
+          }
         }
       }
     },
@@ -107,6 +167,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Copy"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Копировать"
           }
         }
       }
@@ -118,6 +184,12 @@
             "state" : "translated",
             "value" : "Copy Address"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Копировать адрес"
+          }
         }
       }
     },
@@ -127,6 +199,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Create New"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создать новый"
           }
         }
       }
@@ -138,6 +216,12 @@
             "state" : "translated",
             "value" : "Create Password"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Установите пароль"
+          }
         }
       }
     },
@@ -147,6 +231,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Custom gas price"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кастомная цена газа"
           }
         }
       }
@@ -158,6 +248,12 @@
             "state" : "translated",
             "value" : "Custom nonce"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кастомный номер"
+          }
         }
       }
     },
@@ -167,6 +263,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Data"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Данные"
           }
         }
       }
@@ -178,6 +280,12 @@
             "state" : "translated",
             "value" : "Disconnect"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отключиться"
+          }
         }
       }
     },
@@ -187,6 +295,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Done"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Готово"
           }
         }
       }
@@ -198,6 +312,12 @@
             "state" : "translated",
             "value" : "Edit Accounts"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редактировать аккаунты"
+          }
         }
       }
     },
@@ -207,6 +327,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Enable Safari Extension"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Включить расширение Safari"
           }
         }
       }
@@ -218,6 +344,12 @@
             "state" : "translated",
             "value" : "Enter Keystore Password"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Введите пароль кистора"
+          }
         }
       }
     },
@@ -227,6 +359,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Enter Password"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Введите пароль"
           }
         }
       }
@@ -238,6 +376,12 @@
             "state" : "translated",
             "value" : "Enter Wallet"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Войти в кошелек"
+          }
         }
       }
     },
@@ -247,6 +391,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Failed to import wallet"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не получилось добавить кошелек"
           }
         }
       }
@@ -258,6 +408,12 @@
             "state" : "translated",
             "value" : "Failed to load"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На загрузилось"
+          }
         }
       }
     },
@@ -267,6 +423,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Failed to send"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не получилось отправить"
           }
         }
       }
@@ -278,6 +440,12 @@
             "state" : "translated",
             "value" : "Failed to sign"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не получилось подписать"
+          }
         }
       }
     },
@@ -287,6 +455,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Failed to switch chain"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не получилось сменить сеть"
           }
         }
       }
@@ -298,6 +472,12 @@
             "state" : "translated",
             "value" : "Failed to verify"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не получилось верифицировать"
+          }
         }
       }
     },
@@ -307,6 +487,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fee"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Комиссия"
           }
         }
       }
@@ -318,6 +504,12 @@
             "state" : "translated",
             "value" : "Gas Price"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цена газа"
+          }
         }
       }
     },
@@ -328,12 +520,24 @@
             "state" : "translated",
             "value" : "Get Started"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Начать"
+          }
         }
       }
     },
     "github" : {
       "localizations" : {
         "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GitHub"
+          }
+        },
+        "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "GitHub"
@@ -348,6 +552,12 @@
             "state" : "translated",
             "value" : "gwei"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gwei"
+          }
         }
       }
     },
@@ -357,6 +567,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "I understand the risks"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Я понимаю риск"
           }
         }
       }
@@ -368,6 +584,12 @@
             "state" : "translated",
             "value" : "Import"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Импортировать"
+          }
         }
       }
     },
@@ -377,6 +599,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Import Wallet"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Импортировать кошелек"
           }
         }
       }
@@ -1005,6 +1233,12 @@
             "state" : "translated",
             "value" : "Loading"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Загрузка"
+          }
         }
       }
     },
@@ -1014,6 +1248,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mainnets"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Мейннеты"
           }
         }
       }
@@ -1025,6 +1265,12 @@
             "state" : "translated",
             "value" : "Multicoin Wallet"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Мультикоин Кошелек"
+          }
         }
       }
     },
@@ -1034,6 +1280,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nonce"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Номер"
           }
         }
       }
@@ -1045,6 +1297,12 @@
             "state" : "translated",
             "value" : "Nothing here"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Здесь пусто"
+          }
         }
       }
     },
@@ -1054,6 +1312,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OK"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ОК"
           }
         }
       }
@@ -1065,6 +1329,12 @@
             "state" : "translated",
             "value" : "Options:\n\n• Private key\n• Secret words\n• Keystore"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Варианты:\n\n• Приватный ключ\n• Секретная фраза\n• Кистор"
+          }
         }
       }
     },
@@ -1074,6 +1344,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Password"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пароль"
           }
         }
       }
@@ -1085,6 +1361,12 @@
             "state" : "translated",
             "value" : "Password does not match"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пароль не подходит"
+          }
         }
       }
     },
@@ -1094,6 +1376,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Paste"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вставить"
           }
         }
       }
@@ -1105,6 +1393,12 @@
             "state" : "translated",
             "value" : "Pinned"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Закрепленные"
+          }
         }
       }
     },
@@ -1114,6 +1408,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Please type at least 4 characters"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хотя бы 4 символа"
           }
         }
       }
@@ -1125,6 +1425,12 @@
             "state" : "translated",
             "value" : "Private Key"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Приватный ключ"
+          }
         }
       }
     },
@@ -1134,6 +1440,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Private key gives full access to your funds"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Приватный ключ дает полный доступ к кошельку"
           }
         }
       }
@@ -1145,6 +1457,12 @@
             "state" : "translated",
             "value" : "Private Key Wallets"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Приватные ключи"
+          }
         }
       }
     },
@@ -1154,6 +1472,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Quit"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выйти"
           }
         }
       }
@@ -1165,6 +1489,12 @@
             "state" : "translated",
             "value" : "Quit Wallet?"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выйти из кошелька?"
+          }
         }
       }
     },
@@ -1174,6 +1504,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Refresh"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обновить"
           }
         }
       }
@@ -1185,6 +1521,12 @@
             "state" : "translated",
             "value" : "Remove Account"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить аккаунт"
+          }
         }
       }
     },
@@ -1194,6 +1536,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Remove anyway"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Все равно удалить"
           }
         }
       }
@@ -1205,6 +1553,12 @@
             "state" : "translated",
             "value" : "Remove Wallet"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить кошелек"
+          }
         }
       }
     },
@@ -1214,6 +1568,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Removed wallets can't be recovered"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Восстановить удаленный кошелек не получится"
           }
         }
       }
@@ -1225,6 +1585,12 @@
             "state" : "translated",
             "value" : "Removing the last account removes the wallet as well"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Если удалить последний аккаунт, кошелек тоже удалится"
+          }
         }
       }
     },
@@ -1234,6 +1600,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Repeat Password"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Повторить пароль"
           }
         }
       }
@@ -1245,6 +1617,12 @@
             "state" : "translated",
             "value" : "Reset to"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сбросить"
+          }
         }
       }
     },
@@ -1254,6 +1632,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Retry"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Попробовать еще раз"
           }
         }
       }
@@ -1265,6 +1649,12 @@
             "state" : "translated",
             "value" : "Secret Words"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Секретная фраза"
+          }
         }
       }
     },
@@ -1274,6 +1664,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Secret words give full access to your funds"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Секретная фраза дает полный доступ к кошельку"
           }
         }
       }
@@ -1285,6 +1681,12 @@
             "state" : "translated",
             "value" : "Select Account"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбрать аккаунт"
+          }
         }
       }
     },
@@ -1295,15 +1697,11 @@
             "state" : "translated",
             "value" : "Select Network"
           }
-        }
-      }
-    },
-    "Selected" : {
-      "localizations" : {
-        "en" : {
+        },
+        "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Selected"
+            "value" : "Выбрать сеть"
           }
         }
       }
@@ -1315,6 +1713,12 @@
             "state" : "translated",
             "value" : "Send Transaction"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отправить транзакцию"
+          }
         }
       }
     },
@@ -1324,6 +1728,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sending transaction"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отправляем транзакцию"
           }
         }
       }
@@ -1335,6 +1745,12 @@
             "state" : "translated",
             "value" : "Show Private Key"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показать приватный ключ"
+          }
         }
       }
     },
@@ -1344,6 +1760,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Show Secret Words"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показать секретную фразу"
           }
         }
       }
@@ -1355,6 +1777,12 @@
             "state" : "translated",
             "value" : "Show Wallets"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показать кошельки"
+          }
         }
       }
     },
@@ -1364,6 +1792,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sign crypto\ntransactions\nin Safari"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отправляйте\nтранзакции\nв Сафари"
           }
         }
       }
@@ -1375,6 +1809,12 @@
             "state" : "translated",
             "value" : "Sign Message"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подписать сообщение"
+          }
         }
       }
     },
@@ -1384,6 +1824,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sign Personal Message"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подписать сообщение"
           }
         }
       }
@@ -1395,6 +1841,12 @@
             "state" : "translated",
             "value" : "Sign Typed Data"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подписать данные"
+          }
         }
       }
     },
@@ -1404,6 +1856,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Something went wrong"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Что-то пошло не так"
           }
         }
       }
@@ -1415,6 +1873,12 @@
             "state" : "translated",
             "value" : "Start"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Начать"
+          }
         }
       }
     },
@@ -1424,6 +1888,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Switch Account"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сменить аккаунт"
           }
         }
       }
@@ -1435,6 +1905,12 @@
             "state" : "translated",
             "value" : "Testnets"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тестовые сети"
+          }
         }
       }
     },
@@ -1444,6 +1920,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "There is no data yet"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Здесь пока нет даннык"
           }
         }
       }
@@ -1455,6 +1937,12 @@
             "state" : "translated",
             "value" : "To"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кому"
+          }
         }
       }
     },
@@ -1464,6 +1952,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "to remove wallet"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "чтобы удалить кошелек"
           }
         }
       }
@@ -1475,6 +1969,12 @@
             "state" : "translated",
             "value" : "to show private key"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "чтобы показать приватный ключ"
+          }
         }
       }
     },
@@ -1484,6 +1984,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "to show secret words"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "чтобы показать секретную фразу"
           }
         }
       }
@@ -1495,6 +2001,12 @@
             "state" : "translated",
             "value" : "Try Again"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Попробовать еще раз"
+          }
         }
       }
     },
@@ -1504,6 +2016,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Unknown Network"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Неизвестная сеть"
           }
         }
       }
@@ -1515,6 +2033,12 @@
             "state" : "translated",
             "value" : "Unknown Website"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Неизвестный сайт"
+          }
         }
       }
     },
@@ -1524,6 +2048,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Uploading"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Загружаем"
           }
         }
       }
@@ -1535,6 +2065,12 @@
             "state" : "translated",
             "value" : "Value"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сумма"
+          }
         }
       }
     },
@@ -1544,6 +2080,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "View on"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показать на"
           }
         }
       }
@@ -1555,6 +2097,12 @@
             "state" : "translated",
             "value" : "View on Near explorer"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показать на Near"
+          }
         }
       }
     },
@@ -1564,6 +2112,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "View on Solana explorer"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показать на Solana"
           }
         }
       }
@@ -1575,12 +2129,24 @@
             "state" : "translated",
             "value" : "Wallets"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кошельки"
+          }
         }
       }
     },
     "warpcast" : {
       "localizations" : {
         "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Warpcast"
+          }
+        },
+        "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Warpcast"
@@ -1595,6 +2161,12 @@
             "state" : "translated",
             "value" : "𝕏"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "𝕏"
+          }
         }
       }
     },
@@ -1605,6 +2177,12 @@
             "state" : "translated",
             "value" : "Mail"
           }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Почта"
+          }
         }
       }
     },
@@ -1614,6 +2192,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "You will see 12 secret words"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы увидите секретную фразу"
           }
         }
       }
