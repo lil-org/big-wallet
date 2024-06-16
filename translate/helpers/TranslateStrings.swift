@@ -23,7 +23,18 @@ func processSpecificString(_ model: AI.Model, key: String, dict: [String: Any], 
     let localizations = dict["localizations"] as! [String: Any]
     
     guard !isUtilityDoNotTouch(hash) else {
-        completion(dict)
+        if localizations.count == Language.allCases.count {
+            completion(dict)
+        } else {
+            var filledDict = dict
+            let engDict = localizations[Language.english.appLocalizationKey]
+            var allLocalizationsDict = [String: Any]()
+            for language in Language.allCases {
+                allLocalizationsDict[language.appLocalizationKey] = engDict
+            }
+            filledDict["localizations"] = allLocalizationsDict
+            completion(filledDict)
+        }
         return
     }
     
