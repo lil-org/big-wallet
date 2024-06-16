@@ -4,6 +4,12 @@ import Foundation
 
 struct AI {
     
+    protocol Task {
+        var model: Model { get }
+        var prompt: String { get }
+        var description: String { get }
+    }
+    
     enum Model {
         case cheap, highQuality
         
@@ -27,7 +33,7 @@ struct AI {
     static func translate(task: Task, completion: @escaping (String) -> Void) {
         sendRequest(model: task.model, prompt: task.prompt) { response in
             completion(response!)
-            print("✅ \(task.metadataKind.fileName) \(task.language.name)")
+            print("✅ \(task.description)")
         }
     }
     
@@ -62,4 +68,12 @@ struct AI {
         task.resume()
     }
     
+}
+
+extension AI.Task {
+    var hash: String {
+        let description = prompt + model.name
+        let data = description.data(using: .utf8)
+        return String(data!.fnv1aHash())
+    }
 }
