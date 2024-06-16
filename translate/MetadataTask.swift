@@ -2,13 +2,17 @@
 
 import Foundation
 
-struct Task {
+struct MetadataTask: AI.Task {
     
     let model: AI.Model
     let metadataKind: MetadataKind
     let language: Language
     let englishText: String
     let russianText: String
+    
+    var description: String {
+        return "\(language.name) \(metadataKind.fileName)"
+    }
     
     var prompt: String {
         let metadataName: String
@@ -52,7 +56,7 @@ struct Task {
             
             the output should be good to be used as app store keywords.
             
-            make sure the output text is no longer than 100 chars.
+            make sure the output text is no longer than 100 chars. keywords must fit in 100 chars.
             """
         default:
             clarifications = """
@@ -60,7 +64,7 @@ struct Task {
             
             make sure the translated version communicates the same message.
             
-            keep formatting, capitalization, and punctuation style as close to the original as possible.
+            keep formatting, capitalization, and punctuation style close to the original.
             """
         }
         
@@ -78,6 +82,8 @@ struct Task {
         
         russian:
         "\(russianText)"
+        
+        "big wallet" and "lil org" are names that should not be translated, keep them as is.
         
         respond only with a \(language.name) version. do not add anything else to the response.
         """
@@ -101,12 +107,6 @@ struct Task {
     
     private var hashURL: URL {
         return URL(fileURLWithPath: projectDir + "/translate/latest/" + "\(language.metadataLocalizationKey)-\(metadataKind.fileName)")
-    }
-    
-    private var hash: String {
-        let description = prompt + model.name
-        let data = description.data(using: .utf8)
-        return String(data!.fnv1aHash())
     }
     
 }
