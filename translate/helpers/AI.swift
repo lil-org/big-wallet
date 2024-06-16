@@ -31,13 +31,13 @@ struct AI {
     }()
     
     static func translate(task: Task, completion: @escaping (String) -> Void) {
-        sendRequest(model: task.model, prompt: task.prompt, retryCount: 0) { response in
+        sendRequest(model: task.model, prompt: task.prompt) { response in
             print("✅ \(task.description)")
             completion(response!)
         }
     }
     
-    private static func sendRequest(model: Model, prompt: String, retryCount: Int, completion: @escaping (String?) -> Void) {
+    private static func sendRequest(model: Model, prompt: String, completion: @escaping (String?) -> Void) {
         let url = URL(string: "https://api.openai.com/v1/chat/completions")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -59,10 +59,10 @@ struct AI {
                   let content = message["content"] as? String {
                 completion(content.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "\""))))
             } else {
-                let seconds = 60 * (retryCount + 1)
+                let seconds = Int.random(in: 100...130)
                 print("🕰️ will retry in \(seconds) seconds")
                 queue.asyncAfter(deadline: .now() + .seconds(seconds)) {
-                    sendRequest(model: model, prompt: prompt, retryCount: retryCount + 1, completion: completion)
+                    sendRequest(model: model, prompt: prompt, completion: completion)
                 }
             }
         }
