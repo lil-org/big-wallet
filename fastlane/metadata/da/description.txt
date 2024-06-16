@@ -1,7 +1,7 @@
-Big Wallet er en open source krypto-tegnebog med en Safari-udvidelse
+Big Wallet er en open source krypto tegnebog med en Safari-udvidelse
 
-Tilslut en tegnebog på ethvert website i Safari ved at klikke på en Metamask-knap
+Tilslut en tegnebog på ethvert websted i Safari ved at klikke på en Metamask-knap
 
 Understøtter Ethereum, Zora, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche, og mere!
 
-Tegnebøger er sikkert opbevaret i en nøglering
+Tegnebøger opbevares sikkert i en nøglekæde

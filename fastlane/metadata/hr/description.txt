@@ -1,7 +1,7 @@
-Big Wallet je otvoreni izvor crypto novčanika s dodatkom za Safari
+Big Wallet je otvoreni izvor kripto novčanika s dodatkom za Safari
 
 Povežite novčanik na bilo kojoj web stranici u Safariju klikom na Metamask gumb
 
-Podržava Ethereum, Zora, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche, i još mnogo toga!
+Podržava Ethereum, Zora, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche, i druge!
 
-Novčanici se sigurno pohranjuju u keychain
+Ključevi novčanika sigurno su pohranjeni u Keychain

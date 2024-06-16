@@ -1,1 +1,1 @@
-rozszerzenie do przeglądarki web3
+web3 rozszerzenie do przeglądarki

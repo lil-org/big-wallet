@@ -1,7 +1,7 @@
-Big Walletは、Safari拡張機能を備えたオープンソースの暗号ウォレットです
+Big Walletは、Safari拡張機能付きのオープンソースの暗号化ウォレットです
 
-Safariで任意のウェブサイトにウォレットを接続するためには、Metamaskボタンをクリックします
+Safariで任意のウェブサイトでMetamaskボタンをクリックすることでウォレットを接続します
 
-Ethereum、Zora、Base、Polygon、Binance Smart Chain、Optimism、Arbitrum、Avalancheなど、さまざまなネットワークをサポートしています！
+Ethereum、Zora、Base、Polygon、Binance Smart Chain、Optimism、Arbitrum、Avalancheなどをサポート!
 
-ウォレットはKeychainに安全に保存されます
+ウォレットはKeychainで安全に保管されます

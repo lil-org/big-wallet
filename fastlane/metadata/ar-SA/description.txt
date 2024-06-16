@@ -1,7 +1,7 @@
-Big Wallet هو محفظة تشفير مفتوحة المصدر مع امتداد لـ Safari
+big wallet هو محفظة كريبتو مفتوحة المصدر مع امتداد للسفاري
 
-قم بتوصيل المحفظة على أي موقع على الويب في Safari عن طريق النقر على زر Metamask
+قم بتوصيل المحفظة على أي موقع ويب في السفاري بالنقر على زر metamask
 
-يدعم Ethereum ، Zora ، Base ، Polygon ، Binance smart chain ، Optimism ، Arbitrum ، Avalanche ، وأكثر!
+يدعم ethereum، zora، base، polygon، binance smart chain، optimism، arbitrum، avalanche، والمزيد!
 
-تتم تخزين المحافظ بأمان في keychain
+المحافظ يتم تخزينها بأمان في سلسلة المفاتيح
