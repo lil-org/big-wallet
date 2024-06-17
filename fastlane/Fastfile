@@ -61,7 +61,7 @@ lane :clean do
   sh "rm -rf #{File.expand_path('build')}"
 end
 
-lane :release_all do
+lane :release do
 
   update_and_login
   
