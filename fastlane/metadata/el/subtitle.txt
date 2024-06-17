@@ -1,1 +1,1 @@
-επέκταση προγράμματος περιήγησης web3
+web3 browser extension

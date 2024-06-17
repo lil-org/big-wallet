@@ -1,1 +1,1 @@
-web3 rozšírenie pre prehliadač
+web3 browser extension

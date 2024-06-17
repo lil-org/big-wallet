@@ -68,6 +68,8 @@ struct MetadataTask: AI.Task {
             """
         }
         
+        // TODO: subtitle cannot be longer than 30 characters
+        
         let output = """
         translate the \(metadataName) to \(language.name).
         
