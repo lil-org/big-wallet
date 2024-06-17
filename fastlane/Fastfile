@@ -30,7 +30,7 @@ lane :update_and_login do
   ENV['FASTLANE_PASSWORD'] = local_fastlane_password
 end
 
-lane :deliver_all_metadata do
+lane :deliver_metadata do
 
   update_and_login
   
