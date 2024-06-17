@@ -529,38 +529,6 @@
         }
       }
     },
-    "github" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "GitHub"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "GitHub"
-          }
-        }
-      }
-    },
-    "gwei" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "gwei"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "gwei"
-          }
-        }
-      }
-    },
     "I understand the risks" : {
       "localizations" : {
         "en" : {
@@ -1238,6 +1206,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Загрузка"
+          }
+        }
+      }
+    },
+    "Mail" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Почта"
           }
         }
       }
@@ -2134,54 +2112,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Кошельки"
-          }
-        }
-      }
-    },
-    "warpcast" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Warpcast"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Warpcast"
-          }
-        }
-      }
-    },
-    "x.com" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "𝕏"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "𝕏"
-          }
-        }
-      }
-    },
-    "yo@lil.org" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mail"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Почта"
           }
         }
       }

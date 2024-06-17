@@ -15,16 +15,12 @@ struct Strings {
     static let failedToSend = loc("Failed to send")
     static let failedToSign = loc("Failed to sign")
     static let failedToSwitchChain = loc("Failed to switch chain")
-    static let bigWallet = loc("big wallet")
     static let showWallets = loc("Show Wallets")
     static let enterWallet = loc("Enter Wallet")
     static let quit = loc("Quit")
     static let quitWallet = loc("Quit Wallet?")
     static let enableSafariExtension = loc("Enable Safari Extension")
-    static let dropUsALine = loc("yo@lil.org")
-    static let viewOnGithub = loc("github")
-    static let viewOnWarpcast = loc("warpcast")
-    static let viewOnX = loc("x.com")
+    static let dropUsALine = loc("Mail")
     static let start = loc("Start")
     static let removeAccount = loc("Remove Account")
     static let removeWallet = loc("Remove Wallet")
@@ -95,7 +91,6 @@ struct Strings {
     static let customNonce = loc("Custom nonce")
     static let customGasPrice = loc("Custom gas price")
     static let resetTo = loc("Reset to")
-    static let gwei = loc("gwei")
     static let fee = loc("Fee")
     static let value = loc("Value")
     static let to = loc("To")
@@ -104,6 +99,12 @@ struct Strings {
     static let connect = loc("Connect")
     static let paste = loc("Paste")
     static let getStarted = loc("Get Started")
+    
+    static let bigWallet = "big wallet"
+    static let viewOnGithub = "GitHub"
+    static let viewOnWarpcast = "Warpcast"
+    static let viewOnX = "𝕏"
+    static let gwei = "gwei"
     
     // MARK: - Helpers
     
