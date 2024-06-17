@@ -74,8 +74,8 @@ lane :release do
       platform: "ios",
       run_precheck_before_submit: false,
       force: true,
-      submit_for_review: false,
-      automatic_release: false,
+      submit_for_review: true,
+      automatic_release: true,
       submission_information: { add_id_info_uses_idfa: false },
     )
   end
@@ -89,8 +89,8 @@ lane :release do
       platform: "osx",
       run_precheck_before_submit: false,
       force: true,
-      submit_for_review: false,
-      automatic_release: false,
+      submit_for_review: true,
+      automatic_release: true,
       submission_information: { add_id_info_uses_idfa: false },
     )
   end
