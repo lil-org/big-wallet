@@ -4,18 +4,27 @@ import Foundation
 
 func translateAllStrings(_ model: AI.Model) {
     let strings = readStrings()
-    var newStrings = [String: Any]()
-    for key in strings.keys {
-        processSpecificString(model, key: key, dict: strings[key] as! [String: Any]) { result in
-            newStrings[key] = result
-            if newStrings.count == strings.count {
-                writeStrings(newStrings)
-                print("✅ strings all done")
-                semaphore.signal()
-            }
-        }
-    }
+    processNextKey(model, oldStrings: strings, newStrings: strings)
     semaphore.wait()
+}
+
+func processNextKey(_ model: AI.Model, oldStrings: [String: Any], newStrings: [String: Any]) {
+    guard let (key, dict) = oldStrings.first else {
+        print("✅ strings all done")
+        semaphore.signal()
+        return
+    }
+    
+    var oldStrings = oldStrings
+    var newStrings = newStrings
+    
+    oldStrings.removeValue(forKey: key)
+    
+    processSpecificString(model, key: key, dict: dict as! [String: Any]) { result in
+        newStrings[key] = result
+        writeStrings(newStrings)
+        processNextKey(model, oldStrings: oldStrings, newStrings: newStrings)
+    }
 }
 
 func processSpecificString(_ model: AI.Model, key: String, dict: [String: Any], completion: @escaping ([String: Any]) -> Void) {
