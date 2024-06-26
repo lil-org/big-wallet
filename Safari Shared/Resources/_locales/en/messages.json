@@ -4,7 +4,7 @@
         "description": "the display name for the extension"
     },
     "extension_description": {
-        "message": "connect like metamask in safari",
+        "message": "Connect like MetaMask in Safari",
         "description": "description of what the extension does"
     }
 }
