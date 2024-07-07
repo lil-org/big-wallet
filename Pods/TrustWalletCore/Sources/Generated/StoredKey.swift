@@ -493,4 +493,20 @@ public final class StoredKey {
         return TWStoredKeyFixAddresses(rawValue, passwordData)
     }
 
+    /// Re-derives address and public key for the specified chain.
+    /// It can be used to update the address if the default address format for the given chain has been changed.
+    /// This method needs the encryption password to re-write address.
+    ///
+    /// - Parameter key: Non-null pointer to a stored key
+    /// - Parameter password: Non-null block of data, password of the stored key
+    /// - Parameter coin: Coin type for which to update the address and public key
+    /// - Returns: `false` if the password is incorrect or there is no data for the specified chain, true otherwise.
+    public func updateAddress(password: Data, coin: CoinType) -> Bool {
+        let passwordData = TWDataCreateWithNSData(password)
+        defer {
+            TWDataDelete(passwordData)
+        }
+        return TWStoredKeyUpdateAddress(rawValue, passwordData, TWCoinType(rawValue: coin.rawValue))
+    }
+
 }

@@ -124,6 +124,7 @@
 #import "TWThetaProto.h"
 #import "TWTHORChainSwap.h"
 #import "TWTHORChainSwapProto.h"
+#import "TWTONAddressConverter.h"
 #import "TWTransactionCompiler.h"
 #import "TWTransactionCompilerProto.h"
 #import "TWTransactionDecoder.h"
