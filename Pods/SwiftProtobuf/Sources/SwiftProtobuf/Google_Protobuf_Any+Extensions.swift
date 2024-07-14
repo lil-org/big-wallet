@@ -30,15 +30,15 @@ extension Google_Protobuf_Any {
   ///
   /// - Parameters:
   ///   - partial: If `false` (the default), this method will check
-  ///     `Message.isInitialized` before encoding to verify that all required
+  ///     ``Message/isInitialized-6abgi`` before encoding to verify that all required
   ///     fields are present. If any are missing, this method throws
-  ///     `BinaryEncodingError.missingRequiredFields`.
-  ///   - typePrefix: The prefix to be used when building the `type_url`. 
+  ///     ``BinaryEncodingError/missingRequiredFields``.
+  ///   - typePrefix: The prefix to be used when building the `type_url`.
   ///     Defaults to "type.googleapis.com".
-  /// - Throws: `BinaryEncodingError.missingRequiredFields` if `partial` is
-  ///     false and `message` wasn't fully initialized.
+  /// - Throws: ``BinaryEncodingError/missingRequiredFields`` if 
+  /// `partial` is false and `message` wasn't fully initialized.
   public init(
-    message: Message,
+    message: any Message,
     partial: Bool = false,
     typePrefix: String = defaultAnyTypeURLPrefix
   ) throws {
@@ -49,7 +49,7 @@ extension Google_Protobuf_Any {
     typeURL = buildTypeURL(forMessage:message, typePrefix: typePrefix)
     _storage.state = .message(message)
   }
-
+  
   /// Creates a new `Google_Protobuf_Any` by decoding the given string
   /// containing a serialized message in Protocol Buffer text format.
   ///
@@ -59,12 +59,12 @@ extension Google_Protobuf_Any {
   ///     extensions in this message or messages nested within this message's
   ///     fields.
   /// - Throws: an instance of `TextFormatDecodingError` on failure.
+  @_disfavoredOverload
   public init(
     textFormatString: String,
-    extensions: ExtensionMap? = nil
+    extensions: (any ExtensionMap)? = nil
   ) throws {
-    // TODO: Remove this api and default the options instead. This api has to
-    // exist for anything compiled against an older version of the library.
+    // TODO: Remove this api and default the options instead when we do a major release.
     try self.init(textFormatString: textFormatString,
                   options: TextFormatDecodingOptions(),
                   extensions: extensions)
@@ -75,15 +75,15 @@ extension Google_Protobuf_Any {
   ///
   /// - Parameters:
   ///   - textFormatString: The text format string to decode.
-  ///   - options: The `TextFormatDencodingOptions` to use.
-  ///   - extensions: An `ExtensionMap` used to look up and decode any
+  ///   - options: The ``TextFormatDecodingOptions`` to use.
+  ///   - extensions: An ``ExtensionMap`` used to look up and decode any
   ///     extensions in this message or messages nested within this message's
   ///     fields.
-  /// - Throws: an instance of `TextFormatDecodingError` on failure.
+  /// - Throws: ``TextFormatDecodingError`` on failure.
   public init(
     textFormatString: String,
-    options: TextFormatDecodingOptions,
-    extensions: ExtensionMap? = nil
+    options: TextFormatDecodingOptions = TextFormatDecodingOptions(),
+    extensions: (any ExtensionMap)? = nil
   ) throws {
     self.init()
     if !textFormatString.isEmpty {
@@ -118,15 +118,9 @@ extension Google_Protobuf_Any {
     return _storage.isA(type)
   }
 
-#if swift(>=4.2)
   public func hash(into hasher: inout Hasher) {
     _storage.hash(into: &hasher)
   }
-#else  // swift(>=4.2)
-  public var hashValue: Int {
-    return _storage.hashValue
-  }
-#endif  // swift(>=4.2)
 }
 
 extension Google_Protobuf_Any {

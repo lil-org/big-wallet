@@ -24,14 +24,13 @@
 
 import Foundation
 
-// TODO: `FieldType` and `FieldType.BaseType` should require `Sendable` but we cannot do so yet without possibly breaking compatibility.
-
 // Note: The protobuf- and JSON-specific methods here are defined
 // in ProtobufTypeAdditions.swift and JSONTypeAdditions.swift
-public protocol FieldType {
+@preconcurrency
+public protocol FieldType: Sendable {
     // The Swift type used to store data for this field.  For example,
     // proto "sint32" fields use Swift "Int32" type.
-    associatedtype BaseType: Hashable
+    associatedtype BaseType: Hashable, Sendable
 
     // The default value for this field type before it has been set.
     // This is also used, for example, when JSON decodes a "null"
@@ -51,6 +50,7 @@ public protocol FieldType {
 ///
 /// Marker protocol for types that can be used as map keys
 ///
+@preconcurrency
 public protocol MapKeyType: FieldType {
     /// A comparison function for where order is needed.  Can't use `Comparable`
     /// because `Bool` doesn't conform, and since it is `public` there is no way
@@ -68,6 +68,7 @@ extension MapKeyType where BaseType: Comparable {
 ///
 /// Marker Protocol for types that can be used as map values.
 ///
+@preconcurrency
 public protocol MapValueType: FieldType {
 }
 

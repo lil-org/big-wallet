@@ -15,10 +15,9 @@
 ///
 // -----------------------------------------------------------------------------
 
-// TODO: `Enum` should require `Sendable` but we cannot do so yet without possibly breaking compatibility.
-
 /// Generated enum types conform to this protocol.
-public protocol Enum: RawRepresentable, Hashable {
+@preconcurrency
+public protocol Enum: RawRepresentable, Hashable, Sendable {
   /// Creates a new instance of the enum initialized to its default value.
   init()
 
@@ -41,15 +40,9 @@ public protocol Enum: RawRepresentable, Hashable {
 }
 
 extension Enum {
-#if swift(>=4.2)
   public func hash(into hasher: inout Hasher) {
     hasher.combine(rawValue)
   }
-#else  // swift(>=4.2)
-  public var hashValue: Int {
-    return rawValue
-  }
-#endif  // swift(>=4.2)
 
   /// Internal convenience property representing the name of the enum value (or
   /// `nil` if it is an `UNRECOGNIZED` value or doesn't provide names).
@@ -57,7 +50,7 @@ extension Enum {
   /// Since the text format and JSON names are always identical, we don't need
   /// to distinguish them.
   internal var name: _NameMap.Name? {
-    guard let nameProviding = Self.self as? _ProtoNameProviding.Type else {
+    guard let nameProviding = Self.self as? any _ProtoNameProviding.Type else {
       return nil
     }
     return nameProviding._protobuf_nameMap.names(for: rawValue)?.proto
@@ -71,7 +64,7 @@ extension Enum {
   ///
   /// - Parameter name: The name of the enum case.
   internal init?(name: String) {
-    guard let nameProviding = Self.self as? _ProtoNameProviding.Type,
+    guard let nameProviding = Self.self as? any _ProtoNameProviding.Type,
       let number = nameProviding._protobuf_nameMap.number(forJSONName: name) else {
       return nil
     }
@@ -86,7 +79,7 @@ extension Enum {
   ///
   /// - Parameter name: Buffer holding the UTF-8 bytes of the desired name.
   internal init?(rawUTF8: UnsafeRawBufferPointer) {
-    guard let nameProviding = Self.self as? _ProtoNameProviding.Type,
+    guard let nameProviding = Self.self as? any _ProtoNameProviding.Type,
       let number = nameProviding._protobuf_nameMap.number(forJSONName: rawUTF8) else {
       return nil
     }

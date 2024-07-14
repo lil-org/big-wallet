@@ -69,13 +69,15 @@ internal struct JSONEncoder {
 
     internal init() {}
 
-    internal var dataResult: Data { return Data(data) }
+    internal var dataResult: [UInt8] { return data }
 
     internal var stringResult: String {
         get {
             return String(bytes: data, encoding: String.Encoding.utf8)!
         }
     }
+
+    internal var bytesResult: [UInt8] { return data }
 
     /// Append a `StaticString` to the JSON text.  Because
     /// `StaticString` is already UTF8 internally, this is faster
@@ -103,6 +105,11 @@ internal struct JSONEncoder {
     /// Append a raw utf8 in a `Data` to the JSON text.
     internal mutating func append(utf8Data: Data) {
         data.append(contentsOf: utf8Data)
+    }
+
+    /// Append a raw utf8 in a `[UInt8]` to the JSON text.
+    internal mutating func append(utf8Bytes: [UInt8]) {
+        data.append(contentsOf: utf8Bytes)
     }
 
     /// Begin a new field whose name is given as a `_NameMap.Name`
@@ -244,10 +251,14 @@ internal struct JSONEncoder {
     }
 
     /// Write an `Int64` using protobuf JSON quoting conventions.
-    internal mutating func putInt64(value: Int64) {
+    internal mutating func putQuotedInt64(value: Int64) {
         data.append(asciiDoubleQuote)
         appendInt(value: value)
         data.append(asciiDoubleQuote)
+    }
+
+    internal mutating func putNonQuotedInt64(value: Int64) {
+        appendInt(value: value)
     }
 
     /// Write an `Int32` with quoting suitable for
@@ -259,15 +270,19 @@ internal struct JSONEncoder {
     }
 
     /// Write an `Int32` in the default format.
-    internal mutating func putInt32(value: Int32) {
+    internal mutating func putNonQuotedInt32(value: Int32) {
         appendInt(value: Int64(value))
     }
 
     /// Write a `UInt64` using protobuf JSON quoting conventions.
-    internal mutating func putUInt64(value: UInt64) {
+    internal mutating func putQuotedUInt64(value: UInt64) {
         data.append(asciiDoubleQuote)
         appendUInt(value: value)
         data.append(asciiDoubleQuote)
+    }
+
+    internal mutating func putNonQuotedUInt64(value: UInt64) {
+        appendUInt(value: value)
     }
 
     /// Write a `UInt32` with quoting suitable for
@@ -279,7 +294,7 @@ internal struct JSONEncoder {
     }
 
     /// Write a `UInt32` in the default format.
-    internal mutating func putUInt32(value: UInt32) {
+    internal mutating func putNonQuotedUInt32(value: UInt32) {
         appendUInt(value: UInt64(value))
     }
 
@@ -287,12 +302,12 @@ internal struct JSONEncoder {
     /// using the value as a map key.
     internal mutating func putQuotedBoolValue(value: Bool) {
         data.append(asciiDoubleQuote)
-        putBoolValue(value: value)
+        putNonQuotedBoolValue(value: value)
         data.append(asciiDoubleQuote)
     }
 
     /// Write a `Bool` in the default format.
-    internal mutating func putBoolValue(value: Bool) {
+    internal mutating func putNonQuotedBoolValue(value: Bool) {
         if value {
             append(staticText: "true")
         } else {
@@ -337,7 +352,7 @@ internal struct JSONEncoder {
     }
 
     /// Append a bytes value using protobuf JSON Base-64 encoding.
-    internal mutating func putBytesValue(value: Data) {
+    internal mutating func putBytesValue<Bytes: SwiftProtobufContiguousBytes>(value: Bytes) {
         data.append(asciiDoubleQuote)
         if value.count > 0 {
             value.withUnsafeBytes { (body: UnsafeRawBufferPointer) in

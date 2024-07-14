@@ -68,6 +68,11 @@ private let asciiLowerY = UInt8(ascii: "y")
 private let asciiLowerZ = UInt8(ascii: "z")
 private let asciiUpperZ = UInt8(ascii: "Z")
 
+// https://protobuf.dev/programming-guides/proto2/#assigning
+// Fields can be between 1 and 536,870,911. So we can stop parsing
+// a raw number if we go over this (it also avoid rollover).
+private let maxFieldNumLength: Int = 9
+
 private func fromHexDigit(_ c: UInt8) -> UInt8? {
   if c >= asciiZero && c <= asciiNine {
     return c - asciiZero
@@ -232,12 +237,12 @@ private func decodeString(_ s: String) -> String? {
 /// TextFormatScanner has no public members.
 ///
 internal struct TextFormatScanner {
-    internal var extensions: ExtensionMap?
+    internal var extensions: (any ExtensionMap)?
     private var p: UnsafeRawPointer
     private var end: UnsafeRawPointer
     private var doubleParser = DoubleParser()
 
-    private let options: TextFormatDecodingOptions
+    internal let options: TextFormatDecodingOptions
     internal var recursionBudget: Int
 
     internal var complete: Bool {
@@ -250,7 +255,7 @@ internal struct TextFormatScanner {
       utf8Pointer: UnsafeRawPointer,
       count: Int,
       options: TextFormatDecodingOptions,
-      extensions: ExtensionMap? = nil
+      extensions: (any ExtensionMap)? = nil
     ) {
         p = utf8Pointer
         end = p + count
@@ -332,40 +337,6 @@ internal struct TextFormatScanner {
         let s = utf8ToString(bytes: buff.baseAddress!, count: buff.count)
         // Force-unwrap is OK:  we never have invalid UTF8 at this point.
         return s!
-    }
-
-    /// Parse the rest of an [extension_field_name] in the input, assuming the
-    /// initial "[" character has already been read (and is in the prefix)
-    /// This is also used for AnyURL, so we include "/", "."
-    private mutating func parseExtensionKey() -> String? {
-        let start = p
-        if p == end {
-            return nil
-        }
-        let c = p[0]
-        switch c {
-        case asciiLowerA...asciiLowerZ, asciiUpperA...asciiUpperZ:
-            p += 1
-        default:
-            return nil
-        }
-        while p != end {
-            let c = p[0]
-            switch c {
-            case asciiLowerA...asciiLowerZ,
-                 asciiUpperA...asciiUpperZ,
-                 asciiZero...asciiNine,
-                 asciiUnderscore,
-                 asciiPeriod,
-                 asciiForwardSlash:
-                p += 1
-            case asciiCloseSquareBracket: // ]
-                return utf8ToString(bytes: start, count: p - start)
-            default:
-                return nil
-            }
-        }
-        return nil
     }
 
     /// Scan a string that encodes a byte field, return a count of
@@ -643,10 +614,6 @@ internal struct TextFormatScanner {
                         val = UInt64(digit - asciiLowerA + 10)
                     case asciiUpperA...asciiUpperF:
                         val = UInt64(digit - asciiUpperA + 10)
-                    case asciiLowerU: // trailing 'u'
-                        p += 1
-                        skipWhitespace()
-                        return n
                     default:
                         skipWhitespace()
                         return n
@@ -663,11 +630,6 @@ internal struct TextFormatScanner {
                 var n: UInt64 = 0
                 while p != end {
                     let digit = p[0]
-                    if digit == asciiLowerU { // trailing 'u'
-                        p += 1
-                        skipWhitespace()
-                        return n
-                    }
                     if digit < asciiZero || digit > asciiSeven {
                         skipWhitespace()
                         return n // not octal digit
@@ -686,11 +648,6 @@ internal struct TextFormatScanner {
             var n = UInt64(c - asciiZero)
             while p != end {
                 let digit = p[0]
-                if digit == asciiLowerU { // trailing 'u'
-                    p += 1
-                    skipWhitespace()
-                    return n
-                }
                 if digit < asciiZero || digit > asciiNine {
                     skipWhitespace()
                     return n // not a digit
@@ -873,10 +830,11 @@ internal struct TextFormatScanner {
                  asciiLowerE,
                  asciiUpperE: // 0...9, ., +, -, e, E
                 p += 1
-            case asciiLowerF: // f
-                // proto1 allowed floats to be suffixed with 'f'
-                let d = doubleParser.utf8ToDouble(bytes: UnsafeRawBufferPointer(start: start, count: p - start))
-                // Just skip the 'f'
+            case asciiLowerF, asciiUpperF: // f or F
+                let d = doubleParser.utf8ToDouble(bytes: UnsafeRawBufferPointer(start: start,
+                                                                                count: p - start),
+                                                  finiteOnly: false)
+                // Just skip the 'f'/'F'
                 p += 1
                 skipWhitespace()
                 return d
@@ -884,7 +842,9 @@ internal struct TextFormatScanner {
                 break loop
             }
         }
-        let d = doubleParser.utf8ToDouble(bytes: UnsafeRawBufferPointer(start: start, count: p - start))
+        let d = doubleParser.utf8ToDouble(bytes: UnsafeRawBufferPointer(start: start,
+                                                                        count: p - start),
+                                          finiteOnly: false)
         skipWhitespace()
         return d
     }
@@ -937,8 +897,18 @@ internal struct TextFormatScanner {
 
     // If the next token is the identifier "nan", return true.
     private mutating func skipOptionalNaN() -> Bool {
-        return skipOptionalKeyword(bytes:
-                                  [asciiLowerN, asciiLowerA, asciiLowerN])
+        let start = p
+        // "-nan" doesn't mean anything, but upstream handles it, so skip
+        // over any leading minus when checking for "nan".
+        if p != end && p[0] == asciiMinus {
+            p += 1
+        }
+        if skipOptionalKeyword(bytes: [asciiLowerN, asciiLowerA, asciiLowerN]) {
+            return true
+        } else {
+            p = start  // It wasn't "nan", rewind incase we skipped a minus sign.
+            return false
+        }
     }
 
     // If the next token is a recognized spelling of "infinity",
@@ -947,6 +917,7 @@ internal struct TextFormatScanner {
         if p == end {
             return nil
         }
+        let start = p
         let c = p[0]
         let negated: Bool
         if c == asciiMinus {
@@ -962,6 +933,7 @@ internal struct TextFormatScanner {
             || skipOptionalKeyword(bytes: infinity)) {
             return negated ? -Float.infinity : Float.infinity
         }
+        p = start
         return nil
     }
 
@@ -1075,31 +1047,56 @@ internal struct TextFormatScanner {
         if p == end {
             return nil
         }
-        if p[0] == asciiOpenSquareBracket { // [
+        guard p[0] == asciiOpenSquareBracket else { // [
+            return nil
+        }
+        return try parseExtensionKey()
+    }
+
+    /// Parse the rest of an [extension_field_name] in the input, assuming the
+    /// initial "[" character has already been read (and is in the prefix)
+    /// This is also used for AnyURL, so we include "/".
+    private mutating func parseExtensionKey() throws -> String {
+        assert(p[0] == asciiOpenSquareBracket)
+        p += 1
+        if p == end {
+            throw TextFormatDecodingError.malformedText
+        }
+        let start = p
+        switch p[0] {
+        case asciiLowerA...asciiLowerZ, asciiUpperA...asciiUpperZ:
             p += 1
-            if let s = parseExtensionKey() {
-                if p == end || p[0] != asciiCloseSquareBracket {
-                    throw TextFormatDecodingError.malformedText
-                }
-                // Skip ]
+        default:
+            throw TextFormatDecodingError.malformedText
+        }
+        loop: while p != end {
+            switch p[0] {
+            case asciiLowerA...asciiLowerZ,
+                 asciiUpperA...asciiUpperZ,
+                 asciiZero...asciiNine,
+                 asciiUnderscore,
+                 asciiPeriod,
+                 asciiForwardSlash:
                 p += 1
-                skipWhitespace()
-                return s
-            } else {
+            case asciiCloseSquareBracket: // ]
+                break loop
+            default:
                 throw TextFormatDecodingError.malformedText
             }
         }
-        return nil
+        if p == end || p[0] != asciiCloseSquareBracket {
+            throw TextFormatDecodingError.malformedText
+        }
+        guard let extensionName = utf8ToString(bytes: start, count: p - start) else {
+            throw TextFormatDecodingError.malformedText
+        }
+        p += 1  // Skip ]
+        skipWhitespace()
+        return extensionName
     }
 
     /// Returns text of next regular key or nil if end-of-input.
-    /// This considers an extension key [keyname] to be an
-    /// error, so call nextOptionalExtensionKey first if you
-    /// want to handle extension keys.
-    ///
-    /// This is only used by map parsing; we should be able to
-    /// rework that to use nextFieldNumber instead.
-    internal mutating func nextKey() throws -> String? {
+    internal mutating func nextKey(allowExtensions: Bool) throws -> String? {
         skipWhitespace()
         if p == end {
             return nil
@@ -1107,11 +1104,31 @@ internal struct TextFormatScanner {
         let c = p[0]
         switch c {
         case asciiOpenSquareBracket: // [
-            throw TextFormatDecodingError.malformedText
+            if allowExtensions {
+                return "[\(try parseExtensionKey())]"
+            }
+            throw TextFormatDecodingError.unknownField
         case asciiLowerA...asciiLowerZ,
-             asciiUpperA...asciiUpperZ,
-             asciiOne...asciiNine: // a...z, A...Z, 1...9
+             asciiUpperA...asciiUpperZ: // a...z, A...Z
             return parseIdentifier()
+        case asciiOne...asciiNine:  // 1...9 (field numbers are 123, not 0123)
+            let start = p
+            p += 1
+            while p != end {
+                let c = p[0]
+                if c < asciiZero || c > asciiNine {
+                    break
+                }
+                p += 1
+                if p - start > maxFieldNumLength {
+                    throw TextFormatDecodingError.malformedText
+                }
+            }
+            let buff = UnsafeRawBufferPointer(start: start, count: p - start)
+            skipWhitespace()
+            let s = utf8ToString(bytes: buff.baseAddress!, count: buff.count)
+            // Safe, can't be invalid UTF-8 given the input.
+            return s!
         default:
             throw TextFormatDecodingError.malformedText
         }
@@ -1127,46 +1144,222 @@ internal struct TextFormatScanner {
     ///
     /// This function accounts for as much as 2/3 of the total run
     /// time of the entire parse.
-    internal mutating func nextFieldNumber(names: _NameMap) throws -> Int? {
-        if p == end {
-            return nil
-        }
-        let c = p[0]
-        switch c {
-        case asciiLowerA...asciiLowerZ,
-             asciiUpperA...asciiUpperZ: // a...z, A...Z
-            let key = parseUTF8Identifier()
-            if let fieldNumber = names.number(forProtoName: key) {
-                return fieldNumber
-            } else {
-                throw TextFormatDecodingError.unknownField
-            }
-        case asciiOne...asciiNine:  // 1-9 (field numbers are 123, not 0123)
-            var fieldNum = Int(c) - Int(asciiZero)
-            p += 1
-            while p != end {
-              let c = p[0]
-              if c >= asciiZero && c <= asciiNine {
-                fieldNum = fieldNum &* 10 &+ (Int(c) - Int(asciiZero))
-              } else {
-                break
-              }
-              p += 1
-            }
+    internal mutating func nextFieldNumber(
+        names: _NameMap,
+        messageType: any Message.Type,
+        terminator: UInt8?
+    ) throws -> Int? {
+        while true {
             skipWhitespace()
-            if names.names(for: fieldNum) != nil {
-              return fieldNum
-            } else {
-              // It was a number that isn't a known field.
-              // The C++ version (TextFormat::Parser::ParserImpl::ConsumeField()),
-              // supports an option to file or skip the field's value (this is true
-              // of unknown names or numbers).
-              throw TextFormatDecodingError.unknownField
+            if p == end {
+                if terminator == nil {
+                    return nil
+                } else {
+                    // Never got the terminator.
+                    throw TextFormatDecodingError.malformedText
+                }
             }
-        default:
-            break
+            let c = p[0]
+            switch c {
+            case asciiLowerA...asciiLowerZ,
+                asciiUpperA...asciiUpperZ: // a...z, A...Z
+                let key = parseUTF8Identifier()
+                if let fieldNumber = names.number(forProtoName: key) {
+                    return fieldNumber
+                }
+                if !options.ignoreUnknownFields {
+                    throw TextFormatDecodingError.unknownField
+                }
+                // Unknown field name
+                break
+            case asciiOpenSquareBracket: // Start of an extension field
+                let key = try parseExtensionKey()
+                if let fieldNumber = extensions?.fieldNumberForProto(messageType: messageType, protoFieldName: key) {
+                    return fieldNumber
+                }
+                if !options.ignoreUnknownExtensionFields {
+                    throw TextFormatDecodingError.unknownField
+                }
+                // Unknown field name
+                break
+            case asciiOne...asciiNine:  // 1-9 (field numbers are 123, not 0123)
+                let start = p
+                var fieldNum = Int(c) - Int(asciiZero)
+                p += 1
+                while p != end {
+                    let c = p[0]
+                    if c >= asciiZero && c <= asciiNine {
+                        fieldNum = fieldNum &* 10 &+ (Int(c) - Int(asciiZero))
+                    } else {
+                        break
+                    }
+                    p += 1
+                    if p - start > maxFieldNumLength {
+                        throw TextFormatDecodingError.malformedText
+                    }
+                }
+                skipWhitespace()
+                if names.names(for: fieldNum) != nil {
+                    return fieldNum
+                }
+                if !options.ignoreUnknownFields {
+                    throw TextFormatDecodingError.unknownField
+                }
+                // Unknown field name
+                break
+            default:
+                if c == terminator {
+                    let _ = skipOptionalObjectEnd(c)
+                    return nil
+                }
+                throw TextFormatDecodingError.malformedText
+            }
+
+            assert(options.ignoreUnknownFields || options.ignoreUnknownExtensionFields)
+            try skipUnknownFieldValue()
+            // Skip any separator before looping around to try for another field.
+            skipOptionalSeparator()
         }
-        throw TextFormatDecodingError.malformedText
+    }
+
+    // Helper to skip past an unknown field value, when called `p` will be pointing
+    // at the first character after the unknown field name.
+    internal mutating func skipUnknownFieldValue() throws {
+        // This is modeled after the C++ text_format.cpp `ConsumeField()`
+        //
+        // Guess the type of this field:
+        // - If this field is not a message, there should be a ":" between the
+        //   field name and the field value and also the field value should not
+        //   start with "{" or "<" which indicates the beginning of a message body.
+        // - If there is no ":" or there is a "{" or "<" after ":", this field has
+        //   to be a message or the input is ill-formed.
+
+        skipWhitespace()
+        if (skipOptionalColon()) {
+            if p == end {
+                // Nothing after the ':'?
+                throw TextFormatDecodingError.malformedText
+            }
+            let c = p[0]
+            if c != asciiOpenAngleBracket && c != asciiOpenCurlyBracket {
+                try skipUnknownPrimativeFieldValue()
+            } else {
+                try skipUnknownMessageFieldValue()
+            }
+        } else {
+            try skipUnknownMessageFieldValue()
+        }
+    }
+
+    /// Helper to see if this could be the start of a hex or octal number so unknown field
+    /// value parsing can decide how to parse/validate.
+    private func mustParseNumberAsDecimal() -> Bool {
+        // NOTE: If we run out of characters/can't tell; then just say it doesn't have
+        // to be decimal, and let the other code error handle it.
+        var scan = p
+        var c = scan[0]
+
+        // Floats or decimals can have leading '-'
+        if c == asciiMinus {
+            scan += 1
+            if scan == end { return false }
+            c = scan[0]
+        }
+
+        if c == asciiPeriod {
+            return false  // "(-)." : clearly a float
+        }
+
+        if c == asciiZero {
+            scan += 1
+            if scan == end { return true }  // "(-)0[end]" : parse it as decimal
+            c = scan[0]
+            if c == asciiLowerX ||  // "(-)0x" : hex - must parse as decimal
+                (c >= asciiZero && c <= asciiSeven) {  // "(-)0[0-7]" : octal - must parse as decimal
+                return true
+            }
+            if c == asciiPeriod {
+                return false  // "(-)0." : clearly a float
+            }
+        }
+
+        // At this point, it doesn't realy matter what comes next. We'll call it a floating
+        // point value since even if it was a decimal, it might be too large for a UInt64 but
+        // would still be valid for a float/double field.
+        return false
+    }
+
+    private mutating func skipUnknownPrimativeFieldValue(canBeList: Bool = true) throws {
+        // This is modeled after the C++ text_format.cpp `SkipFieldValue()`
+        let c = p[0]
+
+        if c == asciiSingleQuote || c == asciiDoubleQuote {
+            // Note: the field could be 'bytes', so we can't parse that as a string
+            // as it might fail.
+            let _ = try nextBytesValue()
+            return
+        }
+
+        if skipOptionalBeginArray() {
+            guard canBeList else {
+                // Have encounted an array as an element in an array, that isn't legal.
+                throw TextFormatDecodingError.malformedText
+            }
+            if skipOptionalEndArray() {
+                return
+            }
+            while true {
+                if p == end {
+                    throw TextFormatDecodingError.malformedText
+                }
+                let c = p[0]
+                if c != asciiOpenAngleBracket && c != asciiOpenCurlyBracket {
+                    try skipUnknownPrimativeFieldValue(canBeList: false)
+                } else {
+                    try skipUnknownMessageFieldValue()
+                }
+                if skipOptionalEndArray() {
+                    return
+                }
+                try skipRequiredComma()
+            }
+        }
+
+        // NOTE: This will also cover "true", "false" for booleans, "nan"/"inf" for floats.
+        if let _ = try nextOptionalEnumName() {
+            skipWhitespace()  // `nextOptionalEnumName()` doesn't skip trailing whitespace
+            return
+        }
+
+        // NOTE: We don't need to special case "-nan"/"-inf", as they won't be forced
+        // to parse as decimal, and `nextDouble()` already supports them.
+        if mustParseNumberAsDecimal() {
+            if c == asciiMinus {
+                let _ = try nextSInt()
+            } else {
+                let _ = try nextUInt()
+            }
+        } else {
+            let _ = try nextDouble()
+        }
+    }
+
+    private mutating func skipUnknownMessageFieldValue() throws {
+        // This is modeled after the C++ text_format.cpp `SkipFieldMessage()`
+
+        let terminator = try skipObjectStart()
+        while !skipOptionalObjectEnd(terminator) {
+            if p == end {
+                throw TextFormatDecodingError.malformedText
+            }
+            if let _ = try nextKey(allowExtensions: true) {
+                // Got a valid field name or extension name ("[ext.name]")
+            } else {
+                throw TextFormatDecodingError.malformedText
+            }
+            try skipUnknownFieldValue()
+            skipOptionalSeparator()
+        }
     }
 
     private mutating func skipRequiredCharacter(_ c: UInt8) throws {

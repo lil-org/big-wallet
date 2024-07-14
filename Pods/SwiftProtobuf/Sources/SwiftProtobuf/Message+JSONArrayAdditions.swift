@@ -25,29 +25,29 @@ extension Message {
   /// - Parameters:
   ///   - collection: The list of messages to encode.
   ///   - options: The JSONEncodingOptions to use.
-  /// - Throws: `JSONEncodingError` if encoding fails.
+  /// - Throws: ``JSONEncodingError`` if encoding fails.
   public static func jsonString<C: Collection>(
     from collection: C,
     options: JSONEncodingOptions = JSONEncodingOptions()
   ) throws -> String where C.Iterator.Element == Self {
-    let data = try jsonUTF8Data(from: collection, options: options)
-    return String(data: data, encoding: String.Encoding.utf8)!
+    let data: [UInt8] = try jsonUTF8Bytes(from: collection, options: options)
+    return String(bytes: data, encoding: .utf8)!
   }
 
-  /// Returns a Data containing the UTF-8 JSON serialization of the messages.
+  /// Returns a `SwiftProtobufContiguousBytes` containing the UTF-8 JSON serialization of the messages.
   ///
   /// Unlike binary encoding, presence of required fields is not enforced when
   /// serializing to JSON.
   ///
-  /// - Returns: A Data containing the JSON serialization of the messages.
+  /// - Returns: A `SwiftProtobufContiguousBytes` containing the JSON serialization of the messages.
   /// - Parameters:
   ///   - collection: The list of messages to encode.
   ///   - options: The JSONEncodingOptions to use.
-  /// - Throws: `JSONEncodingError` if encoding fails.
-  public static func jsonUTF8Data<C: Collection>(
+  /// - Throws: ``JSONEncodingError`` if encoding fails.
+  public static func jsonUTF8Bytes<C: Collection, Bytes: SwiftProtobufContiguousBytes>(
     from collection: C,
     options: JSONEncodingOptions = JSONEncodingOptions()
-  ) throws -> Data where C.Iterator.Element == Self {
+  ) throws -> Bytes where C.Iterator.Element == Self {
     var visitor = try JSONEncodingVisitor(type: Self.self, options: options)
     visitor.startArray()
     for message in collection {
@@ -56,7 +56,7 @@ extension Message {
         visitor.endObject()
     }
     visitor.endArray()
-    return visitor.dataResult
+    return Bytes(visitor.dataResult)
   }
 
   /// Creates a new array of messages by decoding the given string containing a
@@ -64,7 +64,7 @@ extension Message {
   ///
   /// - Parameter jsonString: The JSON-formatted string to decode.
   /// - Parameter options: The JSONDecodingOptions to use.
-  /// - Throws: `JSONDecodingError` if decoding fails.
+  /// - Throws: ``JSONDecodingError`` if decoding fails.
   public static func array(
     fromJSONString jsonString: String,
     options: JSONDecodingOptions = JSONDecodingOptions()
@@ -80,54 +80,54 @@ extension Message {
   /// - Parameter jsonString: The JSON-formatted string to decode.
   /// - Parameter extensions: The extension map to use with this decode
   /// - Parameter options: The JSONDecodingOptions to use.
-  /// - Throws: `JSONDecodingError` if decoding fails.
+  /// - Throws: ``JSONDecodingError`` if decoding fails.
   public static func array(
     fromJSONString jsonString: String,
-    extensions: ExtensionMap = SimpleExtensionMap(),
+    extensions: any ExtensionMap = SimpleExtensionMap(),
     options: JSONDecodingOptions = JSONDecodingOptions()
   ) throws -> [Self] {
     if jsonString.isEmpty {
       throw JSONDecodingError.truncated
     }
     if let data = jsonString.data(using: String.Encoding.utf8) {
-      return try array(fromJSONUTF8Data: data, extensions: extensions, options: options)
+      return try array(fromJSONUTF8Bytes: data, extensions: extensions, options: options)
     } else {
       throw JSONDecodingError.truncated
     }
   }
 
-  /// Creates a new array of messages by decoding the given `Data` containing a
-  /// serialized array of messages in JSON format, interpreting the data as
+  /// Creates a new array of messages by decoding the given ``SwiftProtobufContiguousBytes``
+  /// containing a serialized array of messages in JSON format, interpreting the data as
   /// UTF-8 encoded text.
   ///
-  /// - Parameter jsonUTF8Data: The JSON-formatted data to decode, represented
+  /// - Parameter jsonUTF8Bytes: The JSON-formatted data to decode, represented
   ///   as UTF-8 encoded text.
   /// - Parameter options: The JSONDecodingOptions to use.
-  /// - Throws: `JSONDecodingError` if decoding fails.
-  public static func array(
-    fromJSONUTF8Data jsonUTF8Data: Data,
+  /// - Throws: ``JSONDecodingError`` if decoding fails.
+  public static func array<Bytes: SwiftProtobufContiguousBytes>(
+    fromJSONUTF8Bytes jsonUTF8Bytes: Bytes,
     options: JSONDecodingOptions = JSONDecodingOptions()
   ) throws -> [Self] {
-    return try self.array(fromJSONUTF8Data: jsonUTF8Data,
+    return try self.array(fromJSONUTF8Bytes: jsonUTF8Bytes,
                           extensions: SimpleExtensionMap(),
                           options: options)
   }
 
-  /// Creates a new array of messages by decoding the given `Data` containing a
-  /// serialized array of messages in JSON format, interpreting the data as
+  /// Creates a new array of messages by decoding the given ``SwiftProtobufContiguousBytes``
+  /// containing a serialized array of messages in JSON format, interpreting the data as
   /// UTF-8 encoded text.
   ///
-  /// - Parameter jsonUTF8Data: The JSON-formatted data to decode, represented
+  /// - Parameter jsonUTF8Bytes: The JSON-formatted data to decode, represented
   ///   as UTF-8 encoded text.
   /// - Parameter extensions: The extension map to use with this decode
   /// - Parameter options: The JSONDecodingOptions to use.
-  /// - Throws: `JSONDecodingError` if decoding fails.
-  public static func array(
-    fromJSONUTF8Data jsonUTF8Data: Data,
-    extensions: ExtensionMap = SimpleExtensionMap(),
+  /// - Throws: ``JSONDecodingError`` if decoding fails.
+  public static func array<Bytes: SwiftProtobufContiguousBytes>(
+    fromJSONUTF8Bytes jsonUTF8Bytes: Bytes,
+    extensions: any ExtensionMap = SimpleExtensionMap(),
     options: JSONDecodingOptions = JSONDecodingOptions()
   ) throws -> [Self] {
-    return try jsonUTF8Data.withUnsafeBytes { (body: UnsafeRawBufferPointer) in
+    return try jsonUTF8Bytes.withUnsafeBytes { (body: UnsafeRawBufferPointer) in
       var array = [Self]()
 
       if body.count > 0 {

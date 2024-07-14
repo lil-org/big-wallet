@@ -23,7 +23,7 @@ internal struct JSONEncodingVisitor: Visitor {
   private let options: JSONEncodingOptions
 
   /// The JSON text produced by the visitor, as raw UTF8 bytes.
-  var dataResult: Data {
+  var dataResult: [UInt8] {
     return encoder.dataResult
   }
 
@@ -34,8 +34,8 @@ internal struct JSONEncodingVisitor: Visitor {
 
   /// Creates a new visitor for serializing a message of the given type to JSON
   /// format.
-  init(type: Message.Type, options: JSONEncodingOptions) throws {
-    if let nameProviding = type as? _ProtoNameProviding.Type {
+  init(type: any Message.Type, options: JSONEncodingOptions) throws {
+    if let nameProviding = type as? any _ProtoNameProviding.Type {
       self.nameMap = nameProviding._protobuf_nameMap
     } else {
       throw JSONEncodingError.missingFieldNames
@@ -51,13 +51,13 @@ internal struct JSONEncodingVisitor: Visitor {
     encoder.endArray()
   }
 
-  mutating func startObject(message: Message) {
-    self.extensions = (message as? ExtensibleMessage)?._protobuf_extensionFieldValues
+  mutating func startObject(message: any Message) {
+    self.extensions = (message as? (any ExtensibleMessage))?._protobuf_extensionFieldValues
     encoder.startObject()
   }
 
-  mutating func startArrayObject(message: Message) {
-    self.extensions = (message as? ExtensibleMessage)?._protobuf_extensionFieldValues
+  mutating func startArrayObject(message: any Message) {
+    self.extensions = (message as? (any ExtensibleMessage))?._protobuf_extensionFieldValues
     encoder.startArrayObject()
   }
 
@@ -91,37 +91,41 @@ internal struct JSONEncodingVisitor: Visitor {
 
   mutating func visitSingularInt32Field(value: Int32, fieldNumber: Int) throws {
     try startField(for: fieldNumber)
-    encoder.putInt32(value: value)
+    encoder.putNonQuotedInt32(value: value)
   }
 
   mutating func visitSingularInt64Field(value: Int64, fieldNumber: Int) throws {
     try startField(for: fieldNumber)
-    encoder.putInt64(value: value)
+    options.alwaysPrintInt64sAsNumbers
+      ? encoder.putNonQuotedInt64(value: value)
+      : encoder.putQuotedInt64(value: value)
   }
 
   mutating func visitSingularUInt32Field(value: UInt32, fieldNumber: Int) throws {
     try startField(for: fieldNumber)
-    encoder.putUInt32(value: value)
+    encoder.putNonQuotedUInt32(value: value)
   }
 
   mutating func visitSingularUInt64Field(value: UInt64, fieldNumber: Int) throws {
     try startField(for: fieldNumber)
-    encoder.putUInt64(value: value)
+    options.alwaysPrintInt64sAsNumbers
+      ? encoder.putNonQuotedUInt64(value: value)
+      : encoder.putQuotedUInt64(value: value)
   }
 
   mutating func visitSingularFixed32Field(value: UInt32, fieldNumber: Int) throws {
     try startField(for: fieldNumber)
-    encoder.putUInt32(value: value)
+    encoder.putNonQuotedUInt32(value: value)
   }
 
   mutating func visitSingularSFixed32Field(value: Int32, fieldNumber: Int) throws {
     try startField(for: fieldNumber)
-    encoder.putInt32(value: value)
+    encoder.putNonQuotedInt32(value: value)
   }
 
   mutating func visitSingularBoolField(value: Bool, fieldNumber: Int) throws {
     try startField(for: fieldNumber)
-    encoder.putBoolValue(value: value)
+    encoder.putNonQuotedBoolValue(value: value)
   }
 
   mutating func visitSingularStringField(value: String, fieldNumber: Int) throws {
@@ -155,7 +159,7 @@ internal struct JSONEncodingVisitor: Visitor {
 
   mutating func visitSingularEnumField<E: Enum>(value: E, fieldNumber: Int) throws {
     try startField(for: fieldNumber)
-    if let e = value as? _CustomJSONCodable {
+    if let e = value as? (any _CustomJSONCodable) {
       let json = try e.encodedJSONString(options: options)
       encoder.append(text: json)
     } else if !options.alwaysPrintEnumsAsInts, let n = value.name {
@@ -167,10 +171,10 @@ internal struct JSONEncodingVisitor: Visitor {
 
   mutating func visitSingularMessageField<M: Message>(value: M, fieldNumber: Int) throws {
     try startField(for: fieldNumber)
-    if let m = value as? _CustomJSONCodable {
+    if let m = value as? (any _CustomJSONCodable) {
       let json = try m.encodedJSONString(options: options)
       encoder.append(text: json)
-    } else if let newNameMap = (M.self as? _ProtoNameProviding.Type)?._protobuf_nameMap {
+    } else if let newNameMap = (M.self as? any _ProtoNameProviding.Type)?._protobuf_nameMap {
       // Preserve outer object's name and extension maps; restore them before returning
       let oldNameMap = self.nameMap
       let oldExtensions = self.extensions
@@ -187,7 +191,7 @@ internal struct JSONEncodingVisitor: Visitor {
   }
 
   mutating func visitSingularGroupField<G: Message>(value: G, fieldNumber: Int) throws {
-    // Google does not serialize groups into JSON
+    try visitSingularMessageField(value: value, fieldNumber: fieldNumber)
   }
 
   mutating func visitRepeatedFloatField(value: [Float], fieldNumber: Int) throws {
@@ -207,28 +211,42 @@ internal struct JSONEncodingVisitor: Visitor {
   mutating func visitRepeatedInt32Field(value: [Int32], fieldNumber: Int) throws {
     try _visitRepeated(value: value, fieldNumber: fieldNumber) {
       (encoder: inout JSONEncoder, v: Int32) in
-      encoder.putInt32(value: v)
+      encoder.putNonQuotedInt32(value: v)
     }
   }
 
   mutating func visitRepeatedInt64Field(value: [Int64], fieldNumber: Int) throws {
-    try _visitRepeated(value: value, fieldNumber: fieldNumber) {
-      (encoder: inout JSONEncoder, v: Int64) in
-      encoder.putInt64(value: v)
+    if options.alwaysPrintInt64sAsNumbers {
+      try _visitRepeated(value: value, fieldNumber: fieldNumber) {
+        (encoder: inout JSONEncoder, v: Int64) in
+        encoder.putNonQuotedInt64(value: v)
+      }
+    } else {
+      try _visitRepeated(value: value, fieldNumber: fieldNumber) {
+        (encoder: inout JSONEncoder, v: Int64) in
+        encoder.putQuotedInt64(value: v)
+      }
     }
   }
 
    mutating func visitRepeatedUInt32Field(value: [UInt32], fieldNumber: Int) throws {
     try _visitRepeated(value: value, fieldNumber: fieldNumber) {
       (encoder: inout JSONEncoder, v: UInt32) in
-      encoder.putUInt32(value: v)
+      encoder.putNonQuotedUInt32(value: v)
     }
   }
 
   mutating func visitRepeatedUInt64Field(value: [UInt64], fieldNumber: Int) throws {
-    try _visitRepeated(value: value, fieldNumber: fieldNumber) {
-      (encoder: inout JSONEncoder, v: UInt64) in
-      encoder.putUInt64(value: v)
+    if options.alwaysPrintInt64sAsNumbers {
+      try _visitRepeated(value: value, fieldNumber: fieldNumber) {
+        (encoder: inout JSONEncoder, v: UInt64) in
+        encoder.putNonQuotedUInt64(value: v)
+      }
+    } else {
+      try _visitRepeated(value: value, fieldNumber: fieldNumber) {
+        (encoder: inout JSONEncoder, v: UInt64) in
+        encoder.putQuotedUInt64(value: v)
+      }
     }
   }
 
@@ -259,7 +277,7 @@ internal struct JSONEncodingVisitor: Visitor {
   mutating func visitRepeatedBoolField(value: [Bool], fieldNumber: Int) throws {
     try _visitRepeated(value: value, fieldNumber: fieldNumber) {
       (encoder: inout JSONEncoder, v: Bool) in
-      encoder.putBoolValue(value: v)
+      encoder.putNonQuotedBoolValue(value: v)
     }
   }
 
@@ -278,11 +296,11 @@ internal struct JSONEncodingVisitor: Visitor {
   }
 
   mutating func visitRepeatedEnumField<E: Enum>(value: [E], fieldNumber: Int) throws {
-    if let _ = E.self as? _CustomJSONCodable.Type {
+    if let _ = E.self as? any _CustomJSONCodable.Type {
       let options = self.options
       try _visitRepeated(value: value, fieldNumber: fieldNumber) {
         (encoder: inout JSONEncoder, v: E) throws in
-        let e = v as! _CustomJSONCodable
+        let e = v as! (any _CustomJSONCodable)
         let json = try e.encodedJSONString(options: options)
         encoder.append(text: json)
       }
@@ -304,7 +322,7 @@ internal struct JSONEncodingVisitor: Visitor {
     try startField(for: fieldNumber)
     var comma = false
     encoder.startArray()
-    if let _ = M.self as? _CustomJSONCodable.Type {
+    if let _ = M.self as? any _CustomJSONCodable.Type {
       for v in value {
         if comma {
           encoder.comma()
@@ -313,7 +331,7 @@ internal struct JSONEncodingVisitor: Visitor {
         let json = try v.jsonString(options: options)
         encoder.append(text: json)
       }
-    } else if let newNameMap = (M.self as? _ProtoNameProviding.Type)?._protobuf_nameMap {
+    } else if let newNameMap = (M.self as? any _ProtoNameProviding.Type)?._protobuf_nameMap {
       // Preserve name and extension maps for outer object
       let oldNameMap = self.nameMap
       let oldExtensions = self.extensions
@@ -333,8 +351,7 @@ internal struct JSONEncodingVisitor: Visitor {
   }
 
   mutating func visitRepeatedGroupField<G: Message>(value: [G], fieldNumber: Int) throws {
-    assert(!value.isEmpty)
-    // Google does not serialize groups into JSON
+    try visitRepeatedMessageField(value: value, fieldNumber: fieldNumber)
   }
 
   // Packed fields are handled the same as non-packed fields, so JSON just
@@ -374,7 +391,7 @@ internal struct JSONEncodingVisitor: Visitor {
   ) throws {
     try startField(for: fieldNumber)
     encoder.append(text: "{")
-    var mapVisitor = JSONMapEncodingVisitor(encoder: encoder, options: options)
+    var mapVisitor = JSONMapEncodingVisitor(encoder: JSONEncoder(), options: options)
     if options.useDeterministicOrdering {
       for (k,v) in map.sorted(by: { isOrderedBefore( $0.0, $1.0) }) {
         try encode(&mapVisitor, k, v)
@@ -384,7 +401,7 @@ internal struct JSONEncodingVisitor: Visitor {
         try encode(&mapVisitor, k, v)
       }
     }
-    encoder = mapVisitor.encoder
+    encoder.append(utf8Bytes: mapVisitor.bytesResult)
     encoder.append(text: "}")
   }
 
@@ -404,7 +421,7 @@ internal struct JSONEncodingVisitor: Visitor {
     } else if let name = extensions?[number]?.protobufExtension.fieldName {
         encoder.startExtensionField(name: name)
     } else {
-        throw JSONEncodingError.missingFieldNames
+      throw JSONEncodingError.missingFieldNames
     }
   }
 }

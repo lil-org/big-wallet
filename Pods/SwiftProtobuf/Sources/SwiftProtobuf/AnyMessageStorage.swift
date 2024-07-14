@@ -15,20 +15,15 @@
 
 import Foundation
 
-#if !swift(>=4.2)
-private let i_2166136261 = Int(bitPattern: 2166136261)
-private let i_16777619 = Int(16777619)
-#endif
-
 fileprivate func serializeAnyJSON(
-  for message: Message,
+  for message: any Message,
   typeURL: String,
   options: JSONEncodingOptions
 ) throws -> String {
   var visitor = try JSONEncodingVisitor(type: type(of: message), options: options)
   visitor.startObject(message: message)
   visitor.encodeField(name: "@type", stringValue: typeURL)
-  if let m = message as? _CustomJSONCodable {
+  if let m = message as? (any _CustomJSONCodable) {
     let value = try m.encodedJSONString(options: options)
     visitor.encodeField(name: "value", jsonText: value)
   } else {
@@ -38,7 +33,7 @@ fileprivate func serializeAnyJSON(
   return visitor.stringResult
 }
 
-fileprivate func emitVerboseTextForm(visitor: inout TextFormatEncodingVisitor, message: Message, typeURL: String) {
+fileprivate func emitVerboseTextForm(visitor: inout TextFormatEncodingVisitor, message: any Message, typeURL: String) {
   let url: String
   if typeURL.isEmpty {
     url = buildTypeURL(forMessage: message, typePrefix: defaultAnyTypeURLPrefix)
@@ -48,22 +43,22 @@ fileprivate func emitVerboseTextForm(visitor: inout TextFormatEncodingVisitor, m
   visitor.visitAnyVerbose(value: message, typeURL: url)
 }
 
-fileprivate func asJSONObject(body: Data) -> Data {
+fileprivate func asJSONObject(body: [UInt8]) -> Data {
   let asciiOpenCurlyBracket = UInt8(ascii: "{")
   let asciiCloseCurlyBracket = UInt8(ascii: "}")
-  var result = Data([asciiOpenCurlyBracket])
-  result.append(body)
+  var result = [asciiOpenCurlyBracket]
+  result.append(contentsOf: body)
   result.append(asciiCloseCurlyBracket)
-  return result
+  return Data(result)
 }
 
-fileprivate func unpack(contentJSON: Data,
-                        extensions: ExtensionMap,
+fileprivate func unpack(contentJSON: [UInt8],
+                        extensions: any ExtensionMap,
                         options: JSONDecodingOptions,
-                        as messageType: Message.Type) throws -> Message {
-  guard messageType is _CustomJSONCodable.Type else {
+                        as messageType: any Message.Type) throws -> any Message {
+  guard messageType is any _CustomJSONCodable.Type else {
     let contentJSONAsObject = asJSONObject(body: contentJSON)
-    return try messageType.init(jsonUTF8Data: contentJSONAsObject, extensions: extensions, options: options)
+    return try messageType.init(jsonUTF8Bytes: contentJSONAsObject, extensions: extensions, options: options)
   }
 
   var value = String()
@@ -104,10 +99,10 @@ internal class AnyMessageStorage {
     get {
       switch state {
       case .binary(let value):
-        return value
+        return Data(value)
       case .message(let message):
         do {
-          return try message.serializedData(partial: true)
+          return try message.serializedBytes(partial: true)
         } catch {
           return Data()
         }
@@ -120,7 +115,7 @@ internal class AnyMessageStorage {
                              extensions: SimpleExtensionMap(),
                              options: options,
                              as: messageType)
-          return try m.serializedData(partial: true)
+          return try m.serializedBytes(partial: true)
         } catch {
           return Data()
         }
@@ -140,9 +135,9 @@ internal class AnyMessageStorage {
     // unpacking that takes new options when a developer decides to decode it.
     case binary(Data)
     // a message
-    case message(Message)
+    case message(any Message)
     // parsed JSON with the @type removed and the decoding options.
-    case contentJSON(Data, JSONDecodingOptions)
+    case contentJSON([UInt8], JSONDecodingOptions)
   }
   var state: InternalState = .binary(Data())
 
@@ -175,7 +170,7 @@ internal class AnyMessageStorage {
   // replaced during the unpacking and never as a merge.
   func unpackTo<M: Message>(
     target: inout M,
-    extensions: ExtensionMap?,
+    extensions: (any ExtensionMap)?,
     options: BinaryDecodingOptions
   ) throws {
     guard isA(M.self) else {
@@ -184,7 +179,7 @@ internal class AnyMessageStorage {
 
     switch state {
     case .binary(let data):
-      target = try M(serializedData: data, extensions: extensions, partial: true, options: options)
+      target = try M(serializedBytes: data, extensions: extensions, partial: true, options: options)
 
     case .message(let msg):
       if let message = msg as? M {
@@ -192,8 +187,8 @@ internal class AnyMessageStorage {
         target = message
       } else {
         // Different type, serialize and parse.
-        let data = try msg.serializedData(partial: true)
-        target = try M(serializedData: data, extensions: extensions, partial: true)
+        let bytes: [UInt8] = try msg.serializedBytes(partial: true)
+        target = try M(serializedBytes: bytes, extensions: extensions, partial: true)
       }
 
     case .contentJSON(let contentJSON, let options):
@@ -223,7 +218,7 @@ internal class AnyMessageStorage {
     case .contentJSON(let contentJSON, let options):
       // contentJSON requires we have the type available for decoding
       guard let messageType = Google_Protobuf_Any.messageType(forTypeURL: _typeURL) else {
-          throw BinaryEncodingError.anyTranscodeFailure
+        throw BinaryEncodingError.anyTranscodeFailure
       }
       do {
         // Decodes the full JSON and then discard the result.
@@ -277,7 +272,7 @@ extension AnyMessageStorage {
       if let messageType = Google_Protobuf_Any.messageType(forTypeURL: _typeURL) {
         // If we can decode it, we can write the readable verbose form:
         do {
-          let m = try messageType.init(serializedData: valueData, partial: true)
+          let m = try messageType.init(serializedBytes: valueData, partial: true)
           emitVerboseTextForm(visitor: &visitor, message: m, typeURL: _typeURL)
           return
         } catch {
@@ -313,7 +308,7 @@ extension AnyMessageStorage {
       }
       // Build a readable form of the JSON:
       let contentJSONAsObject = asJSONObject(body: contentJSON)
-      visitor.visitAnyJSONDataField(value: contentJSONAsObject)
+      visitor.visitAnyJSONBytesField(value: contentJSONAsObject)
     }
   }
 }
@@ -331,7 +326,6 @@ extension AnyMessageStorage {
 /// test.  Of course, regardless of the above, we must guarantee that
 /// hashValue is compatible with equality.
 extension AnyMessageStorage {
-#if swift(>=4.2)
   // Can't use _valueData for a few reasons:
   // 1. Since decode is done on demand, two objects could be equal
   //    but created differently (one from JSON, one for Message, etc.),
@@ -346,15 +340,6 @@ extension AnyMessageStorage {
       hasher.combine(_typeURL)
     }
   }
-#else  // swift(>=4.2)
-  var hashValue: Int {
-    var hash: Int = i_2166136261
-    if !_typeURL.isEmpty {
-      hash = (hash &* i_16777619) ^ _typeURL.hashValue
-    }
-    return hash
-  }
-#endif  // swift(>=4.2)
 
   func isEqualTo(other: AnyMessageStorage) -> Bool {
     if (_typeURL != other._typeURL) {
@@ -439,7 +424,7 @@ extension AnyMessageStorage {
         // else to decode later.)
         throw JSONEncodingError.anyTranscodeFailure
       }
-      let m = try messageType.init(serializedData: valueData, partial: true)
+      let m = try messageType.init(serializedBytes: valueData, partial: true)
       return try serializeAnyJSON(for: m, typeURL: _typeURL, options: options)
 
     case .message(let msg):
@@ -457,7 +442,7 @@ extension AnyMessageStorage {
         jsonEncoder.append(staticText: ",")
         // NOTE: This doesn't really take `options` into account since it is
         // just reflecting out what was taken in originally.
-        jsonEncoder.append(utf8Data: contentJSON)
+        jsonEncoder.append(utf8Bytes: contentJSON)
       }
       jsonEncoder.endObject()
       return jsonEncoder.stringResult
@@ -496,7 +481,7 @@ extension AnyMessageStorage {
         // parsed.
         var updatedOptions = decoder.options
         updatedOptions.messageDepthLimit = decoder.scanner.recursionBudget
-        state = .contentJSON(jsonEncoder.dataResult, updatedOptions)
+        state = .contentJSON(Array(jsonEncoder.dataResult), updatedOptions)
         return
       }
       try decoder.scanner.skipRequiredComma()

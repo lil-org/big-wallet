@@ -34,7 +34,7 @@ extension Message {
   /// of the message.
   ///
   /// Unlike binary encoding, presence of required fields is not enforced when
-  /// serializing to JSON.
+  /// serializing to text format.
   ///
   /// - Returns: A string containing the text format serialization of the message.
   /// - Parameters:
@@ -53,22 +53,21 @@ extension Message {
     }
     return visitor.result
   }
-
+    
   /// Creates a new message by decoding the given string containing a
   /// serialized message in Protocol Buffer text format.
   ///
   /// - Parameters:
   ///   - textFormatString: The text format string to decode.
-  ///   - extensions: An `ExtensionMap` used to look up and decode any
+  ///   - extensions: An ``ExtensionMap`` used to look up and decode any
   ///     extensions in this message or messages nested within this message's
   ///     fields.
-  /// - Throws: an instance of `TextFormatDecodingError` on failure.
+  /// - Throws: ``SwiftProtobufError`` on failure.
+  // TODO: delete this (and keep the one with the extra param instead) when we break API
   public init(
     textFormatString: String,
-    extensions: ExtensionMap? = nil
+    extensions: (any ExtensionMap)? = nil
   ) throws {
-    // TODO: Remove this api and default the options instead. This api has to
-    // exist for anything compiled against an older version of the library.
     try self.init(textFormatString: textFormatString,
                   options: TextFormatDecodingOptions(),
                   extensions: extensions)
@@ -79,15 +78,15 @@ extension Message {
   ///
   /// - Parameters:
   ///   - textFormatString: The text format string to decode.
-  ///   - options: The `TextFormatDencodingOptions` to use.
-  ///   - extensions: An `ExtensionMap` used to look up and decode any
+  ///   - options: The ``TextFormatDecodingOptions`` to use.
+  ///   - extensions: An ``ExtensionMap`` used to look up and decode any
   ///     extensions in this message or messages nested within this message's
   ///     fields.
-  /// - Throws: an instance of `TextFormatDecodingError` on failure.
+  /// - Throws: ``TextFormatDecodingError`` on failure.
   public init(
     textFormatString: String,
-    options: TextFormatDecodingOptions,
-    extensions: ExtensionMap? = nil
+    options: TextFormatDecodingOptions = TextFormatDecodingOptions(),
+    extensions: (any ExtensionMap)? = nil
   ) throws {
     self.init()
     if !textFormatString.isEmpty {

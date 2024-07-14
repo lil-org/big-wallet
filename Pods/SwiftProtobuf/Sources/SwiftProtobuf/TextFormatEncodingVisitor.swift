@@ -32,34 +32,19 @@ internal struct TextFormatEncodingVisitor: Visitor {
 
   /// Creates a new visitor that serializes the given message to protobuf text
   /// format.
-  init(message: Message, options: TextFormatEncodingOptions) {
-    self.init(message: message, encoder: TextFormatEncoder(), options: options)
-  }
-
-  /// Creates a new visitor that serializes the given message to protobuf text
-  /// format, using an existing encoder.
-  private init(message: Message, encoder: TextFormatEncoder, options: TextFormatEncodingOptions) {
+  init(message: any Message, options: TextFormatEncodingOptions) {
     let nameMap: _NameMap?
-    if let nameProviding = message as? _ProtoNameProviding {
+    if let nameProviding = message as? (any _ProtoNameProviding) {
         nameMap = type(of: nameProviding)._protobuf_nameMap
     } else {
         nameMap = nil
     }
-    let extensions = (message as? ExtensibleMessage)?._protobuf_extensionFieldValues
-    self.init(nameMap: nameMap, nameResolver: [:], extensions: extensions, encoder: encoder, options: options)
-  }
+    let extensions = (message as? (any ExtensibleMessage))?._protobuf_extensionFieldValues
 
-  private init(
-    nameMap: _NameMap?,
-    nameResolver: [Int:StaticString],
-    extensions: ExtensionFieldValueSet?,
-    encoder: TextFormatEncoder,
-    options: TextFormatEncodingOptions
-  ) {
     self.nameMap = nameMap
-    self.nameResolver = nameResolver
+    self.nameResolver = [:]
     self.extensions = extensions
-    self.encoder = encoder
+    self.encoder = TextFormatEncoder()
     self.options = options
   }
 
@@ -121,10 +106,10 @@ internal struct TextFormatEncodingVisitor: Visitor {
   /// The implementation tries to be "helpful" and if a length delimited field
   /// appears to be a submessage, it prints it as such. However, that opens the
   /// door to someone sending a message with an unknown field that is a stack
-  /// bomb, i.e. - it causes this code to recurse, exhausing the stack and
+  /// bomb, i.e. - it causes this code to recurse, exhausting the stack and
   /// thus opening up an attack vector. To keep this "help", but avoid the
   /// attack, a limit is placed on how many times it will recurse before just
-  /// treating the length delimted fields as bytes and not trying to decode
+  /// treating the length delimited fields as bytes and not trying to decode
   /// them.
   private mutating func visitUnknown(
     decoder: inout BinaryDecoder,
@@ -158,10 +143,10 @@ internal struct TextFormatEncodingVisitor: Visitor {
               encoder.emitFieldNumber(number: tag.fieldNumber)
               var bytes = Data()
               try decoder.decodeSingularBytesField(value: &bytes)
-              bytes.withUnsafeBytes { (body: UnsafeRawBufferPointer) -> () in
-                  if let baseAddress = body.baseAddress, body.count > 0 {
-                      var encodeAsBytes: Bool
-                      if (recursionBudget > 0) {
+              var encodeAsBytes = true
+              if bytes.count > 0 && recursionBudget > 0 {
+                  bytes.withUnsafeBytes { (body: UnsafeRawBufferPointer) -> () in
+                      if let baseAddress = body.baseAddress, body.count > 0 {
                           do {
                               // Walk all the fields to test if it looks like a message
                               var testDecoder = BinaryDecoder(forReadingFrom: baseAddress,
@@ -181,15 +166,13 @@ internal struct TextFormatEncodingVisitor: Visitor {
                           } catch {
                               encodeAsBytes = true
                           }
-                      } else {
-                          encodeAsBytes = true
-                      }
-                      if (encodeAsBytes) {
-                        encoder.startRegularField()
-                        encoder.putBytesValue(value: bytes)
-                        encoder.endRegularField()
                       }
                   }
+              }
+              if (encodeAsBytes) {
+                encoder.startRegularField()
+                encoder.putBytesValue(value: bytes)
+                encoder.endRegularField()
               }
           case .startGroup:
               encoder.emitFieldNumber(number: tag.fieldNumber)
@@ -280,14 +263,14 @@ internal struct TextFormatEncodingVisitor: Visitor {
                                              fieldNumber: Int) throws {
       emitFieldName(lookingUp: fieldNumber)
 
-      // Cache old encoder state
+      // Cache old visitor configuration
       let oldNameMap = self.nameMap
       let oldNameResolver = self.nameResolver
       let oldExtensions = self.extensions
-      // Update encoding state for new message
-      self.nameMap = (M.self as? _ProtoNameProviding.Type)?._protobuf_nameMap
+      // Update configuration for new message
+    self.nameMap = (M.self as? any _ProtoNameProviding.Type)?._protobuf_nameMap
       self.nameResolver = [:]
-      self.extensions = (value as? ExtensibleMessage)?._protobuf_extensionFieldValues
+    self.extensions = (value as? (any ExtensibleMessage))?._protobuf_extensionFieldValues
       // Encode submessage
       encoder.startMessageField()
       if let any = value as? Google_Protobuf_Any {
@@ -296,7 +279,7 @@ internal struct TextFormatEncodingVisitor: Visitor {
           try! value.traverse(visitor: &self)
       }
       encoder.endMessageField()
-      // Restore state before returning
+      // Restore configuration before returning
       self.extensions = oldExtensions
       self.nameResolver = oldNameResolver
       self.nameMap = oldNameMap
@@ -305,22 +288,36 @@ internal struct TextFormatEncodingVisitor: Visitor {
   // Emit the full "verbose" form of an Any.  This writes the typeURL
   // as a field name in `[...]` followed by the fields of the
   // contained message.
-  internal mutating func visitAnyVerbose(value: Message, typeURL: String) {
+  internal mutating func visitAnyVerbose(value: any Message, typeURL: String) {
       encoder.emitExtensionFieldName(name: typeURL)
       encoder.startMessageField()
-      var visitor = TextFormatEncodingVisitor(message: value, encoder: encoder, options: options)
+
+      // Cache old visitor configuration
+      let oldNameMap = self.nameMap
+      let oldNameResolver = self.nameResolver
+      let oldExtensions = self.extensions
+      // Update configuration for new message
+    self.nameMap = (type(of: value) as? any _ProtoNameProviding.Type)?._protobuf_nameMap
+      self.nameResolver = [:]
+    self.extensions = (value as? (any ExtensibleMessage))?._protobuf_extensionFieldValues
+
       if let any = value as? Google_Protobuf_Any {
-          any.textTraverse(visitor: &visitor)
+          any.textTraverse(visitor: &self)
       } else {
-          try! value.traverse(visitor: &visitor)
+          try! value.traverse(visitor: &self)
       }
-      encoder = visitor.encoder
+
+      // Restore configuration before returning
+      self.extensions = oldExtensions
+      self.nameResolver = oldNameResolver
+      self.nameMap = oldNameMap
+
       encoder.endMessageField()
   }
 
   // Write a single special field called "#json".  This
   // is used for Any objects with undecoded JSON contents.
-  internal mutating func visitAnyJSONDataField(value: Data) {
+  internal mutating func visitAnyJSONBytesField(value: Data) {
       encoder.indent()
       encoder.append(staticText: "#json: ")
       encoder.putBytesValue(value: value)
@@ -466,14 +463,14 @@ internal struct TextFormatEncodingVisitor: Visitor {
       assert(!value.isEmpty)
       // Look up field name against outer message encoding state
       let fieldName = formatFieldName(lookingUp: fieldNumber)
-      // Cache old encoder state
+      // Cache old visitor state
       let oldNameMap = self.nameMap
       let oldNameResolver = self.nameResolver
       let oldExtensions = self.extensions
       // Update encoding state for new message type
-      self.nameMap = (M.self as? _ProtoNameProviding.Type)?._protobuf_nameMap
+    self.nameMap = (M.self as? any _ProtoNameProviding.Type)?._protobuf_nameMap
       self.nameResolver = [:]
-      self.extensions = (value as? ExtensibleMessage)?._protobuf_extensionFieldValues
+    self.extensions = (value as? (any ExtensibleMessage))?._protobuf_extensionFieldValues
       // Iterate and encode each message
       for v in value {
           encoder.emitFieldName(name: fieldName)
@@ -612,12 +609,27 @@ internal struct TextFormatEncodingVisitor: Visitor {
     isOrderedBefore: (K, K) -> Bool,
     encode: (inout TextFormatEncodingVisitor, K, V) throws -> ()
   ) throws {
+      // Cache old visitor configuration
+      let oldNameMap = self.nameMap
+      let oldNameResolver = self.nameResolver
+      let oldExtensions = self.extensions
+
       for (k,v) in map.sorted(by: { isOrderedBefore( $0.0, $1.0) }) {
           emitFieldName(lookingUp: fieldNumber)
           encoder.startMessageField()
-          var visitor = TextFormatEncodingVisitor(nameMap: nil, nameResolver: mapNameResolver, extensions: nil, encoder: encoder, options: options)
-          try encode(&visitor, k, v)
-          encoder = visitor.encoder
+
+          // Update visitor configuration for map
+          self.nameMap = nil
+          self.nameResolver = mapNameResolver
+          self.extensions = nil
+
+          try encode(&self, k, v)
+
+          // Restore configuration before resuming containing message
+          self.extensions = oldExtensions
+          self.nameResolver = oldNameResolver
+          self.nameMap = oldNameMap
+
           encoder.endMessageField()
       }
   }

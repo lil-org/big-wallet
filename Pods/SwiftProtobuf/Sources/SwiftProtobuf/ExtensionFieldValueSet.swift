@@ -14,10 +14,8 @@
 ///
 // -----------------------------------------------------------------------------
 
-// TODO: `ExtensionFieldValueSet` should be `Sendable` but we cannot do so yet without possibly breaking compatibility.
-
-public struct ExtensionFieldValueSet: Hashable {
-  fileprivate var values = [Int : AnyExtensionField]()
+public struct ExtensionFieldValueSet: Hashable, Sendable {
+  fileprivate var values = [Int : any AnyExtensionField]()
 
   public static func ==(lhs: ExtensionFieldValueSet,
                         rhs: ExtensionFieldValueSet) -> Bool {
@@ -41,7 +39,6 @@ public struct ExtensionFieldValueSet: Hashable {
 
   public init() {}
 
-#if swift(>=4.2)
   public func hash(into hasher: inout Hasher) {
     // AnyExtensionField is not Hashable, and the Self constraint that would
     // add breaks some of the uses of it; so the only choice is to manually
@@ -56,16 +53,6 @@ public struct ExtensionFieldValueSet: Hashable {
     }
     hasher.combine(hash)
   }
-#else  // swift(>=4.2)
-  public var hashValue: Int {
-    var hash = 16777619
-    for (fieldNumber, v) in values {
-      // Note: This calculation cannot depend on the order of the items.
-      hash = hash &+ fieldNumber &+ v.hashValue
-    }
-    return hash
-  }
-#endif  // swift(>=4.2)
 
   public func traverse<V: Visitor>(visitor: inout V, start: Int, end: Int) throws {
     let validIndexes = values.keys.filter {$0 >= start && $0 < end}
@@ -75,12 +62,12 @@ public struct ExtensionFieldValueSet: Hashable {
     }
   }
 
-  public subscript(index: Int) -> AnyExtensionField? {
+  public subscript(index: Int) -> (any AnyExtensionField)? {
     get { return values[index] }
     set { values[index] = newValue }
   }
 
-  mutating func modify<ReturnType>(index: Int, _ modifier: (inout AnyExtensionField?) throws -> ReturnType) rethrows -> ReturnType {
+  mutating func modify<ReturnType>(index: Int, _ modifier: (inout (any AnyExtensionField)?) throws -> ReturnType) rethrows -> ReturnType {
     // This internal helper exists to invoke the _modify accessor on Dictionary for the given operation, which can avoid CoWs
     // during the modification operation.
     return try modifier(&values[index])

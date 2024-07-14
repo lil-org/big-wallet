@@ -43,12 +43,8 @@ fileprivate class InternPool {
   private var interned = [UnsafeRawBufferPointer]()
 
   func intern(utf8: String.UTF8View) -> UnsafeRawBufferPointer {
-    #if swift(>=4.1)
     let mutable = UnsafeMutableRawBufferPointer.allocate(byteCount: utf8.count,
                                                          alignment: MemoryLayout<UInt8>.alignment)
-    #else
-    let mutable = UnsafeMutableRawBufferPointer.allocate(count: utf8.count)
-    #endif
     mutable.copyBytes(from: utf8)
     let immutable = UnsafeRawBufferPointer(mutable)
     interned.append(immutable)
@@ -56,12 +52,8 @@ fileprivate class InternPool {
   }
 
   func intern(utf8Ptr: UnsafeBufferPointer<UInt8>) -> UnsafeRawBufferPointer {
-    #if swift(>=4.1)
     let mutable = UnsafeMutableRawBufferPointer.allocate(byteCount: utf8Ptr.count,
                                                          alignment: MemoryLayout<UInt8>.alignment)
-    #else
-    let mutable = UnsafeMutableRawBufferPointer.allocate(count: utf8.count)
-    #endif
     mutable.copyBytes(from: utf8Ptr)
     let immutable = UnsafeRawBufferPointer(mutable)
     interned.append(immutable)
@@ -70,21 +62,10 @@ fileprivate class InternPool {
 
   deinit {
     for buff in interned {
-        #if swift(>=4.1)
-          buff.deallocate()
-        #else
-          let p = UnsafeMutableRawPointer(mutating: buff.baseAddress)!
-          p.deallocate(bytes: buff.count, alignedTo: 1)
-        #endif
+        buff.deallocate()
     }
   }
 }
-
-#if !swift(>=4.2)
-// Constants for FNV hash http://tools.ietf.org/html/draft-eastlake-fnv-03
-private let i_2166136261 = Int(bitPattern: 2166136261)
-private let i_16777619 = Int(16777619)
-#endif
 
 /// An immutable bidirectional mapping between field/enum-case names
 /// and numbers, used to record field names for text-based
@@ -148,21 +129,11 @@ public struct _NameMap: ExpressibleByDictionaryLiteral {
       }
     }
 
-  #if swift(>=4.2)
     public func hash(into hasher: inout Hasher) {
       for byte in utf8Buffer {
         hasher.combine(byte)
       }
     }
-  #else  // swift(>=4.2)
-    public var hashValue: Int {
-      var h = i_2166136261
-      for byte in utf8Buffer {
-        h = (h ^ Int(byte)) &* i_16777619
-      }
-      return h
-    }
-  #endif  // swift(>=4.2)
 
     public static func ==(lhs: Name, rhs: Name) -> Bool {
       if lhs.utf8Buffer.count != rhs.utf8Buffer.count {
@@ -309,7 +280,6 @@ public struct _NameMap: ExpressibleByDictionaryLiteral {
   }
 }
 
-#if swift(>=5.5) && canImport(_Concurrency)
 // The `_NameMap` (and supporting types) are only mutated during their initial
 // creation, then for the lifetime of the a process they are constant. Swift
 // 5.10 flags the generated `_protobuf_nameMap` usages as a problem
@@ -322,4 +292,3 @@ public struct _NameMap: ExpressibleByDictionaryLiteral {
 extension _NameMap : Sendable {}
 extension _NameMap.Name : @unchecked Sendable {}
 extension InternPool : @unchecked Sendable {}
-#endif

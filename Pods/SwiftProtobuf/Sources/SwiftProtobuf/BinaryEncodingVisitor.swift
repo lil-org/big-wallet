@@ -27,13 +27,8 @@ internal struct BinaryEncodingVisitor: Visitor {
   /// - Precondition: `pointer` must point to an allocated block of memory that
   ///   is large enough to hold the entire encoded message. For performance
   ///   reasons, the encoder does not make any attempts to verify this.
-  init(forWritingInto pointer: UnsafeMutableRawPointer, options: BinaryEncodingOptions) {
-    self.encoder = BinaryEncoder(forWritingInto: pointer)
-    self.options = options
-  }
-
-  init(encoder: BinaryEncoder, options: BinaryEncodingOptions) {
-    self.encoder = encoder
+  init(forWritingInto buffer: UnsafeMutableRawBufferPointer, options: BinaryEncodingOptions) {
+    self.encoder = BinaryEncoder(forWritingInto: buffer)
     self.options = options
   }
 
@@ -378,9 +373,11 @@ extension BinaryEncodingVisitor {
       let length = try value.serializedDataSize()
       encoder.putVarInt(value: length)
       // Create the sub encoder after writing the length.
-      var subVisitor = BinaryEncodingVisitor(encoder: encoder, options: options)
+      var subVisitor = BinaryEncodingVisitor(
+        forWritingInto: encoder.remainder, options: options
+      )
       try value.traverse(visitor: &subVisitor)
-      encoder = subVisitor.encoder
+      encoder.advance(subVisitor.encoder.used)
 
       encoder.putVarInt(value: Int64(WireFormat.MessageSet.Tags.itemEnd.rawValue))
     }

@@ -16,23 +16,18 @@
 
 import Foundation
 
-// TODO: `UnknownStorage` should be `Sendable` but we cannot do so yet without possibly breaking compatibility.
-
 /// Contains any unknown fields in a decoded message; that is, fields that were
 /// sent on the wire but were not recognized by the generated message
 /// implementation or were valid field numbers but with mismatching wire
 /// formats (for example, a field encoded as a varint when a fixed32 integer
 /// was expected).
-public struct UnknownStorage: Equatable {
+public struct UnknownStorage: Equatable, @unchecked Sendable {
+  // Once swift(>=5.9) the '@unchecked' can be removed, it is needed for Data in
+  // linux builds.
+
   /// The raw protocol buffer binary-encoded bytes that represent the unknown
   /// fields of a decoded message.
   public private(set) var data = Data()
-
-#if !swift(>=4.1)
-  public static func ==(lhs: UnknownStorage, rhs: UnknownStorage) -> Bool {
-    return lhs.data == rhs.data
-  }
-#endif
 
   public init() {}
 

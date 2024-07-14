@@ -25,7 +25,11 @@ internal struct TextFormatDecoder: Decoder {
     private var fieldCount = 0
     private var terminator: UInt8?
     private var fieldNameMap: _NameMap?
-    private var messageType: Message.Type?
+    private var messageType: any Message.Type
+
+    internal var options: TextFormatDecodingOptions {
+      return scanner.options
+    }
 
     internal var complete: Bool {
         mutating get {
@@ -34,24 +38,24 @@ internal struct TextFormatDecoder: Decoder {
     }
 
     internal init(
-      messageType: Message.Type,
+      messageType: any Message.Type,
       utf8Pointer: UnsafeRawPointer,
       count: Int,
       options: TextFormatDecodingOptions,
-      extensions: ExtensionMap?
+      extensions: (any ExtensionMap)?
     ) throws {
         scanner = TextFormatScanner(utf8Pointer: utf8Pointer, count: count, options: options, extensions: extensions)
-        guard let nameProviding = (messageType as? _ProtoNameProviding.Type) else {
+        guard let nameProviding = (messageType as? any _ProtoNameProviding.Type) else {
             throw TextFormatDecodingError.missingFieldNames
         }
         fieldNameMap = nameProviding._protobuf_nameMap
         self.messageType = messageType
     }
 
-    internal init(messageType: Message.Type, scanner: TextFormatScanner, terminator: UInt8?) throws {
+    internal init(messageType: any Message.Type, scanner: TextFormatScanner, terminator: UInt8?) throws {
         self.scanner = scanner
         self.terminator = terminator
-        guard let nameProviding = (messageType as? _ProtoNameProviding.Type) else {
+        guard let nameProviding = (messageType as? any _ProtoNameProviding.Type) else {
             throw TextFormatDecodingError.missingFieldNames
         }
         fieldNameMap = nameProviding._protobuf_nameMap
@@ -63,31 +67,17 @@ internal struct TextFormatDecoder: Decoder {
     }
 
     mutating func nextFieldNumber() throws -> Int? {
-        if let terminator = terminator {
-            if scanner.skipOptionalObjectEnd(terminator) {
-                return nil
-            }
-        }
         if fieldCount > 0 {
             scanner.skipOptionalSeparator()
         }
-        if let key = try scanner.nextOptionalExtensionKey() {
-            // Extension key; look up in the extension registry
-            if let fieldNumber = scanner.extensions?.fieldNumberForProto(messageType: messageType!, protoFieldName: key) {
-                fieldCount += 1
-                return fieldNumber
-            } else {
-                throw TextFormatDecodingError.unknownField
-            }
-        } else if let fieldNumber = try scanner.nextFieldNumber(names: fieldNameMap!) {
+        if let fieldNumber = try scanner.nextFieldNumber(names: fieldNameMap!,
+                                                         messageType: messageType,
+                                                         terminator: terminator) {
             fieldCount += 1
             return fieldNumber
-        } else if terminator == nil {
-            return nil
         } else {
-            throw TextFormatDecodingError.truncated
+            return nil
         }
-
     }
 
     mutating func decodeSingularFloatField(value: inout Float) throws {
@@ -563,6 +553,7 @@ internal struct TextFormatDecoder: Decoder {
         var keyField: KeyType.BaseType?
         var valueField: ValueType.BaseType?
         let terminator = try scanner.skipObjectStart()
+        let ignoreExtensionFields = options.ignoreUnknownExtensionFields
         while true {
             if scanner.skipOptionalObjectEnd(terminator) {
                 if let keyField = keyField, let valueField = valueField {
@@ -572,14 +563,20 @@ internal struct TextFormatDecoder: Decoder {
                     throw TextFormatDecodingError.malformedText
                 }
             }
-            if let key = try scanner.nextKey() {
+            if let key = try scanner.nextKey(allowExtensions: ignoreExtensionFields) {
                 switch key {
                 case "key", "1":
                     try KeyType.decodeSingular(value: &keyField, from: &self)
                 case "value", "2":
                     try ValueType.decodeSingular(value: &valueField, from: &self)
                 default:
-                    throw TextFormatDecodingError.unknownField
+                    if ignoreExtensionFields && key.hasPrefix("[") {
+                        try scanner.skipUnknownFieldValue()
+                    } else if options.ignoreUnknownFields && !key.hasPrefix("[") {
+                        try scanner.skipUnknownFieldValue()
+                    } else {
+                        throw TextFormatDecodingError.unknownField
+                    }
                 }
                 scanner.skipOptionalSeparator()
             } else {
@@ -612,6 +609,7 @@ internal struct TextFormatDecoder: Decoder {
         var keyField: KeyType.BaseType?
         var valueField: ValueType?
         let terminator = try scanner.skipObjectStart()
+        let ignoreExtensionFields = options.ignoreUnknownExtensionFields
         while true {
             if scanner.skipOptionalObjectEnd(terminator) {
                 if let keyField = keyField, let valueField = valueField {
@@ -621,14 +619,20 @@ internal struct TextFormatDecoder: Decoder {
                     throw TextFormatDecodingError.malformedText
                 }
             }
-            if let key = try scanner.nextKey() {
+            if let key = try scanner.nextKey(allowExtensions: ignoreExtensionFields) {
                 switch key {
                 case "key", "1":
                     try KeyType.decodeSingular(value: &keyField, from: &self)
                 case "value", "2":
                     try decodeSingularEnumField(value: &valueField)
                 default:
-                    throw TextFormatDecodingError.unknownField
+                    if ignoreExtensionFields && key.hasPrefix("[") {
+                        try scanner.skipUnknownFieldValue()
+                    } else if options.ignoreUnknownFields && !key.hasPrefix("[") {
+                        try scanner.skipUnknownFieldValue()
+                    } else {
+                        throw TextFormatDecodingError.unknownField
+                    }
                 }
                 scanner.skipOptionalSeparator()
             } else {
@@ -661,6 +665,7 @@ internal struct TextFormatDecoder: Decoder {
         var keyField: KeyType.BaseType?
         var valueField: ValueType?
         let terminator = try scanner.skipObjectStart()
+        let ignoreExtensionFields = options.ignoreUnknownExtensionFields
         while true {
             if scanner.skipOptionalObjectEnd(terminator) {
                 if let keyField = keyField, let valueField = valueField {
@@ -670,14 +675,20 @@ internal struct TextFormatDecoder: Decoder {
                     throw TextFormatDecodingError.malformedText
                 }
             }
-            if let key = try scanner.nextKey() {
+            if let key = try scanner.nextKey(allowExtensions: ignoreExtensionFields) {
                 switch key {
                 case "key", "1":
                     try KeyType.decodeSingular(value: &keyField, from: &self)
                 case "value", "2":
                     try decodeSingularMessageField(value: &valueField)
                 default:
-                    throw TextFormatDecodingError.unknownField
+                    if ignoreExtensionFields && key.hasPrefix("[") {
+                        try scanner.skipUnknownFieldValue()
+                    } else if options.ignoreUnknownFields && !key.hasPrefix("[") {
+                        try scanner.skipUnknownFieldValue()
+                    } else {
+                        throw TextFormatDecodingError.unknownField
+                    }
                 }
                 scanner.skipOptionalSeparator()
             } else {
@@ -706,7 +717,7 @@ internal struct TextFormatDecoder: Decoder {
         }
     }
 
-    mutating func decodeExtensionField(values: inout ExtensionFieldValueSet, messageType: Message.Type, fieldNumber: Int) throws {
+    mutating func decodeExtensionField(values: inout ExtensionFieldValueSet, messageType: any Message.Type, fieldNumber: Int) throws {
         if let ext = scanner.extensions?[messageType, fieldNumber] {
             try values.modify(index: fieldNumber) { fieldValue in
                 if fieldValue != nil {
