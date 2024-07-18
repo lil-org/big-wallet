@@ -7,6 +7,7 @@ extension URL {
     
     static let x = URL(string: "https://x.lil.org")!
     static let warpcast = URL(string: "https://f.lil.org")!
+    static let zora = URL(string: "https://mint.lil.org")!
     static let github = URL(string: "https://g.lil.org")!
     static let email = URL(string: "mailto:support@lil.org")!
     static let iosSafariGuide = URL(string: "https://lil.org/guide-ios")!

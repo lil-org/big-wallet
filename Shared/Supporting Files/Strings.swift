@@ -102,6 +102,7 @@ struct Strings {
     
     static let bigWallet = "big wallet"
     static let viewOnGithub = "GitHub"
+    static let viewOnZora = "Zora"
     static let viewOnWarpcast = "Warpcast"
     static let viewOnX = "𝕏"
     static let gwei = "gwei"

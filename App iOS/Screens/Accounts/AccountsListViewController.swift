@@ -395,6 +395,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let githubAction = UIAlertAction(title: Strings.viewOnGithub, style: .default) { _ in
             UIApplication.shared.open(URL.github)
         }
+        let zoraAction = UIAlertAction(title: Strings.viewOnZora, style: .default) { _ in
+            UIApplication.shared.open(URL.zora)
+        }
         let emailAction = UIAlertAction(title: Strings.dropUsALine, style: .default) { _ in
             UIApplication.shared.open(URL.email)
         }
@@ -405,6 +408,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         actionSheet.addAction(howToEnableSafariExtension)
         actionSheet.addAction(warpcastAction)
         actionSheet.addAction(githubAction)
+        actionSheet.addAction(zoraAction)
         actionSheet.addAction(emailAction)
         actionSheet.addAction(xAction)
         actionSheet.addAction(cancelAction)
