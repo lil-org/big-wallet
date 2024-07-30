@@ -84,52 +84,6 @@ public final class BitcoinScript {
         return BitcoinScript(rawValue: TWBitcoinScriptBuildPayToWitnessScriptHash(scriptHashData))
     }
 
-    /// Builds the Ordinals inscripton for BRC20 transfer.
-    ///
-    /// - Parameter ticker: ticker of the brc20
-    /// - Parameter amount: uint64 transfer amount
-    /// - Parameter pubkey: Non-null pointer to a pubkey
-    /// - Note: Must be deleted with \TWBitcoinScriptDelete
-    /// - Returns: A pointer to the built script
-    public static func buildBRC20InscribeTransfer(ticker: String, amount: String, pubkey: Data) -> Data {
-        let tickerString = TWStringCreateWithNSString(ticker)
-        defer {
-            TWStringDelete(tickerString)
-        }
-        let amountString = TWStringCreateWithNSString(amount)
-        defer {
-            TWStringDelete(amountString)
-        }
-        let pubkeyData = TWDataCreateWithNSData(pubkey)
-        defer {
-            TWDataDelete(pubkeyData)
-        }
-        return TWDataNSData(TWBitcoinScriptBuildBRC20InscribeTransfer(tickerString, amountString, pubkeyData))
-    }
-
-    /// Builds the Ordinals inscripton for NFT construction.
-    ///
-    /// - Parameter mimeType: the MIME type of the payload
-    /// - Parameter payload: the payload to inscribe
-    /// - Parameter pubkey: Non-null pointer to a pubkey
-    /// - Note: Must be deleted with \TWBitcoinScriptDelete
-    /// - Returns: A pointer to the built script
-    public static func buildOrdinalNftInscription(mimeType: String, payload: Data, pubkey: Data) -> Data {
-        let mimeTypeString = TWStringCreateWithNSString(mimeType)
-        defer {
-            TWStringDelete(mimeTypeString)
-        }
-        let payloadData = TWDataCreateWithNSData(payload)
-        defer {
-            TWDataDelete(payloadData)
-        }
-        let pubkeyData = TWDataCreateWithNSData(pubkey)
-        defer {
-            TWDataDelete(pubkeyData)
-        }
-        return TWDataNSData(TWBitcoinScriptBuildOrdinalNftInscription(mimeTypeString, payloadData, pubkeyData))
-    }
-
     /// Builds a appropriate lock script for the given address..
     ///
     /// - Parameter address: Non-null pointer to an address

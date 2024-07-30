@@ -49,6 +49,7 @@ public final class TONAddressConverter {
     /// - Parameter address: raw or user-friendly address to be converted.
     /// - Parameter bounceable: whether the result address should be bounceable.
     /// - Parameter testnet: whether the result address should be testnet.
+    /// - Returns: user-friendly address str.
     public static func toUserFriendly(address: String, bounceable: Bool, testnet: Bool) -> String? {
         let addressString = TWStringCreateWithNSString(address)
         defer {
