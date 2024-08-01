@@ -129,6 +129,12 @@ class Agent: NSObject {
         menu.addItem(showItem)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(safariItem)
+        if !Defaults.isHiddenFromMenuBar {
+            menu.addItem(NSMenuItem.separator())
+            let hideItem = NSMenuItem(title: Strings.hideFromMenuBar, action: #selector(didSelectHideItem), keyEquivalent: "")
+            hideItem.target = self
+            menu.addItem(hideItem)
+        }
         menu.addItem(NSMenuItem.separator())
         menu.addItem(warpcastItem)
         menu.addItem(githubItem)
@@ -156,6 +162,13 @@ class Agent: NSObject {
                 self?.setupStatusBarItem()
             }
         }
+    }
+    
+    @objc private func didSelectHideItem() {
+        Defaults.isHiddenFromMenuBar = true
+        statusBarItem.isVisible = false
+        statusBarItem.button?.removeFromSuperview()
+        statusBarItem.button?.window?.close()
     }
     
     @objc private func didSelectXMenuItem() {
@@ -191,12 +204,14 @@ class Agent: NSObject {
     }
     
     func setupStatusBarItem() {
-        let statusBar = NSStatusBar.system
-        statusBarItem = statusBar.statusItem(withLength: NSStatusItem.squareLength)
-        statusBarItem.button?.image = Images.statusBarIcon
-        statusBarItem.button?.target = self
-        statusBarItem.button?.action = #selector(statusBarButtonClicked(sender:))
-        statusBarItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        if !Defaults.isHiddenFromMenuBar {
+            let statusBar = NSStatusBar.system
+            statusBarItem = statusBar.statusItem(withLength: NSStatusItem.squareLength)
+            statusBarItem.button?.image = Images.statusBarIcon
+            statusBarItem.button?.target = self
+            statusBarItem.button?.action = #selector(statusBarButtonClicked(sender:))
+            statusBarItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        }
     }
     
     @objc private func statusBarButtonClicked(sender: NSStatusBarButton) {

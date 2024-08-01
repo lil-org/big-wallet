@@ -99,6 +99,7 @@ struct Strings {
     static let connect = loc("Connect")
     static let paste = loc("Paste")
     static let getStarted = loc("Get Started")
+    static let hideFromMenuBar = loc("Hide from Menu Bar")
     
     static let bigWallet = "big wallet"
     static let viewOnGithub = "GitHub"

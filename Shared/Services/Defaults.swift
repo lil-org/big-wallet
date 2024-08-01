@@ -24,4 +24,13 @@ struct Defaults {
         }
     }
     
+    static var isHiddenFromMenuBar: Bool {
+        get {
+            return userDefaults.bool(forKey: "isHiddenFromMenuBar")
+        }
+        set {
+            userDefaults.set(newValue, forKey: "isHiddenFromMenuBar")
+        }
+    }
+    
 }
