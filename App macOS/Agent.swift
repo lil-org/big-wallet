@@ -211,6 +211,7 @@ class Agent: NSObject {
             statusBarItem.button?.target = self
             statusBarItem.button?.action = #selector(statusBarButtonClicked(sender:))
             statusBarItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            statusBarItem.isVisible = true
         }
     }
     
