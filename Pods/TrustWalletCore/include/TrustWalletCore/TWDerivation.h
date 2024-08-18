@@ -16,10 +16,12 @@ TW_EXPORT_ENUM()
 enum TWDerivation {
     TWDerivationDefault = 0, // default, for any coin
     TWDerivationCustom = 1, // custom, for any coin
-    TWDerivationSegwit = 2,
-    TWDerivationLegacy = 3,
-    TWDerivationTestnet = 4,
-    TWDerivationSolana = 5,
+    TWDerivationBitcoinSegwit = 2,
+    TWDerivationBitcoinLegacy = 3,
+    TWDerivationBitcoinTestnet = 4,
+    TWDerivationLitecoinLegacy = 5,
+    TWDerivationSolanaSolana = 6,
+    TWDerivationStratisSegwit = 7,
 };
 
 TW_EXTERN_C_END

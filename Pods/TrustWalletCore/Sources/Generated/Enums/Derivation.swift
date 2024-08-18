@@ -9,8 +9,10 @@
 public enum Derivation: UInt32, CaseIterable {
     case `default` = 0
     case custom = 1
-    case segwit = 2
-    case legacy = 3
-    case testnet = 4
-    case solana = 5
+    case bitcoinSegwit = 2
+    case bitcoinLegacy = 3
+    case bitcoinTestnet = 4
+    case litecoinLegacy = 5
+    case solanaSolana = 6
+    case stratisSegwit = 7
 }
