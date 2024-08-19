@@ -5,11 +5,11 @@ import UniformTypeIdentifiers
 
 extension URL {
     
-    static let x = URL(string: "https://x.lil.org")!
-    static let warpcast = URL(string: "https://f.lil.org")!
-    static let zora = URL(string: "https://mint.lil.org")!
-    static let github = URL(string: "https://g.lil.org")!
-    static let email = URL(string: "mailto:support@lil.org")!
+    static let x = URL(string: "https://x.com/lildotorg")!
+    static let warpcast = URL(string: "https://warpcast.com/org")!
+    static let zora = URL(string: "https://zora.co/collect/zora:0x01c077fd6b4df827490cd4f95650d55d6b35c35d")!
+    static let github = URL(string: "https://github.com/lil-org")!
+    static let email = URL(string: "mailto:ivan@lil.org")!
     static let iosSafariGuide = URL(string: "https://lil.org/guide-ios")!
     
     var mimeType: String {
