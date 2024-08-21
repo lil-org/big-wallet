@@ -1,3 +1,15 @@
+lane :bb do
+  new_build_number = increment_build_number()
+
+  git_add(path: "Wallet.xcodeproj/project.pbxproj")
+  git_commit(
+    path: "Wallet.xcodeproj/project.pbxproj",
+    message: "bump build number #{new_build_number}"
+  )
+
+  push_to_git_remote
+end
+
 lane :bump do |options|
   current_version = get_version_number(xcodeproj: "Wallet.xcodeproj", target: "Wallet")
   version_parts = current_version.split(".").map(&:to_i)
