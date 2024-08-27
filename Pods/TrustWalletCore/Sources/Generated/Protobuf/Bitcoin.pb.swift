@@ -602,9 +602,22 @@ public struct TW_Bitcoin_Proto_PreSigningOutput {
   //// error description
   public var errorMessage: String = String()
 
+  /// Result of a transaction pre-signing using the Bitcoin 2.0 protocol.
+  /// Set if `Bitcoin.Proto.SigningInput.signing_v2` used.
+  public var preSigningResultV2: TW_BitcoinV2_Proto_PreSigningOutput {
+    get {return _preSigningResultV2 ?? TW_BitcoinV2_Proto_PreSigningOutput()}
+    set {_preSigningResultV2 = newValue}
+  }
+  /// Returns true if `preSigningResultV2` has been explicitly set.
+  public var hasPreSigningResultV2: Bool {return self._preSigningResultV2 != nil}
+  /// Clears the value of `preSigningResultV2`. Subsequent reads from it will return its default value.
+  public mutating func clearPreSigningResultV2() {self._preSigningResultV2 = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _preSigningResultV2: TW_BitcoinV2_Proto_PreSigningOutput? = nil
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -1478,6 +1491,7 @@ extension TW_Bitcoin_Proto_PreSigningOutput: SwiftProtobuf.Message, SwiftProtobu
     1: .standard(proto: "hash_public_keys"),
     2: .same(proto: "error"),
     3: .standard(proto: "error_message"),
+    7: .standard(proto: "pre_signing_result_v2"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1489,12 +1503,17 @@ extension TW_Bitcoin_Proto_PreSigningOutput: SwiftProtobuf.Message, SwiftProtobu
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.hashPublicKeys) }()
       case 2: try { try decoder.decodeSingularEnumField(value: &self.error) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
+      case 7: try { try decoder.decodeSingularMessageField(value: &self._preSigningResultV2) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.hashPublicKeys.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.hashPublicKeys, fieldNumber: 1)
     }
@@ -1504,6 +1523,9 @@ extension TW_Bitcoin_Proto_PreSigningOutput: SwiftProtobuf.Message, SwiftProtobu
     if !self.errorMessage.isEmpty {
       try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 3)
     }
+    try { if let v = self._preSigningResultV2 {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1511,6 +1533,7 @@ extension TW_Bitcoin_Proto_PreSigningOutput: SwiftProtobuf.Message, SwiftProtobu
     if lhs.hashPublicKeys != rhs.hashPublicKeys {return false}
     if lhs.error != rhs.error {return false}
     if lhs.errorMessage != rhs.errorMessage {return false}
+    if lhs._preSigningResultV2 != rhs._preSigningResultV2 {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

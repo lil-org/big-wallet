@@ -127,6 +127,7 @@
 #import "TWTHORChainSwap.h"
 #import "TWTHORChainSwapProto.h"
 #import "TWTONAddressConverter.h"
+#import "TWTONMessageSigner.h"
 #import "TWTONWallet.h"
 #import "TWTransactionCompiler.h"
 #import "TWTransactionCompilerProto.h"

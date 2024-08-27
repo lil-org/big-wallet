@@ -23,4 +23,5 @@ public typealias SolanaPriorityFeeLimit = TW_Solana_Proto_PriorityFeeLimit
 public typealias SolanaSigningInput = TW_Solana_Proto_SigningInput
 public typealias SolanaSigningOutput = TW_Solana_Proto_SigningOutput
 public typealias SolanaPreSigningOutput = TW_Solana_Proto_PreSigningOutput
+public typealias SolanaTokenProgramId = TW_Solana_Proto_TokenProgramId
 public typealias SolanaEncoding = TW_Solana_Proto_Encoding

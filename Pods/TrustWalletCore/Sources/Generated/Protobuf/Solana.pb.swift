@@ -20,6 +20,46 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+public enum TW_Solana_Proto_TokenProgramId: SwiftProtobuf.Enum {
+  public typealias RawValue = Int
+  case tokenProgram // = 0
+  case token2022Program // = 1
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .tokenProgram
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .tokenProgram
+    case 1: self = .token2022Program
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .tokenProgram: return 0
+    case .token2022Program: return 1
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+}
+
+#if swift(>=4.2)
+
+extension TW_Solana_Proto_TokenProgramId: CaseIterable {
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static var allCases: [TW_Solana_Proto_TokenProgramId] = [
+    .tokenProgram,
+    .token2022Program,
+  ]
+}
+
+#endif  // swift(>=4.2)
+
 public enum TW_Solana_Proto_Encoding: SwiftProtobuf.Enum {
   public typealias RawValue = Int
   case base58 // = 0
@@ -195,6 +235,9 @@ public struct TW_Solana_Proto_CreateTokenAccount {
   /// Token address
   public var tokenAddress: String = String()
 
+  /// optional token program id
+  public var tokenProgramID: TW_Solana_Proto_TokenProgramId = .tokenProgram
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -226,6 +269,9 @@ public struct TW_Solana_Proto_TokenTransfer {
 
   /// optional referenced public keys
   public var references: [String] = []
+
+  /// optional token program id
+  public var tokenProgramID: TW_Solana_Proto_TokenProgramId = .tokenProgram
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -261,6 +307,9 @@ public struct TW_Solana_Proto_CreateAndTransferToken {
 
   /// optional referenced public keys
   public var references: [String] = []
+
+  /// optional token program id
+  public var tokenProgramID: TW_Solana_Proto_TokenProgramId = .tokenProgram
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -868,6 +917,13 @@ public struct TW_Solana_Proto_PreSigningOutput {
 
 fileprivate let _protobuf_package = "TW.Solana.Proto"
 
+extension TW_Solana_Proto_TokenProgramId: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "TokenProgram"),
+    1: .same(proto: "Token2022Program"),
+  ]
+}
+
 extension TW_Solana_Proto_Encoding: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     0: .same(proto: "Base58"),
@@ -1147,6 +1203,7 @@ extension TW_Solana_Proto_CreateTokenAccount: SwiftProtobuf.Message, SwiftProtob
     1: .standard(proto: "main_address"),
     2: .standard(proto: "token_mint_address"),
     3: .standard(proto: "token_address"),
+    4: .standard(proto: "token_program_id"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1158,6 +1215,7 @@ extension TW_Solana_Proto_CreateTokenAccount: SwiftProtobuf.Message, SwiftProtob
       case 1: try { try decoder.decodeSingularStringField(value: &self.mainAddress) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.tokenMintAddress) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.tokenAddress) }()
+      case 4: try { try decoder.decodeSingularEnumField(value: &self.tokenProgramID) }()
       default: break
       }
     }
@@ -1173,6 +1231,9 @@ extension TW_Solana_Proto_CreateTokenAccount: SwiftProtobuf.Message, SwiftProtob
     if !self.tokenAddress.isEmpty {
       try visitor.visitSingularStringField(value: self.tokenAddress, fieldNumber: 3)
     }
+    if self.tokenProgramID != .tokenProgram {
+      try visitor.visitSingularEnumField(value: self.tokenProgramID, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1180,6 +1241,7 @@ extension TW_Solana_Proto_CreateTokenAccount: SwiftProtobuf.Message, SwiftProtob
     if lhs.mainAddress != rhs.mainAddress {return false}
     if lhs.tokenMintAddress != rhs.tokenMintAddress {return false}
     if lhs.tokenAddress != rhs.tokenAddress {return false}
+    if lhs.tokenProgramID != rhs.tokenProgramID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1195,6 +1257,7 @@ extension TW_Solana_Proto_TokenTransfer: SwiftProtobuf.Message, SwiftProtobuf._M
     5: .same(proto: "decimals"),
     6: .same(proto: "memo"),
     7: .same(proto: "references"),
+    8: .standard(proto: "token_program_id"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1210,6 +1273,7 @@ extension TW_Solana_Proto_TokenTransfer: SwiftProtobuf.Message, SwiftProtobuf._M
       case 5: try { try decoder.decodeSingularUInt32Field(value: &self.decimals) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.memo) }()
       case 7: try { try decoder.decodeRepeatedStringField(value: &self.references) }()
+      case 8: try { try decoder.decodeSingularEnumField(value: &self.tokenProgramID) }()
       default: break
       }
     }
@@ -1237,6 +1301,9 @@ extension TW_Solana_Proto_TokenTransfer: SwiftProtobuf.Message, SwiftProtobuf._M
     if !self.references.isEmpty {
       try visitor.visitRepeatedStringField(value: self.references, fieldNumber: 7)
     }
+    if self.tokenProgramID != .tokenProgram {
+      try visitor.visitSingularEnumField(value: self.tokenProgramID, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1248,6 +1315,7 @@ extension TW_Solana_Proto_TokenTransfer: SwiftProtobuf.Message, SwiftProtobuf._M
     if lhs.decimals != rhs.decimals {return false}
     if lhs.memo != rhs.memo {return false}
     if lhs.references != rhs.references {return false}
+    if lhs.tokenProgramID != rhs.tokenProgramID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1264,6 +1332,7 @@ extension TW_Solana_Proto_CreateAndTransferToken: SwiftProtobuf.Message, SwiftPr
     6: .same(proto: "decimals"),
     7: .same(proto: "memo"),
     8: .same(proto: "references"),
+    9: .standard(proto: "token_program_id"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1280,6 +1349,7 @@ extension TW_Solana_Proto_CreateAndTransferToken: SwiftProtobuf.Message, SwiftPr
       case 6: try { try decoder.decodeSingularUInt32Field(value: &self.decimals) }()
       case 7: try { try decoder.decodeSingularStringField(value: &self.memo) }()
       case 8: try { try decoder.decodeRepeatedStringField(value: &self.references) }()
+      case 9: try { try decoder.decodeSingularEnumField(value: &self.tokenProgramID) }()
       default: break
       }
     }
@@ -1310,6 +1380,9 @@ extension TW_Solana_Proto_CreateAndTransferToken: SwiftProtobuf.Message, SwiftPr
     if !self.references.isEmpty {
       try visitor.visitRepeatedStringField(value: self.references, fieldNumber: 8)
     }
+    if self.tokenProgramID != .tokenProgram {
+      try visitor.visitSingularEnumField(value: self.tokenProgramID, fieldNumber: 9)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1322,6 +1395,7 @@ extension TW_Solana_Proto_CreateAndTransferToken: SwiftProtobuf.Message, SwiftPr
     if lhs.decimals != rhs.decimals {return false}
     if lhs.memo != rhs.memo {return false}
     if lhs.references != rhs.references {return false}
+    if lhs.tokenProgramID != rhs.tokenProgramID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
