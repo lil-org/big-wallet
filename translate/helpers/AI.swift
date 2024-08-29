@@ -16,9 +16,9 @@ struct AI {
         var name: String {
             switch self {
             case .cheap:
-                return "gpt-3.5-turbo"
+                return "gpt-4o-mini"
             case .highQuality:
-                return "gpt-4"
+                return "gpt-4o"
             }
         }
     }
