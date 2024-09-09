@@ -29,6 +29,7 @@ public enum TW_TheOpenNetwork_Proto_WalletVersion: SwiftProtobuf.Enum {
   case walletV3R1 // = 0
   case walletV3R2 // = 1
   case walletV4R2 // = 2
+  case walletV5R1 // = 3
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -40,6 +41,7 @@ public enum TW_TheOpenNetwork_Proto_WalletVersion: SwiftProtobuf.Enum {
     case 0: self = .walletV3R1
     case 1: self = .walletV3R2
     case 2: self = .walletV4R2
+    case 3: self = .walletV5R1
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -49,6 +51,7 @@ public enum TW_TheOpenNetwork_Proto_WalletVersion: SwiftProtobuf.Enum {
     case .walletV3R1: return 0
     case .walletV3R2: return 1
     case .walletV4R2: return 2
+    case .walletV5R1: return 3
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -63,6 +66,7 @@ extension TW_TheOpenNetwork_Proto_WalletVersion: CaseIterable {
     .walletV3R1,
     .walletV3R2,
     .walletV4R2,
+    .walletV5R1,
   ]
 }
 
@@ -128,9 +132,6 @@ public struct TW_TheOpenNetwork_Proto_Transfer {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
-
-  /// Wallet version
-  public var walletVersion: TW_TheOpenNetwork_Proto_WalletVersion = .walletV3R1
 
   /// Recipient address
   public var dest: String = String()
@@ -266,6 +267,9 @@ public struct TW_TheOpenNetwork_Proto_SigningInput {
   /// Expiration UNIX timestamp (optional, now() + 60 by default)
   public var expireAt: UInt32 = 0
 
+  /// Wallet version
+  public var walletVersion: TW_TheOpenNetwork_Proto_WalletVersion = .walletV3R1
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -303,6 +307,7 @@ extension TW_TheOpenNetwork_Proto_WalletVersion: SwiftProtobuf._ProtoNameProvidi
     0: .same(proto: "WALLET_V3_R1"),
     1: .same(proto: "WALLET_V3_R2"),
     2: .same(proto: "WALLET_V4_R2"),
+    3: .same(proto: "WALLET_V5_R1"),
   ]
 }
 
@@ -320,14 +325,13 @@ extension TW_TheOpenNetwork_Proto_SendMode: SwiftProtobuf._ProtoNameProviding {
 extension TW_TheOpenNetwork_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Transfer"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .standard(proto: "wallet_version"),
-    2: .same(proto: "dest"),
-    3: .same(proto: "amount"),
-    4: .same(proto: "mode"),
-    5: .same(proto: "comment"),
-    6: .same(proto: "bounceable"),
-    7: .standard(proto: "jetton_transfer"),
-    8: .standard(proto: "custom_payload"),
+    1: .same(proto: "dest"),
+    2: .same(proto: "amount"),
+    3: .same(proto: "mode"),
+    4: .same(proto: "comment"),
+    5: .same(proto: "bounceable"),
+    6: .standard(proto: "jetton_transfer"),
+    7: .standard(proto: "custom_payload"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -336,13 +340,12 @@ extension TW_TheOpenNetwork_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularEnumField(value: &self.walletVersion) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.dest) }()
-      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.amount) }()
-      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.mode) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.comment) }()
-      case 6: try { try decoder.decodeSingularBoolField(value: &self.bounceable) }()
-      case 7: try {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.dest) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.amount) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.mode) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.comment) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.bounceable) }()
+      case 6: try {
         var v: TW_TheOpenNetwork_Proto_JettonTransfer?
         var hadOneofValue = false
         if let current = self.payload {
@@ -355,7 +358,7 @@ extension TW_TheOpenNetwork_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf
           self.payload = .jettonTransfer(v)
         }
       }()
-      case 8: try {
+      case 7: try {
         var v: TW_TheOpenNetwork_Proto_CustomPayload?
         var hadOneofValue = false
         if let current = self.payload {
@@ -378,32 +381,29 @@ extension TW_TheOpenNetwork_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if self.walletVersion != .walletV3R1 {
-      try visitor.visitSingularEnumField(value: self.walletVersion, fieldNumber: 1)
-    }
     if !self.dest.isEmpty {
-      try visitor.visitSingularStringField(value: self.dest, fieldNumber: 2)
+      try visitor.visitSingularStringField(value: self.dest, fieldNumber: 1)
     }
     if self.amount != 0 {
-      try visitor.visitSingularUInt64Field(value: self.amount, fieldNumber: 3)
+      try visitor.visitSingularUInt64Field(value: self.amount, fieldNumber: 2)
     }
     if self.mode != 0 {
-      try visitor.visitSingularUInt32Field(value: self.mode, fieldNumber: 4)
+      try visitor.visitSingularUInt32Field(value: self.mode, fieldNumber: 3)
     }
     if !self.comment.isEmpty {
-      try visitor.visitSingularStringField(value: self.comment, fieldNumber: 5)
+      try visitor.visitSingularStringField(value: self.comment, fieldNumber: 4)
     }
     if self.bounceable != false {
-      try visitor.visitSingularBoolField(value: self.bounceable, fieldNumber: 6)
+      try visitor.visitSingularBoolField(value: self.bounceable, fieldNumber: 5)
     }
     switch self.payload {
     case .jettonTransfer?: try {
       guard case .jettonTransfer(let v)? = self.payload else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
     }()
     case .customPayload?: try {
       guard case .customPayload(let v)? = self.payload else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
     }()
     case nil: break
     }
@@ -411,7 +411,6 @@ extension TW_TheOpenNetwork_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf
   }
 
   public static func ==(lhs: TW_TheOpenNetwork_Proto_Transfer, rhs: TW_TheOpenNetwork_Proto_Transfer) -> Bool {
-    if lhs.walletVersion != rhs.walletVersion {return false}
     if lhs.dest != rhs.dest {return false}
     if lhs.amount != rhs.amount {return false}
     if lhs.mode != rhs.mode {return false}
@@ -525,6 +524,7 @@ extension TW_TheOpenNetwork_Proto_SigningInput: SwiftProtobuf.Message, SwiftProt
     3: .same(proto: "messages"),
     4: .standard(proto: "sequence_number"),
     5: .standard(proto: "expire_at"),
+    6: .standard(proto: "wallet_version"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -538,6 +538,7 @@ extension TW_TheOpenNetwork_Proto_SigningInput: SwiftProtobuf.Message, SwiftProt
       case 3: try { try decoder.decodeRepeatedMessageField(value: &self.messages) }()
       case 4: try { try decoder.decodeSingularUInt32Field(value: &self.sequenceNumber) }()
       case 5: try { try decoder.decodeSingularUInt32Field(value: &self.expireAt) }()
+      case 6: try { try decoder.decodeSingularEnumField(value: &self.walletVersion) }()
       default: break
       }
     }
@@ -559,6 +560,9 @@ extension TW_TheOpenNetwork_Proto_SigningInput: SwiftProtobuf.Message, SwiftProt
     if self.expireAt != 0 {
       try visitor.visitSingularUInt32Field(value: self.expireAt, fieldNumber: 5)
     }
+    if self.walletVersion != .walletV3R1 {
+      try visitor.visitSingularEnumField(value: self.walletVersion, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -568,6 +572,7 @@ extension TW_TheOpenNetwork_Proto_SigningInput: SwiftProtobuf.Message, SwiftProt
     if lhs.messages != rhs.messages {return false}
     if lhs.sequenceNumber != rhs.sequenceNumber {return false}
     if lhs.expireAt != rhs.expireAt {return false}
+    if lhs.walletVersion != rhs.walletVersion {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

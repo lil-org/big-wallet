@@ -27,7 +27,9 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
 /// Enum for supported coins for liquid staking
 public enum TW_LiquidStaking_Proto_Coin: SwiftProtobuf.Enum {
   public typealias RawValue = Int
-  case matic // = 0
+
+  /// Previously, MATIC.
+  case pol // = 0
   case atom // = 1
   case bnb // = 2
   case apt // = 3
@@ -35,12 +37,12 @@ public enum TW_LiquidStaking_Proto_Coin: SwiftProtobuf.Enum {
   case UNRECOGNIZED(Int)
 
   public init() {
-    self = .matic
+    self = .pol
   }
 
   public init?(rawValue: Int) {
     switch rawValue {
-    case 0: self = .matic
+    case 0: self = .pol
     case 1: self = .atom
     case 2: self = .bnb
     case 3: self = .apt
@@ -51,7 +53,7 @@ public enum TW_LiquidStaking_Proto_Coin: SwiftProtobuf.Enum {
 
   public var rawValue: Int {
     switch self {
-    case .matic: return 0
+    case .pol: return 0
     case .atom: return 1
     case .bnb: return 2
     case .apt: return 3
@@ -67,7 +69,7 @@ public enum TW_LiquidStaking_Proto_Coin: SwiftProtobuf.Enum {
 extension TW_LiquidStaking_Proto_Coin: CaseIterable {
   // The compiler won't synthesize support with the UNRECOGNIZED case.
   public static var allCases: [TW_LiquidStaking_Proto_Coin] = [
-    .matic,
+    .pol,
     .atom,
     .bnb,
     .apt,
@@ -260,7 +262,7 @@ public struct TW_LiquidStaking_Proto_Asset {
   // methods supported on all messages.
 
   /// Coin to be staked
-  public var stakingToken: TW_LiquidStaking_Proto_Coin = .matic
+  public var stakingToken: TW_LiquidStaking_Proto_Coin = .pol
 
   /// Optional, liquid_token to be manipulated: unstake, claim rewards
   public var liquidToken: String = String()
@@ -523,7 +525,7 @@ fileprivate let _protobuf_package = "TW.LiquidStaking.Proto"
 
 extension TW_LiquidStaking_Proto_Coin: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    0: .same(proto: "MATIC"),
+    0: .same(proto: "POL"),
     1: .same(proto: "ATOM"),
     2: .same(proto: "BNB"),
     3: .same(proto: "APT"),
@@ -624,7 +626,7 @@ extension TW_LiquidStaking_Proto_Asset: SwiftProtobuf.Message, SwiftProtobuf._Me
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.stakingToken != .matic {
+    if self.stakingToken != .pol {
       try visitor.visitSingularEnumField(value: self.stakingToken, fieldNumber: 1)
     }
     if !self.liquidToken.isEmpty {
