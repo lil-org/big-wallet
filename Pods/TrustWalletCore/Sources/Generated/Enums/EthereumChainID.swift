@@ -53,7 +53,7 @@ public enum EthereumChainID: UInt32, CaseIterable {
     case ronin = 2020
     case kavaevm = 2222
     case iotexevm = 4689
-    case klaytn = 8217
+    case kaia = 8217
     case avalanchec = 43114
     case evmos = 9001
     case arbitrumnova = 42170

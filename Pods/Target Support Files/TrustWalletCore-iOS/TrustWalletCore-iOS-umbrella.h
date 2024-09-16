@@ -132,6 +132,7 @@
 #import "TWTransactionCompiler.h"
 #import "TWTransactionCompilerProto.h"
 #import "TWTransactionDecoder.h"
+#import "TWTransactionUtil.h"
 #import "TWTronMessageSigner.h"
 #import "TWTronProto.h"
 #import "TWVeChainProto.h"

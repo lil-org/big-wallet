@@ -106,7 +106,7 @@ public enum CoinType: UInt32, CaseIterable {
     case moonriver = 10001285
     case moonbeam = 10001284
     case kavaEvm = 10002222
-    case klaytn = 10008217
+    case kaia = 10008217
     case meter = 18000
     case okxchain = 996
     case stratis = 105105
