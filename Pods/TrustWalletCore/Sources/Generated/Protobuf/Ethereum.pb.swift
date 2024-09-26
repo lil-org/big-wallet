@@ -427,6 +427,23 @@ public struct TW_Ethereum_Proto_UserOperation {
   public init() {}
 }
 
+/// An item of the [EIP-2930](https://eips.ethereum.org/EIPS/eip-2930) access list.
+public struct TW_Ethereum_Proto_Access {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Address to be accessed by the transaction.
+  public var address: String = String()
+
+  /// Storage keys to be accessed by the transaction.
+  public var storedKeys: [Data] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 /// Input data necessary to create a signed transaction.
 /// Legacy and EIP2718/EIP1559 transactions supported, see TransactionMode.
 public struct TW_Ethereum_Proto_SigningInput {
@@ -511,6 +528,13 @@ public struct TW_Ethereum_Proto_SigningInput {
   public var hasUserOperation: Bool {return _storage._userOperation != nil}
   /// Clears the value of `userOperation`. Subsequent reads from it will return its default value.
   public mutating func clearUserOperation() {_uniqueStorage()._userOperation = nil}
+
+  /// Optional list of addresses and storage keys that the transaction plans to access.
+  /// Used in `TransactionMode::Enveloped` only.
+  public var accessList: [TW_Ethereum_Proto_Access] {
+    get {return _storage._accessList}
+    set {_uniqueStorage()._accessList = newValue}
+  }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1208,6 +1232,44 @@ extension TW_Ethereum_Proto_UserOperation: SwiftProtobuf.Message, SwiftProtobuf.
   }
 }
 
+extension TW_Ethereum_Proto_Access: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Access"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "address"),
+    2: .standard(proto: "stored_keys"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.address) }()
+      case 2: try { try decoder.decodeRepeatedBytesField(value: &self.storedKeys) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.address.isEmpty {
+      try visitor.visitSingularStringField(value: self.address, fieldNumber: 1)
+    }
+    if !self.storedKeys.isEmpty {
+      try visitor.visitRepeatedBytesField(value: self.storedKeys, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Ethereum_Proto_Access, rhs: TW_Ethereum_Proto_Access) -> Bool {
+    if lhs.address != rhs.address {return false}
+    if lhs.storedKeys != rhs.storedKeys {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SigningInput"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -1222,6 +1284,7 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
     9: .standard(proto: "private_key"),
     10: .same(proto: "transaction"),
     11: .standard(proto: "user_operation"),
+    12: .standard(proto: "access_list"),
   ]
 
   fileprivate class _StorageClass {
@@ -1236,6 +1299,7 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
     var _privateKey: Data = Data()
     var _transaction: TW_Ethereum_Proto_Transaction? = nil
     var _userOperation: TW_Ethereum_Proto_UserOperation? = nil
+    var _accessList: [TW_Ethereum_Proto_Access] = []
 
     static let defaultInstance = _StorageClass()
 
@@ -1253,6 +1317,7 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
       _privateKey = source._privateKey
       _transaction = source._transaction
       _userOperation = source._userOperation
+      _accessList = source._accessList
     }
   }
 
@@ -1282,6 +1347,7 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
         case 9: try { try decoder.decodeSingularBytesField(value: &_storage._privateKey) }()
         case 10: try { try decoder.decodeSingularMessageField(value: &_storage._transaction) }()
         case 11: try { try decoder.decodeSingularMessageField(value: &_storage._userOperation) }()
+        case 12: try { try decoder.decodeRepeatedMessageField(value: &_storage._accessList) }()
         default: break
         }
       }
@@ -1327,6 +1393,9 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
       try { if let v = _storage._userOperation {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
       } }()
+      if !_storage._accessList.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._accessList, fieldNumber: 12)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1347,6 +1416,7 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
         if _storage._privateKey != rhs_storage._privateKey {return false}
         if _storage._transaction != rhs_storage._transaction {return false}
         if _storage._userOperation != rhs_storage._userOperation {return false}
+        if _storage._accessList != rhs_storage._accessList {return false}
         return true
       }
       if !storagesAreEqual {return false}

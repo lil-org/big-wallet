@@ -55,4 +55,20 @@ public final class SolanaAddress: Address {
         return TWStringNSString(result)
     }
 
+    /// Derive token 2022 address for token
+    ///
+    /// - Parameter address: Non-null pointer to a Solana Address
+    /// - Parameter tokenMintAddress: Non-null pointer to a token mint address as a string
+    /// - Returns: Null pointer if the token 2022 address for a token is not found, valid pointer otherwise
+    public func token2022Address(tokenMintAddress: String) -> String? {
+        let tokenMintAddressString = TWStringCreateWithNSString(tokenMintAddress)
+        defer {
+            TWStringDelete(tokenMintAddressString)
+        }
+        guard let result = TWSolanaAddressToken2022Address(rawValue, tokenMintAddressString) else {
+            return nil
+        }
+        return TWStringNSString(result)
+    }
+
 }
