@@ -150,6 +150,10 @@ public struct TW_TheOpenNetwork_Proto_Transfer {
   /// If the address is bounceable
   public var bounceable: Bool = false
 
+  /// Optional raw one-cell BoC encoded in Base64.
+  /// Can be used to deploy a smart contract.
+  public var stateInit: String = String()
+
   /// One of the Transfer message payloads (optional).
   public var payload: TW_TheOpenNetwork_Proto_Transfer.OneOf_Payload? = nil
 
@@ -162,11 +166,11 @@ public struct TW_TheOpenNetwork_Proto_Transfer {
     set {payload = .jettonTransfer(newValue)}
   }
 
-  /// TON transfer with custom stateInit and payload (contract call).
-  public var customPayload: TW_TheOpenNetwork_Proto_CustomPayload {
+  /// TON transfer with custom payload (contract call). Raw one-cell BoC encoded in Base64.
+  public var customPayload: String {
     get {
       if case .customPayload(let v)? = payload {return v}
-      return TW_TheOpenNetwork_Proto_CustomPayload()
+      return String()
     }
     set {payload = .customPayload(newValue)}
   }
@@ -177,8 +181,8 @@ public struct TW_TheOpenNetwork_Proto_Transfer {
   public enum OneOf_Payload: Equatable {
     /// Jetton transfer payload.
     case jettonTransfer(TW_TheOpenNetwork_Proto_JettonTransfer)
-    /// TON transfer with custom stateInit and payload (contract call).
-    case customPayload(TW_TheOpenNetwork_Proto_CustomPayload)
+    /// TON transfer with custom payload (contract call). Raw one-cell BoC encoded in Base64.
+    case customPayload(String)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_TheOpenNetwork_Proto_Transfer.OneOf_Payload, rhs: TW_TheOpenNetwork_Proto_Transfer.OneOf_Payload) -> Bool {
@@ -223,22 +227,9 @@ public struct TW_TheOpenNetwork_Proto_JettonTransfer {
   /// Amount in nanotons to forward to recipient. Basically minimum amount - 1 nanoton should be used
   public var forwardAmount: UInt64 = 0
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-}
-
-public struct TW_TheOpenNetwork_Proto_CustomPayload {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  /// (string base64, optional): raw one-cell BoC encoded in Base64.
-  /// Can be used to deploy a smart contract.
-  public var stateInit: String = String()
-
-  /// (string base64, optional): raw one-cell BoC encoded in Base64.
-  public var payload: String = String()
+  /// Optional raw one-cell BoC encoded in Base64.
+  /// Can be used in the case of mintless jetton transfers.
+  public var customPayload: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -330,8 +321,9 @@ extension TW_TheOpenNetwork_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf
     3: .same(proto: "mode"),
     4: .same(proto: "comment"),
     5: .same(proto: "bounceable"),
-    6: .standard(proto: "jetton_transfer"),
-    7: .standard(proto: "custom_payload"),
+    6: .standard(proto: "state_init"),
+    7: .standard(proto: "jetton_transfer"),
+    8: .standard(proto: "custom_payload"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -345,7 +337,8 @@ extension TW_TheOpenNetwork_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf
       case 3: try { try decoder.decodeSingularUInt32Field(value: &self.mode) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.comment) }()
       case 5: try { try decoder.decodeSingularBoolField(value: &self.bounceable) }()
-      case 6: try {
+      case 6: try { try decoder.decodeSingularStringField(value: &self.stateInit) }()
+      case 7: try {
         var v: TW_TheOpenNetwork_Proto_JettonTransfer?
         var hadOneofValue = false
         if let current = self.payload {
@@ -358,16 +351,11 @@ extension TW_TheOpenNetwork_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf
           self.payload = .jettonTransfer(v)
         }
       }()
-      case 7: try {
-        var v: TW_TheOpenNetwork_Proto_CustomPayload?
-        var hadOneofValue = false
-        if let current = self.payload {
-          hadOneofValue = true
-          if case .customPayload(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
+      case 8: try {
+        var v: String?
+        try decoder.decodeSingularStringField(value: &v)
         if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          if self.payload != nil {try decoder.handleConflictingOneOf()}
           self.payload = .customPayload(v)
         }
       }()
@@ -396,14 +384,17 @@ extension TW_TheOpenNetwork_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf
     if self.bounceable != false {
       try visitor.visitSingularBoolField(value: self.bounceable, fieldNumber: 5)
     }
+    if !self.stateInit.isEmpty {
+      try visitor.visitSingularStringField(value: self.stateInit, fieldNumber: 6)
+    }
     switch self.payload {
     case .jettonTransfer?: try {
       guard case .jettonTransfer(let v)? = self.payload else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
     }()
     case .customPayload?: try {
       guard case .customPayload(let v)? = self.payload else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+      try visitor.visitSingularStringField(value: v, fieldNumber: 8)
     }()
     case nil: break
     }
@@ -416,6 +407,7 @@ extension TW_TheOpenNetwork_Proto_Transfer: SwiftProtobuf.Message, SwiftProtobuf
     if lhs.mode != rhs.mode {return false}
     if lhs.comment != rhs.comment {return false}
     if lhs.bounceable != rhs.bounceable {return false}
+    if lhs.stateInit != rhs.stateInit {return false}
     if lhs.payload != rhs.payload {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -430,6 +422,7 @@ extension TW_TheOpenNetwork_Proto_JettonTransfer: SwiftProtobuf.Message, SwiftPr
     3: .standard(proto: "to_owner"),
     4: .standard(proto: "response_address"),
     5: .standard(proto: "forward_amount"),
+    6: .standard(proto: "custom_payload"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -443,6 +436,7 @@ extension TW_TheOpenNetwork_Proto_JettonTransfer: SwiftProtobuf.Message, SwiftPr
       case 3: try { try decoder.decodeSingularStringField(value: &self.toOwner) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.responseAddress) }()
       case 5: try { try decoder.decodeSingularUInt64Field(value: &self.forwardAmount) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.customPayload) }()
       default: break
       }
     }
@@ -464,6 +458,9 @@ extension TW_TheOpenNetwork_Proto_JettonTransfer: SwiftProtobuf.Message, SwiftPr
     if self.forwardAmount != 0 {
       try visitor.visitSingularUInt64Field(value: self.forwardAmount, fieldNumber: 5)
     }
+    if !self.customPayload.isEmpty {
+      try visitor.visitSingularStringField(value: self.customPayload, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -473,44 +470,7 @@ extension TW_TheOpenNetwork_Proto_JettonTransfer: SwiftProtobuf.Message, SwiftPr
     if lhs.toOwner != rhs.toOwner {return false}
     if lhs.responseAddress != rhs.responseAddress {return false}
     if lhs.forwardAmount != rhs.forwardAmount {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-extension TW_TheOpenNetwork_Proto_CustomPayload: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".CustomPayload"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .standard(proto: "state_init"),
-    2: .same(proto: "payload"),
-  ]
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.stateInit) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.payload) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.stateInit.isEmpty {
-      try visitor.visitSingularStringField(value: self.stateInit, fieldNumber: 1)
-    }
-    if !self.payload.isEmpty {
-      try visitor.visitSingularStringField(value: self.payload, fieldNumber: 2)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: TW_TheOpenNetwork_Proto_CustomPayload, rhs: TW_TheOpenNetwork_Proto_CustomPayload) -> Bool {
-    if lhs.stateInit != rhs.stateInit {return false}
-    if lhs.payload != rhs.payload {return false}
+    if lhs.customPayload != rhs.customPayload {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
