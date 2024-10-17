@@ -2,11 +2,11 @@ PODS:
   - BigInt (5.2.0)
   - Kingfisher (8.1.0)
   - SwiftProtobuf (1.28.2)
-  - TrustWalletCore (4.1.10):
-    - TrustWalletCore/Core (= 4.1.10)
-  - TrustWalletCore/Core (4.1.10):
+  - TrustWalletCore (4.1.13):
+    - TrustWalletCore/Core (= 4.1.13)
+  - TrustWalletCore/Core (4.1.13):
     - TrustWalletCore/Types
-  - TrustWalletCore/Types (4.1.10):
+  - TrustWalletCore/Types (4.1.13):
     - SwiftProtobuf
 
 DEPENDENCIES:
@@ -25,7 +25,7 @@ SPEC CHECKSUMS:
   BigInt: f668a80089607f521586bbe29513d708491ef2f7
   Kingfisher: dfbf20b6249ed4ef6f18d6a96c847bce860bdb95
   SwiftProtobuf: 4dbaffec76a39a8dc5da23b40af1a5dc01a4c02d
-  TrustWalletCore: 87137978d26cef67fd192050c439df918c7150ee
+  TrustWalletCore: 2d02b4d57a049663b48b37fb8a3020d838d05d21
 
 PODFILE CHECKSUM: 72f7eb26206c881e6d2dfc7cb8e849024520dc10
 
