@@ -399,8 +399,11 @@ public struct TW_Tron_Proto_Transaction {
   /// Clears the value of `blockHeader`. Subsequent reads from it will return its default value.
   public mutating func clearBlockHeader() {self._blockHeader = nil}
 
-  /// Transaction fee limit
+  /// Transaction fee limit.
   public var feeLimit: Int64 = 0
+
+  /// Transaction memo.
+  public var memo: String = String()
 
   /// Contract.
   public var contractOneof: TW_Tron_Proto_Transaction.OneOf_ContractOneof? = nil
@@ -1488,6 +1491,7 @@ extension TW_Tron_Proto_Transaction: SwiftProtobuf.Message, SwiftProtobuf._Messa
     2: .same(proto: "expiration"),
     3: .standard(proto: "block_header"),
     4: .standard(proto: "fee_limit"),
+    5: .same(proto: "memo"),
     10: .same(proto: "transfer"),
     11: .standard(proto: "transfer_asset"),
     12: .standard(proto: "freeze_balance"),
@@ -1515,6 +1519,7 @@ extension TW_Tron_Proto_Transaction: SwiftProtobuf.Message, SwiftProtobuf._Messa
       case 2: try { try decoder.decodeSingularInt64Field(value: &self.expiration) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._blockHeader) }()
       case 4: try { try decoder.decodeSingularInt64Field(value: &self.feeLimit) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.memo) }()
       case 10: try {
         var v: TW_Tron_Proto_TransferContract?
         var hadOneofValue = false
@@ -1732,6 +1737,9 @@ extension TW_Tron_Proto_Transaction: SwiftProtobuf.Message, SwiftProtobuf._Messa
     if self.feeLimit != 0 {
       try visitor.visitSingularInt64Field(value: self.feeLimit, fieldNumber: 4)
     }
+    if !self.memo.isEmpty {
+      try visitor.visitSingularStringField(value: self.memo, fieldNumber: 5)
+    }
     switch self.contractOneof {
     case .transfer?: try {
       guard case .transfer(let v)? = self.contractOneof else { preconditionFailure() }
@@ -1803,6 +1811,7 @@ extension TW_Tron_Proto_Transaction: SwiftProtobuf.Message, SwiftProtobuf._Messa
     if lhs.expiration != rhs.expiration {return false}
     if lhs._blockHeader != rhs._blockHeader {return false}
     if lhs.feeLimit != rhs.feeLimit {return false}
+    if lhs.memo != rhs.memo {return false}
     if lhs.contractOneof != rhs.contractOneof {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
