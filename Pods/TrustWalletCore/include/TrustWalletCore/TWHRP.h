@@ -47,6 +47,7 @@ enum TWHRP {
     TWHRPHarmony     /* "one" */,
     TWHRPCardano     /* "addr" */,
     TWHRPQtum     /* "qc" */,
+    TWHRPPactus     /* "pc" */,
     TWHRPStratis     /* "strax" */,
     TWHRPNativeInjective     /* "inj" */,
     TWHRPOsmosis     /* "osmo" */,
@@ -107,6 +108,7 @@ static const char *_Nonnull HRP_BITCOINDIAMOND = "bcd";
 static const char *_Nonnull HRP_HARMONY = "one";
 static const char *_Nonnull HRP_CARDANO = "addr";
 static const char *_Nonnull HRP_QTUM = "qc";
+static const char *_Nonnull HRP_PACTUS = "pc";
 static const char *_Nonnull HRP_STRATIS = "strax";
 static const char *_Nonnull HRP_NATIVEINJECTIVE = "inj";
 static const char *_Nonnull HRP_OSMOSIS = "osmo";

@@ -40,34 +40,35 @@ public enum HRP: UInt32, CaseIterable, CustomStringConvertible  {
     case harmony = 28
     case cardano = 29
     case qtum = 30
-    case stratis = 31
-    case nativeInjective = 32
-    case osmosis = 33
-    case terraV2 = 34
-    case coreum = 35
-    case nativeZetaChain = 36
-    case nativeCanto = 37
-    case sommelier = 38
-    case fetchAI = 39
-    case mars = 40
-    case umee = 41
-    case quasar = 42
-    case persistence = 43
-    case akash = 44
-    case noble = 45
-    case sei = 46
-    case stargaze = 47
-    case nativeEvmos = 48
-    case tia = 49
-    case dydx = 50
-    case juno = 51
-    case tbinance = 52
-    case stride = 53
-    case axelar = 54
-    case crescent = 55
-    case kujira = 56
-    case comdex = 57
-    case neutron = 58
+    case pactus = 31
+    case stratis = 32
+    case nativeInjective = 33
+    case osmosis = 34
+    case terraV2 = 35
+    case coreum = 36
+    case nativeZetaChain = 37
+    case nativeCanto = 38
+    case sommelier = 39
+    case fetchAI = 40
+    case mars = 41
+    case umee = 42
+    case quasar = 43
+    case persistence = 44
+    case akash = 45
+    case noble = 46
+    case sei = 47
+    case stargaze = 48
+    case nativeEvmos = 49
+    case tia = 50
+    case dydx = 51
+    case juno = 52
+    case tbinance = 53
+    case stride = 54
+    case axelar = 55
+    case crescent = 56
+    case kujira = 57
+    case comdex = 58
+    case neutron = 59
 
     public var description: String {
         switch self {
@@ -102,6 +103,7 @@ public enum HRP: UInt32, CaseIterable, CustomStringConvertible  {
         case .harmony: return "one"
         case .cardano: return "addr"
         case .qtum: return "qc"
+        case .pactus: return "pc"
         case .stratis: return "strax"
         case .nativeInjective: return "inj"
         case .osmosis: return "osmo"

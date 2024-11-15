@@ -95,6 +95,7 @@
 #import "TWNULSProto.h"
 #import "TWOasisProto.h"
 #import "TWOntologyProto.h"
+#import "TWPactusProto.h"
 #import "TWPBKDF2.h"
 #import "TWPolkadotProto.h"
 #import "TWPrivateKey.h"
