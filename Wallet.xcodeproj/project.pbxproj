@@ -83,7 +83,6 @@
 		2C603D0226B6E13F00956955 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
 		2C622BC42BF3C52F0003B932 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C622BC32BF3C52F0003B932 /* main.swift */; };
 		2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6706A4267A6BFE006AAEF2 /* Bundle.swift */; };
-		2C6A0A932BA9AF3A0066C881 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C492689F01700D0926A /* Strings.swift */; };
 		2C6F6D5A28273FE500D6E8FB /* EditAccountsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5928273FE500D6E8FB /* EditAccountsViewController.swift */; };
 		2C6F6D5D2827434800D6E8FB /* PreviewAccountTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5B2827434800D6E8FB /* PreviewAccountTableViewCell.xib */; };
 		2C6F6D5E2827434800D6E8FB /* PreviewAccountTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5C2827434800D6E8FB /* PreviewAccountTableViewCell.swift */; };
@@ -99,13 +98,7 @@
 		2C773F63274523DC007B04E7 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
 		2C78F8282683BDCC00C10670 /* Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C78F8272683BDCC00C10670 /* Alert.swift */; };
 		2C797E7E267BB88800F2CE2D /* WelcomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */; };
-		2C7A8CDF2B7CD98A00683E15 /* UniformTypeIdentifiers.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2C7A8CDE2B7CD98A00683E15 /* UniformTypeIdentifiers.framework */; };
-		2C7A8CE42B7CD98A00683E15 /* ActionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A8CE32B7CD98A00683E15 /* ActionViewController.swift */; };
-		2C7A8CE72B7CD98A00683E15 /* MainInterface.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C7A8CE52B7CD98A00683E15 /* MainInterface.storyboard */; };
-		2C7A8CEB2B7CD98A00683E15 /* Mint iOS.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2C7A8CDD2B7CD98A00683E15 /* Mint iOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		2C7A8CEF2B7CF22E00683E15 /* URL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D39727623EC600687301 /* URL.swift */; };
 		2C7A8CF12B7CF25100683E15 /* IpfsResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A8CF02B7CF25100683E15 /* IpfsResponse.swift */; };
-		2C7A8CF22B7CF25100683E15 /* IpfsResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A8CF02B7CF25100683E15 /* IpfsResponse.swift */; };
 		2C86125B2B76BDF300B22794 /* TransactionInspectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03EB892B069BFD00EF61F5 /* TransactionInspectorTests.swift */; };
 		2C86125D2B76BE2800B22794 /* Tests_iOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03EB752B069B5A00EF61F5 /* Tests_iOS.swift */; };
 		2C8944C52AEAFF97006A711F /* FixedWidthInteger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944C42AEAFF97006A711F /* FixedWidthInteger.swift */; };
@@ -206,7 +199,6 @@
 		2CE3D012267F73C00032A62E /* Transaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D011267F73C00032A62E /* Transaction.swift */; };
 		2CE9A7782BADC59C00579BF7 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 2CE9A7772BADC59C00579BF7 /* Localizable.xcstrings */; };
 		2CE9A7792BADC59C00579BF7 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 2CE9A7772BADC59C00579BF7 /* Localizable.xcstrings */; };
-		2CE9A77A2BADC59C00579BF7 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 2CE9A7772BADC59C00579BF7 /* Localizable.xcstrings */; };
 		2CED86A52AF00BC9006F9E26 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86A42AF00BC9006F9E26 /* main.swift */; };
 		2CED86B02AF0167F006F9E26 /* EIP155ChainData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86AF2AF0167F006F9E26 /* EIP155ChainData.swift */; };
 		2CED86B32AF01F99006F9E26 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
@@ -266,13 +258,6 @@
 			remoteGlobalIDString = 2C09CB9E273979C1009AD39B;
 			remoteInfo = Safari;
 		};
-		2C7A8CE92B7CD98A00683E15 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 2C1995342674C4B900A8E370 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 2C7A8CDC2B7CD98A00683E15;
-			remoteInfo = "Mint iOS";
-		};
 		2C8612552B76BDDC00B22794 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 2C1995342674C4B900A8E370 /* Project object */;
@@ -324,7 +309,6 @@
 			dstSubfolderSpec = 13;
 			files = (
 				2CCEB84527594E2A00768473 /* Safari iOS.appex in Embed Foundation Extensions */,
-				2C7A8CEB2B7CD98A00683E15 /* Mint iOS.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -351,7 +335,7 @@
 		2C09FC5E2828078C00DE9C27 /* AccountsHeaderView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AccountsHeaderView.swift; sourceTree = "<group>"; };
 		2C09FC652828331D00DE9C27 /* PlatformSpecificImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformSpecificImage.swift; sourceTree = "<group>"; };
 		2C134BA527553EC500DAFBDB /* Browser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Browser.swift; sourceTree = "<group>"; };
-		2C19953C2674C4B900A8E370 /* Wallet.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Wallet.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2C19953C2674C4B900A8E370 /* Big Wallet.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Big Wallet.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C19953F2674C4B900A8E370 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		2C1995412674C4B900A8E370 /* ImportViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportViewController.swift; sourceTree = "<group>"; };
 		2C1995432674C4BA00A8E370 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -392,7 +376,7 @@
 		2C4E26BD27564EB000265DCC /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = SOURCE_ROOT; };
 		2C528A15267FA8EB00CA3ADD /* Defaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Defaults.swift; sourceTree = "<group>"; };
 		2C5C829E2822B9DF007D9488 /* Images.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Images.swift; sourceTree = "<group>"; };
-		2C5FF96F26C84F7B00B32ACC /* Wallet iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Wallet iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		2C5FF96F26C84F7B00B32ACC /* Big Wallet.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Big Wallet.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C5FF97126C84F7B00B32ACC /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		2C5FF97326C84F7B00B32ACC /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		2C5FF97826C84F7B00B32ACC /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
@@ -412,11 +396,7 @@
 		2C773F61274523DC007B04E7 /* ResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseToExtension.swift; sourceTree = "<group>"; };
 		2C78F8272683BDCC00C10670 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alert.swift; sourceTree = "<group>"; };
 		2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeViewController.swift; sourceTree = "<group>"; };
-		2C7A8CDD2B7CD98A00683E15 /* Mint iOS.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Mint iOS.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C7A8CDE2B7CD98A00683E15 /* UniformTypeIdentifiers.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UniformTypeIdentifiers.framework; path = System/Library/Frameworks/UniformTypeIdentifiers.framework; sourceTree = SDKROOT; };
-		2C7A8CE32B7CD98A00683E15 /* ActionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionViewController.swift; sourceTree = "<group>"; };
-		2C7A8CE62B7CD98A00683E15 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/MainInterface.storyboard; sourceTree = "<group>"; };
-		2C7A8CE82B7CD98A00683E15 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C7A8CF02B7CF25100683E15 /* IpfsResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IpfsResponse.swift; sourceTree = "<group>"; };
 		2C8612512B76BDDC00B22794 /* Tests iOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Tests iOS.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C8944C42AEAFF97006A711F /* FixedWidthInteger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FixedWidthInteger.swift; sourceTree = "<group>"; };
@@ -930,14 +910,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		2C7A8CDA2B7CD98A00683E15 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				2C7A8CDF2B7CD98A00683E15 /* UniformTypeIdentifiers.framework in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		2C86124E2B76BDDC00B22794 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -1026,7 +998,6 @@
 				2C03EB742B069B5A00EF61F5 /* Tests iOS */,
 				2CE02C7B2BAA0F6700381D70 /* Tests macOS */,
 				2CBB9FA32AF7B5970047B0CD /* ci_scripts */,
-				2C7A8CE02B7CD98A00683E15 /* Mint iOS */,
 				2CF4294F2C1DBE7400AD303A /* app_store */,
 				2C622BC22BF3C52F0003B932 /* translate */,
 				2CF965C42BF4D778001E9D1B /* fastlane */,
@@ -1039,13 +1010,12 @@
 		2C19953D2674C4B900A8E370 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				2C19953C2674C4B900A8E370 /* Wallet.app */,
-				2C5FF96F26C84F7B00B32ACC /* Wallet iOS.app */,
+				2C19953C2674C4B900A8E370 /* Big Wallet.app */,
+				2C5FF96F26C84F7B00B32ACC /* Big Wallet.app */,
 				2C09CB9F273979C1009AD39B /* Safari macOS.appex */,
 				2CCEB82D27594E2A00768473 /* Safari iOS.appex */,
 				2CED86A22AF00BC9006F9E26 /* Tools */,
 				2C8612512B76BDDC00B22794 /* Tests iOS.xctest */,
-				2C7A8CDD2B7CD98A00683E15 /* Mint iOS.appex */,
 				2CE02C7A2BAA0F6700381D70 /* Tests macOS.xctest */,
 				2C622BC12BF3C52F0003B932 /* Translate */,
 			);
@@ -1191,16 +1161,6 @@
 				2C96D38E2762317300687301 /* AccountTableViewCell.xib */,
 			);
 			path = Views;
-			sourceTree = "<group>";
-		};
-		2C7A8CE02B7CD98A00683E15 /* Mint iOS */ = {
-			isa = PBXGroup;
-			children = (
-				2C7A8CE32B7CD98A00683E15 /* ActionViewController.swift */,
-				2C7A8CE52B7CD98A00683E15 /* MainInterface.storyboard */,
-				2C7A8CE82B7CD98A00683E15 /* Info.plist */,
-			);
-			path = "Mint iOS";
 			sourceTree = "<group>";
 		};
 		2C8944D02AEC34F2006A711F /* Utilities */ = {
@@ -2333,7 +2293,7 @@
 			);
 			name = Wallet;
 			productName = "Ecrypted Ink";
-			productReference = 2C19953C2674C4B900A8E370 /* Wallet.app */;
+			productReference = 2C19953C2674C4B900A8E370 /* Big Wallet.app */;
 			productType = "com.apple.product-type.application";
 		};
 		2C5FF96E26C84F7B00B32ACC /* Wallet iOS */ = {
@@ -2352,11 +2312,10 @@
 			);
 			dependencies = (
 				2CCEB84427594E2A00768473 /* PBXTargetDependency */,
-				2C7A8CEA2B7CD98A00683E15 /* PBXTargetDependency */,
 			);
 			name = "Wallet iOS";
 			productName = "Encrypted Ink iOS";
-			productReference = 2C5FF96F26C84F7B00B32ACC /* Wallet iOS.app */;
+			productReference = 2C5FF96F26C84F7B00B32ACC /* Big Wallet.app */;
 			productType = "com.apple.product-type.application";
 		};
 		2C622BC02BF3C52F0003B932 /* Translate */ = {
@@ -2375,23 +2334,6 @@
 			productName = Translate;
 			productReference = 2C622BC12BF3C52F0003B932 /* Translate */;
 			productType = "com.apple.product-type.tool";
-		};
-		2C7A8CDC2B7CD98A00683E15 /* Mint iOS */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 2C7A8CEE2B7CD98A00683E15 /* Build configuration list for PBXNativeTarget "Mint iOS" */;
-			buildPhases = (
-				2C7A8CD92B7CD98A00683E15 /* Sources */,
-				2C7A8CDA2B7CD98A00683E15 /* Frameworks */,
-				2C7A8CDB2B7CD98A00683E15 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = "Mint iOS";
-			productName = "Mint iOS";
-			productReference = 2C7A8CDD2B7CD98A00683E15 /* Mint iOS.appex */;
-			productType = "com.apple.product-type.app-extension";
 		};
 		2C8612502B76BDDC00B22794 /* Tests iOS */ = {
 			isa = PBXNativeTarget;
@@ -2486,9 +2428,6 @@
 					2C622BC02BF3C52F0003B932 = {
 						CreatedOnToolsVersion = 15.3;
 					};
-					2C7A8CDC2B7CD98A00683E15 = {
-						CreatedOnToolsVersion = 15.2;
-					};
 					2C8612502B76BDDC00B22794 = {
 						CreatedOnToolsVersion = 15.2;
 						TestTargetID = 2C5FF96E26C84F7B00B32ACC;
@@ -2555,7 +2494,6 @@
 				2C5FF96E26C84F7B00B32ACC /* Wallet iOS */,
 				2C09CB9E273979C1009AD39B /* Safari macOS */,
 				2CCEB82C27594E2A00768473 /* Safari iOS */,
-				2C7A8CDC2B7CD98A00683E15 /* Mint iOS */,
 				2CE02C792BAA0F6700381D70 /* Tests macOS */,
 				2C8612502B76BDDC00B22794 /* Tests iOS */,
 				2CED86A12AF00BC9006F9E26 /* Tools */,
@@ -2608,15 +2546,6 @@
 				2C5FF97B26C84F7C00B32ACC /* Assets.xcassets in Resources */,
 				2C5FF97926C84F7B00B32ACC /* Main.storyboard in Resources */,
 				2C6F6D5D2827434800D6E8FB /* PreviewAccountTableViewCell.xib in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		2C7A8CDB2B7CD98A00683E15 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				2CE9A77A2BADC59C00579BF7 /* Localizable.xcstrings in Resources */,
-				2C7A8CE72B7CD98A00683E15 /* MainInterface.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3065,17 +2994,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		2C7A8CD92B7CD98A00683E15 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				2C7A8CE42B7CD98A00683E15 /* ActionViewController.swift in Sources */,
-				2C7A8CEF2B7CF22E00683E15 /* URL.swift in Sources */,
-				2C6A0A932BA9AF3A0066C881 /* Strings.swift in Sources */,
-				2C7A8CF22B7CF25100683E15 /* IpfsResponse.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		2C86124D2B76BDDC00B22794 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -3138,11 +3056,6 @@
 			target = 2C09CB9E273979C1009AD39B /* Safari macOS */;
 			targetProxy = 2C09CBB6273979C1009AD39B /* PBXContainerItemProxy */;
 		};
-		2C7A8CEA2B7CD98A00683E15 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 2C7A8CDC2B7CD98A00683E15 /* Mint iOS */;
-			targetProxy = 2C7A8CE92B7CD98A00683E15 /* PBXContainerItemProxy */;
-		};
 		2C8612562B76BDDC00B22794 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 2C5FF96E26C84F7B00B32ACC /* Wallet iOS */;
@@ -3185,14 +3098,6 @@
 			name = LaunchScreen.storyboard;
 			sourceTree = "<group>";
 		};
-		2C7A8CE52B7CD98A00683E15 /* MainInterface.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-				2C7A8CE62B7CD98A00683E15 /* Base */,
-			);
-			name = MainInterface.storyboard;
-			sourceTree = "<group>";
-		};
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
@@ -3209,7 +3114,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari macOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Safari;
+				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet for Desktop Safari";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -3244,7 +3149,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari macOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Safari;
+				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet for Desktop Safari";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -3401,7 +3306,7 @@
 				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "App macOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Wallet;
+				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -3410,7 +3315,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = org.lil.wallet;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Big Wallet";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
 			};
@@ -3432,7 +3337,7 @@
 				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "App macOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Wallet;
+				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -3441,7 +3346,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = org.lil.wallet;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Big Wallet";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
 			};
@@ -3459,7 +3364,7 @@
 				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				INFOPLIST_FILE = "App iOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Wallet;
+				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -3469,7 +3374,7 @@
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = org.lil.wallet;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Big Wallet";
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -3491,7 +3396,7 @@
 				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				INFOPLIST_FILE = "App iOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Wallet;
+				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -3501,7 +3406,7 @@
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = org.lil.wallet;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Big Wallet";
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -3548,82 +3453,6 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.4;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
-		2C7A8CEC2B7CD98A00683E15 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "";
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
-				DEVELOPMENT_TEAM = 8DXC3N7E7P;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "Mint iOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Mint on Zora";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
-				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.wallet.Mint-iOS";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		2C7A8CED2B7CD98A00683E15 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "";
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
-				DEVELOPMENT_TEAM = 8DXC3N7E7P;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "Mint iOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Mint on Zora";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
-				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.wallet.Mint-iOS";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
 		};
@@ -3694,7 +3523,7 @@
 				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari iOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Safari iOS";
+				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet for Mobile Safari";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -3732,7 +3561,7 @@
 				DEVELOPMENT_TEAM = 8DXC3N7E7P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari iOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Safari iOS";
+				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet for Mobile Safari";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -3891,15 +3720,6 @@
 			buildConfigurations = (
 				2C622BC52BF3C52F0003B932 /* Debug */,
 				2C622BC62BF3C52F0003B932 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		2C7A8CEE2B7CD98A00683E15 /* Build configuration list for PBXNativeTarget "Mint iOS" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				2C7A8CEC2B7CD98A00683E15 /* Debug */,
-				2C7A8CED2B7CD98A00683E15 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
