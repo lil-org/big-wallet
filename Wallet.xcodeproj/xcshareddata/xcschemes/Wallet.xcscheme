@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
-   LastUpgradeVersion = "1540"
+   LastUpgradeVersion = "1610"
    version = "1.7">
    <BuildAction
       parallelizeBuildables = "YES"
@@ -17,7 +17,7 @@
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "2C19953B2674C4B900A8E370"
                BuildableName = "Big Wallet.app"
-               BlueprintName = "Wallet"
+               BlueprintName = "Big Wallet"
                ReferencedContainer = "container:Wallet.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -59,7 +59,7 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "2C19953B2674C4B900A8E370"
             BuildableName = "Big Wallet.app"
-            BlueprintName = "Wallet"
+            BlueprintName = "Big Wallet"
             ReferencedContainer = "container:Wallet.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -76,7 +76,7 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "2C19953B2674C4B900A8E370"
             BuildableName = "Big Wallet.app"
-            BlueprintName = "Wallet"
+            BlueprintName = "Big Wallet"
             ReferencedContainer = "container:Wallet.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

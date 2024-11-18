@@ -16,6 +16,7 @@
 		00FD0CDDAD02943B7FF5BD8FC4F2DD96 /* ImageContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD3F0C303570CEA41346DD46117027C /* ImageContext.swift */; };
 		01027699CC88E213E1476CA70C8052C3 /* KingfisherOptionsInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA2BDADD116E45DFEB28E253B8DF59D6 /* KingfisherOptionsInfo.swift */; };
 		019C105E7603787A712FF2872BF3A70D /* ExtensionFieldValueSet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A59D2EDB75A184EFC76AB83BC09DA2E /* ExtensionFieldValueSet.swift */; };
+		020B3ABEBFFDC154830ECE9A0F5C4556 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A761413F21755BB54ECA8A8BAAE8FCB7 /* Cocoa.framework */; };
 		0219573A522C8E4995F44B3FD0DEAF0A /* ImageBinder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89F39908D54A919045E3D5EE4A9ED68C /* ImageBinder.swift */; };
 		021FFA770CABBE3A37FFDF40B055BDBE /* Decred.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 238D988D71F711218CFCED625310860A /* Decred.pb.swift */; };
 		0229758A4B0ACF89408B74870B7A9E77 /* WebAuthn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 959AF4E9AD92D959DCFB625CE43C99C8 /* WebAuthn.swift */; };
@@ -52,6 +53,7 @@
 		06E3494FBFE09887EE70046680783531 /* SelectiveVisitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6C5E075F595AB4A021D19889990205E /* SelectiveVisitor.swift */; };
 		06F89528166C68C4966952FCBD261801 /* Subtraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 666EEB03C76AB202401907B7CAFB4059 /* Subtraction.swift */; };
 		07B1BE26C9C0C3BCACD6E87E84DD8F9A /* TrustWalletCore-macOS-dummy.m in Sources */ = {isa = PBXBuildFile; fileRef = BA77C7C0C15B912D004B4F41D137E19B /* TrustWalletCore-macOS-dummy.m */; };
+		07D106CE7ACB420152B7BB8EA45F8F5E /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 22AE17CE97A90613E843547AB2A651AD /* Foundation.framework */; };
 		0879B3559D5FEBE5DB57B20EB7E89020 /* Nano+Proto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53D70CEE215B42E02BC3F6B5A37C3232 /* Nano+Proto.swift */; };
 		08CCAE89031A6DB7EEE5F2497B7B505D /* Google_Protobuf_Value+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123308D03D47B24D1C33EB0B6235D193 /* Google_Protobuf_Value+Extensions.swift */; };
 		08D4824BF2BAE11CDDC5B7C05AB89D5B /* ExtensibleMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A6D193E3BA2CD9609397C3EF602B469 /* ExtensibleMessage.swift */; };
@@ -177,7 +179,6 @@
 		258C052AA91E4EFE321B3C95F4F6201E /* BinaryEncodingVisitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B2D3472CEC71BD69D50A7BFE608435A /* BinaryEncodingVisitor.swift */; };
 		25998549D5033B9B0FFE27E16083E173 /* TWHDWallet.h in Headers */ = {isa = PBXBuildFile; fileRef = DBA8B4A43249C03D24E84F37BB256638 /* TWHDWallet.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		25B5DDAF8BF6B6B018C3B583D4A86D5D /* TWTONAddressConverter.h in Headers */ = {isa = PBXBuildFile; fileRef = 35BE48C6E8A65F4C65B8A63D0257CADF /* TWTONAddressConverter.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		25D1375473173EF861E69C9508D41BF4 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A761413F21755BB54ECA8A8BAAE8FCB7 /* Cocoa.framework */; };
 		25E05371CB52FA62CB50EC33D68CA4B8 /* Barz.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = F723764E223FA0601B3F40292C3D5E09 /* Barz.pb.swift */; };
 		2629F64C048DDDF76FF6C410B936F5A0 /* Source.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF92EEBE033E9BFDD3BE8689D1F0A0A2 /* Source.swift */; };
 		2663193EAF8A2BA9435ABA57486A867B /* TextFormatEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24E99FE11F243584FC5482078EFC6E72 /* TextFormatEncoder.swift */; };
@@ -419,7 +420,6 @@
 		59332D3C6BAC11C1F9A1C925CDB5054A /* Stellar.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41358FE36AA5A7A238A11AC5A00C7A07 /* Stellar.pb.swift */; };
 		59389A58377726F13AB55451CDD99850 /* empty.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C3FBE6A5BE15329DDD69B953CCA0C9 /* empty.pb.swift */; };
 		59807636F1199C224C0B5789C5FFD273 /* StoredKeyEncryption.swift in Sources */ = {isa = PBXBuildFile; fileRef = 919BBEE466EE0861FAC0BDD6CB9425E8 /* StoredKeyEncryption.swift */; };
-		5994D52FDBB063B2028970528EED3B99 /* SwiftProtobuf-macOS-SwiftProtobuf in Resources */ = {isa = PBXBuildFile; fileRef = 90E213B2540580977A2BF768A0CF2978 /* SwiftProtobuf-macOS-SwiftProtobuf */; };
 		59E512C17985B26DBBEDA890275E29BB /* Cosmos+Proto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 095DE71270B1EB0980283DEAC83085F3 /* Cosmos+Proto.swift */; };
 		5A802EF5FDE2105E9CBD99B9987A968A /* Placeholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD5549D8428E1997C986C98E485BF92D /* Placeholder.swift */; };
 		5AE790AE7499DE1E55B4FC67810CE212 /* CoinType.swift in Sources */ = {isa = PBXBuildFile; fileRef = D640A09FCC236B63AB8A231E3DCCE6AD /* CoinType.swift */; };
@@ -427,6 +427,7 @@
 		5B3C46A4098C6ACCC31AEB49EE69F79C /* CacheSerializer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E1226C2BCB29CE1892B84B0B5173B44 /* CacheSerializer.swift */; };
 		5B570DF19F9F20B8CE08A7F22AC31680 /* TWEthereumRlpProto.h in Headers */ = {isa = PBXBuildFile; fileRef = 054006631A57CEF89FD8A78BEFF786E9 /* TWEthereumRlpProto.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		5B61E0A644278B35DFBF6EDC8D5FF75D /* TWAES.h in Headers */ = {isa = PBXBuildFile; fileRef = BC5C610C6681FDF2EA6C5E12D38E4B43 /* TWAES.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		5C1DC3E06E81ABB622DF011BCCAA2E54 /* Pods-Big Wallet-dummy.m in Sources */ = {isa = PBXBuildFile; fileRef = A41B6749858B5C25E77ADD50DAAC962F /* Pods-Big Wallet-dummy.m */; };
 		5C45AF3F29A75D429DC39D57F0718DBD /* Image.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEDA0DC0E6BD887046651C15BD228126 /* Image.swift */; };
 		5C9168C0A086151EA9569FD5873B7F14 /* BinaryEncodingOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D58F146E818028C48A9248C0EE8A3A8 /* BinaryEncodingOptions.swift */; };
 		5C9BB0A4AB72E30C6753838D7C1520C4 /* TWCurve.h in Headers */ = {isa = PBXBuildFile; fileRef = 696CBB47A11D21E90FE24E472DD8C034 /* TWCurve.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -453,13 +454,13 @@
 		6155CF72691700DE56EAE11C4773A810 /* Mnemonic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F11AE9363BF8EBDEFC9645284DFA613 /* Mnemonic.swift */; };
 		61792DDC9A2CD6D1A7FD57C887FAD6F6 /* StarkWare.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CB133784C0D181B9845EB0297C5C1A0 /* StarkWare.swift */; };
 		617A5D34C3B374A9DC0F33AACC3DB966 /* TWNimiqProto.h in Headers */ = {isa = PBXBuildFile; fileRef = 690F89780860BDCCD35C7A3577D8A306 /* TWNimiqProto.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		61CCC8DF796205B662E62EE621EC64D0 /* Pods-Wallet iOS-umbrella.h in Headers */ = {isa = PBXBuildFile; fileRef = 8783650FAE8DA30D2CC185E5759EF1D6 /* Pods-Wallet iOS-umbrella.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		623927A9847DE0B3883BF4A500A404B0 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A761413F21755BB54ECA8A8BAAE8FCB7 /* Cocoa.framework */; };
 		62719FC15E898A32FDB744A6B5655807 /* TWGroestlcoinAddress.h in Headers */ = {isa = PBXBuildFile; fileRef = AC670E08A24E5F9173D5C36D459F6C2C /* TWGroestlcoinAddress.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		63248906C32931DE54B5B44F0A8C922C /* Documentation.docc in Sources */ = {isa = PBXBuildFile; fileRef = AA56142C4C25B9B1DCA272540DB7D0DE /* Documentation.docc */; };
 		632C6AFF3529C61101D55E78A2ABD00D /* BinaryDecodingOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A94071F4B465F7DCB552FC1E5A83421 /* BinaryDecodingOptions.swift */; };
 		633DF60885B9C0CCB9246BF9BF35285D /* TWAccount.h in Headers */ = {isa = PBXBuildFile; fileRef = 373DC66EB9083332E7BB79AD6A262B22 /* TWAccount.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		6389385ACA5222021C1FD8D3DB70F5C6 /* TWAESPaddingMode.h in Headers */ = {isa = PBXBuildFile; fileRef = 20DCF1486884BAC27F0F269C6049BA03 /* TWAESPaddingMode.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		645B4D88A44B90F40F2A5BABEAC33C90 /* Pods-Big Wallet-umbrella.h in Headers */ = {isa = PBXBuildFile; fileRef = 60867625A15A23B8B85780D44D967754 /* Pods-Big Wallet-umbrella.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		653C8DBB2790CEA0D8465ACA33991489 /* TWTONWallet.h in Headers */ = {isa = PBXBuildFile; fileRef = 5308AF8112369F1D8F56D7F7BCD6E0E5 /* TWTONWallet.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		65BDB95622E1699B400F4A0281D553F6 /* TezosMessageSigner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7751AA4E5F025DD926142AE5DF66DAB8 /* TezosMessageSigner.swift */; };
 		65CAA4AD40C69178B3F17E2F41BDB36E /* SecRandom.m in Sources */ = {isa = PBXBuildFile; fileRef = 6B173E38EB00CC8B8E3763680DD1EAB1 /* SecRandom.m */; settings = {COMPILER_FLAGS = "-w -Xanalyzer -analyzer-disable-all-checks"; }; };
@@ -576,7 +577,6 @@
 		81CACA08D95AEE92929A3CBA6E3D3627 /* MultiversX.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8265C8100AF36C0C7E2713E63811C7D2 /* MultiversX.pb.swift */; };
 		827BB090A7B9B306E17F27845121EBBD /* VeChain.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 875360CF92D67D239122AE8067B0C4D3 /* VeChain.pb.swift */; };
 		8290742134634D0191EAC293F64882FD /* Polkadot+Proto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6774ED2BA24232C9BE31B070E27A08A0 /* Polkadot+Proto.swift */; };
-		82A48E4D5B5AC95ADE0ADABEFBF00B2B /* Pods-Wallet iOS-dummy.m in Sources */ = {isa = PBXBuildFile; fileRef = D02FBF0A105B9677703EB03ACCFC4233 /* Pods-Wallet iOS-dummy.m */; };
 		833C3D17E33455055D19EABF77E8D9B3 /* BinaryEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4588C9D043AC9063690F5C555C74FE0 /* BinaryEncoder.swift */; };
 		833FEBBFF89DFD6277C8D6FCAC9AF439 /* TWNanoProto.h in Headers */ = {isa = PBXBuildFile; fileRef = C76292E1697033B176BA802FE0D68F2E /* TWNanoProto.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		8352FA61907F4DA608C893634FF55E5E /* FIOAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE783A7598C36EF2AC927CF49ACD25E /* FIOAccount.swift */; };
@@ -635,6 +635,7 @@
 		925F3289C3A5750D53F7C20CEEE6BE2E /* Blockchain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CEF28F0F618108FB5BC2226A9D5423B /* Blockchain.swift */; };
 		92707C631039998B5B3E387011E0FB7F /* CacheSerializer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E1226C2BCB29CE1892B84B0B5173B44 /* CacheSerializer.swift */; };
 		92F43FEB08D6F14FF90F730D6D5E18A5 /* TWCryptoBoxPublicKey.h in Headers */ = {isa = PBXBuildFile; fileRef = A4E57E2CE233EB09D9D4C08A72CD7E60 /* TWCryptoBoxPublicKey.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		9334D4BA0B37A985260AC4BE16CBA3AB /* Pods-Big Wallet iOS-umbrella.h in Headers */ = {isa = PBXBuildFile; fileRef = D146847C941E14605D6FD9A61CA69C46 /* Pods-Big Wallet iOS-umbrella.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		934392ABB7F16781A25C291876F809A4 /* Google_Protobuf_FieldMask+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAD010D3A98FE2C7EDBD6376A8529DD7 /* Google_Protobuf_FieldMask+Extensions.swift */; };
 		93AE3DFCC49307379F5B14392A47CE0E /* TextFormatEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24E99FE11F243584FC5482078EFC6E72 /* TextFormatEncoder.swift */; };
 		94015F84E8BA53DEA1D6CDB055FFF001 /* Addition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26CCC1BA640F1A696E5AEBA5D12918CC /* Addition.swift */; };
@@ -719,6 +720,7 @@
 		A9E66C908C3FE1D730639068009FDF4B /* wrappers.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FD09E3A74976C71C20E1A94F764506A /* wrappers.pb.swift */; };
 		A9F28DDDD3928EA298F7BADF64EDF4DF /* Filecoin.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 742D36B1861F35C6E94D1EAFF5C98E7F /* Filecoin.pb.swift */; };
 		AA7A401C6137870ADA01437BA5A08D60 /* LivePhotoSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8EA90A3D9C14D2AC80315F15083E323 /* LivePhotoSource.swift */; };
+		AAA34F91703C2B2FECF2D4E4FAB52D1E /* Pods-Big Wallet iOS-dummy.m in Sources */ = {isa = PBXBuildFile; fileRef = C731A29E847550EAE3A5CDF5B87D3BEC /* Pods-Big Wallet iOS-dummy.m */; };
 		AAD2D1524DB9207B5F79A6516F68A9E4 /* AsyncMessageSequence.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA39355E59E86AA84ADF63D427B18AD3 /* AsyncMessageSequence.swift */; };
 		AAE8310CDEF00AF5D41F7B7A97C73734 /* Google_Protobuf_ListValue+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 466473703B4D5DE2BC1A8C7B77E30313 /* Google_Protobuf_ListValue+Extensions.swift */; };
 		AB593A538BAC447CB623B8B636201863 /* Binance+Proto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4544C390106424ACF18DB840D640CD9B /* Binance+Proto.swift */; };
@@ -804,7 +806,6 @@
 		BC02D785B4403EB058A333F81CF5E431 /* TWWebAuthn.h in Headers */ = {isa = PBXBuildFile; fileRef = 693E54FC34FD1B48FE2D746BB3E18C33 /* TWWebAuthn.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		BC645262D0AFBB0629BC20D3D934B71D /* Message+JSONArrayAdditions_Data.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E2F237383E22C10DAEA10AFF1E360FE /* Message+JSONArrayAdditions_Data.swift */; };
 		BC7972AC3FAEE8CA41775954F6314536 /* duration.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1C65D84480152B65E4005004E29D77 /* duration.pb.swift */; };
-		BCA49D530AE999660B343E83215F505F /* Kingfisher-iOS-Kingfisher in Resources */ = {isa = PBXBuildFile; fileRef = D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher-iOS-Kingfisher */; };
 		BCE22A074FC559D5BFE3CBA4110AFC18 /* AnyAddress.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF890D8AC57D3B07B45E5B7D3643720B /* AnyAddress.swift */; };
 		BD9D058E0323D99333A23D9D1A6D3086 /* JSONScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5AB579FBCCB237623F4885956F618E2 /* JSONScanner.swift */; };
 		BDD19A36455C62204A47734D905A851B /* TWStellarVersionByte.h in Headers */ = {isa = PBXBuildFile; fileRef = 2D6247962775AECD58DE5A4F5C98D9A0 /* TWStellarVersionByte.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -850,7 +851,6 @@
 		C86A7D97CD3E893FC6D08FBFDF57D029 /* Google_Protobuf_Timestamp+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D690365FB4DBED2BD78E437AAEAAAC /* Google_Protobuf_Timestamp+Extensions.swift */; };
 		C9424D018C7F192EB1257EA25EF26C33 /* ImageTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 847BF5A5A1D5BE766566E92D586CEED6 /* ImageTransition.swift */; };
 		C9932F22D1492E43936979211DB26DC6 /* Enum.swift in Sources */ = {isa = PBXBuildFile; fileRef = A67727C682F70F076757DF73FA84305A /* Enum.swift */; };
-		C9BEA3479A780C6F9A2CAB6A1E14EC10 /* Kingfisher-macOS-Kingfisher in Resources */ = {isa = PBXBuildFile; fileRef = 5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher-macOS-Kingfisher */; };
 		CA0F89C9A699EEAC9A2052DC6908F269 /* SolanaAddress.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D0B5B66DD043B243D3A9BCB7D6D031 /* SolanaAddress.swift */; };
 		CA3FBD91F16F90BEB12ADF66BABE7D7E /* KFOptionsSetter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49821959A21D9578452A110A5D04916A /* KFOptionsSetter.swift */; };
 		CA4338BF6893185CB729AE0E3DF8C014 /* MessageExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = A626AF66C87752DAEA360BA2356965EC /* MessageExtension.swift */; };
@@ -907,7 +907,6 @@
 		D64A5327305D8D083CAEFEE455CBD08C /* TWEthereumAbiFunction.h in Headers */ = {isa = PBXBuildFile; fileRef = 128F81C475D3531452DB31EB471B8FE5 /* TWEthereumAbiFunction.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		D67DC973A410DA5AD1179D45FC46D672 /* Shifts.swift in Sources */ = {isa = PBXBuildFile; fileRef = E190E7A99D7CC46AF5B75FEF6C9C3DF3 /* Shifts.swift */; };
 		D6AAF905C7AE9DD55CFDED07D273CC60 /* ExtensionHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A317160DA05AF5BDA9EC05B7998C662B /* ExtensionHelpers.swift */; };
-		D6B05743FEA880A401DCD8D4BD3CFC08 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 22AE17CE97A90613E843547AB2A651AD /* Foundation.framework */; };
 		D80ED5C2A2371522CA6E390EEB6FFE88 /* AnyMessageStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9D0006B6C7483F8575DA5257E8D9BFE /* AnyMessageStorage.swift */; };
 		D880255BE23047A8E9998C3C033A0FE3 /* TWCryptoBox.h in Headers */ = {isa = PBXBuildFile; fileRef = 378D2DC1DE101D52360D6B0E25F827A5 /* TWCryptoBox.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		D8883DB8893AEFAF8D974F3F432C7D9B /* Nano+Proto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53D70CEE215B42E02BC3F6B5A37C3232 /* Nano+Proto.swift */; };
@@ -994,7 +993,6 @@
 		EC2F52184304AD75CAB84D652E68436C /* PublicKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB12D0CCA986EF8472C32A50BB11E977 /* PublicKey.swift */; };
 		EC67BFC9A212733264F59664DD8AD59D /* TWPrivateKeyType.h in Headers */ = {isa = PBXBuildFile; fileRef = DCC23C459C65B493CCF34F7882E86FCB /* TWPrivateKeyType.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		EC92EF273C6F109401BE82374750C4DA /* Theta+Proto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140EE59EA1F32D690438CF554E7137EE /* Theta+Proto.swift */; };
-		ECCD645CF8A1839E07AA2FE32B00849D /* SwiftProtobuf-iOS-SwiftProtobuf in Resources */ = {isa = PBXBuildFile; fileRef = 92D069737DB52F187E62F68A75895067 /* SwiftProtobuf-iOS-SwiftProtobuf */; };
 		ECF18721A91EE4247FC0EAD2BD14D061 /* StellarVersionByte.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C51102B1DFFF2C8DEBB7EFE92126C87 /* StellarVersionByte.swift */; };
 		ECF5E05EAB21A0ADDB12A759EB9F6C3F /* TWBitcoinProto.h in Headers */ = {isa = PBXBuildFile; fileRef = 09355E928C6CA43C309E92BA148F5BA9 /* TWBitcoinProto.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		ED0D256174335C47B825FC17C8850C27 /* field_mask.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D223D2E8E0A065AC5D43FE054456DC3 /* field_mask.pb.swift */; };
@@ -1041,13 +1039,11 @@
 		F77B563427271D70BCA608B658B6454B /* TWTheOpenNetworkProto.h in Headers */ = {isa = PBXBuildFile; fileRef = 91C66B0D53A55303AAE7A0E3814349E4 /* TWTheOpenNetworkProto.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		F7D18EAC10907B87290FE3069D48B842 /* TWDataVector.h in Headers */ = {isa = PBXBuildFile; fileRef = 97B442C985DD074B1AB7463DA3D5FBBA /* TWDataVector.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		F844D9FF014D6645B869F390A6067816 /* ExtensionFields.swift in Sources */ = {isa = PBXBuildFile; fileRef = 406645A8598A54D2B0347C0439CB16F2 /* ExtensionFields.swift */; };
-		F876C0857F9350CC7A2FE6E2E9602528 /* Pods-Wallet-dummy.m in Sources */ = {isa = PBXBuildFile; fileRef = B0E1E54884DBEBE6447DD1D4E2C17C67 /* Pods-Wallet-dummy.m */; };
 		F8D1A42F46F1F8C03256C163214586EF /* TWBase32.h in Headers */ = {isa = PBXBuildFile; fileRef = 8F3E04C2FB878D909812CCCA8AF5D33A /* TWBase32.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		F8F03F4F225B16ED1C3EDBF52089E484 /* TheOpenNetwork.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8066C67AB3D8D84E3B7238000AD0D97 /* TheOpenNetwork.pb.swift */; };
 		F90CEEA0E714E90E79CE9DB202C94BFC /* NEARAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7FF0B963761A1EED2DE9BC778D0F8D1 /* NEARAccount.swift */; };
 		F91C38E38ABA953AC6B76F684572B1B5 /* TWCommonProto.h in Headers */ = {isa = PBXBuildFile; fileRef = 2B1580F516E678F1F4E287EB17496B3F /* TWCommonProto.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		F983E7B6DD4BFF2044DCA58C70EF0E5C /* TWPrivateKey.h in Headers */ = {isa = PBXBuildFile; fileRef = 28ED1C1E110DE567177DBAFFFB112160 /* TWPrivateKey.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		FA3D243B2B4E9A348F1A6D40AE80CAC0 /* Pods-Wallet-umbrella.h in Headers */ = {isa = PBXBuildFile; fileRef = 50F6CFF12CFF0BFA923E8139CCF5DE52 /* Pods-Wallet-umbrella.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		FA79D096C47739812CADEB71108CEB74 /* Derivation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F22E3846E7A8A18A5A35B07C94D8D5 /* Derivation.swift */; };
 		FA9C53A54BA93942C01656A97FE75EB9 /* TWEthereumAbiFunction.h in Headers */ = {isa = PBXBuildFile; fileRef = 128F81C475D3531452DB31EB471B8FE5 /* TWEthereumAbiFunction.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		FB0B2C5A0B64EF7F64CBC2D1FCAE0E84 /* Google_Protobuf_Any+Registry.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4F6CE6B037A43EED0423E92F7E7280D /* Google_Protobuf_Any+Registry.swift */; };
@@ -1082,6 +1078,20 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		1E9FBFD9453186690F9D5853398E47B0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 357D7AA757B0ED4603C9CD1523BC234E;
+			remoteInfo = "SwiftProtobuf-iOS";
+		};
+		24272909CD80761383FC8A03A3E21293 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 685A5AC5E317EE1D980ECCFE9E6EB08A;
+			remoteInfo = "Kingfisher-iOS";
+		};
 		32982F9B6D99AC391353D12D90377B1C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
@@ -1089,14 +1099,7 @@
 			remoteGlobalIDString = 357D7AA757B0ED4603C9CD1523BC234E;
 			remoteInfo = "SwiftProtobuf-iOS";
 		};
-		48BF4A21B252467D98B104AE8DCA8148 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 889A3C6D0A70D789D17B7BFFE160AD76;
-			remoteInfo = "BigInt-iOS";
-		};
-		53AB9D0533BF71A3BE1E5133561241C2 /* PBXContainerItemProxy */ = {
+		369E1723FC9D3DD487C4FEFC928013CA /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
 			proxyType = 1;
@@ -1110,33 +1113,19 @@
 			remoteGlobalIDString = 28E46233E8A1EAE4640778FD2DEDE3C1;
 			remoteInfo = "SwiftProtobuf-macOS-SwiftProtobuf";
 		};
-		75716DAE51ACE7A07C12D73CBDAA4913 /* PBXContainerItemProxy */ = {
+		73F3EDB5378E39CE1612FE8F4F386382 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = AA186741961F10502016CE44BFED6684;
-			remoteInfo = "SwiftProtobuf-macOS";
+			remoteGlobalIDString = 889A3C6D0A70D789D17B7BFFE160AD76;
+			remoteInfo = "BigInt-iOS";
 		};
-		882A76FE52DB165A25FBF3BC5AA12291 /* PBXContainerItemProxy */ = {
+		A3F6F756FD5162F683D048D9AE6A3B17 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 685A5AC5E317EE1D980ECCFE9E6EB08A;
-			remoteInfo = "Kingfisher-iOS";
-		};
-		9D5AF3C7127B5E819B2BB1B094B7ACF3 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 357D7AA757B0ED4603C9CD1523BC234E;
-			remoteInfo = "SwiftProtobuf-iOS";
-		};
-		BC8B8901E31E360A12BB94919876C372 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = DC6F436FE9D7D62655988D0B8E3A24DE;
-			remoteInfo = "TrustWalletCore-iOS";
+			remoteGlobalIDString = 63F854E532D7CBA393D37B6C84E1F23F;
+			remoteInfo = "BigInt-macOS";
 		};
 		C4D28363D8AA184DDF70E6B5991AE45B /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -1145,13 +1134,6 @@
 			remoteGlobalIDString = B2085DBECFAD83713FC1BE448B7882B0;
 			remoteInfo = "Kingfisher-macOS-Kingfisher";
 		};
-		C5CE753DFDAEC6D865BFFB008CAE02A1 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 63F854E532D7CBA393D37B6C84E1F23F;
-			remoteInfo = "BigInt-macOS";
-		};
 		CCED6764FC78B06CECB0CC4948E4C6C7 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
@@ -1159,7 +1141,14 @@
 			remoteGlobalIDString = 0CEE1B56ECDB3CB8B561C703CF8BC996;
 			remoteInfo = "SwiftProtobuf-iOS-SwiftProtobuf";
 		};
-		D7D5DA8F1F4F08C7EA811E206954C3B6 /* PBXContainerItemProxy */ = {
+		CD14819A9EAB1986AD7C309058322464 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AA186741961F10502016CE44BFED6684;
+			remoteInfo = "SwiftProtobuf-macOS";
+		};
+		CFB5FB758F72F991DF9CF9C7CB8B79DF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
 			proxyType = 1;
@@ -1172,6 +1161,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = AA186741961F10502016CE44BFED6684;
 			remoteInfo = "SwiftProtobuf-macOS";
+		};
+		E65EE876183E7FA906BE2B2BC5D210C6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DC6F436FE9D7D62655988D0B8E3A24DE;
+			remoteInfo = "TrustWalletCore-iOS";
 		};
 		EA8E8E22368DD441AAA7EC8E9F87E28F /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -1193,6 +1189,7 @@
 		0424D51E1E290D51124555B7448FF7F4 /* TrustWalletCore-macOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "TrustWalletCore-macOS.debug.xcconfig"; path = "../TrustWalletCore-macOS/TrustWalletCore-macOS.debug.xcconfig"; sourceTree = "<group>"; };
 		043457659BF0CD1D4907F1A2B91DF2C7 /* EthereumRlp.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EthereumRlp.pb.swift; path = Sources/Generated/Protobuf/EthereumRlp.pb.swift; sourceTree = "<group>"; };
 		04876F4334C131BB69512B59A235EEC0 /* TransactionCompiler.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TransactionCompiler.pb.swift; path = Sources/Generated/Protobuf/TransactionCompiler.pb.swift; sourceTree = "<group>"; };
+		04B6BFC950DD33AE00B0D88B95B81CF5 /* Pods-Big Wallet iOS-frameworks.sh */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.script.sh; path = "Pods-Big Wallet iOS-frameworks.sh"; sourceTree = "<group>"; };
 		051FCB3D9520172613385E18A3CD176A /* TWStoredKey.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWStoredKey.h; path = include/TrustWalletCore/TWStoredKey.h; sourceTree = "<group>"; };
 		054006631A57CEF89FD8A78BEFF786E9 /* TWEthereumRlpProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWEthereumRlpProto.h; path = include/TrustWalletCore/TWEthereumRlpProto.h; sourceTree = "<group>"; };
 		05E7FA555E0EFE927C554599C8B39004 /* TWEthereumMessageSigner.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWEthereumMessageSigner.h; path = include/TrustWalletCore/TWEthereumMessageSigner.h; sourceTree = "<group>"; };
@@ -1206,17 +1203,17 @@
 		09355E928C6CA43C309E92BA148F5BA9 /* TWBitcoinProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWBitcoinProto.h; path = include/TrustWalletCore/TWBitcoinProto.h; sourceTree = "<group>"; };
 		095DE71270B1EB0980283DEAC83085F3 /* Cosmos+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Cosmos+Proto.swift"; path = "Sources/Generated/Protobuf/Cosmos+Proto.swift"; sourceTree = "<group>"; };
 		0A08878724F0145475236E1F301942BD /* THORChainSwap.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = THORChainSwap.pb.swift; path = Sources/Generated/Protobuf/THORChainSwap.pb.swift; sourceTree = "<group>"; };
+		0A441F677FCF176EEAD3F92121BA1FD7 /* Pods-Big Wallet iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "Pods-Big Wallet iOS.debug.xcconfig"; sourceTree = "<group>"; };
 		0A6154A7296E1FEC94A40B65B188C4D9 /* Tron.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Tron.pb.swift; path = Sources/Generated/Protobuf/Tron.pb.swift; sourceTree = "<group>"; };
-		0A90AABC168E7ACBF249426FCA99F19B /* TrustWalletCore-macOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "TrustWalletCore-macOS"; path = WalletCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		0A90AABC168E7ACBF249426FCA99F19B /* WalletCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = WalletCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		0B51CF7E863EC9732AF77A931774AED3 /* TheOpenNetwork+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "TheOpenNetwork+Proto.swift"; path = "Sources/Generated/Protobuf/TheOpenNetwork+Proto.swift"; sourceTree = "<group>"; };
 		0B88AB69A96CEBCF3B6CE0118793DB3A /* TrustWalletCore-iOS-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "TrustWalletCore-iOS-umbrella.h"; sourceTree = "<group>"; };
 		0BCDF913618B775F56FBC7B9688074CE /* Division.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Division.swift; path = Sources/Division.swift; sourceTree = "<group>"; };
-		0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher-iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Kingfisher-iOS"; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		0C5F0906A16F6E948C63DEF9B3353C11 /* Harmony+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Harmony+Proto.swift"; path = "Sources/Generated/Protobuf/Harmony+Proto.swift"; sourceTree = "<group>"; };
 		0C65A0101AF3437E4A1B122ED774C111 /* TransactionUtil.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TransactionUtil.swift; path = Sources/Generated/TransactionUtil.swift; sourceTree = "<group>"; };
 		0CFC202D336D766F55873C6CB6C11D94 /* Cosmos.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Cosmos.pb.swift; path = Sources/Generated/Protobuf/Cosmos.pb.swift; sourceTree = "<group>"; };
 		0D8C2E8DAE4998EE06B2CFD249D7B056 /* Kingfisher-macOS-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = "Kingfisher-macOS-Info.plist"; path = "../Kingfisher-macOS/Kingfisher-macOS-Info.plist"; sourceTree = "<group>"; };
-		0E1103E310112E612CFD6762B9E96C97 /* Pods-Wallet-acknowledgements.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Pods-Wallet-acknowledgements.plist"; sourceTree = "<group>"; };
 		0E34809B6A5A0221FB4720709AD112AA /* EOS+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "EOS+Proto.swift"; path = "Sources/Generated/Protobuf/EOS+Proto.swift"; sourceTree = "<group>"; };
 		0EAFF5EB26E4880CD5A3245E93D708E4 /* Base64.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Base64.swift; path = Sources/Generated/Base64.swift; sourceTree = "<group>"; };
 		10BCFB8C7A0583EBC678DC10B1B29033 /* Message+JSONAdditions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Message+JSONAdditions.swift"; path = "Sources/SwiftProtobuf/Message+JSONAdditions.swift"; sourceTree = "<group>"; };
@@ -1281,7 +1278,6 @@
 		27E1B96C89095CC4BECCD8D979E90491 /* SwiftProtobuf-macOS-dummy.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = "SwiftProtobuf-macOS-dummy.m"; path = "../SwiftProtobuf-macOS/SwiftProtobuf-macOS-dummy.m"; sourceTree = "<group>"; };
 		27F70C1D0079AE47C6967856C7924F9D /* Google_Protobuf_Any+Extensions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Google_Protobuf_Any+Extensions.swift"; path = "Sources/SwiftProtobuf/Google_Protobuf_Any+Extensions.swift"; sourceTree = "<group>"; };
 		284E86A559D6DEEB0D04C99249ECC7A9 /* Waves.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Waves.pb.swift; path = Sources/Generated/Protobuf/Waves.pb.swift; sourceTree = "<group>"; };
-		286FB547F73B02C2E5098A4A8FDCE71F /* Pods-Wallet.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; path = "Pods-Wallet.modulemap"; sourceTree = "<group>"; };
 		28BAECD9912F9214F2F9A634E099CA73 /* Floating Point Conversion.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Floating Point Conversion.swift"; path = "Sources/Floating Point Conversion.swift"; sourceTree = "<group>"; };
 		28ED1C1E110DE567177DBAFFFB112160 /* TWPrivateKey.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWPrivateKey.h; path = include/TrustWalletCore/TWPrivateKey.h; sourceTree = "<group>"; };
 		2986F2594C0071D8075F14D068E174A9 /* MathUtils.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MathUtils.swift; path = Sources/SwiftProtobuf/MathUtils.swift; sourceTree = "<group>"; };
@@ -1295,7 +1291,6 @@
 		2B286671C9FE8C84645C18AD00508169 /* Sui+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Sui+Proto.swift"; path = "Sources/Generated/Protobuf/Sui+Proto.swift"; sourceTree = "<group>"; };
 		2BA2B1A88DE15DA8FFACD515736BD1DE /* Nebulas+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Nebulas+Proto.swift"; path = "Sources/Generated/Protobuf/Nebulas+Proto.swift"; sourceTree = "<group>"; };
 		2CA77702E1AE0D1345A7B14AD907B994 /* SizeExtensions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SizeExtensions.swift; path = Sources/Utility/SizeExtensions.swift; sourceTree = "<group>"; };
-		2D4605C86CE07DA1CCD3E90EAE560957 /* Pods-Wallet iOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "Pods-Wallet iOS.release.xcconfig"; sourceTree = "<group>"; };
 		2D6247962775AECD58DE5A4F5C98D9A0 /* TWStellarVersionByte.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWStellarVersionByte.h; path = include/TrustWalletCore/TWStellarVersionByte.h; sourceTree = "<group>"; };
 		2DE00EC6D1B7D44661D2DC4307EA3E93 /* TONMessageSigner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TONMessageSigner.swift; path = Sources/Generated/TONMessageSigner.swift; sourceTree = "<group>"; };
 		2E2E6D3FFB095ABF6C6D884FA47BAC16 /* ImageDrawing.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ImageDrawing.swift; path = Sources/Image/ImageDrawing.swift; sourceTree = "<group>"; };
@@ -1323,7 +1318,6 @@
 		3A0C7C99E2C7D7F7AF97D1A38EDBEFC2 /* THORChainSwap.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = THORChainSwap.swift; path = Sources/Generated/THORChainSwap.swift; sourceTree = "<group>"; };
 		3A145DAE8AA77EDFEB8A9C7AEEB5A106 /* Kingfisher-iOS.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; path = "Kingfisher-iOS.modulemap"; sourceTree = "<group>"; };
 		3B1DD8843228160B8AE1EC30826762D2 /* FieldTypes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FieldTypes.swift; path = Sources/SwiftProtobuf/FieldTypes.swift; sourceTree = "<group>"; };
-		3BB6779780FB224706FCB714747CD1D2 /* Pods-Wallet iOS-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Pods-Wallet iOS-Info.plist"; sourceTree = "<group>"; };
 		3C18C2DC6A6E042BAFEE6B2DB41CD638 /* JSONDecoder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JSONDecoder.swift; path = Sources/SwiftProtobuf/JSONDecoder.swift; sourceTree = "<group>"; };
 		3CAA6A985BADCECE0DD2B4F21EB6A0DF /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Accelerate.framework; sourceTree = DEVELOPER_DIR; };
 		3CB133784C0D181B9845EB0297C5C1A0 /* StarkWare.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = StarkWare.swift; path = Sources/Generated/StarkWare.swift; sourceTree = "<group>"; };
@@ -1355,6 +1349,7 @@
 		466473703B4D5DE2BC1A8C7B77E30313 /* Google_Protobuf_ListValue+Extensions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Google_Protobuf_ListValue+Extensions.swift"; path = "Sources/SwiftProtobuf/Google_Protobuf_ListValue+Extensions.swift"; sourceTree = "<group>"; };
 		46E5462E043DA022688F5F25ABB619A3 /* ImageProcessor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ImageProcessor.swift; path = Sources/Image/ImageProcessor.swift; sourceTree = "<group>"; };
 		477CA9BEE14BB7BEFCFBC1E35667BE10 /* BigInt.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BigInt.swift; path = Sources/BigInt.swift; sourceTree = "<group>"; };
+		47A6BE5F8A28B12D30891D4BD0A9774B /* Pods-Big Wallet-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Pods-Big Wallet-Info.plist"; sourceTree = "<group>"; };
 		48971B5709D78E38D225C60EDF78577A /* TextFormatScanner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TextFormatScanner.swift; path = Sources/SwiftProtobuf/TextFormatScanner.swift; sourceTree = "<group>"; };
 		497B6B12124D2A515D06ABB4557769DB /* EthereumRlp+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "EthereumRlp+Proto.swift"; path = "Sources/Generated/Protobuf/EthereumRlp+Proto.swift"; sourceTree = "<group>"; };
 		49821959A21D9578452A110A5D04916A /* KFOptionsSetter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KFOptionsSetter.swift; path = Sources/General/KFOptionsSetter.swift; sourceTree = "<group>"; };
@@ -1370,21 +1365,21 @@
 		4C933D321D6460EFB5322733A0144BA8 /* LiquidStaking+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "LiquidStaking+Proto.swift"; path = "Sources/Generated/Protobuf/LiquidStaking+Proto.swift"; sourceTree = "<group>"; };
 		4CBF7DC8B5C86F611A1ACBF3474240A8 /* BitcoinV2.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BitcoinV2.pb.swift; path = Sources/Generated/Protobuf/BitcoinV2.pb.swift; sourceTree = "<group>"; };
 		4CF6D45A9F05A9907F75FEC104A83F49 /* BigInt-macOS-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "BigInt-macOS-umbrella.h"; path = "../BigInt-macOS/BigInt-macOS-umbrella.h"; sourceTree = "<group>"; };
+		4CFA067AD9B2BFDB16CDA8C42DBEA39B /* Pods-Big Wallet iOS-acknowledgements.markdown */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "Pods-Big Wallet iOS-acknowledgements.markdown"; sourceTree = "<group>"; };
 		4D574F088B45E45D2C9088A706673316 /* FIO+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "FIO+Proto.swift"; path = "Sources/Generated/Protobuf/FIO+Proto.swift"; sourceTree = "<group>"; };
 		4D78C67C8DEDF5E7AF23A586D5A58778 /* Greenfield+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Greenfield+Proto.swift"; path = "Sources/Generated/Protobuf/Greenfield+Proto.swift"; sourceTree = "<group>"; };
 		4E4B359415C51B7E4AC178C732F7DAE1 /* Icon+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Icon+Proto.swift"; path = "Sources/Generated/Protobuf/Icon+Proto.swift"; sourceTree = "<group>"; };
 		4E5B18DC3D7EC5AC09406E8AB51F4F98 /* SwiftProtobuf-iOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "SwiftProtobuf-iOS.release.xcconfig"; sourceTree = "<group>"; };
 		4E6F0D6C54FAA8FB4CDE00F03ED5C0D1 /* TWEOSProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWEOSProto.h; path = include/TrustWalletCore/TWEOSProto.h; sourceTree = "<group>"; };
-		4EB0995C2F76DD6EBBA232D8C09FED80 /* Pods-Wallet iOS-acknowledgements.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Pods-Wallet iOS-acknowledgements.plist"; sourceTree = "<group>"; };
 		4EBFBE68B60318375E03440372F2B12D /* TWCardano.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TWCardano.swift; path = Sources/TWCardano.swift; sourceTree = "<group>"; };
 		4F19F5AE70195DB63DB2A6D0C550C514 /* Ethereum+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Ethereum+Proto.swift"; path = "Sources/Generated/Protobuf/Ethereum+Proto.swift"; sourceTree = "<group>"; };
 		4F2C499A79C437C9BA15BBDA323D8D2F /* PBKDF2.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PBKDF2.swift; path = Sources/Generated/PBKDF2.swift; sourceTree = "<group>"; };
+		4F58E5DFA28AE1B5C3D4F2A61FF0C5B2 /* Pods-Big Wallet-frameworks.sh */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.script.sh; path = "Pods-Big Wallet-frameworks.sh"; sourceTree = "<group>"; };
 		4FAE4EB018B669932D11C690544C6F97 /* Pactus.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Pactus.pb.swift; path = Sources/Generated/Protobuf/Pactus.pb.swift; sourceTree = "<group>"; };
-		4FB493F27969730246F5D83F23696A73 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Sources/SwiftProtobuf/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		4FB493F27969730246F5D83F23696A73 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Sources/SwiftProtobuf/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		4FDCF84624747F66A75B262E064FC576 /* AVAssetImageDataProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AVAssetImageDataProvider.swift; path = Sources/General/ImageSource/AVAssetImageDataProvider.swift; sourceTree = "<group>"; };
 		5012A6C5C6A5FC0CF0D72F2B17453DFB /* BigInt-macOS-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = "BigInt-macOS-Info.plist"; path = "../BigInt-macOS/BigInt-macOS-Info.plist"; sourceTree = "<group>"; };
 		50DF2D6837A2A6B5CD9208AC39C16B24 /* TWEverscaleProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWEverscaleProto.h; path = include/TrustWalletCore/TWEverscaleProto.h; sourceTree = "<group>"; };
-		50F6CFF12CFF0BFA923E8139CCF5DE52 /* Pods-Wallet-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "Pods-Wallet-umbrella.h"; sourceTree = "<group>"; };
 		516986FE45F72F219EDBECCF55EA74FB /* Kingfisher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Kingfisher.swift; path = Sources/General/Kingfisher.swift; sourceTree = "<group>"; };
 		51C9E8474362BCAFBBFD8D4C8150F974 /* TWBitcoinMessageSigner.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWBitcoinMessageSigner.h; path = include/TrustWalletCore/TWBitcoinMessageSigner.h; sourceTree = "<group>"; };
 		521DE042310D7C26E3B87A7458D66F35 /* TWVeChainProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWVeChainProto.h; path = include/TrustWalletCore/TWVeChainProto.h; sourceTree = "<group>"; };
@@ -1405,7 +1400,8 @@
 		58191F5EE3A983DAA87E6C571FAE2E18 /* TWLiquidStakingProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWLiquidStakingProto.h; path = include/TrustWalletCore/TWLiquidStakingProto.h; sourceTree = "<group>"; };
 		586D008004474EBF94FEBD560ABC2772 /* SimpleExtensionMap.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SimpleExtensionMap.swift; path = Sources/SwiftProtobuf/SimpleExtensionMap.swift; sourceTree = "<group>"; };
 		599804C7DF6E0833AD1A834B1130877E /* Hashable.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Hashable.swift; path = Sources/Hashable.swift; sourceTree = "<group>"; };
-		59C5DD41EE313A65C03650784BF278F3 /* BigInt-macOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "BigInt-macOS"; path = BigInt.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		599D388E1BE3C71DBD3189A4496D86AF /* Pods_Big_Wallet.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Big_Wallet.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		59C5DD41EE313A65C03650784BF278F3 /* BigInt.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = BigInt.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		59CF79CE62030EDC578DE26FEC3AA4C2 /* Data+Hex.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Data+Hex.swift"; path = "Sources/Extensions/Data+Hex.swift"; sourceTree = "<group>"; };
 		59D2B81AB9A05C682255A48177F95587 /* Words and Bits.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Words and Bits.swift"; path = "Sources/Words and Bits.swift"; sourceTree = "<group>"; };
 		5A4F6520440B2C3308750849BEC07DC0 /* VeChain+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "VeChain+Proto.swift"; path = "Sources/Generated/Protobuf/VeChain+Proto.swift"; sourceTree = "<group>"; };
@@ -1416,14 +1412,15 @@
 		5D072A0DC39F36EC39CCECD58CEAAE7A /* TimeUtils.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TimeUtils.swift; path = Sources/SwiftProtobuf/TimeUtils.swift; sourceTree = "<group>"; };
 		5D102ECB95DB0EB87E4219EBEE10EB01 /* TWBarzProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWBarzProto.h; path = include/TrustWalletCore/TWBarzProto.h; sourceTree = "<group>"; };
 		5DA25822E53E76FF2E32D23D4A26780E /* TWHarmonyProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWHarmonyProto.h; path = include/TrustWalletCore/TWHarmonyProto.h; sourceTree = "<group>"; };
-		5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher-macOS-Kingfisher */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = "Kingfisher-macOS-Kingfisher"; path = Kingfisher.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
+		5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = Kingfisher.bundle; path = "/Users/ivan/Developer/lil-org/big-wallet/Pods/../build/Debug/Kingfisher-macOS/Kingfisher.bundle"; sourceTree = "<absolute>"; };
 		5E6E61E9D3CD5342177798A7982F2D86 /* Nervos.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Nervos.pb.swift; path = Sources/Generated/Protobuf/Nervos.pb.swift; sourceTree = "<group>"; };
 		5E887C7343AE11DA1730531525EB3E6D /* Bitcoin+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Bitcoin+Proto.swift"; path = "Sources/Generated/Protobuf/Bitcoin+Proto.swift"; sourceTree = "<group>"; };
 		5EC9326522D04535BABE30955736D404 /* Harmony.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Harmony.pb.swift; path = Sources/Generated/Protobuf/Harmony.pb.swift; sourceTree = "<group>"; };
-		5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf-macOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "SwiftProtobuf-macOS"; path = SwiftProtobuf.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SwiftProtobuf.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		5FD09E3A74976C71C20E1A94F764506A /* wrappers.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = wrappers.pb.swift; path = Sources/SwiftProtobuf/wrappers.pb.swift; sourceTree = "<group>"; };
+		60867625A15A23B8B85780D44D967754 /* Pods-Big Wallet-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "Pods-Big Wallet-umbrella.h"; sourceTree = "<group>"; };
 		608D6AABFB7F68D3DD64EADB1409FC96 /* TrustWalletCore-iOS-dummy.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = "TrustWalletCore-iOS-dummy.m"; sourceTree = "<group>"; };
-		60CD9336BF0D87EB43F318C3C417DB66 /* TrustWalletCore-iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "TrustWalletCore-iOS"; path = WalletCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		60CD9336BF0D87EB43F318C3C417DB66 /* WalletCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = WalletCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		611CB5A92EA3B40C7D9FE4DC77F17F34 /* EthereumRlp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EthereumRlp.swift; path = Sources/Generated/EthereumRlp.swift; sourceTree = "<group>"; };
 		6173C7BF412233BA25BFE6668A1A9F93 /* PrivateKey.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PrivateKey.swift; path = Sources/Generated/PrivateKey.swift; sourceTree = "<group>"; };
 		618A78D72882C2C26509DA1176C59F8C /* TWBitcoinScript.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWBitcoinScript.h; path = include/TrustWalletCore/TWBitcoinScript.h; sourceTree = "<group>"; };
@@ -1462,7 +1459,9 @@
 		6CC44525879B6B38548DEC6C5160A0B4 /* Nebulas.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Nebulas.pb.swift; path = Sources/Generated/Protobuf/Nebulas.pb.swift; sourceTree = "<group>"; };
 		6CEF28F0F618108FB5BC2226A9D5423B /* Blockchain.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Blockchain.swift; path = Sources/Generated/Enums/Blockchain.swift; sourceTree = "<group>"; };
 		6D140058724C71C6F8ED2819F7DECA9D /* Kingfisher-macOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Kingfisher-macOS.release.xcconfig"; path = "../Kingfisher-macOS/Kingfisher-macOS.release.xcconfig"; sourceTree = "<group>"; };
+		6D18E6637F2A7BC21989B982C46509BE /* Pods-Big Wallet iOS.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; path = "Pods-Big Wallet iOS.modulemap"; sourceTree = "<group>"; };
 		6D58F146E818028C48A9248C0EE8A3A8 /* BinaryEncodingOptions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BinaryEncodingOptions.swift; path = Sources/SwiftProtobuf/BinaryEncodingOptions.swift; sourceTree = "<group>"; };
+		6D9F9B22E5D6BCCDA453462724D26DB0 /* Pods-Big Wallet-acknowledgements.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Pods-Big Wallet-acknowledgements.plist"; sourceTree = "<group>"; };
 		6DBACF0331482F7DC93F60910E8F5ED1 /* ImageDataProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ImageDataProvider.swift; path = Sources/General/ImageSource/ImageDataProvider.swift; sourceTree = "<group>"; };
 		6E7A36556BF6FE89B028216E973122C4 /* Square Root.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Square Root.swift"; path = "Sources/Square Root.swift"; sourceTree = "<group>"; };
 		6E9B7DBEADF432D71B2126E88DA6AAD0 /* Barz.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Barz.swift; path = Sources/Generated/Barz.swift; sourceTree = "<group>"; };
@@ -1482,6 +1481,7 @@
 		74BA917FBA95736850A2DAA751AB1E32 /* TWNEARAccount.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWNEARAccount.h; path = include/TrustWalletCore/TWNEARAccount.h; sourceTree = "<group>"; };
 		7584DDD89D29756A98FDDFDA17CB2C0D /* NSButton+Kingfisher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "NSButton+Kingfisher.swift"; path = "Sources/Extensions/NSButton+Kingfisher.swift"; sourceTree = "<group>"; };
 		758853EB83A2088DE02981635AD4817E /* PrivateKeyType.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PrivateKeyType.swift; path = Sources/Generated/Enums/PrivateKeyType.swift; sourceTree = "<group>"; };
+		75AB395E78054B64847552EE348EF0EE /* Pods-Big Wallet iOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "Pods-Big Wallet iOS.release.xcconfig"; sourceTree = "<group>"; };
 		75EE512CE9C8026436CA9C159208F918 /* SolanaTransaction.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SolanaTransaction.swift; path = Sources/Generated/SolanaTransaction.swift; sourceTree = "<group>"; };
 		7751AA4E5F025DD926142AE5DF66DAB8 /* TezosMessageSigner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TezosMessageSigner.swift; path = Sources/Generated/TezosMessageSigner.swift; sourceTree = "<group>"; };
 		778FB9DCFA35E9EEB0F628FF256FD8C7 /* DerivationPath.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DerivationPath.swift; path = Sources/Generated/DerivationPath.swift; sourceTree = "<group>"; };
@@ -1490,7 +1490,6 @@
 		79DF754624D8869AC72AD7ACF2F00B75 /* BitcoinAddress.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BitcoinAddress.swift; path = Sources/Generated/BitcoinAddress.swift; sourceTree = "<group>"; };
 		7A144EF555675D9DDE0B6740B3CB970A /* InternetComputer.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = InternetComputer.pb.swift; path = Sources/Generated/Protobuf/InternetComputer.pb.swift; sourceTree = "<group>"; };
 		7AEDEAB1A8E74123E174626C06D1502D /* TWPublicKeyType.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWPublicKeyType.h; path = include/TrustWalletCore/TWPublicKeyType.h; sourceTree = "<group>"; };
-		7AFB185BCE6781BF1ADEE0EEF8D87CE1 /* Pods-Wallet iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "Pods-Wallet iOS.debug.xcconfig"; sourceTree = "<group>"; };
 		7B2D3472CEC71BD69D50A7BFE608435A /* BinaryEncodingVisitor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BinaryEncodingVisitor.swift; path = Sources/SwiftProtobuf/BinaryEncodingVisitor.swift; sourceTree = "<group>"; };
 		7B54D8FFE872723310696B6B63141A3A /* LiquidStaking.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LiquidStaking.pb.swift; path = Sources/Generated/Protobuf/LiquidStaking.pb.swift; sourceTree = "<group>"; };
 		7B5E398F5E216D278748F1F776C348BE /* CryptoBox.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CryptoBox.swift; path = Sources/Generated/CryptoBox.swift; sourceTree = "<group>"; };
@@ -1500,7 +1499,7 @@
 		7CE1D67B90E3C6D5195D59E497B3E039 /* TWThetaProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWThetaProto.h; path = include/TrustWalletCore/TWThetaProto.h; sourceTree = "<group>"; };
 		7D8EA60BA613120A76822A59276E87E6 /* CryptoBoxPublicKey.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CryptoBoxPublicKey.swift; path = Sources/Generated/CryptoBoxPublicKey.swift; sourceTree = "<group>"; };
 		7F2F3874640FECD1E0C8A9F27F4C0C45 /* HRP.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = HRP.swift; path = Sources/Generated/Enums/HRP.swift; sourceTree = "<group>"; };
-		7F7257D96C8FC25F5D905AFE0E5260FD /* Pods-Wallet-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Pods-Wallet-Info.plist"; sourceTree = "<group>"; };
+		7F681EA52293906398E5B1FE811415C0 /* Pods-Big Wallet iOS-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Pods-Big Wallet iOS-Info.plist"; sourceTree = "<group>"; };
 		7F7F40636E9A50A4E8503183DD39DC3B /* String+SHA256.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "String+SHA256.swift"; path = "Sources/Utility/String+SHA256.swift"; sourceTree = "<group>"; };
 		7F9A76322F30F684EC6B72AD24117DE3 /* TWBinanceProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWBinanceProto.h; path = include/TrustWalletCore/TWBinanceProto.h; sourceTree = "<group>"; };
 		8020188E8D12DD855C3B4A4D48C01943 /* EOS.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EOS.pb.swift; path = Sources/Generated/Protobuf/EOS.pb.swift; sourceTree = "<group>"; };
@@ -1516,17 +1515,16 @@
 		83511398B3868FC408FC101418737CDE /* Ethereum.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Ethereum.swift; path = Sources/Generated/Ethereum.swift; sourceTree = "<group>"; };
 		847BF5A5A1D5BE766566E92D586CEED6 /* ImageTransition.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ImageTransition.swift; path = Sources/Image/ImageTransition.swift; sourceTree = "<group>"; };
 		8603AE6CCE81E2693E21373D31343383 /* TWData.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWData.h; path = include/TrustWalletCore/TWData.h; sourceTree = "<group>"; };
-		8652D3F3EF9723697088AF2E22568314 /* Pods-Wallet iOS.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; path = "Pods-Wallet iOS.modulemap"; sourceTree = "<group>"; };
 		87453DF42F475620FECBF5F569E343E9 /* SwiftProtobuf-iOS-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "SwiftProtobuf-iOS-umbrella.h"; sourceTree = "<group>"; };
 		875360CF92D67D239122AE8067B0C4D3 /* VeChain.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VeChain.pb.swift; path = Sources/Generated/Protobuf/VeChain.pb.swift; sourceTree = "<group>"; };
-		8783650FAE8DA30D2CC185E5759EF1D6 /* Pods-Wallet iOS-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "Pods-Wallet iOS-umbrella.h"; sourceTree = "<group>"; };
 		886E8EEAF680C81B41826F412CED91A6 /* AES.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AES.swift; path = Sources/Generated/AES.swift; sourceTree = "<group>"; };
 		88AB665CA48B2D8464790AF56FD61CA0 /* JSONEncodingVisitor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JSONEncodingVisitor.swift; path = Sources/SwiftProtobuf/JSONEncodingVisitor.swift; sourceTree = "<group>"; };
 		88C6C13BAFBFA3472E1D5E7951F6A706 /* TWBitcoinV2Proto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWBitcoinV2Proto.h; path = include/TrustWalletCore/TWBitcoinV2Proto.h; sourceTree = "<group>"; };
 		890976FC2ACDA88C8EB253163B5C70EC /* ImageDataProcessor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ImageDataProcessor.swift; path = Sources/Networking/ImageDataProcessor.swift; sourceTree = "<group>"; };
+		89C64FDF6E69E22BCC962D8B03648CB7 /* Pods-Big Wallet.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; path = "Pods-Big Wallet.modulemap"; sourceTree = "<group>"; };
 		89F39908D54A919045E3D5EE4A9ED68C /* ImageBinder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ImageBinder.swift; path = Sources/SwiftUI/ImageBinder.swift; sourceTree = "<group>"; };
 		8A26FCAF94025CEF19A4A138FA2D8BDB /* TWEthereumChainID.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWEthereumChainID.h; path = include/TrustWalletCore/TWEthereumChainID.h; sourceTree = "<group>"; };
-		8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf-iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "SwiftProtobuf-iOS"; path = SwiftProtobuf.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SwiftProtobuf.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		8CA43436BD7698F5DEC02A5CB5BAFB3B /* Comparable.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Comparable.swift; path = Sources/Comparable.swift; sourceTree = "<group>"; };
 		8D223D2E8E0A065AC5D43FE054456DC3 /* field_mask.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = field_mask.pb.swift; path = Sources/SwiftProtobuf/field_mask.pb.swift; sourceTree = "<group>"; };
 		8DA23D31E0F549D4C4F5977BB75FF8E9 /* Kingfisher-iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "Kingfisher-iOS.debug.xcconfig"; sourceTree = "<group>"; };
@@ -1534,9 +1532,10 @@
 		8E614EE2BBBEB9FBCB3412478AA545DB /* TWMultiversXProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWMultiversXProto.h; path = include/TrustWalletCore/TWMultiversXProto.h; sourceTree = "<group>"; };
 		8F11AE9363BF8EBDEFC9645284DFA613 /* Mnemonic.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Mnemonic.swift; path = Sources/Generated/Mnemonic.swift; sourceTree = "<group>"; };
 		8F3E04C2FB878D909812CCCA8AF5D33A /* TWBase32.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWBase32.h; path = include/TrustWalletCore/TWBase32.h; sourceTree = "<group>"; };
+		8FA2AFBA1EC822F56334448E625DE433 /* Pods-Big Wallet.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "Pods-Big Wallet.debug.xcconfig"; sourceTree = "<group>"; };
 		8FD76ABE85C2C43D0E43360FC061D80F /* ZigZag.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ZigZag.swift; path = Sources/SwiftProtobuf/ZigZag.swift; sourceTree = "<group>"; };
 		900334EF2FC6D94B56B6B4A01CA876C1 /* TWWalletConnectRequest.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWWalletConnectRequest.h; path = include/TrustWalletCore/TWWalletConnectRequest.h; sourceTree = "<group>"; };
-		90E213B2540580977A2BF768A0CF2978 /* SwiftProtobuf-macOS-SwiftProtobuf */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = "SwiftProtobuf-macOS-SwiftProtobuf"; path = SwiftProtobuf.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
+		90E213B2540580977A2BF768A0CF2978 /* SwiftProtobuf.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = SwiftProtobuf.bundle; path = "/Users/ivan/Developer/lil-org/big-wallet/Pods/../build/Debug/SwiftProtobuf-macOS/SwiftProtobuf.bundle"; sourceTree = "<absolute>"; };
 		914BB98AFEB7170A797297366485A0AE /* EthereumAbi+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "EthereumAbi+Proto.swift"; path = "Sources/Generated/Protobuf/EthereumAbi+Proto.swift"; sourceTree = "<group>"; };
 		9163BE8F6583F1E66194EC5FD9E0D401 /* FormatIndicatedCacheSerializer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FormatIndicatedCacheSerializer.swift; path = Sources/Cache/FormatIndicatedCacheSerializer.swift; sourceTree = "<group>"; };
 		9167D339F6EEAE1004D85B66FBFA70F0 /* Message+AnyAdditions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Message+AnyAdditions.swift"; path = "Sources/SwiftProtobuf/Message+AnyAdditions.swift"; sourceTree = "<group>"; };
@@ -1544,11 +1543,11 @@
 		91C66B0D53A55303AAE7A0E3814349E4 /* TWTheOpenNetworkProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWTheOpenNetworkProto.h; path = include/TrustWalletCore/TWTheOpenNetworkProto.h; sourceTree = "<group>"; };
 		9250BC7924D29F169C46E33428B8D631 /* Nimiq+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Nimiq+Proto.swift"; path = "Sources/Generated/Protobuf/Nimiq+Proto.swift"; sourceTree = "<group>"; };
 		92C81B358E3605AD6E98F4DD04B35415 /* TWAionProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWAionProto.h; path = include/TrustWalletCore/TWAionProto.h; sourceTree = "<group>"; };
-		92D069737DB52F187E62F68A75895067 /* SwiftProtobuf-iOS-SwiftProtobuf */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = "SwiftProtobuf-iOS-SwiftProtobuf"; path = SwiftProtobuf.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
+		92D069737DB52F187E62F68A75895067 /* SwiftProtobuf.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = SwiftProtobuf.bundle; path = "/Users/ivan/Developer/lil-org/big-wallet/Pods/../build/Debug-iphoneos/SwiftProtobuf-iOS/SwiftProtobuf.bundle"; sourceTree = "<absolute>"; };
 		933A5E70CB1FAD08882D62D6861B9B99 /* Runtime.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Runtime.swift; path = Sources/Utility/Runtime.swift; sourceTree = "<group>"; };
 		9396C0ACF2E43E891782F1AE0B36338C /* Filecoin+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Filecoin+Proto.swift"; path = "Sources/Generated/Protobuf/Filecoin+Proto.swift"; sourceTree = "<group>"; };
 		94EF09E3144003C174EB83905B5C2FEA /* TWFiroAddressType.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWFiroAddressType.h; path = include/TrustWalletCore/TWFiroAddressType.h; sourceTree = "<group>"; };
-		9537468CF4D5C16DB31E0F967000827C /* Kingfisher-macOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Kingfisher-macOS"; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		9537468CF4D5C16DB31E0F967000827C /* Kingfisher.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		959AF4E9AD92D959DCFB625CE43C99C8 /* WebAuthn.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WebAuthn.swift; path = Sources/Generated/WebAuthn.swift; sourceTree = "<group>"; };
 		966D7EFBCCA633BAE80B2EA3ACC957E4 /* Decred+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Decred+Proto.swift"; path = "Sources/Generated/Protobuf/Decred+Proto.swift"; sourceTree = "<group>"; };
 		970D896DFB551E6E389022215D5BA2AE /* TONWallet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TONWallet.swift; path = Sources/Generated/TONWallet.swift; sourceTree = "<group>"; };
@@ -1559,18 +1558,19 @@
 		9834F5B718C1CF3C6794DD67D7F33B22 /* Google_Protobuf_NullValue+Extensions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Google_Protobuf_NullValue+Extensions.swift"; path = "Sources/SwiftProtobuf/Google_Protobuf_NullValue+Extensions.swift"; sourceTree = "<group>"; };
 		983BA6BD2BE60D3F9A48FF2310B00FF3 /* Cardano.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Cardano.swift; path = Sources/Generated/Cardano.swift; sourceTree = "<group>"; };
 		9859AB378DEED3C098A215AE612B3097 /* SwiftProtobuf-macOS-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = "SwiftProtobuf-macOS-Info.plist"; path = "../SwiftProtobuf-macOS/SwiftProtobuf-macOS-Info.plist"; sourceTree = "<group>"; };
+		98CB5074EA6B681B722C6A2A2520BAA9 /* Pods-Big Wallet iOS-acknowledgements.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Pods-Big Wallet iOS-acknowledgements.plist"; sourceTree = "<group>"; };
 		99B2C2643AD67A6CCC1A600F5B47C78A /* SessionDataTask.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SessionDataTask.swift; path = Sources/Networking/SessionDataTask.swift; sourceTree = "<group>"; };
 		9A2183C0B602512DB87C38A9BA78B9E1 /* Tezos.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Tezos.pb.swift; path = Sources/Generated/Protobuf/Tezos.pb.swift; sourceTree = "<group>"; };
 		9A251188D902597B9187F101555E2B7F /* TextFormatDecodingOptions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TextFormatDecodingOptions.swift; path = Sources/SwiftProtobuf/TextFormatDecodingOptions.swift; sourceTree = "<group>"; };
 		9A2622093088C331C14EFED2C58EC08D /* Oasis.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Oasis.pb.swift; path = Sources/Generated/Protobuf/Oasis.pb.swift; sourceTree = "<group>"; };
 		9A59D2EDB75A184EFC76AB83BC09DA2E /* ExtensionFieldValueSet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExtensionFieldValueSet.swift; path = Sources/SwiftProtobuf/ExtensionFieldValueSet.swift; sourceTree = "<group>"; };
-		9B313351D20FE3A3B712A9028BCCFC85 /* WalletCoreCommon.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; path = WalletCoreCommon.xcframework; sourceTree = "<group>"; };
+		9B313351D20FE3A3B712A9028BCCFC85 /* WalletCoreCommon.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = wrapper.xcframework; path = WalletCoreCommon.xcframework; sourceTree = "<group>"; };
 		9BB660357148FAE9566F2990423C2D03 /* Message+BinaryAdditions_Data.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Message+BinaryAdditions_Data.swift"; path = "Sources/SwiftProtobuf/Message+BinaryAdditions_Data.swift"; sourceTree = "<group>"; };
 		9BB9A0201F63FA1E6F6B3B2636F6FBCE /* TWTransactionUtil.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWTransactionUtil.h; path = include/TrustWalletCore/TWTransactionUtil.h; sourceTree = "<group>"; };
 		9C3E2A3226AE06E8C89C00A8E1A7534D /* TWSolanaProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWSolanaProto.h; path = include/TrustWalletCore/TWSolanaProto.h; sourceTree = "<group>"; };
 		9C8BF65C7DBDF635C943E471732683E1 /* Exponentiation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Exponentiation.swift; path = Sources/Exponentiation.swift; sourceTree = "<group>"; };
 		9CF74D2A6A33C4D4A3E2CA35C1898BBD /* Ethereum.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Ethereum.pb.swift; path = Sources/Generated/Protobuf/Ethereum.pb.swift; sourceTree = "<group>"; };
-		9D940727FF8FB9C785EB98E56350EF41 /* Podfile */ = {isa = PBXFileReference; explicitFileType = text.script.ruby; includeInIndex = 1; indentWidth = 2; lastKnownFileType = text; name = Podfile; path = ../Podfile; sourceTree = SOURCE_ROOT; tabWidth = 2; xcLanguageSpecificationIdentifier = xcode.lang.ruby; };
+		9D940727FF8FB9C785EB98E56350EF41 /* Podfile */ = {isa = PBXFileReference; explicitFileType = text.script.ruby; includeInIndex = 1; indentWidth = 2; name = Podfile; path = ../Podfile; sourceTree = SOURCE_ROOT; tabWidth = 2; xcLanguageSpecificationIdentifier = xcode.lang.ruby; };
 		9E307E366C559D7ACEDD320D0470F421 /* TrustWalletCore-macOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "TrustWalletCore-macOS.release.xcconfig"; path = "../TrustWalletCore-macOS/TrustWalletCore-macOS.release.xcconfig"; sourceTree = "<group>"; };
 		9F27C2779B48D36217A8D3594927AE67 /* Varint.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Varint.swift; path = Sources/SwiftProtobuf/Varint.swift; sourceTree = "<group>"; };
 		9F75521F4C2C320C791B828C3B28E127 /* TWCoinType.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWCoinType.h; path = include/TrustWalletCore/TWCoinType.h; sourceTree = "<group>"; };
@@ -1579,7 +1579,6 @@
 		9FE0B157A6C0F8056C6802F7C9076197 /* JSONEncodingError.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JSONEncodingError.swift; path = Sources/SwiftProtobuf/JSONEncodingError.swift; sourceTree = "<group>"; };
 		A039028AE244C95A72966370AA7DC88C /* BinaryDecoder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BinaryDecoder.swift; path = Sources/SwiftProtobuf/BinaryDecoder.swift; sourceTree = "<group>"; };
 		A0610BC78AC54D739D5DA540097F67FA /* Strideable.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Strideable.swift; path = Sources/Strideable.swift; sourceTree = "<group>"; };
-		A198FBAF5923D079439933B316D1BEF4 /* Pods-Wallet iOS-frameworks.sh */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.script.sh; path = "Pods-Wallet iOS-frameworks.sh"; sourceTree = "<group>"; };
 		A1B4D6F7C9D777FE8A98E306622270F8 /* FIO.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FIO.pb.swift; path = Sources/Generated/Protobuf/FIO.pb.swift; sourceTree = "<group>"; };
 		A1EC7CDC26B8B294303649E5A8307B84 /* Message+FieldMask.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Message+FieldMask.swift"; path = "Sources/SwiftProtobuf/Message+FieldMask.swift"; sourceTree = "<group>"; };
 		A2722EC901E095BB082720346158FFFB /* TWStoredKeyEncryption.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWStoredKeyEncryption.h; path = include/TrustWalletCore/TWStoredKeyEncryption.h; sourceTree = "<group>"; };
@@ -1587,6 +1586,7 @@
 		A38B714377077246843697BB2962A5F0 /* KFAnimatedImage.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KFAnimatedImage.swift; path = Sources/SwiftUI/KFAnimatedImage.swift; sourceTree = "<group>"; };
 		A39D7572FAEC4D226EA23B3F0422E23F /* TWInternetComputerProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWInternetComputerProto.h; path = include/TrustWalletCore/TWInternetComputerProto.h; sourceTree = "<group>"; };
 		A3D16BA7D2943E9C4CCEC68D05E7A666 /* Message+JSONArrayAdditions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Message+JSONArrayAdditions.swift"; path = "Sources/SwiftProtobuf/Message+JSONArrayAdditions.swift"; sourceTree = "<group>"; };
+		A41B6749858B5C25E77ADD50DAAC962F /* Pods-Big Wallet-dummy.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = "Pods-Big Wallet-dummy.m"; sourceTree = "<group>"; };
 		A4D0A2031946FE12A7D06813C70E8680 /* TWHDVersion.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWHDVersion.h; path = include/TrustWalletCore/TWHDVersion.h; sourceTree = "<group>"; };
 		A4E57E2CE233EB09D9D4C08A72CD7E60 /* TWCryptoBoxPublicKey.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWCryptoBoxPublicKey.h; path = include/TrustWalletCore/TWCryptoBoxPublicKey.h; sourceTree = "<group>"; };
 		A4FABC4FEDC9CD9B3D32AD05AEAE5BC6 /* HDVersion.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = HDVersion.swift; path = Sources/Generated/Enums/HDVersion.swift; sourceTree = "<group>"; };
@@ -1606,7 +1606,7 @@
 		A8EA90A3D9C14D2AC80315F15083E323 /* LivePhotoSource.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LivePhotoSource.swift; path = Sources/General/ImageSource/LivePhotoSource.swift; sourceTree = "<group>"; };
 		A9E97F602BA1F1AC9429909294A5FADE /* TWDecredProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWDecredProto.h; path = include/TrustWalletCore/TWDecredProto.h; sourceTree = "<group>"; };
 		A9F6C0726831AFB70E5AD506109F4C7E /* SwiftProtobuf-macOS.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; name = "SwiftProtobuf-macOS.modulemap"; path = "../SwiftProtobuf-macOS/SwiftProtobuf-macOS.modulemap"; sourceTree = "<group>"; };
-		AA56142C4C25B9B1DCA272540DB7D0DE /* Documentation.docc */ = {isa = PBXFileReference; includeInIndex = 1; name = Documentation.docc; path = Sources/Documentation.docc; sourceTree = "<group>"; };
+		AA56142C4C25B9B1DCA272540DB7D0DE /* Documentation.docc */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.documentationcatalog; name = Documentation.docc; path = Sources/Documentation.docc; sourceTree = "<group>"; };
 		AADF8B348D0CB05150E35ED8F90CA93E /* Version.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Version.swift; path = Sources/SwiftProtobuf/Version.swift; sourceTree = "<group>"; };
 		AB96FE61E4D7AF92D9DFCE843B67CDE6 /* TrustWalletCore-macOS-prefix.pch */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "TrustWalletCore-macOS-prefix.pch"; path = "../TrustWalletCore-macOS/TrustWalletCore-macOS-prefix.pch"; sourceTree = "<group>"; };
 		ABC0D3C5D71252D2F10C9F17D25C4554 /* TWNervosProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWNervosProto.h; path = include/TrustWalletCore/TWNervosProto.h; sourceTree = "<group>"; };
@@ -1616,7 +1616,6 @@
 		AC6FAE47C9633712F4753805FDE79F70 /* KeyStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KeyStore.swift; path = Sources/KeyStore.swift; sourceTree = "<group>"; };
 		AD5549D8428E1997C986C98E485BF92D /* Placeholder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Placeholder.swift; path = Sources/Image/Placeholder.swift; sourceTree = "<group>"; };
 		AD78BC0177F91633FB0EC799CD759B6E /* PathVisitor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PathVisitor.swift; path = Sources/SwiftProtobuf/PathVisitor.swift; sourceTree = "<group>"; };
-		AE0A79DBFF6EDA89FBC23DC0916BBC36 /* Pods-Wallet iOS-acknowledgements.markdown */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "Pods-Wallet iOS-acknowledgements.markdown"; sourceTree = "<group>"; };
 		AE7674211B697C35328027802387FB5D /* TWFIOProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWFIOProto.h; path = include/TrustWalletCore/TWFIOProto.h; sourceTree = "<group>"; };
 		AEAE8839003AAED1884E1ED1F908A09E /* DiskStorage.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DiskStorage.swift; path = Sources/Cache/DiskStorage.swift; sourceTree = "<group>"; };
 		AEDA0DC0E6BD887046651C15BD228126 /* Image.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Image.swift; path = Sources/Image/Image.swift; sourceTree = "<group>"; };
@@ -1624,8 +1623,6 @@
 		AF2EA01024D944889DE7BE1CFBBA79D2 /* TWDerivation.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWDerivation.h; path = include/TrustWalletCore/TWDerivation.h; sourceTree = "<group>"; };
 		AF486F84A1342DECCCE139E2E3A5A690 /* TWBase.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWBase.h; path = include/TrustWalletCore/TWBase.h; sourceTree = "<group>"; };
 		AF890D8AC57D3B07B45E5B7D3643720B /* AnyAddress.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AnyAddress.swift; path = Sources/Generated/AnyAddress.swift; sourceTree = "<group>"; };
-		B00F0996D22207E8DD200058ED615E8F /* Pods-Wallet.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "Pods-Wallet.release.xcconfig"; sourceTree = "<group>"; };
-		B0E1E54884DBEBE6447DD1D4E2C17C67 /* Pods-Wallet-dummy.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = "Pods-Wallet-dummy.m"; sourceTree = "<group>"; };
 		B24489363E1FC743456EE385CFC5DBC9 /* TWEthereumProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWEthereumProto.h; path = include/TrustWalletCore/TWEthereumProto.h; sourceTree = "<group>"; };
 		B27C12FC85796CDD3DCABDEF04FF66B2 /* IoTeX+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "IoTeX+Proto.swift"; path = "Sources/Generated/Protobuf/IoTeX+Proto.swift"; sourceTree = "<group>"; };
 		B2F8F5D0328A15A6AAD9BBE27C77225B /* TWIOSTProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWIOSTProto.h; path = include/TrustWalletCore/TWIOSTProto.h; sourceTree = "<group>"; };
@@ -1680,12 +1677,14 @@
 		C5AB579FBCCB237623F4885956F618E2 /* JSONScanner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JSONScanner.swift; path = Sources/SwiftProtobuf/JSONScanner.swift; sourceTree = "<group>"; };
 		C6BAE3F43872D520D6BD8A5951DE6E3A /* TWStellarMemoType.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWStellarMemoType.h; path = include/TrustWalletCore/TWStellarMemoType.h; sourceTree = "<group>"; };
 		C6DFBEE39CA3C4B5717724F63C5C1D34 /* BigInt-macOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "BigInt-macOS.debug.xcconfig"; path = "../BigInt-macOS/BigInt-macOS.debug.xcconfig"; sourceTree = "<group>"; };
+		C731A29E847550EAE3A5CDF5B87D3BEC /* Pods-Big Wallet iOS-dummy.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = "Pods-Big Wallet iOS-dummy.m"; sourceTree = "<group>"; };
 		C76292E1697033B176BA802FE0D68F2E /* TWNanoProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWNanoProto.h; path = include/TrustWalletCore/TWNanoProto.h; sourceTree = "<group>"; };
 		C78A2A115331E9D4F29BBC1547461304 /* RequestModifier.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RequestModifier.swift; path = Sources/Networking/RequestModifier.swift; sourceTree = "<group>"; };
 		C7FF0B963761A1EED2DE9BC778D0F8D1 /* NEARAccount.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = NEARAccount.swift; path = Sources/Generated/NEARAccount.swift; sourceTree = "<group>"; };
 		C942461701435FE71367A8B8858740BF /* TrustWalletCore-macOS-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = "TrustWalletCore-macOS-Info.plist"; path = "../TrustWalletCore-macOS/TrustWalletCore-macOS-Info.plist"; sourceTree = "<group>"; };
 		CA218CD7291E70B5E20AEA3A9B619A13 /* CFNetwork.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CFNetwork.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/CFNetwork.framework; sourceTree = DEVELOPER_DIR; };
 		CA28FAE9E5D93C3101A31E8F476940F5 /* TWWalletConnectProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWWalletConnectProto.h; path = include/TrustWalletCore/TWWalletConnectProto.h; sourceTree = "<group>"; };
+		CAB09BEC410A76E06B5245389EED3384 /* Pods-Big Wallet.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "Pods-Big Wallet.release.xcconfig"; sourceTree = "<group>"; };
 		CBF08EC08047BEBCBABBF75563C44A33 /* Message+TextFormatAdditions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Message+TextFormatAdditions.swift"; path = "Sources/SwiftProtobuf/Message+TextFormatAdditions.swift"; sourceTree = "<group>"; };
 		CC5D24A8F86EAF9BF3378B56A4F13D3B /* DataVector.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DataVector.swift; path = Sources/Generated/DataVector.swift; sourceTree = "<group>"; };
 		CC7D7EC524F58433D5C872A615305B72 /* Barz+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Barz+Proto.swift"; path = "Sources/Generated/Protobuf/Barz+Proto.swift"; sourceTree = "<group>"; };
@@ -1699,8 +1698,8 @@
 		CF482ED26C172D0B47E27F5F2636351E /* StellarPassphrase.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = StellarPassphrase.swift; path = Sources/Generated/Enums/StellarPassphrase.swift; sourceTree = "<group>"; };
 		CF4E1DAEFB4FC633B943411AB786B7FE /* BigInt-macOS.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; name = "BigInt-macOS.modulemap"; path = "../BigInt-macOS/BigInt-macOS.modulemap"; sourceTree = "<group>"; };
 		D013B64473131965E8DB02FE6B34ED2E /* TWPurpose.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWPurpose.h; path = include/TrustWalletCore/TWPurpose.h; sourceTree = "<group>"; };
-		D02FBF0A105B9677703EB03ACCFC4233 /* Pods-Wallet iOS-dummy.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = "Pods-Wallet iOS-dummy.m"; sourceTree = "<group>"; };
 		D0E551F11463EF186FA8C43AAE06F28F /* TWWavesProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWWavesProto.h; path = include/TrustWalletCore/TWWavesProto.h; sourceTree = "<group>"; };
+		D146847C941E14605D6FD9A61CA69C46 /* Pods-Big Wallet iOS-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "Pods-Big Wallet iOS-umbrella.h"; sourceTree = "<group>"; };
 		D1BA32F99B9B67D478A0B139D9575AC2 /* type.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = type.pb.swift; path = Sources/SwiftProtobuf/type.pb.swift; sourceTree = "<group>"; };
 		D1FD0657B9BC00CC3A60340BBAD4CAF7 /* TWCoinTypeConfiguration.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWCoinTypeConfiguration.h; path = include/TrustWalletCore/TWCoinTypeConfiguration.h; sourceTree = "<group>"; };
 		D4E3F24D0D5ACD189A6061C2B1DC51BA /* TrustWalletCore-iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "TrustWalletCore-iOS.debug.xcconfig"; sourceTree = "<group>"; };
@@ -1713,7 +1712,7 @@
 		D84B146E6E5B5ACE84BD1B5A22A598D2 /* GraphicsContext.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = GraphicsContext.swift; path = Sources/Image/GraphicsContext.swift; sourceTree = "<group>"; };
 		D88CBC43C2DEEC39BC22EA8D8A510594 /* HashVisitor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = HashVisitor.swift; path = Sources/SwiftProtobuf/HashVisitor.swift; sourceTree = "<group>"; };
 		D892D5B30F55A9F855C05AFA7A78A8E5 /* Mnemonic+Extension.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Mnemonic+Extension.swift"; path = "Sources/Extensions/Mnemonic+Extension.swift"; sourceTree = "<group>"; };
-		D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher-iOS-Kingfisher */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = "Kingfisher-iOS-Kingfisher"; path = Kingfisher.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
+		D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = Kingfisher.bundle; path = "/Users/ivan/Developer/lil-org/big-wallet/Pods/../build/Debug-iphoneos/Kingfisher-iOS/Kingfisher.bundle"; sourceTree = "<absolute>"; };
 		D94943D6A84BE20EFC5AB2B49A05BA22 /* TWBlockchain.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWBlockchain.h; path = include/TrustWalletCore/TWBlockchain.h; sourceTree = "<group>"; };
 		DA55BE433A164C9B1B97C33C3B65B14C /* TWStellarProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWStellarProto.h; path = include/TrustWalletCore/TWStellarProto.h; sourceTree = "<group>"; };
 		DB823C280C8A7D47B4FE5EECB0E66607 /* EthereumChainID.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EthereumChainID.swift; path = Sources/Generated/Enums/EthereumChainID.swift; sourceTree = "<group>"; };
@@ -1724,7 +1723,6 @@
 		DC80CB1A6D5EB235287C8F352BEC0750 /* Kingfisher-macOS-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "Kingfisher-macOS-umbrella.h"; path = "../Kingfisher-macOS/Kingfisher-macOS-umbrella.h"; sourceTree = "<group>"; };
 		DCC23C459C65B493CCF34F7882E86FCB /* TWPrivateKeyType.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWPrivateKeyType.h; path = include/TrustWalletCore/TWPrivateKeyType.h; sourceTree = "<group>"; };
 		DCF79945B85D32B40844BAFE7ADE811C /* TextFormatEncodingOptions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TextFormatEncodingOptions.swift; path = Sources/SwiftProtobuf/TextFormatEncodingOptions.swift; sourceTree = "<group>"; };
-		DDE366DD0EB7AD4DF97C291056A05919 /* Pods-Wallet-frameworks.sh */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.script.sh; path = "Pods-Wallet-frameworks.sh"; sourceTree = "<group>"; };
 		DF1EF036D80C17DE9CE607967336F1B5 /* TWAnyAddress.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWAnyAddress.h; path = include/TrustWalletCore/TWAnyAddress.h; sourceTree = "<group>"; };
 		DFA30203E1CB2CBA666F08655FA15744 /* JSONDecodingError.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JSONDecodingError.swift; path = Sources/SwiftProtobuf/JSONDecodingError.swift; sourceTree = "<group>"; };
 		E190E7A99D7CC46AF5B75FEF6C9C3DF3 /* Shifts.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Shifts.swift; path = Sources/Shifts.swift; sourceTree = "<group>"; };
@@ -1735,22 +1733,21 @@
 		E3742BA807E81E9D73BCC6FACAB5B5ED /* ProtoNameProviding.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ProtoNameProviding.swift; path = Sources/SwiftProtobuf/ProtoNameProviding.swift; sourceTree = "<group>"; };
 		E3A3690312EE35F4F45BD45CA28A46AB /* Everscale.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Everscale.pb.swift; path = Sources/Generated/Protobuf/Everscale.pb.swift; sourceTree = "<group>"; };
 		E3BFF8F6E7877ED642B1055582AF9779 /* ResourceBundle-Kingfisher-Kingfisher-macOS-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = "ResourceBundle-Kingfisher-Kingfisher-macOS-Info.plist"; path = "../Kingfisher-macOS/ResourceBundle-Kingfisher-Kingfisher-macOS-Info.plist"; sourceTree = "<group>"; };
-		E4018956AC03F3F045AB8BC6AB6DF804 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Sources/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		E4018956AC03F3F045AB8BC6AB6DF804 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Sources/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		E5462C86E3EBFA34EC0FB14F359B32BD /* Message+JSONAdditions_Data.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Message+JSONAdditions_Data.swift"; path = "Sources/SwiftProtobuf/Message+JSONAdditions_Data.swift"; sourceTree = "<group>"; };
 		E6C5E075F595AB4A021D19889990205E /* SelectiveVisitor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SelectiveVisitor.swift; path = Sources/SwiftProtobuf/SelectiveVisitor.swift; sourceTree = "<group>"; };
 		E7747CACABDD6075636E75666D238596 /* Filter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Filter.swift; path = Sources/Image/Filter.swift; sourceTree = "<group>"; };
 		E7B96D62579858C7ED415204BEB4235F /* Codable.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Codable.swift; path = Sources/Codable.swift; sourceTree = "<group>"; };
 		E821D0670C6F85A816700EE79CDFE4D0 /* source_context.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = source_context.pb.swift; path = Sources/SwiftProtobuf/source_context.pb.swift; sourceTree = "<group>"; };
 		E836374992DB431433C3DE1559A984DE /* IoTeX.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = IoTeX.pb.swift; path = Sources/Generated/Protobuf/IoTeX.pb.swift; sourceTree = "<group>"; };
+		E8494AA73B195EEB6436988D92AB56CE /* Pods-Big Wallet-acknowledgements.markdown */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "Pods-Big Wallet-acknowledgements.markdown"; sourceTree = "<group>"; };
 		E84EA780208C493D528298D878DD80AE /* Theta.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Theta.pb.swift; path = Sources/Generated/Protobuf/Theta.pb.swift; sourceTree = "<group>"; };
 		EA91DA62FC5CD7B8269EF236F12BAB93 /* TrustWalletCore-macOS.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; name = "TrustWalletCore-macOS.modulemap"; path = "../TrustWalletCore-macOS/TrustWalletCore-macOS.modulemap"; sourceTree = "<group>"; };
 		EABBB527EBB289FABEBB6BAD8F517CCA /* TrustWalletCore-iOS-prefix.pch */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "TrustWalletCore-iOS-prefix.pch"; sourceTree = "<group>"; };
 		EABC0F20324695422B5DE6DE4D3BDB2B /* BigInt-iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "BigInt-iOS.debug.xcconfig"; sourceTree = "<group>"; };
 		EAC13C35BC599C0D6D34634A98263DF7 /* TWFIOAccount.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWFIOAccount.h; path = include/TrustWalletCore/TWFIOAccount.h; sourceTree = "<group>"; };
 		EB12D0CCA986EF8472C32A50BB11E977 /* PublicKey.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PublicKey.swift; path = Sources/Generated/PublicKey.swift; sourceTree = "<group>"; };
-		EB576E7C1A28A1C3E9690D7BFDFA3809 /* Pods-Wallet */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Pods-Wallet"; path = Pods_Wallet.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		EBB4043FE8AC9F1C58157C1DB72FFAED /* Waves+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Waves+Proto.swift"; path = "Sources/Generated/Protobuf/Waves+Proto.swift"; sourceTree = "<group>"; };
-		EBD2BEB310679B957081DEE08653FBF9 /* Pods-Wallet iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Pods-Wallet iOS"; path = Pods_Wallet_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		EC090C2894B330EF566289EAA8B9FC71 /* Watch.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Watch.swift; path = Sources/Watch.swift; sourceTree = "<group>"; };
 		EC5F9975B214ADAEA8E0D0A9463D1A7C /* JSONEncodingOptions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JSONEncodingOptions.swift; path = Sources/SwiftProtobuf/JSONEncodingOptions.swift; sourceTree = "<group>"; };
 		ECA9BFAC5465F1A7D394CB2ED6960CA0 /* KFImageRenderer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KFImageRenderer.swift; path = Sources/SwiftUI/KFImageRenderer.swift; sourceTree = "<group>"; };
@@ -1770,9 +1767,8 @@
 		F31E56C6FD97B8A0D9F0E6D196B7E4DD /* TWNervosAddress.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWNervosAddress.h; path = include/TrustWalletCore/TWNervosAddress.h; sourceTree = "<group>"; };
 		F322C0F609A15EED72B117D5424FEA1B /* Purpose.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Purpose.swift; path = Sources/Generated/Enums/Purpose.swift; sourceTree = "<group>"; };
 		F36E915F49DB38EEF3F5D47FBA5B74FB /* EthereumAbiFunction.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EthereumAbiFunction.swift; path = Sources/Generated/EthereumAbiFunction.swift; sourceTree = "<group>"; };
-		F383FF464BDEDDC2BB05AA73D1F1F675 /* Pods-Wallet.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "Pods-Wallet.debug.xcconfig"; sourceTree = "<group>"; };
 		F392FFD70EAA11CF9777DD0B1DEEAB08 /* StoredKeyEncryptionLevel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = StoredKeyEncryptionLevel.swift; path = Sources/Generated/Enums/StoredKeyEncryptionLevel.swift; sourceTree = "<group>"; };
-		F3E0621221B49CBB46826033D3DEB84B /* BigInt-iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "BigInt-iOS"; path = BigInt.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		F3E0621221B49CBB46826033D3DEB84B /* BigInt.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = BigInt.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F4A8E4F3DE93F98CBD4EF1884E6143F9 /* Indicator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Indicator.swift; path = Sources/Views/Indicator.swift; sourceTree = "<group>"; };
 		F4AD4D6D1C01837AB747DF83FC309217 /* CallbackQueue.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CallbackQueue.swift; path = Sources/Utility/CallbackQueue.swift; sourceTree = "<group>"; };
 		F4C8CD8501686D7DFFF0ED492B8822C6 /* Ripple.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Ripple.pb.swift; path = Sources/Generated/Protobuf/Ripple.pb.swift; sourceTree = "<group>"; };
@@ -1791,7 +1787,6 @@
 		FA665DCA6E510C6AC969E0C9A66F343D /* Google_Protobuf_Struct+Extensions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Google_Protobuf_Struct+Extensions.swift"; path = "Sources/SwiftProtobuf/Google_Protobuf_Struct+Extensions.swift"; sourceTree = "<group>"; };
 		FAB71B07A02085D957C881A69EF36830 /* BinaryDelimited.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BinaryDelimited.swift; path = Sources/SwiftProtobuf/BinaryDelimited.swift; sourceTree = "<group>"; };
 		FAC99870EB331B54B565F7607850F15E /* TWAlgorandProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWAlgorandProto.h; path = include/TrustWalletCore/TWAlgorandProto.h; sourceTree = "<group>"; };
-		FB65CB717F0BBD191F0482EC267B36D4 /* Pods-Wallet-acknowledgements.markdown */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "Pods-Wallet-acknowledgements.markdown"; sourceTree = "<group>"; };
 		FC556B092B8D1FE9F9A9E7C755B2599D /* Kingfisher-iOS-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "Kingfisher-iOS-umbrella.h"; sourceTree = "<group>"; };
 		FC6A6406189B727691E392454912EF34 /* KFImageOptions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KFImageOptions.swift; path = Sources/SwiftUI/KFImageOptions.swift; sourceTree = "<group>"; };
 		FDA8EA4CAA4EB5CE00487412E988D083 /* Curve.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Curve.swift; path = Sources/Generated/Enums/Curve.swift; sourceTree = "<group>"; };
@@ -1799,6 +1794,7 @@
 		FE4AC86758C0CFF3532457B8282FFA61 /* Base32.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Base32.swift; path = Sources/Generated/Base32.swift; sourceTree = "<group>"; };
 		FE4E1E29FDEF600C7D2436C53CA991D0 /* ImageCache.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ImageCache.swift; path = Sources/Cache/ImageCache.swift; sourceTree = "<group>"; };
 		FF1F9D963806726DFB8AB384E7542F76 /* ImagePrefetcher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ImagePrefetcher.swift; path = Sources/Networking/ImagePrefetcher.swift; sourceTree = "<group>"; };
+		FF39D311698B6D2ED45143078496C10C /* Pods_Big_Wallet_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Big_Wallet_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		FF76936A72FA1EDD19DB16B23C16D5B6 /* PathDecoder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PathDecoder.swift; path = Sources/SwiftProtobuf/PathDecoder.swift; sourceTree = "<group>"; };
 		FF8E7C7F9939FA6F398C04C0C6516339 /* TWEthereumAbiProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWEthereumAbiProto.h; path = include/TrustWalletCore/TWEthereumAbiProto.h; sourceTree = "<group>"; };
 		FF92E4BD5EFF14BFF4355A83E9B6C58C /* CoinTypeConfiguration.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CoinTypeConfiguration.swift; path = Sources/Generated/CoinTypeConfiguration.swift; sourceTree = "<group>"; };
@@ -1838,6 +1834,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		4BE8A9DC80C27EF3ECCE72BD419461B0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				07D106CE7ACB420152B7BB8EA45F8F5E /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		74F4440C5AC808F9FFDD25BC41CEA178 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -1861,14 +1865,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		8E6FB5E60EDEADFB4FAACACCA0648EE4 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				25D1375473173EF861E69C9508D41BF4 /* Cocoa.framework in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		907A75E5F5B228680B0F05716EEB82EB /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -1876,18 +1872,18 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		9949A523A2042EABA6E0E1C35D110B8A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				D6B05743FEA880A401DCD8D4BD3CFC08 /* Foundation.framework in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		B113E13D4008E002C804DB5A9CEF6CDD /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C22E1B34D1D075AFB6F9D710ECE30148 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				020B3ABEBFFDC154830ECE9A0F5C4556 /* Cocoa.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1931,23 +1927,6 @@
 			name = Pods;
 			sourceTree = "<group>";
 		};
-		2E3AE6CB5E39293E9C97D52E89A844CC /* Pods-Wallet */ = {
-			isa = PBXGroup;
-			children = (
-				286FB547F73B02C2E5098A4A8FDCE71F /* Pods-Wallet.modulemap */,
-				FB65CB717F0BBD191F0482EC267B36D4 /* Pods-Wallet-acknowledgements.markdown */,
-				0E1103E310112E612CFD6762B9E96C97 /* Pods-Wallet-acknowledgements.plist */,
-				B0E1E54884DBEBE6447DD1D4E2C17C67 /* Pods-Wallet-dummy.m */,
-				DDE366DD0EB7AD4DF97C291056A05919 /* Pods-Wallet-frameworks.sh */,
-				7F7257D96C8FC25F5D905AFE0E5260FD /* Pods-Wallet-Info.plist */,
-				50F6CFF12CFF0BFA923E8139CCF5DE52 /* Pods-Wallet-umbrella.h */,
-				F383FF464BDEDDC2BB05AA73D1F1F675 /* Pods-Wallet.debug.xcconfig */,
-				B00F0996D22207E8DD200058ED615E8F /* Pods-Wallet.release.xcconfig */,
-			);
-			name = "Pods-Wallet";
-			path = "Target Support Files/Pods-Wallet";
-			sourceTree = "<group>";
-		};
 		312B48D08B6C882DD9406CF191DCA5CC /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -1989,44 +1968,6 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		496DC6C7A4EA3A97BC4B039AA209D6DD /* Pods-Wallet iOS */ = {
-			isa = PBXGroup;
-			children = (
-				8652D3F3EF9723697088AF2E22568314 /* Pods-Wallet iOS.modulemap */,
-				AE0A79DBFF6EDA89FBC23DC0916BBC36 /* Pods-Wallet iOS-acknowledgements.markdown */,
-				4EB0995C2F76DD6EBBA232D8C09FED80 /* Pods-Wallet iOS-acknowledgements.plist */,
-				D02FBF0A105B9677703EB03ACCFC4233 /* Pods-Wallet iOS-dummy.m */,
-				A198FBAF5923D079439933B316D1BEF4 /* Pods-Wallet iOS-frameworks.sh */,
-				3BB6779780FB224706FCB714747CD1D2 /* Pods-Wallet iOS-Info.plist */,
-				8783650FAE8DA30D2CC185E5759EF1D6 /* Pods-Wallet iOS-umbrella.h */,
-				7AFB185BCE6781BF1ADEE0EEF8D87CE1 /* Pods-Wallet iOS.debug.xcconfig */,
-				2D4605C86CE07DA1CCD3E90EAE560957 /* Pods-Wallet iOS.release.xcconfig */,
-			);
-			name = "Pods-Wallet iOS";
-			path = "Target Support Files/Pods-Wallet iOS";
-			sourceTree = "<group>";
-		};
-		51219BAC770C45DCA4B2110D5D36419F /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				F3E0621221B49CBB46826033D3DEB84B /* BigInt-iOS */,
-				59C5DD41EE313A65C03650784BF278F3 /* BigInt-macOS */,
-				0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher-iOS */,
-				D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher-iOS-Kingfisher */,
-				9537468CF4D5C16DB31E0F967000827C /* Kingfisher-macOS */,
-				5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher-macOS-Kingfisher */,
-				EB576E7C1A28A1C3E9690D7BFDFA3809 /* Pods-Wallet */,
-				EBD2BEB310679B957081DEE08653FBF9 /* Pods-Wallet iOS */,
-				8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf-iOS */,
-				92D069737DB52F187E62F68A75895067 /* SwiftProtobuf-iOS-SwiftProtobuf */,
-				5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf-macOS */,
-				90E213B2540580977A2BF768A0CF2978 /* SwiftProtobuf-macOS-SwiftProtobuf */,
-				60CD9336BF0D87EB43F318C3C417DB66 /* TrustWalletCore-iOS */,
-				0A90AABC168E7ACBF249426FCA99F19B /* TrustWalletCore-macOS */,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
 		5D8CE469D7E541F9AEA30B5B3FDF7BA8 /* Support Files */ = {
 			isa = PBXGroup;
 			children = (
@@ -2051,6 +1992,15 @@
 			path = "../Target Support Files/TrustWalletCore-iOS";
 			sourceTree = "<group>";
 		};
+		609DDFCE54F94A65DD64E983A390DBDE /* Targets Support Files */ = {
+			isa = PBXGroup;
+			children = (
+				AAC8FB331C2EA69BFD98BEEF16FAAF8E /* Pods-Big Wallet */,
+				EF0FE7681FDD6AFEF52BD694162A28B0 /* Pods-Big Wallet iOS */,
+			);
+			name = "Targets Support Files";
+			sourceTree = "<group>";
+		};
 		611D709A70CA28978F60BD47CFE7AE0B /* Support Files */ = {
 			isa = PBXGroup;
 			children = (
@@ -2073,6 +2023,23 @@
 			);
 			name = "Support Files";
 			path = "../Target Support Files/SwiftProtobuf-iOS";
+			sourceTree = "<group>";
+		};
+		6B47AEB5FA4818AF1C8B938FBB030CAA /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F3E0621221B49CBB46826033D3DEB84B /* BigInt.framework */,
+				59C5DD41EE313A65C03650784BF278F3 /* BigInt.framework */,
+				0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher.framework */,
+				9537468CF4D5C16DB31E0F967000827C /* Kingfisher.framework */,
+				599D388E1BE3C71DBD3189A4496D86AF /* Pods_Big_Wallet.framework */,
+				FF39D311698B6D2ED45143078496C10C /* Pods_Big_Wallet_iOS.framework */,
+				8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf.framework */,
+				5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf.framework */,
+				60CD9336BF0D87EB43F318C3C417DB66 /* WalletCore.framework */,
+				0A90AABC168E7ACBF249426FCA99F19B /* WalletCore.framework */,
+			);
+			name = Products;
 			sourceTree = "<group>";
 		};
 		706DBEEB5BA18F075D02D5634EC13402 /* Types */ = {
@@ -2307,7 +2274,6 @@
 				B584C25D5D885A245AD53F9E7939D9F9 /* Resources */,
 				611D709A70CA28978F60BD47CFE7AE0B /* Support Files */,
 			);
-			name = SwiftProtobuf;
 			path = SwiftProtobuf;
 			sourceTree = "<group>";
 		};
@@ -2328,7 +2294,6 @@
 				5D8CE469D7E541F9AEA30B5B3FDF7BA8 /* Support Files */,
 				706DBEEB5BA18F075D02D5634EC13402 /* Types */,
 			);
-			name = TrustWalletCore;
 			path = TrustWalletCore;
 			sourceTree = "<group>";
 		};
@@ -2340,6 +2305,23 @@
 				A761413F21755BB54ECA8A8BAAE8FCB7 /* Cocoa.framework */,
 			);
 			name = "OS X";
+			sourceTree = "<group>";
+		};
+		AAC8FB331C2EA69BFD98BEEF16FAAF8E /* Pods-Big Wallet */ = {
+			isa = PBXGroup;
+			children = (
+				89C64FDF6E69E22BCC962D8B03648CB7 /* Pods-Big Wallet.modulemap */,
+				E8494AA73B195EEB6436988D92AB56CE /* Pods-Big Wallet-acknowledgements.markdown */,
+				6D9F9B22E5D6BCCDA453462724D26DB0 /* Pods-Big Wallet-acknowledgements.plist */,
+				A41B6749858B5C25E77ADD50DAAC962F /* Pods-Big Wallet-dummy.m */,
+				4F58E5DFA28AE1B5C3D4F2A61FF0C5B2 /* Pods-Big Wallet-frameworks.sh */,
+				47A6BE5F8A28B12D30891D4BD0A9774B /* Pods-Big Wallet-Info.plist */,
+				60867625A15A23B8B85780D44D967754 /* Pods-Big Wallet-umbrella.h */,
+				8FA2AFBA1EC822F56334448E625DE433 /* Pods-Big Wallet.debug.xcconfig */,
+				CAB09BEC410A76E06B5245389EED3384 /* Pods-Big Wallet.release.xcconfig */,
+			);
+			name = "Pods-Big Wallet";
+			path = "Target Support Files/Pods-Big Wallet";
 			sourceTree = "<group>";
 		};
 		B584C25D5D885A245AD53F9E7939D9F9 /* Resources */ = {
@@ -2364,18 +2346,9 @@
 				9D940727FF8FB9C785EB98E56350EF41 /* Podfile */,
 				312B48D08B6C882DD9406CF191DCA5CC /* Frameworks */,
 				25A969DA3FBB8C524F787C2C3BBA697B /* Pods */,
-				51219BAC770C45DCA4B2110D5D36419F /* Products */,
-				D1D9D100F8A00AE02954F00D93532A4D /* Targets Support Files */,
+				6B47AEB5FA4818AF1C8B938FBB030CAA /* Products */,
+				609DDFCE54F94A65DD64E983A390DBDE /* Targets Support Files */,
 			);
-			sourceTree = "<group>";
-		};
-		D1D9D100F8A00AE02954F00D93532A4D /* Targets Support Files */ = {
-			isa = PBXGroup;
-			children = (
-				2E3AE6CB5E39293E9C97D52E89A844CC /* Pods-Wallet */,
-				496DC6C7A4EA3A97BC4B039AA209D6DD /* Pods-Wallet iOS */,
-			);
-			name = "Targets Support Files";
 			sourceTree = "<group>";
 		};
 		E4299FE4BA8645FD324ED85D55E3D965 /* Core */ = {
@@ -2593,6 +2566,23 @@
 			name = Core;
 			sourceTree = "<group>";
 		};
+		EF0FE7681FDD6AFEF52BD694162A28B0 /* Pods-Big Wallet iOS */ = {
+			isa = PBXGroup;
+			children = (
+				6D18E6637F2A7BC21989B982C46509BE /* Pods-Big Wallet iOS.modulemap */,
+				4CFA067AD9B2BFDB16CDA8C42DBEA39B /* Pods-Big Wallet iOS-acknowledgements.markdown */,
+				98CB5074EA6B681B722C6A2A2520BAA9 /* Pods-Big Wallet iOS-acknowledgements.plist */,
+				C731A29E847550EAE3A5CDF5B87D3BEC /* Pods-Big Wallet iOS-dummy.m */,
+				04B6BFC950DD33AE00B0D88B95B81CF5 /* Pods-Big Wallet iOS-frameworks.sh */,
+				7F681EA52293906398E5B1FE811415C0 /* Pods-Big Wallet iOS-Info.plist */,
+				D146847C941E14605D6FD9A61CA69C46 /* Pods-Big Wallet iOS-umbrella.h */,
+				0A441F677FCF176EEAD3F92121BA1FD7 /* Pods-Big Wallet iOS.debug.xcconfig */,
+				75AB395E78054B64847552EE348EF0EE /* Pods-Big Wallet iOS.release.xcconfig */,
+			);
+			name = "Pods-Big Wallet iOS";
+			path = "Target Support Files/Pods-Big Wallet iOS";
+			sourceTree = "<group>";
+		};
 		F1D33484D15C2576094DF3E4C0347AB2 /* BigInt */ = {
 			isa = PBXGroup;
 			children = (
@@ -2620,7 +2610,6 @@
 				59D2B81AB9A05C682255A48177F95587 /* Words and Bits.swift */,
 				F968BCAA0AD0B0340D127B6AE84116D9 /* Support Files */,
 			);
-			name = BigInt;
 			path = BigInt;
 			sourceTree = "<group>";
 		};
@@ -2719,7 +2708,6 @@
 				C72F66E4212BA225152DB63D24064A60 /* Resources */,
 				399F134EAD1D20EB6DA5818E3FF87255 /* Support Files */,
 			);
-			name = Kingfisher;
 			path = Kingfisher;
 			sourceTree = "<group>";
 		};
@@ -2731,14 +2719,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				A65587818D10904D258200CF35005BA0 /* BigInt-macOS-umbrella.h in Headers */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		146A18EBB850A09A7D5DAD153B7EFFFC /* Headers */ = {
-			isa = PBXHeadersBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				61CCC8DF796205B662E62EE621EC64D0 /* Pods-Wallet iOS-umbrella.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2882,6 +2862,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		4486815515E8BF93AD19C4CC5051559A /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				645B4D88A44B90F40F2A5BABEAC33C90 /* Pods-Big Wallet-umbrella.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		606A62160398B31BF4A7D15B4B9BB98A /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9334D4BA0B37A985260AC4BE16CBA3AB /* Pods-Big Wallet iOS-umbrella.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		6AB21FA1D7EC0D1C6A82C58BE3A6B638 /* Headers */ = {
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
@@ -3022,14 +3018,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		7AA12CE7EF2730F8ADC5F0733D53C4C5 /* Headers */ = {
-			isa = PBXHeadersBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				FA3D243B2B4E9A348F1A6D40AE80CAC0 /* Pods-Wallet-umbrella.h in Headers */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		7E59AEA924263542796FD7C93C6371D0 /* Headers */ = {
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
@@ -3087,8 +3075,30 @@
 			);
 			name = "SwiftProtobuf-iOS-SwiftProtobuf";
 			productName = SwiftProtobuf;
-			productReference = 92D069737DB52F187E62F68A75895067 /* SwiftProtobuf-iOS-SwiftProtobuf */;
+			productReference = 92D069737DB52F187E62F68A75895067 /* SwiftProtobuf.bundle */;
 			productType = "com.apple.product-type.bundle";
+		};
+		2203B30818F316F3AEBC77DAB5604F48 /* Pods-Big Wallet */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D9A205E6653A495782F22A7256B8199B /* Build configuration list for PBXNativeTarget "Pods-Big Wallet" */;
+			buildPhases = (
+				4486815515E8BF93AD19C4CC5051559A /* Headers */,
+				07F8CECF2898312F0B19F4DA77095A4F /* Sources */,
+				C22E1B34D1D075AFB6F9D710ECE30148 /* Frameworks */,
+				A5F2CC63FA9ED5A642D11D1F4ADEB830 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				98A910EA67EB02D1F4994BAD767C2982 /* PBXTargetDependency */,
+				249210B8E6BB655ABABE7E22F5EF452B /* PBXTargetDependency */,
+				E8E688D703598BD0E027C4D16851479D /* PBXTargetDependency */,
+				CF02A1C2D63BB8EE3AABD098B76E44B5 /* PBXTargetDependency */,
+			);
+			name = "Pods-Big Wallet";
+			productName = Pods_Big_Wallet;
+			productReference = 599D388E1BE3C71DBD3189A4496D86AF /* Pods_Big_Wallet.framework */;
+			productType = "com.apple.product-type.framework";
 		};
 		28E46233E8A1EAE4640778FD2DEDE3C1 /* SwiftProtobuf-macOS-SwiftProtobuf */ = {
 			isa = PBXNativeTarget;
@@ -3104,7 +3114,7 @@
 			);
 			name = "SwiftProtobuf-macOS-SwiftProtobuf";
 			productName = SwiftProtobuf;
-			productReference = 90E213B2540580977A2BF768A0CF2978 /* SwiftProtobuf-macOS-SwiftProtobuf */;
+			productReference = 90E213B2540580977A2BF768A0CF2978 /* SwiftProtobuf.bundle */;
 			productType = "com.apple.product-type.bundle";
 		};
 		357D7AA757B0ED4603C9CD1523BC234E /* SwiftProtobuf-iOS */ = {
@@ -3123,7 +3133,29 @@
 			);
 			name = "SwiftProtobuf-iOS";
 			productName = SwiftProtobuf;
-			productReference = 8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf-iOS */;
+			productReference = 8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		5FFF3C6BEF36B29250B4C4FC28A5861A /* Pods-Big Wallet iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A4043FF953E137D5979481D9B26E2232 /* Build configuration list for PBXNativeTarget "Pods-Big Wallet iOS" */;
+			buildPhases = (
+				606A62160398B31BF4A7D15B4B9BB98A /* Headers */,
+				009E2E9B054F711FD0A9A83A1292ACB2 /* Sources */,
+				4BE8A9DC80C27EF3ECCE72BD419461B0 /* Frameworks */,
+				021CDA6CE38A20EC10449FEEEDAE945C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A2D748277EC449E8D0AC630CB975343F /* PBXTargetDependency */,
+				4BBA3FAF29FD93A9798B96BE8B14DD3E /* PBXTargetDependency */,
+				8583CA97A6706F8A564C7FEA3D3F2F45 /* PBXTargetDependency */,
+				8BBC08B279B0868058431B4303A15F5C /* PBXTargetDependency */,
+			);
+			name = "Pods-Big Wallet iOS";
+			productName = Pods_Big_Wallet_iOS;
+			productReference = FF39D311698B6D2ED45143078496C10C /* Pods_Big_Wallet_iOS.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		63F854E532D7CBA393D37B6C84E1F23F /* BigInt-macOS */ = {
@@ -3141,7 +3173,7 @@
 			);
 			name = "BigInt-macOS";
 			productName = BigInt;
-			productReference = 59C5DD41EE313A65C03650784BF278F3 /* BigInt-macOS */;
+			productReference = 59C5DD41EE313A65C03650784BF278F3 /* BigInt.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		65AA93B2B9CF39819DBD1DDF58FCBC15 /* Kingfisher-macOS */ = {
@@ -3160,7 +3192,7 @@
 			);
 			name = "Kingfisher-macOS";
 			productName = Kingfisher;
-			productReference = 9537468CF4D5C16DB31E0F967000827C /* Kingfisher-macOS */;
+			productReference = 9537468CF4D5C16DB31E0F967000827C /* Kingfisher.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		685A5AC5E317EE1D980ECCFE9E6EB08A /* Kingfisher-iOS */ = {
@@ -3179,7 +3211,7 @@
 			);
 			name = "Kingfisher-iOS";
 			productName = Kingfisher;
-			productReference = 0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher-iOS */;
+			productReference = 0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		7B76B3A65EC90BE00011B16DE4F49E38 /* Kingfisher-iOS-Kingfisher */ = {
@@ -3196,7 +3228,7 @@
 			);
 			name = "Kingfisher-iOS-Kingfisher";
 			productName = Kingfisher;
-			productReference = D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher-iOS-Kingfisher */;
+			productReference = D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher.bundle */;
 			productType = "com.apple.product-type.bundle";
 		};
 		889A3C6D0A70D789D17B7BFFE160AD76 /* BigInt-iOS */ = {
@@ -3214,7 +3246,7 @@
 			);
 			name = "BigInt-iOS";
 			productName = BigInt;
-			productReference = F3E0621221B49CBB46826033D3DEB84B /* BigInt-iOS */;
+			productReference = F3E0621221B49CBB46826033D3DEB84B /* BigInt.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		AA186741961F10502016CE44BFED6684 /* SwiftProtobuf-macOS */ = {
@@ -3233,7 +3265,7 @@
 			);
 			name = "SwiftProtobuf-macOS";
 			productName = SwiftProtobuf;
-			productReference = 5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf-macOS */;
+			productReference = 5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		B2085DBECFAD83713FC1BE448B7882B0 /* Kingfisher-macOS-Kingfisher */ = {
@@ -3250,30 +3282,8 @@
 			);
 			name = "Kingfisher-macOS-Kingfisher";
 			productName = Kingfisher;
-			productReference = 5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher-macOS-Kingfisher */;
+			productReference = 5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher.bundle */;
 			productType = "com.apple.product-type.bundle";
-		};
-		C3D3F5A2C0FBD8B39D3FDB7771CB7757 /* Pods-Wallet */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = C230206F5941CCA69646AB0A1337287E /* Build configuration list for PBXNativeTarget "Pods-Wallet" */;
-			buildPhases = (
-				7AA12CE7EF2730F8ADC5F0733D53C4C5 /* Headers */,
-				A59C4A4D4056C78D6615ACABD549052C /* Sources */,
-				8E6FB5E60EDEADFB4FAACACCA0648EE4 /* Frameworks */,
-				D24999559665E6AF9734F75683B76D1F /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				7CC754A588F2E7522A850A293946EA85 /* PBXTargetDependency */,
-				73577771EB75A6A5540353D8006FB633 /* PBXTargetDependency */,
-				BAD4B2CD89FA7DE344D723B3D11AAF48 /* PBXTargetDependency */,
-				D33BF2FEF7FDF078386DCA59E798F5E2 /* PBXTargetDependency */,
-			);
-			name = "Pods-Wallet";
-			productName = Pods_Wallet;
-			productReference = EB576E7C1A28A1C3E9690D7BFDFA3809 /* Pods-Wallet */;
-			productType = "com.apple.product-type.framework";
 		};
 		D84FF1ABB5E840CFBA9F610D26DFB42D /* TrustWalletCore-macOS */ = {
 			isa = PBXNativeTarget;
@@ -3292,7 +3302,7 @@
 			);
 			name = "TrustWalletCore-macOS";
 			productName = WalletCore;
-			productReference = 0A90AABC168E7ACBF249426FCA99F19B /* TrustWalletCore-macOS */;
+			productReference = 0A90AABC168E7ACBF249426FCA99F19B /* WalletCore.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		DC6F436FE9D7D62655988D0B8E3A24DE /* TrustWalletCore-iOS */ = {
@@ -3312,29 +3322,7 @@
 			);
 			name = "TrustWalletCore-iOS";
 			productName = WalletCore;
-			productReference = 60CD9336BF0D87EB43F318C3C417DB66 /* TrustWalletCore-iOS */;
-			productType = "com.apple.product-type.framework";
-		};
-		F3500393C11965F0036770E810CFD04F /* Pods-Wallet iOS */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 329FC1561FB651CEBCD61D87450FCD9E /* Build configuration list for PBXNativeTarget "Pods-Wallet iOS" */;
-			buildPhases = (
-				146A18EBB850A09A7D5DAD153B7EFFFC /* Headers */,
-				B116FC0EC2FF47C7AB9FB20B5AE4CB8C /* Sources */,
-				9949A523A2042EABA6E0E1C35D110B8A /* Frameworks */,
-				ACD29CBCD62E9FAD49AA623589950BBF /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				F75EC458245BE561039C043E6037B5DE /* PBXTargetDependency */,
-				DBB8069AAC98755278F91BE3366FED95 /* PBXTargetDependency */,
-				92B931D63039F908B34CDA6BB23C48FE /* PBXTargetDependency */,
-				5BF6CEF2035FC573B421D9F6EC7D5117 /* PBXTargetDependency */,
-			);
-			name = "Pods-Wallet iOS";
-			productName = Pods_Wallet_iOS;
-			productReference = EBD2BEB310679B957081DEE08653FBF9 /* Pods-Wallet iOS */;
+			productReference = 60CD9336BF0D87EB43F318C3C417DB66 /* WalletCore.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 /* End PBXNativeTarget section */
@@ -3355,9 +3343,7 @@
 				en,
 			);
 			mainGroup = CF1408CF629C7361332E53B88F7BD30C;
-			minimizedProjectReferenceProxies = 0;
-			preferredProjectObjectVersion = 77;
-			productRefGroup = 51219BAC770C45DCA4B2110D5D36419F /* Products */;
+			productRefGroup = 6B47AEB5FA4818AF1C8B938FBB030CAA /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -3367,8 +3353,8 @@
 				7B76B3A65EC90BE00011B16DE4F49E38 /* Kingfisher-iOS-Kingfisher */,
 				65AA93B2B9CF39819DBD1DDF58FCBC15 /* Kingfisher-macOS */,
 				B2085DBECFAD83713FC1BE448B7882B0 /* Kingfisher-macOS-Kingfisher */,
-				C3D3F5A2C0FBD8B39D3FDB7771CB7757 /* Pods-Wallet */,
-				F3500393C11965F0036770E810CFD04F /* Pods-Wallet iOS */,
+				2203B30818F316F3AEBC77DAB5604F48 /* Pods-Big Wallet */,
+				5FFF3C6BEF36B29250B4C4FC28A5861A /* Pods-Big Wallet iOS */,
 				357D7AA757B0ED4603C9CD1523BC234E /* SwiftProtobuf-iOS */,
 				0CEE1B56ECDB3CB8B561C703CF8BC996 /* SwiftProtobuf-iOS-SwiftProtobuf */,
 				AA186741961F10502016CE44BFED6684 /* SwiftProtobuf-macOS */,
@@ -3380,6 +3366,13 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		021CDA6CE38A20EC10449FEEEDAE945C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		09167907CC75FC6ED2739CBB57048D3C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -3399,7 +3392,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C9BEA3479A780C6F9A2CAB6A1E14EC10 /* Kingfisher-macOS-Kingfisher in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3430,7 +3422,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BCA49D530AE999660B343E83215F505F /* Kingfisher-iOS-Kingfisher in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3438,7 +3429,13 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				ECCD645CF8A1839E07AA2FE32B00849D /* SwiftProtobuf-iOS-SwiftProtobuf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A5F2CC63FA9ED5A642D11D1F4ADEB830 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3449,18 +3446,10 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		ACD29CBCD62E9FAD49AA623589950BBF /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		C1AFA0A22AC9E11944599F0258FA4CDA /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5994D52FDBB063B2028970528EED3B99 /* SwiftProtobuf-macOS-SwiftProtobuf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3469,13 +3458,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				75AC310CA1823907D6D29E8014A0B32E /* PrivacyInfo.xcprivacy in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		D24999559665E6AF9734F75683B76D1F /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3526,6 +3508,22 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		009E2E9B054F711FD0A9A83A1292ACB2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AAA34F91703C2B2FECF2D4E4FAB52D1E /* Pods-Big Wallet iOS-dummy.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		07F8CECF2898312F0B19F4DA77095A4F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5C1DC3E06E81ABB622DF011BCCAA2E54 /* Pods-Big Wallet-dummy.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		08453988B46970E187FE213817818D99 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -4154,22 +4152,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A59C4A4D4056C78D6615ACABD549052C /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				F876C0857F9350CC7A2FE6E2E9602528 /* Pods-Wallet-dummy.m in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		B116FC0EC2FF47C7AB9FB20B5AE4CB8C /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				82A48E4D5B5AC95ADE0ADABEFBF00B2B /* Pods-Wallet iOS-dummy.m in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		B506E7F806E6978AC6DE32AADD43E47E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -4403,6 +4385,12 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		249210B8E6BB655ABABE7E22F5EF452B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = "Kingfisher-macOS";
+			target = 65AA93B2B9CF39819DBD1DDF58FCBC15 /* Kingfisher-macOS */;
+			targetProxy = 369E1723FC9D3DD487C4FEFC928013CA /* PBXContainerItemProxy */;
+		};
 		2A3C08662FDB1DE79354B5FF9F2E981A /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = "SwiftProtobuf-macOS";
@@ -4415,11 +4403,11 @@
 			target = 0CEE1B56ECDB3CB8B561C703CF8BC996 /* SwiftProtobuf-iOS-SwiftProtobuf */;
 			targetProxy = CCED6764FC78B06CECB0CC4948E4C6C7 /* PBXContainerItemProxy */;
 		};
-		5BF6CEF2035FC573B421D9F6EC7D5117 /* PBXTargetDependency */ = {
+		4BBA3FAF29FD93A9798B96BE8B14DD3E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			name = "TrustWalletCore-iOS";
-			target = DC6F436FE9D7D62655988D0B8E3A24DE /* TrustWalletCore-iOS */;
-			targetProxy = BC8B8901E31E360A12BB94919876C372 /* PBXContainerItemProxy */;
+			name = "Kingfisher-iOS";
+			target = 685A5AC5E317EE1D980ECCFE9E6EB08A /* Kingfisher-iOS */;
+			targetProxy = 24272909CD80761383FC8A03A3E21293 /* PBXContainerItemProxy */;
 		};
 		5EEC499FCF24427469184F51631E1BCD /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -4427,29 +4415,29 @@
 			target = 28E46233E8A1EAE4640778FD2DEDE3C1 /* SwiftProtobuf-macOS-SwiftProtobuf */;
 			targetProxy = 6250AABD06BC70A274D37830C7EBD2FB /* PBXContainerItemProxy */;
 		};
-		73577771EB75A6A5540353D8006FB633 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = "Kingfisher-macOS";
-			target = 65AA93B2B9CF39819DBD1DDF58FCBC15 /* Kingfisher-macOS */;
-			targetProxy = 53AB9D0533BF71A3BE1E5133561241C2 /* PBXContainerItemProxy */;
-		};
-		7CC754A588F2E7522A850A293946EA85 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = "BigInt-macOS";
-			target = 63F854E532D7CBA393D37B6C84E1F23F /* BigInt-macOS */;
-			targetProxy = C5CE753DFDAEC6D865BFFB008CAE02A1 /* PBXContainerItemProxy */;
-		};
-		92B931D63039F908B34CDA6BB23C48FE /* PBXTargetDependency */ = {
+		8583CA97A6706F8A564C7FEA3D3F2F45 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = "SwiftProtobuf-iOS";
 			target = 357D7AA757B0ED4603C9CD1523BC234E /* SwiftProtobuf-iOS */;
-			targetProxy = 9D5AF3C7127B5E819B2BB1B094B7ACF3 /* PBXContainerItemProxy */;
+			targetProxy = 1E9FBFD9453186690F9D5853398E47B0 /* PBXContainerItemProxy */;
 		};
-		BAD4B2CD89FA7DE344D723B3D11AAF48 /* PBXTargetDependency */ = {
+		8BBC08B279B0868058431B4303A15F5C /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			name = "SwiftProtobuf-macOS";
-			target = AA186741961F10502016CE44BFED6684 /* SwiftProtobuf-macOS */;
-			targetProxy = 75716DAE51ACE7A07C12D73CBDAA4913 /* PBXContainerItemProxy */;
+			name = "TrustWalletCore-iOS";
+			target = DC6F436FE9D7D62655988D0B8E3A24DE /* TrustWalletCore-iOS */;
+			targetProxy = E65EE876183E7FA906BE2B2BC5D210C6 /* PBXContainerItemProxy */;
+		};
+		98A910EA67EB02D1F4994BAD767C2982 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = "BigInt-macOS";
+			target = 63F854E532D7CBA393D37B6C84E1F23F /* BigInt-macOS */;
+			targetProxy = A3F6F756FD5162F683D048D9AE6A3B17 /* PBXContainerItemProxy */;
+		};
+		A2D748277EC449E8D0AC630CB975343F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = "BigInt-iOS";
+			target = 889A3C6D0A70D789D17B7BFFE160AD76 /* BigInt-iOS */;
+			targetProxy = 73F3EDB5378E39CE1612FE8F4F386382 /* PBXContainerItemProxy */;
 		};
 		C3C7593A240D9DDCAEA1DF0FCE27A634 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -4463,17 +4451,17 @@
 			target = 7B76B3A65EC90BE00011B16DE4F49E38 /* Kingfisher-iOS-Kingfisher */;
 			targetProxy = EA8E8E22368DD441AAA7EC8E9F87E28F /* PBXContainerItemProxy */;
 		};
-		D33BF2FEF7FDF078386DCA59E798F5E2 /* PBXTargetDependency */ = {
+		CF02A1C2D63BB8EE3AABD098B76E44B5 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = "TrustWalletCore-macOS";
 			target = D84FF1ABB5E840CFBA9F610D26DFB42D /* TrustWalletCore-macOS */;
-			targetProxy = D7D5DA8F1F4F08C7EA811E206954C3B6 /* PBXContainerItemProxy */;
+			targetProxy = CFB5FB758F72F991DF9CF9C7CB8B79DF /* PBXContainerItemProxy */;
 		};
-		DBB8069AAC98755278F91BE3366FED95 /* PBXTargetDependency */ = {
+		E8E688D703598BD0E027C4D16851479D /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			name = "Kingfisher-iOS";
-			target = 685A5AC5E317EE1D980ECCFE9E6EB08A /* Kingfisher-iOS */;
-			targetProxy = 882A76FE52DB165A25FBF3BC5AA12291 /* PBXContainerItemProxy */;
+			name = "SwiftProtobuf-macOS";
+			target = AA186741961F10502016CE44BFED6684 /* SwiftProtobuf-macOS */;
+			targetProxy = CD14819A9EAB1986AD7C309058322464 /* PBXContainerItemProxy */;
 		};
 		ED814D47A8D5043871C4330478964336 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -4481,61 +4469,9 @@
 			target = B2085DBECFAD83713FC1BE448B7882B0 /* Kingfisher-macOS-Kingfisher */;
 			targetProxy = C4D28363D8AA184DDF70E6B5991AE45B /* PBXContainerItemProxy */;
 		};
-		F75EC458245BE561039C043E6037B5DE /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = "BigInt-iOS";
-			target = 889A3C6D0A70D789D17B7BFFE160AD76 /* BigInt-iOS */;
-			targetProxy = 48BF4A21B252467D98B104AE8DCA8148 /* PBXContainerItemProxy */;
-		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		0D4485A703DE08722DB1BE14E6F17F19 /* Release */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = B00F0996D22207E8DD200058ED615E8F /* Pods-Wallet.release.xcconfig */;
-			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
-				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEFINES_MODULE = YES;
-				DYLIB_COMPATIBILITY_VERSION = 1;
-				DYLIB_CURRENT_VERSION = 1;
-				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "Target Support Files/Pods-Wallet/Pods-Wallet-Info.plist";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@loader_path/Frameworks",
-				);
-				MACH_O_TYPE = staticlib;
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.0;
-				MODULEMAP_FILE = "Target Support Files/Pods-Wallet/Pods-Wallet.modulemap";
-				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
-				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
-				OTHER_LDFLAGS = "";
-				OTHER_LIBTOOLFLAGS = "";
-				PODS_ROOT = "$(SRCROOT)";
-				PRODUCT_BUNDLE_IDENTIFIER = "org.cocoapods.${PRODUCT_NAME:rfc1034identifier}";
-				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
-				SDKROOT = macosx;
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_INSTALL_OBJC_HEADER = NO;
-				VERSIONING_SYSTEM = "apple-generic";
-				VERSION_INFO_PREFIX = "";
-			};
-			name = Release;
-		};
 		19437F6D8170888C4A8AE9267035120D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 6288D1C86896988713D41A9CE9C4BA13 /* SwiftProtobuf-iOS.debug.xcconfig */;
@@ -4764,6 +4700,52 @@
 			};
 			name = Debug;
 		};
+		52BAF6D494EBECB6A963D2B18DF6EBC7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = CAB09BEC410A76E06B5245389EED3384 /* Pods-Big Wallet.release.xcconfig */;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
+				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Target Support Files/Pods-Big Wallet/Pods-Big Wallet-Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = 1.0;
+				MODULEMAP_FILE = "Target Support Files/Pods-Big Wallet/Pods-Big Wallet.modulemap";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
+				OTHER_LDFLAGS = "";
+				OTHER_LIBTOOLFLAGS = "";
+				PODS_ROOT = "$(SRCROOT)";
+				PRODUCT_BUNDLE_IDENTIFIER = "org.cocoapods.${PRODUCT_NAME:rfc1034identifier}";
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Release;
+		};
 		56EE8E83AF175F95C9CC20AFDA2AC6F6 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 2AF1989295E6562ABB12757AC98B9769 /* Kingfisher-macOS.debug.xcconfig */;
@@ -4809,6 +4791,53 @@
 			};
 			name = Debug;
 		};
+		5CF809A5B62CD6F5871618C3647F60E2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 75AB395E78054B64847552EE348EF0EE /* Pods-Big Wallet iOS.release.xcconfig */;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
+				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Target Support Files/Pods-Big Wallet iOS/Pods-Big Wallet iOS-Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				MARKETING_VERSION = 1.0;
+				MODULEMAP_FILE = "Target Support Files/Pods-Big Wallet iOS/Pods-Big Wallet iOS.modulemap";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
+				OTHER_LDFLAGS = "";
+				OTHER_LIBTOOLFLAGS = "";
+				PODS_ROOT = "$(SRCROOT)";
+				PRODUCT_BUNDLE_IDENTIFIER = "org.cocoapods.${PRODUCT_NAME:rfc1034identifier}";
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Release;
+		};
 		63DC8247A4EBFE65B7EBC54F3EEF84B9 /* Release */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = C355ABB232FDE1B435C6EDF79E67E4CB /* Kingfisher-iOS.release.xcconfig */;
@@ -4853,6 +4882,52 @@
 				VERSION_INFO_PREFIX = "";
 			};
 			name = Release;
+		};
+		690AA92230CA2B2EDCC4831FE77278C0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0A441F677FCF176EEAD3F92121BA1FD7 /* Pods-Big Wallet iOS.debug.xcconfig */;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
+				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Target Support Files/Pods-Big Wallet iOS/Pods-Big Wallet iOS-Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				MARKETING_VERSION = 1.0;
+				MODULEMAP_FILE = "Target Support Files/Pods-Big Wallet iOS/Pods-Big Wallet iOS.modulemap";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
+				OTHER_LDFLAGS = "";
+				OTHER_LIBTOOLFLAGS = "";
+				PODS_ROOT = "$(SRCROOT)";
+				PRODUCT_BUNDLE_IDENTIFIER = "org.cocoapods.${PRODUCT_NAME:rfc1034identifier}";
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Debug;
 		};
 		6C5595B156B9AD33B3C3AD08AF73944A /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -5275,52 +5350,6 @@
 			};
 			name = Release;
 		};
-		AB79BACDE6139183CCE6807978ED0538 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = 7AFB185BCE6781BF1ADEE0EEF8D87CE1 /* Pods-Wallet iOS.debug.xcconfig */;
-			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
-				CURRENT_PROJECT_VERSION = 1;
-				DEFINES_MODULE = YES;
-				DYLIB_COMPATIBILITY_VERSION = 1;
-				DYLIB_CURRENT_VERSION = 1;
-				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "Target Support Files/Pods-Wallet iOS/Pods-Wallet iOS-Info.plist";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				MACH_O_TYPE = staticlib;
-				MARKETING_VERSION = 1.0;
-				MODULEMAP_FILE = "Target Support Files/Pods-Wallet iOS/Pods-Wallet iOS.modulemap";
-				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
-				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
-				OTHER_LDFLAGS = "";
-				OTHER_LIBTOOLFLAGS = "";
-				PODS_ROOT = "$(SRCROOT)";
-				PRODUCT_BUNDLE_IDENTIFIER = "org.cocoapods.${PRODUCT_NAME:rfc1034identifier}";
-				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_INSTALL_OBJC_HEADER = NO;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				VERSIONING_SYSTEM = "apple-generic";
-				VERSION_INFO_PREFIX = "";
-			};
-			name = Debug;
-		};
 		AFEE74AAAA0206F5175B88B6A9532A52 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -5384,6 +5413,52 @@
 				SYMROOT = "${SRCROOT}/../build";
 			};
 			name = Release;
+		};
+		B0AE0F15ECB3C85E45C504A678C9849A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 8FA2AFBA1EC822F56334448E625DE433 /* Pods-Big Wallet.debug.xcconfig */;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
+				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Target Support Files/Pods-Big Wallet/Pods-Big Wallet-Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = 1.0;
+				MODULEMAP_FILE = "Target Support Files/Pods-Big Wallet/Pods-Big Wallet.modulemap";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
+				OTHER_LDFLAGS = "";
+				OTHER_LIBTOOLFLAGS = "";
+				PODS_ROOT = "$(SRCROOT)";
+				PRODUCT_BUNDLE_IDENTIFIER = "org.cocoapods.${PRODUCT_NAME:rfc1034identifier}";
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Debug;
 		};
 		B34715A9914D80E010B5F96F7B998052 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -5473,99 +5548,6 @@
 				VERSION_INFO_PREFIX = "";
 			};
 			name = Debug;
-		};
-		C83961D15E9C4D72826BA8DF12601199 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = F383FF464BDEDDC2BB05AA73D1F1F675 /* Pods-Wallet.debug.xcconfig */;
-			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
-				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEFINES_MODULE = YES;
-				DYLIB_COMPATIBILITY_VERSION = 1;
-				DYLIB_CURRENT_VERSION = 1;
-				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "Target Support Files/Pods-Wallet/Pods-Wallet-Info.plist";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@loader_path/Frameworks",
-				);
-				MACH_O_TYPE = staticlib;
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.0;
-				MODULEMAP_FILE = "Target Support Files/Pods-Wallet/Pods-Wallet.modulemap";
-				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
-				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
-				OTHER_LDFLAGS = "";
-				OTHER_LIBTOOLFLAGS = "";
-				PODS_ROOT = "$(SRCROOT)";
-				PRODUCT_BUNDLE_IDENTIFIER = "org.cocoapods.${PRODUCT_NAME:rfc1034identifier}";
-				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
-				SDKROOT = macosx;
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_INSTALL_OBJC_HEADER = NO;
-				VERSIONING_SYSTEM = "apple-generic";
-				VERSION_INFO_PREFIX = "";
-			};
-			name = Debug;
-		};
-		DC852622E75A1C32C3527881C33E70CF /* Release */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = 2D4605C86CE07DA1CCD3E90EAE560957 /* Pods-Wallet iOS.release.xcconfig */;
-			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
-				CURRENT_PROJECT_VERSION = 1;
-				DEFINES_MODULE = YES;
-				DYLIB_COMPATIBILITY_VERSION = 1;
-				DYLIB_CURRENT_VERSION = 1;
-				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "Target Support Files/Pods-Wallet iOS/Pods-Wallet iOS-Info.plist";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				MACH_O_TYPE = staticlib;
-				MARKETING_VERSION = 1.0;
-				MODULEMAP_FILE = "Target Support Files/Pods-Wallet iOS/Pods-Wallet iOS.modulemap";
-				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
-				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
-				OTHER_LDFLAGS = "";
-				OTHER_LIBTOOLFLAGS = "";
-				PODS_ROOT = "$(SRCROOT)";
-				PRODUCT_BUNDLE_IDENTIFIER = "org.cocoapods.${PRODUCT_NAME:rfc1034identifier}";
-				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_INSTALL_OBJC_HEADER = NO;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				VALIDATE_PRODUCT = YES;
-				VERSIONING_SYSTEM = "apple-generic";
-				VERSION_INFO_PREFIX = "";
-			};
-			name = Release;
 		};
 		E2E88EF96903BF4F64E12697EB0D3CA1 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -5710,15 +5692,6 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		329FC1561FB651CEBCD61D87450FCD9E /* Build configuration list for PBXNativeTarget "Pods-Wallet iOS" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				AB79BACDE6139183CCE6807978ED0538 /* Debug */,
-				DC852622E75A1C32C3527881C33E70CF /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		4821239608C13582E20E6DA73FD5F1F9 /* Build configuration list for PBXProject "Pods" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -5764,6 +5737,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		A4043FF953E137D5979481D9B26E2232 /* Build configuration list for PBXNativeTarget "Pods-Big Wallet iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				690AA92230CA2B2EDCC4831FE77278C0 /* Debug */,
+				5CF809A5B62CD6F5871618C3647F60E2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		B976E8FF23C9A7E28EE1B816FDD03E9A /* Build configuration list for PBXNativeTarget "Kingfisher-iOS-Kingfisher" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -5782,20 +5764,20 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		C230206F5941CCA69646AB0A1337287E /* Build configuration list for PBXNativeTarget "Pods-Wallet" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				C83961D15E9C4D72826BA8DF12601199 /* Debug */,
-				0D4485A703DE08722DB1BE14E6F17F19 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		D96F8A7BF668047F5CDA8B588880BCD2 /* Build configuration list for PBXNativeTarget "BigInt-iOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				481891EB8D1646BCB567908C7322CB40 /* Debug */,
 				4043F66C7A76F4CDAB01C134AA818B28 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D9A205E6653A495782F22A7256B8199B /* Build configuration list for PBXNativeTarget "Pods-Big Wallet" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B0AE0F15ECB3C85E45C504A678C9849A /* Debug */,
+				52BAF6D494EBECB6A963D2B18DF6EBC7 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

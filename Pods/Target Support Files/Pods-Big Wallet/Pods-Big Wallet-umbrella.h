@@ -11,6 +11,6 @@
 #endif
 
 
-FOUNDATION_EXPORT double Pods_WalletVersionNumber;
-FOUNDATION_EXPORT const unsigned char Pods_WalletVersionString[];
+FOUNDATION_EXPORT double Pods_Big_WalletVersionNumber;
+FOUNDATION_EXPORT const unsigned char Pods_Big_WalletVersionString[];
 
