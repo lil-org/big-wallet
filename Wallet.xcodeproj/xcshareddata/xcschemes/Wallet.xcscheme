@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "2C19953B2674C4B900A8E370"
-               BuildableName = "Wallet.app"
+               BuildableName = "Big Wallet.app"
                BlueprintName = "Wallet"
                ReferencedContainer = "container:Wallet.xcodeproj">
             </BuildableReference>
@@ -58,7 +58,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "2C19953B2674C4B900A8E370"
-            BuildableName = "Wallet.app"
+            BuildableName = "Big Wallet.app"
             BlueprintName = "Wallet"
             ReferencedContainer = "container:Wallet.xcodeproj">
          </BuildableReference>
@@ -75,7 +75,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "2C19953B2674C4B900A8E370"
-            BuildableName = "Wallet.app"
+            BuildableName = "Big Wallet.app"
             BlueprintName = "Wallet"
             ReferencedContainer = "container:Wallet.xcodeproj">
          </BuildableReference>
