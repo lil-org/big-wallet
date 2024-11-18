@@ -8,7 +8,7 @@ def shared_pods
 end
 
 target 'Big Wallet' do
-  platform :osx, '12.0'
+  platform :osx, '14.0'
   shared_pods
 end
 
@@ -27,7 +27,7 @@ post_install do |installer|
           end
         elsif target.platform_name == :osx
           target.build_configurations.each do |config|
-            config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '12.0'
+            config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '14.0'
           end
         end
       end
