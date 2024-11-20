@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.Cocoa.Storyboard.XIB" version="3.0" toolsVersion="32700.99.1234" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
+<document type="com.apple.InterfaceBuilder3.Cocoa.Storyboard.XIB" version="3.0" toolsVersion="23504" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
     <dependencies>
         <deployment identifier="macosx"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="22689"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="23504"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <scenes>
@@ -675,7 +675,7 @@
                         <outlet property="delegate" destination="Voe-Tx-rLC" id="PrD-fu-P6m"/>
                     </connections>
                 </application>
-                <customObject id="Voe-Tx-rLC" customClass="AppDelegate" customModule="Wallet" customModuleProvider="target"/>
+                <customObject id="Voe-Tx-rLC" customClass="AppDelegate" customModule="Big_Wallet" customModuleProvider="target"/>
                 <customObject id="YLy-65-1bz" customClass="NSFontManager"/>
                 <customObject id="Ady-hI-5gd" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
             </objects>
@@ -717,12 +717,12 @@
         <!--Import View Controller-->
         <scene sceneID="hIz-AP-VOD">
             <objects>
-                <viewController storyboardIdentifier="ImportViewController" id="XfG-lQ-9wD" customClass="ImportViewController" customModule="Wallet" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="ImportViewController" id="XfG-lQ-9wD" customClass="ImportViewController" customModule="Big_Wallet" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="m2S-Jp-Qdl">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
-                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="feM-MO-Msf" userLabel="Import Wallet">
+                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="feM-MO-Msf" userLabel="Import Wallet">
                                 <rect key="frame" x="14" y="258" width="222" height="68"/>
                                 <textFieldCell key="cell" controlSize="large" alignment="center" id="bI7-hT-bS8">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
@@ -808,12 +808,12 @@ DQ
         <!--Accounts List View Controller-->
         <scene sceneID="o7E-xn-hDh">
             <objects>
-                <viewController storyboardIdentifier="AccountsListViewController" id="29s-Rd-OUf" customClass="AccountsListViewController" customModule="Wallet" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="AccountsListViewController" id="29s-Rd-OUf" customClass="AccountsListViewController" customModule="Big_Wallet" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="Yjc-Zm-uZY">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="412"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
-                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" textCompletion="NO" translatesAutoresizingMaskIntoConstraints="NO" id="dkh-kG-EFj">
+                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" textCompletion="NO" translatesAutoresizingMaskIntoConstraints="NO" id="dkh-kG-EFj">
                                 <rect key="frame" x="55" y="354" width="140" height="34"/>
                                 <textFieldCell key="cell" controlSize="large" enabled="NO" allowsUndo="NO" alignment="center" title="accounts" id="9No-vQ-vBK">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
@@ -823,17 +823,17 @@ DQ
                             </textField>
                             <scrollView autohidesScrollers="YES" horizontalLineScroll="40" horizontalPageScroll="0.0" verticalLineScroll="40" verticalPageScroll="10" hasHorizontalScroller="NO" usesPredominantAxisScrolling="NO" horizontalScrollElasticity="none" translatesAutoresizingMaskIntoConstraints="NO" id="7bs-Kr-ija">
                                 <rect key="frame" x="0.0" y="62" width="250" height="280"/>
-                                <clipView key="contentView" id="RjU-hi-SHx">
+                                <clipView key="contentView" ambiguous="YES" id="RjU-hi-SHx">
                                     <rect key="frame" x="1" y="1" width="248" height="278"/>
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <subviews>
-                                        <tableView verticalHuggingPriority="750" allowsExpansionToolTips="YES" columnAutoresizingStyle="none" tableStyle="plain" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" typeSelect="NO" rowHeight="40" rowSizeStyle="automatic" viewBased="YES" id="glA-FK-Kdd" customClass="RightClickTableView" customModule="Wallet" customModuleProvider="target">
+                                        <tableView verticalHuggingPriority="750" ambiguous="YES" allowsExpansionToolTips="YES" columnAutoresizingStyle="none" tableStyle="plain" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" typeSelect="NO" rowHeight="40" rowSizeStyle="automatic" viewBased="YES" id="glA-FK-Kdd" customClass="RightClickTableView" customModule="Big_Wallet" customModuleProvider="target">
                                             <rect key="frame" x="0.0" y="0.0" width="248" height="278"/>
                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                             <color key="backgroundColor" name="controlBackgroundColor" catalog="System" colorSpace="catalog"/>
                                             <color key="gridColor" name="gridColor" catalog="System" colorSpace="catalog"/>
                                             <tableColumns>
-                                                <tableColumn width="248" minWidth="40" maxWidth="1000" id="Usc-6R-O3H">
+                                                <tableColumn width="247.5" minWidth="40" maxWidth="1000" id="Usc-6R-O3H">
                                                     <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="center">
                                                         <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                         <color key="backgroundColor" name="headerColor" catalog="System" colorSpace="catalog"/>
@@ -844,8 +844,8 @@ DQ
                                                         <color key="backgroundColor" name="controlBackgroundColor" catalog="System" colorSpace="catalog"/>
                                                     </textFieldCell>
                                                     <prototypeCellViews>
-                                                        <tableCellView identifier="AccountCellView" id="Lp1-Zy-70c" customClass="AccountCellView" customModule="Wallet" customModuleProvider="target">
-                                                            <rect key="frame" x="0.0" y="0.0" width="248" height="40"/>
+                                                        <tableCellView identifier="AccountCellView" id="Lp1-Zy-70c" customClass="AccountCellView" customModule="Big_Wallet" customModuleProvider="target">
+                                                            <rect key="frame" x="0.0" y="0.0" width="247" height="40"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
                                                                 <customView translatesAutoresizingMaskIntoConstraints="NO" id="NCN-NG-n35">
@@ -864,7 +864,7 @@ DQ
                                                                                 </userDefinedRuntimeAttribute>
                                                                             </userDefinedRuntimeAttributes>
                                                                         </imageView>
-                                                                        <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="sef-hl-iPV">
+                                                                        <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="sef-hl-iPV">
                                                                             <rect key="frame" x="34" y="8" width="56" height="25"/>
                                                                             <textFieldCell key="cell" lineBreakMode="clipping" alignment="center" title="label" id="2a6-9c-AzV">
                                                                                 <font key="font" metaFont="systemBold" size="21"/>
@@ -893,12 +893,12 @@ DQ
                                                                 <outlet property="addressTextField" destination="sef-hl-iPV" id="aGb-wC-t98"/>
                                                             </connections>
                                                         </tableCellView>
-                                                        <tableCellView identifier="AccountsHeaderRowView" id="HeR-ji-8cK" customClass="AccountsHeaderRowView" customModule="Wallet" customModuleProvider="target">
-                                                            <rect key="frame" x="0.0" y="40" width="248" height="40"/>
+                                                        <tableCellView identifier="AccountsHeaderRowView" id="HeR-ji-8cK" customClass="AccountsHeaderRowView" customModule="Big_Wallet" customModuleProvider="target">
+                                                            <rect key="frame" x="0.0" y="40" width="247" height="40"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
                                                                 <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="VIM-Pg-2r3">
-                                                                    <rect key="frame" x="71" y="2" width="107.5" height="14"/>
+                                                                    <rect key="frame" x="69" y="2" width="109.5" height="14"/>
                                                                     <buttonCell key="cell" type="inline" title="multicoin wallet" bezelStyle="inline" image="ellipsis.rectangle" catalog="system" imagePosition="right" alignment="center" state="on" inset="2" id="jI9-6q-eSx">
                                                                         <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                                                         <font key="font" metaFont="systemSemibold" size="11"/>
@@ -917,23 +917,37 @@ DQ
                                                                 <outlet property="titleButton" destination="VIM-Pg-2r3" id="KF2-28-nzL"/>
                                                             </connections>
                                                         </tableCellView>
-                                                        <tableCellView identifier="AddAccountOptionCellView" id="1KM-PS-nEo" customClass="AddAccountOptionCellView" customModule="Wallet" customModuleProvider="target">
-                                                            <rect key="frame" x="0.0" y="80" width="248" height="40"/>
+                                                        <tableCellView identifier="AddAccountOptionCellView" id="1KM-PS-nEo" customClass="AddAccountOptionCellView" customModule="Big_Wallet" customModuleProvider="target">
+                                                            <rect key="frame" x="0.0" y="80" width="247" height="44"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
-                                                                <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="BpB-tc-JdP">
-                                                                    <rect key="frame" x="18" y="8" width="224" height="25"/>
-                                                                    <textFieldCell key="cell" lineBreakMode="clipping" alignment="left" title="label" id="FAR-3U-VR0">
-                                                                        <font key="font" metaFont="systemBold" size="21"/>
+                                                                <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="fCe-vX-CRz">
+                                                                    <rect key="frame" x="8" y="0.0" width="231" height="38"/>
+                                                                    <constraints>
+                                                                        <constraint firstAttribute="height" constant="38" id="ger-Pg-q2J"/>
+                                                                    </constraints>
+                                                                    <textFieldCell key="cell" lineBreakMode="clipping" borderStyle="bezel" bezelStyle="round" id="5SK-Sf-ygj">
+                                                                        <font key="font" metaFont="system"/>
                                                                         <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
+                                                                        <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                                                                    </textFieldCell>
+                                                                </textField>
+                                                                <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="BpB-tc-JdP">
+                                                                    <rect key="frame" x="6" y="7" width="235" height="25"/>
+                                                                    <textFieldCell key="cell" lineBreakMode="clipping" alignment="center" title="label" id="FAR-3U-VR0">
+                                                                        <font key="font" metaFont="systemBold" size="21"/>
+                                                                        <color key="textColor" name="linkColor" catalog="System" colorSpace="catalog"/>
                                                                         <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
                                                                     </textFieldCell>
                                                                 </textField>
                                                             </subviews>
                                                             <constraints>
-                                                                <constraint firstItem="BpB-tc-JdP" firstAttribute="centerY" secondItem="1KM-PS-nEo" secondAttribute="centerY" id="TPK-nv-hua"/>
-                                                                <constraint firstItem="BpB-tc-JdP" firstAttribute="leading" secondItem="1KM-PS-nEo" secondAttribute="leading" constant="20" id="UGV-sR-Wou"/>
+                                                                <constraint firstItem="fCe-vX-CRz" firstAttribute="centerX" secondItem="BpB-tc-JdP" secondAttribute="centerX" id="16n-mO-mQG"/>
+                                                                <constraint firstAttribute="bottom" secondItem="fCe-vX-CRz" secondAttribute="bottom" id="AaW-r9-Iek"/>
+                                                                <constraint firstItem="BpB-tc-JdP" firstAttribute="centerY" secondItem="fCe-vX-CRz" secondAttribute="centerY" id="S8O-PO-xub"/>
+                                                                <constraint firstItem="BpB-tc-JdP" firstAttribute="leading" secondItem="1KM-PS-nEo" secondAttribute="leading" constant="8" id="UGV-sR-Wou"/>
                                                                 <constraint firstAttribute="trailing" secondItem="BpB-tc-JdP" secondAttribute="trailing" constant="8" id="YjX-hl-ACx"/>
+                                                                <constraint firstItem="fCe-vX-CRz" firstAttribute="width" secondItem="BpB-tc-JdP" secondAttribute="width" id="yeG-uv-Xrp"/>
                                                             </constraints>
                                                             <connections>
                                                                 <outlet property="titleLabel" destination="BpB-tc-JdP" id="E5r-c3-Wju"/>
@@ -982,7 +996,7 @@ DQ
                                                 </constraints>
                                                 <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyDown" id="9eJ-C5-e6g"/>
                                             </imageView>
-                                            <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Khi-cn-EGb">
+                                            <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Khi-cn-EGb">
                                                 <rect key="frame" x="20" y="0.0" width="101" height="16"/>
                                                 <textFieldCell key="cell" lineBreakMode="truncatingTail" title="Unknown dapp" id="CM5-MZ-VQq">
                                                     <font key="font" metaFont="systemBold"/>
@@ -1106,12 +1120,12 @@ DQ
         <!--Waiting View Controller-->
         <scene sceneID="xkb-7p-mUK">
             <objects>
-                <viewController storyboardIdentifier="WaitingViewController" id="Wjt-h2-yE1" customClass="WaitingViewController" customModule="Wallet" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="WaitingViewController" id="Wjt-h2-yE1" customClass="WaitingViewController" customModule="Big_Wallet" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="DVX-Gd-m4U">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
-                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="GMd-25-PjD">
+                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="GMd-25-PjD">
                                 <rect key="frame" x="14" y="292" width="222" height="34"/>
                                 <textFieldCell key="cell" controlSize="large" alignment="center" title="waiting" id="Ab0-0l-hhQ">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
@@ -1167,12 +1181,12 @@ DQ
         <!--Approve View Controller-->
         <scene sceneID="aMM-KY-BR7">
             <objects>
-                <viewController storyboardIdentifier="ApproveViewController" id="A70-cr-SWr" customClass="ApproveViewController" customModule="Wallet" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="ApproveViewController" id="A70-cr-SWr" customClass="ApproveViewController" customModule="Big_Wallet" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="xvx-vV-OZe">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="372"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
-                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="PdV-Nr-oOY">
+                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="PdV-Nr-oOY">
                                 <rect key="frame" x="14" y="292" width="222" height="34"/>
                                 <textFieldCell key="cell" controlSize="large" alignment="center" title="approve" id="wVk-Ux-kpU">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
@@ -1268,7 +1282,7 @@ DQ
                                         </constraints>
                                         <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyDown" id="eOs-XT-voj"/>
                                     </imageView>
-                                    <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="LKE-ra-fan">
+                                    <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="LKE-ra-fan">
                                         <rect key="frame" x="20" y="0.0" width="99" height="16"/>
                                         <textFieldCell key="cell" lineBreakMode="truncatingTail" title="unknown dapp" id="lo2-i6-DId">
                                             <font key="font" metaFont="systemBold"/>
@@ -1324,12 +1338,12 @@ DQ
         <!--Password View Controller-->
         <scene sceneID="Riu-mP-tQs">
             <objects>
-                <viewController storyboardIdentifier="PasswordViewController" id="KMi-XY-mOg" customClass="PasswordViewController" customModule="Wallet" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="PasswordViewController" id="KMi-XY-mOg" customClass="PasswordViewController" customModule="Big_Wallet" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="Efz-OH-wm2">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
-                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Gdw-Q4-bo0">
+                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Gdw-Q4-bo0">
                                 <rect key="frame" x="14" y="258" width="222" height="68"/>
                                 <textFieldCell key="cell" controlSize="large" alignment="center" title="create password" id="8sq-L4-gvS">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
@@ -1376,7 +1390,7 @@ DQ
                                     <real value="3.4028234663852886e+38"/>
                                 </customSpacing>
                             </stackView>
-                            <secureTextField verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="bsj-p7-maG">
+                            <secureTextField focusRingType="none" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="bsj-p7-maG">
                                 <rect key="frame" x="45" y="177" width="160" height="20"/>
                                 <constraints>
                                     <constraint firstAttribute="width" constant="160" id="PLH-bk-GPE"/>
@@ -1390,7 +1404,7 @@ DQ
                                     </allowedInputSourceLocales>
                                 </secureTextFieldCell>
                             </secureTextField>
-                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="H35-O5-AZi">
+                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="H35-O5-AZi">
                                 <rect key="frame" x="18" y="234" width="214" height="16"/>
                                 <textFieldCell key="cell" controlSize="large" selectable="YES" alignment="center" title="multiline label" id="5g8-hW-z0n">
                                     <font key="font" metaFont="system"/>
@@ -1428,12 +1442,12 @@ DQ
         <!--Welcome View Controller-->
         <scene sceneID="xdv-om-uKF">
             <objects>
-                <viewController storyboardIdentifier="WelcomeViewController" id="42G-F4-o1P" customClass="WelcomeViewController" customModule="Wallet" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="WelcomeViewController" id="42G-F4-o1P" customClass="WelcomeViewController" customModule="Big_Wallet" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="n8I-Pv-qZV">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
-                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="vxh-AZ-Ll4">
+                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="vxh-AZ-Ll4">
                                 <rect key="frame" x="14" y="292" width="222" height="34"/>
                                 <textFieldCell key="cell" controlSize="large" alignment="center" title="big wallet" id="dja-pE-CfV">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
@@ -1465,7 +1479,7 @@ DQ
                                     <real value="3.4028234663852886e+38"/>
                                 </customSpacing>
                             </stackView>
-                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="BvK-xX-gxC">
+                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="BvK-xX-gxC">
                                 <rect key="frame" x="26" y="162" width="198" height="50"/>
                                 <textFieldCell key="cell" controlSize="large" alignment="center" title="sign crypto transactions" id="4kF-cy-CbK">
                                     <font key="font" metaFont="systemBold" size="21"/>
@@ -1498,12 +1512,12 @@ DQ
         <!--Approve Transaction View Controller-->
         <scene sceneID="WAJ-YX-5QJ">
             <objects>
-                <viewController storyboardIdentifier="ApproveTransactionViewController" id="eky-J7-eog" customClass="ApproveTransactionViewController" customModule="Wallet" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="ApproveTransactionViewController" id="eky-J7-eog" customClass="ApproveTransactionViewController" customModule="Big_Wallet" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="SAE-QE-uez">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="407"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
-                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="g2G-lh-X1F">
+                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="g2G-lh-X1F">
                                 <rect key="frame" x="14" y="327" width="222" height="34"/>
                                 <textFieldCell key="cell" controlSize="large" alignment="center" title="approve" id="t64-oP-3Nm">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
@@ -1591,7 +1605,7 @@ DQ
                             <stackView distribution="fillProportionally" orientation="horizontal" alignment="centerY" spacing="4" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="pLD-2z-PFP">
                                 <rect key="frame" x="45" y="86" width="160" height="16"/>
                                 <subviews>
-                                    <textField verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="Jcz-Um-efA">
+                                    <textField focusRingType="none" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="Jcz-Um-efA">
                                         <rect key="frame" x="-2" y="0.0" width="24" height="16"/>
                                         <constraints>
                                             <constraint firstAttribute="width" constant="20" id="Vdv-zQ-pVQ"/>
@@ -1609,7 +1623,7 @@ DQ
                                             <action selector="sliderValueChanged:" target="eky-J7-eog" id="iz9-9b-wNa"/>
                                         </connections>
                                     </slider>
-                                    <textField verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="WJV-V3-GWm">
+                                    <textField focusRingType="none" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="WJV-V3-GWm">
                                         <rect key="frame" x="138" y="0.0" width="24" height="16"/>
                                         <textFieldCell key="cell" controlSize="large" lineBreakMode="clipping" alignment="right" title="🐇" id="aKB-6P-OIS">
                                             <font key="font" metaFont="system"/>
@@ -1644,7 +1658,7 @@ DQ
                                         </constraints>
                                         <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyDown" id="DGI-qz-sBc"/>
                                     </imageView>
-                                    <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Ji7-6C-gUp">
+                                    <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Ji7-6C-gUp">
                                         <rect key="frame" x="20" y="0.0" width="99" height="16"/>
                                         <textFieldCell key="cell" lineBreakMode="truncatingTail" title="unknown dapp" id="csk-3U-RLL">
                                             <font key="font" metaFont="systemBold"/>
@@ -1662,7 +1676,7 @@ DQ
                                     <real value="3.4028234663852886e+38"/>
                                 </customSpacing>
                             </stackView>
-                            <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="xby-TM-Wec">
+                            <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="xby-TM-Wec">
                                 <rect key="frame" x="28" y="111" width="194" height="14"/>
                                 <textFieldCell key="cell" lineBreakMode="truncatingTail" alignment="center" id="606-Ge-1Pk">
                                     <font key="font" metaFont="smallSystem"/>
@@ -1727,12 +1741,12 @@ DQ
         <!--Edit Accounts View Controller-->
         <scene sceneID="PtW-Bw-c7x">
             <objects>
-                <viewController storyboardIdentifier="EditAccountsViewController" id="tNa-Gh-bIQ" customClass="EditAccountsViewController" customModule="Wallet" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="EditAccountsViewController" id="tNa-Gh-bIQ" customClass="EditAccountsViewController" customModule="Big_Wallet" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="IWe-oX-N42">
                         <rect key="frame" x="0.0" y="0.0" width="250" height="350"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
-                            <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="oHl-So-oUC" userLabel="Title Label">
+                            <textField focusRingType="none" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="oHl-So-oUC" userLabel="Title Label">
                                 <rect key="frame" x="14" y="258" width="222" height="68"/>
                                 <textFieldCell key="cell" controlSize="large" alignment="center" id="PuW-b2-Okp">
                                     <font key="font" metaFont="systemHeavy" size="29"/>
@@ -1783,11 +1797,11 @@ DQ
                             </stackView>
                             <scrollView autohidesScrollers="YES" horizontalLineScroll="32" horizontalPageScroll="0.0" verticalLineScroll="32" verticalPageScroll="10" hasHorizontalScroller="NO" usesPredominantAxisScrolling="NO" horizontalScrollElasticity="none" translatesAutoresizingMaskIntoConstraints="NO" id="aIc-a3-p2o">
                                 <rect key="frame" x="20" y="90" width="210" height="150"/>
-                                <clipView key="contentView" drawsBackground="NO" id="vwY-cP-2w3">
+                                <clipView key="contentView" ambiguous="YES" drawsBackground="NO" id="vwY-cP-2w3">
                                     <rect key="frame" x="1" y="1" width="208" height="148"/>
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <subviews>
-                                        <tableView verticalHuggingPriority="750" allowsExpansionToolTips="YES" tableStyle="plain" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" typeSelect="NO" rowHeight="32" rowSizeStyle="automatic" viewBased="YES" id="JM4-ya-UH4" customClass="RightClickTableView" customModule="Wallet" customModuleProvider="target">
+                                        <tableView verticalHuggingPriority="750" ambiguous="YES" allowsExpansionToolTips="YES" tableStyle="plain" columnReordering="NO" columnResizing="NO" multipleSelection="NO" autosaveColumns="NO" typeSelect="NO" rowHeight="32" rowSizeStyle="automatic" viewBased="YES" id="JM4-ya-UH4" customClass="RightClickTableView" customModule="Big_Wallet" customModuleProvider="target">
                                             <rect key="frame" x="0.0" y="0.0" width="208" height="148"/>
                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                             <color key="backgroundColor" name="controlBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -1805,11 +1819,11 @@ DQ
                                                     </textFieldCell>
                                                     <tableColumnResizingMask key="resizingMask" resizeWithTable="YES"/>
                                                     <prototypeCellViews>
-                                                        <tableCellView identifier="PreviewAccountCellView" id="qLR-M4-6xB" customClass="PreviewAccountCellView" customModule="Wallet" customModuleProvider="target">
+                                                        <tableCellView identifier="PreviewAccountCellView" id="qLR-M4-6xB" customClass="PreviewAccountCellView" customModule="Big_Wallet" customModuleProvider="target">
                                                             <rect key="frame" x="0.0" y="0.0" width="208" height="32"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
-                                                                <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="4Mf-qK-XmB">
+                                                                <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="4Mf-qK-XmB">
                                                                     <rect key="frame" x="48" y="8" width="37" height="16"/>
                                                                     <textFieldCell key="cell" lineBreakMode="clipping" alignment="center" title="label" id="SM6-6l-KvR">
                                                                         <font key="font" metaFont="system"/>
@@ -1818,7 +1832,7 @@ DQ
                                                                     </textFieldCell>
                                                                 </textField>
                                                                 <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="6Jb-Gf-h0p">
-                                                                    <rect key="frame" x="180" y="7" width="18" height="18"/>
+                                                                    <rect key="frame" x="179" y="7" width="18" height="18"/>
                                                                     <buttonCell key="cell" type="check" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="DsM-7u-00M">
                                                                         <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                                                                         <font key="font" metaFont="system"/>
@@ -1840,7 +1854,7 @@ DQ
                                                                         </userDefinedRuntimeAttribute>
                                                                     </userDefinedRuntimeAttributes>
                                                                 </imageView>
-                                                                <textField horizontalHuggingPriority="500" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="sqT-CS-5ih">
+                                                                <textField focusRingType="none" horizontalHuggingPriority="500" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="sqT-CS-5ih">
                                                                     <rect key="frame" x="3" y="11" width="20" height="11"/>
                                                                     <constraints>
                                                                         <constraint firstAttribute="width" relation="lessThanOrEqual" constant="23" id="OcV-Wo-7SP"/>
