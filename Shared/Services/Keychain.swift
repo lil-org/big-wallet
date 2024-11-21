@@ -12,7 +12,7 @@ struct Keychain {
     
     static let shared = Keychain()
     
-    private let accessGroup = "org.lil.keychain"
+    private let accessGroup = "8DXC3N7E7P.org.lil.keychain"
     
     private enum ItemKey {
         case password
@@ -88,33 +88,47 @@ struct Keychain {
     // MARK: - Private
     
     private func update(data: Data, key: ItemKey) throws {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                    kSecAttrAccount as String: key.stringValue,
-                                    kSecAttrAccessGroup as String: accessGroup]
-        let attributes: [String: Any] = [kSecValueData as String: data]
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key.stringValue,
+            kSecAttrAccessGroup as String: accessGroup,
+            kSecUseDataProtectionKeychain as String: true
+        ]
+        let attributes: [String: Any] = [
+            kSecValueData as String: data
+        ]
         let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
         guard status == errSecSuccess else { throw KeychainError.failedToUpdate }
     }
     
     private func save(data: Data, key: ItemKey) {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                    kSecAttrAccount as String: key.stringValue,
-                                    kSecValueData as String: data,
-                                    kSecAttrAccessGroup as String: accessGroup]
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key.stringValue,
+            kSecValueData as String: data,
+            kSecAttrAccessGroup as String: accessGroup,
+            kSecUseDataProtectionKeychain as String: true
+        ]
         SecItemDelete(query as CFDictionary)
         SecItemAdd(query as CFDictionary, nil)
     }
     
     private func allStoredItemsKeys() -> [String] {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                    kSecReturnData as String: false,
-                                    kSecReturnAttributes as String: true,
-                                    kSecMatchLimit as String: kSecMatchLimitAll,
-                                    kSecAttrAccessGroup as String: accessGroup]
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecReturnData as String: false,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecAttrAccessGroup as String: accessGroup,
+            kSecUseDataProtectionKeychain as String: true
+        ]
         var items: CFTypeRef?
         let status: OSStatus = SecItemCopyMatching(query as CFDictionary, &items)
         if status == noErr, let items = items as? [[String: Any]], !items.isEmpty {
-            let sorted = items.sorted(by: { ($0[kSecAttrCreationDate as String] as? Date ?? Date()) < ($1[kSecAttrCreationDate as String] as? Date ?? Date()) })
+            let sorted = items.sorted(by: {
+                ($0[kSecAttrCreationDate as String] as? Date ?? Date()) <
+                    ($1[kSecAttrCreationDate as String] as? Date ?? Date())
+            })
             return sorted.compactMap { $0[kSecAttrAccount as String] as? String }
         } else {
             return []
@@ -122,18 +136,24 @@ struct Keychain {
     }
     
     private func removeData(forKey key: ItemKey) {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                    kSecAttrAccount as String: key.stringValue,
-                                    kSecAttrAccessGroup as String: accessGroup]
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key.stringValue,
+            kSecAttrAccessGroup as String: accessGroup,
+            kSecUseDataProtectionKeychain as String: true
+        ]
         SecItemDelete(query as CFDictionary)
     }
     
     private func get(key: ItemKey) -> Data? {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                    kSecAttrAccount as String: key.stringValue,
-                                    kSecReturnData as String: true,
-                                    kSecMatchLimit as String: kSecMatchLimitOne,
-                                    kSecAttrAccessGroup as String: accessGroup]
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key.stringValue,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecAttrAccessGroup as String: accessGroup,
+            kSecUseDataProtectionKeychain as String: true
+        ]
         var item: CFTypeRef?
         let status: OSStatus = SecItemCopyMatching(query as CFDictionary, &item)
         if status == noErr, let data = item as? Data {
@@ -142,5 +162,6 @@ struct Keychain {
             return nil
         }
     }
+    
     
 }
