@@ -101,7 +101,7 @@ struct Strings {
     static let getStarted = loc("Get Started")
     static let hideFromMenuBar = loc("Hide from Menu Bar")
     
-    static let bigWallet = "big wallet"
+    static let bigWallet = "Big Wallet"
     static let viewOnGithub = "GitHub"
     static let viewOnZora = "Zora"
     static let viewOnWarpcast = "Warpcast"

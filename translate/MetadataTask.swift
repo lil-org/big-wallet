@@ -85,7 +85,7 @@ struct MetadataTask: AI.Task {
         russian:
         "\(russianText)"
         
-        "big wallet" and "lil org" are names that should not be translated, keep them as is.
+        "Big Wallet" and "lil org" are names that should not be translated, keep them as is.
         
         respond only with a \(language.name) version. do not add anything else to the response.
         """
