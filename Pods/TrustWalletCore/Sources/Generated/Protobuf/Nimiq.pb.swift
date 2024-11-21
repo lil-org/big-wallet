@@ -20,6 +20,54 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+public enum TW_Nimiq_Proto_NetworkId: SwiftProtobuf.Enum {
+  public typealias RawValue = Int
+  case useDefault // = 0
+
+  /// Default PoW Mainnet.
+  case mainnet // = 42
+
+  /// PoS Mainnet starting at the PoW block height 3’456’000.
+  case mainnetAlbatross // = 24
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .useDefault
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .useDefault
+    case 24: self = .mainnetAlbatross
+    case 42: self = .mainnet
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .useDefault: return 0
+    case .mainnetAlbatross: return 24
+    case .mainnet: return 42
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+}
+
+#if swift(>=4.2)
+
+extension TW_Nimiq_Proto_NetworkId: CaseIterable {
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static var allCases: [TW_Nimiq_Proto_NetworkId] = [
+    .useDefault,
+    .mainnet,
+    .mainnetAlbatross,
+  ]
+}
+
+#endif  // swift(>=4.2)
+
 /// Input data necessary to create a signed transaction.
 public struct TW_Nimiq_Proto_SigningInput {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -40,6 +88,9 @@ public struct TW_Nimiq_Proto_SigningInput {
 
   /// Validity start, in block height
   public var validityStartHeight: UInt32 = 0
+
+  /// Network ID.
+  public var networkID: TW_Nimiq_Proto_NetworkId = .useDefault
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -64,6 +115,14 @@ public struct TW_Nimiq_Proto_SigningOutput {
 
 fileprivate let _protobuf_package = "TW.Nimiq.Proto"
 
+extension TW_Nimiq_Proto_NetworkId: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "UseDefault"),
+    24: .same(proto: "MainnetAlbatross"),
+    42: .same(proto: "Mainnet"),
+  ]
+}
+
 extension TW_Nimiq_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SigningInput"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -72,6 +131,7 @@ extension TW_Nimiq_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     3: .same(proto: "value"),
     4: .same(proto: "fee"),
     5: .standard(proto: "validity_start_height"),
+    6: .standard(proto: "network_id"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -85,6 +145,7 @@ extension TW_Nimiq_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mes
       case 3: try { try decoder.decodeSingularUInt64Field(value: &self.value) }()
       case 4: try { try decoder.decodeSingularUInt64Field(value: &self.fee) }()
       case 5: try { try decoder.decodeSingularUInt32Field(value: &self.validityStartHeight) }()
+      case 6: try { try decoder.decodeSingularEnumField(value: &self.networkID) }()
       default: break
       }
     }
@@ -106,6 +167,9 @@ extension TW_Nimiq_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     if self.validityStartHeight != 0 {
       try visitor.visitSingularUInt32Field(value: self.validityStartHeight, fieldNumber: 5)
     }
+    if self.networkID != .useDefault {
+      try visitor.visitSingularEnumField(value: self.networkID, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -115,6 +179,7 @@ extension TW_Nimiq_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     if lhs.value != rhs.value {return false}
     if lhs.fee != rhs.fee {return false}
     if lhs.validityStartHeight != rhs.validityStartHeight {return false}
+    if lhs.networkID != rhs.networkID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
