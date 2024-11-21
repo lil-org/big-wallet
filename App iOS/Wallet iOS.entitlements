@@ -18,5 +18,9 @@
 	<array>
 		<string>group.org.lil.wallet</string>
 	</array>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)org.lil.keychain</string>
+	</array>
 </dict>
 </plist>

@@ -12,6 +12,8 @@ struct Keychain {
     
     static let shared = Keychain()
     
+    private let accessGroup = "org.lil.keychain"
+    
     private enum ItemKey {
         case password
         case wallet(id: String)
@@ -87,7 +89,8 @@ struct Keychain {
     
     private func update(data: Data, key: ItemKey) throws {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                    kSecAttrAccount as String: key.stringValue]
+                                    kSecAttrAccount as String: key.stringValue,
+                                    kSecAttrAccessGroup as String: accessGroup]
         let attributes: [String: Any] = [kSecValueData as String: data]
         let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
         guard status == errSecSuccess else { throw KeychainError.failedToUpdate }
@@ -96,7 +99,8 @@ struct Keychain {
     private func save(data: Data, key: ItemKey) {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                                     kSecAttrAccount as String: key.stringValue,
-                                    kSecValueData as String: data]
+                                    kSecValueData as String: data,
+                                    kSecAttrAccessGroup as String: accessGroup]
         SecItemDelete(query as CFDictionary)
         SecItemAdd(query as CFDictionary, nil)
     }
@@ -105,7 +109,8 @@ struct Keychain {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                                     kSecReturnData as String: false,
                                     kSecReturnAttributes as String: true,
-                                    kSecMatchLimit as String: kSecMatchLimitAll]
+                                    kSecMatchLimit as String: kSecMatchLimitAll,
+                                    kSecAttrAccessGroup as String: accessGroup]
         var items: CFTypeRef?
         let status: OSStatus = SecItemCopyMatching(query as CFDictionary, &items)
         if status == noErr, let items = items as? [[String: Any]], !items.isEmpty {
@@ -118,7 +123,8 @@ struct Keychain {
     
     private func removeData(forKey key: ItemKey) {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                     kSecAttrAccount as String: key.stringValue]
+                                    kSecAttrAccount as String: key.stringValue,
+                                    kSecAttrAccessGroup as String: accessGroup]
         SecItemDelete(query as CFDictionary)
     }
     
@@ -126,7 +132,8 @@ struct Keychain {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                                     kSecAttrAccount as String: key.stringValue,
                                     kSecReturnData as String: true,
-                                    kSecMatchLimit as String: kSecMatchLimitOne]
+                                    kSecMatchLimit as String: kSecMatchLimitOne,
+                                    kSecAttrAccessGroup as String: accessGroup]
         var item: CFTypeRef?
         let status: OSStatus = SecItemCopyMatching(query as CFDictionary, &item)
         if status == noErr, let data = item as? Data {
