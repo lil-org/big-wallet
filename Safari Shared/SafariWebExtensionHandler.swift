@@ -57,9 +57,9 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 // TODO: ethereumRequest.method == .addEthereumChain
                 // TODO: navigate for new chains, switch otherwise just switch chain
                 ExtensionBridge.makeRequest(id: request.id)
-                #if os(macOS)
+#if os(macOS)
                 NSWorkspace.shared.open(url)
-                #endif
+#endif
                 context.cancelRequest(withError: HandlerError.empty)
             }
         } else {
@@ -81,22 +81,26 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = httpBody
+        rpcRequestResponseContext = context
         
         let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             if let data = data, var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 if json["id"] == nil { json["id"] = id }
-                self?.respond(with: json, context: context)
+                self?.respond(with: json, context: nil)
             } else {
-                self?.respond(with: ["id": id, "error": "something went wrong"], context: context)
+                self?.respond(with: ["id": id, "error": "something went wrong"], context: nil)
             }
         }
         task.resume()
     }
     
-    private func respond(with response: [String: Any], context: NSExtensionContext) {
+    private var rpcRequestResponseContext: NSExtensionContext?
+    
+    private func respond(with response: [String: Any], context: NSExtensionContext?) {
         let item = NSExtensionItem()
         item.userInfo = [SFExtensionMessageKey: response]
-        context.completeRequest(returningItems: [item], completionHandler: nil)
+        (context ?? rpcRequestResponseContext)?.completeRequest(returningItems: [item], completionHandler: nil)
+        rpcRequestResponseContext = nil
     }
     
 }
