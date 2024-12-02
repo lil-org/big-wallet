@@ -150,6 +150,11 @@
     "o" : true,
     "s" : "ETH"
   },
+  "480" : {
+    "b" : "https://worldscan.org",
+    "n" : "World Chain",
+    "s" : "ETH",
+  },
   "690" : {
     "b" : "https://explorer.redstone.xyz",
     "n" : "Redstone",
