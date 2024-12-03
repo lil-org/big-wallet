@@ -87,9 +87,12 @@ struct Window {
     
     private static func closeAll() {
         isClosingAllWindows = true
-        NSApplication.shared.windows.forEach { $0.close() }
+        NSApplication.shared.windows.forEach { window in
+            if window.className != "NSStatusBarWindow" {
+                window.close()
+            }
+        }
         isClosingAllWindows = false
-        Agent.shared.setupStatusBarItem()
     }
     
     static func activateBrowser(specific browser: Browser?) {

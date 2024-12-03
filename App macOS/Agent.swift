@@ -146,24 +146,6 @@ class Agent: NSObject {
         return menu
     }()
     
-    func warnBeforeQuitting(updateStatusBarAfterwards: Bool = false) {
-        Window.activateWindow(nil)
-        let alert = Alert()
-        alert.messageText = Strings.quitWallet
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: Strings.ok)
-        alert.addButton(withTitle: Strings.cancel)
-        
-        DispatchQueue.main.async { [weak self] in
-            if alert.runModal() == .alertFirstButtonReturn {
-                NSApp.terminate(nil)
-            }
-            if updateStatusBarAfterwards {
-                self?.setupStatusBarItem()
-            }
-        }
-    }
-    
     @objc private func didSelectHideItem() {
         Defaults.isHiddenFromMenuBar = true
         statusBarItem.isVisible = false
@@ -200,10 +182,10 @@ class Agent: NSObject {
     }
     
     @objc private func didSelectQuitMenuItem() {
-        warnBeforeQuitting()
+        NSApp.terminate(nil)
     }
     
-    func setupStatusBarItem() {
+    private func setupStatusBarItem() {
         if !Defaults.isHiddenFromMenuBar {
             let statusBar = NSStatusBar.system
             statusBarItem = statusBar.statusItem(withLength: NSStatusItem.squareLength)

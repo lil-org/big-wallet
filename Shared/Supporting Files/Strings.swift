@@ -18,7 +18,6 @@ struct Strings {
     static let showWallets = loc("Show Wallets")
     static let enterWallet = loc("Enter Wallet")
     static let quit = loc("Quit")
-    static let quitWallet = loc("Quit Wallet?")
     static let enableSafariExtension = loc("Enable Safari Extension")
     static let dropUsALine = loc("Mail")
     static let start = loc("Start")
