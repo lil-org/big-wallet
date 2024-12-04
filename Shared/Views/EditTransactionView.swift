@@ -36,7 +36,9 @@ struct EditTransactionView: View {
                 }
                 TextField(Strings.customGasPrice, text: $gasPrice)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .onChange(of: gasPrice) { _ in didUpdateGasPrice() }
+                    .onChange(of: gasPrice) { _, _ in
+                        didUpdateGasPrice()
+                    }
             }.padding()
             VStack {
                 HStack {
@@ -50,7 +52,7 @@ struct EditTransactionView: View {
                 }
                 TextField(Strings.customNonce, text: $nonce)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .onChange(of: nonce) { _ in didUpdateNonce() }
+                    .onChange(of: nonce) { _, _ in didUpdateNonce() }
             }.padding([.horizontal, .bottom])
             HStack {
                 Button(Strings.cancel) { completion(nil) }.keyboardShortcut(.cancelAction).buttonStyle(.bordered)
