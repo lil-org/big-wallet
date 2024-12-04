@@ -11,7 +11,7 @@ lane :bb do
 end
 
 lane :bump do |options|
-  current_version = get_version_number(xcodeproj: "Wallet.xcodeproj", target: "Wallet")
+  current_version = get_version_number(xcodeproj: "Wallet.xcodeproj", target: "Big Wallet")
   version_parts = current_version.split(".").map(&:to_i)
   version_parts[-1] += 1
   new_version = options[:version] || version_parts.join(".")
