@@ -116,14 +116,14 @@ struct Window {
         guard let windows = CGWindowListCopyWindowInfo(options, CGWindowID(0)) as? [[String: AnyObject]] else { return }
         for window in windows {
             if let pid = window[kCGWindowOwnerPID as String] as? pid_t, browsersPids.contains(pid) {
-                browsers.first(where: { $0.processIdentifier == pid })?.activate(options: .activateIgnoringOtherApps)
+                browsers.first(where: { $0.processIdentifier == pid })?.activate()
                 return
             }
         }
     }
     
     private static func activateBrowser(_ browser: Browser) {
-        NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == browser.rawValue })?.activate(options: .activateIgnoringOtherApps)
+        NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == browser.rawValue })?.activate()
     }
     
     private static var new: NSWindowController {
