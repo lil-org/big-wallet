@@ -130,6 +130,11 @@
     "n" : "Manta Pacific Mainnet",
     "s" : "ETH"
   },
+  "196" : {
+    "b" : "https://www.oklink.com/xlayer",
+    "n" : "X Layer Mainnet",
+    "s" : "OKB"
+  },
   "200" : {
     "b" : "https://blockscout.com/xdai/arbitrum",
     "n" : "Arbitrum on xDai",
@@ -179,11 +184,21 @@
     "o" : true,
     "s" : "FTM"
   },
+  "255" : {
+    "b" : "https://blockscout.kroma.network",
+    "n" : "Kroma",
+    "s" : "ETH"
+  },
   "280" : {
     "b" : "https://goerli.explorer.zksync.io",
     "n" : "zkSync Era Testnet",
     "s" : "ETH",
     "t" : true
+  },
+  "2818" : {
+    "b" : "https://explorer.morphl2.io",
+    "n" : "Morph",
+    "s" : "ETH"
   },
   "288" : {
     "b" : "https://bobascan.com",
@@ -207,6 +222,11 @@
     "n" : "Cronos Testnet",
     "s" : "TCRO",
     "t" : true
+  },
+  "34443" : {
+    "b" : "https://explorer.mode.network",
+    "n" : "Mode",
+    "s" : "ETH"
   },
   "40" : {
     "b" : "https://teloscan.io",
@@ -328,6 +348,10 @@
     "o" : true,
     "s" : "ETH"
   },
+  "5545" : {
+    "n" : "DuckChain Mainnet",
+    "s" : "TON"
+  },
   "56" : {
     "b" : "https://bscscan.com",
     "n" : "BNB Chain",
@@ -389,6 +413,11 @@
     "n" : "Redstone",
     "o" : true,
     "s" : "ETH"
+  },
+  "7000" : {
+    "b" : "https://explorer.zetachain.com",
+    "n" : "ZetaChain Mainnet",
+    "s" : "ZETA"
   },
   "77" : {
     "b" : "https://blockscout.com/poa/sokol",
