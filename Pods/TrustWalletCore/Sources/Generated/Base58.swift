@@ -37,7 +37,7 @@ public struct Base58 {
     /// Decodes a Base58 string, checking the checksum. Returns null if the string is not a valid Base58 string.
     ///
     /// - Parameter string: The Base58 string to decode.
-    /// - Returns: the decoded data, empty if the string is not a valid Base58 string with checksum.
+    /// - Returns: the decoded data, null if the string is not a valid Base58 string with checksum.
     public static func decode(string: String) -> Data? {
         let stringString = TWStringCreateWithNSString(string)
         defer {
@@ -52,7 +52,7 @@ public struct Base58 {
     /// Decodes a Base58 string, w/o checking the checksum. Returns null if the string is not a valid Base58 string.
     ///
     /// - Parameter string: The Base58 string to decode.
-    /// - Returns: the decoded data, empty if the string is not a valid Base58 string without checksum.
+    /// - Returns: the decoded data, null if the string is not a valid Base58 string without checksum.
     public static func decodeNoCheck(string: String) -> Data? {
         let stringString = TWStringCreateWithNSString(string)
         defer {

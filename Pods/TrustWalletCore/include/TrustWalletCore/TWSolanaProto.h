@@ -29,3 +29,6 @@ typedef TWData *_Nonnull TW_Solana_Proto_PriorityFeeLimit;
 typedef TWData *_Nonnull TW_Solana_Proto_SigningInput;
 typedef TWData *_Nonnull TW_Solana_Proto_SigningOutput;
 typedef TWData *_Nonnull TW_Solana_Proto_PreSigningOutput;
+typedef TWData *_Nonnull TW_Solana_Proto_MessageSigningInput;
+typedef TWData *_Nonnull TW_Solana_Proto_MessageSigningOutput;
+typedef TWData *_Nonnull TW_Solana_Proto_MessageVerifyingInput;

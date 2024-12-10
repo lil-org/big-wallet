@@ -541,11 +541,33 @@ public struct TW_Polkadot_Proto_Staking {
     /// Clears the value of `callIndices`. Subsequent reads from it will return its default value.
     public mutating func clearCallIndices() {self._callIndices = nil}
 
+    /// Staking.Bond call indices
+    public var bondCallIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _bondCallIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_bondCallIndices = newValue}
+    }
+    /// Returns true if `bondCallIndices` has been explicitly set.
+    public var hasBondCallIndices: Bool {return self._bondCallIndices != nil}
+    /// Clears the value of `bondCallIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearBondCallIndices() {self._bondCallIndices = nil}
+
+    /// Staking.Nominate call indices
+    public var nominateCallIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _nominateCallIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_nominateCallIndices = newValue}
+    }
+    /// Returns true if `nominateCallIndices` has been explicitly set.
+    public var hasNominateCallIndices: Bool {return self._nominateCallIndices != nil}
+    /// Clears the value of `nominateCallIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearNominateCallIndices() {self._nominateCallIndices = nil}
+
     public var unknownFields = SwiftProtobuf.UnknownStorage()
 
     public init() {}
 
     fileprivate var _callIndices: TW_Polkadot_Proto_CallIndices? = nil
+    fileprivate var _bondCallIndices: TW_Polkadot_Proto_CallIndices? = nil
+    fileprivate var _nominateCallIndices: TW_Polkadot_Proto_CallIndices? = nil
   }
 
   /// Bond extra amount
@@ -696,11 +718,33 @@ public struct TW_Polkadot_Proto_Staking {
     /// Clears the value of `callIndices`. Subsequent reads from it will return its default value.
     public mutating func clearCallIndices() {self._callIndices = nil}
 
+    /// Staking.Chill call indices
+    public var chillCallIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _chillCallIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_chillCallIndices = newValue}
+    }
+    /// Returns true if `chillCallIndices` has been explicitly set.
+    public var hasChillCallIndices: Bool {return self._chillCallIndices != nil}
+    /// Clears the value of `chillCallIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearChillCallIndices() {self._chillCallIndices = nil}
+
+    /// Staking.Unbond call indices
+    public var unbondCallIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _unbondCallIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_unbondCallIndices = newValue}
+    }
+    /// Returns true if `unbondCallIndices` has been explicitly set.
+    public var hasUnbondCallIndices: Bool {return self._unbondCallIndices != nil}
+    /// Clears the value of `unbondCallIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearUnbondCallIndices() {self._unbondCallIndices = nil}
+
     public var unknownFields = SwiftProtobuf.UnknownStorage()
 
     public init() {}
 
     fileprivate var _callIndices: TW_Polkadot_Proto_CallIndices? = nil
+    fileprivate var _chillCallIndices: TW_Polkadot_Proto_CallIndices? = nil
+    fileprivate var _unbondCallIndices: TW_Polkadot_Proto_CallIndices? = nil
   }
 
   /// Chill
@@ -1804,6 +1848,8 @@ extension TW_Polkadot_Proto_Staking.BondAndNominate: SwiftProtobuf.Message, Swif
     3: .standard(proto: "reward_destination"),
     4: .same(proto: "nominators"),
     5: .standard(proto: "call_indices"),
+    6: .standard(proto: "bond_call_indices"),
+    7: .standard(proto: "nominate_call_indices"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1817,6 +1863,8 @@ extension TW_Polkadot_Proto_Staking.BondAndNominate: SwiftProtobuf.Message, Swif
       case 3: try { try decoder.decodeSingularEnumField(value: &self.rewardDestination) }()
       case 4: try { try decoder.decodeRepeatedStringField(value: &self.nominators) }()
       case 5: try { try decoder.decodeSingularMessageField(value: &self._callIndices) }()
+      case 6: try { try decoder.decodeSingularMessageField(value: &self._bondCallIndices) }()
+      case 7: try { try decoder.decodeSingularMessageField(value: &self._nominateCallIndices) }()
       default: break
       }
     }
@@ -1842,6 +1890,12 @@ extension TW_Polkadot_Proto_Staking.BondAndNominate: SwiftProtobuf.Message, Swif
     try { if let v = self._callIndices {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
     } }()
+    try { if let v = self._bondCallIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    } }()
+    try { if let v = self._nominateCallIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1851,6 +1905,8 @@ extension TW_Polkadot_Proto_Staking.BondAndNominate: SwiftProtobuf.Message, Swif
     if lhs.rewardDestination != rhs.rewardDestination {return false}
     if lhs.nominators != rhs.nominators {return false}
     if lhs._callIndices != rhs._callIndices {return false}
+    if lhs._bondCallIndices != rhs._bondCallIndices {return false}
+    if lhs._nominateCallIndices != rhs._nominateCallIndices {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -2071,6 +2127,8 @@ extension TW_Polkadot_Proto_Staking.ChillAndUnbond: SwiftProtobuf.Message, Swift
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "value"),
     2: .standard(proto: "call_indices"),
+    3: .standard(proto: "chill_call_indices"),
+    4: .standard(proto: "unbond_call_indices"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -2081,6 +2139,8 @@ extension TW_Polkadot_Proto_Staking.ChillAndUnbond: SwiftProtobuf.Message, Swift
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.value) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._callIndices) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._chillCallIndices) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._unbondCallIndices) }()
       default: break
       }
     }
@@ -2097,12 +2157,20 @@ extension TW_Polkadot_Proto_Staking.ChillAndUnbond: SwiftProtobuf.Message, Swift
     try { if let v = self._callIndices {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
+    try { if let v = self._chillCallIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._unbondCallIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Polkadot_Proto_Staking.ChillAndUnbond, rhs: TW_Polkadot_Proto_Staking.ChillAndUnbond) -> Bool {
     if lhs.value != rhs.value {return false}
     if lhs._callIndices != rhs._callIndices {return false}
+    if lhs._chillCallIndices != rhs._chillCallIndices {return false}
+    if lhs._unbondCallIndices != rhs._unbondCallIndices {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
