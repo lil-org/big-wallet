@@ -69,7 +69,7 @@ public struct SolanaTransaction {
     /// and returns the updated transaction.
     ///
     /// - Parameter encodedTx: base64 encoded Solana transaction.
-    /// \price Unit Price as a decimal string.
+    /// - Parameter price: Unit Price as a decimal string.
     /// - Returns: base64 encoded Solana transaction. Null if an error occurred.
     public static func setComputeUnitPrice(encodedTx: String, price: String) -> String? {
         let encodedTxString = TWStringCreateWithNSString(encodedTx)
@@ -90,7 +90,7 @@ public struct SolanaTransaction {
     /// and returns the updated transaction.
     ///
     /// - Parameter encodedTx: base64 encoded Solana transaction.
-    /// \limit Unit Limit as a decimal string.
+    /// - Parameter limit: Unit Limit as a decimal string.
     /// - Returns: base64 encoded Solana transaction. Null if an error occurred.
     public static func setComputeUnitLimit(encodedTx: String, limit: String) -> String? {
         let encodedTxString = TWStringCreateWithNSString(encodedTx)
@@ -102,6 +102,26 @@ public struct SolanaTransaction {
             TWStringDelete(limitString)
         }
         guard let result = TWSolanaTransactionSetComputeUnitLimit(encodedTxString, limitString) else {
+            return nil
+        }
+        return TWStringNSString(result)
+    }
+
+    /// Adds fee payer to the given transaction and returns the updated transaction.
+    ///
+    /// - Parameter encodedTx: base64 encoded Solana transaction.
+    /// - Parameter feePayer: fee payer account address. Must be a base58 encoded public key. It must NOT be in the account list yet.
+    /// - Returns: base64 encoded Solana transaction. Null if an error occurred.
+    public static func setFeePayer(encodedTx: String, feePayer: String) -> String? {
+        let encodedTxString = TWStringCreateWithNSString(encodedTx)
+        defer {
+            TWStringDelete(encodedTxString)
+        }
+        let feePayerString = TWStringCreateWithNSString(feePayer)
+        defer {
+            TWStringDelete(feePayerString)
+        }
+        guard let result = TWSolanaTransactionSetFeePayer(encodedTxString, feePayerString) else {
             return nil
         }
         return TWStringNSString(result)
