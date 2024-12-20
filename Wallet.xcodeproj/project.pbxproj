@@ -3365,7 +3365,7 @@
 				INFOPLIST_FILE = "App iOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -3397,7 +3397,7 @@
 				INFOPLIST_FILE = "App iOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -3524,7 +3524,7 @@
 				INFOPLIST_FILE = "Safari iOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet for Mobile Safari";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -3563,7 +3563,7 @@
 				INFOPLIST_FILE = "Safari iOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet for Mobile Safari";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

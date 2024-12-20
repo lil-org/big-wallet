@@ -13,7 +13,7 @@ target 'Big Wallet' do
 end
 
 target 'Big Wallet iOS' do
-  platform :ios, '15.0'
+  platform :ios, '17.0'
   shared_pods
 end
 
@@ -23,7 +23,7 @@ post_install do |installer|
       project.targets.each do |target|
         if target.platform_name == :ios
           target.build_configurations.each do |config|
-            config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+            config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '17.0'
           end
         elsif target.platform_name == :osx
           target.build_configurations.each do |config|
