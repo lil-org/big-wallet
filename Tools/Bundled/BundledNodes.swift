@@ -67,6 +67,7 @@ struct BundledNodes {
         43288: "avax.boba.network",
         44787: "alfajores-forno.celo-testnet.org",
         56288: "bnb.boba.network",
+        57073: "rpc-gel.inkonchain.com",
         58008: "sepolia.publicgoods.network",
         59140: "rpc.goerli.linea.build",
         59144: "rpc.linea.build",

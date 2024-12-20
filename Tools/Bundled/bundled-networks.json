@@ -369,6 +369,11 @@
     "n" : "Boba BNB Mainnet",
     "s" : "BOBA"
   },
+  "57073" : {
+    "b" : "https://explorer.inkonchain.com",
+    "n" : "Ink",
+    "s" : "ETH",
+  },
   "58008" : {
     "b" : "https://explorer.sepolia.publicgoods.network",
     "n" : "Public Goods Network Sepolia",
