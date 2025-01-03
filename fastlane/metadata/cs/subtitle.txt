@@ -1,1 +1,1 @@
-web3 rozšíření prohlížeče
+rozšíření web3 pro prohlížeč

@@ -1,7 +1,7 @@
-Big Wallet to otwartoźródłowy portfel krypto z rozszerzeniem do Safari
+big wallet to otwarty portfel kryptowalut z rozszerzeniem dla safari
 
-Podłącz portfel na dowolnej stronie w Safari, klikając przycisk Metamask
+połącz portfel na dowolnej stronie w safari, klikając przycisk metamask
 
-Obsługuje Ethereum, Zora, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche i wiele więcej!
+obsługuje ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche i inne!
 
-Portfele są bezpiecznie przechowywane w kluczyku
+portfele są bezpiecznie przechowywane w keychain

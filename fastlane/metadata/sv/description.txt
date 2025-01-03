@@ -1,7 +1,7 @@
-big wallet är en öppen källkods-krypto plånbok med ett safari-tillägg
+big wallet är en öppen källkod krypto plånbok med en safari-tillägg
 
-Koppla en plånbok på vilken webbplats som helst i Safari genom att klicka på en metamask-knapp
+anslut en plånbok på vilken webbplats som helst i safari genom att klicka på en metamask-knapp
 
-Stöder ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, och mer!
+stöder ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, och fler!
 
-Plånböcker lagras säkert i en nyckelring
+plånböcker lagras säkert i en nyckelring

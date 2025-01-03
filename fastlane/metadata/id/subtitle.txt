@@ -1,1 +1,1 @@
-ekstensi web3 untuk browser
+ekstensi browser web3

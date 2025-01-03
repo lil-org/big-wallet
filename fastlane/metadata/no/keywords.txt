@@ -1,1 +1,1 @@
-metamask safari,trust,safari lommebok,krypto,binance,coinbase,metamask,phantom,glow,eter,eth,zora
+metamask,trust,safari-lommebok,krypto,binance,coinbase,eth,zora,token,lommebok,web3,utvidelse

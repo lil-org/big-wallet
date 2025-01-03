@@ -1,7 +1,7 @@
-big wallet هو محفظة كريبتو مفتوحة المصدر مع امتداد للسفاري
+big wallet" هو محفظة مفتوحة المصدر مع امتداد لبرنامج سفاري
 
-قم بتوصيل المحفظة على أي موقع ويب في السفاري بالنقر على زر metamask
+قم بتوصيل المحفظة على أي موقع في سفاري بالنقر على زر metamask
 
-يدعم ethereum، zora، base، polygon، binance smart chain، optimism، arbitrum، avalanche، والمزيد!
+يدعم ethereum وzora وbase وpolygon وbinance smart chain وoptimism وarbitrum وavalanche والمزيد!
 
-المحافظ يتم تخزينها بأمان في سلسلة المفاتيح
+المحافظ مخزنة بأمان في keychain

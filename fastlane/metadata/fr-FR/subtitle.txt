@@ -1,1 +1,1 @@
-extension de navigateur web3
+extension web3 pour navigateur

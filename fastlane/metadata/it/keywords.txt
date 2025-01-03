@@ -1,1 +1,1 @@
-metamask safari,trust,portafoglio safari,crypto,binance,coinbase,metamask,phantom,glow,ether,eth
+metamask,portafoglio,safari,crypto,binance,coinbase,phantom,glow,ether,eth,nft,estensione,web3

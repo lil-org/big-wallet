@@ -1,1 +1,1 @@
-web3 tarayıcı eklentisi
+web3 tarayıcı uzantısı

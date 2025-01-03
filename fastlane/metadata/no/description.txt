@@ -1,7 +1,7 @@
-Big Wallet er en åpen kildekode krypto lommebok med en Safari-utvidelse 
+big wallet er en åpen kildekode kryptolommebok med en safari-utvidelse
 
-Koble til en lommebok på hvilken som helst nettside i Safari ved å klikke på en MetaMask-knapp
+koble en lommebok til hvilken som helst nettside i safari ved å klikke på en metamask-knapp
 
-Støtter Ethereum, Zora, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche, og mer!
+støtter ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche og flere!
 
-Lommebøkene er trygt lagret i en nøkkelring
+lommebøker lagres sikkert i en nøkkelring

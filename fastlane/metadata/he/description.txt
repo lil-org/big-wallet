@@ -1,7 +1,7 @@
-big wallet הוא קופת קריפטו קוד פתוח עם תוסף של ספארי
+Big Wallet הוא ארנק קריפטו קוד פתוח עם הרחבה לספארי
 
-התחבר לארנק באתר כלשהו בספארי על ידי לחיצה על כפתור metamask
+חברו ארנק בכל אתר דרך כפתור metamask בספארי
 
-תומך ב-ethereum, zora, base, polygon, בינאנס רשת חכמה, optimism, arbitrum, avalanche, ועוד!
+תומך ב-ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche ועוד!
 
 הארנקים מאוחסנים באופן מאובטח ב-keychain
