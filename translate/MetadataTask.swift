@@ -47,6 +47,8 @@ struct MetadataTask: AI.Task {
             make sure the translated version communicates the same message.
             
             keep it lowercased if possible.
+
+            response must fit 30 chars. if not, rewrite to fit 30 chars. maintain the same meaning.
             """
         case .keywords:
             clarifications = """
@@ -60,7 +62,7 @@ struct MetadataTask: AI.Task {
             
             the output should be good to be used as app store keywords.
             
-            make sure the output text is no longer than 100 chars. keywords must fit in 100 chars.
+            make sure the output text is no longer than 100 chars. it must fit 100 chars.
             """
         default:
             clarifications = """
@@ -73,8 +75,6 @@ struct MetadataTask: AI.Task {
             "Big Wallet" and "lil org" are names that should not be translated; keep them as is and do not change their spelling.
             """
         }
-        
-        // TODO: subtitle cannot be longer than 30 characters
         
         let output = """
         translate the \(metadataName) to \(language.name).
