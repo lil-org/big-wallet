@@ -38,7 +38,7 @@ struct MetadataTask: AI.Task {
         switch metadataKind {
         case .name:
             clarifications = """
-            “big wallet” and “Safari” are names that should not be translated; keep them as is and do not change their spelling.
+            big wallet and Safari are names that should not be translated; keep them as is and do not change their spelling.
             """
         case .subtitle:
             clarifications = """
@@ -72,7 +72,7 @@ struct MetadataTask: AI.Task {
             
             keep formatting, capitalization, and punctuation style close to the original.
             
-            "Big Wallet" and "lil org" are names that should not be translated; keep them as is and do not change their spelling.
+            Big Wallet and lil org are names that should not be translated; keep them as is and do not change their spelling.
             """
         }
         
