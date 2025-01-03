@@ -91,7 +91,7 @@ struct MetadataTask: AI.Task {
         russian:
         "\(russianText)"
         
-        respond only with a \(language.name) version. do not add anything else to the response.
+        respond only with a \(language.name) version. do not add anything else to the response. do not surround the response with quotation marks.
         """
         
         return output

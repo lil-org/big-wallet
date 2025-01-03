@@ -33,7 +33,7 @@ struct StringTask: AI.Task {
                     
         keep formatting, capitalization, and punctuation style close to the original.
         
-        respond only with \(language.name) version. do not add anything else to the response.
+        respond only with \(language.name) version. do not add anything else to the response. do not surround the response with quotation marks.
         """
         
         return output
