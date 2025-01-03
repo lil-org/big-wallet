@@ -5,7 +5,7 @@ import Foundation
 func translateAppStoreMetadata(_ model: AI.Model) {
     var tasks = [MetadataTask]()
     
-    for metadataKind in MetadataKind.allCases {
+    for metadataKind in [MetadataKind.name] {
         let englishText = originalMetadata(kind: metadataKind, language: .english)
         let russianText = originalMetadata(kind: metadataKind, language: .russian)
         write(englishText, metadataKind: metadataKind, language: .english)
