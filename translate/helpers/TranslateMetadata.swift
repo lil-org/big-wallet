@@ -8,8 +8,8 @@ func translateAppStoreMetadata(_ model: AI.Model) {
     for metadataKind in MetadataKind.allCases {
         let englishText = originalMetadata(kind: metadataKind, language: .english)
         let russianText = originalMetadata(kind: metadataKind, language: .russian)
-        write(englishText, metadataKind: metadataKind, language: .english)
-        write(russianText, metadataKind: metadataKind, language: .russian)
+        write(englishText, englishOriginal: englishText, metadataKind: metadataKind, language: .english)
+        write(russianText, englishOriginal: englishText, metadataKind: metadataKind, language: .russian)
         let notEmpty = !englishText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         
         for language in Language.allCases where language != .english && language != .russian {
@@ -19,7 +19,7 @@ func translateAppStoreMetadata(_ model: AI.Model) {
                     tasks.append(task)
                 }
             } else {
-                write(englishText, metadataKind: metadataKind, language: language)
+                write(englishText, englishOriginal: englishText, metadataKind: metadataKind, language: language)
             }
         }
     }
@@ -27,7 +27,7 @@ func translateAppStoreMetadata(_ model: AI.Model) {
     var finalTasksCount = tasks.count
     for task in tasks {
         AI.translate(task: task) { translation in
-            write(translation, metadataKind: task.metadataKind, language: task.language)
+            write(translation, englishOriginal: task.englishText, metadataKind: task.metadataKind, language: task.language)
             task.storeAsCompleted()
             finalTasksCount -= 1
             if finalTasksCount == 0 {
@@ -52,17 +52,17 @@ func read(url: URL) -> String {
     return text.trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
-func write(_ newValue: String, metadataKind: MetadataKind, language: Language) {
-    let textToWrite: String = {
-        if metadataKind == .keywords && newValue.count > 100 {
-            print("🟡 trimming \(language.name) keywords")
-            return String(newValue.prefix(100))
-        } else {
-            return newValue
-        }
-    }()
+func write(_ newValue: String, englishOriginal: String, metadataKind: MetadataKind, language: Language) {
+    let toWrite: String
+    if metadataKind == .subtitle && newValue.count > 30 {
+        toWrite = englishOriginal
+    } else if metadataKind == .keywords && newValue.count > 100 {
+        toWrite = englishOriginal
+    } else {
+        toWrite = newValue
+    }
     let url = url(metadataKind: metadataKind, language: language)
-    let data = textToWrite.data(using: .utf8)!
+    let data = toWrite.data(using: .utf8)!
     try! data.write(to: url)
 }
 
