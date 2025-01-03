@@ -1,7 +1,7 @@
 big wallet es una billetera de criptomonedas de código abierto con una extensión para safari
 
-conecta una billetera en cualquier sitio web en safari haciendo clic en el botón de metamask
+conecta una billetera en cualquier sitio web en safari haciendo clic en un botón de metamask
 
-soporta ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, ¡y más!
+compatible con ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, ¡y más!
 
-las billeteras se almacenan de forma segura en un keychain
+las billeteras se almacenan de forma segura en un llavero

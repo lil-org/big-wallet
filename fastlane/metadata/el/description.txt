@@ -1,7 +1,7 @@
-Το "Big Wallet" είναι ένα ανοιχτού κώδικα κρυπτο-πορτοφόλι με επέκταση για το Safari
+big wallet είναι ένα ανοιχτού κώδικα κρυπτο-πορτοφόλι με επέκταση για σαφάρι
 
-συνδέστε το πορτοφόλι σας σε οποιοδήποτε ιστότοπο στο Safari με το πάτημα του κουμπιού Metamask
+συνδέστε το πορτοφόλι σε οποιαδήποτε ιστοσελίδα στο σαφάρι κάνοντας κλικ σε κουμπί metamask
 
-υποστηρίζει Ethereum, Zora, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche και περισσότερα!
+υποστηρίζει ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, και άλλα!
 
-τα πορτοφόλια αποθηκεύονται με ασφάλεια σε ένα keychain
+τα πορτοφόλια αποθηκεύονται με ασφάλεια σε keychain

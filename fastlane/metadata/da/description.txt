@@ -1,7 +1,7 @@
-big wallet er en open source kryptopung med en safari-udvidelse
+big wallet er en open source kryptovaluta wallet med en safari-udvidelse
 
-forbind en pung på enhver hjemmeside i safari ved at klikke på en metamask-knap
+tilslut en wallet på enhver hjemmeside i safari ved at klikke på metamask-knappen
 
-understøtter ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche og mere!
+understøtter ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche og flere!
 
-pungene opbevares sikkert i en nøglering
+wallets opbevares sikkert i en nøglering

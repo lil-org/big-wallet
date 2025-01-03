@@ -1,7 +1,7 @@
-big wallet és una cartera de codi obert amb una extensió per a safari
+big wallet és un moneder de criptomonedes de codi obert amb una extensió per a safari
 
-connecta una cartera a qualsevol lloc web a safari fent clic a un botó metamask
+connecta un moneder a qualsevol lloc web en safari fent clic al botó de metamask
 
-compta amb suport per a ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, i més!
+admet ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, i més!
 
-les carteres es guarden de manera segura en un keychain
+els moneders es guarden de manera segura en un portaclau

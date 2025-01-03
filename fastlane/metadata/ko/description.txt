@@ -1,7 +1,7 @@
-big wallet"는 사파리 확장을 지원하는 오픈 소스 암호화폐 지갑입니다
+Big Wallet은 Safari 확장이 포함된 오픈 소스 암호화폐 지갑입니다
 
-사파리에서 메타마스크 버튼을 클릭하여 어느 웹사이트에서든 지갑을 연결하세요
+Safari에서 Metamask 버튼을 클릭하여 어떤 웹사이트에서도 지갑을 연결하세요
 
-ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche 등 다양한 네트워크를 지원합니다!
+Ethereum, Zora, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche 등 다양한 네트워크를 지원합니다
 
-지갑은 keychain에 안전하게 저장됩니다
+지갑은 Keychain에 안전하게 저장됩니다

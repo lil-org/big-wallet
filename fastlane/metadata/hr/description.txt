@@ -1,6 +1,6 @@
-big wallet je open source kripto novčanik s ekstenzijom za safari
+big wallet je otvoreni izvor kripto novčanik s ekstenzijom za safari
 
-priključite novčanik na bilo kojoj web stranici u safariju pritiskom na gumb za metamask
+poveži novčanik na bilo kojoj web stranici u safariju klikom na metamask gumb
 
 podržava ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche i još mnogo toga!
 

@@ -1,7 +1,7 @@
-big wallet là một ví tiền điện tử mã nguồn mở với tiện ích mở rộng cho safari
+big wallet là một ví tiền mã nguồn mở với tiện ích mở rộng cho safari
 
-kết nối ví trên bất kỳ trang web nào trong safari bằng cách nhấp vào nút metamask
+kết nối ví trên mọi trang web có nút metamask trong safari
 
-hỗ trợ ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, và nhiều hơn nữa!
+hỗ trợ ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche và nhiều mạng khác!
 
-các ví được lưu trữ an toàn trong keychain
+ví được lưu trữ an toàn trong keychain
