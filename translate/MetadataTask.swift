@@ -24,7 +24,7 @@ struct MetadataTask: AI.Task {
         case .keywords:
             metadataName = "app store keywords"
         case .name:
-            metadataName = "app name"
+            metadataName = "app store app name"
         case .subtitle:
             metadataName = "app store page subtitle"
         case .promotionalText:
@@ -36,7 +36,11 @@ struct MetadataTask: AI.Task {
         }
         
         switch metadataKind {
-        case .name, .subtitle:
+        case .name:
+            clarifications = """
+            “big wallet” and “Safari” are names that should not be translated; keep them as is and do not change their spelling.
+            """
+        case .subtitle:
             clarifications = """
             feel free to tune it to make \(language.name) version sound natural.
             
@@ -65,6 +69,8 @@ struct MetadataTask: AI.Task {
             make sure the translated version communicates the same message.
             
             keep formatting, capitalization, and punctuation style close to the original.
+            
+            "Big Wallet" and "lil org" are names that should not be translated; keep them as is and do not change their spelling.
             """
         }
         
@@ -84,8 +90,6 @@ struct MetadataTask: AI.Task {
         
         russian:
         "\(russianText)"
-        
-        "Big Wallet" and "lil org" are names that should not be translated, keep them as is.
         
         respond only with a \(language.name) version. do not add anything else to the response.
         """
