@@ -1,3 +1,3 @@
-Apró javítások és továbbfejlesztések
+apró javítások és fejlesztések
 
-Visszajelzéseket küldjön ide: ivan@lil.org
+visszajelzés ivan@lil.org

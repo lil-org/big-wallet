@@ -1,3 +1,3 @@
-小修复和改进
+小幅修复和改进
 
-发送反馈至 ivan@lil.org
+发送反馈 ivan@lil.org
