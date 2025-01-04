@@ -130,6 +130,11 @@
     "n" : "Manta Pacific Mainnet",
     "s" : "ETH"
   },
+  "185" : {
+    "b" : "https://explorer.mintchain.io",
+    "n" : "Mint Mainnet",
+    "s" : "ETH",
+  },
   "196" : {
     "b" : "https://www.oklink.com/xlayer",
     "n" : "X Layer Mainnet",
@@ -372,7 +377,7 @@
   "57073" : {
     "b" : "https://explorer.inkonchain.com",
     "n" : "Ink",
-    "s" : "ETH",
+    "s" : "ETH"
   },
   "58008" : {
     "b" : "https://explorer.sepolia.publicgoods.network",

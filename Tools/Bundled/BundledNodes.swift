@@ -19,6 +19,7 @@ struct BundledNodes {
         128: "http-mainnet.hecochain.com",
         137: "polygon.llamarpc.com",
         169: "pacific-rpc.manta.network/http",
+        185: "rpc.mintchain.io",
         196: "rpc.xlayer.tech",
         200: "arbitrum.xdaichain.com/",
         204: "opbnb-mainnet-rpc.bnbchain.org",
