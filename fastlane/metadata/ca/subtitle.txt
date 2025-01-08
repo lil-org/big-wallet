@@ -1,1 +1,1 @@
-ràpid moneder criptogràfic
+simple crypto wallet

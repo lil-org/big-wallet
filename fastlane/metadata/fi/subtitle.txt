@@ -1,1 +1,1 @@
-nopea kryptolompakko
+yksinkertainen kryptolompakko
