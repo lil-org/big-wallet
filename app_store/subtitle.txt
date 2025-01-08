@@ -1,1 +1,1 @@
-quick crypto wallet
+simple crypto wallet
