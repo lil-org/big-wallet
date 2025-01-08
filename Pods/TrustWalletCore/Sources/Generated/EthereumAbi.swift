@@ -149,6 +149,21 @@ public struct EthereumAbi {
         return TWDataNSData(TWEthereumAbiEncodeTyped(messageJsonString))
     }
 
+    /// Get function signature from Ethereum ABI json
+    ///
+    /// - Parameter abi: The function ABI json string, for example: {"inputs":[{"internalType":"bool","name":"arg1","type":"bool"}],"name":"fun1","outputs":[],"stateMutability":"nonpayable","type":"function"}
+    /// - Returns: the function type signature, of the form "baz(int32,uint256)", null if the abi is invalid.
+    public static func getFunctionSignature(abi: String) -> String? {
+        let abiString = TWStringCreateWithNSString(abi)
+        defer {
+            TWStringDelete(abiString)
+        }
+        guard let result = TWEthereumAbiGetFunctionSignature(abiString) else {
+            return nil
+        }
+        return TWStringNSString(result)
+    }
+
 
     init() {
     }

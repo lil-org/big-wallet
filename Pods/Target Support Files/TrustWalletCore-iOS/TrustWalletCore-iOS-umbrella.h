@@ -20,6 +20,7 @@
 #import "TWAnySigner.h"
 #import "TWAptosProto.h"
 #import "TWAsnParser.h"
+#import "TWBabylonStakingProto.h"
 #import "TWBarz.h"
 #import "TWBarzProto.h"
 #import "TWBase.h"

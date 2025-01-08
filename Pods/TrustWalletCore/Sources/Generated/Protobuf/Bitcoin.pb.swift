@@ -361,6 +361,13 @@ public struct TW_Bitcoin_Proto_SigningInput {
     set {_uniqueStorage()._time = newValue}
   }
 
+  /// Whether to calculate the fee according to ZIP-0317 for the given transaction
+  /// https://zips.z.cash/zip-0317#fee-calculation
+  public var zip0317: Bool {
+    get {return _storage._zip0317}
+    set {_uniqueStorage()._zip0317 = newValue}
+  }
+
   /// If set, uses Bitcoin 2.0 Signing protocol.
   /// As a result, `Bitcoin.Proto.SigningOutput.signing_result_v2` is set.
   public var signingV2: TW_BitcoinV2_Proto_SigningInput {
@@ -977,6 +984,7 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
     15: .standard(proto: "use_max_utxo"),
     16: .standard(proto: "disable_dust_filter"),
     17: .same(proto: "time"),
+    18: .standard(proto: "zip_0317"),
     21: .standard(proto: "signing_v2"),
     24: .standard(proto: "fixed_dust_threshold"),
   ]
@@ -1000,6 +1008,7 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
     var _useMaxUtxo: Bool = false
     var _disableDustFilter: Bool = false
     var _time: UInt32 = 0
+    var _zip0317: Bool = false
     var _signingV2: TW_BitcoinV2_Proto_SigningInput? = nil
     var _dustPolicy: TW_Bitcoin_Proto_SigningInput.OneOf_DustPolicy?
 
@@ -1026,6 +1035,7 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
       _useMaxUtxo = source._useMaxUtxo
       _disableDustFilter = source._disableDustFilter
       _time = source._time
+      _zip0317 = source._zip0317
       _signingV2 = source._signingV2
       _dustPolicy = source._dustPolicy
     }
@@ -1063,6 +1073,7 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
         case 15: try { try decoder.decodeSingularBoolField(value: &_storage._useMaxUtxo) }()
         case 16: try { try decoder.decodeSingularBoolField(value: &_storage._disableDustFilter) }()
         case 17: try { try decoder.decodeSingularUInt32Field(value: &_storage._time) }()
+        case 18: try { try decoder.decodeSingularBoolField(value: &_storage._zip0317) }()
         case 21: try { try decoder.decodeSingularMessageField(value: &_storage._signingV2) }()
         case 24: try {
           var v: Int64?
@@ -1136,6 +1147,9 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
       if _storage._time != 0 {
         try visitor.visitSingularUInt32Field(value: _storage._time, fieldNumber: 17)
       }
+      if _storage._zip0317 != false {
+        try visitor.visitSingularBoolField(value: _storage._zip0317, fieldNumber: 18)
+      }
       try { if let v = _storage._signingV2 {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 21)
       } }()
@@ -1172,6 +1186,7 @@ extension TW_Bitcoin_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
         if _storage._useMaxUtxo != rhs_storage._useMaxUtxo {return false}
         if _storage._disableDustFilter != rhs_storage._disableDustFilter {return false}
         if _storage._time != rhs_storage._time {return false}
+        if _storage._zip0317 != rhs_storage._zip0317 {return false}
         if _storage._signingV2 != rhs_storage._signingV2 {return false}
         if _storage._dustPolicy != rhs_storage._dustPolicy {return false}
         return true

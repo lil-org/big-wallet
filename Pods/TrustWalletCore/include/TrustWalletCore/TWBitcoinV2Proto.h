@@ -9,6 +9,7 @@
 #include "TWData.h"
 
 typedef TWData *_Nonnull TW_BitcoinV2_Proto_PublicKeyOrHash;
+typedef TWData *_Nonnull TW_BitcoinV2_Proto_PublicKeySignature;
 typedef TWData *_Nonnull TW_BitcoinV2_Proto_OutPoint;
 typedef TWData *_Nonnull TW_BitcoinV2_Proto_Input;
 typedef TWData *_Nonnull TW_BitcoinV2_Proto_Output;

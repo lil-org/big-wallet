@@ -3,6 +3,7 @@
 // Copyright © 2017 Trust Wallet.
 
 public typealias BitcoinV2PublicKeyOrHash = TW_BitcoinV2_Proto_PublicKeyOrHash
+public typealias BitcoinV2PublicKeySignature = TW_BitcoinV2_Proto_PublicKeySignature
 public typealias BitcoinV2OutPoint = TW_BitcoinV2_Proto_OutPoint
 public typealias BitcoinV2Input = TW_BitcoinV2_Proto_Input
 public typealias BitcoinV2Output = TW_BitcoinV2_Proto_Output
