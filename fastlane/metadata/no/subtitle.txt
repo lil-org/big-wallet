@@ -1,1 +1,1 @@
-enkel kryptolommebok
+sikker krypto-lommebok

@@ -1,1 +1,1 @@
-simple crypto wallet
+cartera criptogràfica segura

@@ -1,1 +1,1 @@
-simple crypto wallet
+secure crypto wallet

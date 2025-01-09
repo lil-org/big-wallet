@@ -1,1 +1,1 @@
-einfaches krypto-wallet
+sichere krypto-wallet
