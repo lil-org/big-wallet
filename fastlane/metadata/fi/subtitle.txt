@@ -1,1 +1,1 @@
-turvallinen kryptolompakko
+yleinen kryptolompakko
