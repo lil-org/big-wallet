@@ -386,6 +386,11 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     @objc private func preferencesButtonTapped() {
         let actionSheet = UIAlertController(title: Strings.bigWallet, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.barButtonItem = preferencesItem
+        
+        let appStoreAction = UIAlertAction(title: Strings.rateOnTheAppStore, style: .default) { _ in
+            ReviewRequster.didClickAppStoreReviewButton()
+        }
+        
         let xAction = UIAlertAction(title: Strings.viewOnX, style: .default) { _ in
             UIApplication.shared.open(URL.x)
         }
@@ -406,6 +411,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
         actionSheet.addAction(howToEnableSafariExtension)
+        actionSheet.addAction(appStoreAction)
         actionSheet.addAction(warpcastAction)
         actionSheet.addAction(githubAction)
         actionSheet.addAction(zoraAction)

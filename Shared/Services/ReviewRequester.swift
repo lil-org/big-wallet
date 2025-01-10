@@ -17,6 +17,13 @@ struct ReviewRequster {
             }
         }
     }
+
+    static func didClickAppStoreReviewButton() {
+        didRequestReview()
+        if let url = URL(string: "https://apps.apple.com/app/id6478607925?action=write-review") {
+            UIApplication.shared.open(url)
+        }
+    }
     
     private static func requestReview(in scene: Any?) {
 #if os(macOS)
@@ -26,6 +33,10 @@ struct ReviewRequster {
             SKStoreReviewController.requestReview(in: scene)
         }
 #endif
+        didRequestReview()
+    }
+    
+    private static func didRequestReview() {
         Defaults.latestReviewRequestDate = Date()
     }
     
