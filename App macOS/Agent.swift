@@ -113,6 +113,7 @@ class Agent: NSObject {
         let warpcastItem = NSMenuItem(title: Strings.viewOnWarpcast, action: #selector(didSelectWarpcastMenuItem), keyEquivalent: "")
         let zoraItem = NSMenuItem(title: Strings.viewOnZora, action: #selector(didSelectZoraMenuItem), keyEquivalent: "")
         let xItem = NSMenuItem(title: Strings.viewOnX, action: #selector(didSelectXMenuItem), keyEquivalent: "")
+        let appStoreItem = NSMenuItem(title: Strings.rateOnTheAppStore, action: #selector(didSelectAppStoreMenuItem), keyEquivalent: "")
         let quitItem = NSMenuItem(title: Strings.quit, action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
         showItem.image = Images.zorb
         
@@ -122,6 +123,7 @@ class Agent: NSObject {
         warpcastItem.target = self
         zoraItem.target = self
         xItem.target = self
+        appStoreItem.target = self
         mailItem.target = self
         quitItem.target = self
         
@@ -129,6 +131,7 @@ class Agent: NSObject {
         menu.addItem(showItem)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(safariItem)
+        menu.addItem(appStoreItem)
         if !Defaults.isHiddenFromMenuBar {
             menu.addItem(NSMenuItem.separator())
             let hideItem = NSMenuItem(title: Strings.hideFromMenuBar, action: #selector(didSelectHideItem), keyEquivalent: "")
@@ -151,6 +154,10 @@ class Agent: NSObject {
         statusBarItem.isVisible = false
         statusBarItem.button?.removeFromSuperview()
         statusBarItem.button?.window?.close()
+    }
+    
+    @objc private func didSelectAppStoreMenuItem() {
+        ReviewRequster.didClickAppStoreReviewButton()
     }
     
     @objc private func didSelectXMenuItem() {
