@@ -120,6 +120,25 @@ public struct TW_Aptos_Proto_TokenTransferCoinsMessage {
   fileprivate var _function: TW_Aptos_Proto_StructTag? = nil
 }
 
+public struct TW_Aptos_Proto_FungibleAssetTransferMessage {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Fungible Asset address (string)
+  public var metadataAddress: String = String()
+
+  /// Destination Account address (string)
+  public var to: String = String()
+
+  /// Amount to be transferred (uint64)
+  public var amount: UInt64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 /// Necessary fields to process a ManagedTokensRegisterMessage
 public struct TW_Aptos_Proto_ManagedTokensRegisterMessage {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -498,6 +517,16 @@ public struct TW_Aptos_Proto_SigningInput {
     set {transactionPayload = .tokenTransferCoins(newValue)}
   }
 
+  public var fungibleAssetTransfer: TW_Aptos_Proto_FungibleAssetTransferMessage {
+    get {
+      if case .fungibleAssetTransfer(let v)? = transactionPayload {return v}
+      return TW_Aptos_Proto_FungibleAssetTransferMessage()
+    }
+    set {transactionPayload = .fungibleAssetTransfer(newValue)}
+  }
+
+  public var abi: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public enum OneOf_TransactionPayload: Equatable {
@@ -508,6 +537,7 @@ public struct TW_Aptos_Proto_SigningInput {
     case registerToken(TW_Aptos_Proto_ManagedTokensRegisterMessage)
     case liquidStakingMessage(TW_Aptos_Proto_LiquidStaking)
     case tokenTransferCoins(TW_Aptos_Proto_TokenTransferCoinsMessage)
+    case fungibleAssetTransfer(TW_Aptos_Proto_FungibleAssetTransferMessage)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_Aptos_Proto_SigningInput.OneOf_TransactionPayload, rhs: TW_Aptos_Proto_SigningInput.OneOf_TransactionPayload) -> Bool {
@@ -541,6 +571,10 @@ public struct TW_Aptos_Proto_SigningInput {
       }()
       case (.tokenTransferCoins, .tokenTransferCoins): return {
         guard case .tokenTransferCoins(let l) = lhs, case .tokenTransferCoins(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.fungibleAssetTransfer, .fungibleAssetTransfer): return {
+        guard case .fungibleAssetTransfer(let l) = lhs, case .fungibleAssetTransfer(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
       default: return false
@@ -784,6 +818,50 @@ extension TW_Aptos_Proto_TokenTransferCoinsMessage: SwiftProtobuf.Message, Swift
     if lhs.to != rhs.to {return false}
     if lhs.amount != rhs.amount {return false}
     if lhs._function != rhs._function {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Aptos_Proto_FungibleAssetTransferMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".FungibleAssetTransferMessage"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "metadata_address"),
+    2: .same(proto: "to"),
+    3: .same(proto: "amount"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.metadataAddress) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.to) }()
+      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.amount) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.metadataAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.metadataAddress, fieldNumber: 1)
+    }
+    if !self.to.isEmpty {
+      try visitor.visitSingularStringField(value: self.to, fieldNumber: 2)
+    }
+    if self.amount != 0 {
+      try visitor.visitSingularUInt64Field(value: self.amount, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Aptos_Proto_FungibleAssetTransferMessage, rhs: TW_Aptos_Proto_FungibleAssetTransferMessage) -> Bool {
+    if lhs.metadataAddress != rhs.metadataAddress {return false}
+    if lhs.to != rhs.to {return false}
+    if lhs.amount != rhs.amount {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1327,6 +1405,8 @@ extension TW_Aptos_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     13: .standard(proto: "register_token"),
     14: .standard(proto: "liquid_staking_message"),
     15: .standard(proto: "token_transfer_coins"),
+    16: .standard(proto: "fungible_asset_transfer"),
+    21: .same(proto: "abi"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1434,6 +1514,20 @@ extension TW_Aptos_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mes
           self.transactionPayload = .tokenTransferCoins(v)
         }
       }()
+      case 16: try {
+        var v: TW_Aptos_Proto_FungibleAssetTransferMessage?
+        var hadOneofValue = false
+        if let current = self.transactionPayload {
+          hadOneofValue = true
+          if case .fungibleAssetTransfer(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.transactionPayload = .fungibleAssetTransfer(v)
+        }
+      }()
+      case 21: try { try decoder.decodeSingularStringField(value: &self.abi) }()
       default: break
       }
     }
@@ -1497,7 +1591,14 @@ extension TW_Aptos_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mes
       guard case .tokenTransferCoins(let v)? = self.transactionPayload else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 15)
     }()
+    case .fungibleAssetTransfer?: try {
+      guard case .fungibleAssetTransfer(let v)? = self.transactionPayload else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 16)
+    }()
     case nil: break
+    }
+    if !self.abi.isEmpty {
+      try visitor.visitSingularStringField(value: self.abi, fieldNumber: 21)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1512,6 +1613,7 @@ extension TW_Aptos_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Mes
     if lhs.privateKey != rhs.privateKey {return false}
     if lhs.anyEncoded != rhs.anyEncoded {return false}
     if lhs.transactionPayload != rhs.transactionPayload {return false}
+    if lhs.abi != rhs.abi {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

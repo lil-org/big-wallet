@@ -38,15 +38,13 @@ struct MetadataTask: AI.Task {
         switch metadataKind {
         case .name:
             clarifications = """
-            big wallet and Safari are names that should not be translated; keep them as is and do not change their spelling.
+            Big Wallet and Safari are names that should not be translated; keep them as is and do not change their spelling.
             """
         case .subtitle:
             clarifications = """
             feel free to tune it to make \(language.name) version sound natural.
             
             make sure the translated version communicates the same message.
-            
-            keep it lowercased if possible.
 
             response must fit 30 chars. if not, rewrite to fit 30 chars. maintain the same meaning.
             """

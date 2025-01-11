@@ -1096,9 +1096,11 @@ public struct TW_Cosmos_Proto_Message {
     // methods supported on all messages.
 
     /// The prepared serialized TxBody
+    /// Required
     public var bodyBytes: Data = Data()
 
     /// The prepared serialized AuthInfo
+    /// Optional. If not provided, will be generated from `SigningInput` parameters.
     public var authInfoBytes: Data = Data()
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()

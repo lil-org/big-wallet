@@ -12,6 +12,7 @@ typedef TWData *_Nonnull TW_Aptos_Proto_TransferMessage;
 typedef TWData *_Nonnull TW_Aptos_Proto_StructTag;
 typedef TWData *_Nonnull TW_Aptos_Proto_TokenTransferMessage;
 typedef TWData *_Nonnull TW_Aptos_Proto_TokenTransferCoinsMessage;
+typedef TWData *_Nonnull TW_Aptos_Proto_FungibleAssetTransferMessage;
 typedef TWData *_Nonnull TW_Aptos_Proto_ManagedTokensRegisterMessage;
 typedef TWData *_Nonnull TW_Aptos_Proto_CreateAccountMessage;
 typedef TWData *_Nonnull TW_Aptos_Proto_OfferNftMessage;

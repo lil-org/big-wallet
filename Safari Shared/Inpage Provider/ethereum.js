@@ -199,7 +199,7 @@ class BigWalletEthereum extends EventEmitter {
                 case "eth_newPendingTransactionFilter":
                 case "eth_uninstallFilter":
                 case "eth_subscribe":
-                    throw new ProviderRpcError(4200, `big wallet does not support ${payload.method}`);
+                    throw new ProviderRpcError(4200, `Big Wallet does not support ${payload.method}`);
                 default:
                     return this.rpc.call(payload);
             }
