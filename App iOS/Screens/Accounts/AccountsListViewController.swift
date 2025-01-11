@@ -4,6 +4,8 @@ import UIKit
 import SwiftUI
 import WalletCore
 
+private let screenshotMode = false
+
 class AccountsListViewController: UIViewController, DataStateContainer {
     
     enum Section {
@@ -60,6 +62,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             tableView.registerReusableCell(type: AccountTableViewCell.self)
             tableView.registerReusableHeaderFooter(type: AccountsHeaderView.self)
         }
+    }
+    
+    override var prefersHomeIndicatorAutoHidden: Bool {
+        return screenshotMode ? true : super.prefersHomeIndicatorAutoHidden
     }
     
     override func viewDidLoad() {
