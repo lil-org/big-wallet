@@ -860,11 +860,8 @@
 		2CF965AF2BF4D778001E9D1B /* secondary_second_sub_category.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = secondary_second_sub_category.txt; sourceTree = "<group>"; };
 		2CF965B12BF4D778001E9D1B /* 0_APP_IPAD_PRO_3GEN_129_0.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 0_APP_IPAD_PRO_3GEN_129_0.png; sourceTree = "<group>"; };
 		2CF965B22BF4D778001E9D1B /* 0_APP_IPAD_PRO_129_0.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 0_APP_IPAD_PRO_129_0.png; sourceTree = "<group>"; };
-		2CF965B32BF4D778001E9D1B /* 0_APP_IPHONE_55_0.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 0_APP_IPHONE_55_0.png; sourceTree = "<group>"; };
 		2CF965B42BF4D778001E9D1B /* 0_APP_IPHONE_67_0.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 0_APP_IPHONE_67_0.png; sourceTree = "<group>"; };
-		2CF965B52BF4D778001E9D1B /* 1_APP_IPHONE_55_1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 1_APP_IPHONE_55_1.png; sourceTree = "<group>"; };
 		2CF965B62BF4D778001E9D1B /* 1_APP_IPHONE_67_1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 1_APP_IPHONE_67_1.png; sourceTree = "<group>"; };
-		2CF965B72BF4D778001E9D1B /* 2_APP_IPHONE_55_2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 2_APP_IPHONE_55_2.png; sourceTree = "<group>"; };
 		2CF965B82BF4D778001E9D1B /* 2_APP_IPHONE_67_2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 2_APP_IPHONE_67_2.png; sourceTree = "<group>"; };
 		2CF965BB2BF4D778001E9D1B /* 0_APP_DESKTOP_0.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 0_APP_DESKTOP_0.png; sourceTree = "<group>"; };
 		2CF965BF2BF4D778001E9D1B /* Appfile */ = {isa = PBXFileReference; lastKnownFileType = text; path = Appfile; sourceTree = "<group>"; };
@@ -2173,11 +2170,8 @@
 			children = (
 				2CF965B12BF4D778001E9D1B /* 0_APP_IPAD_PRO_3GEN_129_0.png */,
 				2CF965B22BF4D778001E9D1B /* 0_APP_IPAD_PRO_129_0.png */,
-				2CF965B32BF4D778001E9D1B /* 0_APP_IPHONE_55_0.png */,
 				2CF965B42BF4D778001E9D1B /* 0_APP_IPHONE_67_0.png */,
-				2CF965B52BF4D778001E9D1B /* 1_APP_IPHONE_55_1.png */,
 				2CF965B62BF4D778001E9D1B /* 1_APP_IPHONE_67_1.png */,
-				2CF965B72BF4D778001E9D1B /* 2_APP_IPHONE_55_2.png */,
 				2CF965B82BF4D778001E9D1B /* 2_APP_IPHONE_67_2.png */,
 			);
 			path = "en-US";
