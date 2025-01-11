@@ -2,6 +2,8 @@
 
 import UIKit
 
+let screenshotMode = false
+
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
 

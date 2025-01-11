@@ -4,8 +4,6 @@ import UIKit
 import SwiftUI
 import WalletCore
 
-private let screenshotMode = false
-
 class AccountsListViewController: UIViewController, DataStateContainer {
     
     enum Section {

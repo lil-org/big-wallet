@@ -57,6 +57,10 @@ class ApproveViewController: UIViewController {
                       .text(meta)]
     }
     
+    override var prefersHomeIndicatorAutoHidden: Bool {
+        return screenshotMode ? true : super.prefersHomeIndicatorAutoHidden
+    }
+    
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         DispatchQueue.main.async { [weak self] in

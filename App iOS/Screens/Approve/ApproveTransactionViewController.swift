@@ -79,6 +79,10 @@ class ApproveTransactionViewController: UIViewController {
         }
     }
     
+    override var prefersHomeIndicatorAutoHidden: Bool {
+        return screenshotMode ? true : super.prefersHomeIndicatorAutoHidden
+    }
+    
     @objc private func editTransactionButtonTapped() {
         if suggestedNonceAndGasPrice == nil { suggestedNonceAndGasPrice = (transaction.decimalNonceString, transaction.gasPriceGwei) }
         let editTransactionView = EditTransactionView(initialTransaction: transaction,
