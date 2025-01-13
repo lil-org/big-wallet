@@ -1,1 +1,1 @@
-Univerzalni kripto novčanik
+Kripto novčanik u Safariju

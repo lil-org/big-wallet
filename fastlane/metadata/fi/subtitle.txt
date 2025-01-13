@@ -1,1 +1,1 @@
-Yleinen kryptolompakko
+Salauslompakko Safarissa
