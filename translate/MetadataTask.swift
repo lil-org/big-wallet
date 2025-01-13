@@ -46,7 +46,7 @@ struct MetadataTask: AI.Task {
             
             make sure the translated version communicates the same message.
 
-            response must fit 30 chars. if not, rewrite to fit 30 chars. maintain the same meaning.
+            your response must fit 30 chars. phrase it to fit 30 chars.
             """
         case .keywords:
             clarifications = """
