@@ -254,7 +254,7 @@ class AccountsListViewController: NSViewController {
         guard let wallet = try? walletsManager.createWallet() else { return }
         newWalletId = wallet.id
         blinkNewWalletCellIfNeeded()
-        showKey(wallet: wallet)
+        showKey(wallet: wallet, specificAccount: nil)
     }
     
     private func getBackToRectIfNeeded() {
@@ -427,29 +427,44 @@ class AccountsListViewController: NSViewController {
     @objc private func didClickShowKey(_ sender: AnyObject) {
         let row = tableView.deselectedRow
         guard let wallet = walletForRow(row) else { return }
-        warnBeforeShowingKey(wallet: wallet)
+        warnBeforeShowingKey(wallet: wallet, specificAccount: nil)
     }
     
-    private func warnBeforeShowingKey(wallet: WalletContainer) {
+    @objc private func didClickShowSpecificPrivateKey(_ sender: AnyObject) {
+        let row = tableView.deselectedRow
+        guard let wallet = walletForRow(row), let account = accountForRow(row) else { return }
+        warnBeforeShowingKey(wallet: wallet, specificAccount: account)
+    }
+    
+    private func warnBeforeShowingKey(wallet: WalletContainer, specificAccount: Account?) {
         let alert = Alert()
-        alert.messageText = wallet.isMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
+        let showingMnemonic = wallet.isMnemonic && specificAccount == nil
+        alert.messageText = showingMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
         alert.alertStyle = .critical
         alert.addButton(withTitle: Strings.iUnderstandTheRisks)
         alert.addButton(withTitle: Strings.cancel)
         if alert.runModal() == .alertFirstButtonReturn {
-            let reason: AuthenticationReason = wallet.isMnemonic ? .showSecretWords : .showPrivateKey
+            let reason: AuthenticationReason = showingMnemonic ? .showSecretWords : .showPrivateKey
             agent.askAuthentication(on: view.window, getBackTo: self, browser: nil, onStart: false, reason: reason) { [weak self] allowed in
                 Window.activateWindow(self?.view.window)
                 if allowed {
-                    self?.showKey(wallet: wallet)
+                    self?.showKey(wallet: wallet, specificAccount: specificAccount)
                 }
             }
         }
     }
     
-    private func showKey(wallet: WalletContainer) {
+    private func showKey(wallet: WalletContainer, specificAccount: Account?) {
         let secret: String
-        if wallet.isMnemonic, let mnemonicString = try? walletsManager.exportMnemonic(wallet: wallet) {
+        let showingMnemonic = wallet.isMnemonic && specificAccount == nil
+        
+        if let account = specificAccount, wallet.isMnemonic {
+            if let hex = walletsManager.getPrivateKey(wallet: wallet, account: account)?.data.hexString {
+                secret = hex
+            } else {
+                return
+            }
+        } else if wallet.isMnemonic, let mnemonicString = try? walletsManager.exportMnemonic(wallet: wallet) {
             secret = mnemonicString
         } else if let data = try? walletsManager.exportPrivateKey(wallet: wallet) {
             secret = data.hexString
@@ -458,7 +473,7 @@ class AccountsListViewController: NSViewController {
         }
         
         let alert = Alert()
-        alert.messageText = wallet.isMnemonic ? Strings.secretWords : Strings.privateKey
+        alert.messageText = showingMnemonic ? Strings.secretWords : Strings.privateKey
         alert.informativeText = secret
         alert.alertStyle = .informational
         alert.addButton(withTitle: Strings.ok)
@@ -575,6 +590,7 @@ extension AccountsListViewController: TableViewMenuSource {
         menu.addItem(NSMenuItem(title: wallet.isMnemonic ? Strings.showSecretWords : Strings.showPrivateKey, action: #selector(didClickShowKey(_:)), keyEquivalent: ""))
         
         if wallet.isMnemonic {
+            menu.addItem(NSMenuItem(title: Strings.showPrivateKey, action: #selector(didClickShowSpecificPrivateKey(_:)), keyEquivalent: ""))
             menu.addItem(NSMenuItem(title: Strings.removeAccount, action: #selector(didClickRemoveAccount(_:)), keyEquivalent: ""))
         } else {
             menu.addItem(NSMenuItem(title: Strings.removeWallet, action: #selector(didClickRemoveWallet(_:)), keyEquivalent: ""))
@@ -602,7 +618,7 @@ extension AccountsListViewController: AccountsHeaderDelegate {
     func didClickShowSecretWords(sender: NSTableRowView) {
         let row = tableView.row(for: sender)
         guard let wallet = walletForRow(row) else { return }
-        warnBeforeShowingKey(wallet: wallet)
+        warnBeforeShowingKey(wallet: wallet, specificAccount: nil)
     }
     
     func didClickRemoveWallet(sender: NSTableRowView) {
