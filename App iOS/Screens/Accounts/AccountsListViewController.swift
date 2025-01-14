@@ -455,12 +455,20 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private func createNewWalletAndShowSecretWords() {
         guard let wallet = try? walletsManager.createWallet() else { return }
         reloadData()
-        showKey(wallet: wallet, mnemonic: true)
+        showKey(wallet: wallet, specificAccount: nil)
     }
     
-    private func showKey(wallet: WalletContainer, mnemonic: Bool) {
+    private func showKey(wallet: WalletContainer, specificAccount: Account?) {
         let secret: String
-        if mnemonic, let mnemonicString = try? walletsManager.exportMnemonic(wallet: wallet) {
+        let showingMnemonic = wallet.isMnemonic && specificAccount == nil
+        
+        if let account = specificAccount, wallet.isMnemonic {
+            if let hex = walletsManager.getPrivateKey(wallet: wallet, account: account)?.data.hexString {
+                secret = hex
+            } else {
+                return
+            }
+        } else if wallet.isMnemonic, let mnemonicString = try? walletsManager.exportMnemonic(wallet: wallet) {
             secret = mnemonicString
         } else if let data = try? walletsManager.exportPrivateKey(wallet: wallet) {
             secret = data.hexString
@@ -468,7 +476,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             return
         }
         
-        let alert = UIAlertController(title: mnemonic ? Strings.secretWords : Strings.privateKey, message: secret, preferredStyle: .alert)
+        let alert = UIAlertController(title: showingMnemonic ? Strings.secretWords : Strings.privateKey, message: secret, preferredStyle: .alert)
         let okAction = UIAlertAction(title: Strings.ok, style: .default)
         let cancelAction = UIAlertAction(title: Strings.copy, style: .default) { _ in
             UIPasteboard.general.string = secret
@@ -494,7 +502,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
         
         let showKeyAction = UIAlertAction(title: Strings.showSecretWords, style: .default) { [weak self] _ in
-            self?.didTapExportWallet(wallet)
+            self?.didTapExportWallet(wallet, specificAccount: nil)
         }
         
         let removeAction = UIAlertAction(title: Strings.removeWallet, style: .destructive) { [weak self] _ in
@@ -519,7 +527,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
         let showKeyTitle = wallet.isMnemonic ? Strings.showSecretWords : Strings.showPrivateKey
         let showKeyAction = UIAlertAction(title: showKeyTitle, style: .default) { [weak self] _ in
-            self?.didTapExportWallet(wallet)
+            self?.didTapExportWallet(wallet, specificAccount: nil)
         }
         
         let removeTitle = wallet.isMnemonic ? Strings.removeAccount : Strings.removeWallet
@@ -542,6 +550,14 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         
         actionSheet.addAction(copyAddressAction)
         actionSheet.addAction(showKeyAction)
+        
+        if wallet.isMnemonic {
+            let showPrivateKeyAction = UIAlertAction(title: Strings.showPrivateKey, style: .default) { [weak self] _ in
+                self?.didTapExportWallet(wallet, specificAccount: account)
+            }
+            actionSheet.addAction(showPrivateKeyAction)
+        }
+        
         actionSheet.addAction(removeAction)
         actionSheet.addAction(cancelAction)
         present(actionSheet, animated: true)
@@ -594,16 +610,16 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         reloadData()
     }
     
-    private func didTapExportWallet(_ wallet: WalletContainer) {
-        let isMnemonic = wallet.isMnemonic
-        let title = isMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
-        let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
+    private func didTapExportWallet(_ wallet: WalletContainer, specificAccount: Account?) {
+        let willExportMnemonic = wallet.isMnemonic && specificAccount == nil
+        let title = willExportMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
+        let alert = UIAlertController(title: title, message: specificAccount?.croppedAddress, preferredStyle: .alert)
         let okAction = UIAlertAction(title: Strings.iUnderstandTheRisks, style: .default) { [weak self] _ in
-            let reason = isMnemonic ? Strings.showSecretWords : Strings.showPrivateKey
-            let passwordReason = isMnemonic ? Strings.toShowSecretWords : Strings.toShowPrivateKey
+            let reason = willExportMnemonic ? Strings.showSecretWords : Strings.showPrivateKey
+            let passwordReason = willExportMnemonic ? Strings.toShowSecretWords : Strings.toShowPrivateKey
             LocalAuthentication.attempt(reason: reason, presentPasswordAlertFrom: self, passwordReason: passwordReason) { success in
                 if success {
-                    self?.showKey(wallet: wallet, mnemonic: isMnemonic)
+                    self?.showKey(wallet: wallet, specificAccount: specificAccount)
                 }
             }
         }
