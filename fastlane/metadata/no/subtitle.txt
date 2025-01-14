@@ -1,1 +1,1 @@
-Krypto-lommebok i Safari
+Native crypto wallet in Safari

@@ -1,1 +1,1 @@
-Kripto novčanik u Safariju
+Native crypto wallet in Safari
