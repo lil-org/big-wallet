@@ -24,7 +24,7 @@ extension CoinType {
         case .ethereum:
             return [
                 (Strings.viewOn + " " + "Etherscan", URL(string: "https://etherscan.io/address/\(address)")!),
-                (Strings.viewOn + " " + "Superscan", URL(string: "https://superscan.network/address/\(address)")!),
+                (Strings.viewOn + " " + "Superscan", URL(string: "https://thesuperscan.io/address/\(address)")!),
                 (Strings.viewOn + " " + "Blockscan", URL(string: "https://blockscan.com/address/\(address)")!)
             ]
         case .near:
