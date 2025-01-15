@@ -10,7 +10,7 @@ struct Networks {
     
     static func withChainId(_ chainId: Int?) -> EthereumNetwork? {
         guard let chainId = chainId else { return nil }
-        return allBundledDict[chainId]
+        return allBundledDict[chainId] ?? custom.first(where: { $0.chainId == chainId })
     }
     
     static func explorerURL(chainId: Int, hash: String) -> URL? {
@@ -27,7 +27,7 @@ struct Networks {
     
     static func withChainIdHex(_ chainIdHex: String?) -> EthereumNetwork? {
         guard let chainIdHex = chainIdHex, let id = Int(hexString: chainIdHex) else { return nil }
-        return allBundledDict[id]
+        return allBundledDict[id] ?? custom.first(where: { $0.chainId == id })
     }
     
     private static let pinnedIds = [1, 7777777, 10, 8453, 42161]
