@@ -275,6 +275,18 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                                                                                          peerMeta: action.peerMeta,
                                                                                          completion: action.completion)
             presentForExternalRequest(approveTransactionViewController.inNavigationController, id: id)
+        case .addEthereumChain(let action):
+            // TODO: implement appropriate confirmation
+            let alert = UIAlertController(title: "add chain", message: "chain info", preferredStyle: .alert)
+            let okAction = UIAlertAction(title: Strings.ok, style: .default) { _ in
+                action.completion(true)
+            }
+            let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel) { _ in
+                action.completion(false)
+            }
+            alert.addAction(cancelAction)
+            alert.addAction(okAction)
+            presentForExternalRequest(alert, id: id)
         case let .showMessage(message, subtitle, completion):
             let alert = UIAlertController(title: message, message: subtitle, preferredStyle: .alert)
             let okAction = UIAlertAction(title: Strings.ok, style: .default) { _ in
