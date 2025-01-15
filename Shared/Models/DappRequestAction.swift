@@ -11,6 +11,7 @@ enum DappRequestAction {
     case selectAccount(SelectAccountAction)
     case approveMessage(SignMessageAction)
     case approveTransaction(SendTransactionAction)
+    case addEthereumChain(AddEthereumChainAction)
 }
 
 struct SelectAccountAction {
@@ -43,4 +44,9 @@ struct SendTransactionAction {
     let account: Account
     let peerMeta: PeerMeta
     let completion: (Transaction?) -> Void
+}
+
+struct AddEthereumChainAction {
+    let chainToAdd: EthereumNetworkFromDapp
+    let completion: (Bool) -> Void
 }

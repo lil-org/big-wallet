@@ -293,6 +293,15 @@ class Agent: NSObject {
             windowNumber = windowController.window?.windowNumber
             let accountsList = instantiate(AccountsListViewController.self)
             windowController.contentViewController = accountsList
+        case .addEthereumChain(let action):
+            // TODO: implement appropriate confirmation
+            let alert = Alert()
+            alert.messageText = "add chain"
+            alert.informativeText = "chain info"
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: Strings.ok)
+            alert.addButton(withTitle: Strings.cancel)
+            action.completion(alert.runModal() == .alertFirstButtonReturn)
         case let .showMessage(message, subtitle, completion):
             let alert = Alert()
             alert.messageText = message

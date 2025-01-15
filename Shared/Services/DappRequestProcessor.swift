@@ -83,11 +83,22 @@ struct DappRequestProcessor {
         
         switch ethereumRequest.method {
         case .addEthereumChain:
-            let newNetwork = EthereumNetworkFromDapp.from(ethereumRequest.parameters)
-            // TODO: show add chain screen
-            // TODO: handle known networks by switching into them
-            print(newNetwork)
-            return .justShowApp
+            if let chainToAdd = EthereumNetworkFromDapp.from(ethereumRequest.parameters) {
+                // TODO: handle known networks by switching into them
+                let action = AddEthereumChainAction(chainToAdd: chainToAdd) { didApprove in
+                    if didApprove {
+                        print("did approve adding a chain")
+                        // TODO: add a chain and send a repsonse
+                        respond(to: request, error: Strings.canceled, completion: completion)
+                    } else {
+                        print("did cancel adding a chain")
+                        respond(to: request, error: Strings.canceled, completion: completion)
+                    }
+                }
+                return .addEthereumChain(action)
+            } else {
+                respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+            }
         case .requestAccounts:
             let action = SelectAccountAction(peer: peerMeta,
                                              coinType: .ethereum,
