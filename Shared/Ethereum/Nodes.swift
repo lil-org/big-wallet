@@ -14,10 +14,12 @@ struct Nodes {
         }
     }()
     
+    // TODO: make it work with custom networks efficiently
     static func knowsNode(chainId: Int) -> Bool {
         return getNode(chainId: chainId) != nil
     }
     
+    // TODO: make it work with custom networks efficiently
     static func getNode(chainId: Int) -> String? {
         let https = "https://"
         if let infura = BundledNodes.infura[chainId], let infuraKey = infuraKey {

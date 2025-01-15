@@ -32,6 +32,10 @@ struct Networks {
         return pinnedIds.compactMap { Networks.withChainId($0) }
     }()
     
+    static let custom: [EthereumNetwork] = {
+        return [] // TODO: implement
+    }()
+    
     static let mainnets: [EthereumNetwork] = {
         let excluded = Set(pinnedIds)
         return allBundled.filter { !$0.isTestnet && !excluded.contains($0.chainId) }
