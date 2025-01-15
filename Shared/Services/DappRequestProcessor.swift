@@ -90,11 +90,10 @@ struct DappRequestProcessor {
                 } else {
                     let action = AddEthereumChainAction(chainToAdd: chainToAdd) { didApprove in
                         if didApprove {
-                            print("did approve adding a chain")
-                            // TODO: add a chain and send a repsonse
-                            respond(to: request, error: Strings.canceled, completion: completion)
+                            Networks.add(networkFromDapp: chainToAdd)
+                            let responseBody = ResponseToExtension.Ethereum(results: [ethereumRequest.address], chainId: chainToAdd.chainId)
+                            respond(to: request, body: .ethereum(responseBody), completion: completion)
                         } else {
-                            print("did cancel adding a chain")
                             respond(to: request, error: Strings.canceled, completion: completion)
                         }
                     }

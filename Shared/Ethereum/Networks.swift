@@ -21,6 +21,10 @@ struct Networks {
         }
     }
     
+    static func add(networkFromDapp: EthereumNetworkFromDapp) {
+        // TODO: implement
+    }
+    
     static func withChainIdHex(_ chainIdHex: String?) -> EthereumNetwork? {
         guard let chainIdHex = chainIdHex, let id = Int(hexString: chainIdHex) else { return nil }
         return allBundledDict[id]
