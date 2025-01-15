@@ -133,7 +133,7 @@
   "185" : {
     "b" : "https://explorer.mintchain.io",
     "n" : "Mint Mainnet",
-    "s" : "ETH",
+    "s" : "ETH"
   },
   "196" : {
     "b" : "https://www.oklink.com/xlayer",
@@ -161,11 +161,6 @@
     "b" : "https://kavascan.com",
     "n" : "Kava",
     "s" : "KAVA"
-  },
-  "238" : {
-    "b" : "https://scan.blastblockchain.com",
-    "n" : "Blast",
-    "s" : "ETH"
   },
   "245022926" : {
     "b" : "https://devnet.neonscan.org",
@@ -462,6 +457,11 @@
     "b" : "https://explorer.zklink.io",
     "n" : "zkLink Nova Mainnet",
     "s" : "ETH"
+  },
+  "81457" : {
+    "b" : "https://blastscan.io",
+    "n" : "Blast",
+    "s" : "ETH",
   },
   "8217" : {
     "b" : "https://scope.klaytn.com",
