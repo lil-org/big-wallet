@@ -294,10 +294,9 @@ class Agent: NSObject {
             let accountsList = instantiate(AccountsListViewController.self)
             windowController.contentViewController = accountsList
         case .addEthereumChain(let action):
-            // TODO: implement appropriate confirmation
             let alert = Alert()
-            alert.messageText = "add chain"
-            alert.informativeText = "chain info"
+            alert.messageText = Strings.addNetwork
+            alert.informativeText = action.chainToAdd.chainName + "\n\n" + action.chainToAdd.defaultRpcUrl
             alert.alertStyle = .informational
             alert.addButton(withTitle: Strings.ok)
             alert.addButton(withTitle: Strings.cancel)

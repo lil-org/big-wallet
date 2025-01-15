@@ -100,6 +100,7 @@ struct Strings {
     static let getStarted = loc("Get Started")
     static let hideFromMenuBar = loc("Hide from Menu Bar")
     static let rateOnTheAppStore = loc("Rate on the App Store")
+    static let addNetwork = loc("Add Network")
     
     static let bigWallet = "Big Wallet"
     static let viewOnGithub = "GitHub"

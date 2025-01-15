@@ -276,8 +276,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                                                                                          completion: action.completion)
             presentForExternalRequest(approveTransactionViewController.inNavigationController, id: id)
         case .addEthereumChain(let action):
-            // TODO: implement appropriate confirmation
-            let alert = UIAlertController(title: "add chain", message: "chain info", preferredStyle: .alert)
+            let message = action.chainToAdd.chainName + "\n\n" + action.chainToAdd.defaultRpcUrl
+            let alert = UIAlertController(title: Strings.addNetwork, message: message, preferredStyle: .alert)
             let okAction = UIAlertAction(title: Strings.ok, style: .default) { _ in
                 action.completion(true)
             }

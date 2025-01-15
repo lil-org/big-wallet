@@ -43,4 +43,8 @@ struct EthereumNetworkFromDapp: Codable {
         }
     }
     
+    var defaultRpcUrl: String {
+        return rpcUrls.first(where: { $0.starts(with: "https") }) ?? rpcUrls.first ?? ""
+    }
+    
 }
