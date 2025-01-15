@@ -83,8 +83,11 @@ struct DappRequestProcessor {
         
         switch ethereumRequest.method {
         case .addEthereumChain:
-            let _ = EthereumNetworkFromDapp.from(ethereumRequest.parameters)
-            return .justShowApp // TODO: show add chain screen
+            let newNetwork = EthereumNetworkFromDapp.from(ethereumRequest.parameters)
+            // TODO: show add chain screen
+            // TODO: handle known networks by switching into them
+            print(newNetwork)
+            return .justShowApp
         case .requestAccounts:
             let action = SelectAccountAction(peer: peerMeta,
                                              coinType: .ethereum,
