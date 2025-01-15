@@ -114,6 +114,7 @@ struct Strings {
     static let isVisionPro = loc("isVisionPro") == "isVisionPro"
     
     private static func loc(_ string: String.LocalizationValue) -> String {
+        // NSLocalizedString("", comment: "")
         return String(localized: string)
     }
     
