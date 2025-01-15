@@ -2,9 +2,9 @@
 
 import XCTest
 #if os(iOS)
-@testable import Wallet_iOS
+@testable import Big_Wallet
 #elseif os(macOS)
-@testable import Wallet
+@testable import Big_Wallet
 #endif
 
 final class TransactionInspectorTests: XCTestCase {
