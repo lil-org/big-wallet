@@ -143,6 +143,10 @@
 		2C96D3A62763CCA000687301 /* Images.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D3A52763CCA000687301 /* Images.swift */; };
 		2C96D3A92763D13400687301 /* DataStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D3A72763D13400687301 /* DataStateView.swift */; };
 		2C96D3AA2763D13400687301 /* DataStateView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C96D3A82763D13400687301 /* DataStateView.xib */; };
+		2C9B2C6B2D38416800D56607 /* SharedDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B2C6A2D38415F00D56607 /* SharedDefaults.swift */; };
+		2C9B2C6C2D38416800D56607 /* SharedDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B2C6A2D38415F00D56607 /* SharedDefaults.swift */; };
+		2C9B2C6D2D38416800D56607 /* SharedDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B2C6A2D38415F00D56607 /* SharedDefaults.swift */; };
+		2C9B2C6E2D38416800D56607 /* SharedDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B2C6A2D38415F00D56607 /* SharedDefaults.swift */; };
 		2C9B55D12AF2AE4B008BE899 /* BundledNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */; };
 		2C9B55D22AF2AE4B008BE899 /* BundledNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */; };
 		2C9B55D32AF2AE4B008BE899 /* BundledNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */; };
@@ -431,6 +435,7 @@
 		2C96D3A72763D13400687301 /* DataStateView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DataStateView.swift; sourceTree = "<group>"; };
 		2C96D3A82763D13400687301 /* DataStateView.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = DataStateView.xib; sourceTree = "<group>"; };
 		2C9931DB2AEEC0E200577C8A /* NetworksListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworksListView.swift; sourceTree = "<group>"; };
+		2C9B2C6A2D38415F00D56607 /* SharedDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedDefaults.swift; sourceTree = "<group>"; };
 		2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundledNetwork.swift; sourceTree = "<group>"; };
 		2C9B55D42AF2B004008BE899 /* nodes-to-bundle.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "nodes-to-bundle.json"; sourceTree = "<group>"; };
 		2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumNetwork.swift; sourceTree = "<group>"; };
@@ -1322,6 +1327,7 @@
 			isa = PBXGroup;
 			children = (
 				2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */,
+				2C9B2C6A2D38415F00D56607 /* SharedDefaults.swift */,
 				2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */,
 				2C264BDA27B5A94400234393 /* Models */,
 				2C452ECE2B0EDB7E0017CE2C /* Inpage Provider */,
@@ -2787,6 +2793,7 @@
 				2C264BD727B5806200234393 /* InpageProvider.swift in Sources */,
 				2C8ED8D62AEA7DB200818D74 /* String.swift in Sources */,
 				2CADD2C72AFAAE860082BFA4 /* Infura.swift in Sources */,
+				2C9B2C6B2D38416800D56607 /* SharedDefaults.swift in Sources */,
 				2C20ED992AEE54A300DDE709 /* FixedWidthInteger.swift in Sources */,
 				2C90E61D27B2C5C100C8991E /* InternalSafariRequest.swift in Sources */,
 				2C2AA1D728AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
@@ -2812,6 +2819,7 @@
 				2C901C4A2689F01700D0926A /* Strings.swift in Sources */,
 				2C2AA1D228AD1DC100E35DBF /* SpecificWalletAccount.swift in Sources */,
 				2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */,
+				2C9B2C6D2D38416800D56607 /* SharedDefaults.swift in Sources */,
 				2CC0CDBE2692027E0072922A /* PriceService.swift in Sources */,
 				2C8A09C6267513FC00993638 /* Agent.swift in Sources */,
 				2C8A09D42675184700993638 /* Window.swift in Sources */,
@@ -2890,6 +2898,7 @@
 			files = (
 				2C6F6D5A28273FE500D6E8FB /* EditAccountsViewController.swift in Sources */,
 				2CF255BA275A749300AE54B9 /* ApproveViewController.swift in Sources */,
+				2C9B2C6E2D38416800D56607 /* SharedDefaults.swift in Sources */,
 				2C3024FD28C1193100C304ED /* Account.swift in Sources */,
 				2CD7FC8E2B1115AE00659439 /* EditTransactionView.swift in Sources */,
 				2C96D3962762380400687301 /* ButtonWithExtendedArea.swift in Sources */,
@@ -3003,6 +3012,7 @@
 				2C264BD827B5806200234393 /* InpageProvider.swift in Sources */,
 				2C8ED8D72AEA7DB300818D74 /* String.swift in Sources */,
 				2CADD2C82AFAAE860082BFA4 /* Infura.swift in Sources */,
+				2C9B2C6C2D38416800D56607 /* SharedDefaults.swift in Sources */,
 				2C20ED9A2AEE54A400DDE709 /* FixedWidthInteger.swift in Sources */,
 				2C90E61E27B2C5C100C8991E /* InternalSafariRequest.swift in Sources */,
 				2C2AA1D828AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
