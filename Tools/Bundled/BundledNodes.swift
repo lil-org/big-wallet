@@ -18,6 +18,7 @@ struct BundledNodes {
         122: "rpc.fuse.io",
         128: "http-mainnet.hecochain.com",
         137: "polygon.llamarpc.com",
+        146: "rpc.soniclabs.com",
         169: "pacific-rpc.manta.network/http",
         185: "rpc.mintchain.io",
         196: "rpc.xlayer.tech",

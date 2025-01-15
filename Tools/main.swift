@@ -30,7 +30,7 @@ fetchChains { chains in
     let currentNodes = try! JSONDecoder().decode([String: String].self, from: currentNodesData)
     
     let currentIds = Set(currentNetworks.keys)
-    let newChainsIds = Set([81457])
+    let newChainsIds = Set([146])
     
     let newChains = chains.filter { chain in
         let isEIP3091 = chain.explorers?.contains(where: { $0.standard == "EIP3091" }) == true

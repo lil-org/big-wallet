@@ -115,6 +115,12 @@
     "s" : "ETH",
     "t" : true
   },
+  "146" : {
+    "b" : "https://explorer.soniclabs.com",
+    "n" : "Sonic Mainnet",
+    "s" : "S",
+    "t" : true
+  },
   "1666600000" : {
     "b" : "https://explorer.harmony.one",
     "n" : "Harmony",
@@ -461,7 +467,7 @@
   "81457" : {
     "b" : "https://blastscan.io",
     "n" : "Blast",
-    "s" : "ETH",
+    "s" : "ETH"
   },
   "8217" : {
     "b" : "https://scope.klaytn.com",
