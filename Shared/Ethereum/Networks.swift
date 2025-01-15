@@ -22,7 +22,7 @@ struct Networks {
     }
     
     static func add(networkFromDapp: EthereumNetworkFromDapp) {
-        // TODO: implement
+        SharedDefaults.addNetwork(networkFromDapp)
     }
     
     static func withChainIdHex(_ chainIdHex: String?) -> EthereumNetwork? {
@@ -37,7 +37,11 @@ struct Networks {
     }()
     
     static let custom: [EthereumNetwork] = {
-        return [] // TODO: implement
+        let customNetworks = SharedDefaults.getCustomNetworks().compactMap { custom -> EthereumNetwork? in
+            guard let id = Int(hexString: custom.chainId) else { return nil }
+            return EthereumNetwork(chainId: id, name: custom.chainName, symbol: custom.nativeCurrency.symbol, nodeURLString: custom.defaultRpcUrl, isTestnet: false, mightShowPrice: false, explorer: nil)
+        }
+        return customNetworks
     }()
     
     static let mainnets: [EthereumNetwork] = {

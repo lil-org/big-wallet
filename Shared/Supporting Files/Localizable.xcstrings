@@ -3136,6 +3136,9 @@
         }
       }
     },
+    "Custom Networks" : {
+
+    },
     "Custom nonce" : {
       "comment" : "5652364793232792661",
       "localizations" : {

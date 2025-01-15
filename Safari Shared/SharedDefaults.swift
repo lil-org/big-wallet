@@ -10,4 +10,18 @@ struct SharedDefaults {
     static let defaults = UserDefaults(suiteName: "group.org.lil.wallet")
 #endif
     
+    static func addNetwork(_ network: EthereumNetworkFromDapp) {
+        // TODO: implement
+    }
+    
+    static func getCustomNetworks() -> [EthereumNetworkFromDapp] {
+        // TODO: implement
+        return []
+    }
+    
+    static func getCustomNetworkNode(chainId: Int) -> String? {
+        // TODO: implement
+        return nil
+    }
+    
 }

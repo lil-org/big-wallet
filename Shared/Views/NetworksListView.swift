@@ -6,6 +6,7 @@ struct NetworksListView: View {
     
     private let mainnets = Networks.mainnets
     private let testnets = Networks.testnets
+    private let custom = Networks.custom
     private let pinned = Networks.pinned
     
     @Environment(\.presentationMode) var presentationMode
@@ -48,6 +49,9 @@ struct NetworksListView: View {
         List {
             networkSection(networks: pinned, title: Strings.pinned)
             networkSection(networks: mainnets, title: Strings.mainnets)
+            if !custom.isEmpty {
+                networkSection(networks: custom, title: Strings.customNetworks)
+            }
             networkSection(networks: testnets, title: Strings.testnets)
         }
     }
