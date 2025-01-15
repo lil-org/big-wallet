@@ -36,13 +36,13 @@ struct Networks {
         return pinnedIds.compactMap { Networks.withChainId($0) }
     }()
     
-    static let custom: [EthereumNetwork] = {
+    static var custom: [EthereumNetwork] {
         let customNetworks = SharedDefaults.getCustomNetworks().compactMap { custom -> EthereumNetwork? in
             guard let id = Int(hexString: custom.chainId) else { return nil }
             return EthereumNetwork(chainId: id, name: custom.chainName, symbol: custom.nativeCurrency.symbol, nodeURLString: custom.defaultRpcUrl, isTestnet: false, mightShowPrice: false, explorer: nil)
         }
         return customNetworks
-    }()
+    }
     
     static let mainnets: [EthereumNetwork] = {
         let excluded = Set(pinnedIds)
