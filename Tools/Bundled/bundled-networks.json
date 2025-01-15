@@ -118,8 +118,7 @@
   "146" : {
     "b" : "https://explorer.soniclabs.com",
     "n" : "Sonic Mainnet",
-    "s" : "S",
-    "t" : true
+    "s" : "S"
   },
   "1666600000" : {
     "b" : "https://explorer.harmony.one",
