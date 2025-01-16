@@ -23,6 +23,10 @@ extension UIViewController {
         present(alert, animated: true)
     }
     
+    func showTextInputAlert(title: String, message: String?, initialText: String?, placeholder: String, completion: @escaping ((String?) -> Void)) {
+        // TODO: implement
+    }
+    
     func showPasswordAlert(title: String, message: String?, completion: @escaping ((String?) -> Void)) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addTextField { textField in
