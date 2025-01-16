@@ -430,6 +430,12 @@ class AccountsListViewController: NSViewController {
         warnBeforeShowingKey(wallet: wallet, specificAccount: nil)
     }
     
+    @objc private func didClickEditAccountName(_ sender: AnyObject) {
+        let row = tableView.deselectedRow
+        guard let wallet = walletForRow(row), let account = accountForRow(row) else { return }
+        // TODO: implement
+    }
+    
     @objc private func didClickShowSpecificPrivateKey(_ sender: AnyObject) {
         let row = tableView.deselectedRow
         guard let wallet = walletForRow(row), let account = accountForRow(row) else { return }
@@ -587,6 +593,10 @@ extension AccountsListViewController: TableViewMenuSource {
         }
         
         menu.addItem(.separator())
+        // TODO: call it wallet for private key wallets
+        // TODO: or Strings.setAccountName if it is not set yet
+        menu.addItem(NSMenuItem(title: Strings.editAccountName, action: #selector(didClickEditAccountName(_:)), keyEquivalent: ""))
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: wallet.isMnemonic ? Strings.showSecretWords : Strings.showPrivateKey, action: #selector(didClickShowKey(_:)), keyEquivalent: ""))
         
         if wallet.isMnemonic {
@@ -602,6 +612,10 @@ extension AccountsListViewController: TableViewMenuSource {
 }
 
 extension AccountsListViewController: AccountsHeaderDelegate {
+    
+    func didClickEditName(sender: NSTableRowView) {
+        // TODO: implement
+    }
     
     func didClickEditAccounts(sender: NSTableRowView) {
         let row = tableView.row(for: sender)

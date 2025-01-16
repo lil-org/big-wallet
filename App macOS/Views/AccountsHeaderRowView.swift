@@ -7,6 +7,7 @@ protocol AccountsHeaderDelegate: AnyObject {
     func didClickEditAccounts(sender: NSTableRowView)
     func didClickShowSecretWords(sender: NSTableRowView)
     func didClickRemoveWallet(sender: NSTableRowView)
+    func didClickEditName(sender: NSTableRowView)
     
 }
 
@@ -27,14 +28,19 @@ class AccountsHeaderRowView: NSTableRowView {
         menu?.autoenablesItems = false
         
         let editAccountsItem = NSMenuItem(title: Strings.editAccounts, action: #selector(didClickEditAccounts), keyEquivalent: "")
+        // TODO: or Strings.setWalletName if it is not set yet
+        let editNameItem = NSMenuItem(title: Strings.editWalletName, action: #selector(didClickEditName), keyEquivalent: "")
         let showSecretWordsItem = NSMenuItem(title: Strings.showSecretWords, action: #selector(didClickShowSecretWords), keyEquivalent: "")
         let removeWalletItem = NSMenuItem(title: Strings.removeWallet, action: #selector(didClickRemoveWallet), keyEquivalent: "")
         
         editAccountsItem.target = self
+        editNameItem.target = self
         showSecretWordsItem.target = self
         removeWalletItem.target = self
         
         menu?.addItem(editAccountsItem)
+        menu?.addItem(.separator())
+        menu?.addItem(editNameItem)
         menu?.addItem(.separator())
         menu?.addItem(showSecretWordsItem)
         menu?.addItem(removeWalletItem)
@@ -56,6 +62,10 @@ class AccountsHeaderRowView: NSTableRowView {
             titleButton.isEnabled = false
             titleButton.image = nil
         }
+    }
+    
+    @objc private func didClickEditName() {
+        headerDelegate?.didClickEditName(sender: self)
     }
     
     @objc private func didClickEditAccounts() {

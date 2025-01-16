@@ -576,6 +576,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         
         actionSheet.addAction(copyAddressAction)
         
+        // TODO: call it wallet for private key wallets
         let nameActionTitle = Strings.editAccountName // TODO: or Strings.setAccountName if it is not set yet
         let nameAction = UIAlertAction(title: nameActionTitle, style: .default) { [weak self] _ in
             self?.didSelectNameActionForAccount(account, wallet: wallet)
