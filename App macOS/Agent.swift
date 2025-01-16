@@ -111,7 +111,6 @@ class Agent: NSObject {
         let mailItem = NSMenuItem(title: Strings.dropUsALine, action: #selector(didSelectMailMenuItem), keyEquivalent: "")
         let githubItem = NSMenuItem(title: Strings.viewOnGithub, action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
         let warpcastItem = NSMenuItem(title: Strings.viewOnWarpcast, action: #selector(didSelectWarpcastMenuItem), keyEquivalent: "")
-        let zoraItem = NSMenuItem(title: Strings.viewOnZora, action: #selector(didSelectZoraMenuItem), keyEquivalent: "")
         let xItem = NSMenuItem(title: Strings.viewOnX, action: #selector(didSelectXMenuItem), keyEquivalent: "")
         let appStoreItem = NSMenuItem(title: Strings.rateOnTheAppStore, action: #selector(didSelectAppStoreMenuItem), keyEquivalent: "")
         let quitItem = NSMenuItem(title: Strings.quit, action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
@@ -121,7 +120,6 @@ class Agent: NSObject {
         safariItem.target = self
         githubItem.target = self
         warpcastItem.target = self
-        zoraItem.target = self
         xItem.target = self
         appStoreItem.target = self
         mailItem.target = self
@@ -141,7 +139,6 @@ class Agent: NSObject {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(warpcastItem)
         menu.addItem(githubItem)
-        menu.addItem(zoraItem)
         menu.addItem(mailItem)
         menu.addItem(xItem)
         menu.addItem(NSMenuItem.separator())
@@ -162,10 +159,6 @@ class Agent: NSObject {
     
     @objc private func didSelectXMenuItem() {
         NSWorkspace.shared.open(URL.x)
-    }
-    
-    @objc private func didSelectZoraMenuItem() {
-        NSWorkspace.shared.open(URL.zora)
     }
     
     @objc private func didSelectWarpcastMenuItem() {

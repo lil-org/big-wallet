@@ -416,9 +416,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let githubAction = UIAlertAction(title: Strings.viewOnGithub, style: .default) { _ in
             UIApplication.shared.open(URL.github)
         }
-        let zoraAction = UIAlertAction(title: Strings.viewOnZora, style: .default) { _ in
-            UIApplication.shared.open(URL.zora)
-        }
         let emailAction = UIAlertAction(title: Strings.dropUsALine, style: .default) { _ in
             UIApplication.shared.open(URL.email)
         }
@@ -430,7 +427,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         actionSheet.addAction(appStoreAction)
         actionSheet.addAction(warpcastAction)
         actionSheet.addAction(githubAction)
-        actionSheet.addAction(zoraAction)
         actionSheet.addAction(emailAction)
         actionSheet.addAction(xAction)
         actionSheet.addAction(cancelAction)
@@ -537,6 +533,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func didSelectNameActionForWallet(_ wallet: WalletContainer) {
+        
         // TODO: implement
     }
     
