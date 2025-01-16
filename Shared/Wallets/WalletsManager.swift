@@ -159,11 +159,6 @@ final class WalletsManager {
         try update(wallet: wallet, password: password, newPassword: newPassword, newName: wallet.key.name)
     }
 
-    func update(wallet: WalletContainer, newName: String) throws {
-        guard let password = keychain.password else { throw Error.keychainAccessFailure }
-        try update(wallet: wallet, password: password, newPassword: password, newName: newName)
-    }
-
     func delete(wallet: WalletContainer) throws {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         guard let index = wallets.firstIndex(of: wallet) else { throw KeyStore.Error.accountNotFound }
@@ -253,7 +248,7 @@ final class WalletsManager {
         NotificationCenter.default.post(name: .walletsChanged, object: nil)
     }
     
-    private var defaultWalletName = ""
+    private let defaultWalletName = ""
     
     private func makeNewWalletId() -> String {
         let uuid = UUID().uuidString

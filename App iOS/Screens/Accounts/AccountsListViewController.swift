@@ -513,6 +513,11 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             self?.present(editAccountsViewController.inNavigationController, animated: true)
         }
         
+        let nameActionTitle = Strings.editWalletName // TODO: or Strings.setWalletName if it is not set yet
+        let nameAction = UIAlertAction(title: nameActionTitle, style: .default) { [weak self] _ in
+            self?.didSelectNameActionForWallet(wallet)
+        }
+        
         let showKeyAction = UIAlertAction(title: Strings.showSecretWords, style: .default) { [weak self] _ in
             self?.didTapExportWallet(wallet, specificAccount: nil)
         }
@@ -524,10 +529,19 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
         
         actionSheet.addAction(editAction)
+        actionSheet.addAction(nameAction)
         actionSheet.addAction(showKeyAction)
         actionSheet.addAction(removeAction)
         actionSheet.addAction(cancelAction)
         present(actionSheet, animated: true)
+    }
+    
+    private func didSelectNameActionForWallet(_ wallet: WalletContainer) {
+        // TODO: implement
+    }
+    
+    private func didSelectNameActionForAccount(_ account: Account, wallet: WalletContainer) {
+        // TODO: implement
     }
     
     private func showActionsForAccount(_ account: Account, wallet: WalletContainer, cell: UITableViewCell?) {
@@ -561,6 +575,13 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
         
         actionSheet.addAction(copyAddressAction)
+        
+        let nameActionTitle = Strings.editAccountName // TODO: or Strings.setAccountName if it is not set yet
+        let nameAction = UIAlertAction(title: nameActionTitle, style: .default) { [weak self] _ in
+            self?.didSelectNameActionForAccount(account, wallet: wallet)
+        }
+        actionSheet.addAction(nameAction)
+        
         actionSheet.addAction(showKeyAction)
         
         if wallet.isMnemonic {
