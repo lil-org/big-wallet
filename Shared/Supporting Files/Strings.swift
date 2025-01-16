@@ -102,6 +102,10 @@ struct Strings {
     static let rateOnTheAppStore = loc("Rate on the App Store")
     static let addNetwork = loc("Add Network")
     static let customNetworks = loc("Custom Networks")
+    static let setAccountName = loc("Set Account Name")
+    static let editAccountName = loc("Edit Account Name")
+    static let setWalletName = loc("Set Wallet Name")
+    static let editWalletName = loc("Edit Wallet Name")
     
     static let bigWallet = "Big Wallet"
     static let viewOnGithub = "GitHub"
