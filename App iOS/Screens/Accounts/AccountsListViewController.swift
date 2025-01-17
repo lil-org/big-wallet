@@ -538,9 +538,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     private func didSelectNameActionForWallet(_ wallet: WalletContainer) {
         let initialText = WalletsMetadataService.getWalletName(wallet: wallet)
-        showTextInputAlert(title: initialText == nil ? Strings.setWalletName : Strings.editWalletName, message: nil, initialText: initialText, placeholder: Strings.multicoinWallet) { newName in
+        showTextInputAlert(title: initialText == nil ? Strings.setWalletName : Strings.editWalletName, message: nil, initialText: initialText, placeholder: Strings.multicoinWallet) { [weak self] newName in
             if let newName = newName {
                 WalletsMetadataService.saveWalletName(newName, wallet: wallet)
+                self?.tableView.reloadData()
             }
         }
     }
@@ -548,9 +549,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private func didSelectNameActionForAccount(_ account: Account, wallet: WalletContainer) {
         let initialText = account.name(walletId: wallet.id)
         let nameActionTitle = initialText == nil ? (wallet.isMnemonic ? Strings.setAccountName : Strings.setWalletName) : (wallet.isMnemonic ? Strings.editAccountName : Strings.editWalletName)
-        showTextInputAlert(title: nameActionTitle, message: nil, initialText: initialText, placeholder: account.croppedAddress) { newName in
+        showTextInputAlert(title: nameActionTitle, message: nil, initialText: initialText, placeholder: account.croppedAddress) { [weak self] newName in
             if let newName = newName {
                 WalletsMetadataService.saveAccountName(newName, wallet: wallet, account: account)
+                self?.tableView.reloadData()
             }
         }
     }

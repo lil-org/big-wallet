@@ -435,9 +435,10 @@ class AccountsListViewController: NSViewController {
         guard let wallet = walletForRow(row), let account = accountForRow(row) else { return }
         let initialText = account.name(walletId: wallet.id)
         let nameActionTitle = initialText == nil ? (wallet.isMnemonic ? Strings.setAccountName : Strings.setWalletName) : (wallet.isMnemonic ? Strings.editAccountName : Strings.editWalletName)
-        Alert.showTextInputAlert(title: nameActionTitle, message: nil, initialText: initialText, placeholder: account.croppedAddress) { newName in
+        Alert.showTextInputAlert(title: nameActionTitle, message: nil, initialText: initialText, placeholder: account.croppedAddress) { [weak self] newName in
             if let newName = newName {
                 WalletsMetadataService.saveAccountName(newName, wallet: wallet, account: account)
+                self?.tableView.reloadData()
             }
         }
     }
@@ -625,9 +626,10 @@ extension AccountsListViewController: AccountsHeaderDelegate {
         
         let initialText = WalletsMetadataService.getWalletName(wallet: wallet)
         let nameActionTitle = initialText == nil ? Strings.setWalletName : Strings.editWalletName
-        Alert.showTextInputAlert(title: nameActionTitle, message: nil, initialText: initialText, placeholder: Strings.multicoinWallet) { newName in
+        Alert.showTextInputAlert(title: nameActionTitle, message: nil, initialText: initialText, placeholder: Strings.multicoinWallet) { [weak self] newName in
             if let newName = newName {
                 WalletsMetadataService.saveWalletName(newName, wallet: wallet)
+                self?.tableView.reloadData()
             }
         }
     }
