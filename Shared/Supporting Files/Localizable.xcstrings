@@ -4183,6 +4183,7 @@
     },
     "Edit Account Name" : {
       "comment" : "11927122656444087975",
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -4601,6 +4602,7 @@
     },
     "Edit Wallet Name" : {
       "comment" : "14228789943518081609",
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -15877,6 +15879,7 @@
     },
     "Set Account Name" : {
       "comment" : "482969017503006281",
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -16086,6 +16089,7 @@
     },
     "Set Wallet Name" : {
       "comment" : "17326137137781604811",
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {

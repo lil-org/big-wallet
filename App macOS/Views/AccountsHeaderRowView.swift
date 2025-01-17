@@ -30,7 +30,7 @@ class AccountsHeaderRowView: NSTableRowView {
         
         let editAccountsItem = NSMenuItem(title: Strings.editAccounts, action: #selector(didClickEditAccounts), keyEquivalent: "")
         
-        let nameItemTitle = walletName == nil ? Strings.setWalletName : Strings.editWalletName
+        let nameItemTitle = walletName == nil ? Strings.setName : Strings.editName
         let editNameItem = NSMenuItem(title: nameItemTitle, action: #selector(didClickEditName), keyEquivalent: "")
         let showSecretWordsItem = NSMenuItem(title: Strings.showSecretWords, action: #selector(didClickShowSecretWords), keyEquivalent: "")
         let removeWalletItem = NSMenuItem(title: Strings.removeWallet, action: #selector(didClickRemoveWallet), keyEquivalent: "")

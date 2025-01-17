@@ -434,7 +434,7 @@ class AccountsListViewController: NSViewController {
         let row = tableView.deselectedRow
         guard let wallet = walletForRow(row), let account = accountForRow(row) else { return }
         let initialText = account.name(walletId: wallet.id)
-        let nameActionTitle = initialText == nil ? (wallet.isMnemonic ? Strings.setAccountName : Strings.setWalletName) : (wallet.isMnemonic ? Strings.editAccountName : Strings.editWalletName)
+        let nameActionTitle = initialText == nil ? Strings.setName : Strings.editName
         Alert.showTextInputAlert(title: nameActionTitle, message: nil, initialText: initialText, placeholder: account.croppedAddress) { [weak self] newName in
             if let newName = newName {
                 WalletsMetadataService.saveAccountName(newName, wallet: wallet, account: account)
@@ -601,7 +601,7 @@ extension AccountsListViewController: TableViewMenuSource {
         
         menu.addItem(.separator())
         let currentName = account.name(walletId: wallet.id)
-        let nameActionTitle = currentName == nil ? (wallet.isMnemonic ? Strings.setAccountName : Strings.setWalletName) : (wallet.isMnemonic ? Strings.editAccountName : Strings.editWalletName)
+        let nameActionTitle = currentName == nil ? Strings.setName : Strings.editName
         menu.addItem(NSMenuItem(title: nameActionTitle, action: #selector(didClickEditAccountName(_:)), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: wallet.isMnemonic ? Strings.showSecretWords : Strings.showPrivateKey, action: #selector(didClickShowKey(_:)), keyEquivalent: ""))
@@ -625,7 +625,7 @@ extension AccountsListViewController: AccountsHeaderDelegate {
         guard let wallet = walletForRow(row) else { return }
         
         let initialText = WalletsMetadataService.getWalletName(wallet: wallet)
-        let nameActionTitle = initialText == nil ? Strings.setWalletName : Strings.editWalletName
+        let nameActionTitle = initialText == nil ? Strings.setName : Strings.editName
         Alert.showTextInputAlert(title: nameActionTitle, message: nil, initialText: initialText, placeholder: Strings.multicoinWallet) { [weak self] newName in
             if let newName = newName {
                 WalletsMetadataService.saveWalletName(newName, wallet: wallet)
