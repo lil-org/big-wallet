@@ -119,6 +119,7 @@ class ApproveTransactionViewController: UIViewController {
     private func updateDisplayedTransactionInfo(initially: Bool) {
         var cellModels: [CellModel] = [
             .textWithImage(text: peerMeta?.name ?? Strings.unknownWebsite, extraText: nil, imageURL: peerMeta?.iconURLString, image: nil),
+            // TODO: get account name
             .textWithImage(text: account.croppedAddress, extraText: balance, imageURL: nil, image: account.image),
             .textWithImage(text: chain.name, extraText: nil, imageURL: nil, image: Images.network)
         ]

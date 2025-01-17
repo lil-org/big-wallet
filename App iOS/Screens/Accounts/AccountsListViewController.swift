@@ -656,6 +656,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private func didTapExportWallet(_ wallet: WalletContainer, specificAccount: Account?) {
         let willExportMnemonic = wallet.isMnemonic && specificAccount == nil
         let title = willExportMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
+        // TODO: get account name
         let alert = UIAlertController(title: title, message: specificAccount?.croppedAddress, preferredStyle: .alert)
         let okAction = UIAlertAction(title: Strings.iUnderstandTheRisks, style: .default) { [weak self] _ in
             let reason = willExportMnemonic ? Strings.showSecretWords : Strings.showPrivateKey
@@ -764,6 +765,7 @@ extension AccountsListViewController: UITableViewDataSource {
         let wallet = walletForIndexPath(indexPath)
         let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
         let isSelected = selectAccountAction?.selectedAccounts.contains(specificWalletAccount) == true
+        // TODO: get account name
         cell.setup(title: account.croppedAddress,
                    image: account.image,
                    isDisabled: !accountCanBeSelected(account),

@@ -53,6 +53,7 @@ class ApproveViewController: UIViewController {
         navigationItem.largeTitleDisplayMode = .always
         isModalInPresentation = true
         cellModels = [.textWithImage(text: peerMeta?.name ?? Strings.unknownWebsite, imageURL: peerMeta?.iconURLString, image: nil),
+                      // TODO: get account name
                       .textWithImage(text: account.croppedAddress, imageURL: nil, image: account.image),
                       .text(meta)]
     }

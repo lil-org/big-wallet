@@ -127,6 +127,7 @@ class ApproveTransactionViewController: NSViewController {
         
         let fullString = NSMutableAttributedString(attributedString: accountImageAttachmentString)
         fullString.insert(NSAttributedString(string: " ", attributes: [.font: NSFont.systemFont(ofSize: 5)]), at: 0)
+        // TODO: get account name
         let addressString = NSAttributedString(string: " " + account.croppedAddress,
                                                attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.labelColor])
         let balanceAttributedString = NSAttributedString(string: "\n" + balanceString + "\n\n",

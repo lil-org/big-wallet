@@ -151,6 +151,7 @@ extension EditAccountsViewController: NSTableViewDataSource {
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let model = cellModels[row]
         let rowView = tableView.makeViewOfType(PreviewAccountCellView.self, owner: self)
+        // TODO: get account name
         rowView.setup(title: model.account.croppedAddress, index: row, image: model.account.image, isEnabled: model.isEnabled, delegate: self)
         
         if row >= cellModels.count - 20 {

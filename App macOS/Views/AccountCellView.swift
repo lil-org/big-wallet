@@ -21,6 +21,7 @@ class AccountCellView: NSTableRowView {
     
     func setup(account: Account, isSelected: Bool, isDisabled: Bool) {
         addressImageView.image = account.image
+        // TODO: get account name
         addressTextField.stringValue = account.croppedAddress
         setSelected(isSelected)
         setDisabled(isDisabled)

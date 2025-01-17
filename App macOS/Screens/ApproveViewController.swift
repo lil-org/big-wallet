@@ -82,6 +82,7 @@ class ApproveViewController: NSViewController {
     private func updateDisplayedMeta() {
         let fullString = NSMutableAttributedString(attributedString: NSAttributedString.accountImageAttachment(account: account))
         fullString.insert(NSAttributedString(string: " ", attributes: [.font: NSFont.systemFont(ofSize: 5)]), at: 0)
+        // TODO: get account name
         let addressString = NSAttributedString(string: " " + account.croppedAddress + "\n\n",
                                                attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.labelColor])
         let metaString = NSAttributedString(string: meta, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.labelColor])
