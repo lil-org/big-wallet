@@ -509,7 +509,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             self?.present(editAccountsViewController.inNavigationController, animated: true)
         }
         
-        let nameActionTitle = Strings.editWalletName // TODO: or Strings.setWalletName if it is not set yet
+        let currentName = WalletsMetadataService.getWalletName(wallet: wallet)
+        let nameActionTitle = currentName == nil ? Strings.setWalletName : Strings.editWalletName
         let nameAction = UIAlertAction(title: nameActionTitle, style: .default) { [weak self] _ in
             self?.didSelectNameActionForWallet(wallet)
         }
@@ -533,21 +534,20 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func didSelectNameActionForWallet(_ wallet: WalletContainer) {
-        // TODO: or Strings.setWalletName if it is not set yet
-        let initialText: String? = nil // TODO: setup with current name
-        showTextInputAlert(title: Strings.editWalletName, message: nil, initialText: initialText, placeholder: Strings.multicoinWallet) { newName in
+        let initialText = WalletsMetadataService.getWalletName(wallet: wallet)
+        showTextInputAlert(title: initialText == nil ? Strings.setWalletName : Strings.editWalletName, message: nil, initialText: initialText, placeholder: Strings.multicoinWallet) { newName in
             if let newName = newName {
-                // TODO: implement
+                WalletsMetadataService.saveWalletName(newName, wallet: wallet)
             }
         }
     }
     
     private func didSelectNameActionForAccount(_ account: Account, wallet: WalletContainer) {
-        // TODO: or Strings.setAccountName if it is not set yet
-        let initialText: String? = nil // TODO: setup with current name
-        showTextInputAlert(title: Strings.editAccountName, message: nil, initialText: initialText, placeholder: account.croppedAddress) { newName in
+        let initialText = WalletsMetadataService.getAccountName(wallet: wallet, account: account)
+        let nameActionTitle = initialText == nil ? (wallet.isMnemonic ? Strings.setAccountName : Strings.setWalletName) : (wallet.isMnemonic ? Strings.editAccountName : Strings.editWalletName)
+        showTextInputAlert(title: nameActionTitle, message: nil, initialText: initialText, placeholder: account.croppedAddress) { newName in
             if let newName = newName {
-                // TODO: implement
+                WalletsMetadataService.saveAccountName(newName, wallet: wallet, account: account)
             }
         }
     }
@@ -584,8 +584,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         
         actionSheet.addAction(copyAddressAction)
         
-        // TODO: call it wallet for private key wallets
-        let nameActionTitle = Strings.editAccountName // TODO: or Strings.setAccountName if it is not set yet
+        let currentName = WalletsMetadataService.getAccountName(wallet: wallet, account: account)
+        let nameActionTitle = currentName == nil ? (wallet.isMnemonic ? Strings.setAccountName : Strings.setWalletName) : (wallet.isMnemonic ? Strings.editAccountName : Strings.editWalletName)
         let nameAction = UIAlertAction(title: nameActionTitle, style: .default) { [weak self] _ in
             self?.didSelectNameActionForAccount(account, wallet: wallet)
         }
