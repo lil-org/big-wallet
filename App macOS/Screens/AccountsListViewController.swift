@@ -433,7 +433,7 @@ class AccountsListViewController: NSViewController {
     @objc private func didClickEditAccountName(_ sender: AnyObject) {
         let row = tableView.deselectedRow
         guard let wallet = walletForRow(row), let account = accountForRow(row) else { return }
-        let initialText = WalletsMetadataService.getAccountName(wallet: wallet, account: account)
+        let initialText = account.name(walletId: wallet.id)
         let nameActionTitle = initialText == nil ? (wallet.isMnemonic ? Strings.setAccountName : Strings.setWalletName) : (wallet.isMnemonic ? Strings.editAccountName : Strings.editWalletName)
         Alert.showTextInputAlert(title: nameActionTitle, message: nil, initialText: initialText, placeholder: account.croppedAddress) { newName in
             if let newName = newName {
@@ -599,7 +599,7 @@ extension AccountsListViewController: TableViewMenuSource {
         }
         
         menu.addItem(.separator())
-        let currentName = WalletsMetadataService.getAccountName(wallet: wallet, account: account)
+        let currentName = account.name(walletId: wallet.id)
         let nameActionTitle = currentName == nil ? (wallet.isMnemonic ? Strings.setAccountName : Strings.setWalletName) : (wallet.isMnemonic ? Strings.editAccountName : Strings.editWalletName)
         menu.addItem(NSMenuItem(title: nameActionTitle, action: #selector(didClickEditAccountName(_:)), keyEquivalent: ""))
         menu.addItem(.separator())

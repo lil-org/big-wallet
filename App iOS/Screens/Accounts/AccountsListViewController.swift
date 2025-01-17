@@ -544,7 +544,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func didSelectNameActionForAccount(_ account: Account, wallet: WalletContainer) {
-        let initialText = WalletsMetadataService.getAccountName(wallet: wallet, account: account)
+        let initialText = account.name(walletId: wallet.id)
         let nameActionTitle = initialText == nil ? (wallet.isMnemonic ? Strings.setAccountName : Strings.setWalletName) : (wallet.isMnemonic ? Strings.editAccountName : Strings.editWalletName)
         showTextInputAlert(title: nameActionTitle, message: nil, initialText: initialText, placeholder: account.croppedAddress) { newName in
             if let newName = newName {
@@ -585,7 +585,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         
         actionSheet.addAction(copyAddressAction)
         
-        let currentName = WalletsMetadataService.getAccountName(wallet: wallet, account: account)
+        let currentName = account.name(walletId: wallet.id)
         let nameActionTitle = currentName == nil ? (wallet.isMnemonic ? Strings.setAccountName : Strings.setWalletName) : (wallet.isMnemonic ? Strings.editAccountName : Strings.editWalletName)
         let nameAction = UIAlertAction(title: nameActionTitle, style: .default) { [weak self] _ in
             self?.didSelectNameActionForAccount(account, wallet: wallet)

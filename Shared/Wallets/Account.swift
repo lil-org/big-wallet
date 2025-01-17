@@ -26,4 +26,8 @@ extension Account {
         }
     }
     
+    func name(walletId: String) -> String? {
+        return WalletsMetadataService.getAccountName(walletId: walletId, account: self)
+    }
+    
 }
