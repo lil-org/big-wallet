@@ -433,10 +433,11 @@ class AccountsListViewController: NSViewController {
     @objc private func didClickEditAccountName(_ sender: AnyObject) {
         let row = tableView.deselectedRow
         guard let wallet = walletForRow(row), let account = accountForRow(row) else { return }
-        let initialText: String? = nil // TODO: setup with current name
-        Alert.showTextInputAlert(title: Strings.editAccountName, message: nil, initialText: initialText, placeholder: account.croppedAddress) { newName in
+        let initialText = WalletsMetadataService.getAccountName(wallet: wallet, account: account)
+        let nameActionTitle = initialText == nil ? (wallet.isMnemonic ? Strings.setAccountName : Strings.setWalletName) : (wallet.isMnemonic ? Strings.editAccountName : Strings.editWalletName)
+        Alert.showTextInputAlert(title: nameActionTitle, message: nil, initialText: initialText, placeholder: account.croppedAddress) { newName in
             if let newName = newName {
-                // TODO: implement
+                WalletsMetadataService.saveAccountName(newName, wallet: wallet, account: account)
             }
         }
     }
@@ -598,9 +599,9 @@ extension AccountsListViewController: TableViewMenuSource {
         }
         
         menu.addItem(.separator())
-        // TODO: call it wallet for private key wallets
-        // TODO: or Strings.setAccountName if it is not set yet
-        menu.addItem(NSMenuItem(title: Strings.editAccountName, action: #selector(didClickEditAccountName(_:)), keyEquivalent: ""))
+        let currentName = WalletsMetadataService.getAccountName(wallet: wallet, account: account)
+        let nameActionTitle = currentName == nil ? (wallet.isMnemonic ? Strings.setAccountName : Strings.setWalletName) : (wallet.isMnemonic ? Strings.editAccountName : Strings.editWalletName)
+        menu.addItem(NSMenuItem(title: nameActionTitle, action: #selector(didClickEditAccountName(_:)), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: wallet.isMnemonic ? Strings.showSecretWords : Strings.showPrivateKey, action: #selector(didClickShowKey(_:)), keyEquivalent: ""))
         
@@ -619,10 +620,14 @@ extension AccountsListViewController: TableViewMenuSource {
 extension AccountsListViewController: AccountsHeaderDelegate {
     
     func didClickEditName(sender: NSTableRowView) {
-        let initialText: String? = nil // TODO: setup with current name
-        Alert.showTextInputAlert(title: Strings.editWalletName, message: nil, initialText: initialText, placeholder: Strings.multicoinWallet) { newName in
+        let row = tableView.row(for: sender)
+        guard let wallet = walletForRow(row) else { return }
+        
+        let initialText = WalletsMetadataService.getWalletName(wallet: wallet)
+        let nameActionTitle = initialText == nil ? Strings.setWalletName : Strings.editWalletName
+        Alert.showTextInputAlert(title: nameActionTitle, message: nil, initialText: initialText, placeholder: Strings.multicoinWallet) { newName in
             if let newName = newName {
-                // TODO: implement
+                WalletsMetadataService.saveWalletName(newName, wallet: wallet)
             }
         }
     }
@@ -717,13 +722,15 @@ extension AccountsListViewController: NSTableViewDataSource {
             let isSelected = selectAccountAction?.selectedAccounts.contains(specificWalletAccount) == true
             rowView.setup(account: account, isSelected: isSelected, isDisabled: !accountCanBeSelected(account))
             return rowView
-        case .mnemonicWalletHeader:
+        case let .mnemonicWalletHeader(walletIndex):
             let rowView = tableView.makeViewOfType(AccountsHeaderRowView.self, owner: self)
-            rowView.setup(multicoinWallet: true, delegate: self)
+            let wallet = wallets[walletIndex]
+            let name = WalletsMetadataService.getWalletName(wallet: wallet)
+            rowView.setup(walletName: name, multicoinWallet: true, delegate: self)
             return rowView
         case .privateKeyWalletsHeader:
             let rowView = tableView.makeViewOfType(AccountsHeaderRowView.self, owner: self)
-            rowView.setup(multicoinWallet: false, delegate: nil)
+            rowView.setup(walletName: nil, multicoinWallet: false, delegate: nil)
             return rowView
         case let .addAccountOption(addAccountOption):
             let rowView = tableView.makeViewOfType(AddAccountOptionCellView.self, owner: self)

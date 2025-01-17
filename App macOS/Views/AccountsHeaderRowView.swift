@@ -14,6 +14,7 @@ protocol AccountsHeaderDelegate: AnyObject {
 class AccountsHeaderRowView: NSTableRowView {
     
     private weak var headerDelegate: AccountsHeaderDelegate?
+    private var walletName: String?
     
     @IBOutlet weak var titleButton: NSButton! {
         didSet {
@@ -28,8 +29,9 @@ class AccountsHeaderRowView: NSTableRowView {
         menu?.autoenablesItems = false
         
         let editAccountsItem = NSMenuItem(title: Strings.editAccounts, action: #selector(didClickEditAccounts), keyEquivalent: "")
-        // TODO: or Strings.setWalletName if it is not set yet
-        let editNameItem = NSMenuItem(title: Strings.editWalletName, action: #selector(didClickEditName), keyEquivalent: "")
+        
+        let nameItemTitle = walletName == nil ? Strings.setWalletName : Strings.editWalletName
+        let editNameItem = NSMenuItem(title: nameItemTitle, action: #selector(didClickEditName), keyEquivalent: "")
         let showSecretWordsItem = NSMenuItem(title: Strings.showSecretWords, action: #selector(didClickShowSecretWords), keyEquivalent: "")
         let removeWalletItem = NSMenuItem(title: Strings.removeWallet, action: #selector(didClickRemoveWallet), keyEquivalent: "")
         
@@ -51,10 +53,15 @@ class AccountsHeaderRowView: NSTableRowView {
         menu?.popUp(positioning: nil, at: origin, in: self)
     }
     
-    func setup(multicoinWallet: Bool, delegate: AccountsHeaderDelegate?) {
+    func setup(walletName: String?, multicoinWallet: Bool, delegate: AccountsHeaderDelegate?) {
+        self.walletName = walletName
         headerDelegate = delegate
         if multicoinWallet {
-            titleButton.title = Strings.multicoinWallet
+            if let name = walletName {
+                titleButton.title = name
+            } else {
+                titleButton.title = Strings.multicoinWallet
+            }
             titleButton.isEnabled = true
             titleButton.image = Images.multicoinWalletPreferences
         } else {
