@@ -6,11 +6,21 @@ struct WalletsMetadataService {
     
     private init() {}
     
-    static func getName(wallet: WalletContainer, account: Account) -> String {
+    static func getWalletName(wallet: WalletContainer) -> String? {
         return "" // TODO: implement
     }
     
-    static func saveName(_ name: String, wallet: WalletContainer, account: Account) {
+    static func saveWalletName(_ name: String?, wallet: WalletContainer) {
+        // TODO: implement
+        // TODO: key by wallet.id
+    }
+    
+    static func getAccountName(wallet: WalletContainer, account: Account) -> String? {
+        return "" // TODO: implement
+    }
+    
+    static func saveAccountName(_ name: String?, wallet: WalletContainer, account: Account) {
+        // TODO: key by wallet.id account.coin account.derivationPath
         // TODO: implement
     }
     
