@@ -31,6 +31,7 @@ struct SelectAccountAction {
 struct SignMessageAction {
     let provider: InpageProvider
     let subject: ApprovalSubject
+    let walletId: String
     let account: Account
     let meta: String
     let peerMeta: PeerMeta
@@ -41,6 +42,7 @@ struct SendTransactionAction {
     let provider: InpageProvider
     let transaction: Transaction
     let chain: EthereumNetwork
+    let walletId: String
     let account: Account
     let peerMeta: PeerMeta
     let completion: (Transaction?) -> Void

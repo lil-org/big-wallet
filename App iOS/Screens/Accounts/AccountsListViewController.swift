@@ -264,6 +264,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             let approveViewController = ApproveViewController.with(subject: action.subject,
                                                                    provider: action.provider,
                                                                    account: action.account,
+                                                                   walletId: action.walletId,
                                                                    meta: action.meta,
                                                                    peerMeta: action.peerMeta,
                                                                    completion: action.completion)
@@ -272,6 +273,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             let approveTransactionViewController = ApproveTransactionViewController.with(transaction: action.transaction,
                                                                                          chain: action.chain,
                                                                                          account: action.account,
+                                                                                         walletId: action.walletId,
                                                                                          peerMeta: action.peerMeta,
                                                                                          completion: action.completion)
             presentForExternalRequest(approveTransactionViewController.inNavigationController, id: id)
@@ -656,8 +658,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private func didTapExportWallet(_ wallet: WalletContainer, specificAccount: Account?) {
         let willExportMnemonic = wallet.isMnemonic && specificAccount == nil
         let title = willExportMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
-        // TODO: get account name
-        let alert = UIAlertController(title: title, message: specificAccount?.croppedAddress, preferredStyle: .alert)
+        let alert = UIAlertController(title: title, message: specificAccount?.nameOrCroppedAddress(walletId: wallet.id), preferredStyle: .alert)
         let okAction = UIAlertAction(title: Strings.iUnderstandTheRisks, style: .default) { [weak self] _ in
             let reason = willExportMnemonic ? Strings.showSecretWords : Strings.showPrivateKey
             let passwordReason = willExportMnemonic ? Strings.toShowSecretWords : Strings.toShowPrivateKey
@@ -765,8 +766,7 @@ extension AccountsListViewController: UITableViewDataSource {
         let wallet = walletForIndexPath(indexPath)
         let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
         let isSelected = selectAccountAction?.selectedAccounts.contains(specificWalletAccount) == true
-        // TODO: get account name
-        cell.setup(title: account.croppedAddress,
+        cell.setup(title: account.nameOrCroppedAddress(walletId: wallet.id),
                    image: account.image,
                    isDisabled: !accountCanBeSelected(account),
                    customSelectionStyle: selectAccountAction != nil,

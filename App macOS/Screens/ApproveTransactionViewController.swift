@@ -37,11 +37,13 @@ class ApproveTransactionViewController: NSViewController {
     private var didEnableSpeedConfiguration = false
     private var peerMeta: PeerMeta?
     private var account: Account!
+    private var walletId: String!
     private var balance: String?
     private var suggestedNonceAndGasPrice: (nonce: String?, gasPrice: String?)?
     
-    static func with(transaction: Transaction, chain: EthereumNetwork, account: Account, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
+    static func with(transaction: Transaction, chain: EthereumNetwork, account: Account, walletId: String, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self)
+        new.walletId = walletId
         new.account = account
         new.chain = chain
         new.transaction = transaction
@@ -127,8 +129,7 @@ class ApproveTransactionViewController: NSViewController {
         
         let fullString = NSMutableAttributedString(attributedString: accountImageAttachmentString)
         fullString.insert(NSAttributedString(string: " ", attributes: [.font: NSFont.systemFont(ofSize: 5)]), at: 0)
-        // TODO: get account name
-        let addressString = NSAttributedString(string: " " + account.croppedAddress,
+        let addressString = NSAttributedString(string: " " + account.nameOrCroppedAddress(walletId: walletId),
                                                attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.labelColor])
         let balanceAttributedString = NSAttributedString(string: "\n" + balanceString + "\n\n",
                                                attributes: [.font: NSFont.systemFont(ofSize: 9), .foregroundColor: NSColor.tertiaryLabelColor])

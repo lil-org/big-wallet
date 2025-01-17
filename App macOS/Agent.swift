@@ -74,9 +74,9 @@ class Agent: NSObject {
         }
     }
     
-    func showApprove(windowController: NSWindowController, browser: Browser?, transaction: Transaction, account: Account, chain: EthereumNetwork, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) {
+    func showApprove(windowController: NSWindowController, browser: Browser?, transaction: Transaction, account: Account, walletId: String, chain: EthereumNetwork, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) {
         let window = windowController.window
-        let approveViewController = ApproveTransactionViewController.with(transaction: transaction, chain: chain, account: account, peerMeta: peerMeta) { [weak self, weak window] transaction in
+        let approveViewController = ApproveTransactionViewController.with(transaction: transaction, chain: chain, account: account, walletId: walletId, peerMeta: peerMeta) { [weak self, weak window] transaction in
             if transaction != nil {
                 self?.askAuthentication(on: window, browser: browser, onStart: false, reason: .sendTransaction) { success in
                     completion(success ? transaction : nil)
@@ -88,9 +88,9 @@ class Agent: NSObject {
         windowController.contentViewController = approveViewController
     }
     
-    func showApprove(windowController: NSWindowController, browser: Browser?, subject: ApprovalSubject, meta: String, account: Account, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) {
+    func showApprove(windowController: NSWindowController, browser: Browser?, subject: ApprovalSubject, meta: String, account: Account, walletId: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) {
         let window = windowController.window
-        let approveViewController = ApproveViewController.with(subject: subject, meta: meta, account: account, peerMeta: peerMeta) { [weak self, weak window] result in
+        let approveViewController = ApproveViewController.with(subject: subject, meta: meta, account: account, walletId: walletId, peerMeta: peerMeta) { [weak self, weak window] result in
             if result {
                 self?.askAuthentication(on: window, getBackTo: window?.contentViewController, browser: browser, onStart: false, reason: subject.asAuthenticationReason) { success in
                     completion(success)
@@ -276,11 +276,11 @@ class Agent: NSObject {
         case .approveMessage(let action):
             let windowController = Window.showNew(closeOthers: false)
             windowNumber = windowController.window?.windowNumber
-            showApprove(windowController: windowController, browser: .safari, subject: action.subject, meta: action.meta, account: action.account, peerMeta: action.peerMeta, completion: action.completion)
+            showApprove(windowController: windowController, browser: .safari, subject: action.subject, meta: action.meta, account: action.account, walletId: action.walletId, peerMeta: action.peerMeta, completion: action.completion)
         case .approveTransaction(let action):
             let windowController = Window.showNew(closeOthers: false)
             windowNumber = windowController.window?.windowNumber
-            showApprove(windowController: windowController, browser: .safari, transaction: action.transaction, account: action.account, chain: action.chain, peerMeta: action.peerMeta, completion: action.completion)
+            showApprove(windowController: windowController, browser: .safari, transaction: action.transaction, account: action.account, walletId: action.walletId, chain: action.chain, peerMeta: action.peerMeta, completion: action.completion)
         case .justShowApp:
             let windowController = Window.showNew(closeOthers: true)
             windowNumber = windowController.window?.windowNumber

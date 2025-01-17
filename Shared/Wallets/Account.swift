@@ -26,6 +26,10 @@ extension Account {
         }
     }
     
+    func nameOrCroppedAddress(walletId: String) -> String {
+        return WalletsMetadataService.getAccountName(walletId: walletId, account: self) ?? croppedAddress
+    }
+    
     func name(walletId: String) -> String? {
         return WalletsMetadataService.getAccountName(walletId: walletId, account: self)
     }

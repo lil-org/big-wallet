@@ -27,9 +27,11 @@ class ApproveViewController: NSViewController {
     private var completion: ((Bool) -> Void)!
     private var didCallCompletion = false
     private var peerMeta: PeerMeta?
+    private var walletId: String!
     
-    static func with(subject: ApprovalSubject, meta: String, account: Account, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
+    static func with(subject: ApprovalSubject, meta: String, account: Account, walletId: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
         let new = instantiate(ApproveViewController.self)
+        new.walletId = walletId
         new.completion = completion
         new.subject = subject
         new.meta = meta
@@ -82,8 +84,7 @@ class ApproveViewController: NSViewController {
     private func updateDisplayedMeta() {
         let fullString = NSMutableAttributedString(attributedString: NSAttributedString.accountImageAttachment(account: account))
         fullString.insert(NSAttributedString(string: " ", attributes: [.font: NSFont.systemFont(ofSize: 5)]), at: 0)
-        // TODO: get account name
-        let addressString = NSAttributedString(string: " " + account.croppedAddress + "\n\n",
+        let addressString = NSAttributedString(string: " " + account.nameOrCroppedAddress(walletId: walletId) + "\n\n",
                                                attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.labelColor])
         let metaString = NSAttributedString(string: meta, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.labelColor])
         fullString.append(addressString)

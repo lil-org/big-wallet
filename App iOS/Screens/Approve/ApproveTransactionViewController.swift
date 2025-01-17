@@ -32,6 +32,7 @@ class ApproveTransactionViewController: UIViewController {
     private var sectionModels = [[CellModel]]()
     private var didEnableSpeedConfiguration = false
     
+    private var walletId: String!
     private var account: Account!
     private var transaction: Transaction!
     private var chain: EthereumNetwork!
@@ -44,8 +45,9 @@ class ApproveTransactionViewController: UIViewController {
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var cancelButton: UIButton!
     
-    static func with(transaction: Transaction, chain: EthereumNetwork, account: Account, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
+    static func with(transaction: Transaction, chain: EthereumNetwork, account: Account, walletId: String, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self, from: .main)
+        new.walletId = walletId
         new.transaction = transaction
         new.chain = chain
         new.completion = completion
@@ -119,8 +121,7 @@ class ApproveTransactionViewController: UIViewController {
     private func updateDisplayedTransactionInfo(initially: Bool) {
         var cellModels: [CellModel] = [
             .textWithImage(text: peerMeta?.name ?? Strings.unknownWebsite, extraText: nil, imageURL: peerMeta?.iconURLString, image: nil),
-            // TODO: get account name
-            .textWithImage(text: account.croppedAddress, extraText: balance, imageURL: nil, image: account.image),
+            .textWithImage(text: account.nameOrCroppedAddress(walletId: walletId), extraText: balance, imageURL: nil, image: account.image),
             .textWithImage(text: chain.name, extraText: nil, imageURL: nil, image: Images.network)
         ]
         

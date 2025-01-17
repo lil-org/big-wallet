@@ -262,10 +262,6 @@ final class WalletsManager {
 
 extension WalletsManager {
     
-    func getAccount(coin: CoinType, address: String) -> Account? {
-        return getWalletAndAccount(coin: coin, address: address)?.1
-    }
-    
     func getPrivateKey(wallet: WalletContainer, account: Account) -> PrivateKey? {
         guard let password = Keychain.shared.password else { return nil }
         return try? wallet.privateKey(password: password, account: account)

@@ -712,7 +712,7 @@ extension AccountsListViewController: NSTableViewDataSource {
             let account = wallet.accounts[0]
             let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
             let isSelected = selectAccountAction?.selectedAccounts.contains(specificWalletAccount) == true
-            rowView.setup(account: account, isSelected: isSelected, isDisabled: !accountCanBeSelected(account))
+            rowView.setup(account: account, walletId: wallet.id, isSelected: isSelected, isDisabled: !accountCanBeSelected(account))
             return rowView
         case let .mnemonicAccount(walletIndex: walletIndex, accountIndex: accountIndex):
             let wallet = wallets[walletIndex]
@@ -720,7 +720,7 @@ extension AccountsListViewController: NSTableViewDataSource {
             let account = wallet.accounts[accountIndex]
             let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
             let isSelected = selectAccountAction?.selectedAccounts.contains(specificWalletAccount) == true
-            rowView.setup(account: account, isSelected: isSelected, isDisabled: !accountCanBeSelected(account))
+            rowView.setup(account: account, walletId: wallet.id, isSelected: isSelected, isDisabled: !accountCanBeSelected(account))
             return rowView
         case let .mnemonicWalletHeader(walletIndex):
             let rowView = tableView.makeViewOfType(AccountsHeaderRowView.self, owner: self)

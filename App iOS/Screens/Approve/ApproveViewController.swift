@@ -26,6 +26,7 @@ class ApproveViewController: UIViewController {
     private var approveTitle: String!
     private var shouldEnableWaiting = false
     private var account: Account!
+    private var walletId: String!
     private var meta: String!
     private var completion: ((Bool) -> Void)!
     private var peerMeta: PeerMeta?
@@ -33,8 +34,9 @@ class ApproveViewController: UIViewController {
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var cancelButton: UIButton!
     
-    static func with(subject: ApprovalSubject, provider: InpageProvider, account: Account, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
+    static func with(subject: ApprovalSubject, provider: InpageProvider, account: Account, walletId: String, meta: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
         let new = instantiate(ApproveViewController.self, from: .main)
+        new.walletId = walletId
         new.completion = completion
         new.shouldEnableWaiting = false
         new.account = account
@@ -53,8 +55,7 @@ class ApproveViewController: UIViewController {
         navigationItem.largeTitleDisplayMode = .always
         isModalInPresentation = true
         cellModels = [.textWithImage(text: peerMeta?.name ?? Strings.unknownWebsite, imageURL: peerMeta?.iconURLString, image: nil),
-                      // TODO: get account name
-                      .textWithImage(text: account.croppedAddress, imageURL: nil, image: account.image),
+                      .textWithImage(text: account.nameOrCroppedAddress(walletId: walletId), imageURL: nil, image: account.image),
                       .text(meta)]
     }
     

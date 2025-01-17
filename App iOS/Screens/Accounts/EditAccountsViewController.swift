@@ -142,8 +142,7 @@ extension EditAccountsViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCellOfType(PreviewAccountTableViewCell.self, for: indexPath)
         let model = cellModels[indexPath.row]
-        // TODO: get account name
-        cell.setup(title: model.account.croppedAddress, image: model.account.image, index: indexPath.row, isEnabled: model.isEnabled, delegate: self)
+        cell.setup(title: model.account.nameOrCroppedAddress(walletId: wallet.id), image: model.account.image, index: indexPath.row, isEnabled: model.isEnabled, delegate: self)
         return cell
     }
     

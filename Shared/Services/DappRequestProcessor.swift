@@ -78,7 +78,7 @@ struct DappRequestProcessor {
     
     private static func process(request: SafariRequest, ethereumRequest: SafariRequest.Ethereum, completion: @escaping (String?) -> Void) -> DappRequestAction {
         let peerMeta = request.peerMeta
-        lazy var account = walletsManager.getAccount(coin: .ethereum, address: ethereumRequest.address)
+        lazy var walletAndAccount = walletsManager.getWalletAndAccount(coin: .ethereum, address: ethereumRequest.address)
         lazy var privateKey = walletsManager.getPrivateKey(coin: .ethereum, address: ethereumRequest.address)
         
         switch ethereumRequest.method {
@@ -118,10 +118,10 @@ struct DappRequestProcessor {
             }
             return .selectAccount(action)
         case .signTypedMessage:
-            if let raw = ethereumRequest.raw,
-               let account = account,
+            if let walletAndAccount = walletAndAccount,
+               let raw = ethereumRequest.raw,
                let privateKey = privateKey {
-                let action = SignMessageAction(provider: request.provider, subject: .signTypedData, account: account, meta: raw, peerMeta: peerMeta) { approved in
+                let action = SignMessageAction(provider: request.provider, subject: .signTypedData, walletId: walletAndAccount.0.id, account: walletAndAccount.1, meta: raw, peerMeta: peerMeta) { approved in
                     if approved {
                         signTypedData(privateKey: privateKey, raw: raw, request: request, completion: completion)
                     } else {
@@ -134,9 +134,9 @@ struct DappRequestProcessor {
             }
         case .signMessage:
             if let data = ethereumRequest.message,
-               let account = account,
+               let walletAndAccount = walletAndAccount,
                let privateKey = privateKey {
-                let action = SignMessageAction(provider: request.provider, subject: .signMessage, account: account, meta: data.hexString, peerMeta: peerMeta) { approved in
+                let action = SignMessageAction(provider: request.provider, subject: .signMessage, walletId: walletAndAccount.0.id, account: walletAndAccount.1, meta: data.hexString, peerMeta: peerMeta) { approved in
                     if approved {
                         signMessage(privateKey: privateKey, data: data, request: request, completion: completion)
                     } else {
@@ -149,10 +149,10 @@ struct DappRequestProcessor {
             }
         case .signPersonalMessage:
             if let data = ethereumRequest.message,
-               let account = account,
+               let walletAndAccount = walletAndAccount,
                let privateKey = privateKey {
                 let text = String(data: data, encoding: .utf8) ?? data.hexString
-                let action = SignMessageAction(provider: request.provider, subject: .signPersonalMessage, account: account, meta: text, peerMeta: peerMeta) { approved in
+                let action = SignMessageAction(provider: request.provider, subject: .signPersonalMessage, walletId: walletAndAccount.0.id, account: walletAndAccount.1, meta: text, peerMeta: peerMeta) { approved in
                     if approved {
                         signPersonalMessage(privateKey: privateKey, data: data, request: request, completion: completion)
                     } else {
@@ -167,12 +167,12 @@ struct DappRequestProcessor {
             if let transaction = ethereumRequest.transaction,
                let chainId = ethereumRequest.currentChainId,
                let chain = Networks.withChainId(chainId),
-               let account = account,
+               let walletAndAccount = walletAndAccount,
                let privateKey = privateKey {
                 let action = SendTransactionAction(provider: request.provider,
                                                    transaction: transaction,
-                                                   chain: chain,
-                                                   account: account,
+                                                   chain: chain, walletId: walletAndAccount.0.id,
+                                                   account: walletAndAccount.1,
                                                    peerMeta: peerMeta) { transaction in
                     if let transaction = transaction {
                         sendTransaction(privateKey: privateKey, transaction: transaction, network: chain, respondTo: request, completion: completion)
