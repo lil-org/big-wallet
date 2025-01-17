@@ -433,7 +433,12 @@ class AccountsListViewController: NSViewController {
     @objc private func didClickEditAccountName(_ sender: AnyObject) {
         let row = tableView.deselectedRow
         guard let wallet = walletForRow(row), let account = accountForRow(row) else { return }
-        // TODO: implement
+        let initialText: String? = nil // TODO: setup with current name
+        Alert.showTextInputAlert(title: Strings.editAccountName, message: nil, initialText: initialText, placeholder: account.croppedAddress) { newName in
+            if let newName = newName {
+                // TODO: implement
+            }
+        }
     }
     
     @objc private func didClickShowSpecificPrivateKey(_ sender: AnyObject) {
@@ -614,7 +619,12 @@ extension AccountsListViewController: TableViewMenuSource {
 extension AccountsListViewController: AccountsHeaderDelegate {
     
     func didClickEditName(sender: NSTableRowView) {
-        // TODO: implement
+        let initialText: String? = nil // TODO: setup with current name
+        Alert.showTextInputAlert(title: Strings.editWalletName, message: nil, initialText: initialText, placeholder: Strings.multicoinWallet) { newName in
+            if let newName = newName {
+                // TODO: implement
+            }
+        }
     }
     
     func didClickEditAccounts(sender: NSTableRowView) {
