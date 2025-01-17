@@ -97,6 +97,28 @@ lane :release_ios do
   clean
 end
 
+lane :release_macos do
+
+  update_and_login
+
+  platform :mac do
+    gym(scheme: "Wallet", output_directory: "fastlane/build", clean: true)
+    deliver(
+      metadata_path: "./fastlane/metadata",
+      screenshots_path: "./fastlane/screenshots/macos",
+      overwrite_screenshots: true,
+      platform: "osx",
+      run_precheck_before_submit: false,
+      force: true,
+      submit_for_review: true,
+      automatic_release: true,
+      submission_information: { add_id_info_uses_idfa: false },
+    )
+  end
+
+  clean
+end
+
 
 lane :release do
 
