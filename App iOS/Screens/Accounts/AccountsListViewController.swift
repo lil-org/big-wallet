@@ -500,7 +500,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func showActionsForWallet(wallet: WalletContainer, headerView: AccountsHeaderView) {
-        let actionSheet = UIAlertController(title: Strings.multicoinWallet, message: nil, preferredStyle: .actionSheet)
+        let currentName = WalletsMetadataService.getWalletName(wallet: wallet)
+        
+        let actionSheet = UIAlertController(title: currentName ?? Strings.multicoinWallet, message: nil, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.sourceView = headerView
         
         let editAction = UIAlertAction(title: Strings.editAccounts, style: .default) { [weak self] _ in
@@ -509,7 +511,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             self?.present(editAccountsViewController.inNavigationController, animated: true)
         }
         
-        let currentName = WalletsMetadataService.getWalletName(wallet: wallet)
         let nameActionTitle = currentName == nil ? Strings.setWalletName : Strings.editWalletName
         let nameAction = UIAlertAction(title: nameActionTitle, style: .default) { [weak self] _ in
             self?.didSelectNameActionForWallet(wallet)
@@ -781,8 +782,10 @@ extension AccountsListViewController: UITableViewDataSource {
         case .privateKeyWallets:
             title = Strings.privateKeyWallets
             showsButton = false
-        case .mnemonicWallet:
-            title = Strings.multicoinWallet
+        case .mnemonicWallet(_, let index):
+            let wallet = wallets[index]
+            let name = WalletsMetadataService.getWalletName(wallet: wallet)
+            title = name ?? Strings.multicoinWallet
             showsButton = true
         }
         
