@@ -24,7 +24,21 @@ extension UIViewController {
     }
     
     func showTextInputAlert(title: String, message: String?, initialText: String?, placeholder: String, completion: @escaping ((String?) -> Void)) {
-        // TODO: implement
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addTextField { textField in
+            textField.placeholder = placeholder
+            textField.text = initialText
+        }
+        let okAction = UIAlertAction(title: Strings.ok, style: .default) { [weak alert] _ in
+            completion(alert?.textFields?.first?.text ?? "")
+        }
+        let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel) { _ in
+            completion(nil)
+        }
+        alert.addAction(okAction)
+        alert.addAction(cancelAction)
+        present(alert, animated: true)
+        alert.textFields?.first?.becomeFirstResponder()
     }
     
     func showPasswordAlert(title: String, message: String?, completion: @escaping ((String?) -> Void)) {

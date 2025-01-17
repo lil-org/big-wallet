@@ -533,12 +533,23 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func didSelectNameActionForWallet(_ wallet: WalletContainer) {
-        
-        // TODO: implement
+        // TODO: or Strings.setWalletName if it is not set yet
+        let initialText: String? = nil // TODO: setup with current name
+        showTextInputAlert(title: Strings.editWalletName, message: nil, initialText: initialText, placeholder: Strings.multicoinWallet) { newName in
+            if let newName = newName {
+                // TODO: implement
+            }
+        }
     }
     
     private func didSelectNameActionForAccount(_ account: Account, wallet: WalletContainer) {
-        // TODO: implement
+        // TODO: or Strings.setAccountName if it is not set yet
+        let initialText: String? = nil // TODO: setup with current name
+        showTextInputAlert(title: Strings.editAccountName, message: nil, initialText: initialText, placeholder: account.croppedAddress) { newName in
+            if let newName = newName {
+                // TODO: implement
+            }
+        }
     }
     
     private func showActionsForAccount(_ account: Account, wallet: WalletContainer, cell: UITableViewCell?) {
