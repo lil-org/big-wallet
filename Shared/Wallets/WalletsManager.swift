@@ -167,6 +167,7 @@ final class WalletsManager {
         wallets.remove(at: index)
         try keychain.removeWallet(id: wallet.id)
         postWalletsChangedNotification()
+        WalletsMetadataService.removeMetadataForWallet(wallet)
     }
 
     func destroy() throws {

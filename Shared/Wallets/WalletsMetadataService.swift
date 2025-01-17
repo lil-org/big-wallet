@@ -24,6 +24,13 @@ struct WalletsMetadataService {
         saveItemName(name, wallet: wallet, account: account)
     }
     
+    static func removeMetadataForWallet(_ wallet: WalletContainer) {
+        for key in names.keys where key.hasPrefix(wallet.id) {
+            names.removeValue(forKey: key)
+        }
+        Defaults.walletsAndAccountsNames = names
+    }
+    
     private static func saveItemName(_ name: String?, wallet: WalletContainer, account: Account?) {
         let key = itemKey(wallet: wallet, account: account)
         if let name = name, !name.isEmpty {
