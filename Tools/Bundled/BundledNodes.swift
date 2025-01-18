@@ -41,6 +41,7 @@ struct BundledNodes {
         1284: "rpc.api.moonbeam.network",
         1285: "rpc.api.moonriver.moonbeam.network",
         1442: "rpc.public.zkevm-test.net",
+        2020: "api.roninchain.com/rpc",
         2221: "evm.testnet.kava.io",
         2222: "evm.kava.io",
         2818: "rpc.morphl2.io",

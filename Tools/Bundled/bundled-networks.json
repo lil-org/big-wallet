@@ -150,6 +150,11 @@
     "n" : "Arbitrum on xDai",
     "s" : "xDai"
   },
+  "2020" : {
+    "b" : "https://app.roninchain.com",
+    "n" : "Ronin",
+    "s" : "RON",
+  },
   "204" : {
     "b" : "https://mainnet.opbnbscan.com",
     "n" : "opBNB",
