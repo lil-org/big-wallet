@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "2C17BDC92D3D007E0015C58B"
-               BuildableName = "Big Wallet visionOS.app"
+               BuildableName = "Big Wallet.app"
                BlueprintName = "Big Wallet visionOS"
                ReferencedContainer = "container:Wallet.xcodeproj">
             </BuildableReference>
@@ -45,7 +45,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "2C17BDC92D3D007E0015C58B"
-            BuildableName = "Big Wallet visionOS.app"
+            BuildableName = "Big Wallet.app"
             BlueprintName = "Big Wallet visionOS"
             ReferencedContainer = "container:Wallet.xcodeproj">
          </BuildableReference>
@@ -62,7 +62,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "2C17BDC92D3D007E0015C58B"
-            BuildableName = "Big Wallet visionOS.app"
+            BuildableName = "Big Wallet.app"
             BlueprintName = "Big Wallet visionOS"
             ReferencedContainer = "container:Wallet.xcodeproj">
          </BuildableReference>
