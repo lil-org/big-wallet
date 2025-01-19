@@ -22,6 +22,9 @@
 		2C09FC662828331D00DE9C27 /* PlatformSpecificImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09FC652828331D00DE9C27 /* PlatformSpecificImage.swift */; };
 		2C09FC672828331D00DE9C27 /* PlatformSpecificImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09FC652828331D00DE9C27 /* PlatformSpecificImage.swift */; };
 		2C134BA627553EC500DAFBDB /* Browser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C134BA527553EC500DAFBDB /* Browser.swift */; };
+		2C17BDE32D3D01F30015C58B /* Big_Wallet_visionOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C17BDDF2D3D01F30015C58B /* Big_Wallet_visionOSApp.swift */; };
+		2C17BDE42D3D01F30015C58B /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C17BDE02D3D01F30015C58B /* ContentView.swift */; };
+		2C17BDE52D3D01F30015C58B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C17BDDE2D3D01F30015C58B /* Assets.xcassets */; };
 		2C1995402674C4B900A8E370 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C19953F2674C4B900A8E370 /* AppDelegate.swift */; };
 		2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995412674C4B900A8E370 /* ImportViewController.swift */; };
 		2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C1995432674C4BA00A8E370 /* Assets.xcassets */; };
@@ -341,6 +344,11 @@
 		2C09FC5E2828078C00DE9C27 /* AccountsHeaderView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AccountsHeaderView.swift; sourceTree = "<group>"; };
 		2C09FC652828331D00DE9C27 /* PlatformSpecificImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformSpecificImage.swift; sourceTree = "<group>"; };
 		2C134BA527553EC500DAFBDB /* Browser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Browser.swift; sourceTree = "<group>"; };
+		2C17BDCA2D3D007E0015C58B /* Big Wallet.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Big Wallet.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		2C17BDDE2D3D01F30015C58B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		2C17BDDF2D3D01F30015C58B /* Big_Wallet_visionOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Big_Wallet_visionOSApp.swift; sourceTree = "<group>"; };
+		2C17BDE02D3D01F30015C58B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		2C17BDE12D3D01F30015C58B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C19953C2674C4B900A8E370 /* Big Wallet.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Big Wallet.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C19953F2674C4B900A8E370 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		2C1995412674C4B900A8E370 /* ImportViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportViewController.swift; sourceTree = "<group>"; };
@@ -890,6 +898,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2C17BDC72D3D007E0015C58B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2C1995392674C4B900A8E370 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -987,12 +1002,24 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
+		2C17BDE22D3D01F30015C58B /* App visionOS */ = {
+			isa = PBXGroup;
+			children = (
+				2C17BDDE2D3D01F30015C58B /* Assets.xcassets */,
+				2C17BDDF2D3D01F30015C58B /* Big_Wallet_visionOSApp.swift */,
+				2C17BDE02D3D01F30015C58B /* ContentView.swift */,
+				2C17BDE12D3D01F30015C58B /* Info.plist */,
+			);
+			path = "App visionOS";
+			sourceTree = "<group>";
+		};
 		2C1995332674C4B900A8E370 = {
 			isa = PBXGroup;
 			children = (
 				2CCEB7A127592A1F00768473 /* Shared */,
 				2C19953E2674C4B900A8E370 /* App macOS */,
 				2C5FF97026C84F7B00B32ACC /* App iOS */,
+				2C17BDE22D3D01F30015C58B /* App visionOS */,
 				2CCEB7A227592A3800768473 /* Safari Shared */,
 				2C09CBA0273979C1009AD39B /* Safari macOS */,
 				2CCEB82E27594E2A00768473 /* Safari iOS */,
@@ -1021,6 +1048,7 @@
 				2C8612512B76BDDC00B22794 /* Tests iOS.xctest */,
 				2CE02C7A2BAA0F6700381D70 /* Tests macOS.xctest */,
 				2C622BC12BF3C52F0003B932 /* Translate */,
+				2C17BDCA2D3D007E0015C58B /* Big Wallet.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -2274,6 +2302,25 @@
 			productReference = 2C09CB9F273979C1009AD39B /* Safari macOS.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		2C17BDC92D3D007E0015C58B /* Big Wallet visionOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2C17BDDD2D3D007F0015C58B /* Build configuration list for PBXNativeTarget "Big Wallet visionOS" */;
+			buildPhases = (
+				2C17BDC62D3D007E0015C58B /* Sources */,
+				2C17BDC72D3D007E0015C58B /* Frameworks */,
+				2C17BDC82D3D007E0015C58B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Big Wallet visionOS";
+			packageProductDependencies = (
+			);
+			productName = "Big Wallet visionOS";
+			productReference = 2C17BDCA2D3D007E0015C58B /* Big Wallet.app */;
+			productType = "com.apple.product-type.application";
+		};
 		2C19953B2674C4B900A8E370 /* Big Wallet */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2C19954C2674C4BA00A8E370 /* Build configuration list for PBXNativeTarget "Big Wallet" */;
@@ -2413,11 +2460,14 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastSwiftUpdateCheck = 1530;
+				LastSwiftUpdateCheck = 1620;
 				LastUpgradeCheck = 1620;
 				TargetAttributes = {
 					2C09CB9E273979C1009AD39B = {
 						CreatedOnToolsVersion = 13.0;
+					};
+					2C17BDC92D3D007E0015C58B = {
+						CreatedOnToolsVersion = 16.2;
 					};
 					2C19953B2674C4B900A8E370 = {
 						CreatedOnToolsVersion = 12.4;
@@ -2492,6 +2542,7 @@
 			targets = (
 				2C19953B2674C4B900A8E370 /* Big Wallet */,
 				2C5FF96E26C84F7B00B32ACC /* Big Wallet iOS */,
+				2C17BDC92D3D007E0015C58B /* Big Wallet visionOS */,
 				2C09CB9E273979C1009AD39B /* Safari macOS */,
 				2CCEB82C27594E2A00768473 /* Safari iOS */,
 				2CE02C792BAA0F6700381D70 /* Tests macOS */,
@@ -2514,6 +2565,14 @@
 				2C09CBAB273979C1009AD39B /* service_worker.js in Resources */,
 				2C09CBA9273979C1009AD39B /* manifest.json in Resources */,
 				2C09CBAD273979C1009AD39B /* content.js in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2C17BDC82D3D007E0015C58B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2C17BDE52D3D01F30015C58B /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2810,6 +2869,15 @@
 				2C09CBA2273979C1009AD39B /* SafariWebExtensionHandler.swift in Sources */,
 				2C773F63274523DC007B04E7 /* ResponseToExtension.swift in Sources */,
 				2CED86B62AF17D5A006F9E26 /* BundledNodes.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2C17BDC62D3D007E0015C58B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2C17BDE32D3D01F30015C58B /* Big_Wallet_visionOSApp.swift in Sources */,
+				2C17BDE42D3D01F30015C58B /* ContentView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3176,6 +3244,75 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		2C17BDDA2D3D007F0015C58B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 38;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "App visionOS/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0.12;
+				PRODUCT_BUNDLE_IDENTIFIER = org.lil.wallet;
+				PRODUCT_NAME = "Big Wallet";
+				SDKROOT = xros;
+				SUPPORTED_PLATFORMS = "xros xrsimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 7;
+				XROS_DEPLOYMENT_TARGET = 1.3;
+			};
+			name = Debug;
+		};
+		2C17BDDB2D3D007F0015C58B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 38;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "App visionOS/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0.12;
+				PRODUCT_BUNDLE_IDENTIFIER = org.lil.wallet;
+				PRODUCT_NAME = "Big Wallet";
+				SDKROOT = xros;
+				SUPPORTED_PLATFORMS = "xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 7;
+				XROS_DEPLOYMENT_TARGET = 1.3;
 			};
 			name = Release;
 		};
@@ -3704,6 +3841,15 @@
 			buildConfigurations = (
 				2C09CBBA273979C1009AD39B /* Debug */,
 				2C09CBBB273979C1009AD39B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2C17BDDD2D3D007F0015C58B /* Build configuration list for PBXNativeTarget "Big Wallet visionOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2C17BDDA2D3D007F0015C58B /* Debug */,
+				2C17BDDB2D3D007F0015C58B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
