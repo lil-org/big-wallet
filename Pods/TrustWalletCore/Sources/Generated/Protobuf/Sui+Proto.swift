@@ -13,3 +13,6 @@ public typealias SuiRequestWithdrawStake = TW_Sui_Proto_RequestWithdrawStake
 public typealias SuiTransferObject = TW_Sui_Proto_TransferObject
 public typealias SuiSigningInput = TW_Sui_Proto_SigningInput
 public typealias SuiSigningOutput = TW_Sui_Proto_SigningOutput
+public typealias SuiMessageSigningInput = TW_Sui_Proto_MessageSigningInput
+public typealias SuiMessageSigningOutput = TW_Sui_Proto_MessageSigningOutput
+public typealias SuiMessageVerifyingInput = TW_Sui_Proto_MessageVerifyingInput

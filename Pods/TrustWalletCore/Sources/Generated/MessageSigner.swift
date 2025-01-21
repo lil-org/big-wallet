@@ -10,6 +10,22 @@ import Foundation
 /// Represents a message signer to sign custom messages for any blockchain.
 public final class MessageSigner {
 
+    /// Computes preimage hashes of a message, needed for external signing.
+    ///
+    /// - Parameter coin: The given coin type to sign the message for.
+    /// - Parameter input: The serialized data of a `MessageSigningInput` proto object, (e.g. `TW.Solana.Proto.MessageSigningInput`).
+    /// - Returns: The serialized data of a `PreSigningOutput` proto object, (e.g. `TxCompiler::Proto::PreSigningOutput`).
+    public static func preImageHashes(coin: CoinType, input: Data) -> Data? {
+        let inputData = TWDataCreateWithNSData(input)
+        defer {
+            TWDataDelete(inputData)
+        }
+        guard let result = TWMessageSignerPreImageHashes(TWCoinType(rawValue: coin.rawValue), inputData) else {
+            return nil
+        }
+        return TWDataNSData(result)
+    }
+
     /// Signs an arbitrary message to prove ownership of an address for off-chain services.
     ///
     /// - Parameter coin: The given coin type to sign the message for.

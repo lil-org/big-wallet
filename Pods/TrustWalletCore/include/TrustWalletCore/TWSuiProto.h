@@ -19,3 +19,6 @@ typedef TWData *_Nonnull TW_Sui_Proto_RequestWithdrawStake;
 typedef TWData *_Nonnull TW_Sui_Proto_TransferObject;
 typedef TWData *_Nonnull TW_Sui_Proto_SigningInput;
 typedef TWData *_Nonnull TW_Sui_Proto_SigningOutput;
+typedef TWData *_Nonnull TW_Sui_Proto_MessageSigningInput;
+typedef TWData *_Nonnull TW_Sui_Proto_MessageSigningOutput;
+typedef TWData *_Nonnull TW_Sui_Proto_MessageVerifyingInput;
