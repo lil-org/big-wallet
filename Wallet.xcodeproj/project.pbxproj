@@ -471,8 +471,6 @@
 		2CCEB82D27594E2A00768473 /* Safari iOS.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Safari iOS.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CCEB83627594E2A00768473 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
 		2CCEB84227594E2A00768473 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		2CCFE2182D428A5A000DF66D /* subtitle_override.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle_override.txt; sourceTree = "<group>"; };
-		2CCFE2192D428A6B000DF66D /* subtitle_ru_override.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = subtitle_ru_override.txt; sourceTree = "<group>"; };
 		2CD0668926B213E500728C20 /* WalletsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsManager.swift; sourceTree = "<group>"; };
 		2CD0668B26B2142000728C20 /* WalletContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletContainer.swift; sourceTree = "<group>"; };
 		2CD0B3F426A0DAA900488D92 /* NSPasteboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSPasteboard.swift; sourceTree = "<group>"; };
@@ -1556,8 +1554,6 @@
 				2CF4295A2C1DC00700AD303A /* keywords.txt */,
 				2CF429652C1DC00700AD303A /* keywords_ru.txt */,
 				2CF429662C1DC00700AD303A /* subtitle.txt */,
-				2CCFE2192D428A6B000DF66D /* subtitle_ru_override.txt */,
-				2CCFE2182D428A5A000DF66D /* subtitle_override.txt */,
 				2CF4295E2C1DC00700AD303A /* subtitle_ru.txt */,
 				2CF429612C1DC00700AD303A /* name.txt */,
 				2CF429642C1DC00700AD303A /* name_ru.txt */,
