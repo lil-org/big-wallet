@@ -9,6 +9,7 @@ struct MetadataTask: AI.Task {
     let language: Language
     let englishText: String
     let russianText: String
+    let englishOverride: String
     
     var description: String {
         return "\(language.name) \(metadataKind.fileName)"
