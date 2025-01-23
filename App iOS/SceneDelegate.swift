@@ -16,6 +16,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             UIApplication.shared.open(.quickFeedbackMail)
         }
         
+        if screenshotMode {
+            window?.backgroundColor = UIColor(white: 0.137, alpha: 1)
+        }
+        
         if let url = connectionOptions.userActivities.first?.webpageURL ?? connectionOptions.urlContexts.first?.url {
             wasOpenedWithURL(url, onStart: true)
         }
