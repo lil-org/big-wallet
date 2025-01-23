@@ -1,1 +1,1 @@
-Fast crypto wallet in Safari
+Crypto wallet. Web3 in Safari.
