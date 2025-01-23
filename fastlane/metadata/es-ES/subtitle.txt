@@ -1,1 +1,1 @@
-Crypto wallet. Web3 in Safari.
+Billetera Web3 en Safari

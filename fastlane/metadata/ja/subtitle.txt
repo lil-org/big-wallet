@@ -1,1 +1,1 @@
-暗号ウォレット。SafariでWeb3
+Safariで使えるWeb3暗号ウォレット
