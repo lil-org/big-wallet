@@ -1,1 +1,1 @@
-metamask,peněženka,safari,krypto,binance,coinbase,fantom,záře,ether,eth,rozšíření,web3
+metamask,web3,rozšíření,ethereum,nft,prohlížeč,dapp,připojit,token,defi,swap,obchod,solana,phantom

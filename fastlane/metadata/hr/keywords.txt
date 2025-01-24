@@ -1,1 +1,1 @@
-metamask,trust,novčanik,kripto,binance,coinbase,eter,eth,nft,web3,novčanik u safariju,proširenje
+web3,metamask,ethereum,extension,nft,browser,dapp,connect,token,defi,swap,trade,solana,phantom,zora

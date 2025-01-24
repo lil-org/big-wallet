@@ -1,1 +1,1 @@
-metamask,safari,trust,peňaženka,crypto,binance,coinbase,phantom,eth,zora,rozšírenie,web3
+web3,metamask,ethereum,extension,nft,browser,dapp,connect,token,defi,swap,trade,solana,phantom,zora

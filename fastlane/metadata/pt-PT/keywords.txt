@@ -1,1 +1,1 @@
-metamask,carteira,cripto,binance,trust,ether,eth,nft,saúde,moeda,web3,zora,extensão,glow
+metamask,web3,ethereum,extensão,nft,navegador,dapp,token,defi,solana,conectar,swap,trade,zora

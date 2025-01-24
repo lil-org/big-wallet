@@ -1,1 +1,1 @@
-metamask,szafari,trust,tárca,kripto,binance,coinbase,ether,eth,phantom,fény,web3,token
+web3,metamask,ethereum,bővítmény,nft,böngésző,dapp,csatlakozz,token,defi,csere,kereskedelem,zora

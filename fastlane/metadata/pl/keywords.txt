@@ -1,1 +1,1 @@
-metamask,safari,portfel,crypto,binance,coinbase,phantom,ether,eth,web3,rozszerzenie,nft
+web3,metamask,ethereum,rozszerzenie,nft,przeglądarka,dapp,połącz,token,defi,swap,handel,solana

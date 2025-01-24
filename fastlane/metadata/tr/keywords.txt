@@ -1,1 +1,1 @@
-metamask,safari,trust,cüzdan,kripto,binance,coinbase,zora,ether,eth,web3,nft,genişletme
+metamask,web3,ethereum,uzantı,nft,tarayıcı,dapp,bağlan,token,defi,takas,solana,phantom,zora

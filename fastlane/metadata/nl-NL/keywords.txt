@@ -1,1 +1,1 @@
-metamask,safari,vertrouwen,crypto,binance,coinbase,portemonnee,ether,eth,nft,extensie,web3
+web3,metamask,ethereum,extension,nft,browser,dapp,connect,token,defi,swap,trade,solana,phantom,zora

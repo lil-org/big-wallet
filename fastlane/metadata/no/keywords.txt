@@ -1,1 +1,1 @@
-metamask,trust,safari-lommebok,krypto,binance,coinbase,eth,zora,token,lommebok,web3,utvidelse
+web3,metamask,ethereum,extension,nft,browser,dapp,connect,token,defi,swap,trade,solana,phantom,zora

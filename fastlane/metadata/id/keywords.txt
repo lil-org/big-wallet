@@ -1,1 +1,1 @@
-metamask,safari,dompet,safari wallet,kripto,binance,coinbase,ether,eth,nft,web3,phantom,ton
+web3,metamask,ethereum,extension,nft,browser,dapp,connect,token,defi,swap,trade,solana,phantom,zora
