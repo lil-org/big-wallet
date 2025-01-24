@@ -1,1 +1,1 @@
-Web3-crypto-lompakko Safarissa
+Kryptolompakko, web3 Safarissa
