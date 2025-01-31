@@ -1,6 +1,6 @@
 PODS:
   - BigInt (5.2.0)
-  - Kingfisher (8.1.3)
+  - Kingfisher (8.1.4)
   - SwiftProtobuf (1.28.2)
   - TrustWalletCore (4.2.3):
     - TrustWalletCore/Core (= 4.2.3)
@@ -23,7 +23,7 @@ SPEC REPOS:
 
 SPEC CHECKSUMS:
   BigInt: f668a80089607f521586bbe29513d708491ef2f7
-  Kingfisher: f2af9028b16baf9dc6c07c570072bc41cbf009ef
+  Kingfisher: a5cc3d8689cd40d7cb2edfa67a5ede0b53122813
   SwiftProtobuf: 4dbaffec76a39a8dc5da23b40af1a5dc01a4c02d
   TrustWalletCore: 4fd68f4df0428532a13cefaec1a3e403273c0869
 
