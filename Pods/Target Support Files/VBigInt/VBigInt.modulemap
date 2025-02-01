@@ -1,0 +1,6 @@
+framework module VBigInt {
+  umbrella header "VBigInt-umbrella.h"
+
+  export *
+  module * { export * }
+}

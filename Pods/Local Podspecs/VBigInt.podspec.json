@@ -1,0 +1,25 @@
+{
+  "name": "VBigInt",
+  "version": "1.0.0",
+  "summary": "Arbitrary-precision arithmetic library in Swift",
+  "description": "BigInt is a Swift package for performing arbitrary-precision arithmetic.",
+  "homepage": "https://github.com/grachyov/BigInt",
+  "license": {
+    "type": "MIT",
+    "file": "LICENSE.md"
+  },
+  "authors": {
+    "attaswift": "attaswift@attaswift.org",
+    "ivan": "ivan@lil.org"
+  },
+  "source": {
+    "git": "https://github.com/grachyov/BigInt.git",
+    "tag": "1.0.0"
+  },
+  "platforms": {
+    "visionos": "1.0"
+  },
+  "source_files": "Sources/**/*.{swift}",
+  "swift_versions": "5.9",
+  "swift_version": "5.9"
+}

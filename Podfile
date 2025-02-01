@@ -20,6 +20,7 @@ end
 target 'Big Wallet visionOS' do
   platform :visionos, '1.0'
   pod 'Kingfisher'
+  pod 'VBigInt', :git => 'https://github.com/grachyov/BigInt.git', :branch => 'master'
 end
 
 post_install do |installer|
