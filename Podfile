@@ -17,6 +17,11 @@ target 'Big Wallet iOS' do
   shared_pods
 end
 
+target 'Big Wallet visionOS' do
+  platform :visionos, '1.0'
+  pod 'Kingfisher'
+end
+
 post_install do |installer|
   installer.generated_projects.each do |project|
     project.build_configurations.each do |config|
@@ -28,6 +33,10 @@ post_install do |installer|
         elsif target.platform_name == :osx
           target.build_configurations.each do |config|
             config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '14.0'
+          end
+        elsif target.platform_name == :visionos
+          target.build_configurations.each do |config|
+            config.build_settings['VISIONOS_DEPLOYMENT_TARGET'] = '1.0'
           end
         end
       end

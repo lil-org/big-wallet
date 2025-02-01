@@ -1,0 +1,6 @@
+framework module Pods_Big_Wallet_visionOS {
+  umbrella header "Pods-Big Wallet visionOS-umbrella.h"
+
+  export *
+  module * { export * }
+}
