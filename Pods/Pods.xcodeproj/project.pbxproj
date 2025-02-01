@@ -48,7 +48,6 @@
 		0655355F24071AFFBAD7C01EE9975CA1 /* TimeUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D072A0DC39F36EC39CCECD58CEAAE7A /* TimeUtils.swift */; };
 		066CC914E3D8B560B17564F88C77BB03 /* StringUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 748A656588C2B6F63157A44C8BD6E621 /* StringUtils.swift */; };
 		06941A355D24DC516CE648CC4594F72D /* FIO+Proto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 788F76D7C74856D84A7EF9E5A60A6941 /* FIO+Proto.swift */; };
-		06956E3AE224E25E482CF8F803C7F72A /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4FB493F27969730246F5D83F23696A73 /* PrivacyInfo.xcprivacy */; };
 		0695B1DC0DDC997747806EEFDFEA9104 /* ZigZag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD76ABE85C2C43D0E43360FC061D80F /* ZigZag.swift */; };
 		06E3494FBFE09887EE70046680783531 /* SelectiveVisitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6C5E075F595AB4A021D19889990205E /* SelectiveVisitor.swift */; };
 		06F89528166C68C4966952FCBD261801 /* Subtraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 666EEB03C76AB202401907B7CAFB4059 /* Subtraction.swift */; };
@@ -88,7 +87,6 @@
 		10291EFE6B1606B22C802E365FA14F8A /* ImageDataProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DCC10EC4755AA784080AE1643F90EAF /* ImageDataProcessor.swift */; };
 		1078CEFCA4D791F0700BA45FF0BCF5FA /* TWSuiProto.h in Headers */ = {isa = PBXBuildFile; fileRef = BB20F63C2F3019FBC5F8DA57B70DCEA3 /* TWSuiProto.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		107B48AC1D203ED38C62311F8B2BB1DF /* NSButton+Kingfisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = C81A6DAB5BD531775B6F42B9EC8D1C1E /* NSButton+Kingfisher.swift */; };
-		1081FAA0F29326E6C14AADD6BCA4B303 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1A44656BE74633F25EB407F59B453440 /* PrivacyInfo.xcprivacy */; };
 		1092AFE75336FE98943B4020227A4267 /* Version.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADF8B348D0CB05150E35ED8F90CA93E /* Version.swift */; };
 		10A17DD57EE87EAA2BB89BD8C9A99F1C /* TWFilecoinProto.h in Headers */ = {isa = PBXBuildFile; fileRef = B1B0134E006A259748A768ABDBA458AC /* TWFilecoinProto.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		10A34936A474186353B2E7D77453E951 /* Message+JSONAdditions_Data.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5462C86E3EBFA34EC0FB14F359B32BD /* Message+JSONAdditions_Data.swift */; };
@@ -102,7 +100,6 @@
 		11D7582B23CB5B65672F012E9F4E7DF6 /* TWTHORChainSwapProto.h in Headers */ = {isa = PBXBuildFile; fileRef = B4640DADCF35464237907EF2001889FB /* TWTHORChainSwapProto.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		11D823F10AA544FB2709E53EB4517C32 /* ImageFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A18AEBD19501ED906F917850B308B4E /* ImageFormat.swift */; };
 		120F0CF980F0279CB6D47DF24D963807 /* RetryStrategy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA9A19C4D9951F9AD789F5F8B05093FC /* RetryStrategy.swift */; };
-		130CA61D721730E97FE704CB998F0D44 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1A44656BE74633F25EB407F59B453440 /* PrivacyInfo.xcprivacy */; };
 		132121983513E3B6AAF05DB1D724DA8C /* TWFIOAccount.h in Headers */ = {isa = PBXBuildFile; fileRef = FDAAB41BF869CFD0269C81932CC71223 /* TWFIOAccount.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		132C816607B9B47909ADF23815CE896E /* BitcoinScript.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0FA9F647B99FDF7868F0C2C64ED0FC /* BitcoinScript.swift */; };
 		13675891FA54BE13109BADB5BF9592CA /* IOST.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 205C88485846672276685BD8AEBF8EA7 /* IOST.pb.swift */; };
@@ -421,7 +418,6 @@
 		5923984A1EC60502CC8F5C6612620BAE /* TrustWalletCore-iOS-dummy.m in Sources */ = {isa = PBXBuildFile; fileRef = B1EE88033F34AADBC7A9C6D6DD6E3F39 /* TrustWalletCore-iOS-dummy.m */; };
 		59389A58377726F13AB55451CDD99850 /* empty.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C3FBE6A5BE15329DDD69B953CCA0C9 /* empty.pb.swift */; };
 		59897D005D679E7448CE9A6ABF96193C /* Sui+Proto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3054A5D1C527E651D334DA7BDF5D50D6 /* Sui+Proto.swift */; };
-		5994D52FDBB063B2028970528EED3B99 /* SwiftProtobuf-macOS-SwiftProtobuf in Resources */ = {isa = PBXBuildFile; fileRef = 90E213B2540580977A2BF768A0CF2978 /* SwiftProtobuf-macOS-SwiftProtobuf */; };
 		59AD54C11CD0C098C0E51CB9C1FDC95E /* Cardano.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54D927503B560574531288536A3818A6 /* Cardano.pb.swift */; };
 		59AF4C269EA5CF442BF540AE3DDF5D6B /* Mnemonic+Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C320095670F7FDDBDEDCE51380FD9BD /* Mnemonic+Extension.swift */; };
 		59FE819CB424AB8C9AA781CE0E36EC68 /* Mnemonic.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0826DAF4C3A823EBF040AA1702F24CC /* Mnemonic.swift */; };
@@ -663,7 +659,6 @@
 		8DD3354ED49BCAF08657684153F2C0A4 /* CryptoBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B60DB39E15357D844E074CE68242918 /* CryptoBox.swift */; };
 		8DE0FFB8379CE6342021917A791BEE1C /* Bech32.swift in Sources */ = {isa = PBXBuildFile; fileRef = D16FBE6DFB10DAB49BD9D5D45D5E8661 /* Bech32.swift */; };
 		8E610A06250EA2C1715E3905D87834A7 /* DerivationPathIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18876ACF48A4F6D39708BE81426E72B9 /* DerivationPathIndex.swift */; };
-		8EBF6F291C5CDD0D1D4DC569D5D84910 /* Kingfisher-visionOS-Kingfisher in Resources */ = {isa = PBXBuildFile; fileRef = F99A69668010DC0D20DF90520CAF4F9B /* Kingfisher-visionOS-Kingfisher */; };
 		8EF1B166F8695A4EEA2103356E25B43C /* DiskStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F9640875DED16CE73D4524CA78C6BAA /* DiskStorage.swift */; };
 		8F04F69340AE68F8A7652A75A735F299 /* TWEthereumAbiValue.h in Headers */ = {isa = PBXBuildFile; fileRef = 8FFA0B3BF39C49F31E0BC10E37F36490 /* TWEthereumAbiValue.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		8FA87F2506EBBBFD4085C7D65FB5C65A /* MathUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2986F2594C0071D8075F14D068E174A9 /* MathUtils.swift */; };
@@ -713,7 +708,6 @@
 		975C39C0EF913CB4D27C351C48D52BE4 /* AsnParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 213CDE8DF93C4A905E2A647C7DFD8569 /* AsnParser.swift */; };
 		9817C45A025AAFD98277CAD631856B25 /* ImageProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E015D1F3AD76FA0050EDDABAB3640D81 /* ImageProcessor.swift */; };
 		989EE687EC6781C22194B0B36BA04412 /* AVAssetImageDataProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 284874F973B6389C521D764D2902797D /* AVAssetImageDataProvider.swift */; };
-		990A44BF07C6E03CC35EA7B8B5AD6633 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4FB493F27969730246F5D83F23696A73 /* PrivacyInfo.xcprivacy */; };
 		99D0FB405BA52CB4B0819877E6B23836 /* CPListItem+Kingfisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAA19E50B8E02BC9D79B2638C9F08420 /* CPListItem+Kingfisher.swift */; };
 		9A16B493E2CABA4641AE6124F48E007F /* TWRippleXAddress.h in Headers */ = {isa = PBXBuildFile; fileRef = F41EFCB2767F1BD55F873D64E19D0D96 /* TWRippleXAddress.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		9A31E185DBFA2451E844AD6CA6F436F7 /* TextFormatDecodingOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A251188D902597B9187F101555E2B7F /* TextFormatDecodingOptions.swift */; };
@@ -866,7 +860,6 @@
 		BC645262D0AFBB0629BC20D3D934B71D /* Message+JSONArrayAdditions_Data.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E2F237383E22C10DAEA10AFF1E360FE /* Message+JSONArrayAdditions_Data.swift */; };
 		BC753DCC7A34292743B5BEA07D3AE59B /* TWHederaProto.h in Headers */ = {isa = PBXBuildFile; fileRef = 409C119246A5F063563F35B78C6C3859 /* TWHederaProto.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		BC7972AC3FAEE8CA41775954F6314536 /* duration.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1C65D84480152B65E4005004E29D77 /* duration.pb.swift */; };
-		BCA49D530AE999660B343E83215F505F /* Kingfisher-iOS-Kingfisher in Resources */ = {isa = PBXBuildFile; fileRef = D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher-iOS-Kingfisher */; };
 		BCBEBCED1645B8C8883FD50D993963E2 /* WebAuthn.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC322702528C5D9F43F75C138AA0F42B /* WebAuthn.swift */; };
 		BCE23F67028176AFA923C85AB16BCFF7 /* UniversalAssetID.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9932EBC730392A1C83383B22C906BB49 /* UniversalAssetID.swift */; };
 		BD06523FC27CDDFFB99CAF2F0A74D33C /* TWNervosAddress.h in Headers */ = {isa = PBXBuildFile; fileRef = 39E7EE220439DE86F53D78B45F3D24CE /* TWNervosAddress.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -918,7 +911,6 @@
 		C9424D018C7F192EB1257EA25EF26C33 /* ImageTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A8596F8E2E11F39F64C60245556853C /* ImageTransition.swift */; };
 		C944748624065BBF7FD23A772A3E7510 /* KeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C03577C4E5F21A78494C2CDF9B0CDCC /* KeyStore.swift */; };
 		C9932F22D1492E43936979211DB26DC6 /* Enum.swift in Sources */ = {isa = PBXBuildFile; fileRef = A67727C682F70F076757DF73FA84305A /* Enum.swift */; };
-		C9BEA3479A780C6F9A2CAB6A1E14EC10 /* Kingfisher-macOS-Kingfisher in Resources */ = {isa = PBXBuildFile; fileRef = 5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher-macOS-Kingfisher */; };
 		CA382C3B0E0538C49735BF884A9BFC90 /* PublicKeyType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4661DA2A0C7EC87EDA0D9A43AADC4E4B /* PublicKeyType.swift */; };
 		CA3FBD91F16F90BEB12ADF66BABE7D7E /* KFOptionsSetter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B46084B2ECD8596E719FC1352442C555 /* KFOptionsSetter.swift */; };
 		CA4338BF6893185CB729AE0E3DF8C014 /* MessageExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = A626AF66C87752DAEA360BA2356965EC /* MessageExtension.swift */; };
@@ -994,7 +986,6 @@
 		D97628CE549F71261182A68783DE2411 /* TWSolanaTransaction.h in Headers */ = {isa = PBXBuildFile; fileRef = 465765E256EB253EABF9908CC97B953E /* TWSolanaTransaction.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		D98671508E83ABD91254F14BD8A871DD /* TWNEARProto.h in Headers */ = {isa = PBXBuildFile; fileRef = BBF48DA54F4956A9540A5B303105F2F5 /* TWNEARProto.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		D9AEB67932B438E4572C12B949185E9A /* Division.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BCDF913618B775F56FBC7B9688074CE /* Division.swift */; };
-		D9B3089F8BA3B075DF890973287D3682 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1A44656BE74633F25EB407F59B453440 /* PrivacyInfo.xcprivacy */; };
 		DAB4A4300BE0C4C6EECAC27DE7148465 /* TONAddressConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 446691A996E46BBB16BB469AC115E1BA /* TONAddressConverter.swift */; };
 		DAEBE0389491AEF3A945572D77C13996 /* FIO+Proto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 788F76D7C74856D84A7EF9E5A60A6941 /* FIO+Proto.swift */; };
 		DB3D277E9E9285872F911F1B227CF44B /* Multiplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 654338C6F0E6A2F2911D42407E227A94 /* Multiplication.swift */; };
@@ -1070,7 +1061,6 @@
 		EBE54D191FBCC2F2A1BE7390911DFEA7 /* ImageDataProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 459680133081E51D96C10A177186F951 /* ImageDataProvider.swift */; };
 		EBFBAF41E554ACB22A22DD2DC959E2D5 /* timestamp.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5553FD261F628803E72CCC894B4BC249 /* timestamp.pb.swift */; };
 		ECC482A116D4FBBA4C8B607253BF68A9 /* TWMultiversXProto.h in Headers */ = {isa = PBXBuildFile; fileRef = 303432FA2F6F1141D282F3FABA82A4AB /* TWMultiversXProto.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		ECCD645CF8A1839E07AA2FE32B00849D /* SwiftProtobuf-iOS-SwiftProtobuf in Resources */ = {isa = PBXBuildFile; fileRef = 92D069737DB52F187E62F68A75895067 /* SwiftProtobuf-iOS-SwiftProtobuf */; };
 		ECEEB5C2F85D15E608D41BEE81E94108 /* Nervos+Proto.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFEBEF4CA6CADAF74975215A6CDD457D /* Nervos+Proto.swift */; };
 		ED0D256174335C47B825FC17C8850C27 /* field_mask.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D223D2E8E0A065AC5D43FE054456DC3 /* field_mask.pb.swift */; };
 		ED126718DDF4D9F6C1B06AB6C7665E08 /* TWDerivationPathIndex.h in Headers */ = {isa = PBXBuildFile; fileRef = 411144E2D4A02934EE7B3BE4617FCBA1 /* TWDerivationPathIndex.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -1197,13 +1187,6 @@
 			remoteGlobalIDString = 357D7AA757B0ED4603C9CD1523BC234E;
 			remoteInfo = "SwiftProtobuf-iOS";
 		};
-		442AB5CF741E1884B50E6C2239BFF212 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = CDA4DE8278DEABE67C20F3FD29FEDA7A;
-			remoteInfo = "Kingfisher-visionOS-Kingfisher";
-		};
 		5B5A799A78B1A91EC003E22E1FF7C145 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
@@ -1225,26 +1208,12 @@
 			remoteGlobalIDString = 63F854E532D7CBA393D37B6C84E1F23F;
 			remoteInfo = "BigInt-macOS";
 		};
-		9D02EFCD449C656DE0D7C2DD676602C2 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 7B76B3A65EC90BE00011B16DE4F49E38;
-			remoteInfo = "Kingfisher-iOS-Kingfisher";
-		};
 		AA78005CB16A83F94DA67E2126BDC079 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = CA07A5380AD6E7CC10070DD2E369060D;
 			remoteInfo = "Kingfisher-visionOS";
-		};
-		AD3F24E58228FC6C1D9F56D0A9F08B07 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 0CEE1B56ECDB3CB8B561C703CF8BC996;
-			remoteInfo = "SwiftProtobuf-iOS-SwiftProtobuf";
 		};
 		D3CD911A2B6D1211CE5A3B59F1286C93 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -1259,20 +1228,6 @@
 			proxyType = 1;
 			remoteGlobalIDString = D84FF1ABB5E840CFBA9F610D26DFB42D;
 			remoteInfo = "TrustWalletCore-macOS";
-		};
-		E14B75235DFFA199CAD65F6705AD6BDA /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = B2085DBECFAD83713FC1BE448B7882B0;
-			remoteInfo = "Kingfisher-macOS-Kingfisher";
-		};
-		EE5C5302C18DEA94C4DB4BEE9B11B81A /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 28E46233E8A1EAE4640778FD2DEDE3C1;
-			remoteInfo = "SwiftProtobuf-macOS-SwiftProtobuf";
 		};
 		FEF0DD73C584847BBB99C1E0A58A4BEA /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -1305,11 +1260,11 @@
 		084BF84859E59CF9AFE860114F77F4F4 /* TWWavesProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWWavesProto.h; path = include/TrustWalletCore/TWWavesProto.h; sourceTree = "<group>"; };
 		0898BC4F55AF944BA87D269EB99F2415 /* FormatIndicatedCacheSerializer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FormatIndicatedCacheSerializer.swift; path = Sources/Cache/FormatIndicatedCacheSerializer.swift; sourceTree = "<group>"; };
 		0918662A7D5F9830DD8205E87CE80A30 /* TrustWalletCore-iOS-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "TrustWalletCore-iOS-umbrella.h"; sourceTree = "<group>"; };
-		0A90AABC168E7ACBF249426FCA99F19B /* TrustWalletCore-macOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "TrustWalletCore-macOS"; path = WalletCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		0A90AABC168E7ACBF249426FCA99F19B /* WalletCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = WalletCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		0ACEC72AB10B8B24CCFDED22155D49C4 /* TWTONWallet.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWTONWallet.h; path = include/TrustWalletCore/TWTONWallet.h; sourceTree = "<group>"; };
 		0BCDF913618B775F56FBC7B9688074CE /* Division.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Division.swift; path = Sources/Division.swift; sourceTree = "<group>"; };
 		0C320095670F7FDDBDEDCE51380FD9BD /* Mnemonic+Extension.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Mnemonic+Extension.swift"; path = "Sources/Extensions/Mnemonic+Extension.swift"; sourceTree = "<group>"; };
-		0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher-iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Kingfisher-iOS"; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		0D3455B05F2D5493CF05932C07BF4C85 /* StoredKeyEncryptionLevel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = StoredKeyEncryptionLevel.swift; path = Sources/Generated/Enums/StoredKeyEncryptionLevel.swift; sourceTree = "<group>"; };
 		0D3D0259A9AF312B43B9EDEA0E6C9B65 /* Pods-Big Wallet visionOS-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "Pods-Big Wallet visionOS-umbrella.h"; sourceTree = "<group>"; };
 		0DD110D9E3FB6DE960134460367B489B /* CoinType+Address.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "CoinType+Address.swift"; path = "Sources/Extensions/CoinType+Address.swift"; sourceTree = "<group>"; };
@@ -1338,11 +1293,11 @@
 		1881A4A08204C9C8F60777DED2553238 /* TWNEOProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWNEOProto.h; path = include/TrustWalletCore/TWNEOProto.h; sourceTree = "<group>"; };
 		18876ACF48A4F6D39708BE81426E72B9 /* DerivationPathIndex.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DerivationPathIndex.swift; path = Sources/Generated/DerivationPathIndex.swift; sourceTree = "<group>"; };
 		18FD49C35A1920EA685114FACB4C0D08 /* Blockchain.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Blockchain.swift; path = Sources/Generated/Enums/Blockchain.swift; sourceTree = "<group>"; };
-		1903232A53CFA33E2C3949C71A88A2B6 /* Kingfisher-visionOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Kingfisher-visionOS"; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		1903232A53CFA33E2C3949C71A88A2B6 /* Kingfisher.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		191B83A8FECB846A99D3F5EFBA0E74AC /* Pods-Big Wallet-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Pods-Big Wallet-Info.plist"; sourceTree = "<group>"; };
 		19DC987962A361999F2485EF05F02C1F /* TWLiquidStaking.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWLiquidStaking.h; path = include/TrustWalletCore/TWLiquidStaking.h; sourceTree = "<group>"; };
 		19F616FEDA55A538D5291C0D892E7B10 /* BinaryDecodingError.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BinaryDecodingError.swift; path = Sources/SwiftProtobuf/BinaryDecodingError.swift; sourceTree = "<group>"; };
-		1A44656BE74633F25EB407F59B453440 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Sources/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		1A44656BE74633F25EB407F59B453440 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Sources/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		1AA1532A64AB7F2C498BD01D8D6814A8 /* Hash.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Hash.swift; path = Sources/Generated/Hash.swift; sourceTree = "<group>"; };
 		1AF7A77C4FB34176393D6F1E56BF26FC /* RedirectHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RedirectHandler.swift; path = Sources/Networking/RedirectHandler.swift; sourceTree = "<group>"; };
 		1B533C68570B8503EEAC3AE318D56137 /* TheOpenNetwork.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TheOpenNetwork.pb.swift; path = Sources/Generated/Protobuf/TheOpenNetwork.pb.swift; sourceTree = "<group>"; };
@@ -1421,7 +1376,7 @@
 		3527979DA735E9090F34F37F54C7D63E /* SwiftProtobuf-iOS-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "SwiftProtobuf-iOS-Info.plist"; sourceTree = "<group>"; };
 		352DA2C9FF4972F47808442EA63FFAAE /* CFNetwork.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CFNetwork.framework; path = Platforms/XROS.platform/Developer/SDKs/XROS2.0.sdk/System/Library/Frameworks/CFNetwork.framework; sourceTree = DEVELOPER_DIR; };
 		3577F75749D139A92BD5D474EBD051EB /* TWEthereumAbiProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWEthereumAbiProto.h; path = include/TrustWalletCore/TWEthereumAbiProto.h; sourceTree = "<group>"; };
-		365C54C567FAFD04845C833BD8A513D2 /* WalletCoreCommon.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; path = WalletCoreCommon.xcframework; sourceTree = "<group>"; };
+		365C54C567FAFD04845C833BD8A513D2 /* WalletCoreCommon.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = wrapper.xcframework; path = WalletCoreCommon.xcframework; sourceTree = "<group>"; };
 		36CD25D581D65255944DB90635E0FB58 /* TWAnyAddress.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWAnyAddress.h; path = include/TrustWalletCore/TWAnyAddress.h; sourceTree = "<group>"; };
 		370D286CF05E2D71952867C78A7A10C4 /* Waves.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Waves.pb.swift; path = Sources/Generated/Protobuf/Waves.pb.swift; sourceTree = "<group>"; };
 		371636A964FAEB7C3C48CA3A61F51630 /* EthereumChainID.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EthereumChainID.swift; path = Sources/Generated/Enums/EthereumChainID.swift; sourceTree = "<group>"; };
@@ -1446,7 +1401,7 @@
 		3E3DA995FF593C0712B2C40EFC041E71 /* ResourceBundle-Kingfisher-Kingfisher-macOS-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = "ResourceBundle-Kingfisher-Kingfisher-macOS-Info.plist"; path = "../Kingfisher-macOS/ResourceBundle-Kingfisher-Kingfisher-macOS-Info.plist"; sourceTree = "<group>"; };
 		3EB504C7DE55A81CE108F9E33C13F56E /* TWStoredKeyEncryption.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWStoredKeyEncryption.h; path = include/TrustWalletCore/TWStoredKeyEncryption.h; sourceTree = "<group>"; };
 		3F41EC57414757D2A112C70629DFD42F /* SessionDataTask.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SessionDataTask.swift; path = Sources/Networking/SessionDataTask.swift; sourceTree = "<group>"; };
-		3F55EFD9001FCE1ED103CE04B70BF8D6 /* Pods-Big Wallet visionOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Pods-Big Wallet visionOS"; path = Pods_Big_Wallet_visionOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		3F55EFD9001FCE1ED103CE04B70BF8D6 /* Pods_Big_Wallet_visionOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Big_Wallet_visionOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		3FB0817CCFB3FB8AF2797E7ABDE73C6A /* Pactus.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Pactus.pb.swift; path = Sources/Generated/Protobuf/Pactus.pb.swift; sourceTree = "<group>"; };
 		405BB0509F281802C79BFC7EAD0FF7F7 /* ResourceBundle-SwiftProtobuf-SwiftProtobuf-iOS-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "ResourceBundle-SwiftProtobuf-SwiftProtobuf-iOS-Info.plist"; sourceTree = "<group>"; };
 		406645A8598A54D2B0347C0439CB16F2 /* ExtensionFields.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExtensionFields.swift; path = Sources/SwiftProtobuf/ExtensionFields.swift; sourceTree = "<group>"; };
@@ -1497,7 +1452,7 @@
 		4E5B18DC3D7EC5AC09406E8AB51F4F98 /* SwiftProtobuf-iOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "SwiftProtobuf-iOS.release.xcconfig"; sourceTree = "<group>"; };
 		4F437AA52111C931B4995B714CFDA71E /* TWAccount.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWAccount.h; path = include/TrustWalletCore/TWAccount.h; sourceTree = "<group>"; };
 		4F5F88FFEC44C6318E49AEE0057144E3 /* Wallet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Wallet.swift; path = Sources/Wallet.swift; sourceTree = "<group>"; };
-		4FB493F27969730246F5D83F23696A73 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Sources/SwiftProtobuf/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		4FB493F27969730246F5D83F23696A73 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Sources/SwiftProtobuf/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		4FB87754B9DFE360B49054FBE901F2E7 /* ExtensionHelpers.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExtensionHelpers.swift; path = Sources/Utility/ExtensionHelpers.swift; sourceTree = "<group>"; };
 		4FCAF4F2178430164F1FB17DBCEB00E2 /* Cardano+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Cardano+Proto.swift"; path = "Sources/Generated/Protobuf/Cardano+Proto.swift"; sourceTree = "<group>"; };
 		4FD10B96AAA751A4892E76B32B52918D /* ImageCache.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ImageCache.swift; path = Sources/Cache/ImageCache.swift; sourceTree = "<group>"; };
@@ -1529,8 +1484,8 @@
 		58D154ED031DF06A7F509807D1B71372 /* TWHDWallet.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWHDWallet.h; path = include/TrustWalletCore/TWHDWallet.h; sourceTree = "<group>"; };
 		598188D24B5EAE6CFC6DEEDE20E37EA6 /* Nimiq.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Nimiq.pb.swift; path = Sources/Generated/Protobuf/Nimiq.pb.swift; sourceTree = "<group>"; };
 		599804C7DF6E0833AD1A834B1130877E /* Hashable.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Hashable.swift; path = Sources/Hashable.swift; sourceTree = "<group>"; };
-		599D388E1BE3C71DBD3189A4496D86AF /* Pods-Big Wallet */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Pods-Big Wallet"; path = Pods_Big_Wallet.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		59C5DD41EE313A65C03650784BF278F3 /* BigInt-macOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "BigInt-macOS"; path = BigInt.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		599D388E1BE3C71DBD3189A4496D86AF /* Pods_Big_Wallet.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Big_Wallet.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		59C5DD41EE313A65C03650784BF278F3 /* BigInt.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = BigInt.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		59D2B81AB9A05C682255A48177F95587 /* Words and Bits.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Words and Bits.swift"; path = "Sources/Words and Bits.swift"; sourceTree = "<group>"; };
 		5B4AB055BC5753400E3A9BE4958758D4 /* Kingfisher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Kingfisher.swift; path = Sources/General/Kingfisher.swift; sourceTree = "<group>"; };
 		5B60DB39E15357D844E074CE68242918 /* CryptoBox.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CryptoBox.swift; path = Sources/Generated/CryptoBox.swift; sourceTree = "<group>"; };
@@ -1544,11 +1499,10 @@
 		5CD526ACA6AB9B463F756DCEBA3CB0F4 /* Aptos.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Aptos.pb.swift; path = Sources/Generated/Protobuf/Aptos.pb.swift; sourceTree = "<group>"; };
 		5D072A0DC39F36EC39CCECD58CEAAE7A /* TimeUtils.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TimeUtils.swift; path = Sources/SwiftProtobuf/TimeUtils.swift; sourceTree = "<group>"; };
 		5DDF9631B18554233438FF6679B9D74D /* TrustWalletCore-macOS-prefix.pch */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "TrustWalletCore-macOS-prefix.pch"; path = "../TrustWalletCore-macOS/TrustWalletCore-macOS-prefix.pch"; sourceTree = "<group>"; };
-		5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher-macOS-Kingfisher */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = "Kingfisher-macOS-Kingfisher"; path = Kingfisher.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
 		5E92FEBEC90B0802E0D4396929C0D2DA /* TWRippleProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWRippleProto.h; path = include/TrustWalletCore/TWRippleProto.h; sourceTree = "<group>"; };
 		5F021E3A6E8224F96BF8F2E45EE0AFBF /* TWStellarProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWStellarProto.h; path = include/TrustWalletCore/TWStellarProto.h; sourceTree = "<group>"; };
 		5F09FEFE24BD316B5D47C3019B90833C /* TWWalletConnectProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWWalletConnectProto.h; path = include/TrustWalletCore/TWWalletConnectProto.h; sourceTree = "<group>"; };
-		5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf-macOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "SwiftProtobuf-macOS"; path = SwiftProtobuf.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SwiftProtobuf.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		5FB24A2FED568112C58D6708D1160078 /* Box.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Box.swift; path = Sources/Utility/Box.swift; sourceTree = "<group>"; };
 		5FD09E3A74976C71C20E1A94F764506A /* wrappers.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = wrappers.pb.swift; path = Sources/SwiftProtobuf/wrappers.pb.swift; sourceTree = "<group>"; };
 		5FF8C55859442E33A2717C5086727458 /* Hedera+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Hedera+Proto.swift"; path = "Sources/Generated/Protobuf/Hedera+Proto.swift"; sourceTree = "<group>"; };
@@ -1556,7 +1510,7 @@
 		6096E3E0F316D7BD8FD4878CF880AD0C /* Kingfisher-visionOS-dummy.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = "Kingfisher-visionOS-dummy.m"; path = "../Kingfisher-visionOS/Kingfisher-visionOS-dummy.m"; sourceTree = "<group>"; };
 		609E592522A6511AEA8B6D17272F8BC5 /* AnyAddress.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AnyAddress.swift; path = Sources/Generated/AnyAddress.swift; sourceTree = "<group>"; };
 		60BD3B025F1CE876348260C96C91FCF4 /* Everscale.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Everscale.pb.swift; path = Sources/Generated/Protobuf/Everscale.pb.swift; sourceTree = "<group>"; };
-		60CD9336BF0D87EB43F318C3C417DB66 /* TrustWalletCore-iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "TrustWalletCore-iOS"; path = WalletCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		60CD9336BF0D87EB43F318C3C417DB66 /* WalletCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = WalletCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		611459CF83C018E08BA16CDD50695FF5 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = Platforms/XROS.platform/Developer/SDKs/XROS2.0.sdk/System/Library/Frameworks/Accelerate.framework; sourceTree = DEVELOPER_DIR; };
 		61785E9C78007CD2135DA1C60C53BE66 /* SolanaTransaction.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SolanaTransaction.swift; path = Sources/Generated/SolanaTransaction.swift; sourceTree = "<group>"; };
 		624D52B2620053163CCF256BE6FFCB88 /* SwiftProtobuf-macOS-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "SwiftProtobuf-macOS-umbrella.h"; path = "../SwiftProtobuf-macOS/SwiftProtobuf-macOS-umbrella.h"; sourceTree = "<group>"; };
@@ -1653,7 +1607,7 @@
 		8A3CF128020B0D479A5C57C351B78CFD /* TWStoredKey.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWStoredKey.h; path = include/TrustWalletCore/TWStoredKey.h; sourceTree = "<group>"; };
 		8A8596F8E2E11F39F64C60245556853C /* ImageTransition.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ImageTransition.swift; path = Sources/Image/ImageTransition.swift; sourceTree = "<group>"; };
 		8AAC55869A13D91E34E1D6C9F4435590 /* TrustWalletCore-macOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "TrustWalletCore-macOS.debug.xcconfig"; path = "../TrustWalletCore-macOS/TrustWalletCore-macOS.debug.xcconfig"; sourceTree = "<group>"; };
-		8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf-iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "SwiftProtobuf-iOS"; path = SwiftProtobuf.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SwiftProtobuf.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		8AF4445864497135615EF33BEC468E3C /* Pods-Big Wallet iOS-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "Pods-Big Wallet iOS-umbrella.h"; sourceTree = "<group>"; };
 		8B0B055973ACA333CCA319EB7A21F911 /* NULS+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "NULS+Proto.swift"; path = "Sources/Generated/Protobuf/NULS+Proto.swift"; sourceTree = "<group>"; };
 		8B884DE231731899B89FE985AD8125F2 /* BabylonStaking+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "BabylonStaking+Proto.swift"; path = "Sources/Generated/Protobuf/BabylonStaking+Proto.swift"; sourceTree = "<group>"; };
@@ -1668,14 +1622,12 @@
 		8FCF0CFD3F7DCE1E4655B1C0793100D4 /* Nebulas+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Nebulas+Proto.swift"; path = "Sources/Generated/Protobuf/Nebulas+Proto.swift"; sourceTree = "<group>"; };
 		8FD76ABE85C2C43D0E43360FC061D80F /* ZigZag.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ZigZag.swift; path = Sources/SwiftProtobuf/ZigZag.swift; sourceTree = "<group>"; };
 		8FFA0B3BF39C49F31E0BC10E37F36490 /* TWEthereumAbiValue.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWEthereumAbiValue.h; path = include/TrustWalletCore/TWEthereumAbiValue.h; sourceTree = "<group>"; };
-		90E213B2540580977A2BF768A0CF2978 /* SwiftProtobuf-macOS-SwiftProtobuf */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = "SwiftProtobuf-macOS-SwiftProtobuf"; path = SwiftProtobuf.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
 		9167D339F6EEAE1004D85B66FBFA70F0 /* Message+AnyAdditions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Message+AnyAdditions.swift"; path = "Sources/SwiftProtobuf/Message+AnyAdditions.swift"; sourceTree = "<group>"; };
 		9179AD6A9A12FF978D513B9D68634DE8 /* Theta.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Theta.pb.swift; path = Sources/Generated/Protobuf/Theta.pb.swift; sourceTree = "<group>"; };
 		92521AE3B005D42F18EFE973A1775DD7 /* TWAnySigner.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWAnySigner.h; path = include/TrustWalletCore/TWAnySigner.h; sourceTree = "<group>"; };
-		92D069737DB52F187E62F68A75895067 /* SwiftProtobuf-iOS-SwiftProtobuf */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = "SwiftProtobuf-iOS-SwiftProtobuf"; path = SwiftProtobuf.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
 		9314403E4E8AC2E54CB32C651DB543E6 /* Nervos.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Nervos.pb.swift; path = Sources/Generated/Protobuf/Nervos.pb.swift; sourceTree = "<group>"; };
 		938599A9441F335A823040EDE6E82824 /* EthereumAbi.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EthereumAbi.pb.swift; path = Sources/Generated/Protobuf/EthereumAbi.pb.swift; sourceTree = "<group>"; };
-		9537468CF4D5C16DB31E0F967000827C /* Kingfisher-macOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Kingfisher-macOS"; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		9537468CF4D5C16DB31E0F967000827C /* Kingfisher.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Kingfisher.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		97A75931B385CBE604D2648DDBCBD5C7 /* String Conversion.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "String Conversion.swift"; path = "Sources/String Conversion.swift"; sourceTree = "<group>"; };
 		97A7A073EB605614BD4F939243522085 /* ResourceBundle-SwiftProtobuf-SwiftProtobuf-macOS-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = "ResourceBundle-SwiftProtobuf-SwiftProtobuf-macOS-Info.plist"; path = "../SwiftProtobuf-macOS/ResourceBundle-SwiftProtobuf-SwiftProtobuf-macOS-Info.plist"; sourceTree = "<group>"; };
 		97D0A9FBD17774B3A2BE3EDF9DE7D8E5 /* TrustWalletCore-macOS-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "TrustWalletCore-macOS-umbrella.h"; path = "../TrustWalletCore-macOS/TrustWalletCore-macOS-umbrella.h"; sourceTree = "<group>"; };
@@ -1700,7 +1652,7 @@
 		9D1C97DAE08F82718D503D1F5D03B217 /* PrivateKey.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PrivateKey.swift; path = Sources/Generated/PrivateKey.swift; sourceTree = "<group>"; };
 		9D60A0B9912C80BE800C63F6483561F3 /* LiquidStaking.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LiquidStaking.swift; path = Sources/Generated/LiquidStaking.swift; sourceTree = "<group>"; };
 		9D7FE159F28957125459D4888C11607D /* InternetComputer+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "InternetComputer+Proto.swift"; path = "Sources/Generated/Protobuf/InternetComputer+Proto.swift"; sourceTree = "<group>"; };
-		9D940727FF8FB9C785EB98E56350EF41 /* Podfile */ = {isa = PBXFileReference; explicitFileType = text.script.ruby; includeInIndex = 1; indentWidth = 2; lastKnownFileType = text; name = Podfile; path = ../Podfile; sourceTree = SOURCE_ROOT; tabWidth = 2; xcLanguageSpecificationIdentifier = xcode.lang.ruby; };
+		9D940727FF8FB9C785EB98E56350EF41 /* Podfile */ = {isa = PBXFileReference; explicitFileType = text.script.ruby; includeInIndex = 1; indentWidth = 2; name = Podfile; path = ../Podfile; sourceTree = SOURCE_ROOT; tabWidth = 2; xcLanguageSpecificationIdentifier = xcode.lang.ruby; };
 		9DD961FEA581AACC04B4BFE5D2912549 /* Polkadot.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Polkadot.pb.swift; path = Sources/Generated/Protobuf/Polkadot.pb.swift; sourceTree = "<group>"; };
 		9DEF8CFBB75C60EE2AAE18C4847A3104 /* TWBase32.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWBase32.h; path = include/TrustWalletCore/TWBase32.h; sourceTree = "<group>"; };
 		9E98733E4784428FA2DB9B83A41545F7 /* TWBitcoinMessageSigner.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWBitcoinMessageSigner.h; path = include/TrustWalletCore/TWBitcoinMessageSigner.h; sourceTree = "<group>"; };
@@ -1837,7 +1789,6 @@
 		D85071B133F41E355D17610732AEEA40 /* TWFilecoinAddressType.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWFilecoinAddressType.h; path = include/TrustWalletCore/TWFilecoinAddressType.h; sourceTree = "<group>"; };
 		D88CBC43C2DEEC39BC22EA8D8A510594 /* HashVisitor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = HashVisitor.swift; path = Sources/SwiftProtobuf/HashVisitor.swift; sourceTree = "<group>"; };
 		D8B0DC7242A05E23CB61A12AB402B112 /* TWStellarPassphrase.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWStellarPassphrase.h; path = include/TrustWalletCore/TWStellarPassphrase.h; sourceTree = "<group>"; };
-		D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher-iOS-Kingfisher */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = "Kingfisher-iOS-Kingfisher"; path = Kingfisher.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
 		D9CBFA77DB24D26EA7243D0798D8A0DD /* TronMessageSigner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TronMessageSigner.swift; path = Sources/Generated/TronMessageSigner.swift; sourceTree = "<group>"; };
 		DA02CC0E3683747D2B4B691D88A69CEF /* Decred+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Decred+Proto.swift"; path = "Sources/Generated/Protobuf/Decred+Proto.swift"; sourceTree = "<group>"; };
 		DAFCBD48199C6A8385C8FD4BAB50F92E /* Greenfield.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Greenfield.pb.swift; path = Sources/Generated/Protobuf/Greenfield.pb.swift; sourceTree = "<group>"; };
@@ -1900,7 +1851,7 @@
 		F297A30C00CBD7A40540C11C9640FC11 /* KingfisherOptionsInfo.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KingfisherOptionsInfo.swift; path = Sources/General/KingfisherOptionsInfo.swift; sourceTree = "<group>"; };
 		F3ABDFC8ECE21C91EE4DF541D63C9C09 /* KFImageOptions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KFImageOptions.swift; path = Sources/SwiftUI/KFImageOptions.swift; sourceTree = "<group>"; };
 		F3D4E95EB67D597167BE89B2E4620438 /* Hedera.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Hedera.pb.swift; path = Sources/Generated/Protobuf/Hedera.pb.swift; sourceTree = "<group>"; };
-		F3E0621221B49CBB46826033D3DEB84B /* BigInt-iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "BigInt-iOS"; path = BigInt.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		F3E0621221B49CBB46826033D3DEB84B /* BigInt.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = BigInt.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F41580C814E97733544DF38C14B2C2C1 /* Watch.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Watch.swift; path = Sources/Watch.swift; sourceTree = "<group>"; };
 		F41EFCB2767F1BD55F873D64E19D0D96 /* TWRippleXAddress.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWRippleXAddress.h; path = include/TrustWalletCore/TWRippleXAddress.h; sourceTree = "<group>"; };
 		F45B8A2A5375BBF892AD197789301469 /* Icon.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Icon.pb.swift; path = Sources/Generated/Protobuf/Icon.pb.swift; sourceTree = "<group>"; };
@@ -1908,14 +1859,13 @@
 		F52AD0682F8EF27349701A6CF4A24A2E /* AESPaddingMode.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AESPaddingMode.swift; path = Sources/Generated/Enums/AESPaddingMode.swift; sourceTree = "<group>"; };
 		F54E83EF912909EADA63FA21DFBE2F6B /* IoTeX.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = IoTeX.pb.swift; path = Sources/Generated/Protobuf/IoTeX.pb.swift; sourceTree = "<group>"; };
 		F5741E023218A4FBBA7B6D8E0F880B74 /* SwiftProtobuf-iOS.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; path = "SwiftProtobuf-iOS.modulemap"; sourceTree = "<group>"; };
-		F58C09D85DCBB923155E50102516BB3F /* Documentation.docc */ = {isa = PBXFileReference; includeInIndex = 1; name = Documentation.docc; path = Sources/Documentation.docc; sourceTree = "<group>"; };
+		F58C09D85DCBB923155E50102516BB3F /* Documentation.docc */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.documentationcatalog; name = Documentation.docc; path = Sources/Documentation.docc; sourceTree = "<group>"; };
 		F6CF8FA5559822261D97B07C99E96EEF /* TWFiroAddressType.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWFiroAddressType.h; path = include/TrustWalletCore/TWFiroAddressType.h; sourceTree = "<group>"; };
 		F6E7053330D25486F9437226E63D1CCA /* Data Conversion.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Data Conversion.swift"; path = "Sources/Data Conversion.swift"; sourceTree = "<group>"; };
 		F74DD807B9A4DAF76D7B6ABC606BD570 /* TWEverscaleProto.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWEverscaleProto.h; path = include/TrustWalletCore/TWEverscaleProto.h; sourceTree = "<group>"; };
 		F8B2801D1779D162CB4CE39C4CC4D03A /* CFNetwork.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CFNetwork.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/CFNetwork.framework; sourceTree = DEVELOPER_DIR; };
 		F8EA4FBA98F2C5C16C427BF60B7121AE /* JSONEncoder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JSONEncoder.swift; path = Sources/SwiftProtobuf/JSONEncoder.swift; sourceTree = "<group>"; };
 		F95F9433E0CC823DB96F760060DB4789 /* Pactus+Proto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Pactus+Proto.swift"; path = "Sources/Generated/Protobuf/Pactus+Proto.swift"; sourceTree = "<group>"; };
-		F99A69668010DC0D20DF90520CAF4F9B /* Kingfisher-visionOS-Kingfisher */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = "Kingfisher-visionOS-Kingfisher"; path = Kingfisher.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
 		F9FEB34CC6DA6BDB99668B332C0C35D8 /* Ethereum.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Ethereum.swift; path = Sources/Generated/Ethereum.swift; sourceTree = "<group>"; };
 		FA012741338A0ABBC292B9F5EAE139E2 /* CoinType.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CoinType.swift; path = Sources/Generated/Enums/CoinType.swift; sourceTree = "<group>"; };
 		FA39355E59E86AA84ADF63D427B18AD3 /* AsyncMessageSequence.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AsyncMessageSequence.swift; path = Sources/SwiftProtobuf/AsyncMessageSequence.swift; sourceTree = "<group>"; };
@@ -1929,7 +1879,7 @@
 		FD67A93D9EF8537D51144F2FFD08398C /* TWDerivation.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWDerivation.h; path = include/TrustWalletCore/TWDerivation.h; sourceTree = "<group>"; };
 		FDAAB41BF869CFD0269C81932CC71223 /* TWFIOAccount.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = TWFIOAccount.h; path = include/TrustWalletCore/TWFIOAccount.h; sourceTree = "<group>"; };
 		FE2F77C686CBD88A3B24860881A532B7 /* CoinTypeConfiguration.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CoinTypeConfiguration.swift; path = Sources/Generated/CoinTypeConfiguration.swift; sourceTree = "<group>"; };
-		FF39D311698B6D2ED45143078496C10C /* Pods-Big Wallet iOS */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = "Pods-Big Wallet iOS"; path = Pods_Big_Wallet_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		FF39D311698B6D2ED45143078496C10C /* Pods_Big_Wallet_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Big_Wallet_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		FF76936A72FA1EDD19DB16B23C16D5B6 /* PathDecoder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PathDecoder.swift; path = Sources/SwiftProtobuf/PathDecoder.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -1976,13 +1926,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		6DF8919556B71809F4B10F18AED42457 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		82FEB9DD6CF33E75CD15DD33E726CC6C /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -2009,13 +1952,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		BE12CAA1A71752D09EB62B5A77A31E67 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		C22E1B34D1D075AFB6F9D710ECE30148 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -2032,13 +1968,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		E1657FFF1B66B38E0CB1B8DF3B2E4801 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		E97AD58BB461A3F37FDF04FB460F473C /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -2049,25 +1978,11 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		FF1E277FF30137154DB17565B1EC2223 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		FF2F59209F825B1D27BC15E09185496C /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				9DF8483C8E52AAB28348AB5B24532C92 /* Cocoa.framework in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		FF3EC350DC2EC8ED503ADD6FA18CBD46 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2235,7 +2150,6 @@
 				413C633A71D730C096C37C58B9A138E5 /* Resources */,
 				FEE18E4878DB8A250D2A1A9E0FE5E8C1 /* Support Files */,
 			);
-			name = Kingfisher;
 			path = Kingfisher;
 			sourceTree = "<group>";
 		};
@@ -2283,23 +2197,18 @@
 		7B0A5966423654B87E3B486D6F98E604 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				F3E0621221B49CBB46826033D3DEB84B /* BigInt-iOS */,
-				59C5DD41EE313A65C03650784BF278F3 /* BigInt-macOS */,
-				0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher-iOS */,
-				D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher-iOS-Kingfisher */,
-				9537468CF4D5C16DB31E0F967000827C /* Kingfisher-macOS */,
-				5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher-macOS-Kingfisher */,
-				1903232A53CFA33E2C3949C71A88A2B6 /* Kingfisher-visionOS */,
-				F99A69668010DC0D20DF90520CAF4F9B /* Kingfisher-visionOS-Kingfisher */,
-				599D388E1BE3C71DBD3189A4496D86AF /* Pods-Big Wallet */,
-				FF39D311698B6D2ED45143078496C10C /* Pods-Big Wallet iOS */,
-				3F55EFD9001FCE1ED103CE04B70BF8D6 /* Pods-Big Wallet visionOS */,
-				8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf-iOS */,
-				92D069737DB52F187E62F68A75895067 /* SwiftProtobuf-iOS-SwiftProtobuf */,
-				5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf-macOS */,
-				90E213B2540580977A2BF768A0CF2978 /* SwiftProtobuf-macOS-SwiftProtobuf */,
-				60CD9336BF0D87EB43F318C3C417DB66 /* TrustWalletCore-iOS */,
-				0A90AABC168E7ACBF249426FCA99F19B /* TrustWalletCore-macOS */,
+				F3E0621221B49CBB46826033D3DEB84B /* BigInt.framework */,
+				59C5DD41EE313A65C03650784BF278F3 /* BigInt.framework */,
+				0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher.framework */,
+				9537468CF4D5C16DB31E0F967000827C /* Kingfisher.framework */,
+				1903232A53CFA33E2C3949C71A88A2B6 /* Kingfisher.framework */,
+				599D388E1BE3C71DBD3189A4496D86AF /* Pods_Big_Wallet.framework */,
+				FF39D311698B6D2ED45143078496C10C /* Pods_Big_Wallet_iOS.framework */,
+				3F55EFD9001FCE1ED103CE04B70BF8D6 /* Pods_Big_Wallet_visionOS.framework */,
+				8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf.framework */,
+				5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf.framework */,
+				60CD9336BF0D87EB43F318C3C417DB66 /* WalletCore.framework */,
+				0A90AABC168E7ACBF249426FCA99F19B /* WalletCore.framework */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -2402,7 +2311,6 @@
 				B584C25D5D885A245AD53F9E7939D9F9 /* Resources */,
 				611D709A70CA28978F60BD47CFE7AE0B /* Support Files */,
 			);
-			name = SwiftProtobuf;
 			path = SwiftProtobuf;
 			sourceTree = "<group>";
 		};
@@ -2583,7 +2491,6 @@
 				6403EE7183A67A2A1F29D29B8FCD85B1 /* Support Files */,
 				A8C458AAEFB15AE1BC952DDAAB51D6AB /* Types */,
 			);
-			name = TrustWalletCore;
 			path = TrustWalletCore;
 			sourceTree = "<group>";
 		};
@@ -2635,7 +2542,6 @@
 				59D2B81AB9A05C682255A48177F95587 /* Words and Bits.swift */,
 				F968BCAA0AD0B0340D127B6AE84116D9 /* Support Files */,
 			);
-			name = BigInt;
 			path = BigInt;
 			sourceTree = "<group>";
 		};
@@ -3292,23 +3198,6 @@
 /* End PBXHeadersBuildPhase section */
 
 /* Begin PBXNativeTarget section */
-		0CEE1B56ECDB3CB8B561C703CF8BC996 /* SwiftProtobuf-iOS-SwiftProtobuf */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = C3264566DFFC96F89E900D40D6CACD3A /* Build configuration list for PBXNativeTarget "SwiftProtobuf-iOS-SwiftProtobuf" */;
-			buildPhases = (
-				993353381B9039136E7BE2B4EE0B3E85 /* Sources */,
-				E1657FFF1B66B38E0CB1B8DF3B2E4801 /* Frameworks */,
-				99120EB42EA27F7F029CF9EE9E7DF00F /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = "SwiftProtobuf-iOS-SwiftProtobuf";
-			productName = SwiftProtobuf;
-			productReference = 92D069737DB52F187E62F68A75895067 /* SwiftProtobuf-iOS-SwiftProtobuf */;
-			productType = "com.apple.product-type.bundle";
-		};
 		2203B30818F316F3AEBC77DAB5604F48 /* Pods-Big Wallet */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = D9A205E6653A495782F22A7256B8199B /* Build configuration list for PBXNativeTarget "Pods-Big Wallet" */;
@@ -3328,25 +3217,8 @@
 			);
 			name = "Pods-Big Wallet";
 			productName = Pods_Big_Wallet;
-			productReference = 599D388E1BE3C71DBD3189A4496D86AF /* Pods-Big Wallet */;
+			productReference = 599D388E1BE3C71DBD3189A4496D86AF /* Pods_Big_Wallet.framework */;
 			productType = "com.apple.product-type.framework";
-		};
-		28E46233E8A1EAE4640778FD2DEDE3C1 /* SwiftProtobuf-macOS-SwiftProtobuf */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = EF027A7042126745B4537FE7E072BD78 /* Build configuration list for PBXNativeTarget "SwiftProtobuf-macOS-SwiftProtobuf" */;
-			buildPhases = (
-				1D1833FA2AE71AEA9D19D532196530D3 /* Sources */,
-				6DF8919556B71809F4B10F18AED42457 /* Frameworks */,
-				28EAC6D81BE84C805904CCD427E59952 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = "SwiftProtobuf-macOS-SwiftProtobuf";
-			productName = SwiftProtobuf;
-			productReference = 90E213B2540580977A2BF768A0CF2978 /* SwiftProtobuf-macOS-SwiftProtobuf */;
-			productType = "com.apple.product-type.bundle";
 		};
 		357D7AA757B0ED4603C9CD1523BC234E /* SwiftProtobuf-iOS */ = {
 			isa = PBXNativeTarget;
@@ -3360,11 +3232,10 @@
 			buildRules = (
 			);
 			dependencies = (
-				F4F05ED4C8334563EF8923434ED51239 /* PBXTargetDependency */,
 			);
 			name = "SwiftProtobuf-iOS";
 			productName = SwiftProtobuf;
-			productReference = 8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf-iOS */;
+			productReference = 8AF0E4BE6CB89D1A02A14081360DFD8C /* SwiftProtobuf.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		5FFF3C6BEF36B29250B4C4FC28A5861A /* Pods-Big Wallet iOS */ = {
@@ -3386,7 +3257,7 @@
 			);
 			name = "Pods-Big Wallet iOS";
 			productName = Pods_Big_Wallet_iOS;
-			productReference = FF39D311698B6D2ED45143078496C10C /* Pods-Big Wallet iOS */;
+			productReference = FF39D311698B6D2ED45143078496C10C /* Pods_Big_Wallet_iOS.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		63F854E532D7CBA393D37B6C84E1F23F /* BigInt-macOS */ = {
@@ -3404,7 +3275,7 @@
 			);
 			name = "BigInt-macOS";
 			productName = BigInt;
-			productReference = 59C5DD41EE313A65C03650784BF278F3 /* BigInt-macOS */;
+			productReference = 59C5DD41EE313A65C03650784BF278F3 /* BigInt.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		65AA93B2B9CF39819DBD1DDF58FCBC15 /* Kingfisher-macOS */ = {
@@ -3419,11 +3290,10 @@
 			buildRules = (
 			);
 			dependencies = (
-				2C147F2627FF34950CE68649F9952937 /* PBXTargetDependency */,
 			);
 			name = "Kingfisher-macOS";
 			productName = Kingfisher;
-			productReference = 9537468CF4D5C16DB31E0F967000827C /* Kingfisher-macOS */;
+			productReference = 9537468CF4D5C16DB31E0F967000827C /* Kingfisher.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		685A5AC5E317EE1D980ECCFE9E6EB08A /* Kingfisher-iOS */ = {
@@ -3438,29 +3308,11 @@
 			buildRules = (
 			);
 			dependencies = (
-				443C4C3A054434A5C75B857B388E27E2 /* PBXTargetDependency */,
 			);
 			name = "Kingfisher-iOS";
 			productName = Kingfisher;
-			productReference = 0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher-iOS */;
+			productReference = 0C37C0511F5A16369B30672CB6BA6D00 /* Kingfisher.framework */;
 			productType = "com.apple.product-type.framework";
-		};
-		7B76B3A65EC90BE00011B16DE4F49E38 /* Kingfisher-iOS-Kingfisher */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 9D8E35DB2DB8B682EE9A0D05AED12373 /* Build configuration list for PBXNativeTarget "Kingfisher-iOS-Kingfisher" */;
-			buildPhases = (
-				BC7757D4E18624CB8D699D15DB14B728 /* Sources */,
-				BE12CAA1A71752D09EB62B5A77A31E67 /* Frameworks */,
-				5F4339B21A1B266591EE8EEB10A69712 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = "Kingfisher-iOS-Kingfisher";
-			productName = Kingfisher;
-			productReference = D8CBDEF9B0EB359E8FD0F5FA8C86428A /* Kingfisher-iOS-Kingfisher */;
-			productType = "com.apple.product-type.bundle";
 		};
 		889A3C6D0A70D789D17B7BFFE160AD76 /* BigInt-iOS */ = {
 			isa = PBXNativeTarget;
@@ -3477,7 +3329,7 @@
 			);
 			name = "BigInt-iOS";
 			productName = BigInt;
-			productReference = F3E0621221B49CBB46826033D3DEB84B /* BigInt-iOS */;
+			productReference = F3E0621221B49CBB46826033D3DEB84B /* BigInt.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		9E7CD3CBD8AF745955F239BAC780F32A /* Pods-Big Wallet visionOS */ = {
@@ -3496,7 +3348,7 @@
 			);
 			name = "Pods-Big Wallet visionOS";
 			productName = Pods_Big_Wallet_visionOS;
-			productReference = 3F55EFD9001FCE1ED103CE04B70BF8D6 /* Pods-Big Wallet visionOS */;
+			productReference = 3F55EFD9001FCE1ED103CE04B70BF8D6 /* Pods_Big_Wallet_visionOS.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		AA186741961F10502016CE44BFED6684 /* SwiftProtobuf-macOS */ = {
@@ -3511,29 +3363,11 @@
 			buildRules = (
 			);
 			dependencies = (
-				CC2F456A36BB935F53AD680C12A7B0E0 /* PBXTargetDependency */,
 			);
 			name = "SwiftProtobuf-macOS";
 			productName = SwiftProtobuf;
-			productReference = 5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf-macOS */;
+			productReference = 5F52C76D0CC7F92C551EC2E40D9320AB /* SwiftProtobuf.framework */;
 			productType = "com.apple.product-type.framework";
-		};
-		B2085DBECFAD83713FC1BE448B7882B0 /* Kingfisher-macOS-Kingfisher */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = CEB4F10E82CE1CDDB33F5B1E12144BB8 /* Build configuration list for PBXNativeTarget "Kingfisher-macOS-Kingfisher" */;
-			buildPhases = (
-				C2AC5BCDA38C6A5C586401F846F7C490 /* Sources */,
-				FF3EC350DC2EC8ED503ADD6FA18CBD46 /* Frameworks */,
-				4CF9ACD2C056486655ACC0718E63A46C /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = "Kingfisher-macOS-Kingfisher";
-			productName = Kingfisher;
-			productReference = 5DEA2DA8FDA7BAA10038CC169BBB4E50 /* Kingfisher-macOS-Kingfisher */;
-			productType = "com.apple.product-type.bundle";
 		};
 		CA07A5380AD6E7CC10070DD2E369060D /* Kingfisher-visionOS */ = {
 			isa = PBXNativeTarget;
@@ -3547,29 +3381,11 @@
 			buildRules = (
 			);
 			dependencies = (
-				620578CF96F4AD40F312F9646EFCF11A /* PBXTargetDependency */,
 			);
 			name = "Kingfisher-visionOS";
 			productName = Kingfisher;
-			productReference = 1903232A53CFA33E2C3949C71A88A2B6 /* Kingfisher-visionOS */;
+			productReference = 1903232A53CFA33E2C3949C71A88A2B6 /* Kingfisher.framework */;
 			productType = "com.apple.product-type.framework";
-		};
-		CDA4DE8278DEABE67C20F3FD29FEDA7A /* Kingfisher-visionOS-Kingfisher */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = F97F1F4FD04A0519BFBF9D418907BBB6 /* Build configuration list for PBXNativeTarget "Kingfisher-visionOS-Kingfisher" */;
-			buildPhases = (
-				439CA55BBFADDFF58F6E2CF00F561042 /* Sources */,
-				FF1E277FF30137154DB17565B1EC2223 /* Frameworks */,
-				9322F7C79508CC7E99BD1D32FF1AEDAA /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = "Kingfisher-visionOS-Kingfisher";
-			productName = Kingfisher;
-			productReference = F99A69668010DC0D20DF90520CAF4F9B /* Kingfisher-visionOS-Kingfisher */;
-			productType = "com.apple.product-type.bundle";
 		};
 		D84FF1ABB5E840CFBA9F610D26DFB42D /* TrustWalletCore-macOS */ = {
 			isa = PBXNativeTarget;
@@ -3588,7 +3404,7 @@
 			);
 			name = "TrustWalletCore-macOS";
 			productName = WalletCore;
-			productReference = 0A90AABC168E7ACBF249426FCA99F19B /* TrustWalletCore-macOS */;
+			productReference = 0A90AABC168E7ACBF249426FCA99F19B /* WalletCore.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		DC6F436FE9D7D62655988D0B8E3A24DE /* TrustWalletCore-iOS */ = {
@@ -3608,7 +3424,7 @@
 			);
 			name = "TrustWalletCore-iOS";
 			productName = WalletCore;
-			productReference = 60CD9336BF0D87EB43F318C3C417DB66 /* TrustWalletCore-iOS */;
+			productReference = 60CD9336BF0D87EB43F318C3C417DB66 /* WalletCore.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 /* End PBXNativeTarget section */
@@ -3617,8 +3433,9 @@
 		BFDFE7DC352907FC980B868725387E98 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
+				BuildIndependentTargetsInParallel = YES;
 				LastSwiftUpdateCheck = 1600;
-				LastUpgradeCheck = 1600;
+				LastUpgradeCheck = 1620;
 			};
 			buildConfigurationList = 4821239608C13582E20E6DA73FD5F1F9 /* Build configuration list for PBXProject "Pods" */;
 			compatibilityVersion = "Xcode 12.0";
@@ -3629,8 +3446,6 @@
 				en,
 			);
 			mainGroup = CF1408CF629C7361332E53B88F7BD30C;
-			minimizedProjectReferenceProxies = 0;
-			preferredProjectObjectVersion = 77;
 			productRefGroup = 7B0A5966423654B87E3B486D6F98E604 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -3638,18 +3453,13 @@
 				889A3C6D0A70D789D17B7BFFE160AD76 /* BigInt-iOS */,
 				63F854E532D7CBA393D37B6C84E1F23F /* BigInt-macOS */,
 				685A5AC5E317EE1D980ECCFE9E6EB08A /* Kingfisher-iOS */,
-				7B76B3A65EC90BE00011B16DE4F49E38 /* Kingfisher-iOS-Kingfisher */,
 				65AA93B2B9CF39819DBD1DDF58FCBC15 /* Kingfisher-macOS */,
-				B2085DBECFAD83713FC1BE448B7882B0 /* Kingfisher-macOS-Kingfisher */,
 				CA07A5380AD6E7CC10070DD2E369060D /* Kingfisher-visionOS */,
-				CDA4DE8278DEABE67C20F3FD29FEDA7A /* Kingfisher-visionOS-Kingfisher */,
 				2203B30818F316F3AEBC77DAB5604F48 /* Pods-Big Wallet */,
 				5FFF3C6BEF36B29250B4C4FC28A5861A /* Pods-Big Wallet iOS */,
 				9E7CD3CBD8AF745955F239BAC780F32A /* Pods-Big Wallet visionOS */,
 				357D7AA757B0ED4603C9CD1523BC234E /* SwiftProtobuf-iOS */,
-				0CEE1B56ECDB3CB8B561C703CF8BC996 /* SwiftProtobuf-iOS-SwiftProtobuf */,
 				AA186741961F10502016CE44BFED6684 /* SwiftProtobuf-macOS */,
-				28E46233E8A1EAE4640778FD2DEDE3C1 /* SwiftProtobuf-macOS-SwiftProtobuf */,
 				DC6F436FE9D7D62655988D0B8E3A24DE /* TrustWalletCore-iOS */,
 				D84FF1ABB5E840CFBA9F610D26DFB42D /* TrustWalletCore-macOS */,
 			);
@@ -3671,14 +3481,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		28EAC6D81BE84C805904CCD427E59952 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				06956E3AE224E25E482CF8F803C7F72A /* PrivacyInfo.xcprivacy in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		2B5E72C62938B4D269AE2F7CA8DD2F68 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -3690,23 +3492,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C9BEA3479A780C6F9A2CAB6A1E14EC10 /* Kingfisher-macOS-Kingfisher in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		4CF9ACD2C056486655ACC0718E63A46C /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				130CA61D721730E97FE704CB998F0D44 /* PrivacyInfo.xcprivacy in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		5F4339B21A1B266591EE8EEB10A69712 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				D9B3089F8BA3B075DF890973287D3682 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3728,7 +3513,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8EBF6F291C5CDD0D1D4DC569D5D84910 /* Kingfisher-visionOS-Kingfisher in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3736,7 +3520,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BCA49D530AE999660B343E83215F505F /* Kingfisher-iOS-Kingfisher in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3744,23 +3527,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				ECCD645CF8A1839E07AA2FE32B00849D /* SwiftProtobuf-iOS-SwiftProtobuf in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		9322F7C79508CC7E99BD1D32FF1AEDAA /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				1081FAA0F29326E6C14AADD6BCA4B303 /* PrivacyInfo.xcprivacy in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		99120EB42EA27F7F029CF9EE9E7DF00F /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				990A44BF07C6E03CC35EA7B8B5AD6633 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3775,7 +3541,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5994D52FDBB063B2028970528EED3B99 /* SwiftProtobuf-macOS-SwiftProtobuf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3992,25 +3757,11 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		1D1833FA2AE71AEA9D19D532196530D3 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		29213B8810CB3BD8C0158A5A5F1443B2 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				353C02C18E38EB177DFBAFC452965E3B /* Pods-Big Wallet visionOS-dummy.m in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		439CA55BBFADDFF58F6E2CF00F561042 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -4254,13 +4005,6 @@
 				BCBEBCED1645B8C8883FD50D993963E2 /* WebAuthn.swift in Sources */,
 				8A8D71C21E08E66C0EA58ECABF3A138F /* Zilliqa+Proto.swift in Sources */,
 				657C8C7F67BF3C7B50A21A500EB65A59 /* Zilliqa.pb.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		993353381B9039136E7BE2B4EE0B3E85 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -4652,20 +4396,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		BC7757D4E18624CB8D699D15DB14B728 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		C2AC5BCDA38C6A5C586401F846F7C490 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		C50C3A75C5DB72DD9DDDC9804EFA0011 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -4823,18 +4553,6 @@
 			target = 889A3C6D0A70D789D17B7BFFE160AD76 /* BigInt-iOS */;
 			targetProxy = 6E570B646C767CA097DDBDDCA73ADEF9 /* PBXContainerItemProxy */;
 		};
-		2C147F2627FF34950CE68649F9952937 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = "Kingfisher-macOS-Kingfisher";
-			target = B2085DBECFAD83713FC1BE448B7882B0 /* Kingfisher-macOS-Kingfisher */;
-			targetProxy = E14B75235DFFA199CAD65F6705AD6BDA /* PBXContainerItemProxy */;
-		};
-		443C4C3A054434A5C75B857B388E27E2 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = "Kingfisher-iOS-Kingfisher";
-			target = 7B76B3A65EC90BE00011B16DE4F49E38 /* Kingfisher-iOS-Kingfisher */;
-			targetProxy = 9D02EFCD449C656DE0D7C2DD676602C2 /* PBXContainerItemProxy */;
-		};
 		4A90912F7DD32AF14878E72ECEEACD81 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = "SwiftProtobuf-macOS";
@@ -4846,12 +4564,6 @@
 			name = "TrustWalletCore-iOS";
 			target = DC6F436FE9D7D62655988D0B8E3A24DE /* TrustWalletCore-iOS */;
 			targetProxy = FEF0DD73C584847BBB99C1E0A58A4BEA /* PBXContainerItemProxy */;
-		};
-		620578CF96F4AD40F312F9646EFCF11A /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = "Kingfisher-visionOS-Kingfisher";
-			target = CDA4DE8278DEABE67C20F3FD29FEDA7A /* Kingfisher-visionOS-Kingfisher */;
-			targetProxy = 442AB5CF741E1884B50E6C2239BFF212 /* PBXContainerItemProxy */;
 		};
 		63D043D8E61D9C473DC8A6130B3CCDE4 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -4883,18 +4595,6 @@
 			target = 357D7AA757B0ED4603C9CD1523BC234E /* SwiftProtobuf-iOS */;
 			targetProxy = 2FA42ED0EA8293C2516E49B751A4BA45 /* PBXContainerItemProxy */;
 		};
-		CC2F456A36BB935F53AD680C12A7B0E0 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = "SwiftProtobuf-macOS-SwiftProtobuf";
-			target = 28E46233E8A1EAE4640778FD2DEDE3C1 /* SwiftProtobuf-macOS-SwiftProtobuf */;
-			targetProxy = EE5C5302C18DEA94C4DB4BEE9B11B81A /* PBXContainerItemProxy */;
-		};
-		F4F05ED4C8334563EF8923434ED51239 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = "SwiftProtobuf-iOS-SwiftProtobuf";
-			target = 0CEE1B56ECDB3CB8B561C703CF8BC996 /* SwiftProtobuf-iOS-SwiftProtobuf */;
-			targetProxy = AD3F24E58228FC6C1D9F56D0A9F08B07 /* PBXContainerItemProxy */;
-		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -4902,19 +4602,18 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 66757AAA6346BBBC62D3E2E3B0571201 /* Pods-Big Wallet.release.xcconfig */;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
-				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Target Support Files/Pods-Big Wallet/Pods-Big Wallet-Info.plist";
@@ -4948,7 +4647,6 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = FD2218FA1F11BE1E598E751045214E55 /* TrustWalletCore-macOS.release.xcconfig */;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
@@ -4956,11 +4654,12 @@
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = "Target Support Files/TrustWalletCore-macOS/TrustWalletCore-macOS-prefix.pch";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -4989,55 +4688,18 @@
 			};
 			name = Release;
 		};
-		1BC5B90F1B7D067543AF5528C40D599E /* Debug */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = 2415AEA59D40F4CA1E32D3CC1265802E /* Kingfisher-iOS.debug.xcconfig */;
-			buildSettings = {
-				CODE_SIGNING_ALLOWED = NO;
-				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Kingfisher-iOS";
-				IBSC_MODULE = Kingfisher;
-				INFOPLIST_FILE = "Target Support Files/Kingfisher-iOS/ResourceBundle-Kingfisher-Kingfisher-iOS-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				PRODUCT_NAME = Kingfisher;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				WRAPPER_EXTENSION = bundle;
-			};
-			name = Debug;
-		};
-		232CEE4AC0A00ECCE9E21130574F69F3 /* Release */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = 98A0705054D10FEA4FBB4EF295CA5011 /* Kingfisher-iOS.release.xcconfig */;
-			buildSettings = {
-				CODE_SIGNING_ALLOWED = NO;
-				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Kingfisher-iOS";
-				IBSC_MODULE = Kingfisher;
-				INFOPLIST_FILE = "Target Support Files/Kingfisher-iOS/ResourceBundle-Kingfisher-Kingfisher-iOS-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				PRODUCT_NAME = Kingfisher;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				WRAPPER_EXTENSION = bundle;
-			};
-			name = Release;
-		};
 		23BC347BDA5D1DDFDD30979E828A264E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = BA5870DDEE126C274E7C8DB883D7BD60 /* Pods-Big Wallet visionOS.debug.xcconfig */;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CODE_SIGN_IDENTITY = "";
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Target Support Files/Pods-Big Wallet visionOS/Pods-Big Wallet visionOS-Info.plist";
@@ -5067,18 +4729,18 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = BED5A508E454CD452A4E16FB49020778 /* BigInt-macOS.release.xcconfig */;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = "Target Support Files/BigInt-macOS/BigInt-macOS-prefix.pch";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -5113,15 +4775,13 @@
 			buildSettings = {
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
-				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CODE_SIGN_IDENTITY = "";
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = "Target Support Files/TrustWalletCore-iOS/TrustWalletCore-iOS-prefix.pch";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -5156,15 +4816,13 @@
 			baseConfigurationReference = D6C601FFE7B2B70C8D0779C10EAA3C16 /* BigInt-iOS.release.xcconfig */;
 			buildSettings = {
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CODE_SIGN_IDENTITY = "";
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = "Target Support Files/BigInt-iOS/BigInt-iOS-prefix.pch";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -5200,15 +4858,13 @@
 			baseConfigurationReference = EABC0F20324695422B5DE6DE4D3BDB2B /* BigInt-iOS.debug.xcconfig */;
 			buildSettings = {
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CODE_SIGN_IDENTITY = "";
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = "Target Support Files/BigInt-iOS/BigInt-iOS-prefix.pch";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -5273,6 +4929,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -5299,7 +4956,6 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRIP_INSTALLED_PRODUCT = NO;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -5312,7 +4968,6 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = D3D4A8AC4C4EA255800A2B894C0110AF /* Kingfisher-macOS.debug.xcconfig */;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
@@ -5320,11 +4975,12 @@
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = "Target Support Files/Kingfisher-macOS/Kingfisher-macOS-prefix.pch";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -5353,78 +5009,19 @@
 			};
 			name = Debug;
 		};
-		5E72DE1C817EF4F21A11B719BB4BC95E /* Debug */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6277EAC28D09E8EF25179AAB3EC2C70D /* Kingfisher-visionOS.debug.xcconfig */;
-			buildSettings = {
-				CODE_SIGNING_ALLOWED = NO;
-				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Kingfisher-visionOS";
-				IBSC_MODULE = Kingfisher;
-				INFOPLIST_FILE = "Target Support Files/Kingfisher-visionOS/ResourceBundle-Kingfisher-Kingfisher-visionOS-Info.plist";
-				PRODUCT_NAME = Kingfisher;
-				SDKROOT = xros;
-				SKIP_INSTALL = YES;
-				VISIONOS_DEPLOYMENT_TARGET = 1.0;
-				WRAPPER_EXTENSION = bundle;
-				XROS_DEPLOYMENT_TARGET = 1.0;
-			};
-			name = Debug;
-		};
-		60C495469004233B4835B2D98862D7C9 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6288D1C86896988713D41A9CE9C4BA13 /* SwiftProtobuf-iOS.debug.xcconfig */;
-			buildSettings = {
-				CODE_SIGNING_ALLOWED = NO;
-				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/SwiftProtobuf-iOS";
-				IBSC_MODULE = SwiftProtobuf;
-				INFOPLIST_FILE = "Target Support Files/SwiftProtobuf-iOS/ResourceBundle-SwiftProtobuf-SwiftProtobuf-iOS-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				PRODUCT_NAME = SwiftProtobuf;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				WRAPPER_EXTENSION = bundle;
-			};
-			name = Debug;
-		};
-		6105C2DD640198CA4EFC0BE04BC29B79 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = D3D4A8AC4C4EA255800A2B894C0110AF /* Kingfisher-macOS.debug.xcconfig */;
-			buildSettings = {
-				CODE_SIGNING_ALLOWED = NO;
-				COMBINE_HIDPI_IMAGES = YES;
-				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Kingfisher-macOS";
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				IBSC_MODULE = Kingfisher;
-				INFOPLIST_FILE = "Target Support Files/Kingfisher-macOS/ResourceBundle-Kingfisher-Kingfisher-macOS-Info.plist";
-				INFOPLIST_KEY_NSPrincipalClass = "";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_NAME = Kingfisher;
-				SDKROOT = macosx;
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				WRAPPER_EXTENSION = bundle;
-			};
-			name = Debug;
-		};
 		63DC8247A4EBFE65B7EBC54F3EEF84B9 /* Release */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 98A0705054D10FEA4FBB4EF295CA5011 /* Kingfisher-iOS.release.xcconfig */;
 			buildSettings = {
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
-				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CODE_SIGN_IDENTITY = "";
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = "Target Support Files/Kingfisher-iOS/Kingfisher-iOS-prefix.pch";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -5455,45 +5052,22 @@
 			};
 			name = Release;
 		};
-		647D342636B3DA8756ACC3219A3B98F9 /* Release */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = 741055743D9D8365862D6BC19A33DD41 /* SwiftProtobuf-macOS.release.xcconfig */;
-			buildSettings = {
-				CODE_SIGNING_ALLOWED = NO;
-				COMBINE_HIDPI_IMAGES = YES;
-				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/SwiftProtobuf-macOS";
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				IBSC_MODULE = SwiftProtobuf;
-				INFOPLIST_FILE = "Target Support Files/SwiftProtobuf-macOS/ResourceBundle-SwiftProtobuf-SwiftProtobuf-macOS-Info.plist";
-				INFOPLIST_KEY_NSPrincipalClass = "";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_NAME = SwiftProtobuf;
-				SDKROOT = macosx;
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				WRAPPER_EXTENSION = bundle;
-			};
-			name = Release;
-		};
 		6C5595B156B9AD33B3C3AD08AF73944A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = C6DFBEE39CA3C4B5717724F63C5C1D34 /* BigInt-macOS.debug.xcconfig */;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = "Target Support Files/BigInt-macOS/BigInt-macOS-prefix.pch";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -5527,15 +5101,13 @@
 			baseConfigurationReference = 4816F1CBD2C3BE772CBA0E71E80DF8BC /* Kingfisher-visionOS.release.xcconfig */;
 			buildSettings = {
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CODE_SIGN_IDENTITY = "";
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = "Target Support Files/Kingfisher-visionOS/Kingfisher-visionOS-prefix.pch";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -5566,15 +5138,13 @@
 			buildSettings = {
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
-				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CODE_SIGN_IDENTITY = "";
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = "Target Support Files/SwiftProtobuf-iOS/SwiftProtobuf-iOS-prefix.pch";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -5609,7 +5179,6 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 8AAC55869A13D91E34E1D6C9F4435590 /* TrustWalletCore-macOS.debug.xcconfig */;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
@@ -5617,11 +5186,12 @@
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = "Target Support Files/TrustWalletCore-macOS/TrustWalletCore-macOS-prefix.pch";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -5654,17 +5224,14 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 768E95472C2820919DC87CE3CF04E343 /* Pods-Big Wallet visionOS.release.xcconfig */;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CODE_SIGN_IDENTITY = "";
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Target Support Files/Pods-Big Wallet visionOS/Pods-Big Wallet visionOS-Info.plist";
@@ -5696,15 +5263,13 @@
 			buildSettings = {
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
-				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CODE_SIGN_IDENTITY = "";
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = "Target Support Files/Kingfisher-iOS/Kingfisher-iOS-prefix.pch";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -5733,29 +5298,6 @@
 				VERSION_INFO_PREFIX = "";
 			};
 			name = Debug;
-		};
-		90463BA98AD9AA4AEE94B5B085F090EC /* Release */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = B54F6082CF3D50B7F8D6041B20E462D7 /* Kingfisher-macOS.release.xcconfig */;
-			buildSettings = {
-				CODE_SIGNING_ALLOWED = NO;
-				COMBINE_HIDPI_IMAGES = YES;
-				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Kingfisher-macOS";
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				IBSC_MODULE = Kingfisher;
-				INFOPLIST_FILE = "Target Support Files/Kingfisher-macOS/ResourceBundle-Kingfisher-Kingfisher-macOS-Info.plist";
-				INFOPLIST_KEY_NSPrincipalClass = "";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_NAME = Kingfisher;
-				SDKROOT = macosx;
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				WRAPPER_EXTENSION = bundle;
-			};
-			name = Release;
 		};
 		917E5E935CBFD364DCDAF0EC60FA1064 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -5792,6 +5334,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -5814,7 +5357,6 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRIP_INSTALLED_PRODUCT = NO;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_VERSION = 5.0;
 				SYMROOT = "${SRCROOT}/../build";
@@ -5826,19 +5368,18 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = E6A1C0F12B19D6A48BD1027E6035558A /* Pods-Big Wallet.debug.xcconfig */;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
-				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Target Support Files/Pods-Big Wallet/Pods-Big Wallet-Info.plist";
@@ -5874,15 +5415,13 @@
 			buildSettings = {
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
-				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CODE_SIGN_IDENTITY = "";
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = "Target Support Files/SwiftProtobuf-iOS/SwiftProtobuf-iOS-prefix.pch";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -5916,7 +5455,6 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = B54F6082CF3D50B7F8D6041B20E462D7 /* Kingfisher-macOS.release.xcconfig */;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
@@ -5924,11 +5462,12 @@
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = "Target Support Files/Kingfisher-macOS/Kingfisher-macOS-prefix.pch";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -5961,18 +5500,15 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 8E2F111E7B14E587DD86BC4006926E50 /* Pods-Big Wallet iOS.release.xcconfig */;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
-				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CODE_SIGN_IDENTITY = "";
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Target Support Files/Pods-Big Wallet iOS/Pods-Big Wallet iOS-Info.plist";
@@ -6004,54 +5540,18 @@
 			};
 			name = Release;
 		};
-		BE9C2D80DBD1F0406AB10EB63354A823 /* Release */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = 4816F1CBD2C3BE772CBA0E71E80DF8BC /* Kingfisher-visionOS.release.xcconfig */;
-			buildSettings = {
-				CODE_SIGNING_ALLOWED = NO;
-				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Kingfisher-visionOS";
-				IBSC_MODULE = Kingfisher;
-				INFOPLIST_FILE = "Target Support Files/Kingfisher-visionOS/ResourceBundle-Kingfisher-Kingfisher-visionOS-Info.plist";
-				PRODUCT_NAME = Kingfisher;
-				SDKROOT = xros;
-				SKIP_INSTALL = YES;
-				VISIONOS_DEPLOYMENT_TARGET = 1.0;
-				WRAPPER_EXTENSION = bundle;
-				XROS_DEPLOYMENT_TARGET = 1.0;
-			};
-			name = Release;
-		};
-		BEA64B7E5F5D70E69D86EB70EC9FE191 /* Release */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = 4E5B18DC3D7EC5AC09406E8AB51F4F98 /* SwiftProtobuf-iOS.release.xcconfig */;
-			buildSettings = {
-				CODE_SIGNING_ALLOWED = NO;
-				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/SwiftProtobuf-iOS";
-				IBSC_MODULE = SwiftProtobuf;
-				INFOPLIST_FILE = "Target Support Files/SwiftProtobuf-iOS/ResourceBundle-SwiftProtobuf-SwiftProtobuf-iOS-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				PRODUCT_NAME = SwiftProtobuf;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				WRAPPER_EXTENSION = bundle;
-			};
-			name = Release;
-		};
 		D351979409319B11FC03192A0655A6F8 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 6277EAC28D09E8EF25179AAB3EC2C70D /* Kingfisher-visionOS.debug.xcconfig */;
 			buildSettings = {
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CODE_SIGN_IDENTITY = "";
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = "Target Support Files/Kingfisher-visionOS/Kingfisher-visionOS-prefix.pch";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -6080,7 +5580,6 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 741055743D9D8365862D6BC19A33DD41 /* SwiftProtobuf-macOS.release.xcconfig */;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
@@ -6088,11 +5587,12 @@
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = "Target Support Files/SwiftProtobuf-macOS/SwiftProtobuf-macOS-prefix.pch";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -6125,7 +5625,6 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = B599EC355537A8AE5AE4DAA4741802CC /* SwiftProtobuf-macOS.debug.xcconfig */;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
@@ -6133,11 +5632,12 @@
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = "Target Support Files/SwiftProtobuf-macOS/SwiftProtobuf-macOS-prefix.pch";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -6166,45 +5666,19 @@
 			};
 			name = Debug;
 		};
-		F09CB67C6A2069C57935CDDA7384689A /* Debug */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = B599EC355537A8AE5AE4DAA4741802CC /* SwiftProtobuf-macOS.debug.xcconfig */;
-			buildSettings = {
-				CODE_SIGNING_ALLOWED = NO;
-				COMBINE_HIDPI_IMAGES = YES;
-				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/SwiftProtobuf-macOS";
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				IBSC_MODULE = SwiftProtobuf;
-				INFOPLIST_FILE = "Target Support Files/SwiftProtobuf-macOS/ResourceBundle-SwiftProtobuf-SwiftProtobuf-macOS-Info.plist";
-				INFOPLIST_KEY_NSPrincipalClass = "";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_NAME = SwiftProtobuf;
-				SDKROOT = macosx;
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				WRAPPER_EXTENSION = bundle;
-			};
-			name = Debug;
-		};
 		F47CB5931FF27FCC9C69F3EAEB3BAE55 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 63E7175618EFCD57A262C8FF583E88FA /* Pods-Big Wallet iOS.debug.xcconfig */;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
-				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CODE_SIGN_IDENTITY = "";
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Target Support Files/Pods-Big Wallet iOS/Pods-Big Wallet iOS-Info.plist";
@@ -6241,15 +5715,13 @@
 			buildSettings = {
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
-				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CODE_SIGN_IDENTITY = "";
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_MODULE_VERIFIER = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = "Target Support Files/TrustWalletCore-iOS/TrustWalletCore-iOS-prefix.pch";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -6337,15 +5809,6 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		9D8E35DB2DB8B682EE9A0D05AED12373 /* Build configuration list for PBXNativeTarget "Kingfisher-iOS-Kingfisher" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				1BC5B90F1B7D067543AF5528C40D599E /* Debug */,
-				232CEE4AC0A00ECCE9E21130574F69F3 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		9E3A1778939F0D27D63BEBBF79314D26 /* Build configuration list for PBXNativeTarget "TrustWalletCore-macOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -6373,24 +5836,6 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		C3264566DFFC96F89E900D40D6CACD3A /* Build configuration list for PBXNativeTarget "SwiftProtobuf-iOS-SwiftProtobuf" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				60C495469004233B4835B2D98862D7C9 /* Debug */,
-				BEA64B7E5F5D70E69D86EB70EC9FE191 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		CEB4F10E82CE1CDDB33F5B1E12144BB8 /* Build configuration list for PBXNativeTarget "Kingfisher-macOS-Kingfisher" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				6105C2DD640198CA4EFC0BE04BC29B79 /* Debug */,
-				90463BA98AD9AA4AEE94B5B085F090EC /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		D96F8A7BF668047F5CDA8B588880BCD2 /* Build configuration list for PBXNativeTarget "BigInt-iOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -6409,15 +5854,6 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		EF027A7042126745B4537FE7E072BD78 /* Build configuration list for PBXNativeTarget "SwiftProtobuf-macOS-SwiftProtobuf" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				F09CB67C6A2069C57935CDDA7384689A /* Debug */,
-				647D342636B3DA8756ACC3219A3B98F9 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		EF96A21B92F9BB6BFE40689FCC64FC46 /* Build configuration list for PBXNativeTarget "BigInt-macOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -6432,15 +5868,6 @@
 			buildConfigurations = (
 				8D5E947ADF025B30B7BF6C6B9962DCF8 /* Debug */,
 				63DC8247A4EBFE65B7EBC54F3EEF84B9 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		F97F1F4FD04A0519BFBF9D418907BBB6 /* Build configuration list for PBXNativeTarget "Kingfisher-visionOS-Kingfisher" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				5E72DE1C817EF4F21A11B719BB4BC95E /* Debug */,
-				BE9C2D80DBD1F0406AB10EB63354A823 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
