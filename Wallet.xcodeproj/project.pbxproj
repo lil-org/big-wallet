@@ -412,6 +412,7 @@
 		2C5FF97D26C84F7C00B32ACC /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		2C5FF97F26C84F7C00B32ACC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C603D0126B6E13F00956955 /* String.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = String.swift; sourceTree = "<group>"; };
+		2C6054652D5296CE00779570 /* Big Wallet visionOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Big Wallet visionOS.entitlements"; sourceTree = "<group>"; };
 		2C622BC12BF3C52F0003B932 /* Translate */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = Translate; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C622BC32BF3C52F0003B932 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		2C6706A4267A6BFE006AAEF2 /* Bundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bundle.swift; sourceTree = "<group>"; };
@@ -1033,6 +1034,7 @@
 				2C17BDDE2D3D01F30015C58B /* Assets.xcassets */,
 				2C17BDDF2D3D01F30015C58B /* Big_Wallet_visionOSApp.swift */,
 				2C17BDE02D3D01F30015C58B /* ContentView.swift */,
+				2C6054652D5296CE00779570 /* Big Wallet visionOS.entitlements */,
 				2C17BDE12D3D01F30015C58B /* Info.plist */,
 			);
 			path = "App visionOS";
@@ -3380,6 +3382,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_ENTITLEMENTS = "App visionOS/Big Wallet visionOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 51;
 				DEVELOPMENT_ASSET_PATHS = "";
@@ -3416,6 +3419,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_ENTITLEMENTS = "App visionOS/Big Wallet visionOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 51;
 				DEVELOPMENT_ASSET_PATHS = "";
