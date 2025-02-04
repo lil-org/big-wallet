@@ -254,6 +254,7 @@
 		2CF429552C1DBF0300AD303A /* MetadataTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF429542C1DBF0300AD303A /* MetadataTask.swift */; };
 		2CF429572C1DBF1100AD303A /* Language.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF429562C1DBF1100AD303A /* Language.swift */; };
 		2CF429592C1DBFCF00AD303A /* Data.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF429582C1DBFCF00AD303A /* Data.swift */; };
+		2CF9B1042D526E2300B5CE82 /* WalletContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668B26B2142000728C20 /* WalletContainer.swift */; };
 		2CFAE56A28BE6292001D0799 /* NSImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CFAE56928BE6292001D0799 /* NSImage.swift */; };
 		2CFDDF4E2765417E00F89019 /* ios_specific_content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CFDDF4D2765417D00F89019 /* ios_specific_content.js */; };
 		52B05EDE6C519B91E26B4F9C /* Pods_Big_Wallet.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9B77B7B65690D61ACCF043B2 /* Pods_Big_Wallet.framework */; };
@@ -2923,6 +2924,7 @@
 			files = (
 				2C17BDE32D3D01F30015C58B /* Big_Wallet_visionOSApp.swift in Sources */,
 				2C17BDE42D3D01F30015C58B /* ContentView.swift in Sources */,
+				2CF9B1042D526E2300B5CE82 /* WalletContainer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

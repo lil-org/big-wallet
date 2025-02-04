@@ -9,12 +9,20 @@ PODS:
   - TrustWalletCore/Types (4.2.3):
     - SwiftProtobuf
   - VBigInt (1.0.0)
+  - VSwiftProtobuf (5.0.0)
+  - VTrustWalletCore (7.7.7):
+    - VTrustWalletCore/Core (= 7.7.7)
+  - VTrustWalletCore/Core (7.7.7):
+    - VTrustWalletCore/Types
+  - VTrustWalletCore/Types (7.7.7):
+    - VSwiftProtobuf
 
 DEPENDENCIES:
   - BigInt
   - Kingfisher
   - TrustWalletCore
   - VBigInt (from `https://github.com/grachyov/BigInt.git`, branch `master`)
+  - VTrustWalletCore (from `https://github.com/grachyov/wallet-core/raw/master/VTrustWalletCore.podspec`)
 
 SPEC REPOS:
   trunk:
@@ -22,11 +30,14 @@ SPEC REPOS:
     - Kingfisher
     - SwiftProtobuf
     - TrustWalletCore
+    - VSwiftProtobuf
 
 EXTERNAL SOURCES:
   VBigInt:
     :branch: master
     :git: https://github.com/grachyov/BigInt.git
+  VTrustWalletCore:
+    :podspec: https://github.com/grachyov/wallet-core/raw/master/VTrustWalletCore.podspec
 
 CHECKOUT OPTIONS:
   VBigInt:
@@ -39,7 +50,9 @@ SPEC CHECKSUMS:
   SwiftProtobuf: 4dbaffec76a39a8dc5da23b40af1a5dc01a4c02d
   TrustWalletCore: 4fd68f4df0428532a13cefaec1a3e403273c0869
   VBigInt: cc9ca0713293650229c8067f42b059ca41b929db
+  VSwiftProtobuf: 90ccd59c4535da3d7618b2ff910543ef46bfa9c0
+  VTrustWalletCore: 393420dc10dc08f1f8bc065c89705461098708bd
 
-PODFILE CHECKSUM: 4a7b0ce4c8186366ad8cb0c052780d1bcd48c89f
+PODFILE CHECKSUM: 1550d6efe6862d091d24d31a0b11652cf8cb4070
 
-COCOAPODS: 1.16.1
+COCOAPODS: 1.16.2

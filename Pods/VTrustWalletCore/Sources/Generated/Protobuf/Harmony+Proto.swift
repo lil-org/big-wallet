@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// Copyright © 2017 Trust Wallet.
+
+public typealias HarmonySigningInput = TW_Harmony_Proto_SigningInput
+public typealias HarmonySigningOutput = TW_Harmony_Proto_SigningOutput
+public typealias HarmonyTransactionMessage = TW_Harmony_Proto_TransactionMessage
+public typealias HarmonyStakingMessage = TW_Harmony_Proto_StakingMessage
+public typealias HarmonyDescription = TW_Harmony_Proto_Description
+public typealias HarmonyDecimal = TW_Harmony_Proto_Decimal
+public typealias HarmonyCommissionRate = TW_Harmony_Proto_CommissionRate
+public typealias HarmonyDirectiveCreateValidator = TW_Harmony_Proto_DirectiveCreateValidator
+public typealias HarmonyDirectiveEditValidator = TW_Harmony_Proto_DirectiveEditValidator
+public typealias HarmonyDirectiveDelegate = TW_Harmony_Proto_DirectiveDelegate
+public typealias HarmonyDirectiveUndelegate = TW_Harmony_Proto_DirectiveUndelegate
+public typealias HarmonyDirectiveCollectRewards = TW_Harmony_Proto_DirectiveCollectRewards

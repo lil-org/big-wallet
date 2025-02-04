@@ -1,13 +1,13 @@
 ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES
 CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO
-FRAMEWORK_SEARCH_PATHS = $(inherited) "${PODS_CONFIGURATION_BUILD_DIR}/Kingfisher-visionOS" "${PODS_CONFIGURATION_BUILD_DIR}/VBigInt"
+FRAMEWORK_SEARCH_PATHS = $(inherited) "${PODS_CONFIGURATION_BUILD_DIR}/Kingfisher-visionOS" "${PODS_CONFIGURATION_BUILD_DIR}/VBigInt" "${PODS_CONFIGURATION_BUILD_DIR}/VSwiftProtobuf" "${PODS_CONFIGURATION_BUILD_DIR}/VTrustWalletCore" "${PODS_ROOT}/VTrustWalletCore" "${PODS_XCFRAMEWORKS_BUILD_DIR}/VTrustWalletCore/Core"
 GCC_PREPROCESSOR_DEFINITIONS = $(inherited) COCOAPODS=1
-HEADER_SEARCH_PATHS = $(inherited) "${PODS_CONFIGURATION_BUILD_DIR}/Kingfisher-visionOS/Kingfisher.framework/Headers" "${PODS_CONFIGURATION_BUILD_DIR}/VBigInt/VBigInt.framework/Headers"
+HEADER_SEARCH_PATHS = $(inherited) "${PODS_CONFIGURATION_BUILD_DIR}/Kingfisher-visionOS/Kingfisher.framework/Headers" "${PODS_CONFIGURATION_BUILD_DIR}/VBigInt/VBigInt.framework/Headers" "${PODS_CONFIGURATION_BUILD_DIR}/VSwiftProtobuf/VSwiftProtobuf.framework/Headers" "${PODS_CONFIGURATION_BUILD_DIR}/VTrustWalletCore/WalletCore.framework/Headers"
 LD_RUNPATH_SEARCH_PATHS = $(inherited) /usr/lib/swift '@executable_path/Frameworks' '@loader_path/Frameworks'
 LIBRARY_SEARCH_PATHS = $(inherited) "${TOOLCHAIN_DIR}/usr/lib/swift/${PLATFORM_NAME}" /usr/lib/swift
-OTHER_CFLAGS = $(inherited) -isystem "${PODS_CONFIGURATION_BUILD_DIR}/Kingfisher-visionOS/Kingfisher.framework/Headers" -isystem "${PODS_CONFIGURATION_BUILD_DIR}/VBigInt/VBigInt.framework/Headers" -iframework "${PODS_CONFIGURATION_BUILD_DIR}/Kingfisher-visionOS" -iframework "${PODS_CONFIGURATION_BUILD_DIR}/VBigInt"
-OTHER_LDFLAGS = $(inherited) -framework "Accelerate" -framework "CFNetwork" -framework "Kingfisher" -framework "VBigInt" -weak_framework "Combine" -weak_framework "SwiftUI"
-OTHER_MODULE_VERIFIER_FLAGS = $(inherited) "-F${PODS_CONFIGURATION_BUILD_DIR}/Kingfisher-visionOS" "-F${PODS_CONFIGURATION_BUILD_DIR}/VBigInt"
+OTHER_CFLAGS = $(inherited) -isystem "${PODS_CONFIGURATION_BUILD_DIR}/Kingfisher-visionOS/Kingfisher.framework/Headers" -isystem "${PODS_CONFIGURATION_BUILD_DIR}/VBigInt/VBigInt.framework/Headers" -isystem "${PODS_CONFIGURATION_BUILD_DIR}/VSwiftProtobuf/VSwiftProtobuf.framework/Headers" -isystem "${PODS_CONFIGURATION_BUILD_DIR}/VTrustWalletCore/WalletCore.framework/Headers" -iframework "${PODS_CONFIGURATION_BUILD_DIR}/Kingfisher-visionOS" -iframework "${PODS_CONFIGURATION_BUILD_DIR}/VBigInt" -iframework "${PODS_CONFIGURATION_BUILD_DIR}/VSwiftProtobuf" -iframework "${PODS_ROOT}/VTrustWalletCore" -iframework "${PODS_XCFRAMEWORKS_BUILD_DIR}/VTrustWalletCore/Core" -iframework "${PODS_CONFIGURATION_BUILD_DIR}/VTrustWalletCore"
+OTHER_LDFLAGS = $(inherited) -ObjC -l"c++" -framework "Accelerate" -framework "CFNetwork" -framework "Kingfisher" -framework "VBigInt" -framework "VSwiftProtobuf" -framework "WalletCore" -weak_framework "Combine" -weak_framework "SwiftUI"
+OTHER_MODULE_VERIFIER_FLAGS = $(inherited) "-F${PODS_CONFIGURATION_BUILD_DIR}/Kingfisher-visionOS" "-F${PODS_CONFIGURATION_BUILD_DIR}/VBigInt" "-F${PODS_CONFIGURATION_BUILD_DIR}/VSwiftProtobuf" "-F${PODS_CONFIGURATION_BUILD_DIR}/VTrustWalletCore"
 OTHER_SWIFT_FLAGS = $(inherited) -D COCOAPODS
 PODS_BUILD_DIR = ${BUILD_DIR}
 PODS_CONFIGURATION_BUILD_DIR = ${PODS_BUILD_DIR}/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)

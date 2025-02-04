@@ -1,0 +1,6 @@
+framework module VSwiftProtobuf {
+  umbrella header "VSwiftProtobuf-umbrella.h"
+
+  export *
+  module * { export * }
+}
