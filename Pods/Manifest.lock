@@ -1,6 +1,6 @@
 PODS:
   - BigInt (5.2.0)
-  - Kingfisher (8.1.4)
+  - Kingfisher (8.2.0)
   - SwiftProtobuf (1.28.2)
   - TrustWalletCore (4.2.3):
     - TrustWalletCore/Core (= 4.2.3)
@@ -41,15 +41,15 @@ EXTERNAL SOURCES:
 
 CHECKOUT OPTIONS:
   VBigInt:
-    :commit: cf11fceae608a0b083101f8c85b6af3bbe39828f
+    :commit: 95277d941df7b030da3bfbf9b6d202e4cb637d47
     :git: https://github.com/grachyov/BigInt.git
 
 SPEC CHECKSUMS:
   BigInt: f668a80089607f521586bbe29513d708491ef2f7
-  Kingfisher: a5cc3d8689cd40d7cb2edfa67a5ede0b53122813
+  Kingfisher: 323e5c4ec7983aaace12af655a7b51a7f88a599d
   SwiftProtobuf: 4dbaffec76a39a8dc5da23b40af1a5dc01a4c02d
   TrustWalletCore: 4fd68f4df0428532a13cefaec1a3e403273c0869
-  VBigInt: cc9ca0713293650229c8067f42b059ca41b929db
+  VBigInt: 0cb96b7ea4319327359d2c8a7692e6902b29b2d7
   VSwiftProtobuf: 90ccd59c4535da3d7618b2ff910543ef46bfa9c0
   VTrustWalletCore: 393420dc10dc08f1f8bc065c89705461098708bd
 

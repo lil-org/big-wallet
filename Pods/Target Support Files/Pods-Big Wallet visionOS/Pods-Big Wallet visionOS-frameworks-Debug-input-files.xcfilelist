@@ -1,5 +1,5 @@
 ${PODS_ROOT}/Target Support Files/Pods-Big Wallet visionOS/Pods-Big Wallet visionOS-frameworks.sh
 ${BUILT_PRODUCTS_DIR}/Kingfisher-visionOS/Kingfisher.framework
-${BUILT_PRODUCTS_DIR}/VBigInt/VBigInt.framework
+${BUILT_PRODUCTS_DIR}/VBigInt/BigInt.framework
 ${BUILT_PRODUCTS_DIR}/VSwiftProtobuf/VSwiftProtobuf.framework
 ${BUILT_PRODUCTS_DIR}/VTrustWalletCore/WalletCore.framework

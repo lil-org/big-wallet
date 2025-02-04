@@ -12,6 +12,7 @@
     "attaswift": "attaswift@attaswift.org",
     "ivan": "ivan@lil.org"
   },
+  "module_name": "BigInt",
   "source": {
     "git": "https://github.com/grachyov/BigInt.git",
     "tag": "1.0.0"

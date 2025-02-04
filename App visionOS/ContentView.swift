@@ -2,8 +2,8 @@
 
 import SwiftUI
 import Kingfisher
-import VBigInt
 import WalletCore
+import BigInt
 
 struct ContentView: View {
     var body: some View {

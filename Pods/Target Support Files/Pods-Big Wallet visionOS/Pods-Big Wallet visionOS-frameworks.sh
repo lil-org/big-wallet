@@ -177,13 +177,13 @@ code_sign_if_enabled() {
 
 if [[ "$CONFIGURATION" == "Debug" ]]; then
   install_framework "${BUILT_PRODUCTS_DIR}/Kingfisher-visionOS/Kingfisher.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/VBigInt/VBigInt.framework"
+  install_framework "${BUILT_PRODUCTS_DIR}/VBigInt/BigInt.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/VSwiftProtobuf/VSwiftProtobuf.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/VTrustWalletCore/WalletCore.framework"
 fi
 if [[ "$CONFIGURATION" == "Release" ]]; then
   install_framework "${BUILT_PRODUCTS_DIR}/Kingfisher-visionOS/Kingfisher.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/VBigInt/VBigInt.framework"
+  install_framework "${BUILT_PRODUCTS_DIR}/VBigInt/BigInt.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/VSwiftProtobuf/VSwiftProtobuf.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/VTrustWalletCore/WalletCore.framework"
 fi

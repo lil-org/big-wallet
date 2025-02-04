@@ -1,4 +1,4 @@
-framework module VBigInt {
+framework module BigInt {
   umbrella header "VBigInt-umbrella.h"
 
   export *

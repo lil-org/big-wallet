@@ -11,6 +11,6 @@
 #endif
 
 
-FOUNDATION_EXPORT double VBigIntVersionNumber;
-FOUNDATION_EXPORT const unsigned char VBigIntVersionString[];
+FOUNDATION_EXPORT double BigIntVersionNumber;
+FOUNDATION_EXPORT const unsigned char BigIntVersionString[];
 
