@@ -155,6 +155,7 @@
 		2C9B55D32AF2AE4B008BE899 /* BundledNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */; };
 		2C9F0B6826BDCB2E008FA3D6 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */; };
 		2CAA412526C7CD93009F3535 /* ReviewRequester.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CAA412426C7CD93009F3535 /* ReviewRequester.swift */; };
+		2CADA62C2D5271BA002C34A8 /* Tests_visionOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CADA62B2D527198002C34A8 /* Tests_visionOS.swift */; };
 		2CADD2C52AFAAE860082BFA4 /* Infura.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CADD2C42AFAAE860082BFA4 /* Infura.swift */; };
 		2CADD2C62AFAAE860082BFA4 /* Infura.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CADD2C42AFAAE860082BFA4 /* Infura.swift */; };
 		2CADD2C72AFAAE860082BFA4 /* Infura.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CADD2C42AFAAE860082BFA4 /* Infura.swift */; };
@@ -255,6 +256,9 @@
 		2CF429572C1DBF1100AD303A /* Language.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF429562C1DBF1100AD303A /* Language.swift */; };
 		2CF429592C1DBFCF00AD303A /* Data.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF429582C1DBFCF00AD303A /* Data.swift */; };
 		2CF9B1042D526E2300B5CE82 /* WalletContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0668B26B2142000728C20 /* WalletContainer.swift */; };
+		2CF9B10F2D526F7C00B5CE82 /* TransactionInspectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03EB892B069BFD00EF61F5 /* TransactionInspectorTests.swift */; };
+		2CF9B1102D526F8B00B5CE82 /* TransactionInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC79DF72AFD4BD6002B5A2D /* TransactionInspector.swift */; };
+		2CF9B1112D526F9900B5CE82 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
 		2CFAE56A28BE6292001D0799 /* NSImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CFAE56928BE6292001D0799 /* NSImage.swift */; };
 		2CFDDF4E2765417E00F89019 /* ios_specific_content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CFDDF4D2765417D00F89019 /* ios_specific_content.js */; };
 		52B05EDE6C519B91E26B4F9C /* Pods_Big_Wallet.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9B77B7B65690D61ACCF043B2 /* Pods_Big_Wallet.framework */; };
@@ -289,6 +293,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 2C19953B2674C4B900A8E370;
 			remoteInfo = Wallet;
+		};
+		2CF9B10A2D526F4D00B5CE82 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2C1995342674C4B900A8E370 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2C17BDC92D3D007E0015C58B;
+			remoteInfo = "Big Wallet visionOS";
 		};
 /* End PBXContainerItemProxy section */
 
@@ -453,6 +464,7 @@
 		2C9B55D42AF2B004008BE899 /* nodes-to-bundle.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "nodes-to-bundle.json"; sourceTree = "<group>"; };
 		2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumNetwork.swift; sourceTree = "<group>"; };
 		2CAA412426C7CD93009F3535 /* ReviewRequester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewRequester.swift; sourceTree = "<group>"; };
+		2CADA62B2D527198002C34A8 /* Tests_visionOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests_visionOS.swift; sourceTree = "<group>"; };
 		2CADD2C42AFAAE860082BFA4 /* Infura.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Infura.swift; sourceTree = "<group>"; };
 		2CB0BC482B13AA5100603E68 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		2CB3845827654E9700A189B9 /* _locales */ = {isa = PBXFileReference; lastKnownFileType = folder; path = _locales; sourceTree = "<group>"; };
@@ -884,6 +896,7 @@
 		2CF965BB2BF4D778001E9D1B /* 0_APP_DESKTOP_0.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 0_APP_DESKTOP_0.png; sourceTree = "<group>"; };
 		2CF965BF2BF4D778001E9D1B /* Appfile */ = {isa = PBXFileReference; lastKnownFileType = text; path = Appfile; sourceTree = "<group>"; };
 		2CF965C02BF4D778001E9D1B /* Fastfile */ = {isa = PBXFileReference; lastKnownFileType = text; path = Fastfile; sourceTree = "<group>"; };
+		2CF9B1092D526F4D00B5CE82 /* Tests visionOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Tests visionOS.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CFAE56928BE6292001D0799 /* NSImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSImage.swift; sourceTree = "<group>"; };
 		2CFDDF4D2765417D00F89019 /* ios_specific_content.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = ios_specific_content.js; sourceTree = "<group>"; };
 		510059EF5B291ACA46D961C4 /* Pods_Big_Wallet_visionOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Big_Wallet_visionOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -961,6 +974,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2CF9B1062D526F4D00B5CE82 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -1031,6 +1051,7 @@
 				2CED86A32AF00BC9006F9E26 /* Tools */,
 				2C03EB8E2B06A18700EF61F5 /* Tests */,
 				2C03EB742B069B5A00EF61F5 /* Tests iOS */,
+				2CADA62A2D527187002C34A8 /* Tests visionOS */,
 				2CE02C7B2BAA0F6700381D70 /* Tests macOS */,
 				2CBB9FA32AF7B5970047B0CD /* ci_scripts */,
 				2CF4294F2C1DBE7400AD303A /* app_store */,
@@ -1054,6 +1075,7 @@
 				2CE02C7A2BAA0F6700381D70 /* Tests macOS.xctest */,
 				2C622BC12BF3C52F0003B932 /* Translate */,
 				2C17BDCA2D3D007E0015C58B /* Big Wallet.app */,
+				2CF9B1092D526F4D00B5CE82 /* Tests visionOS.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -1297,6 +1319,14 @@
 				2C9B55D42AF2B004008BE899 /* nodes-to-bundle.json */,
 			);
 			path = Helpers;
+			sourceTree = "<group>";
+		};
+		2CADA62A2D527187002C34A8 /* Tests visionOS */ = {
+			isa = PBXGroup;
+			children = (
+				2CADA62B2D527198002C34A8 /* Tests_visionOS.swift */,
+			);
+			path = "Tests visionOS";
 			sourceTree = "<group>";
 		};
 		2CB3844027654A0D00A189B9 /* Resources */ = {
@@ -2460,6 +2490,26 @@
 			productReference = 2CED86A22AF00BC9006F9E26 /* Tools */;
 			productType = "com.apple.product-type.tool";
 		};
+		2CF9B1082D526F4D00B5CE82 /* Tests visionOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2CF9B10C2D526F4D00B5CE82 /* Build configuration list for PBXNativeTarget "Tests visionOS" */;
+			buildPhases = (
+				2CF9B1052D526F4D00B5CE82 /* Sources */,
+				2CF9B1062D526F4D00B5CE82 /* Frameworks */,
+				2CF9B1072D526F4D00B5CE82 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2CF9B10B2D526F4D00B5CE82 /* PBXTargetDependency */,
+			);
+			name = "Tests visionOS";
+			packageProductDependencies = (
+			);
+			productName = "Tests visionOS";
+			productReference = 2CF9B1092D526F4D00B5CE82 /* Tests visionOS.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -2498,6 +2548,10 @@
 					};
 					2CED86A12AF00BC9006F9E26 = {
 						CreatedOnToolsVersion = 15.0.1;
+					};
+					2CF9B1082D526F4D00B5CE82 = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = 2C17BDC92D3D007E0015C58B;
 					};
 				};
 			};
@@ -2554,6 +2608,7 @@
 				2CCEB82C27594E2A00768473 /* Safari iOS */,
 				2CE02C792BAA0F6700381D70 /* Tests macOS */,
 				2C8612502B76BDDC00B22794 /* Tests iOS */,
+				2CF9B1082D526F4D00B5CE82 /* Tests visionOS */,
 				2CED86A12AF00BC9006F9E26 /* Tools */,
 				2C622BC02BF3C52F0003B932 /* Translate */,
 			);
@@ -2637,6 +2692,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		2CE02C782BAA0F6700381D70 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2CF9B1072D526F4D00B5CE82 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -2924,6 +2986,8 @@
 			files = (
 				2C17BDE32D3D01F30015C58B /* Big_Wallet_visionOSApp.swift in Sources */,
 				2C17BDE42D3D01F30015C58B /* ContentView.swift in Sources */,
+				2CF9B1112D526F9900B5CE82 /* String.swift in Sources */,
+				2CF9B1102D526F8B00B5CE82 /* TransactionInspector.swift in Sources */,
 				2CF9B1042D526E2300B5CE82 /* WalletContainer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -3169,6 +3233,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2CF9B1052D526F4D00B5CE82 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2CF9B10F2D526F7C00B5CE82 /* TransactionInspectorTests.swift in Sources */,
+				2CADA62C2D5271BA002C34A8 /* Tests_visionOS.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -3191,6 +3264,11 @@
 			isa = PBXTargetDependency;
 			target = 2C19953B2674C4B900A8E370 /* Big Wallet */;
 			targetProxy = 2CE02C7E2BAA0F6700381D70 /* PBXContainerItemProxy */;
+		};
+		2CF9B10B2D526F4D00B5CE82 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2C17BDC92D3D007E0015C58B /* Big Wallet visionOS */;
+			targetProxy = 2CF9B10A2D526F4D00B5CE82 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -3882,6 +3960,59 @@
 			};
 			name = Release;
 		};
+		2CF9B10D2D526F4D00B5CE82 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.Tests-visionOS";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = xros;
+				SUPPORTED_PLATFORMS = "xros xrsimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 7;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Big Wallet.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Big Wallet";
+				XROS_DEPLOYMENT_TARGET = 2.2;
+			};
+			name = Debug;
+		};
+		2CF9B10E2D526F4D00B5CE82 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "org.lil.Tests-visionOS";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = xros;
+				SUPPORTED_PLATFORMS = "xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 7;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Big Wallet.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Big Wallet";
+				XROS_DEPLOYMENT_TARGET = 2.2;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -3971,6 +4102,15 @@
 			buildConfigurations = (
 				2CED86A62AF00BC9006F9E26 /* Debug */,
 				2CED86A72AF00BC9006F9E26 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2CF9B10C2D526F4D00B5CE82 /* Build configuration list for PBXNativeTarget "Tests visionOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2CF9B10D2D526F4D00B5CE82 /* Debug */,
+				2CF9B10E2D526F4D00B5CE82 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

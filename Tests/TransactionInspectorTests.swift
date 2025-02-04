@@ -1,11 +1,7 @@
 // ∅ 2025 lil org
 
 import XCTest
-#if os(iOS)
 @testable import Big_Wallet
-#elseif os(macOS)
-@testable import Big_Wallet
-#endif
 
 final class TransactionInspectorTests: XCTestCase {
 
