@@ -85,6 +85,16 @@
 		2C5FF97B26C84F7C00B32ACC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C5FF97A26C84F7C00B32ACC /* Assets.xcassets */; };
 		2C5FF97E26C84F7C00B32ACC /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C5FF97C26C84F7C00B32ACC /* LaunchScreen.storyboard */; };
 		2C603D0226B6E13F00956955 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
+		2C6054872D529A9A00779570 /* Safari visionOS.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2C60546F2D529A9A00779570 /* Safari visionOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		2C6054992D529B3200779570 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6054972D529B3200779570 /* SafariWebExtensionHandler.swift */; };
+		2C60549A2D529B3200779570 /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 2C60548D2D529B3200779570 /* _locales */; };
+		2C60549B2D529B3200779570 /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C60548E2D529B3200779570 /* background.js */; };
+		2C60549C2D529B3200779570 /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C60548F2D529B3200779570 /* content.js */; };
+		2C60549D2D529B3200779570 /* images in Resources */ = {isa = PBXBuildFile; fileRef = 2C6054902D529B3200779570 /* images */; };
+		2C60549E2D529B3200779570 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 2C6054912D529B3200779570 /* manifest.json */; };
+		2C60549F2D529B3200779570 /* popup.css in Resources */ = {isa = PBXBuildFile; fileRef = 2C6054922D529B3200779570 /* popup.css */; };
+		2C6054A02D529B3200779570 /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = 2C6054932D529B3200779570 /* popup.html */; };
+		2C6054A12D529B3200779570 /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C6054942D529B3200779570 /* popup.js */; };
 		2C622BC42BF3C52F0003B932 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C622BC32BF3C52F0003B932 /* main.swift */; };
 		2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6706A4267A6BFE006AAEF2 /* Bundle.swift */; };
 		2C6F6D5A28273FE500D6E8FB /* EditAccountsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5928273FE500D6E8FB /* EditAccountsViewController.swift */; };
@@ -273,6 +283,13 @@
 			remoteGlobalIDString = 2C09CB9E273979C1009AD39B;
 			remoteInfo = Safari;
 		};
+		2C6054852D529A9A00779570 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2C1995342674C4B900A8E370 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2C60546E2D529A9A00779570;
+			remoteInfo = "Safari visionOS";
+		};
 		2C8612552B76BDDC00B22794 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 2C1995342674C4B900A8E370 /* Project object */;
@@ -311,6 +328,17 @@
 			dstSubfolderSpec = 13;
 			files = (
 				2C09CBB9273979C1009AD39B /* Safari macOS.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2C6054882D529A9A00779570 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				2C6054872D529A9A00779570 /* Safari visionOS.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -413,6 +441,18 @@
 		2C5FF97F26C84F7C00B32ACC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C603D0126B6E13F00956955 /* String.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = String.swift; sourceTree = "<group>"; };
 		2C6054652D5296CE00779570 /* Big Wallet visionOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Big Wallet visionOS.entitlements"; sourceTree = "<group>"; };
+		2C60546F2D529A9A00779570 /* Safari visionOS.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Safari visionOS.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		2C60548D2D529B3200779570 /* _locales */ = {isa = PBXFileReference; lastKnownFileType = folder; path = _locales; sourceTree = "<group>"; };
+		2C60548E2D529B3200779570 /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = background.js; sourceTree = "<group>"; };
+		2C60548F2D529B3200779570 /* content.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = content.js; sourceTree = "<group>"; };
+		2C6054902D529B3200779570 /* images */ = {isa = PBXFileReference; lastKnownFileType = folder; path = images; sourceTree = "<group>"; };
+		2C6054912D529B3200779570 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
+		2C6054922D529B3200779570 /* popup.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = popup.css; sourceTree = "<group>"; };
+		2C6054932D529B3200779570 /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = popup.html; sourceTree = "<group>"; };
+		2C6054942D529B3200779570 /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = popup.js; sourceTree = "<group>"; };
+		2C6054962D529B3200779570 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		2C6054972D529B3200779570 /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
+		2C6054A32D529B7C00779570 /* Safari visionOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Safari visionOS.entitlements"; sourceTree = "<group>"; };
 		2C622BC12BF3C52F0003B932 /* Translate */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = Translate; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C622BC32BF3C52F0003B932 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		2C6706A4267A6BFE006AAEF2 /* Bundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bundle.swift; sourceTree = "<group>"; };
@@ -940,6 +980,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2C60546C2D529A9A00779570 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2C622BBE2BF3C52F0003B932 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -1050,6 +1097,7 @@
 				2CCEB7A227592A3800768473 /* Safari Shared */,
 				2C09CBA0273979C1009AD39B /* Safari macOS */,
 				2CCEB82E27594E2A00768473 /* Safari iOS */,
+				2C6054982D529B3200779570 /* Safari visionOS */,
 				2CED86A32AF00BC9006F9E26 /* Tools */,
 				2C03EB8E2B06A18700EF61F5 /* Tests */,
 				2C03EB742B069B5A00EF61F5 /* Tests iOS */,
@@ -1078,6 +1126,7 @@
 				2C622BC12BF3C52F0003B932 /* Translate */,
 				2C17BDCA2D3D007E0015C58B /* Big Wallet.app */,
 				2CF9B1092D526F4D00B5CE82 /* Tests visionOS.xctest */,
+				2C60546F2D529A9A00779570 /* Safari visionOS.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -1185,6 +1234,32 @@
 				2C5FF97F26C84F7C00B32ACC /* Info.plist */,
 			);
 			path = "App iOS";
+			sourceTree = "<group>";
+		};
+		2C6054952D529B3200779570 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				2C60548D2D529B3200779570 /* _locales */,
+				2C60548E2D529B3200779570 /* background.js */,
+				2C60548F2D529B3200779570 /* content.js */,
+				2C6054902D529B3200779570 /* images */,
+				2C6054912D529B3200779570 /* manifest.json */,
+				2C6054922D529B3200779570 /* popup.css */,
+				2C6054932D529B3200779570 /* popup.html */,
+				2C6054942D529B3200779570 /* popup.js */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		2C6054982D529B3200779570 /* Safari visionOS */ = {
+			isa = PBXGroup;
+			children = (
+				2C6054A32D529B7C00779570 /* Safari visionOS.entitlements */,
+				2C6054952D529B3200779570 /* Resources */,
+				2C6054962D529B3200779570 /* Info.plist */,
+				2C6054972D529B3200779570 /* SafariWebExtensionHandler.swift */,
+			);
+			path = "Safari visionOS";
 			sourceTree = "<group>";
 		};
 		2C622BC22BF3C52F0003B932 /* translate */ = {
@@ -2350,10 +2425,12 @@
 				2C17BDC72D3D007E0015C58B /* Frameworks */,
 				2C17BDC82D3D007E0015C58B /* Resources */,
 				7552A7E9A1F17CC6AE60ED9B /* [CP] Embed Pods Frameworks */,
+				2C6054882D529A9A00779570 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				2C6054862D529A9A00779570 /* PBXTargetDependency */,
 			);
 			name = "Big Wallet visionOS";
 			productName = "Big Wallet visionOS";
@@ -2403,6 +2480,25 @@
 			productName = "Encrypted Ink iOS";
 			productReference = 2C5FF96F26C84F7B00B32ACC /* Big Wallet.app */;
 			productType = "com.apple.product-type.application";
+		};
+		2C60546E2D529A9A00779570 /* Safari visionOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2C60548C2D529A9A00779570 /* Build configuration list for PBXNativeTarget "Safari visionOS" */;
+			buildPhases = (
+				2C60546B2D529A9A00779570 /* Sources */,
+				2C60546C2D529A9A00779570 /* Frameworks */,
+				2C60546D2D529A9A00779570 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Safari visionOS";
+			packageProductDependencies = (
+			);
+			productName = "Safari visionOS";
+			productReference = 2C60546F2D529A9A00779570 /* Safari visionOS.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		2C622BC02BF3C52F0003B932 /* Translate */ = {
 			isa = PBXNativeTarget;
@@ -2534,6 +2630,9 @@
 					2C5FF96E26C84F7B00B32ACC = {
 						CreatedOnToolsVersion = 12.5.1;
 					};
+					2C60546E2D529A9A00779570 = {
+						CreatedOnToolsVersion = 16.2;
+					};
 					2C622BC02BF3C52F0003B932 = {
 						CreatedOnToolsVersion = 15.3;
 					};
@@ -2608,6 +2707,7 @@
 				2C17BDC92D3D007E0015C58B /* Big Wallet visionOS */,
 				2C09CB9E273979C1009AD39B /* Safari macOS */,
 				2CCEB82C27594E2A00768473 /* Safari iOS */,
+				2C60546E2D529A9A00779570 /* Safari visionOS */,
 				2CE02C792BAA0F6700381D70 /* Tests macOS */,
 				2C8612502B76BDDC00B22794 /* Tests iOS */,
 				2CF9B1082D526F4D00B5CE82 /* Tests visionOS */,
@@ -2669,6 +2769,21 @@
 				2C5FF97B26C84F7C00B32ACC /* Assets.xcassets in Resources */,
 				2C5FF97926C84F7B00B32ACC /* Main.storyboard in Resources */,
 				2C6F6D5D2827434800D6E8FB /* PreviewAccountTableViewCell.xib in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2C60546D2D529A9A00779570 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2C60549A2D529B3200779570 /* _locales in Resources */,
+				2C60549B2D529B3200779570 /* background.js in Resources */,
+				2C60549C2D529B3200779570 /* content.js in Resources */,
+				2C60549D2D529B3200779570 /* images in Resources */,
+				2C60549E2D529B3200779570 /* manifest.json in Resources */,
+				2C60549F2D529B3200779570 /* popup.css in Resources */,
+				2C6054A02D529B3200779570 /* popup.html in Resources */,
+				2C6054A12D529B3200779570 /* popup.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3164,6 +3279,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2C60546B2D529A9A00779570 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2C6054992D529B3200779570 /* SafariWebExtensionHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2C622BBD2BF3C52F0003B932 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -3251,6 +3374,11 @@
 			isa = PBXTargetDependency;
 			target = 2C09CB9E273979C1009AD39B /* Safari macOS */;
 			targetProxy = 2C09CBB6273979C1009AD39B /* PBXContainerItemProxy */;
+		};
+		2C6054862D529A9A00779570 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2C60546E2D529A9A00779570 /* Safari visionOS */;
+			targetProxy = 2C6054852D529A9A00779570 /* PBXContainerItemProxy */;
 		};
 		2C8612562B76BDDC00B22794 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -3704,6 +3832,83 @@
 			};
 			name = Release;
 		};
+		2C6054892D529A9A00779570 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_ENTITLEMENTS = "Safari visionOS/Safari visionOS.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 51;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Safari visionOS/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet for Safari";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0.15;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.lil.wallet.Safari;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = xros;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "xros xrsimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 7;
+				XROS_DEPLOYMENT_TARGET = 1.0;
+			};
+			name = Debug;
+		};
+		2C60548A2D529A9A00779570 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_ENTITLEMENTS = "Safari visionOS/Safari visionOS.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 51;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Safari visionOS/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet for Safari";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0.15;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.lil.wallet.Safari;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = xros;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 7;
+				XROS_DEPLOYMENT_TARGET = 1.0;
+			};
+			name = Release;
+		};
 		2C622BC52BF3C52F0003B932 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -4061,6 +4266,15 @@
 			buildConfigurations = (
 				2C5FF98126C84F7C00B32ACC /* Debug */,
 				2C5FF98226C84F7C00B32ACC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2C60548C2D529A9A00779570 /* Build configuration list for PBXNativeTarget "Safari visionOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2C6054892D529A9A00779570 /* Debug */,
+				2C60548A2D529A9A00779570 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
