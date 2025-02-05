@@ -190,6 +190,25 @@
 		2C7740182D53C26D00879A1F /* DataStateView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C96D3A82763D13400687301 /* DataStateView.xib */; };
 		2C7740192D53C28200879A1F /* Storyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8E889E275F9967003EB8DB /* Storyboard.swift */; };
 		2C77401A2D53C28200879A1F /* Images.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D3A52763CCA000687301 /* Images.swift */; };
+		2C77401B2D53CBEC00879A1F /* AccountTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D38D2762317300687301 /* AccountTableViewCell.swift */; };
+		2C77401C2D53CBEC00879A1F /* PreviewAccountTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5C2827434800D6E8FB /* PreviewAccountTableViewCell.swift */; };
+		2C77401D2D53CBEC00879A1F /* AccountsHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09FC5E2828078C00DE9C27 /* AccountsHeaderView.swift */; };
+		2C77401E2D53CBEC00879A1F /* AccountsHeaderView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C09FC5D2828078C00DE9C27 /* AccountsHeaderView.xib */; };
+		2C77401F2D53CBEC00879A1F /* AccountTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C96D38E2762317300687301 /* AccountTableViewCell.xib */; };
+		2C7740202D53CBEC00879A1F /* PreviewAccountTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5B2827434800D6E8FB /* PreviewAccountTableViewCell.xib */; };
+		2C7740212D53CBF200879A1F /* AccountsListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF255B5275A746000AE54B9 /* AccountsListViewController.swift */; };
+		2C7740222D53CBF200879A1F /* EditAccountsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5928273FE500D6E8FB /* EditAccountsViewController.swift */; };
+		2C7740232D53CC1200879A1F /* PasswordViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF255B3275A744000AE54B9 /* PasswordViewController.swift */; };
+		2C7740242D53CC1200879A1F /* MultilineLabelTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C40708E27667A6600AB3D55 /* MultilineLabelTableViewCell.swift */; };
+		2C7740252D53CC1200879A1F /* ApproveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF255B9275A749300AE54B9 /* ApproveViewController.swift */; };
+		2C7740262D53CC1200879A1F /* GasPriceSliderTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC8C5A02767D3B30083FB1B /* GasPriceSliderTableViewCell.swift */; };
+		2C7740272D53CC1200879A1F /* ImageWithLabelTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C40709227667A8600AB3D55 /* ImageWithLabelTableViewCell.swift */; };
+		2C7740282D53CC1200879A1F /* ImportViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8E88A1275FA596003EB8DB /* ImportViewController.swift */; };
+		2C7740292D53CC1200879A1F /* ApproveTransactionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF255B7275A748300AE54B9 /* ApproveTransactionViewController.swift */; };
+		2C77402A2D53CC1200879A1F /* MultilineLabelTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C40708F27667A6600AB3D55 /* MultilineLabelTableViewCell.xib */; };
+		2C77402B2D53CC1200879A1F /* GasPriceSliderTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2CC8C5A12767D3B30083FB1B /* GasPriceSliderTableViewCell.xib */; };
+		2C77402C2D53CC1200879A1F /* ImageWithLabelTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C40709327667A8600AB3D55 /* ImageWithLabelTableViewCell.xib */; };
+		2C77402D2D53CC2400879A1F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C5FF97726C84F7B00B32ACC /* Main.storyboard */; };
 		2C78F8282683BDCC00C10670 /* Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C78F8272683BDCC00C10670 /* Alert.swift */; };
 		2C797E7E267BB88800F2CE2D /* WelcomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */; };
 		2C7A8CF12B7CF25100683E15 /* IpfsResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A8CF02B7CF25100683E15 /* IpfsResponse.swift */; };
@@ -610,7 +629,6 @@
 		2CE0594B2764DF9A0042D844 /* Safari iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Safari iOS.entitlements"; sourceTree = "<group>"; };
 		2CE377CB2D3A748D00288FFB /* WalletsMetadataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsMetadataService.swift; sourceTree = "<group>"; };
 		2CE3D011267F73C00032A62E /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
-		2CE9841D2C1872E1003B6A5D /* Media.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Media.xcassets; sourceTree = "<group>"; };
 		2CE9A7772BADC59C00579BF7 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		2CED86A22AF00BC9006F9E26 /* Tools */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = Tools; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CED86A42AF00BC9006F9E26 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
@@ -1297,7 +1315,6 @@
 				2CF255BB275A74A400AE54B9 /* Screens */,
 				2C5FF97726C84F7B00B32ACC /* Main.storyboard */,
 				2C5FF97A26C84F7C00B32ACC /* Assets.xcassets */,
-				2CE9841D2C1872E1003B6A5D /* Media.xcassets */,
 				2C8E88A0275F99D4003EB8DB /* Content */,
 				2C5FF97C26C84F7C00B32ACC /* LaunchScreen.storyboard */,
 				2C5FF97F26C84F7C00B32ACC /* Info.plist */,
@@ -2791,6 +2808,13 @@
 				2C17BDE52D3D01F30015C58B /* Assets.xcassets in Resources */,
 				2C773FE82D53C15400879A1F /* bundled-networks.json in Resources */,
 				2C77400D2D53C23300879A1F /* Localizable.xcstrings in Resources */,
+				2C77402A2D53CC1200879A1F /* MultilineLabelTableViewCell.xib in Resources */,
+				2C77402D2D53CC2400879A1F /* Main.storyboard in Resources */,
+				2C77402B2D53CC1200879A1F /* GasPriceSliderTableViewCell.xib in Resources */,
+				2C77402C2D53CC1200879A1F /* ImageWithLabelTableViewCell.xib in Resources */,
+				2C77401E2D53CBEC00879A1F /* AccountsHeaderView.xib in Resources */,
+				2C77401F2D53CBEC00879A1F /* AccountTableViewCell.xib in Resources */,
+				2C7740202D53CBEC00879A1F /* PreviewAccountTableViewCell.xib in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3164,7 +3188,16 @@
 				2C773FEE2D53C17000879A1F /* DappRequestProcessor.swift in Sources */,
 				2C773FEF2D53C17000879A1F /* Keychain.swift in Sources */,
 				2C7740132D53C26D00879A1F /* Haptic.swift in Sources */,
+				2C7740212D53CBF200879A1F /* AccountsListViewController.swift in Sources */,
+				2C7740222D53CBF200879A1F /* EditAccountsViewController.swift in Sources */,
 				2C7740142D53C26D00879A1F /* LocalAuthentication.swift in Sources */,
+				2C7740232D53CC1200879A1F /* PasswordViewController.swift in Sources */,
+				2C7740242D53CC1200879A1F /* MultilineLabelTableViewCell.swift in Sources */,
+				2C7740252D53CC1200879A1F /* ApproveViewController.swift in Sources */,
+				2C7740262D53CC1200879A1F /* GasPriceSliderTableViewCell.swift in Sources */,
+				2C7740272D53CC1200879A1F /* ImageWithLabelTableViewCell.swift in Sources */,
+				2C7740282D53CC1200879A1F /* ImportViewController.swift in Sources */,
+				2C7740292D53CC1200879A1F /* ApproveTransactionViewController.swift in Sources */,
 				2C7740152D53C26D00879A1F /* DataStateView.swift in Sources */,
 				2C7740162D53C26D00879A1F /* KeyboardObserver.swift in Sources */,
 				2C7740172D53C26D00879A1F /* ButtonWithExtendedArea.swift in Sources */,
@@ -3195,6 +3228,9 @@
 				2C773FFE2D53C1C800879A1F /* WalletsManager.swift in Sources */,
 				2CF9B1112D526F9900B5CE82 /* String.swift in Sources */,
 				2C773FC92D53A5A300879A1F /* MultipleResponseToExtension.swift in Sources */,
+				2C77401B2D53CBEC00879A1F /* AccountTableViewCell.swift in Sources */,
+				2C77401C2D53CBEC00879A1F /* PreviewAccountTableViewCell.swift in Sources */,
+				2C77401D2D53CBEC00879A1F /* AccountsHeaderView.swift in Sources */,
 				2C773FF42D53C19600879A1F /* CoinType.swift in Sources */,
 				2C773FCF2D53A5B400879A1F /* UnknownSafariRequest.swift in Sources */,
 				2C773FD02D53A5B400879A1F /* EthereumSafariRequest.swift in Sources */,
