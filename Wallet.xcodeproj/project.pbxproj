@@ -86,15 +86,6 @@
 		2C5FF97E26C84F7C00B32ACC /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C5FF97C26C84F7C00B32ACC /* LaunchScreen.storyboard */; };
 		2C603D0226B6E13F00956955 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
 		2C6054872D529A9A00779570 /* Safari visionOS.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2C60546F2D529A9A00779570 /* Safari visionOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		2C6054992D529B3200779570 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6054972D529B3200779570 /* SafariWebExtensionHandler.swift */; };
-		2C60549A2D529B3200779570 /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 2C60548D2D529B3200779570 /* _locales */; };
-		2C60549B2D529B3200779570 /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C60548E2D529B3200779570 /* background.js */; };
-		2C60549C2D529B3200779570 /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C60548F2D529B3200779570 /* content.js */; };
-		2C60549D2D529B3200779570 /* images in Resources */ = {isa = PBXBuildFile; fileRef = 2C6054902D529B3200779570 /* images */; };
-		2C60549E2D529B3200779570 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 2C6054912D529B3200779570 /* manifest.json */; };
-		2C60549F2D529B3200779570 /* popup.css in Resources */ = {isa = PBXBuildFile; fileRef = 2C6054922D529B3200779570 /* popup.css */; };
-		2C6054A02D529B3200779570 /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = 2C6054932D529B3200779570 /* popup.html */; };
-		2C6054A12D529B3200779570 /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C6054942D529B3200779570 /* popup.js */; };
 		2C622BC42BF3C52F0003B932 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C622BC32BF3C52F0003B932 /* main.swift */; };
 		2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6706A4267A6BFE006AAEF2 /* Bundle.swift */; };
 		2C6F6D5A28273FE500D6E8FB /* EditAccountsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5928273FE500D6E8FB /* EditAccountsViewController.swift */; };
@@ -110,6 +101,33 @@
 		2C773F5F27450FBD007B04E7 /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
 		2C773F62274523DC007B04E7 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
 		2C773F63274523DC007B04E7 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
+		2C773FC02D53A54D00879A1F /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 2CCEB83627594E2A00768473 /* manifest.json */; };
+		2C773FC12D53A55500879A1F /* ios_specific_content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CFDDF4D2765417D00F89019 /* ios_specific_content.js */; };
+		2C773FC22D53A57B00879A1F /* inpage.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CEFEB15274D5DC900CE23BD /* inpage.js */; };
+		2C773FC32D53A57F00879A1F /* service_worker.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAA273979C1009AD39B /* service_worker.js */; };
+		2C773FC42D53A58300879A1F /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2C09CBAC273979C1009AD39B /* content.js */; };
+		2C773FC52D53A58800879A1F /* images in Resources */ = {isa = PBXBuildFile; fileRef = 2CB3845927654E9700A189B9 /* images */; };
+		2C773FC62D53A58C00879A1F /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 2CB3845827654E9700A189B9 /* _locales */; };
+		2C773FC72D53A59800879A1F /* InpageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BD427B5806200234393 /* InpageProvider.swift */; };
+		2C773FC82D53A59800879A1F /* InpageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BD427B5806200234393 /* InpageProvider.swift */; };
+		2C773FC92D53A5A300879A1F /* MultipleResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D428AFB1AD00E35DBF /* MultipleResponseToExtension.swift */; };
+		2C773FCA2D53A5A300879A1F /* EthereumResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BDB27B5AC5400234393 /* EthereumResponseToExtension.swift */; };
+		2C773FCB2D53A5A300879A1F /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
+		2C773FCC2D53A5A300879A1F /* MultipleResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D428AFB1AD00E35DBF /* MultipleResponseToExtension.swift */; };
+		2C773FCD2D53A5A300879A1F /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
+		2C773FCE2D53A5A300879A1F /* EthereumResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BDB27B5AC5400234393 /* EthereumResponseToExtension.swift */; };
+		2C773FCF2D53A5B400879A1F /* UnknownSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BCF27B2F30C00234393 /* UnknownSafariRequest.swift */; };
+		2C773FD02D53A5B400879A1F /* EthereumSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BC027B2F2C100234393 /* EthereumSafariRequest.swift */; };
+		2C773FD12D53A5B400879A1F /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BBB27B2F25E00234393 /* SafariRequest.swift */; };
+		2C773FD22D53A5B400879A1F /* UnknownSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BCF27B2F30C00234393 /* UnknownSafariRequest.swift */; };
+		2C773FD32D53A5B400879A1F /* EthereumSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BC027B2F2C100234393 /* EthereumSafariRequest.swift */; };
+		2C773FD42D53A5B400879A1F /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BBB27B2F25E00234393 /* SafariRequest.swift */; };
+		2C773FD52D53A5B800879A1F /* InternalSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */; };
+		2C773FD62D53A5C100879A1F /* SharedDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B2C6A2D38415F00D56607 /* SharedDefaults.swift */; };
+		2C773FD72D53A5C100879A1F /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
+		2C773FD82D53A5C100879A1F /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
+		2C773FD92D53A5C100879A1F /* SharedDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B2C6A2D38415F00D56607 /* SharedDefaults.swift */; };
+		2C773FDA2D53A5C500879A1F /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */; };
 		2C78F8282683BDCC00C10670 /* Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C78F8272683BDCC00C10670 /* Alert.swift */; };
 		2C797E7E267BB88800F2CE2D /* WelcomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */; };
 		2C7A8CF12B7CF25100683E15 /* IpfsResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A8CF02B7CF25100683E15 /* IpfsResponse.swift */; };
@@ -442,16 +460,7 @@
 		2C603D0126B6E13F00956955 /* String.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = String.swift; sourceTree = "<group>"; };
 		2C6054652D5296CE00779570 /* Big Wallet visionOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Big Wallet visionOS.entitlements"; sourceTree = "<group>"; };
 		2C60546F2D529A9A00779570 /* Safari visionOS.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Safari visionOS.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
-		2C60548D2D529B3200779570 /* _locales */ = {isa = PBXFileReference; lastKnownFileType = folder; path = _locales; sourceTree = "<group>"; };
-		2C60548E2D529B3200779570 /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = background.js; sourceTree = "<group>"; };
-		2C60548F2D529B3200779570 /* content.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = content.js; sourceTree = "<group>"; };
-		2C6054902D529B3200779570 /* images */ = {isa = PBXFileReference; lastKnownFileType = folder; path = images; sourceTree = "<group>"; };
-		2C6054912D529B3200779570 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
-		2C6054922D529B3200779570 /* popup.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = popup.css; sourceTree = "<group>"; };
-		2C6054932D529B3200779570 /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = popup.html; sourceTree = "<group>"; };
-		2C6054942D529B3200779570 /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = popup.js; sourceTree = "<group>"; };
 		2C6054962D529B3200779570 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		2C6054972D529B3200779570 /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
 		2C6054A32D529B7C00779570 /* Safari visionOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Safari visionOS.entitlements"; sourceTree = "<group>"; };
 		2C622BC12BF3C52F0003B932 /* Translate */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = Translate; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C622BC32BF3C52F0003B932 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
@@ -1236,28 +1245,11 @@
 			path = "App iOS";
 			sourceTree = "<group>";
 		};
-		2C6054952D529B3200779570 /* Resources */ = {
-			isa = PBXGroup;
-			children = (
-				2C60548D2D529B3200779570 /* _locales */,
-				2C60548E2D529B3200779570 /* background.js */,
-				2C60548F2D529B3200779570 /* content.js */,
-				2C6054902D529B3200779570 /* images */,
-				2C6054912D529B3200779570 /* manifest.json */,
-				2C6054922D529B3200779570 /* popup.css */,
-				2C6054932D529B3200779570 /* popup.html */,
-				2C6054942D529B3200779570 /* popup.js */,
-			);
-			path = Resources;
-			sourceTree = "<group>";
-		};
 		2C6054982D529B3200779570 /* Safari visionOS */ = {
 			isa = PBXGroup;
 			children = (
 				2C6054A32D529B7C00779570 /* Safari visionOS.entitlements */,
-				2C6054952D529B3200779570 /* Resources */,
 				2C6054962D529B3200779570 /* Info.plist */,
-				2C6054972D529B3200779570 /* SafariWebExtensionHandler.swift */,
 			);
 			path = "Safari visionOS";
 			sourceTree = "<group>";
@@ -2776,14 +2768,13 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2C60549A2D529B3200779570 /* _locales in Resources */,
-				2C60549B2D529B3200779570 /* background.js in Resources */,
-				2C60549C2D529B3200779570 /* content.js in Resources */,
-				2C60549D2D529B3200779570 /* images in Resources */,
-				2C60549E2D529B3200779570 /* manifest.json in Resources */,
-				2C60549F2D529B3200779570 /* popup.css in Resources */,
-				2C6054A02D529B3200779570 /* popup.html in Resources */,
-				2C6054A12D529B3200779570 /* popup.js in Resources */,
+				2C773FC22D53A57B00879A1F /* inpage.js in Resources */,
+				2C773FC62D53A58C00879A1F /* _locales in Resources */,
+				2C773FC12D53A55500879A1F /* ios_specific_content.js in Resources */,
+				2C773FC42D53A58300879A1F /* content.js in Resources */,
+				2C773FC32D53A57F00879A1F /* service_worker.js in Resources */,
+				2C773FC02D53A54D00879A1F /* manifest.json in Resources */,
+				2C773FC52D53A58800879A1F /* images in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3101,9 +3092,18 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2C773FC72D53A59800879A1F /* InpageProvider.swift in Sources */,
 				2C17BDE32D3D01F30015C58B /* Big_Wallet_visionOSApp.swift in Sources */,
 				2C17BDE42D3D01F30015C58B /* ContentView.swift in Sources */,
 				2CF9B1112D526F9900B5CE82 /* String.swift in Sources */,
+				2C773FC92D53A5A300879A1F /* MultipleResponseToExtension.swift in Sources */,
+				2C773FCF2D53A5B400879A1F /* UnknownSafariRequest.swift in Sources */,
+				2C773FD02D53A5B400879A1F /* EthereumSafariRequest.swift in Sources */,
+				2C773FD12D53A5B400879A1F /* SafariRequest.swift in Sources */,
+				2C773FCA2D53A5A300879A1F /* EthereumResponseToExtension.swift in Sources */,
+				2C773FCB2D53A5A300879A1F /* ResponseToExtension.swift in Sources */,
+				2C773FD62D53A5C100879A1F /* SharedDefaults.swift in Sources */,
+				2C773FD72D53A5C100879A1F /* ExtensionBridge.swift in Sources */,
 				2CF9B1102D526F8B00B5CE82 /* TransactionInspector.swift in Sources */,
 				2CF9B1042D526E2300B5CE82 /* WalletContainer.swift in Sources */,
 			);
@@ -3283,7 +3283,17 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2C6054992D529B3200779570 /* SafariWebExtensionHandler.swift in Sources */,
+				2C773FCC2D53A5A300879A1F /* MultipleResponseToExtension.swift in Sources */,
+				2C773FCD2D53A5A300879A1F /* ResponseToExtension.swift in Sources */,
+				2C773FD82D53A5C100879A1F /* ExtensionBridge.swift in Sources */,
+				2C773FD92D53A5C100879A1F /* SharedDefaults.swift in Sources */,
+				2C773FCE2D53A5A300879A1F /* EthereumResponseToExtension.swift in Sources */,
+				2C773FDA2D53A5C500879A1F /* SafariWebExtensionHandler.swift in Sources */,
+				2C773FD52D53A5B800879A1F /* InternalSafariRequest.swift in Sources */,
+				2C773FC82D53A59800879A1F /* InpageProvider.swift in Sources */,
+				2C773FD22D53A5B400879A1F /* UnknownSafariRequest.swift in Sources */,
+				2C773FD32D53A5B400879A1F /* EthereumSafariRequest.swift in Sources */,
+				2C773FD42D53A5B400879A1F /* SafariRequest.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
