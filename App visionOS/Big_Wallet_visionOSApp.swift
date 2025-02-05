@@ -10,3 +10,10 @@ struct Big_Wallet_visionOSApp: App {
         }
     }
 }
+
+// TODO: dev tmp
+class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+    
+    var window: UIWindow?
+    
+}

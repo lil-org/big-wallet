@@ -7,7 +7,7 @@
 //  Created by Koray Koska on 19.12.17.
 //
 
-#if os(iOS) || os(tvOS) || os(watchOS)
+#if os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
     import UIKit
 #elseif os(OSX)
     import AppKit
@@ -24,7 +24,7 @@ final class Blockies {
     public var size: Int
     public var scale: Int
 
-    #if os(iOS) || os(tvOS) || os(watchOS)
+    #if os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
     public typealias Color = UIColor
     public typealias Image = UIImage
     #elseif os(OSX)
@@ -152,7 +152,7 @@ final class Blockies {
 
     private func image(data: [Double], customScale: Int) -> Image? {
         let finalSize = size * scale * customScale
-        #if os(iOS) || os(tvOS) || os(watchOS)
+        #if os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
             UIGraphicsBeginImageContext(CGSize(width: finalSize, height: finalSize))
             let nilContext = UIGraphicsGetCurrentContext()
         #elseif os(OSX)
@@ -191,7 +191,7 @@ final class Blockies {
             context.fill(CGRect(x: CGFloat(col * scale * customScale), y: CGFloat(row * scale * customScale), width: CGFloat(scale * customScale), height: CGFloat(scale * customScale)))
         }
 
-        #if os(iOS) || os(tvOS) || os(watchOS)
+        #if os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
             let output = UIGraphicsGetImageFromCurrentImageContext()
             UIGraphicsEndImageContext()
 
@@ -255,7 +255,7 @@ private extension Character {
     }
 }
 
-#if os(iOS) || os(tvOS) || os(watchOS)
+#if os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
     private typealias Color = UIColor
 #elseif os(OSX)
     private typealias Color = NSColor

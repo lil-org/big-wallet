@@ -4,6 +4,12 @@ import UIKit
 
 extension CGFloat {
     
-    static let pixel = CGFloat(1) / UIScreen.main.scale
+    static let pixel: CGFloat = {
+        #if os(visionOS)
+        return 1
+        #else
+        return 1.0 / UIScreen.main.scale
+        #endif
+    }()
     
 }

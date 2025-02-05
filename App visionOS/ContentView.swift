@@ -8,7 +8,7 @@ import BigInt
 struct ContentView: View {
     var body: some View {
         VStack {
-            Text("Hello, \(genRandomEthAddress()) world!")
+            Text(genRandomEthAddress())
         }
         .padding()
     }
