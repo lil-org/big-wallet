@@ -20,9 +20,9 @@
 		2C09FC602828078C00DE9C27 /* AccountsHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09FC5E2828078C00DE9C27 /* AccountsHeaderView.swift */; };
 		2C09FC662828331D00DE9C27 /* PlatformSpecificImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09FC652828331D00DE9C27 /* PlatformSpecificImage.swift */; };
 		2C09FC672828331D00DE9C27 /* PlatformSpecificImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09FC652828331D00DE9C27 /* PlatformSpecificImage.swift */; };
+		2C0C7A752D53D62D009D71BD /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */; };
 		2C134BA627553EC500DAFBDB /* Browser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C134BA527553EC500DAFBDB /* Browser.swift */; };
 		2C17BDE32D3D01F30015C58B /* Big_Wallet_visionOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C17BDDF2D3D01F30015C58B /* Big_Wallet_visionOSApp.swift */; };
-		2C17BDE42D3D01F30015C58B /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C17BDE02D3D01F30015C58B /* ContentView.swift */; };
 		2C17BDE52D3D01F30015C58B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C17BDDE2D3D01F30015C58B /* Assets.xcassets */; };
 		2C1995402674C4B900A8E370 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C19953F2674C4B900A8E370 /* AppDelegate.swift */; };
 		2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995412674C4B900A8E370 /* ImportViewController.swift */; };
@@ -485,7 +485,6 @@
 		2C17BDCA2D3D007E0015C58B /* Big Wallet.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Big Wallet.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C17BDDE2D3D01F30015C58B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2C17BDDF2D3D01F30015C58B /* Big_Wallet_visionOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Big_Wallet_visionOSApp.swift; sourceTree = "<group>"; };
-		2C17BDE02D3D01F30015C58B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		2C17BDE12D3D01F30015C58B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C19953C2674C4B900A8E370 /* Big Wallet.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Big Wallet.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C19953F2674C4B900A8E370 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -1167,7 +1166,6 @@
 			children = (
 				2C17BDDE2D3D01F30015C58B /* Assets.xcassets */,
 				2C17BDDF2D3D01F30015C58B /* Big_Wallet_visionOSApp.swift */,
-				2C17BDE02D3D01F30015C58B /* ContentView.swift */,
 				2C6054652D5296CE00779570 /* Big Wallet visionOS.entitlements */,
 				2C17BDE12D3D01F30015C58B /* Info.plist */,
 			);
@@ -2491,6 +2489,7 @@
 				2852B9DBCCE270BEE887F6E2 /* [CP] Check Pods Manifest.lock */,
 				2C17BDC62D3D007E0015C58B /* Sources */,
 				2C17BDC72D3D007E0015C58B /* Frameworks */,
+				2C0C7A762D53D6A0009D71BD /* ShellScript */,
 				2C17BDC82D3D007E0015C58B /* Resources */,
 				7552A7E9A1F17CC6AE60ED9B /* [CP] Embed Pods Frameworks */,
 				2C6054882D529A9A00779570 /* Embed Foundation Extensions */,
@@ -2553,8 +2552,10 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2C60548C2D529A9A00779570 /* Build configuration list for PBXNativeTarget "Safari visionOS" */;
 			buildPhases = (
+				2C0C7A772D53D6F3009D71BD /* ShellScript */,
 				2C60546B2D529A9A00779570 /* Sources */,
 				2C60546C2D529A9A00779570 /* Frameworks */,
+				2C0C7A782D53D6F5009D71BD /* ShellScript */,
 				2C60546D2D529A9A00779570 /* Resources */,
 			);
 			buildRules = (
@@ -2807,6 +2808,7 @@
 				2C7740182D53C26D00879A1F /* DataStateView.xib in Resources */,
 				2C17BDE52D3D01F30015C58B /* Assets.xcassets in Resources */,
 				2C773FE82D53C15400879A1F /* bundled-networks.json in Resources */,
+				2C0C7A752D53D62D009D71BD /* SharedAssets.xcassets in Resources */,
 				2C77400D2D53C23300879A1F /* Localizable.xcstrings in Resources */,
 				2C77402A2D53CC1200879A1F /* MultilineLabelTableViewCell.xib in Resources */,
 				2C77402D2D53CC2400879A1F /* Main.storyboard in Resources */,
@@ -2922,6 +2924,68 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		2C0C7A762D53D6A0009D71BD /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$SRCROOT/Shared/Supporting Files/Secrets.plist",
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" ]; then\n    cp -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nelse\n    echo \"warning: 🟢🔴 YO BUNDLING EMPTY SECRETS\"\n    cp -f \"$SRCROOT/Shared/Supporting Files/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nfi\n";
+			showEnvVarsInLog = 0;
+		};
+		2C0C7A772D53D6F3009D71BD /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "YARN_PATH=$(command -v yarn)\n\nif [ -z \"$YARN_PATH\" ]; then\n    echo \"warning: install yarn to make changes to the inpage script\"\nelse\n    FILE=/usr/lib/bin/yarn\n    if [ -f \"$FILE\" ]; then\n        export PATH=/usr/lib/bin:$PATH\n    else\n        export PATH=/opt/homebrew/bin:$PATH\n    fi\n\n    cd \"$PROJECT_DIR\"/Safari\\ Shared/Inpage\\ Provider\n    yarn run prebuild\n    yarn run build\nfi\n";
+			showEnvVarsInLog = 0;
+		};
+		2C0C7A782D53D6F5009D71BD /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$SRCROOT/Shared/Supporting Files/Secrets.plist",
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" ]; then\n    cp -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nelse\n    echo \"warning: 🟢🔴 YO BUNDLING EMPTY SECRETS\"\n    cp -f \"$SRCROOT/Shared/Supporting Files/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nfi\n";
 			showEnvVarsInLog = 0;
 		};
 		2C85D99C274E531100160AD5 /* Run Script */ = {
@@ -3219,7 +3283,6 @@
 				2C77400A2D53C22700879A1F /* Secrets.swift in Sources */,
 				2C773FF72D53C1AA00879A1F /* Notification.swift in Sources */,
 				2C773FE22D53C12900879A1F /* EthereumRPC.swift in Sources */,
-				2C17BDE42D3D01F30015C58B /* ContentView.swift in Sources */,
 				2C773FE42D53C14F00879A1F /* BundledNodes.swift in Sources */,
 				2C773FE52D53C14F00879A1F /* Infura.swift in Sources */,
 				2C773FF32D53C19100879A1F /* Bundle.swift in Sources */,
@@ -4009,7 +4072,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 51;
 				DEVELOPMENT_TEAM = 8DXC3N7E7P;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari visionOS/Info.plist";
@@ -4048,7 +4111,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 51;
 				DEVELOPMENT_TEAM = 8DXC3N7E7P;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari visionOS/Info.plist";
