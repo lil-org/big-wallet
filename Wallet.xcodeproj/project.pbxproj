@@ -3750,6 +3750,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "App visionOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Enter app and confirm requests";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -3787,6 +3788,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "App visionOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Enter app and confirm requests";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

@@ -4,6 +4,7 @@ import UIKit
 
 extension UIApplication {
     
+    // TODO: make it work on visionos
     func replaceRootViewController(with viewController: UIViewController) {
         guard let window = (connectedScenes.first?.delegate as? SceneDelegate)?.window else { return }
         (connectedScenes.first?.delegate as? SceneDelegate)?.window?.rootViewController = viewController
