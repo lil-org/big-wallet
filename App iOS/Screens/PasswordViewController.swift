@@ -8,6 +8,8 @@ class PasswordViewController: UIViewController {
         case create, repeatAfterCreate, enter
     }
     
+    var showAccountsListOnVision: (() -> Void)?
+    
     private let keychain = Keychain.shared
     private var mode = Mode.create
     var passwordToRepeat: String?
@@ -133,10 +135,10 @@ class PasswordViewController: UIViewController {
     }
     
     private func showAccountsList() {
-        let accountsList = instantiate(AccountsListViewController.self, from: .main)
 #if os(visionOS)
-        view.window?.rootViewController = accountsList.inNavigationController
+        showAccountsListOnVision?()
 #else
+        let accountsList = instantiate(AccountsListViewController.self, from: .main)
         UIApplication.shared.replaceRootViewController(with: accountsList.inNavigationController)
 #endif
     }

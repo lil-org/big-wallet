@@ -317,12 +317,13 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func closePopups(requestId: Int) {
-        // TODO: implement for visionos?
 #if os(iOS)
         let isFullscreen = view.bounds.width == UIScreen.main.bounds.width
+#else
+        let isFullscreen = false
+#endif
         toDismissAfterResponse[requestId]?.dismiss(animated: !isFullscreen)
         toDismissAfterResponse.removeValue(forKey: requestId)
-#endif
     }
     
     @IBAction func networkButtonTapped(_ sender: Any) {
