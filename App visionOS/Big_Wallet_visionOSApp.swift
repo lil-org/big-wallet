@@ -10,7 +10,7 @@ struct Big_Wallet_visionOSApp: App {
     var body: some Scene {
         WindowGroup {
             ViewControllerWrapper()
-        }.defaultSize(CGSize(width: 350, height: 500))
+        }.defaultSize(CGSize(width: 420, height: 555))
     }
 }
 

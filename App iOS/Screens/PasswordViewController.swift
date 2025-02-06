@@ -138,7 +138,11 @@ class PasswordViewController: UIViewController {
     
     private func showAccountsList() {
         let accountsList = instantiate(AccountsListViewController.self, from: .main)
+#if os(visionOS)
+        view.window?.rootViewController = accountsList.inNavigationController
+#else
         UIApplication.shared.replaceRootViewController(with: accountsList.inNavigationController)
+#endif
     }
     
 }
