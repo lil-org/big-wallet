@@ -97,13 +97,7 @@ class PasswordViewController: UIViewController {
     }
     
     func focusOnPasswordTextField() {
-        if Strings.isVisionPro {
-            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(1000)) { [weak self] in
-                self?.passwordTextField.becomeFirstResponder()
-            }
-        } else {
-            passwordTextField.becomeFirstResponder()
-        }
+        passwordTextField.becomeFirstResponder()
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
