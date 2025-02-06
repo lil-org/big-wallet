@@ -14,13 +14,6 @@ struct Big_Wallet_visionOSApp: App {
     }
 }
 
-// TODO: dev tmp
-class SceneDelegate: UIResponder, UIWindowSceneDelegate {
-    
-    var window: UIWindow?
-    
-}
-
 struct ViewControllerWrapper: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIViewController {
         return createInitialViewController()
