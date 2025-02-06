@@ -15,7 +15,16 @@ struct NetworksListView: View {
     private let completion: ((EthereumNetwork?) -> Void)
     
     var body: some View {
-#if os(iOS)
+#if os(macOS)
+        VStack {
+            list()
+            HStack {
+                Button(Strings.cancel) { completion(nil) }.keyboardShortcut(.cancelAction)
+                Button(Strings.ok) { completion(selectedNetwork) }.keyboardShortcut(.defaultAction)
+                    .disabled(selectedNetwork == nil)
+            }.frame(height: 36).offset(CGSize(width: 0, height: -6))
+        }
+#else
         NavigationView {
             VStack {
                 list()
@@ -26,15 +35,6 @@ struct NetworksListView: View {
                 presentationMode.wrappedValue.dismiss() }) {
                     Text(Strings.done).bold()
                 }.disabled(selectedNetwork == nil))
-        }
-#elseif os(macOS)
-        VStack {
-            list()
-            HStack {
-                Button(Strings.cancel) { completion(nil) }.keyboardShortcut(.cancelAction)
-                Button(Strings.ok) { completion(selectedNetwork) }.keyboardShortcut(.defaultAction)
-                    .disabled(selectedNetwork == nil)
-            }.frame(height: 36).offset(CGSize(width: 0, height: -6))
         }
 #endif
     }

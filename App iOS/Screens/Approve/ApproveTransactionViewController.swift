@@ -100,7 +100,11 @@ class ApproveTransactionViewController: UIViewController {
         }
         let hostingController = UIHostingController(rootView: editTransactionView)
         hostingController.modalPresentationStyle = .popover
+#if os(visionOS)
+        hostingController.preferredContentSize = CGSize(width: 230, height: 300)
+#else
         hostingController.preferredContentSize = CGSize(width: 230, height: 250)
+#endif
         if let hostingController = hostingController.popoverPresentationController {
             hostingController.permittedArrowDirections = [.up]
             hostingController.barButtonItem = navigationItem.rightBarButtonItem
