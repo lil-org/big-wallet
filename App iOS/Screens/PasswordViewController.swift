@@ -114,6 +114,7 @@ class PasswordViewController: UIViewController {
             if passwordTextField.text?.isOkAsPassword == true {
                 let passwordViewController = instantiate(PasswordViewController.self, from: .main)
                 passwordViewController.passwordToRepeat = passwordTextField.text
+                passwordViewController.showAccountsListOnVision = showAccountsListOnVision
                 navigationController?.pushViewController(passwordViewController, animated: true)
             } else {
                 showMessageAlert(text: Strings.pleaseTypeAtLeast)
