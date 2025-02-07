@@ -75,6 +75,19 @@ lane :clean do
   sh "rm -rf #{File.expand_path('build')}"
 end
 
+lane :deliver_metadata_visionos do
+  update_and_login
+  platform :xros do
+    deliver(
+      metadata_path: "./fastlane/metadata",
+      platform: "xros",
+      run_precheck_before_submit: false,
+      force: true,
+      ignore_language_directory_validation: true,
+    )
+  end
+end
+
 lane :release_ios do
 
   update_and_login
