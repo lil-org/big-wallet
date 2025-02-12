@@ -107,7 +107,6 @@
 #import "TWPublicKeyType.h"
 #import "TWPurpose.h"
 #import "TWRippleProto.h"
-#import "TWRippleXAddress.h"
 #import "TWSegwitAddress.h"
 #import "TWSolanaAddress.h"
 #import "TWSolanaProto.h"
@@ -138,11 +137,13 @@
 #import "TWTransactionUtil.h"
 #import "TWTronMessageSigner.h"
 #import "TWTronProto.h"
+#import "TWUtxoProto.h"
 #import "TWVeChainProto.h"
 #import "TWWalletConnectProto.h"
 #import "TWWalletConnectRequest.h"
 #import "TWWavesProto.h"
 #import "TWWebAuthn.h"
+#import "TWZcashProto.h"
 #import "TWZilliqaProto.h"
 
 FOUNDATION_EXPORT double WalletCoreVersionNumber;

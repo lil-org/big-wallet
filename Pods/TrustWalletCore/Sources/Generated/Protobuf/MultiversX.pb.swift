@@ -181,6 +181,9 @@ public struct TW_MultiversX_Proto_Accounts {
   /// Guardian address
   public var guardian: String = String()
 
+  /// Relayer address
+  public var relayer: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -541,6 +544,7 @@ extension TW_MultiversX_Proto_Accounts: SwiftProtobuf.Message, SwiftProtobuf._Me
     4: .same(proto: "receiver"),
     5: .standard(proto: "receiver_username"),
     6: .same(proto: "guardian"),
+    7: .same(proto: "relayer"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -555,6 +559,7 @@ extension TW_MultiversX_Proto_Accounts: SwiftProtobuf.Message, SwiftProtobuf._Me
       case 4: try { try decoder.decodeSingularStringField(value: &self.receiver) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.receiverUsername) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.guardian) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.relayer) }()
       default: break
       }
     }
@@ -579,6 +584,9 @@ extension TW_MultiversX_Proto_Accounts: SwiftProtobuf.Message, SwiftProtobuf._Me
     if !self.guardian.isEmpty {
       try visitor.visitSingularStringField(value: self.guardian, fieldNumber: 6)
     }
+    if !self.relayer.isEmpty {
+      try visitor.visitSingularStringField(value: self.relayer, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -589,6 +597,7 @@ extension TW_MultiversX_Proto_Accounts: SwiftProtobuf.Message, SwiftProtobuf._Me
     if lhs.receiver != rhs.receiver {return false}
     if lhs.receiverUsername != rhs.receiverUsername {return false}
     if lhs.guardian != rhs.guardian {return false}
+    if lhs.relayer != rhs.relayer {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

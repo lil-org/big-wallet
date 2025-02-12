@@ -168,4 +168,5 @@ public enum CoinType: UInt32, CaseIterable {
     case bounceBit = 6001
     case zkLinkNova = 810180
     case pactus = 21888
+    case sonic = 10000146
 }

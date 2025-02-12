@@ -47,6 +47,7 @@ enum TWEthereumChainID {
     TWEthereumChainIDOptimism = 10,
     TWEthereumChainIDXdai = 100,
     TWEthereumChainIDSmartbch = 10000,
+    TWEthereumChainIDSonic = 146,
     TWEthereumChainIDFantom = 250,
     TWEthereumChainIDBoba = 288,
     TWEthereumChainIDKcc = 321,

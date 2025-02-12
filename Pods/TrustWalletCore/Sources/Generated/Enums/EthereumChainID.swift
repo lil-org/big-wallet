@@ -40,6 +40,7 @@ public enum EthereumChainID: UInt32, CaseIterable {
     case optimism = 10
     case xdai = 100
     case smartbch = 10000
+    case sonic = 146
     case fantom = 250
     case boba = 288
     case kcc = 321

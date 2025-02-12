@@ -332,6 +332,14 @@ public struct TW_Sui_Proto_SigningInput {
     set {transactionPayload = .transferObject(newValue)}
   }
 
+  public var rawJson: String {
+    get {
+      if case .rawJson(let v)? = transactionPayload {return v}
+      return String()
+    }
+    set {transactionPayload = .rawJson(newValue)}
+  }
+
   /// The gas budget, the transaction will fail if the gas cost exceed the budget.
   public var gasBudget: UInt64 = 0
 
@@ -348,6 +356,7 @@ public struct TW_Sui_Proto_SigningInput {
     case requestAddStake(TW_Sui_Proto_RequestAddStake)
     case requestWithdrawStake(TW_Sui_Proto_RequestWithdrawStake)
     case transferObject(TW_Sui_Proto_TransferObject)
+    case rawJson(String)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_Sui_Proto_SigningInput.OneOf_TransactionPayload, rhs: TW_Sui_Proto_SigningInput.OneOf_TransactionPayload) -> Bool {
@@ -381,6 +390,10 @@ public struct TW_Sui_Proto_SigningInput {
       }()
       case (.transferObject, .transferObject): return {
         guard case .transferObject(let l) = lhs, case .transferObject(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.rawJson, .rawJson): return {
+        guard case .rawJson(let l) = lhs, case .rawJson(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
       default: return false
@@ -880,6 +893,7 @@ extension TW_Sui_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Messa
     7: .standard(proto: "request_add_stake"),
     8: .standard(proto: "request_withdraw_stake"),
     9: .standard(proto: "transfer_object"),
+    10: .standard(proto: "raw_json"),
     12: .standard(proto: "gas_budget"),
     13: .standard(proto: "reference_gas_price"),
   ]
@@ -983,6 +997,14 @@ extension TW_Sui_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Messa
           self.transactionPayload = .transferObject(v)
         }
       }()
+      case 10: try {
+        var v: String?
+        try decoder.decodeSingularStringField(value: &v)
+        if let v = v {
+          if self.transactionPayload != nil {try decoder.handleConflictingOneOf()}
+          self.transactionPayload = .rawJson(v)
+        }
+      }()
       case 12: try { try decoder.decodeSingularUInt64Field(value: &self.gasBudget) }()
       case 13: try { try decoder.decodeSingularUInt64Field(value: &self.referenceGasPrice) }()
       default: break
@@ -1029,6 +1051,10 @@ extension TW_Sui_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Messa
     case .transferObject?: try {
       guard case .transferObject(let v)? = self.transactionPayload else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+    }()
+    case .rawJson?: try {
+      guard case .rawJson(let v)? = self.transactionPayload else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 10)
     }()
     case nil: break
     }

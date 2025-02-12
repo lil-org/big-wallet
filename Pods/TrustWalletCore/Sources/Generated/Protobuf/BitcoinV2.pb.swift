@@ -200,32 +200,14 @@ public struct TW_BitcoinV2_Proto_PublicKeySignature {
   public init() {}
 }
 
-/// Bitcoin transaction out-point reference.
-public struct TW_BitcoinV2_Proto_OutPoint {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  /// The hash of the referenced transaction (network byte order, usually needs to be reversed).
-  /// The referenced transaction ID in REVERSED order.
-  public var hash: Data = Data()
-
-  /// The position in the previous transactions output that this input references.
-  public var vout: UInt32 = 0
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-}
-
 public struct TW_BitcoinV2_Proto_Input {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Reference to the previous transaction's output.
-  public var outPoint: TW_BitcoinV2_Proto_OutPoint {
-    get {return _outPoint ?? TW_BitcoinV2_Proto_OutPoint()}
+  public var outPoint: TW_Utxo_Proto_OutPoint {
+    get {return _outPoint ?? TW_Utxo_Proto_OutPoint()}
     set {_outPoint = newValue}
   }
   /// Returns true if `outPoint` has been explicitly set.
@@ -572,7 +554,7 @@ public struct TW_BitcoinV2_Proto_Input {
 
   public init() {}
 
-  fileprivate var _outPoint: TW_BitcoinV2_Proto_OutPoint? = nil
+  fileprivate var _outPoint: TW_Utxo_Proto_OutPoint? = nil
   fileprivate var _sequence: TW_BitcoinV2_Proto_Input.Sequence? = nil
 }
 
@@ -1064,6 +1046,20 @@ public struct TW_BitcoinV2_Proto_TransactionBuilder {
     set {_uniqueStorage()._dustPolicy = .fixedDustThreshold(newValue)}
   }
 
+  public var chainSpecific: OneOf_ChainSpecific? {
+    get {return _storage._chainSpecific}
+    set {_uniqueStorage()._chainSpecific = newValue}
+  }
+
+  /// ZCash specific transaction data.
+  public var zcashExtraData: TW_Zcash_Proto_TransactionBuilderExtraData {
+    get {
+      if case .zcashExtraData(let v)? = _storage._chainSpecific {return v}
+      return TW_Zcash_Proto_TransactionBuilderExtraData()
+    }
+    set {_uniqueStorage()._chainSpecific = .zcashExtraData(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// One of the "Dust" amount policies.
@@ -1080,6 +1076,25 @@ public struct TW_BitcoinV2_Proto_TransactionBuilder {
       switch (lhs, rhs) {
       case (.fixedDustThreshold, .fixedDustThreshold): return {
         guard case .fixedDustThreshold(let l) = lhs, case .fixedDustThreshold(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      }
+    }
+  #endif
+  }
+
+  public enum OneOf_ChainSpecific: Equatable {
+    /// ZCash specific transaction data.
+    case zcashExtraData(TW_Zcash_Proto_TransactionBuilderExtraData)
+
+  #if !swift(>=4.1)
+    public static func ==(lhs: TW_BitcoinV2_Proto_TransactionBuilder.OneOf_ChainSpecific, rhs: TW_BitcoinV2_Proto_TransactionBuilder.OneOf_ChainSpecific) -> Bool {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch (lhs, rhs) {
+      case (.zcashExtraData, .zcashExtraData): return {
+        guard case .zcashExtraData(let l) = lhs, case .zcashExtraData(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
       }
@@ -1187,76 +1202,6 @@ public struct TW_BitcoinV2_Proto_SigningInput {
   public init() {}
 
   fileprivate var _chainInfo: TW_BitcoinV2_Proto_ChainInfo? = nil
-}
-
-public struct TW_BitcoinV2_Proto_Transaction {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  /// The protocol version, is currently expected to be 1 or 2 (BIP68).
-  public var version: Int32 = 0
-
-  /// Block height or timestamp indicating at what point transactions can be included in a block.
-  /// Zero by default.
-  public var lockTime: UInt32 = 0
-
-  /// The transaction inputs.
-  public var inputs: [TW_BitcoinV2_Proto_Transaction.TransactionInput] = []
-
-  /// The transaction outputs.
-  public var outputs: [TW_BitcoinV2_Proto_Transaction.TransactionOutput] = []
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public struct TransactionInput {
-    // SwiftProtobuf.Message conformance is added in an extension below. See the
-    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-    // methods supported on all messages.
-
-    /// Reference to the previous transaction's output.
-    public var outPoint: TW_BitcoinV2_Proto_OutPoint {
-      get {return _outPoint ?? TW_BitcoinV2_Proto_OutPoint()}
-      set {_outPoint = newValue}
-    }
-    /// Returns true if `outPoint` has been explicitly set.
-    public var hasOutPoint: Bool {return self._outPoint != nil}
-    /// Clears the value of `outPoint`. Subsequent reads from it will return its default value.
-    public mutating func clearOutPoint() {self._outPoint = nil}
-
-    /// The sequence number, used for timelocks, replace-by-fee, etc.
-    public var sequence: UInt32 = 0
-
-    /// The script for claiming the input (non-Segwit/non-Taproot).
-    public var scriptSig: Data = Data()
-
-    /// The script for claiming the input (Segit/Taproot).
-    public var witnessItems: [Data] = []
-
-    public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-    public init() {}
-
-    fileprivate var _outPoint: TW_BitcoinV2_Proto_OutPoint? = nil
-  }
-
-  public struct TransactionOutput {
-    // SwiftProtobuf.Message conformance is added in an extension below. See the
-    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-    // methods supported on all messages.
-
-    /// The condition for claiming the output.
-    public var scriptPubkey: Data = Data()
-
-    /// The amount of satoshis to spend.
-    public var value: Int64 = 0
-
-    public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-    public init() {}
-  }
-
-  public init() {}
 }
 
 public struct TW_BitcoinV2_Proto_TransactionPlan {
@@ -1428,16 +1373,6 @@ public struct TW_BitcoinV2_Proto_SigningOutput {
   /// Error description.
   public var errorMessage: String = String()
 
-  /// Resulting transaction.
-  public var transaction: TW_BitcoinV2_Proto_Transaction {
-    get {return _transaction ?? TW_BitcoinV2_Proto_Transaction()}
-    set {_transaction = newValue}
-  }
-  /// Returns true if `transaction` has been explicitly set.
-  public var hasTransaction: Bool {return self._transaction != nil}
-  /// Clears the value of `transaction`. Subsequent reads from it will return its default value.
-  public mutating func clearTransaction() {self._transaction = nil}
-
   /// The encoded transaction that can be submitted to the network.
   public var encoded: Data = Data()
 
@@ -1467,11 +1402,58 @@ public struct TW_BitcoinV2_Proto_SigningOutput {
   /// Clears the value of `psbt`. Subsequent reads from it will return its default value.
   public mutating func clearPsbt() {self._psbt = nil}
 
+  /// Resulting transaction.
+  public var transaction: TW_BitcoinV2_Proto_SigningOutput.OneOf_Transaction? = nil
+
+  /// Standard Bitcoin transaction.
+  public var bitcoin: TW_Utxo_Proto_Transaction {
+    get {
+      if case .bitcoin(let v)? = transaction {return v}
+      return TW_Utxo_Proto_Transaction()
+    }
+    set {transaction = .bitcoin(newValue)}
+  }
+
+  /// ZCash transaction.
+  public var zcash: TW_Zcash_Proto_Transaction {
+    get {
+      if case .zcash(let v)? = transaction {return v}
+      return TW_Zcash_Proto_Transaction()
+    }
+    set {transaction = .zcash(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  /// Resulting transaction.
+  public enum OneOf_Transaction: Equatable {
+    /// Standard Bitcoin transaction.
+    case bitcoin(TW_Utxo_Proto_Transaction)
+    /// ZCash transaction.
+    case zcash(TW_Zcash_Proto_Transaction)
+
+  #if !swift(>=4.1)
+    public static func ==(lhs: TW_BitcoinV2_Proto_SigningOutput.OneOf_Transaction, rhs: TW_BitcoinV2_Proto_SigningOutput.OneOf_Transaction) -> Bool {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch (lhs, rhs) {
+      case (.bitcoin, .bitcoin): return {
+        guard case .bitcoin(let l) = lhs, case .bitcoin(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.zcash, .zcash): return {
+        guard case .zcash(let l) = lhs, case .zcash(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      default: return false
+      }
+    }
+  #endif
+  }
 
   public init() {}
 
-  fileprivate var _transaction: TW_BitcoinV2_Proto_Transaction? = nil
   fileprivate var _psbt: TW_BitcoinV2_Proto_Psbt? = nil
 }
 
@@ -1589,44 +1571,6 @@ extension TW_BitcoinV2_Proto_PublicKeySignature: SwiftProtobuf.Message, SwiftPro
   public static func ==(lhs: TW_BitcoinV2_Proto_PublicKeySignature, rhs: TW_BitcoinV2_Proto_PublicKeySignature) -> Bool {
     if lhs.publicKey != rhs.publicKey {return false}
     if lhs.signature != rhs.signature {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-extension TW_BitcoinV2_Proto_OutPoint: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".OutPoint"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "hash"),
-    2: .same(proto: "vout"),
-  ]
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularBytesField(value: &self.hash) }()
-      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.vout) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.hash.isEmpty {
-      try visitor.visitSingularBytesField(value: self.hash, fieldNumber: 1)
-    }
-    if self.vout != 0 {
-      try visitor.visitSingularUInt32Field(value: self.vout, fieldNumber: 2)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: TW_BitcoinV2_Proto_OutPoint, rhs: TW_BitcoinV2_Proto_OutPoint) -> Bool {
-    if lhs.hash != rhs.hash {return false}
-    if lhs.vout != rhs.vout {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -2581,7 +2525,8 @@ extension TW_BitcoinV2_Proto_TransactionBuilder: SwiftProtobuf.Message, SwiftPro
     6: .standard(proto: "fee_per_vb"),
     7: .standard(proto: "change_output"),
     8: .standard(proto: "max_amount_output"),
-    14: .standard(proto: "fixed_dust_threshold"),
+    10: .standard(proto: "fixed_dust_threshold"),
+    20: .standard(proto: "zcash_extra_data"),
   ]
 
   fileprivate class _StorageClass {
@@ -2594,6 +2539,7 @@ extension TW_BitcoinV2_Proto_TransactionBuilder: SwiftProtobuf.Message, SwiftPro
     var _changeOutput: TW_BitcoinV2_Proto_Output? = nil
     var _maxAmountOutput: TW_BitcoinV2_Proto_Output? = nil
     var _dustPolicy: TW_BitcoinV2_Proto_TransactionBuilder.OneOf_DustPolicy?
+    var _chainSpecific: TW_BitcoinV2_Proto_TransactionBuilder.OneOf_ChainSpecific?
 
     static let defaultInstance = _StorageClass()
 
@@ -2609,6 +2555,7 @@ extension TW_BitcoinV2_Proto_TransactionBuilder: SwiftProtobuf.Message, SwiftPro
       _changeOutput = source._changeOutput
       _maxAmountOutput = source._maxAmountOutput
       _dustPolicy = source._dustPolicy
+      _chainSpecific = source._chainSpecific
     }
   }
 
@@ -2635,12 +2582,25 @@ extension TW_BitcoinV2_Proto_TransactionBuilder: SwiftProtobuf.Message, SwiftPro
         case 6: try { try decoder.decodeSingularInt64Field(value: &_storage._feePerVb) }()
         case 7: try { try decoder.decodeSingularMessageField(value: &_storage._changeOutput) }()
         case 8: try { try decoder.decodeSingularMessageField(value: &_storage._maxAmountOutput) }()
-        case 14: try {
+        case 10: try {
           var v: Int64?
           try decoder.decodeSingularInt64Field(value: &v)
           if let v = v {
             if _storage._dustPolicy != nil {try decoder.handleConflictingOneOf()}
             _storage._dustPolicy = .fixedDustThreshold(v)
+          }
+        }()
+        case 20: try {
+          var v: TW_Zcash_Proto_TransactionBuilderExtraData?
+          var hadOneofValue = false
+          if let current = _storage._chainSpecific {
+            hadOneofValue = true
+            if case .zcashExtraData(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._chainSpecific = .zcashExtraData(v)
           }
         }()
         default: break
@@ -2680,7 +2640,10 @@ extension TW_BitcoinV2_Proto_TransactionBuilder: SwiftProtobuf.Message, SwiftPro
         try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
       } }()
       try { if case .fixedDustThreshold(let v)? = _storage._dustPolicy {
-        try visitor.visitSingularInt64Field(value: v, fieldNumber: 14)
+        try visitor.visitSingularInt64Field(value: v, fieldNumber: 10)
+      } }()
+      try { if case .zcashExtraData(let v)? = _storage._chainSpecific {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 20)
       } }()
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -2700,6 +2663,7 @@ extension TW_BitcoinV2_Proto_TransactionBuilder: SwiftProtobuf.Message, SwiftPro
         if _storage._changeOutput != rhs_storage._changeOutput {return false}
         if _storage._maxAmountOutput != rhs_storage._maxAmountOutput {return false}
         if _storage._dustPolicy != rhs_storage._dustPolicy {return false}
+        if _storage._chainSpecific != rhs_storage._chainSpecific {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -2830,148 +2794,6 @@ extension TW_BitcoinV2_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf.
     if lhs._chainInfo != rhs._chainInfo {return false}
     if lhs.dangerousUseFixedSchnorrRng != rhs.dangerousUseFixedSchnorrRng {return false}
     if lhs.transaction != rhs.transaction {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-extension TW_BitcoinV2_Proto_Transaction: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".Transaction"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "version"),
-    2: .standard(proto: "lock_time"),
-    3: .same(proto: "inputs"),
-    4: .same(proto: "outputs"),
-  ]
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularInt32Field(value: &self.version) }()
-      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.lockTime) }()
-      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.inputs) }()
-      case 4: try { try decoder.decodeRepeatedMessageField(value: &self.outputs) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.version != 0 {
-      try visitor.visitSingularInt32Field(value: self.version, fieldNumber: 1)
-    }
-    if self.lockTime != 0 {
-      try visitor.visitSingularUInt32Field(value: self.lockTime, fieldNumber: 2)
-    }
-    if !self.inputs.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.inputs, fieldNumber: 3)
-    }
-    if !self.outputs.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.outputs, fieldNumber: 4)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: TW_BitcoinV2_Proto_Transaction, rhs: TW_BitcoinV2_Proto_Transaction) -> Bool {
-    if lhs.version != rhs.version {return false}
-    if lhs.lockTime != rhs.lockTime {return false}
-    if lhs.inputs != rhs.inputs {return false}
-    if lhs.outputs != rhs.outputs {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-extension TW_BitcoinV2_Proto_Transaction.TransactionInput: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = TW_BitcoinV2_Proto_Transaction.protoMessageName + ".TransactionInput"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .standard(proto: "out_point"),
-    2: .same(proto: "sequence"),
-    3: .standard(proto: "script_sig"),
-    4: .standard(proto: "witness_items"),
-  ]
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._outPoint) }()
-      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.sequence) }()
-      case 3: try { try decoder.decodeSingularBytesField(value: &self.scriptSig) }()
-      case 4: try { try decoder.decodeRepeatedBytesField(value: &self.witnessItems) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._outPoint {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    if self.sequence != 0 {
-      try visitor.visitSingularUInt32Field(value: self.sequence, fieldNumber: 2)
-    }
-    if !self.scriptSig.isEmpty {
-      try visitor.visitSingularBytesField(value: self.scriptSig, fieldNumber: 3)
-    }
-    if !self.witnessItems.isEmpty {
-      try visitor.visitRepeatedBytesField(value: self.witnessItems, fieldNumber: 4)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: TW_BitcoinV2_Proto_Transaction.TransactionInput, rhs: TW_BitcoinV2_Proto_Transaction.TransactionInput) -> Bool {
-    if lhs._outPoint != rhs._outPoint {return false}
-    if lhs.sequence != rhs.sequence {return false}
-    if lhs.scriptSig != rhs.scriptSig {return false}
-    if lhs.witnessItems != rhs.witnessItems {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-extension TW_BitcoinV2_Proto_Transaction.TransactionOutput: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = TW_BitcoinV2_Proto_Transaction.protoMessageName + ".TransactionOutput"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .standard(proto: "script_pubkey"),
-    2: .same(proto: "value"),
-  ]
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularBytesField(value: &self.scriptPubkey) }()
-      case 2: try { try decoder.decodeSingularInt64Field(value: &self.value) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.scriptPubkey.isEmpty {
-      try visitor.visitSingularBytesField(value: self.scriptPubkey, fieldNumber: 1)
-    }
-    if self.value != 0 {
-      try visitor.visitSingularInt64Field(value: self.value, fieldNumber: 2)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: TW_BitcoinV2_Proto_Transaction.TransactionOutput, rhs: TW_BitcoinV2_Proto_Transaction.TransactionOutput) -> Bool {
-    if lhs.scriptPubkey != rhs.scriptPubkey {return false}
-    if lhs.value != rhs.value {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -3200,13 +3022,14 @@ extension TW_BitcoinV2_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "error"),
     2: .standard(proto: "error_message"),
-    3: .same(proto: "transaction"),
     4: .same(proto: "encoded"),
     5: .same(proto: "txid"),
     6: .same(proto: "vsize"),
     7: .same(proto: "weight"),
     8: .same(proto: "fee"),
     9: .same(proto: "psbt"),
+    15: .same(proto: "bitcoin"),
+    16: .same(proto: "zcash"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -3217,13 +3040,38 @@ extension TW_BitcoinV2_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularEnumField(value: &self.error) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
-      case 3: try { try decoder.decodeSingularMessageField(value: &self._transaction) }()
       case 4: try { try decoder.decodeSingularBytesField(value: &self.encoded) }()
       case 5: try { try decoder.decodeSingularBytesField(value: &self.txid) }()
       case 6: try { try decoder.decodeSingularUInt64Field(value: &self.vsize) }()
       case 7: try { try decoder.decodeSingularUInt64Field(value: &self.weight) }()
       case 8: try { try decoder.decodeSingularInt64Field(value: &self.fee) }()
       case 9: try { try decoder.decodeSingularMessageField(value: &self._psbt) }()
+      case 15: try {
+        var v: TW_Utxo_Proto_Transaction?
+        var hadOneofValue = false
+        if let current = self.transaction {
+          hadOneofValue = true
+          if case .bitcoin(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.transaction = .bitcoin(v)
+        }
+      }()
+      case 16: try {
+        var v: TW_Zcash_Proto_Transaction?
+        var hadOneofValue = false
+        if let current = self.transaction {
+          hadOneofValue = true
+          if case .zcash(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.transaction = .zcash(v)
+        }
+      }()
       default: break
       }
     }
@@ -3240,9 +3088,6 @@ extension TW_BitcoinV2_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf
     if !self.errorMessage.isEmpty {
       try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 2)
     }
-    try { if let v = self._transaction {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-    } }()
     if !self.encoded.isEmpty {
       try visitor.visitSingularBytesField(value: self.encoded, fieldNumber: 4)
     }
@@ -3261,19 +3106,30 @@ extension TW_BitcoinV2_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf
     try { if let v = self._psbt {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
     } }()
+    switch self.transaction {
+    case .bitcoin?: try {
+      guard case .bitcoin(let v)? = self.transaction else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 15)
+    }()
+    case .zcash?: try {
+      guard case .zcash(let v)? = self.transaction else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 16)
+    }()
+    case nil: break
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_BitcoinV2_Proto_SigningOutput, rhs: TW_BitcoinV2_Proto_SigningOutput) -> Bool {
     if lhs.error != rhs.error {return false}
     if lhs.errorMessage != rhs.errorMessage {return false}
-    if lhs._transaction != rhs._transaction {return false}
     if lhs.encoded != rhs.encoded {return false}
     if lhs.txid != rhs.txid {return false}
     if lhs.vsize != rhs.vsize {return false}
     if lhs.weight != rhs.weight {return false}
     if lhs.fee != rhs.fee {return false}
     if lhs._psbt != rhs._psbt {return false}
+    if lhs.transaction != rhs.transaction {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
