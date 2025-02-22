@@ -16,6 +16,7 @@ typedef TWData *_Nonnull TW_Cardano_Proto_TokenBundle;
 typedef TWData *_Nonnull TW_Cardano_Proto_Transfer;
 typedef TWData *_Nonnull TW_Cardano_Proto_RegisterStakingKey;
 typedef TWData *_Nonnull TW_Cardano_Proto_DeregisterStakingKey;
+typedef TWData *_Nonnull TW_Cardano_Proto_VoteDelegation;
 typedef TWData *_Nonnull TW_Cardano_Proto_Delegate;
 typedef TWData *_Nonnull TW_Cardano_Proto_Withdraw;
 typedef TWData *_Nonnull TW_Cardano_Proto_TransactionPlan;

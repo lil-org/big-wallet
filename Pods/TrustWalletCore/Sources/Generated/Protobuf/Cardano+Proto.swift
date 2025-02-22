@@ -10,6 +10,7 @@ public typealias CardanoTokenBundle = TW_Cardano_Proto_TokenBundle
 public typealias CardanoTransfer = TW_Cardano_Proto_Transfer
 public typealias CardanoRegisterStakingKey = TW_Cardano_Proto_RegisterStakingKey
 public typealias CardanoDeregisterStakingKey = TW_Cardano_Proto_DeregisterStakingKey
+public typealias CardanoVoteDelegation = TW_Cardano_Proto_VoteDelegation
 public typealias CardanoDelegate = TW_Cardano_Proto_Delegate
 public typealias CardanoWithdraw = TW_Cardano_Proto_Withdraw
 public typealias CardanoTransactionPlan = TW_Cardano_Proto_TransactionPlan

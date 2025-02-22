@@ -201,6 +201,70 @@ public struct TW_Cardano_Proto_DeregisterStakingKey {
   public init() {}
 }
 
+/// Vote delegation to a specific DRep or always abstain or no confidence
+public struct TW_Cardano_Proto_VoteDelegation {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Staking address (as string)
+  public var stakingAddress: String = String()
+
+  /// DRep type
+  public var drepType: TW_Cardano_Proto_VoteDelegation.DRepType = .drepID
+
+  /// DRep ID (only used when drep_type is DREP_ID)
+  public var drepID: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public enum DRepType: SwiftProtobuf.Enum {
+    public typealias RawValue = Int
+    case drepID // = 0
+    case drepAlwaysAbstain // = 2
+    case drepNoConfidence // = 3
+    case UNRECOGNIZED(Int)
+
+    public init() {
+      self = .drepID
+    }
+
+    public init?(rawValue: Int) {
+      switch rawValue {
+      case 0: self = .drepID
+      case 2: self = .drepAlwaysAbstain
+      case 3: self = .drepNoConfidence
+      default: self = .UNRECOGNIZED(rawValue)
+      }
+    }
+
+    public var rawValue: Int {
+      switch self {
+      case .drepID: return 0
+      case .drepAlwaysAbstain: return 2
+      case .drepNoConfidence: return 3
+      case .UNRECOGNIZED(let i): return i
+      }
+    }
+
+  }
+
+  public init() {}
+}
+
+#if swift(>=4.2)
+
+extension TW_Cardano_Proto_VoteDelegation.DRepType: CaseIterable {
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static var allCases: [TW_Cardano_Proto_VoteDelegation.DRepType] = [
+    .drepID,
+    .drepAlwaysAbstain,
+    .drepNoConfidence,
+  ]
+}
+
+#endif  // swift(>=4.2)
+
 /// Delegate funds in this account to a specified staking pool.
 public struct TW_Cardano_Proto_Delegate {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -353,6 +417,16 @@ public struct TW_Cardano_Proto_SigningInput {
   public var hasDeregisterStakingKey: Bool {return _storage._deregisterStakingKey != nil}
   /// Clears the value of `deregisterStakingKey`. Subsequent reads from it will return its default value.
   public mutating func clearDeregisterStakingKey() {_uniqueStorage()._deregisterStakingKey = nil}
+
+  /// Optional, used for vote delegation
+  public var voteDelegation: TW_Cardano_Proto_VoteDelegation {
+    get {return _storage._voteDelegation ?? TW_Cardano_Proto_VoteDelegation()}
+    set {_uniqueStorage()._voteDelegation = newValue}
+  }
+  /// Returns true if `voteDelegation` has been explicitly set.
+  public var hasVoteDelegation: Bool {return _storage._voteDelegation != nil}
+  /// Clears the value of `voteDelegation`. Subsequent reads from it will return its default value.
+  public mutating func clearVoteDelegation() {_uniqueStorage()._voteDelegation = nil}
 
   /// Time-to-live time of the TX
   public var ttl: UInt64 {
@@ -770,6 +844,58 @@ extension TW_Cardano_Proto_DeregisterStakingKey: SwiftProtobuf.Message, SwiftPro
   }
 }
 
+extension TW_Cardano_Proto_VoteDelegation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".VoteDelegation"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "staking_address"),
+    2: .standard(proto: "drep_type"),
+    3: .standard(proto: "drep_id"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.stakingAddress) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.drepType) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.drepID) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.stakingAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.stakingAddress, fieldNumber: 1)
+    }
+    if self.drepType != .drepID {
+      try visitor.visitSingularEnumField(value: self.drepType, fieldNumber: 2)
+    }
+    if !self.drepID.isEmpty {
+      try visitor.visitSingularStringField(value: self.drepID, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cardano_Proto_VoteDelegation, rhs: TW_Cardano_Proto_VoteDelegation) -> Bool {
+    if lhs.stakingAddress != rhs.stakingAddress {return false}
+    if lhs.drepType != rhs.drepType {return false}
+    if lhs.drepID != rhs.drepID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cardano_Proto_VoteDelegation.DRepType: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "DREP_ID"),
+    2: .same(proto: "DREP_ALWAYS_ABSTAIN"),
+    3: .same(proto: "DREP_NO_CONFIDENCE"),
+  ]
+}
+
 extension TW_Cardano_Proto_Delegate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Delegate"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -960,6 +1086,7 @@ extension TW_Cardano_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
     7: .same(proto: "delegate"),
     8: .same(proto: "withdraw"),
     9: .standard(proto: "deregister_staking_key"),
+    11: .standard(proto: "vote_delegation"),
     4: .same(proto: "ttl"),
     5: .same(proto: "plan"),
     10: .standard(proto: "extra_outputs"),
@@ -973,6 +1100,7 @@ extension TW_Cardano_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
     var _delegate: TW_Cardano_Proto_Delegate? = nil
     var _withdraw: TW_Cardano_Proto_Withdraw? = nil
     var _deregisterStakingKey: TW_Cardano_Proto_DeregisterStakingKey? = nil
+    var _voteDelegation: TW_Cardano_Proto_VoteDelegation? = nil
     var _ttl: UInt64 = 0
     var _plan: TW_Cardano_Proto_TransactionPlan? = nil
     var _extraOutputs: [TW_Cardano_Proto_TxOutput] = []
@@ -989,6 +1117,7 @@ extension TW_Cardano_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
       _delegate = source._delegate
       _withdraw = source._withdraw
       _deregisterStakingKey = source._deregisterStakingKey
+      _voteDelegation = source._voteDelegation
       _ttl = source._ttl
       _plan = source._plan
       _extraOutputs = source._extraOutputs
@@ -1020,6 +1149,7 @@ extension TW_Cardano_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
         case 8: try { try decoder.decodeSingularMessageField(value: &_storage._withdraw) }()
         case 9: try { try decoder.decodeSingularMessageField(value: &_storage._deregisterStakingKey) }()
         case 10: try { try decoder.decodeRepeatedMessageField(value: &_storage._extraOutputs) }()
+        case 11: try { try decoder.decodeSingularMessageField(value: &_storage._voteDelegation) }()
         default: break
         }
       }
@@ -1062,6 +1192,9 @@ extension TW_Cardano_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
       if !_storage._extraOutputs.isEmpty {
         try visitor.visitRepeatedMessageField(value: _storage._extraOutputs, fieldNumber: 10)
       }
+      try { if let v = _storage._voteDelegation {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1078,6 +1211,7 @@ extension TW_Cardano_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._M
         if _storage._delegate != rhs_storage._delegate {return false}
         if _storage._withdraw != rhs_storage._withdraw {return false}
         if _storage._deregisterStakingKey != rhs_storage._deregisterStakingKey {return false}
+        if _storage._voteDelegation != rhs_storage._voteDelegation {return false}
         if _storage._ttl != rhs_storage._ttl {return false}
         if _storage._plan != rhs_storage._plan {return false}
         if _storage._extraOutputs != rhs_storage._extraOutputs {return false}
