@@ -144,10 +144,7 @@ extension Google_Protobuf_Duration: ExpressibleByFloatLiteral {
     /// that is interpreted as a duration in seconds, rounded to the nearest
     /// nanosecond.
     public init(floatLiteral value: Double) {
-        let sd = trunc(value)
-        let nd = round((value - sd) * TimeInterval(nanosPerSecond))
-        let (s, n) = normalizeForDuration(seconds: Int64(sd), nanos: Int32(nd))
-        self.init(seconds: s, nanos: n)
+        self.init(rounding: value, rule: .toNearestOrAwayFromZero)
     }
 }
 
@@ -156,16 +153,71 @@ extension Google_Protobuf_Duration {
     /// `TimeInterval` (measured in seconds), rounded to the nearest nanosecond.
     ///
     /// - Parameter timeInterval: The `TimeInterval`.
+    @available(*, deprecated, renamed: "init(rounding:rule:)")
     public init(timeInterval: TimeInterval) {
-        let sd = trunc(timeInterval)
-        let nd = round((timeInterval - sd) * TimeInterval(nanosPerSecond))
-        let (s, n) = normalizeForDuration(seconds: Int64(sd), nanos: Int32(nd))
+        self.init(rounding: timeInterval, rule: .toNearestOrAwayFromZero)
+    }
+
+    /// Creates a new `Google_Protobuf_Duration` that is equal to the given
+    /// `TimeInterval` (measured in seconds), rounded to the nearest nanosecond
+    /// according to the given rounding rule.
+    ///
+    /// - Parameters:
+    ///   - timeInterval: The `TimeInterval`.
+    ///   - rule: The rounding rule to use.
+    public init(
+        rounding timeInterval: TimeInterval,
+        rule: FloatingPointRoundingRule = .toNearestOrAwayFromZero
+    ) {
+        let sd = Int64(timeInterval)
+        let nd = ((timeInterval - Double(sd)) * TimeInterval(nanosPerSecond)).rounded(rule)
+        let (s, n) = normalizeForDuration(seconds: sd, nanos: Int32(nd))
         self.init(seconds: s, nanos: n)
     }
 
     /// The `TimeInterval` (measured in seconds) equal to this duration.
     public var timeInterval: TimeInterval {
         TimeInterval(self.seconds) + TimeInterval(self.nanos) / TimeInterval(nanosPerSecond)
+    }
+}
+
+@available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
+extension Google_Protobuf_Duration {
+    /// Creates a new `Google_Protobuf_Duration` by rounding a `Duration` to
+    /// the nearest nanosecond according to the given rounding rule.
+    ///
+    /// - Parameters:
+    ///   - duration: The `Duration`.
+    ///   - rule: The rounding rule to use.
+    public init(
+        rounding duration: Duration,
+        rule: FloatingPointRoundingRule = .toNearestOrAwayFromZero
+    ) {
+        let secs = duration.components.seconds
+        let attos = duration.components.attoseconds
+        let fracNanos =
+            (Double(attos % attosPerNanosecond) / Double(attosPerNanosecond)).rounded(rule)
+        let nanos = Int32(attos / attosPerNanosecond) + Int32(fracNanos)
+        let (s, n) = normalizeForDuration(seconds: secs, nanos: nanos)
+        self.init(seconds: s, nanos: n)
+    }
+}
+
+@available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
+extension Duration {
+    /// Creates a new `Duration` that is equal to the given duration.
+    ///
+    /// Swift `Duration` has a strictly higher precision than `Google_Protobuf_Duration`
+    /// (attoseconds vs. nanoseconds, respectively), so this conversion is always
+    /// value-preserving.
+    ///
+    /// - Parameters:
+    ///   - duration: The `Google_Protobuf_Duration`.
+    public init(_ duration: Google_Protobuf_Duration) {
+        self.init(
+            secondsComponent: duration.seconds,
+            attosecondsComponent: Int64(duration.nanos) * attosPerNanosecond
+        )
     }
 }
 

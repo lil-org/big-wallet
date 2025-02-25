@@ -60,86 +60,50 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: ProtobufAPIVersionCheck 
 }
 
 /// The full set of known editions.
-public enum Google_Protobuf_Edition: Enum, Swift.CaseIterable {
-  public typealias RawValue = Int
+public enum Google_Protobuf_Edition: Int, Enum, Swift.CaseIterable {
 
   /// A placeholder for an unknown edition value.
-  case unknown // = 0
+  case unknown = 0
 
   /// A placeholder edition for specifying default behaviors *before* a feature
   /// was first introduced.  This is effectively an "infinite past".
-  case legacy // = 900
+  case legacy = 900
 
   /// Legacy syntax "editions".  These pre-date editions, but behave much like
   /// distinct editions.  These can't be used to specify the edition of proto
   /// files, but feature definitions must supply proto2/proto3 defaults for
   /// backwards compatibility.
-  case proto2 // = 998
-  case proto3 // = 999
+  case proto2 = 998
+  case proto3 = 999
 
   /// Editions that have been released.  The specific values are arbitrary and
   /// should not be depended on, but they will always be time-ordered for easy
   /// comparison.
-  case edition2023 // = 1000
-  case edition2024 // = 1001
+  case edition2023 = 1000
+  case edition2024 = 1001
 
   /// Placeholder editions for testing feature resolution.  These should not be
   /// used or relied on outside of tests.
-  case edition1TestOnly // = 1
-  case edition2TestOnly // = 2
-  case edition99997TestOnly // = 99997
-  case edition99998TestOnly // = 99998
-  case edition99999TestOnly // = 99999
+  case edition1TestOnly = 1
+  case edition2TestOnly = 2
+  case edition99997TestOnly = 99997
+  case edition99998TestOnly = 99998
+  case edition99999TestOnly = 99999
 
   /// Placeholder for specifying unbounded edition support.  This should only
   /// ever be used by plugins that can expect to never require any changes to
   /// support a new edition.
-  case max // = 2147483647
+  case max = 2147483647
 
   public init() {
     self = .unknown
-  }
-
-  public init?(rawValue: Int) {
-    switch rawValue {
-    case 0: self = .unknown
-    case 1: self = .edition1TestOnly
-    case 2: self = .edition2TestOnly
-    case 900: self = .legacy
-    case 998: self = .proto2
-    case 999: self = .proto3
-    case 1000: self = .edition2023
-    case 1001: self = .edition2024
-    case 99997: self = .edition99997TestOnly
-    case 99998: self = .edition99998TestOnly
-    case 99999: self = .edition99999TestOnly
-    case 2147483647: self = .max
-    default: return nil
-    }
-  }
-
-  public var rawValue: Int {
-    switch self {
-    case .unknown: return 0
-    case .edition1TestOnly: return 1
-    case .edition2TestOnly: return 2
-    case .legacy: return 900
-    case .proto2: return 998
-    case .proto3: return 999
-    case .edition2023: return 1000
-    case .edition2024: return 1001
-    case .edition99997TestOnly: return 99997
-    case .edition99998TestOnly: return 99998
-    case .edition99999TestOnly: return 99999
-    case .max: return 2147483647
-    }
   }
 
 }
 
 /// The protocol compiler can output a FileDescriptorSet containing the .proto
 /// files it parses.
-public struct Google_Protobuf_FileDescriptorSet: Sendable {
+public struct Google_Protobuf_FileDescriptorSet: ExtensibleMessage, Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -149,6 +113,8 @@ public struct Google_Protobuf_FileDescriptorSet: Sendable {
   public var unknownFields = UnknownStorage()
 
   public init() {}
+
+  public var _protobuf_extensionFieldValues = ExtensionFieldValueSet()
 }
 
 /// Describes a complete .proto file.
@@ -222,6 +188,9 @@ public struct Google_Protobuf_FileDescriptorProto: Sendable {
   /// The supported values are "proto2", "proto3", and "editions".
   ///
   /// If `edition` is present, this value must be "editions".
+  /// WARNING: This field should only be used by protobuf plugins or special
+  /// cases like the proto compiler. Other uses are discouraged and
+  /// developers should rely on the protoreflect APIs for their client language.
   public var syntax: String {
     get {return _syntax ?? String()}
     set {_syntax = newValue}
@@ -232,6 +201,9 @@ public struct Google_Protobuf_FileDescriptorProto: Sendable {
   public mutating func clearSyntax() {self._syntax = nil}
 
   /// The edition of the proto file.
+  /// WARNING: This field should only be used by protobuf plugins or special
+  /// cases like the proto compiler. Other uses are discouraged and
+  /// developers should rely on the protoreflect APIs for their client language.
   public var edition: Google_Protobuf_Edition {
     get {return _edition ?? .unknown}
     set {_edition = newValue}
@@ -443,30 +415,14 @@ public struct Google_Protobuf_ExtensionRangeOptions: ExtensibleMessage, Sendable
   public var unknownFields = UnknownStorage()
 
   /// The verification state of the extension range.
-  public enum VerificationState: Enum, Swift.CaseIterable {
-    public typealias RawValue = Int
+  public enum VerificationState: Int, Enum, Swift.CaseIterable {
 
     /// All the extensions of the range must be declared.
-    case declaration // = 0
-    case unverified // = 1
+    case declaration = 0
+    case unverified = 1
 
     public init() {
       self = .declaration
-    }
-
-    public init?(rawValue: Int) {
-      switch rawValue {
-      case 0: self = .declaration
-      case 1: self = .unverified
-      default: return nil
-      }
-    }
-
-    public var rawValue: Int {
-      switch self {
-      case .declaration: return 0
-      case .unverified: return 1
-      }
     }
 
   }
@@ -697,134 +653,68 @@ public struct Google_Protobuf_FieldDescriptorProto: Sendable {
 
   public var unknownFields = UnknownStorage()
 
-  public enum TypeEnum: Enum, Swift.CaseIterable {
-    public typealias RawValue = Int
+  public enum TypeEnum: Int, Enum, Swift.CaseIterable {
 
     /// 0 is reserved for errors.
     /// Order is weird for historical reasons.
-    case double // = 1
-    case float // = 2
+    case double = 1
+    case float = 2
 
     /// Not ZigZag encoded.  Negative numbers take 10 bytes.  Use TYPE_SINT64 if
     /// negative values are likely.
-    case int64 // = 3
-    case uint64 // = 4
+    case int64 = 3
+    case uint64 = 4
 
     /// Not ZigZag encoded.  Negative numbers take 10 bytes.  Use TYPE_SINT32 if
     /// negative values are likely.
-    case int32 // = 5
-    case fixed64 // = 6
-    case fixed32 // = 7
-    case bool // = 8
-    case string // = 9
+    case int32 = 5
+    case fixed64 = 6
+    case fixed32 = 7
+    case bool = 8
+    case string = 9
 
     /// Tag-delimited aggregate.
     /// Group type is deprecated and not supported after google.protobuf. However, Proto3
     /// implementations should still be able to parse the group wire format and
     /// treat group fields as unknown fields.  In Editions, the group wire format
     /// can be enabled via the `message_encoding` feature.
-    case group // = 10
+    case group = 10
 
     /// Length-delimited aggregate.
-    case message // = 11
+    case message = 11
 
     /// New in version 2.
-    case bytes // = 12
-    case uint32 // = 13
-    case `enum` // = 14
-    case sfixed32 // = 15
-    case sfixed64 // = 16
+    case bytes = 12
+    case uint32 = 13
+    case `enum` = 14
+    case sfixed32 = 15
+    case sfixed64 = 16
 
     /// Uses ZigZag encoding.
-    case sint32 // = 17
+    case sint32 = 17
 
     /// Uses ZigZag encoding.
-    case sint64 // = 18
+    case sint64 = 18
 
     public init() {
       self = .double
     }
 
-    public init?(rawValue: Int) {
-      switch rawValue {
-      case 1: self = .double
-      case 2: self = .float
-      case 3: self = .int64
-      case 4: self = .uint64
-      case 5: self = .int32
-      case 6: self = .fixed64
-      case 7: self = .fixed32
-      case 8: self = .bool
-      case 9: self = .string
-      case 10: self = .group
-      case 11: self = .message
-      case 12: self = .bytes
-      case 13: self = .uint32
-      case 14: self = .enum
-      case 15: self = .sfixed32
-      case 16: self = .sfixed64
-      case 17: self = .sint32
-      case 18: self = .sint64
-      default: return nil
-      }
-    }
-
-    public var rawValue: Int {
-      switch self {
-      case .double: return 1
-      case .float: return 2
-      case .int64: return 3
-      case .uint64: return 4
-      case .int32: return 5
-      case .fixed64: return 6
-      case .fixed32: return 7
-      case .bool: return 8
-      case .string: return 9
-      case .group: return 10
-      case .message: return 11
-      case .bytes: return 12
-      case .uint32: return 13
-      case .enum: return 14
-      case .sfixed32: return 15
-      case .sfixed64: return 16
-      case .sint32: return 17
-      case .sint64: return 18
-      }
-    }
-
   }
 
-  public enum Label: Enum, Swift.CaseIterable {
-    public typealias RawValue = Int
+  public enum Label: Int, Enum, Swift.CaseIterable {
 
     /// 0 is reserved for errors
-    case `optional` // = 1
-    case repeated // = 3
+    case `optional` = 1
+    case repeated = 3
 
     /// The required label is only allowed in google.protobuf.  In proto3 and Editions
     /// it's explicitly prohibited.  In Editions, the `field_presence` feature
     /// can be used to get this behavior.
-    case `required` // = 2
+    case `required` = 2
 
     public init() {
       self = .optional
-    }
-
-    public init?(rawValue: Int) {
-      switch rawValue {
-      case 1: self = .optional
-      case 2: self = .required
-      case 3: self = .repeated
-      default: return nil
-      }
-    }
-
-    public var rawValue: Int {
-      switch self {
-      case .optional: return 1
-      case .required: return 2
-      case .repeated: return 3
-      }
     }
 
   }
@@ -1354,6 +1244,9 @@ public struct Google_Protobuf_FileOptions: ExtensibleMessage, @unchecked Sendabl
   public mutating func clearRubyPackage() {_uniqueStorage()._rubyPackage = nil}
 
   /// Any features defined in the specific edition.
+  /// WARNING: This field should only be used by protobuf plugins or special
+  /// cases like the proto compiler. Other uses are discouraged and
+  /// developers should rely on the protoreflect APIs for their client language.
   public var features: Google_Protobuf_FeatureSet {
     get {return _storage._features ?? Google_Protobuf_FeatureSet()}
     set {_uniqueStorage()._features = newValue}
@@ -1373,37 +1266,19 @@ public struct Google_Protobuf_FileOptions: ExtensibleMessage, @unchecked Sendabl
   public var unknownFields = UnknownStorage()
 
   /// Generated classes can be optimized for speed or code size.
-  public enum OptimizeMode: Enum, Swift.CaseIterable {
-    public typealias RawValue = Int
+  public enum OptimizeMode: Int, Enum, Swift.CaseIterable {
 
     /// Generate complete code for parsing, serialization,
-    case speed // = 1
+    case speed = 1
 
     /// etc.
-    case codeSize // = 2
+    case codeSize = 2
 
     /// Generate code using MessageLite and the lite runtime.
-    case liteRuntime // = 3
+    case liteRuntime = 3
 
     public init() {
       self = .speed
-    }
-
-    public init?(rawValue: Int) {
-      switch rawValue {
-      case 1: self = .speed
-      case 2: self = .codeSize
-      case 3: self = .liteRuntime
-      default: return nil
-      }
-    }
-
-    public var rawValue: Int {
-      switch self {
-      case .speed: return 1
-      case .codeSize: return 2
-      case .liteRuntime: return 3
-      }
     }
 
   }
@@ -1523,6 +1398,9 @@ public struct Google_Protobuf_MessageOptions: ExtensibleMessage, Sendable {
   public mutating func clearDeprecatedLegacyJsonFieldConflicts() {self._deprecatedLegacyJsonFieldConflicts = nil}
 
   /// Any features defined in the specific edition.
+  /// WARNING: This field should only be used by protobuf plugins or special
+  /// cases like the proto compiler. Other uses are discouraged and
+  /// developers should rely on the protoreflect APIs for their client language.
   public var features: Google_Protobuf_FeatureSet {
     get {return _features ?? Google_Protobuf_FeatureSet()}
     set {_features = newValue}
@@ -1702,6 +1580,9 @@ public struct Google_Protobuf_FieldOptions: ExtensibleMessage, @unchecked Sendab
   }
 
   /// Any features defined in the specific edition.
+  /// WARNING: This field should only be used by protobuf plugins or special
+  /// cases like the proto compiler. Other uses are discouraged and
+  /// developers should rely on the protoreflect APIs for their client language.
   public var features: Google_Protobuf_FeatureSet {
     get {return _storage._features ?? Google_Protobuf_FeatureSet()}
     set {_uniqueStorage()._features = newValue}
@@ -1728,11 +1609,10 @@ public struct Google_Protobuf_FieldOptions: ExtensibleMessage, @unchecked Sendab
 
   public var unknownFields = UnknownStorage()
 
-  public enum CType: Enum, Swift.CaseIterable {
-    public typealias RawValue = Int
+  public enum CType: Int, Enum, Swift.CaseIterable {
 
     /// Default mode.
-    case string // = 0
+    case string = 0
 
     /// The option [ctype=CORD] may be applied to a non-repeated field of type
     /// "bytes". It indicates that in C++, the data should be stored in a Cord
@@ -1740,93 +1620,40 @@ public struct Google_Protobuf_FieldOptions: ExtensibleMessage, @unchecked Sendab
     /// fragmentation. It may also allow better performance when parsing from a
     /// Cord, or when parsing with aliasing enabled, as the parsed Cord may then
     /// alias the original buffer.
-    case cord // = 1
-    case stringPiece // = 2
+    case cord = 1
+    case stringPiece = 2
 
     public init() {
       self = .string
     }
 
-    public init?(rawValue: Int) {
-      switch rawValue {
-      case 0: self = .string
-      case 1: self = .cord
-      case 2: self = .stringPiece
-      default: return nil
-      }
-    }
-
-    public var rawValue: Int {
-      switch self {
-      case .string: return 0
-      case .cord: return 1
-      case .stringPiece: return 2
-      }
-    }
-
   }
 
-  public enum JSType: Enum, Swift.CaseIterable {
-    public typealias RawValue = Int
+  public enum JSType: Int, Enum, Swift.CaseIterable {
 
     /// Use the default type.
-    case jsNormal // = 0
+    case jsNormal = 0
 
     /// Use JavaScript strings.
-    case jsString // = 1
+    case jsString = 1
 
     /// Use JavaScript numbers.
-    case jsNumber // = 2
+    case jsNumber = 2
 
     public init() {
       self = .jsNormal
     }
 
-    public init?(rawValue: Int) {
-      switch rawValue {
-      case 0: self = .jsNormal
-      case 1: self = .jsString
-      case 2: self = .jsNumber
-      default: return nil
-      }
-    }
-
-    public var rawValue: Int {
-      switch self {
-      case .jsNormal: return 0
-      case .jsString: return 1
-      case .jsNumber: return 2
-      }
-    }
-
   }
 
   /// If set to RETENTION_SOURCE, the option will be omitted from the binary.
-  public enum OptionRetention: Enum, Swift.CaseIterable {
-    public typealias RawValue = Int
-    case retentionUnknown // = 0
-    case retentionRuntime // = 1
-    case retentionSource // = 2
+  public enum OptionRetention: Int, Enum, Swift.CaseIterable {
+    case retentionUnknown = 0
+    case retentionRuntime = 1
+    case retentionSource = 2
 
     public init() {
       self = .retentionUnknown
-    }
-
-    public init?(rawValue: Int) {
-      switch rawValue {
-      case 0: self = .retentionUnknown
-      case 1: self = .retentionRuntime
-      case 2: self = .retentionSource
-      default: return nil
-      }
-    }
-
-    public var rawValue: Int {
-      switch self {
-      case .retentionUnknown: return 0
-      case .retentionRuntime: return 1
-      case .retentionSource: return 2
-      }
     }
 
   }
@@ -1834,52 +1661,20 @@ public struct Google_Protobuf_FieldOptions: ExtensibleMessage, @unchecked Sendab
   /// This indicates the types of entities that the field may apply to when used
   /// as an option. If it is unset, then the field may be freely used as an
   /// option on any kind of entity.
-  public enum OptionTargetType: Enum, Swift.CaseIterable {
-    public typealias RawValue = Int
-    case targetTypeUnknown // = 0
-    case targetTypeFile // = 1
-    case targetTypeExtensionRange // = 2
-    case targetTypeMessage // = 3
-    case targetTypeField // = 4
-    case targetTypeOneof // = 5
-    case targetTypeEnum // = 6
-    case targetTypeEnumEntry // = 7
-    case targetTypeService // = 8
-    case targetTypeMethod // = 9
+  public enum OptionTargetType: Int, Enum, Swift.CaseIterable {
+    case targetTypeUnknown = 0
+    case targetTypeFile = 1
+    case targetTypeExtensionRange = 2
+    case targetTypeMessage = 3
+    case targetTypeField = 4
+    case targetTypeOneof = 5
+    case targetTypeEnum = 6
+    case targetTypeEnumEntry = 7
+    case targetTypeService = 8
+    case targetTypeMethod = 9
 
     public init() {
       self = .targetTypeUnknown
-    }
-
-    public init?(rawValue: Int) {
-      switch rawValue {
-      case 0: self = .targetTypeUnknown
-      case 1: self = .targetTypeFile
-      case 2: self = .targetTypeExtensionRange
-      case 3: self = .targetTypeMessage
-      case 4: self = .targetTypeField
-      case 5: self = .targetTypeOneof
-      case 6: self = .targetTypeEnum
-      case 7: self = .targetTypeEnumEntry
-      case 8: self = .targetTypeService
-      case 9: self = .targetTypeMethod
-      default: return nil
-      }
-    }
-
-    public var rawValue: Int {
-      switch self {
-      case .targetTypeUnknown: return 0
-      case .targetTypeFile: return 1
-      case .targetTypeExtensionRange: return 2
-      case .targetTypeMessage: return 3
-      case .targetTypeField: return 4
-      case .targetTypeOneof: return 5
-      case .targetTypeEnum: return 6
-      case .targetTypeEnumEntry: return 7
-      case .targetTypeService: return 8
-      case .targetTypeMethod: return 9
-      }
     }
 
   }
@@ -1990,6 +1785,9 @@ public struct Google_Protobuf_OneofOptions: ExtensibleMessage, Sendable {
   // methods supported on all messages.
 
   /// Any features defined in the specific edition.
+  /// WARNING: This field should only be used by protobuf plugins or special
+  /// cases like the proto compiler. Other uses are discouraged and
+  /// developers should rely on the protoreflect APIs for their client language.
   public var features: Google_Protobuf_FeatureSet {
     get {return _features ?? Google_Protobuf_FeatureSet()}
     set {_features = newValue}
@@ -2057,6 +1855,9 @@ public struct Google_Protobuf_EnumOptions: ExtensibleMessage, Sendable {
   public mutating func clearDeprecatedLegacyJsonFieldConflicts() {self._deprecatedLegacyJsonFieldConflicts = nil}
 
   /// Any features defined in the specific edition.
+  /// WARNING: This field should only be used by protobuf plugins or special
+  /// cases like the proto compiler. Other uses are discouraged and
+  /// developers should rely on the protoreflect APIs for their client language.
   public var features: Google_Protobuf_FeatureSet {
     get {return _features ?? Google_Protobuf_FeatureSet()}
     set {_features = newValue}
@@ -2099,6 +1900,9 @@ public struct Google_Protobuf_EnumValueOptions: ExtensibleMessage, Sendable {
   public mutating func clearDeprecated() {self._deprecated = nil}
 
   /// Any features defined in the specific edition.
+  /// WARNING: This field should only be used by protobuf plugins or special
+  /// cases like the proto compiler. Other uses are discouraged and
+  /// developers should rely on the protoreflect APIs for their client language.
   public var features: Google_Protobuf_FeatureSet {
     get {return _features ?? Google_Protobuf_FeatureSet()}
     set {_features = newValue}
@@ -2150,6 +1954,9 @@ public struct Google_Protobuf_ServiceOptions: ExtensibleMessage, Sendable {
   // methods supported on all messages.
 
   /// Any features defined in the specific edition.
+  /// WARNING: This field should only be used by protobuf plugins or special
+  /// cases like the proto compiler. Other uses are discouraged and
+  /// developers should rely on the protoreflect APIs for their client language.
   public var features: Google_Protobuf_FeatureSet {
     get {return _features ?? Google_Protobuf_FeatureSet()}
     set {_features = newValue}
@@ -2212,6 +2019,9 @@ public struct Google_Protobuf_MethodOptions: ExtensibleMessage, Sendable {
   public mutating func clearIdempotencyLevel() {self._idempotencyLevel = nil}
 
   /// Any features defined in the specific edition.
+  /// WARNING: This field should only be used by protobuf plugins or special
+  /// cases like the proto compiler. Other uses are discouraged and
+  /// developers should rely on the protoreflect APIs for their client language.
   public var features: Google_Protobuf_FeatureSet {
     get {return _features ?? Google_Protobuf_FeatureSet()}
     set {_features = newValue}
@@ -2229,35 +2039,17 @@ public struct Google_Protobuf_MethodOptions: ExtensibleMessage, Sendable {
   /// Is this method side-effect-free (or safe in HTTP parlance), or idempotent,
   /// or neither? HTTP based RPC implementation may choose GET verb for safe
   /// methods, and PUT verb for idempotent methods instead of the default POST.
-  public enum IdempotencyLevel: Enum, Swift.CaseIterable {
-    public typealias RawValue = Int
-    case idempotencyUnknown // = 0
+  public enum IdempotencyLevel: Int, Enum, Swift.CaseIterable {
+    case idempotencyUnknown = 0
 
     /// implies idempotent
-    case noSideEffects // = 1
+    case noSideEffects = 1
 
     /// idempotent, but may have side effects
-    case idempotent // = 2
+    case idempotent = 2
 
     public init() {
       self = .idempotencyUnknown
-    }
-
-    public init?(rawValue: Int) {
-      switch rawValue {
-      case 0: self = .idempotencyUnknown
-      case 1: self = .noSideEffects
-      case 2: self = .idempotent
-      default: return nil
-      }
-    }
-
-    public var rawValue: Int {
-      switch self {
-      case .idempotencyUnknown: return 0
-      case .noSideEffects: return 1
-      case .idempotent: return 2
-      }
     }
 
   }
@@ -2452,181 +2244,91 @@ public struct Google_Protobuf_FeatureSet: ExtensibleMessage, Sendable {
   /// Clears the value of `jsonFormat`. Subsequent reads from it will return its default value.
   public mutating func clearJsonFormat() {self._jsonFormat = nil}
 
+  public var enforceNamingStyle: Google_Protobuf_FeatureSet.EnforceNamingStyle {
+    get {return _enforceNamingStyle ?? .unknown}
+    set {_enforceNamingStyle = newValue}
+  }
+  /// Returns true if `enforceNamingStyle` has been explicitly set.
+  public var hasEnforceNamingStyle: Bool {return self._enforceNamingStyle != nil}
+  /// Clears the value of `enforceNamingStyle`. Subsequent reads from it will return its default value.
+  public mutating func clearEnforceNamingStyle() {self._enforceNamingStyle = nil}
+
   public var unknownFields = UnknownStorage()
 
-  public enum FieldPresence: Enum, Swift.CaseIterable {
-    public typealias RawValue = Int
-    case unknown // = 0
-    case explicit // = 1
-    case implicit // = 2
-    case legacyRequired // = 3
+  public enum FieldPresence: Int, Enum, Swift.CaseIterable {
+    case unknown = 0
+    case explicit = 1
+    case implicit = 2
+    case legacyRequired = 3
 
     public init() {
       self = .unknown
-    }
-
-    public init?(rawValue: Int) {
-      switch rawValue {
-      case 0: self = .unknown
-      case 1: self = .explicit
-      case 2: self = .implicit
-      case 3: self = .legacyRequired
-      default: return nil
-      }
-    }
-
-    public var rawValue: Int {
-      switch self {
-      case .unknown: return 0
-      case .explicit: return 1
-      case .implicit: return 2
-      case .legacyRequired: return 3
-      }
     }
 
   }
 
-  public enum EnumType: Enum, Swift.CaseIterable {
-    public typealias RawValue = Int
-    case unknown // = 0
-    case `open` // = 1
-    case closed // = 2
+  public enum EnumType: Int, Enum, Swift.CaseIterable {
+    case unknown = 0
+    case `open` = 1
+    case closed = 2
 
     public init() {
       self = .unknown
-    }
-
-    public init?(rawValue: Int) {
-      switch rawValue {
-      case 0: self = .unknown
-      case 1: self = .open
-      case 2: self = .closed
-      default: return nil
-      }
-    }
-
-    public var rawValue: Int {
-      switch self {
-      case .unknown: return 0
-      case .open: return 1
-      case .closed: return 2
-      }
     }
 
   }
 
-  public enum RepeatedFieldEncoding: Enum, Swift.CaseIterable {
-    public typealias RawValue = Int
-    case unknown // = 0
-    case packed // = 1
-    case expanded // = 2
+  public enum RepeatedFieldEncoding: Int, Enum, Swift.CaseIterable {
+    case unknown = 0
+    case packed = 1
+    case expanded = 2
 
     public init() {
       self = .unknown
-    }
-
-    public init?(rawValue: Int) {
-      switch rawValue {
-      case 0: self = .unknown
-      case 1: self = .packed
-      case 2: self = .expanded
-      default: return nil
-      }
-    }
-
-    public var rawValue: Int {
-      switch self {
-      case .unknown: return 0
-      case .packed: return 1
-      case .expanded: return 2
-      }
     }
 
   }
 
-  public enum Utf8Validation: Enum, Swift.CaseIterable {
-    public typealias RawValue = Int
-    case unknown // = 0
-    case verify // = 2
-    case none // = 3
+  public enum Utf8Validation: Int, Enum, Swift.CaseIterable {
+    case unknown = 0
+    case verify = 2
+    case none = 3
 
     public init() {
       self = .unknown
-    }
-
-    public init?(rawValue: Int) {
-      switch rawValue {
-      case 0: self = .unknown
-      case 2: self = .verify
-      case 3: self = .none
-      default: return nil
-      }
-    }
-
-    public var rawValue: Int {
-      switch self {
-      case .unknown: return 0
-      case .verify: return 2
-      case .none: return 3
-      }
     }
 
   }
 
-  public enum MessageEncoding: Enum, Swift.CaseIterable {
-    public typealias RawValue = Int
-    case unknown // = 0
-    case lengthPrefixed // = 1
-    case delimited // = 2
+  public enum MessageEncoding: Int, Enum, Swift.CaseIterable {
+    case unknown = 0
+    case lengthPrefixed = 1
+    case delimited = 2
 
     public init() {
       self = .unknown
-    }
-
-    public init?(rawValue: Int) {
-      switch rawValue {
-      case 0: self = .unknown
-      case 1: self = .lengthPrefixed
-      case 2: self = .delimited
-      default: return nil
-      }
-    }
-
-    public var rawValue: Int {
-      switch self {
-      case .unknown: return 0
-      case .lengthPrefixed: return 1
-      case .delimited: return 2
-      }
     }
 
   }
 
-  public enum JsonFormat: Enum, Swift.CaseIterable {
-    public typealias RawValue = Int
-    case unknown // = 0
-    case allow // = 1
-    case legacyBestEffort // = 2
+  public enum JsonFormat: Int, Enum, Swift.CaseIterable {
+    case unknown = 0
+    case allow = 1
+    case legacyBestEffort = 2
 
     public init() {
       self = .unknown
     }
 
-    public init?(rawValue: Int) {
-      switch rawValue {
-      case 0: self = .unknown
-      case 1: self = .allow
-      case 2: self = .legacyBestEffort
-      default: return nil
-      }
-    }
+  }
 
-    public var rawValue: Int {
-      switch self {
-      case .unknown: return 0
-      case .allow: return 1
-      case .legacyBestEffort: return 2
-      }
+  public enum EnforceNamingStyle: Int, Enum, Swift.CaseIterable {
+    case unknown = 0
+    case style2024 = 1
+    case styleLegacy = 2
+
+    public init() {
+      self = .unknown
     }
 
   }
@@ -2640,6 +2342,7 @@ public struct Google_Protobuf_FeatureSet: ExtensibleMessage, Sendable {
   fileprivate var _utf8Validation: Google_Protobuf_FeatureSet.Utf8Validation? = nil
   fileprivate var _messageEncoding: Google_Protobuf_FeatureSet.MessageEncoding? = nil
   fileprivate var _jsonFormat: Google_Protobuf_FeatureSet.JsonFormat? = nil
+  fileprivate var _enforceNamingStyle: Google_Protobuf_FeatureSet.EnforceNamingStyle? = nil
 }
 
 /// A compiled specification for the defaults of a set of features.  These
@@ -2732,7 +2435,7 @@ public struct Google_Protobuf_FeatureSetDefaults: Sendable {
 
 /// Encapsulates information about the original source file from which a
 /// FileDescriptorProto was generated.
-public struct Google_Protobuf_SourceCodeInfo: Sendable {
+public struct Google_Protobuf_SourceCodeInfo: ExtensibleMessage, Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -2897,6 +2600,8 @@ public struct Google_Protobuf_SourceCodeInfo: Sendable {
   }
 
   public init() {}
+
+  public var _protobuf_extensionFieldValues = ExtensionFieldValueSet()
 }
 
 /// Describes the relationship between generated code and its original source
@@ -2968,37 +2673,19 @@ public struct Google_Protobuf_GeneratedCodeInfo: Sendable {
 
     /// Represents the identified object's effect on the element in the original
     /// .proto file.
-    public enum Semantic: Enum, Swift.CaseIterable {
-      public typealias RawValue = Int
+    public enum Semantic: Int, Enum, Swift.CaseIterable {
 
       /// There is no effect or the effect is indescribable.
-      case none // = 0
+      case none = 0
 
       /// The element is set or otherwise mutated.
-      case set // = 1
+      case set = 1
 
       /// An alias to the element is returned.
-      case alias // = 2
+      case alias = 2
 
       public init() {
         self = .none
-      }
-
-      public init?(rawValue: Int) {
-        switch rawValue {
-        case 0: self = .none
-        case 1: self = .set
-        case 2: self = .alias
-        default: return nil
-        }
-      }
-
-      public var rawValue: Int {
-        switch self {
-        case .none: return 0
-        case .set: return 1
-        case .alias: return 2
-        }
       }
 
     }
@@ -3042,6 +2729,7 @@ extension Google_Protobuf_FileDescriptorSet: Message, _MessageImplementationBase
   ]
 
   public var isInitialized: Bool {
+    if !_protobuf_extensionFieldValues.isInitialized {return false}
     if !Internal.areAllInitialized(self.file) {return false}
     return true
   }
@@ -3053,6 +2741,8 @@ extension Google_Protobuf_FileDescriptorSet: Message, _MessageImplementationBase
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.file) }()
+      case 536000000:
+        try { try decoder.decodeExtensionField(values: &_protobuf_extensionFieldValues, messageType: Google_Protobuf_FileDescriptorSet.self, fieldNumber: fieldNumber) }()
       default: break
       }
     }
@@ -3062,12 +2752,14 @@ extension Google_Protobuf_FileDescriptorSet: Message, _MessageImplementationBase
     if !self.file.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.file, fieldNumber: 1)
     }
+    try visitor.visitExtensionFields(fields: _protobuf_extensionFieldValues, start: 536000000, end: 536000001)
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Google_Protobuf_FileDescriptorSet, rhs: Google_Protobuf_FileDescriptorSet) -> Bool {
     if lhs.file != rhs.file {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
+    if lhs._protobuf_extensionFieldValues != rhs._protobuf_extensionFieldValues {return false}
     return true
   }
 }
@@ -3096,6 +2788,7 @@ extension Google_Protobuf_FileDescriptorProto: Message, _MessageImplementationBa
     if !Internal.areAllInitialized(self.service) {return false}
     if !Internal.areAllInitialized(self.`extension`) {return false}
     if let v = self._options, !v.isInitialized {return false}
+    if let v = self._sourceCodeInfo, !v.isInitialized {return false}
     return true
   }
 
@@ -5171,6 +4864,7 @@ extension Google_Protobuf_FeatureSet: Message, _MessageImplementationBase, _Prot
     4: .standard(proto: "utf8_validation"),
     5: .standard(proto: "message_encoding"),
     6: .standard(proto: "json_format"),
+    7: .standard(proto: "enforce_naming_style"),
   ]
 
   public var isInitialized: Bool {
@@ -5190,6 +4884,7 @@ extension Google_Protobuf_FeatureSet: Message, _MessageImplementationBase, _Prot
       case 4: try { try decoder.decodeSingularEnumField(value: &self._utf8Validation) }()
       case 5: try { try decoder.decodeSingularEnumField(value: &self._messageEncoding) }()
       case 6: try { try decoder.decodeSingularEnumField(value: &self._jsonFormat) }()
+      case 7: try { try decoder.decodeSingularEnumField(value: &self._enforceNamingStyle) }()
       case 1000..<10001:
         try { try decoder.decodeExtensionField(values: &_protobuf_extensionFieldValues, messageType: Google_Protobuf_FeatureSet.self, fieldNumber: fieldNumber) }()
       default: break
@@ -5220,6 +4915,9 @@ extension Google_Protobuf_FeatureSet: Message, _MessageImplementationBase, _Prot
     try { if let v = self._jsonFormat {
       try visitor.visitSingularEnumField(value: v, fieldNumber: 6)
     } }()
+    try { if let v = self._enforceNamingStyle {
+      try visitor.visitSingularEnumField(value: v, fieldNumber: 7)
+    } }()
     try visitor.visitExtensionFields(fields: _protobuf_extensionFieldValues, start: 1000, end: 10001)
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -5231,6 +4929,7 @@ extension Google_Protobuf_FeatureSet: Message, _MessageImplementationBase, _Prot
     if lhs._utf8Validation != rhs._utf8Validation {return false}
     if lhs._messageEncoding != rhs._messageEncoding {return false}
     if lhs._jsonFormat != rhs._jsonFormat {return false}
+    if lhs._enforceNamingStyle != rhs._enforceNamingStyle {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     if lhs._protobuf_extensionFieldValues != rhs._protobuf_extensionFieldValues {return false}
     return true
@@ -5283,6 +4982,14 @@ extension Google_Protobuf_FeatureSet.JsonFormat: _ProtoNameProviding {
     0: .same(proto: "JSON_FORMAT_UNKNOWN"),
     1: .same(proto: "ALLOW"),
     2: .same(proto: "LEGACY_BEST_EFFORT"),
+  ]
+}
+
+extension Google_Protobuf_FeatureSet.EnforceNamingStyle: _ProtoNameProviding {
+  public static let _protobuf_nameMap: _NameMap = [
+    0: .same(proto: "ENFORCE_NAMING_STYLE_UNKNOWN"),
+    1: .same(proto: "STYLE2024"),
+    2: .same(proto: "STYLE_LEGACY"),
   ]
 }
 
@@ -5399,6 +5106,11 @@ extension Google_Protobuf_SourceCodeInfo: Message, _MessageImplementationBase, _
     1: .same(proto: "location"),
   ]
 
+  public var isInitialized: Bool {
+    if !_protobuf_extensionFieldValues.isInitialized {return false}
+    return true
+  }
+
   public mutating func decodeMessage<D: Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
@@ -5406,6 +5118,8 @@ extension Google_Protobuf_SourceCodeInfo: Message, _MessageImplementationBase, _
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.location) }()
+      case 536000000:
+        try { try decoder.decodeExtensionField(values: &_protobuf_extensionFieldValues, messageType: Google_Protobuf_SourceCodeInfo.self, fieldNumber: fieldNumber) }()
       default: break
       }
     }
@@ -5415,12 +5129,14 @@ extension Google_Protobuf_SourceCodeInfo: Message, _MessageImplementationBase, _
     if !self.location.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.location, fieldNumber: 1)
     }
+    try visitor.visitExtensionFields(fields: _protobuf_extensionFieldValues, start: 536000000, end: 536000001)
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Google_Protobuf_SourceCodeInfo, rhs: Google_Protobuf_SourceCodeInfo) -> Bool {
     if lhs.location != rhs.location {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
+    if lhs._protobuf_extensionFieldValues != rhs._protobuf_extensionFieldValues {return false}
     return true
   }
 }
