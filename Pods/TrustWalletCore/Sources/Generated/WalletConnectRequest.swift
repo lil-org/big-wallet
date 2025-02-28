@@ -7,11 +7,11 @@
 
 import Foundation
 
-/// Represents a WalletConnect signing request.
+
 public final class WalletConnectRequest {
 
     /// Parses the WalletConnect signing request as a `SigningInput`.
-    ///
+    /// 
     /// - Parameter coin: The given coin type to plan the transaction for.
     /// - Parameter input: The serialized data of a `WalletConnect::Proto::ParseRequestInput` proto object.
     /// - Returns: The serialized data of `WalletConnect::Proto::ParseRequestOutput` proto object.

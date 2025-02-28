@@ -8,89 +8,13 @@
 import Foundation
 
 
-public struct SolanaTransaction {
-
-    /// Decode Solana transaction, update the recent blockhash and re-sign the transaction.
-    ///
-    /// # Warning
-    ///
-    /// This is a temporary solution. It will be removed when `Solana.proto` supports
-    /// direct transaction signing.
-    ///
-    /// - Parameter encodedTx: base64 encoded Solana transaction.
-    /// - Parameter recentBlockhash: base58 encoded recent blockhash.
-    /// - Parameter privateKeys: list of private keys that should be used to re-sign the transaction.
-    /// - Returns: serialized `Solana::Proto::SigningOutput`.
-    public static func updateBlockhashAndSign(encodedTx: String, recentBlockhash: String, privateKeys: DataVector) -> Data {
-        let encodedTxString = TWStringCreateWithNSString(encodedTx)
-        defer {
-            TWStringDelete(encodedTxString)
-        }
-        let recentBlockhashString = TWStringCreateWithNSString(recentBlockhash)
-        defer {
-            TWStringDelete(recentBlockhashString)
-        }
-        return TWDataNSData(TWSolanaTransactionUpdateBlockhashAndSign(encodedTxString, recentBlockhashString, privateKeys.rawValue))
-    }
-
-    /// Try to find a `ComputeBudgetInstruction::SetComputeUnitPrice` instruction in the given transaction,
-    /// and returns the specified Unit Price.
-    ///
-    /// - Parameter encodedTx: base64 encoded Solana transaction.
-    /// - Returns: nullable Unit Price as a decimal string. Null if no instruction found.
-    public static func getComputeUnitPrice(encodedTx: String) -> String? {
-        let encodedTxString = TWStringCreateWithNSString(encodedTx)
-        defer {
-            TWStringDelete(encodedTxString)
-        }
-        guard let result = TWSolanaTransactionGetComputeUnitPrice(encodedTxString) else {
-            return nil
-        }
-        return TWStringNSString(result)
-    }
-
-    /// Try to find a `ComputeBudgetInstruction::SetComputeUnitLimit` instruction in the given transaction,
-    /// and returns the specified Unit Limit.
-    ///
-    /// - Parameter encodedTx: base64 encoded Solana transaction.
-    /// - Returns: nullable Unit Limit as a decimal string. Null if no instruction found.
-    public static func getComputeUnitLimit(encodedTx: String) -> String? {
-        let encodedTxString = TWStringCreateWithNSString(encodedTx)
-        defer {
-            TWStringDelete(encodedTxString)
-        }
-        guard let result = TWSolanaTransactionGetComputeUnitLimit(encodedTxString) else {
-            return nil
-        }
-        return TWStringNSString(result)
-    }
-
-    /// Adds or updates a `ComputeBudgetInstruction::SetComputeUnitPrice` instruction of the given transaction,
-    /// and returns the updated transaction.
-    ///
-    /// - Parameter encodedTx: base64 encoded Solana transaction.
-    /// - Parameter price: Unit Price as a decimal string.
-    /// - Returns: base64 encoded Solana transaction. Null if an error occurred.
-    public static func setComputeUnitPrice(encodedTx: String, price: String) -> String? {
-        let encodedTxString = TWStringCreateWithNSString(encodedTx)
-        defer {
-            TWStringDelete(encodedTxString)
-        }
-        let priceString = TWStringCreateWithNSString(price)
-        defer {
-            TWStringDelete(priceString)
-        }
-        guard let result = TWSolanaTransactionSetComputeUnitPrice(encodedTxString, priceString) else {
-            return nil
-        }
-        return TWStringNSString(result)
-    }
+public final class SolanaTransaction {
 
     /// Adds or updates a `ComputeBudgetInstruction::SetComputeUnitLimit` instruction of the given transaction,
     /// and returns the updated transaction.
-    ///
-    /// - Parameter encodedTx: base64 encoded Solana transaction.
-    /// - Parameter limit: Unit Limit as a decimal string.
+    /// 
+    /// - Parameter encoded_tx: base64 encoded Solana transaction.
+    /// \limit Unit Limit as a decimal string.
     /// - Returns: base64 encoded Solana transaction. Null if an error occurred.
     public static func setComputeUnitLimit(encodedTx: String, limit: String) -> String? {
         let encodedTxString = TWStringCreateWithNSString(encodedTx)
@@ -107,10 +31,10 @@ public struct SolanaTransaction {
         return TWStringNSString(result)
     }
 
-    /// Adds fee payer to the given transaction and returns the updated transaction.
-    ///
-    /// - Parameter encodedTx: base64 encoded Solana transaction.
-    /// - Parameter feePayer: fee payer account address. Must be a base58 encoded public key. It must NOT be in the account list yet.
+    /// Adds fee payer to the given transaction, and returns the updated transaction.
+    /// 
+    /// - Parameter encoded_tx: base64 encoded Solana transaction.
+    /// - Parameter fee_payer: fee payer account address. Must be a base58 encoded public key. It must NOT be in the account list yet.
     /// - Returns: base64 encoded Solana transaction. Null if an error occurred.
     public static func setFeePayer(encodedTx: String, feePayer: String) -> String? {
         let encodedTxString = TWStringCreateWithNSString(encodedTx)
@@ -127,8 +51,89 @@ public struct SolanaTransaction {
         return TWStringNSString(result)
     }
 
+    /// Decode Solana transaction, update the recent blockhash and re-sign the transaction.
+    /// 
+    /// # Warning
+    /// 
+    /// This is a temporary solution. It will be removed when `Solana.proto` supports
+    /// direct transaction signing.
+    /// 
+    /// - Parameter encoded_tx: base64 encoded Solana transaction.
+    /// - Parameter recent_blockhash: base58 encoded recent blockhash.
+    /// - Parameter private_keys: list of private keys that should be used to re-sign the transaction.
+    /// - Returns: serialized `Solana::Proto::SigningOutput`.
+    public static func updateBlockhashAndSign(encodedTx: String, recentBlockhash: String, privateKeys: DataVector) -> Data? {
+        let encodedTxString = TWStringCreateWithNSString(encodedTx)
+        defer {
+            TWStringDelete(encodedTxString)
+        }
+        let recentBlockhashString = TWStringCreateWithNSString(recentBlockhash)
+        defer {
+            TWStringDelete(recentBlockhashString)
+        }
+        guard let result = TWSolanaTransactionUpdateBlockhashAndSign(encodedTxString, recentBlockhashString, privateKeys.rawValue) else {
+            return nil
+        }
+        return TWDataNSData(result)
+    }
 
-    init() {
+    /// Try to find a `ComputeBudgetInstruction::SetComputeUnitPrice` instruction in the given transaction,
+    /// and returns the specified Unit Price.
+    /// 
+    /// - Parameter encoded_tx: base64 encoded Solana transaction.
+    /// - Returns: nullable Unit Price as a decimal string. Null if no instruction found.
+    public static func getComputeUnitPrice(encodedTx: String) -> String? {
+        let encodedTxString = TWStringCreateWithNSString(encodedTx)
+        defer {
+            TWStringDelete(encodedTxString)
+        }
+        guard let result = TWSolanaTransactionGetComputeUnitPrice(encodedTxString) else {
+            return nil
+        }
+        return TWStringNSString(result)
+    }
+
+    /// Try to find a `ComputeBudgetInstruction::SetComputeUnitLimit` instruction in the given transaction,
+    /// and returns the specified Unit Limit.
+    /// 
+    /// - Parameter encoded_tx: base64 encoded Solana transaction.
+    /// - Returns: nullable Unit Limit as a decimal string. Null if no instruction found.
+    public static func getComputeUnitLimit(encodedTx: String) -> String? {
+        let encodedTxString = TWStringCreateWithNSString(encodedTx)
+        defer {
+            TWStringDelete(encodedTxString)
+        }
+        guard let result = TWSolanaTransactionGetComputeUnitLimit(encodedTxString) else {
+            return nil
+        }
+        return TWStringNSString(result)
+    }
+
+    /// Adds or updates a `ComputeBudgetInstruction::SetComputeUnitPrice` instruction of the given transaction,
+    /// and returns the updated transaction.
+    /// 
+    /// - Parameter encoded_tx: base64 encoded Solana transaction.
+    /// \price Unit Price as a decimal string.
+    /// - Returns: base64 encoded Solana transaction. Null if an error occurred.
+    public static func setComputeUnitPrice(encodedTx: String, price: String) -> String? {
+        let encodedTxString = TWStringCreateWithNSString(encodedTx)
+        defer {
+            TWStringDelete(encodedTxString)
+        }
+        let priceString = TWStringCreateWithNSString(price)
+        defer {
+            TWStringDelete(priceString)
+        }
+        guard let result = TWSolanaTransactionSetComputeUnitPrice(encodedTxString, priceString) else {
+            return nil
+        }
+        return TWStringNSString(result)
+    }
+
+    let rawValue: OpaquePointer
+
+    init(rawValue: OpaquePointer) {
+        self.rawValue = rawValue
     }
 
 

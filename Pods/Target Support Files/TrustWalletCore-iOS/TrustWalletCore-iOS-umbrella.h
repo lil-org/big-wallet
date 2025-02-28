@@ -49,6 +49,7 @@
 #import "TWData.h"
 #import "TWDataVector.h"
 #import "TWDecredProto.h"
+#import "TWDecredV2Proto.h"
 #import "TWDerivation.h"
 #import "TWDerivationPath.h"
 #import "TWDerivationPathIndex.h"

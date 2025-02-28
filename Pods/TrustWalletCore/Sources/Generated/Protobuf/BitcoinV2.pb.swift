@@ -1423,6 +1423,15 @@ public struct TW_BitcoinV2_Proto_SigningOutput {
     set {transaction = .zcash(newValue)}
   }
 
+  /// Decred transaction.
+  public var decred: TW_DecredV2_Proto_Transaction {
+    get {
+      if case .decred(let v)? = transaction {return v}
+      return TW_DecredV2_Proto_Transaction()
+    }
+    set {transaction = .decred(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// Resulting transaction.
@@ -1431,6 +1440,8 @@ public struct TW_BitcoinV2_Proto_SigningOutput {
     case bitcoin(TW_Utxo_Proto_Transaction)
     /// ZCash transaction.
     case zcash(TW_Zcash_Proto_Transaction)
+    /// Decred transaction.
+    case decred(TW_DecredV2_Proto_Transaction)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_BitcoinV2_Proto_SigningOutput.OneOf_Transaction, rhs: TW_BitcoinV2_Proto_SigningOutput.OneOf_Transaction) -> Bool {
@@ -1444,6 +1455,10 @@ public struct TW_BitcoinV2_Proto_SigningOutput {
       }()
       case (.zcash, .zcash): return {
         guard case .zcash(let l) = lhs, case .zcash(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.decred, .decred): return {
+        guard case .decred(let l) = lhs, case .decred(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
       default: return false
@@ -3030,6 +3045,7 @@ extension TW_BitcoinV2_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf
     9: .same(proto: "psbt"),
     15: .same(proto: "bitcoin"),
     16: .same(proto: "zcash"),
+    17: .same(proto: "decred"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -3070,6 +3086,19 @@ extension TW_BitcoinV2_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
           self.transaction = .zcash(v)
+        }
+      }()
+      case 17: try {
+        var v: TW_DecredV2_Proto_Transaction?
+        var hadOneofValue = false
+        if let current = self.transaction {
+          hadOneofValue = true
+          if case .decred(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.transaction = .decred(v)
         }
       }()
       default: break
@@ -3114,6 +3143,10 @@ extension TW_BitcoinV2_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf
     case .zcash?: try {
       guard case .zcash(let v)? = self.transaction else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 16)
+    }()
+    case .decred?: try {
+      guard case .decred(let v)? = self.transaction else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 17)
     }()
     case nil: break
     }

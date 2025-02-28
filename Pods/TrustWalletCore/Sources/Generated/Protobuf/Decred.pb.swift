@@ -115,30 +115,53 @@ public struct TW_Decred_Proto_SigningOutput {
 
   /// Resulting transaction. Note that the amount may be different than the requested amount to account for fees and available funds.
   public var transaction: TW_Decred_Proto_Transaction {
-    get {return _transaction ?? TW_Decred_Proto_Transaction()}
-    set {_transaction = newValue}
+    get {return _storage._transaction ?? TW_Decred_Proto_Transaction()}
+    set {_uniqueStorage()._transaction = newValue}
   }
   /// Returns true if `transaction` has been explicitly set.
-  public var hasTransaction: Bool {return self._transaction != nil}
+  public var hasTransaction: Bool {return _storage._transaction != nil}
   /// Clears the value of `transaction`. Subsequent reads from it will return its default value.
-  public mutating func clearTransaction() {self._transaction = nil}
+  public mutating func clearTransaction() {_uniqueStorage()._transaction = nil}
 
   /// Signed and encoded transaction bytes.
-  public var encoded: Data = Data()
+  public var encoded: Data {
+    get {return _storage._encoded}
+    set {_uniqueStorage()._encoded = newValue}
+  }
 
   /// Transaction id
-  public var transactionID: String = String()
+  public var transactionID: String {
+    get {return _storage._transactionID}
+    set {_uniqueStorage()._transactionID = newValue}
+  }
 
   /// Optional error
-  public var error: TW_Common_Proto_SigningError = .ok
+  public var error: TW_Common_Proto_SigningError {
+    get {return _storage._error}
+    set {_uniqueStorage()._error = newValue}
+  }
 
-  public var errorMessage: String = String()
+  public var errorMessage: String {
+    get {return _storage._errorMessage}
+    set {_uniqueStorage()._errorMessage = newValue}
+  }
+
+  /// Result of a transaction signing using the Bitcoin 2.0 protocol.
+  /// Set if `Bitcoin.Proto.SigningInput.signing_v2` used.
+  public var signingResultV2: TW_BitcoinV2_Proto_SigningOutput {
+    get {return _storage._signingResultV2 ?? TW_BitcoinV2_Proto_SigningOutput()}
+    set {_uniqueStorage()._signingResultV2 = newValue}
+  }
+  /// Returns true if `signingResultV2` has been explicitly set.
+  public var hasSigningResultV2: Bool {return _storage._signingResultV2 != nil}
+  /// Clears the value of `signingResultV2`. Subsequent reads from it will return its default value.
+  public mutating func clearSigningResultV2() {_uniqueStorage()._signingResultV2 = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _transaction: TW_Decred_Proto_Transaction? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -325,53 +348,101 @@ extension TW_Decred_Proto_SigningOutput: SwiftProtobuf.Message, SwiftProtobuf._M
     3: .standard(proto: "transaction_id"),
     4: .same(proto: "error"),
     5: .standard(proto: "error_message"),
+    6: .standard(proto: "signing_result_v2"),
   ]
 
+  fileprivate class _StorageClass {
+    var _transaction: TW_Decred_Proto_Transaction? = nil
+    var _encoded: Data = Data()
+    var _transactionID: String = String()
+    var _error: TW_Common_Proto_SigningError = .ok
+    var _errorMessage: String = String()
+    var _signingResultV2: TW_BitcoinV2_Proto_SigningOutput? = nil
+
+    static let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _transaction = source._transaction
+      _encoded = source._encoded
+      _transactionID = source._transactionID
+      _error = source._error
+      _errorMessage = source._errorMessage
+      _signingResultV2 = source._signingResultV2
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._transaction) }()
-      case 2: try { try decoder.decodeSingularBytesField(value: &self.encoded) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.transactionID) }()
-      case 4: try { try decoder.decodeSingularEnumField(value: &self.error) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._transaction) }()
+        case 2: try { try decoder.decodeSingularBytesField(value: &_storage._encoded) }()
+        case 3: try { try decoder.decodeSingularStringField(value: &_storage._transactionID) }()
+        case 4: try { try decoder.decodeSingularEnumField(value: &_storage._error) }()
+        case 5: try { try decoder.decodeSingularStringField(value: &_storage._errorMessage) }()
+        case 6: try { try decoder.decodeSingularMessageField(value: &_storage._signingResultV2) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._transaction {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    if !self.encoded.isEmpty {
-      try visitor.visitSingularBytesField(value: self.encoded, fieldNumber: 2)
-    }
-    if !self.transactionID.isEmpty {
-      try visitor.visitSingularStringField(value: self.transactionID, fieldNumber: 3)
-    }
-    if self.error != .ok {
-      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 4)
-    }
-    if !self.errorMessage.isEmpty {
-      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 5)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._transaction {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      if !_storage._encoded.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._encoded, fieldNumber: 2)
+      }
+      if !_storage._transactionID.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._transactionID, fieldNumber: 3)
+      }
+      if _storage._error != .ok {
+        try visitor.visitSingularEnumField(value: _storage._error, fieldNumber: 4)
+      }
+      if !_storage._errorMessage.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._errorMessage, fieldNumber: 5)
+      }
+      try { if let v = _storage._signingResultV2 {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Decred_Proto_SigningOutput, rhs: TW_Decred_Proto_SigningOutput) -> Bool {
-    if lhs._transaction != rhs._transaction {return false}
-    if lhs.encoded != rhs.encoded {return false}
-    if lhs.transactionID != rhs.transactionID {return false}
-    if lhs.error != rhs.error {return false}
-    if lhs.errorMessage != rhs.errorMessage {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._transaction != rhs_storage._transaction {return false}
+        if _storage._encoded != rhs_storage._encoded {return false}
+        if _storage._transactionID != rhs_storage._transactionID {return false}
+        if _storage._error != rhs_storage._error {return false}
+        if _storage._errorMessage != rhs_storage._errorMessage {return false}
+        if _storage._signingResultV2 != rhs_storage._signingResultV2 {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

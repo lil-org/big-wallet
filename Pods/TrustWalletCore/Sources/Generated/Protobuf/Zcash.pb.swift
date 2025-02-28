@@ -48,7 +48,7 @@ public struct TW_Zcash_Proto_Transaction {
 
   //// Transaction version.
   //// Currently, version 4 (0x80000004) is supported only.
-  public var version: Int32 = 0
+  public var version: UInt32 = 0
 
   /// If transaction version is 4 (0x80000004), version group ID is 0x892F2085.
   public var versionGroupID: UInt32 = 0
@@ -145,7 +145,7 @@ extension TW_Zcash_Proto_Transaction: SwiftProtobuf.Message, SwiftProtobuf._Mess
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularInt32Field(value: &self.version) }()
+      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.version) }()
       case 2: try { try decoder.decodeSingularUInt32Field(value: &self.versionGroupID) }()
       case 3: try { try decoder.decodeRepeatedMessageField(value: &self.inputs) }()
       case 4: try { try decoder.decodeRepeatedMessageField(value: &self.outputs) }()
@@ -160,7 +160,7 @@ extension TW_Zcash_Proto_Transaction: SwiftProtobuf.Message, SwiftProtobuf._Mess
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.version != 0 {
-      try visitor.visitSingularInt32Field(value: self.version, fieldNumber: 1)
+      try visitor.visitSingularUInt32Field(value: self.version, fieldNumber: 1)
     }
     if self.versionGroupID != 0 {
       try visitor.visitSingularUInt32Field(value: self.versionGroupID, fieldNumber: 2)

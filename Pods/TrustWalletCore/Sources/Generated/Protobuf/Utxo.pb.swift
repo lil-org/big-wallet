@@ -91,7 +91,7 @@ public struct TW_Utxo_Proto_Transaction {
   // methods supported on all messages.
 
   /// The protocol version, is currently expected to be 1 or 2 (BIP68).
-  public var version: Int32 = 0
+  public var version: UInt32 = 0
 
   /// Block height or timestamp indicating at what point transactions can be included in a block.
   /// Zero by default.
@@ -257,7 +257,7 @@ extension TW_Utxo_Proto_Transaction: SwiftProtobuf.Message, SwiftProtobuf._Messa
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularInt32Field(value: &self.version) }()
+      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.version) }()
       case 2: try { try decoder.decodeSingularUInt32Field(value: &self.lockTime) }()
       case 3: try { try decoder.decodeRepeatedMessageField(value: &self.inputs) }()
       case 4: try { try decoder.decodeRepeatedMessageField(value: &self.outputs) }()
@@ -268,7 +268,7 @@ extension TW_Utxo_Proto_Transaction: SwiftProtobuf.Message, SwiftProtobuf._Messa
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.version != 0 {
-      try visitor.visitSingularInt32Field(value: self.version, fieldNumber: 1)
+      try visitor.visitSingularUInt32Field(value: self.version, fieldNumber: 1)
     }
     if self.lockTime != 0 {
       try visitor.visitSingularUInt32Field(value: self.lockTime, fieldNumber: 2)
