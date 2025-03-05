@@ -250,8 +250,9 @@ public class KingfisherManager: @unchecked Sendable {
     func retrieveImage(
         with source: Source,
         options: KingfisherParsedOptionsInfo,
-        progressBlock: DownloadProgressBlock? = nil,
+        progressBlock: DownloadProgressBlock?,
         downloadTaskUpdated: DownloadTaskUpdatedBlock? = nil,
+        progressiveImageSetter: ((KFCrossPlatformImage?) -> Void)? = nil,
         completionHandler: (@Sendable (Result<RetrieveImageResult, KingfisherError>) -> Void)?) -> DownloadTask?
     {
         var info = options
@@ -262,7 +263,7 @@ public class KingfisherManager: @unchecked Sendable {
             with: source,
             options: info,
             downloadTaskUpdated: downloadTaskUpdated,
-            progressiveImageSetter: nil,
+            progressiveImageSetter: progressiveImageSetter,
             completionHandler: completionHandler)
     }
 
@@ -276,12 +277,13 @@ public class KingfisherManager: @unchecked Sendable {
     {
         var options = options
         let retryStrategy = options.retryStrategy
-        
+
+        let progressiveJPEG = options.progressiveJPEG
         if let provider = ImageProgressiveProvider(options: options, refresh: { image in
             guard let setter = progressiveImageSetter else {
                 return
             }
-            guard let strategy = options.progressiveJPEG?.onImageUpdated(image) else {
+            guard let strategy = progressiveJPEG?.onImageUpdated(image) else {
                 setter(image)
                 return
             }
@@ -648,7 +650,7 @@ public class KingfisherManager: @unchecked Sendable {
                     }
                 } onFailure: { error in
                     options.callbackQueue.execute {
-                        completionHandler(.failure(KingfisherError.cacheError(reason: .imageNotExisting(key: key))))
+                        completionHandler(.failure(error))
                     }
                 }
             }
@@ -727,13 +729,11 @@ public class KingfisherManager: @unchecked Sendable {
                             }
                         }
                     },
-                    onFailure: { _ in
+                    onFailure: { error in
                         // This should not happen actually, since we already confirmed `originalImageCached` is `true`.
                         // Just in case...
-                        options.callbackQueue.execute {
-                            completionHandler?(
-                                .failure(KingfisherError.cacheError(reason: .imageNotExisting(key: key)))
-                            )
+                        if let completionHandler = completionHandler {
+                            options.callbackQueue.execute { completionHandler(.failure(error)) }
                         }
                     }
                 )

@@ -44,7 +44,7 @@ public protocol KFOptionSetter {
 
 extension KF.Builder: KFOptionSetter { }
 
-final class KFDelegateObserver: Sendable {
+final actor KFDelegateObserver {
     static let `default` = KFDelegateObserver()
 }
 
@@ -499,6 +499,15 @@ extension KFOptionSetter {
     ///
     public func setProcessor(_ processor: any ImageProcessor) -> Self {
         options.processor = processor
+        return self
+    }
+    
+    /// Enables progressive image loading with a specified `ImageProgressive` setting to process the
+    /// progressive JPEG data and display it in a progressive way.
+    /// - Parameter progressive: The progressive settings which is used while loading.
+    /// - Returns: A ``KF/Builder`` with changes applied.
+    public func progressiveJPEG(_ progressive: ImageProgressive? = .init()) -> Self {
+        options.progressiveJPEG = progressive
         return self
     }
 
