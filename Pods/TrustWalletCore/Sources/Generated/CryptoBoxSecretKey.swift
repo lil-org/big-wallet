@@ -7,11 +7,11 @@
 
 import Foundation
 
-/// Secret key used in `crypto_box` cryptography.
+
 public final class CryptoBoxSecretKey {
 
     /// Determines if the given secret key is valid or not.
-    ///
+    /// 
     /// - Parameter data: *non-null* byte array.
     /// - Returns: true if the secret key is valid, false otherwise.
     public static func isValid(data: Data) -> Bool {
@@ -22,9 +22,9 @@ public final class CryptoBoxSecretKey {
         return TWCryptoBoxSecretKeyIsValid(dataData)
     }
 
-    /// Returns the raw data of the given secret-key.
-    ///
-    /// - Parameter secretKey: *non-null* pointer to a secret key.
+    /// Returns the raw data of a given secret-key.
+    /// 
+    /// - Parameter secret_key: *non-null* pointer to a secret key.
     /// - Returns: C-compatible result with a C-compatible byte array.
     public var data: Data {
         return TWDataNSData(TWCryptoBoxSecretKeyData(rawValue))
@@ -56,7 +56,7 @@ public final class CryptoBoxSecretKey {
     }
 
     /// Returns the public key associated with the given `key`.
-    ///
+    /// 
     /// - Parameter key: *non-null* pointer to the private key.
     /// - Returns: *non-null* pointer to the corresponding public key.
     public func getPublicKey() -> CryptoBoxPublicKey {

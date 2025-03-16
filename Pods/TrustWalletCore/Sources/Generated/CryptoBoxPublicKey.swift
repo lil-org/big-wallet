@@ -7,11 +7,11 @@
 
 import Foundation
 
-/// Public key used in `crypto_box` cryptography.
+
 public final class CryptoBoxPublicKey {
 
     /// Determines if the given public key is valid or not.
-    ///
+    /// 
     /// - Parameter data: *non-null* byte array.
     /// - Returns: true if the public key is valid, false otherwise.
     public static func isValid(data: Data) -> Bool {
@@ -22,9 +22,9 @@ public final class CryptoBoxPublicKey {
         return TWCryptoBoxPublicKeyIsValid(dataData)
     }
 
-    /// Returns the raw data of the given public-key.
-    ///
-    /// - Parameter publicKey: *non-null* pointer to a public key.
+    /// Returns the raw data of a given public-key.
+    /// 
+    /// - Parameter public_key: *non-null* pointer to a public key.
     /// - Returns: C-compatible result with a C-compatible byte array.
     public var data: Data {
         return TWDataNSData(TWCryptoBoxPublicKeyData(rawValue))

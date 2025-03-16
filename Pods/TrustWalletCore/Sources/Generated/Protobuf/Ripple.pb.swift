@@ -94,7 +94,8 @@ public struct TW_Ripple_Proto_OperationPayment {
   public var destination: String = String()
 
   /// A Destination Tag
-  public var destinationTag: UInt32 = 0
+  /// It must fit uint32
+  public var destinationTag: UInt64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -139,13 +140,16 @@ public struct TW_Ripple_Proto_OperationEscrowCreate {
   public var destination: String = String()
 
   /// Destination Tag
-  public var destinationTag: UInt32 = 0
+  /// It must fit uint32
+  public var destinationTag: UInt64 = 0
 
   /// Escrow expire time
-  public var cancelAfter: UInt32 = 0
+  /// It must fit uint32
+  public var cancelAfter: UInt64 = 0
 
   /// Escrow release time
-  public var finishAfter: UInt32 = 0
+  /// It must fit uint32
+  public var finishAfter: UInt64 = 0
 
   /// Hex-encoded crypto condition
   /// https://datatracker.ietf.org/doc/html/draft-thomas-crypto-conditions-02#section-8.1
@@ -196,7 +200,7 @@ public struct TW_Ripple_Proto_OperationEscrowFinish {
   public init() {}
 }
 
-/// https://xrpl.org/nftokenburn.html 
+/// https://xrpl.org/nftokenburn.html
 public struct TW_Ripple_Proto_OperationNFTokenBurn {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -210,7 +214,7 @@ public struct TW_Ripple_Proto_OperationNFTokenBurn {
   public init() {}
 }
 
-/// https://xrpl.org/nftokencreateoffer.html 
+/// https://xrpl.org/nftokencreateoffer.html
 public struct TW_Ripple_Proto_OperationNFTokenCreateOffer {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -227,7 +231,7 @@ public struct TW_Ripple_Proto_OperationNFTokenCreateOffer {
   public init() {}
 }
 
-/// https://xrpl.org/nftokenacceptoffer.html 
+/// https://xrpl.org/nftokenacceptoffer.html
 public struct TW_Ripple_Proto_OperationNFTokenAcceptOffer {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -241,7 +245,7 @@ public struct TW_Ripple_Proto_OperationNFTokenAcceptOffer {
   public init() {}
 }
 
-/// https://xrpl.org/nftokencanceloffer.html 
+/// https://xrpl.org/nftokencanceloffer.html
 public struct TW_Ripple_Proto_OperationNFTokenCancelOffer {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -274,7 +278,8 @@ public struct TW_Ripple_Proto_SigningInput {
   public var account: String = String()
 
   /// Transaction flags, optional
-  public var flags: UInt32 = 0
+  /// It must fit uint32
+  public var flags: UInt64 = 0
 
   /// The secret private key used for signing (32 bytes).
   public var privateKey: Data = Data()
@@ -367,7 +372,8 @@ public struct TW_Ripple_Proto_SigningInput {
 
   /// Arbitrary integer used to identify the reason for this payment, or a sender on whose behalf this transaction is made.
   /// Conventionally, a refund should specify the initial payment's SourceTag as the refund payment's DestinationTag.
-  public var sourceTag: UInt32 = 0
+  /// It must fit uint32.
+  public var sourceTag: UInt64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -574,7 +580,7 @@ extension TW_Ripple_Proto_OperationPayment: SwiftProtobuf.Message, SwiftProtobuf
         }
       }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.destination) }()
-      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.destinationTag) }()
+      case 4: try { try decoder.decodeSingularUInt64Field(value: &self.destinationTag) }()
       default: break
       }
     }
@@ -600,7 +606,7 @@ extension TW_Ripple_Proto_OperationPayment: SwiftProtobuf.Message, SwiftProtobuf
       try visitor.visitSingularStringField(value: self.destination, fieldNumber: 3)
     }
     if self.destinationTag != 0 {
-      try visitor.visitSingularUInt32Field(value: self.destinationTag, fieldNumber: 4)
+      try visitor.visitSingularUInt64Field(value: self.destinationTag, fieldNumber: 4)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -633,9 +639,9 @@ extension TW_Ripple_Proto_OperationEscrowCreate: SwiftProtobuf.Message, SwiftPro
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularInt64Field(value: &self.amount) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.destination) }()
-      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.destinationTag) }()
-      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.cancelAfter) }()
-      case 5: try { try decoder.decodeSingularUInt32Field(value: &self.finishAfter) }()
+      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.destinationTag) }()
+      case 4: try { try decoder.decodeSingularUInt64Field(value: &self.cancelAfter) }()
+      case 5: try { try decoder.decodeSingularUInt64Field(value: &self.finishAfter) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.condition) }()
       default: break
       }
@@ -650,13 +656,13 @@ extension TW_Ripple_Proto_OperationEscrowCreate: SwiftProtobuf.Message, SwiftPro
       try visitor.visitSingularStringField(value: self.destination, fieldNumber: 2)
     }
     if self.destinationTag != 0 {
-      try visitor.visitSingularUInt32Field(value: self.destinationTag, fieldNumber: 3)
+      try visitor.visitSingularUInt64Field(value: self.destinationTag, fieldNumber: 3)
     }
     if self.cancelAfter != 0 {
-      try visitor.visitSingularUInt32Field(value: self.cancelAfter, fieldNumber: 4)
+      try visitor.visitSingularUInt64Field(value: self.cancelAfter, fieldNumber: 4)
     }
     if self.finishAfter != 0 {
-      try visitor.visitSingularUInt32Field(value: self.finishAfter, fieldNumber: 5)
+      try visitor.visitSingularUInt64Field(value: self.finishAfter, fieldNumber: 5)
     }
     if !self.condition.isEmpty {
       try visitor.visitSingularStringField(value: self.condition, fieldNumber: 6)
@@ -931,7 +937,7 @@ extension TW_Ripple_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Me
       case 2: try { try decoder.decodeSingularUInt32Field(value: &self.sequence) }()
       case 3: try { try decoder.decodeSingularUInt32Field(value: &self.lastLedgerSequence) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.account) }()
-      case 5: try { try decoder.decodeSingularUInt32Field(value: &self.flags) }()
+      case 5: try { try decoder.decodeSingularUInt64Field(value: &self.flags) }()
       case 6: try { try decoder.decodeSingularBytesField(value: &self.privateKey) }()
       case 7: try {
         var v: TW_Ripple_Proto_OperationTrustSet?
@@ -1052,7 +1058,7 @@ extension TW_Ripple_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Me
         }
       }()
       case 20: try { try decoder.decodeSingularStringField(value: &self.rawJson) }()
-      case 25: try { try decoder.decodeSingularUInt32Field(value: &self.sourceTag) }()
+      case 25: try { try decoder.decodeSingularUInt64Field(value: &self.sourceTag) }()
       default: break
       }
     }
@@ -1076,7 +1082,7 @@ extension TW_Ripple_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Me
       try visitor.visitSingularStringField(value: self.account, fieldNumber: 4)
     }
     if self.flags != 0 {
-      try visitor.visitSingularUInt32Field(value: self.flags, fieldNumber: 5)
+      try visitor.visitSingularUInt64Field(value: self.flags, fieldNumber: 5)
     }
     if !self.privateKey.isEmpty {
       try visitor.visitSingularBytesField(value: self.privateKey, fieldNumber: 6)
@@ -1130,7 +1136,7 @@ extension TW_Ripple_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._Me
       try visitor.visitSingularStringField(value: self.rawJson, fieldNumber: 20)
     }
     if self.sourceTag != 0 {
-      try visitor.visitSingularUInt32Field(value: self.sourceTag, fieldNumber: 25)
+      try visitor.visitSingularUInt64Field(value: self.sourceTag, fieldNumber: 25)
     }
     try unknownFields.traverse(visitor: &visitor)
   }

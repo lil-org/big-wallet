@@ -64,4 +64,5 @@ public enum Blockchain: UInt32, CaseIterable {
     case bitcoinCash = 55
     case pactus = 56
     case komodo = 57
+    case polymesh = 58
 }

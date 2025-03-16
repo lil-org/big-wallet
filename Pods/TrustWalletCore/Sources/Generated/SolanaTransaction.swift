@@ -10,47 +10,6 @@ import Foundation
 
 public final class SolanaTransaction {
 
-    /// Adds or updates a `ComputeBudgetInstruction::SetComputeUnitLimit` instruction of the given transaction,
-    /// and returns the updated transaction.
-    /// 
-    /// - Parameter encoded_tx: base64 encoded Solana transaction.
-    /// \limit Unit Limit as a decimal string.
-    /// - Returns: base64 encoded Solana transaction. Null if an error occurred.
-    public static func setComputeUnitLimit(encodedTx: String, limit: String) -> String? {
-        let encodedTxString = TWStringCreateWithNSString(encodedTx)
-        defer {
-            TWStringDelete(encodedTxString)
-        }
-        let limitString = TWStringCreateWithNSString(limit)
-        defer {
-            TWStringDelete(limitString)
-        }
-        guard let result = TWSolanaTransactionSetComputeUnitLimit(encodedTxString, limitString) else {
-            return nil
-        }
-        return TWStringNSString(result)
-    }
-
-    /// Adds fee payer to the given transaction, and returns the updated transaction.
-    /// 
-    /// - Parameter encoded_tx: base64 encoded Solana transaction.
-    /// - Parameter fee_payer: fee payer account address. Must be a base58 encoded public key. It must NOT be in the account list yet.
-    /// - Returns: base64 encoded Solana transaction. Null if an error occurred.
-    public static func setFeePayer(encodedTx: String, feePayer: String) -> String? {
-        let encodedTxString = TWStringCreateWithNSString(encodedTx)
-        defer {
-            TWStringDelete(encodedTxString)
-        }
-        let feePayerString = TWStringCreateWithNSString(feePayer)
-        defer {
-            TWStringDelete(feePayerString)
-        }
-        guard let result = TWSolanaTransactionSetFeePayer(encodedTxString, feePayerString) else {
-            return nil
-        }
-        return TWStringNSString(result)
-    }
-
     /// Decode Solana transaction, update the recent blockhash and re-sign the transaction.
     /// 
     /// # Warning
@@ -125,6 +84,47 @@ public final class SolanaTransaction {
             TWStringDelete(priceString)
         }
         guard let result = TWSolanaTransactionSetComputeUnitPrice(encodedTxString, priceString) else {
+            return nil
+        }
+        return TWStringNSString(result)
+    }
+
+    /// Adds or updates a `ComputeBudgetInstruction::SetComputeUnitLimit` instruction of the given transaction,
+    /// and returns the updated transaction.
+    /// 
+    /// - Parameter encoded_tx: base64 encoded Solana transaction.
+    /// \limit Unit Limit as a decimal string.
+    /// - Returns: base64 encoded Solana transaction. Null if an error occurred.
+    public static func setComputeUnitLimit(encodedTx: String, limit: String) -> String? {
+        let encodedTxString = TWStringCreateWithNSString(encodedTx)
+        defer {
+            TWStringDelete(encodedTxString)
+        }
+        let limitString = TWStringCreateWithNSString(limit)
+        defer {
+            TWStringDelete(limitString)
+        }
+        guard let result = TWSolanaTransactionSetComputeUnitLimit(encodedTxString, limitString) else {
+            return nil
+        }
+        return TWStringNSString(result)
+    }
+
+    /// Adds fee payer to the given transaction, and returns the updated transaction.
+    /// 
+    /// - Parameter encoded_tx: base64 encoded Solana transaction.
+    /// - Parameter fee_payer: fee payer account address. Must be a base58 encoded public key. It must NOT be in the account list yet.
+    /// - Returns: base64 encoded Solana transaction. Null if an error occurred.
+    public static func setFeePayer(encodedTx: String, feePayer: String) -> String? {
+        let encodedTxString = TWStringCreateWithNSString(encodedTx)
+        defer {
+            TWStringDelete(encodedTxString)
+        }
+        let feePayerString = TWStringCreateWithNSString(feePayer)
+        defer {
+            TWStringDelete(feePayerString)
+        }
+        guard let result = TWSolanaTransactionSetFeePayer(encodedTxString, feePayerString) else {
             return nil
         }
         return TWStringNSString(result)

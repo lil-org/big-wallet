@@ -102,6 +102,7 @@
 #import "TWPactusProto.h"
 #import "TWPBKDF2.h"
 #import "TWPolkadotProto.h"
+#import "TWPolymeshProto.h"
 #import "TWPrivateKey.h"
 #import "TWPrivateKeyType.h"
 #import "TWPublicKey.h"
