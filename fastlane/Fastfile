@@ -166,6 +166,19 @@ lane :release do
       submission_information: { add_id_info_uses_idfa: false },
     )
   end
+  
+  platform :xros do
+    gym(scheme: "Wallet visionOS", output_directory: "fastlane/build", clean: true)
+    deliver(
+      metadata_path: "./fastlane/metadata",
+      platform: "xros",
+      run_precheck_before_submit: false,
+      force: true,
+      submit_for_review: true,
+      automatic_release: true,
+      submission_information: { add_id_info_uses_idfa: false },
+    )
+  end
 
   clean
 end
