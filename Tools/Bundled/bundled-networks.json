@@ -87,6 +87,11 @@
     "n" : "Moonriver",
     "s" : "MOVR"
   },
+  "130" : {
+    "b" : "https://uniscan.xyz",
+    "n" : "Unichain",
+    "s" : "ETH",
+  },
   "1313161554" : {
     "b" : "https://aurorascan.dev",
     "n" : "Aurora",
@@ -98,6 +103,11 @@
     "n" : "Aurora Testnet",
     "s" : "ETH",
     "t" : true
+  },
+  "1329" : {
+    "b" : "https://seitrace.com",
+    "n" : "Sei Network",
+    "s" : "SEI",
   },
   "13371" : {
     "b" : "https://explorer.immutable.com",
@@ -140,6 +150,11 @@
     "n" : "Mint Mainnet",
     "s" : "ETH"
   },
+  "1868" : {
+    "b" : "https://soneium.blockscout.com",
+    "n" : "Soneium",
+    "s" : "ETH",
+  },
   "196" : {
     "b" : "https://www.oklink.com/xlayer",
     "n" : "X Layer Mainnet",
@@ -153,7 +168,7 @@
   "2020" : {
     "b" : "https://app.roninchain.com",
     "n" : "Ronin",
-    "s" : "RON",
+    "s" : "RON"
   },
   "204" : {
     "b" : "https://mainnet.opbnbscan.com",
@@ -227,6 +242,11 @@
     "o" : true,
     "s" : "ETH"
   },
+  "33139" : {
+    "b" : "https://apescan.io",
+    "n" : "ApeChain",
+    "s" : "APE",
+  },
   "338" : {
     "b" : "https://explorer.cronos.org/testnet",
     "n" : "Cronos Testnet",
@@ -237,6 +257,11 @@
     "b" : "https://explorer.mode.network",
     "n" : "Mode",
     "s" : "ETH"
+  },
+  "360" : {
+    "b" : "https://shapescan.xyz",
+    "n" : "Shape",
+    "s" : "ETH",
   },
   "40" : {
     "b" : "https://teloscan.io",
@@ -434,6 +459,11 @@
     "n" : "ZetaChain Mainnet",
     "s" : "ZETA"
   },
+  "747" : {
+    "b" : "https://evm.flowscan.io",
+    "n" : "Flow EVM Mainnet",
+    "s" : "FLOW",
+  },
   "77" : {
     "b" : "https://blockscout.com/poa/sokol",
     "n" : "POA Network Sokol",
@@ -463,6 +493,11 @@
     "s" : "POL",
     "t" : true
   },
+  "80094" : {
+    "b" : "https://berascan.com",
+    "n" : "Berachain",
+    "s" : "BERA",
+  },
   "810180" : {
     "b" : "https://explorer.zklink.io",
     "n" : "zkLink Nova Mainnet",
@@ -477,6 +512,11 @@
     "b" : "https://scope.klaytn.com",
     "n" : "Klaytn",
     "s" : "KLAY"
+  },
+  "8333" : {
+    "b" : "https://explorer.b3.fun",
+    "n" : "B3",
+    "s" : "ETH",
   },
   "8453" : {
     "b" : "https://basescan.org",
