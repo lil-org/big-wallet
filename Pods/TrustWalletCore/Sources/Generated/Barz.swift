@@ -97,6 +97,110 @@ public struct Barz {
         return TWDataNSData(TWBarzGetDiamondCutCode(inputData))
     }
 
+    /// Computes an Authorization hash in [EIP-7702 format](https://eips.ethereum.org/EIPS/eip-7702)
+    /// `keccak256('0x05' || rlp([chain_id, address, nonce]))`.
+    ///
+    /// - Parameter chainId: The chainId of the network
+    /// - Parameter contractAddress: The address of the contract to be authorized
+    /// - Parameter nonce: The nonce of the transaction
+    /// - Returns: The authorization hash
+    public static func getAuthorizationHash(chainId: Data, contractAddress: String, nonce: Data) -> Data {
+        let chainIdData = TWDataCreateWithNSData(chainId)
+        defer {
+            TWDataDelete(chainIdData)
+        }
+        let contractAddressString = TWStringCreateWithNSString(contractAddress)
+        defer {
+            TWStringDelete(contractAddressString)
+        }
+        let nonceData = TWDataCreateWithNSData(nonce)
+        defer {
+            TWDataDelete(nonceData)
+        }
+        return TWDataNSData(TWBarzGetAuthorizationHash(chainIdData, contractAddressString, nonceData))
+    }
+
+    /// Returns the signed authorization hash
+    ///
+    /// - Parameter chainId: The chainId of the network
+    /// - Parameter contractAddress: The address of the contract to be authorized
+    /// - Parameter nonce: The nonce of the transaction
+    /// - Parameter privateKey: The private key
+    /// - Returns: A json string of the signed authorization
+    public static func signAuthorization(chainId: Data, contractAddress: String, nonce: Data, privateKey: String) -> String {
+        let chainIdData = TWDataCreateWithNSData(chainId)
+        defer {
+            TWDataDelete(chainIdData)
+        }
+        let contractAddressString = TWStringCreateWithNSString(contractAddress)
+        defer {
+            TWStringDelete(contractAddressString)
+        }
+        let nonceData = TWDataCreateWithNSData(nonce)
+        defer {
+            TWDataDelete(nonceData)
+        }
+        let privateKeyString = TWStringCreateWithNSString(privateKey)
+        defer {
+            TWStringDelete(privateKeyString)
+        }
+        return TWStringNSString(TWBarzSignAuthorization(chainIdData, contractAddressString, nonceData, privateKeyString))
+    }
+
+    /// Returns the encoded hash of the user operation
+    ///
+    /// - Parameter chainId: The chainId of the network
+    /// - Parameter wallet: The address of the wallet
+    /// - Parameter version: The version of the wallet
+    /// - Parameter typeHash: The type hash of the transaction
+    /// - Parameter domainSeparatorHash: The domain separator hash of the wallet
+    /// - Parameter hash: The hash of the user operation
+    /// - Returns: The encoded hash of the user operation
+    public static func getEncodedHash(chainId: Data, wallet: String, version: String, typeHash: String, domainSeparatorHash: String, hash: String) -> Data {
+        let chainIdData = TWDataCreateWithNSData(chainId)
+        defer {
+            TWDataDelete(chainIdData)
+        }
+        let walletString = TWStringCreateWithNSString(wallet)
+        defer {
+            TWStringDelete(walletString)
+        }
+        let versionString = TWStringCreateWithNSString(version)
+        defer {
+            TWStringDelete(versionString)
+        }
+        let typeHashString = TWStringCreateWithNSString(typeHash)
+        defer {
+            TWStringDelete(typeHashString)
+        }
+        let domainSeparatorHashString = TWStringCreateWithNSString(domainSeparatorHash)
+        defer {
+            TWStringDelete(domainSeparatorHashString)
+        }
+        let hashString = TWStringCreateWithNSString(hash)
+        defer {
+            TWStringDelete(hashString)
+        }
+        return TWDataNSData(TWBarzGetEncodedHash(chainIdData, walletString, versionString, typeHashString, domainSeparatorHashString, hashString))
+    }
+
+    /// Signs a message using the private key
+    ///
+    /// - Parameter hash: The hash to sign
+    /// - Parameter privateKey: The private key
+    /// - Returns: The signature
+    public static func getSignedHash(hash: String, privateKey: String) -> Data {
+        let hashString = TWStringCreateWithNSString(hash)
+        defer {
+            TWStringDelete(hashString)
+        }
+        let privateKeyString = TWStringCreateWithNSString(privateKey)
+        defer {
+            TWStringDelete(privateKeyString)
+        }
+        return TWDataNSData(TWBarzGetSignedHash(hashString, privateKeyString))
+    }
+
 
     init() {
     }

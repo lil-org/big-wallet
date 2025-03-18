@@ -427,6 +427,47 @@ public struct TW_Ethereum_Proto_UserOperation {
   public init() {}
 }
 
+/// EIP-7702 compatible ERC-4337 structure that describes a transaction to be sent on behalf of a user
+public struct TW_Ethereum_Proto_UserOperationV0_7 {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Entry point contract address
+  public var entryPoint: String = String()
+
+  /// Account factory contract address
+  public var factory: String = String()
+
+  /// Account factory data
+  public var factoryData: Data = Data()
+
+  /// Account logic contract address
+  public var sender: String = String()
+
+  /// The amount of gas to pay for to compensate the bundler for pre-verification execution and calldata
+  public var preVerificationGas: Data = Data()
+
+  /// The amount of gas to allocate for the verification step
+  public var verificationGasLimit: Data = Data()
+
+  /// Address of paymaster
+  public var paymaster: String = String()
+
+  /// The amount of gas to allocate for the paymaster verification step
+  public var paymasterVerificationGasLimit: Data = Data()
+
+  /// The amount of gas to allocate for paymaster post ops
+  public var paymasterPostOpGasLimit: Data = Data()
+
+  /// Paymaster data
+  public var paymasterData: Data = Data()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 /// An item of the [EIP-2930](https://eips.ethereum.org/EIPS/eip-2930) access list.
 public struct TW_Ethereum_Proto_Access {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -520,14 +561,27 @@ public struct TW_Ethereum_Proto_SigningInput {
   public mutating func clearTransaction() {_uniqueStorage()._transaction = nil}
 
   /// UserOperation for ERC-4337 wallets
-  public var userOperation: TW_Ethereum_Proto_UserOperation {
-    get {return _storage._userOperation ?? TW_Ethereum_Proto_UserOperation()}
-    set {_uniqueStorage()._userOperation = newValue}
+  public var userOperationOneof: OneOf_UserOperationOneof? {
+    get {return _storage._userOperationOneof}
+    set {_uniqueStorage()._userOperationOneof = newValue}
   }
-  /// Returns true if `userOperation` has been explicitly set.
-  public var hasUserOperation: Bool {return _storage._userOperation != nil}
-  /// Clears the value of `userOperation`. Subsequent reads from it will return its default value.
-  public mutating func clearUserOperation() {_uniqueStorage()._userOperation = nil}
+
+  public var userOperation: TW_Ethereum_Proto_UserOperation {
+    get {
+      if case .userOperation(let v)? = _storage._userOperationOneof {return v}
+      return TW_Ethereum_Proto_UserOperation()
+    }
+    set {_uniqueStorage()._userOperationOneof = .userOperation(newValue)}
+  }
+
+  /// EIP-7702 compatible
+  public var userOperationV07: TW_Ethereum_Proto_UserOperationV0_7 {
+    get {
+      if case .userOperationV07(let v)? = _storage._userOperationOneof {return v}
+      return TW_Ethereum_Proto_UserOperationV0_7()
+    }
+    set {_uniqueStorage()._userOperationOneof = .userOperationV07(newValue)}
+  }
 
   /// Optional list of addresses and storage keys that the transaction plans to access.
   /// Used in `TransactionMode::Enveloped` only.
@@ -537,6 +591,32 @@ public struct TW_Ethereum_Proto_SigningInput {
   }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  /// UserOperation for ERC-4337 wallets
+  public enum OneOf_UserOperationOneof: Equatable {
+    case userOperation(TW_Ethereum_Proto_UserOperation)
+    /// EIP-7702 compatible
+    case userOperationV07(TW_Ethereum_Proto_UserOperationV0_7)
+
+  #if !swift(>=4.1)
+    public static func ==(lhs: TW_Ethereum_Proto_SigningInput.OneOf_UserOperationOneof, rhs: TW_Ethereum_Proto_SigningInput.OneOf_UserOperationOneof) -> Bool {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch (lhs, rhs) {
+      case (.userOperation, .userOperation): return {
+        guard case .userOperation(let l) = lhs, case .userOperation(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.userOperationV07, .userOperationV07): return {
+        guard case .userOperationV07(let l) = lhs, case .userOperationV07(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      default: return false
+      }
+    }
+  #endif
+  }
 
   public init() {}
 
@@ -1232,6 +1312,92 @@ extension TW_Ethereum_Proto_UserOperation: SwiftProtobuf.Message, SwiftProtobuf.
   }
 }
 
+extension TW_Ethereum_Proto_UserOperationV0_7: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".UserOperationV0_7"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "entry_point"),
+    2: .same(proto: "factory"),
+    3: .standard(proto: "factory_data"),
+    4: .same(proto: "sender"),
+    5: .standard(proto: "pre_verification_gas"),
+    6: .standard(proto: "verification_gas_limit"),
+    7: .same(proto: "paymaster"),
+    8: .standard(proto: "paymaster_verification_gas_limit"),
+    9: .standard(proto: "paymaster_post_op_gas_limit"),
+    10: .standard(proto: "paymaster_data"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.entryPoint) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.factory) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.factoryData) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.sender) }()
+      case 5: try { try decoder.decodeSingularBytesField(value: &self.preVerificationGas) }()
+      case 6: try { try decoder.decodeSingularBytesField(value: &self.verificationGasLimit) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.paymaster) }()
+      case 8: try { try decoder.decodeSingularBytesField(value: &self.paymasterVerificationGasLimit) }()
+      case 9: try { try decoder.decodeSingularBytesField(value: &self.paymasterPostOpGasLimit) }()
+      case 10: try { try decoder.decodeSingularBytesField(value: &self.paymasterData) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.entryPoint.isEmpty {
+      try visitor.visitSingularStringField(value: self.entryPoint, fieldNumber: 1)
+    }
+    if !self.factory.isEmpty {
+      try visitor.visitSingularStringField(value: self.factory, fieldNumber: 2)
+    }
+    if !self.factoryData.isEmpty {
+      try visitor.visitSingularBytesField(value: self.factoryData, fieldNumber: 3)
+    }
+    if !self.sender.isEmpty {
+      try visitor.visitSingularStringField(value: self.sender, fieldNumber: 4)
+    }
+    if !self.preVerificationGas.isEmpty {
+      try visitor.visitSingularBytesField(value: self.preVerificationGas, fieldNumber: 5)
+    }
+    if !self.verificationGasLimit.isEmpty {
+      try visitor.visitSingularBytesField(value: self.verificationGasLimit, fieldNumber: 6)
+    }
+    if !self.paymaster.isEmpty {
+      try visitor.visitSingularStringField(value: self.paymaster, fieldNumber: 7)
+    }
+    if !self.paymasterVerificationGasLimit.isEmpty {
+      try visitor.visitSingularBytesField(value: self.paymasterVerificationGasLimit, fieldNumber: 8)
+    }
+    if !self.paymasterPostOpGasLimit.isEmpty {
+      try visitor.visitSingularBytesField(value: self.paymasterPostOpGasLimit, fieldNumber: 9)
+    }
+    if !self.paymasterData.isEmpty {
+      try visitor.visitSingularBytesField(value: self.paymasterData, fieldNumber: 10)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Ethereum_Proto_UserOperationV0_7, rhs: TW_Ethereum_Proto_UserOperationV0_7) -> Bool {
+    if lhs.entryPoint != rhs.entryPoint {return false}
+    if lhs.factory != rhs.factory {return false}
+    if lhs.factoryData != rhs.factoryData {return false}
+    if lhs.sender != rhs.sender {return false}
+    if lhs.preVerificationGas != rhs.preVerificationGas {return false}
+    if lhs.verificationGasLimit != rhs.verificationGasLimit {return false}
+    if lhs.paymaster != rhs.paymaster {return false}
+    if lhs.paymasterVerificationGasLimit != rhs.paymasterVerificationGasLimit {return false}
+    if lhs.paymasterPostOpGasLimit != rhs.paymasterPostOpGasLimit {return false}
+    if lhs.paymasterData != rhs.paymasterData {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension TW_Ethereum_Proto_Access: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Access"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -1284,6 +1450,7 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
     9: .standard(proto: "private_key"),
     10: .same(proto: "transaction"),
     11: .standard(proto: "user_operation"),
+    13: .standard(proto: "user_operation_v0_7"),
     12: .standard(proto: "access_list"),
   ]
 
@@ -1298,7 +1465,7 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
     var _toAddress: String = String()
     var _privateKey: Data = Data()
     var _transaction: TW_Ethereum_Proto_Transaction? = nil
-    var _userOperation: TW_Ethereum_Proto_UserOperation? = nil
+    var _userOperationOneof: TW_Ethereum_Proto_SigningInput.OneOf_UserOperationOneof?
     var _accessList: [TW_Ethereum_Proto_Access] = []
 
     static let defaultInstance = _StorageClass()
@@ -1316,7 +1483,7 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
       _toAddress = source._toAddress
       _privateKey = source._privateKey
       _transaction = source._transaction
-      _userOperation = source._userOperation
+      _userOperationOneof = source._userOperationOneof
       _accessList = source._accessList
     }
   }
@@ -1346,8 +1513,33 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
         case 8: try { try decoder.decodeSingularStringField(value: &_storage._toAddress) }()
         case 9: try { try decoder.decodeSingularBytesField(value: &_storage._privateKey) }()
         case 10: try { try decoder.decodeSingularMessageField(value: &_storage._transaction) }()
-        case 11: try { try decoder.decodeSingularMessageField(value: &_storage._userOperation) }()
+        case 11: try {
+          var v: TW_Ethereum_Proto_UserOperation?
+          var hadOneofValue = false
+          if let current = _storage._userOperationOneof {
+            hadOneofValue = true
+            if case .userOperation(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._userOperationOneof = .userOperation(v)
+          }
+        }()
         case 12: try { try decoder.decodeRepeatedMessageField(value: &_storage._accessList) }()
+        case 13: try {
+          var v: TW_Ethereum_Proto_UserOperationV0_7?
+          var hadOneofValue = false
+          if let current = _storage._userOperationOneof {
+            hadOneofValue = true
+            if case .userOperationV07(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._userOperationOneof = .userOperationV07(v)
+          }
+        }()
         default: break
         }
       }
@@ -1390,12 +1582,15 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
       try { if let v = _storage._transaction {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
       } }()
-      try { if let v = _storage._userOperation {
+      try { if case .userOperation(let v)? = _storage._userOperationOneof {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
       } }()
       if !_storage._accessList.isEmpty {
         try visitor.visitRepeatedMessageField(value: _storage._accessList, fieldNumber: 12)
       }
+      try { if case .userOperationV07(let v)? = _storage._userOperationOneof {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1415,7 +1610,7 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
         if _storage._toAddress != rhs_storage._toAddress {return false}
         if _storage._privateKey != rhs_storage._privateKey {return false}
         if _storage._transaction != rhs_storage._transaction {return false}
-        if _storage._userOperation != rhs_storage._userOperation {return false}
+        if _storage._userOperationOneof != rhs_storage._userOperationOneof {return false}
         if _storage._accessList != rhs_storage._accessList {return false}
         return true
       }
