@@ -13,4 +13,5 @@ public typealias EthereumMessageSigningInput = TW_Ethereum_Proto_MessageSigningI
 public typealias EthereumMessageSigningOutput = TW_Ethereum_Proto_MessageSigningOutput
 public typealias EthereumMessageVerifyingInput = TW_Ethereum_Proto_MessageVerifyingInput
 public typealias EthereumTransactionMode = TW_Ethereum_Proto_TransactionMode
+public typealias EthereumSCAccountType = TW_Ethereum_Proto_SCAccountType
 public typealias EthereumMessageType = TW_Ethereum_Proto_MessageType

@@ -71,6 +71,52 @@ extension TW_Ethereum_Proto_TransactionMode: CaseIterable {
 
 #endif  // swift(>=4.2)
 
+/// Smart Contract account type.
+public enum TW_Ethereum_Proto_SCAccountType: SwiftProtobuf.Enum {
+  public typealias RawValue = Int
+
+  /// ERC-4337 compatible smart contract wallet.
+  /// https://github.com/eth-infinitism/account-abstraction/blob/develop/contracts/accounts/SimpleAccount.sol
+  case simpleAccount // = 0
+
+  /// Biz smart contract (Trust Wallet specific).
+  case biz4337 // = 1
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .simpleAccount
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .simpleAccount
+    case 1: self = .biz4337
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .simpleAccount: return 0
+    case .biz4337: return 1
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+}
+
+#if swift(>=4.2)
+
+extension TW_Ethereum_Proto_SCAccountType: CaseIterable {
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static var allCases: [TW_Ethereum_Proto_SCAccountType] = [
+    .simpleAccount,
+    .biz4337,
+  ]
+}
+
+#endif  // swift(>=4.2)
+
 public enum TW_Ethereum_Proto_MessageType: SwiftProtobuf.Enum {
   public typealias RawValue = Int
 
@@ -590,6 +636,12 @@ public struct TW_Ethereum_Proto_SigningInput {
     set {_uniqueStorage()._accessList = newValue}
   }
 
+  /// Smart contract account type. Used in `TransactionMode::UserOp` only.
+  public var userOperationMode: TW_Ethereum_Proto_SCAccountType {
+    get {return _storage._userOperationMode}
+    set {_uniqueStorage()._userOperationMode = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// UserOperation for ERC-4337 wallets
@@ -749,6 +801,13 @@ extension TW_Ethereum_Proto_TransactionMode: SwiftProtobuf._ProtoNameProviding {
     0: .same(proto: "Legacy"),
     1: .same(proto: "Enveloped"),
     2: .same(proto: "UserOp"),
+  ]
+}
+
+extension TW_Ethereum_Proto_SCAccountType: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "SimpleAccount"),
+    1: .same(proto: "Biz4337"),
   ]
 }
 
@@ -1452,6 +1511,7 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
     11: .standard(proto: "user_operation"),
     13: .standard(proto: "user_operation_v0_7"),
     12: .standard(proto: "access_list"),
+    14: .standard(proto: "user_operation_mode"),
   ]
 
   fileprivate class _StorageClass {
@@ -1467,6 +1527,7 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
     var _transaction: TW_Ethereum_Proto_Transaction? = nil
     var _userOperationOneof: TW_Ethereum_Proto_SigningInput.OneOf_UserOperationOneof?
     var _accessList: [TW_Ethereum_Proto_Access] = []
+    var _userOperationMode: TW_Ethereum_Proto_SCAccountType = .simpleAccount
 
     static let defaultInstance = _StorageClass()
 
@@ -1485,6 +1546,7 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
       _transaction = source._transaction
       _userOperationOneof = source._userOperationOneof
       _accessList = source._accessList
+      _userOperationMode = source._userOperationMode
     }
   }
 
@@ -1540,6 +1602,7 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
             _storage._userOperationOneof = .userOperationV07(v)
           }
         }()
+        case 14: try { try decoder.decodeSingularEnumField(value: &_storage._userOperationMode) }()
         default: break
         }
       }
@@ -1591,6 +1654,9 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
       try { if case .userOperationV07(let v)? = _storage._userOperationOneof {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
       } }()
+      if _storage._userOperationMode != .simpleAccount {
+        try visitor.visitSingularEnumField(value: _storage._userOperationMode, fieldNumber: 14)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1612,6 +1678,7 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
         if _storage._transaction != rhs_storage._transaction {return false}
         if _storage._userOperationOneof != rhs_storage._userOperationOneof {return false}
         if _storage._accessList != rhs_storage._accessList {return false}
+        if _storage._userOperationMode != rhs_storage._userOperationMode {return false}
         return true
       }
       if !storagesAreEqual {return false}
