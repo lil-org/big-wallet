@@ -30,7 +30,7 @@
 			<key>UIApplicationShortcutItemIconSymbolName</key>
 			<string>envelope</string>
 			<key>UIApplicationShortcutItemSubtitle</key>
-			<string>Tap here to send quick feedback</string>
+			<string>Tap here to let us know</string>
 		</dict>
 	</array>
 	<key>CFBundleName</key>
