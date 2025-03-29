@@ -43,11 +43,11 @@ struct MetadataTask: AI.Task {
             """
         case .subtitle:
             clarifications = """
-            feel free to tune it to make \(language.name) version sound natural.
+            your response should be max 30 symbols.
+                        
+            do not translate or transliterate web3 and Safari, keep it as is.
             
-            make sure the translated version communicates the same message.
-
-            your response must fit 30 chars. phrase it to fit 30 chars.
+            make sure the response fits 30 chars — shorten the phrase if needed, make sure to keep "Crypto wallet in Safari".
             """
         case .keywords:
             clarifications = """
