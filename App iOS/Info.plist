@@ -38,7 +38,7 @@
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.23</string>
+	<string>1.0.24</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -53,7 +53,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>69</string>
+	<string>70</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
