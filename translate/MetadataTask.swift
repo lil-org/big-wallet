@@ -45,7 +45,7 @@ struct MetadataTask: AI.Task {
             clarifications = """
             your response should be max 30 symbols.
                         
-            do not translate or transliterate web3 and Safari, keep it as is.
+            do not translate or transliterate Web3 and Safari, keep it as is.
             
             make sure the response fits 30 chars — shorten the phrase if needed, make sure to keep "Crypto wallet in Safari".
             """
