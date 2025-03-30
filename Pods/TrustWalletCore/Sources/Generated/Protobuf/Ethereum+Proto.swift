@@ -6,6 +6,7 @@ public typealias EthereumTransaction = TW_Ethereum_Proto_Transaction
 public typealias EthereumUserOperation = TW_Ethereum_Proto_UserOperation
 public typealias EthereumUserOperationV0_7 = TW_Ethereum_Proto_UserOperationV0_7
 public typealias EthereumAccess = TW_Ethereum_Proto_Access
+public typealias EthereumAuthority = TW_Ethereum_Proto_Authority
 public typealias EthereumSigningInput = TW_Ethereum_Proto_SigningInput
 public typealias EthereumSigningOutput = TW_Ethereum_Proto_SigningOutput
 public typealias EthereumMaybeChainId = TW_Ethereum_Proto_MaybeChainId

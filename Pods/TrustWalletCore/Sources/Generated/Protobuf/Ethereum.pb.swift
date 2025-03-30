@@ -32,6 +32,11 @@ public enum TW_Ethereum_Proto_TransactionMode: SwiftProtobuf.Enum {
 
   /// EIP4337-compatible UserOperation
   case userOp // = 2
+
+  /// EIP-7702 transaction (with type 0x4); allows to set the code of a contract for an EOA.
+  /// Note that `SetCode` transaction extends `Enveloped` transaction.
+  /// https://eips.ethereum.org/EIPS/eip-7702
+  case setCode // = 4
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -43,6 +48,7 @@ public enum TW_Ethereum_Proto_TransactionMode: SwiftProtobuf.Enum {
     case 0: self = .legacy
     case 1: self = .enveloped
     case 2: self = .userOp
+    case 4: self = .setCode
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -52,6 +58,7 @@ public enum TW_Ethereum_Proto_TransactionMode: SwiftProtobuf.Enum {
     case .legacy: return 0
     case .enveloped: return 1
     case .userOp: return 2
+    case .setCode: return 4
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -66,6 +73,7 @@ extension TW_Ethereum_Proto_TransactionMode: CaseIterable {
     .legacy,
     .enveloped,
     .userOp,
+    .setCode,
   ]
 }
 
@@ -79,8 +87,11 @@ public enum TW_Ethereum_Proto_SCAccountType: SwiftProtobuf.Enum {
   /// https://github.com/eth-infinitism/account-abstraction/blob/develop/contracts/accounts/SimpleAccount.sol
   case simpleAccount // = 0
 
-  /// Biz smart contract (Trust Wallet specific).
+  /// Biz smart contract (Trust Wallet specific) through ERC-4337 EntryPoint.
   case biz4337 // = 1
+
+  /// Biz smart contract (Trust Wallet specific) directly through ERC-7702.
+  case biz // = 2
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -91,6 +102,7 @@ public enum TW_Ethereum_Proto_SCAccountType: SwiftProtobuf.Enum {
     switch rawValue {
     case 0: self = .simpleAccount
     case 1: self = .biz4337
+    case 2: self = .biz
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -99,6 +111,7 @@ public enum TW_Ethereum_Proto_SCAccountType: SwiftProtobuf.Enum {
     switch self {
     case .simpleAccount: return 0
     case .biz4337: return 1
+    case .biz: return 2
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -112,6 +125,7 @@ extension TW_Ethereum_Proto_SCAccountType: CaseIterable {
   public static var allCases: [TW_Ethereum_Proto_SCAccountType] = [
     .simpleAccount,
     .biz4337,
+    .biz,
   ]
 }
 
@@ -531,6 +545,20 @@ public struct TW_Ethereum_Proto_Access {
   public init() {}
 }
 
+/// [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702) authority.
+public struct TW_Ethereum_Proto_Authority {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Address to be authorized, a smart contract address.
+  public var address: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 /// Input data necessary to create a signed transaction.
 /// Legacy and EIP2718/EIP1559 transactions supported, see TransactionMode.
 public struct TW_Ethereum_Proto_SigningInput {
@@ -641,6 +669,17 @@ public struct TW_Ethereum_Proto_SigningInput {
     get {return _storage._userOperationMode}
     set {_uniqueStorage()._userOperationMode = newValue}
   }
+
+  /// A smart contract to which we’re delegating to.
+  /// Currently, we support delegation to only one authority at a time.
+  public var eip7702Authority: TW_Ethereum_Proto_Authority {
+    get {return _storage._eip7702Authority ?? TW_Ethereum_Proto_Authority()}
+    set {_uniqueStorage()._eip7702Authority = newValue}
+  }
+  /// Returns true if `eip7702Authority` has been explicitly set.
+  public var hasEip7702Authority: Bool {return _storage._eip7702Authority != nil}
+  /// Clears the value of `eip7702Authority`. Subsequent reads from it will return its default value.
+  public mutating func clearEip7702Authority() {_uniqueStorage()._eip7702Authority = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -801,6 +840,7 @@ extension TW_Ethereum_Proto_TransactionMode: SwiftProtobuf._ProtoNameProviding {
     0: .same(proto: "Legacy"),
     1: .same(proto: "Enveloped"),
     2: .same(proto: "UserOp"),
+    4: .same(proto: "SetCode"),
   ]
 }
 
@@ -808,6 +848,7 @@ extension TW_Ethereum_Proto_SCAccountType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     0: .same(proto: "SimpleAccount"),
     1: .same(proto: "Biz4337"),
+    2: .same(proto: "Biz"),
   ]
 }
 
@@ -1495,6 +1536,38 @@ extension TW_Ethereum_Proto_Access: SwiftProtobuf.Message, SwiftProtobuf._Messag
   }
 }
 
+extension TW_Ethereum_Proto_Authority: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Authority"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    2: .same(proto: "address"),
+  ]
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 2: try { try decoder.decodeSingularStringField(value: &self.address) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.address.isEmpty {
+      try visitor.visitSingularStringField(value: self.address, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Ethereum_Proto_Authority, rhs: TW_Ethereum_Proto_Authority) -> Bool {
+    if lhs.address != rhs.address {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SigningInput"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -1512,6 +1585,7 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
     13: .standard(proto: "user_operation_v0_7"),
     12: .standard(proto: "access_list"),
     14: .standard(proto: "user_operation_mode"),
+    15: .standard(proto: "eip7702_authority"),
   ]
 
   fileprivate class _StorageClass {
@@ -1528,6 +1602,7 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
     var _userOperationOneof: TW_Ethereum_Proto_SigningInput.OneOf_UserOperationOneof?
     var _accessList: [TW_Ethereum_Proto_Access] = []
     var _userOperationMode: TW_Ethereum_Proto_SCAccountType = .simpleAccount
+    var _eip7702Authority: TW_Ethereum_Proto_Authority? = nil
 
     static let defaultInstance = _StorageClass()
 
@@ -1547,6 +1622,7 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
       _userOperationOneof = source._userOperationOneof
       _accessList = source._accessList
       _userOperationMode = source._userOperationMode
+      _eip7702Authority = source._eip7702Authority
     }
   }
 
@@ -1603,6 +1679,7 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
           }
         }()
         case 14: try { try decoder.decodeSingularEnumField(value: &_storage._userOperationMode) }()
+        case 15: try { try decoder.decodeSingularMessageField(value: &_storage._eip7702Authority) }()
         default: break
         }
       }
@@ -1657,6 +1734,9 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
       if _storage._userOperationMode != .simpleAccount {
         try visitor.visitSingularEnumField(value: _storage._userOperationMode, fieldNumber: 14)
       }
+      try { if let v = _storage._eip7702Authority {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 15)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1679,6 +1759,7 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
         if _storage._userOperationOneof != rhs_storage._userOperationOneof {return false}
         if _storage._accessList != rhs_storage._accessList {return false}
         if _storage._userOperationMode != rhs_storage._userOperationMode {return false}
+        if _storage._eip7702Authority != rhs_storage._eip7702Authority {return false}
         return true
       }
       if !storagesAreEqual {return false}
