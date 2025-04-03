@@ -79,8 +79,8 @@ extension TW_Ethereum_Proto_TransactionMode: CaseIterable {
 
 #endif  // swift(>=4.2)
 
-/// Smart Contract account type.
-public enum TW_Ethereum_Proto_SCAccountType: SwiftProtobuf.Enum {
+/// Smart Contract Wallet type.
+public enum TW_Ethereum_Proto_SCWalletType: SwiftProtobuf.Enum {
   public typealias RawValue = Int
 
   /// ERC-4337 compatible smart contract wallet.
@@ -120,9 +120,9 @@ public enum TW_Ethereum_Proto_SCAccountType: SwiftProtobuf.Enum {
 
 #if swift(>=4.2)
 
-extension TW_Ethereum_Proto_SCAccountType: CaseIterable {
+extension TW_Ethereum_Proto_SCWalletType: CaseIterable {
   // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static var allCases: [TW_Ethereum_Proto_SCAccountType] = [
+  public static var allCases: [TW_Ethereum_Proto_SCWalletType] = [
     .simpleAccount,
     .biz4337,
     .biz,
@@ -200,62 +200,75 @@ public struct TW_Ethereum_Proto_Transaction {
   // methods supported on all messages.
 
   /// Payload transfer
-  public var transactionOneof: TW_Ethereum_Proto_Transaction.OneOf_TransactionOneof? = nil
+  public var transactionOneof: OneOf_TransactionOneof? {
+    get {return _storage._transactionOneof}
+    set {_uniqueStorage()._transactionOneof = newValue}
+  }
 
   public var transfer: TW_Ethereum_Proto_Transaction.Transfer {
     get {
-      if case .transfer(let v)? = transactionOneof {return v}
+      if case .transfer(let v)? = _storage._transactionOneof {return v}
       return TW_Ethereum_Proto_Transaction.Transfer()
     }
-    set {transactionOneof = .transfer(newValue)}
+    set {_uniqueStorage()._transactionOneof = .transfer(newValue)}
   }
 
   public var erc20Transfer: TW_Ethereum_Proto_Transaction.ERC20Transfer {
     get {
-      if case .erc20Transfer(let v)? = transactionOneof {return v}
+      if case .erc20Transfer(let v)? = _storage._transactionOneof {return v}
       return TW_Ethereum_Proto_Transaction.ERC20Transfer()
     }
-    set {transactionOneof = .erc20Transfer(newValue)}
+    set {_uniqueStorage()._transactionOneof = .erc20Transfer(newValue)}
   }
 
   public var erc20Approve: TW_Ethereum_Proto_Transaction.ERC20Approve {
     get {
-      if case .erc20Approve(let v)? = transactionOneof {return v}
+      if case .erc20Approve(let v)? = _storage._transactionOneof {return v}
       return TW_Ethereum_Proto_Transaction.ERC20Approve()
     }
-    set {transactionOneof = .erc20Approve(newValue)}
+    set {_uniqueStorage()._transactionOneof = .erc20Approve(newValue)}
   }
 
   public var erc721Transfer: TW_Ethereum_Proto_Transaction.ERC721Transfer {
     get {
-      if case .erc721Transfer(let v)? = transactionOneof {return v}
+      if case .erc721Transfer(let v)? = _storage._transactionOneof {return v}
       return TW_Ethereum_Proto_Transaction.ERC721Transfer()
     }
-    set {transactionOneof = .erc721Transfer(newValue)}
+    set {_uniqueStorage()._transactionOneof = .erc721Transfer(newValue)}
   }
 
   public var erc1155Transfer: TW_Ethereum_Proto_Transaction.ERC1155Transfer {
     get {
-      if case .erc1155Transfer(let v)? = transactionOneof {return v}
+      if case .erc1155Transfer(let v)? = _storage._transactionOneof {return v}
       return TW_Ethereum_Proto_Transaction.ERC1155Transfer()
     }
-    set {transactionOneof = .erc1155Transfer(newValue)}
+    set {_uniqueStorage()._transactionOneof = .erc1155Transfer(newValue)}
   }
 
   public var contractGeneric: TW_Ethereum_Proto_Transaction.ContractGeneric {
     get {
-      if case .contractGeneric(let v)? = transactionOneof {return v}
+      if case .contractGeneric(let v)? = _storage._transactionOneof {return v}
       return TW_Ethereum_Proto_Transaction.ContractGeneric()
     }
-    set {transactionOneof = .contractGeneric(newValue)}
+    set {_uniqueStorage()._transactionOneof = .contractGeneric(newValue)}
   }
 
-  public var batch: TW_Ethereum_Proto_Transaction.Batch {
+  /// Batch transaction to a Smart Contract Wallet (ERC-4337 and ERC-7702).
+  public var scwBatch: TW_Ethereum_Proto_Transaction.SCWalletBatch {
     get {
-      if case .batch(let v)? = transactionOneof {return v}
-      return TW_Ethereum_Proto_Transaction.Batch()
+      if case .scwBatch(let v)? = _storage._transactionOneof {return v}
+      return TW_Ethereum_Proto_Transaction.SCWalletBatch()
     }
-    set {transactionOneof = .batch(newValue)}
+    set {_uniqueStorage()._transactionOneof = .scwBatch(newValue)}
+  }
+
+  /// Execute transaction to a Smart Contract Wallet (ERC-4337 and ERC-7702).
+  public var scwExecute: TW_Ethereum_Proto_Transaction.SCWalletExecute {
+    get {
+      if case .scwExecute(let v)? = _storage._transactionOneof {return v}
+      return TW_Ethereum_Proto_Transaction.SCWalletExecute()
+    }
+    set {_uniqueStorage()._transactionOneof = .scwExecute(newValue)}
   }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -268,7 +281,10 @@ public struct TW_Ethereum_Proto_Transaction {
     case erc721Transfer(TW_Ethereum_Proto_Transaction.ERC721Transfer)
     case erc1155Transfer(TW_Ethereum_Proto_Transaction.ERC1155Transfer)
     case contractGeneric(TW_Ethereum_Proto_Transaction.ContractGeneric)
-    case batch(TW_Ethereum_Proto_Transaction.Batch)
+    /// Batch transaction to a Smart Contract Wallet (ERC-4337 and ERC-7702).
+    case scwBatch(TW_Ethereum_Proto_Transaction.SCWalletBatch)
+    /// Execute transaction to a Smart Contract Wallet (ERC-4337 and ERC-7702).
+    case scwExecute(TW_Ethereum_Proto_Transaction.SCWalletExecute)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_Ethereum_Proto_Transaction.OneOf_TransactionOneof, rhs: TW_Ethereum_Proto_Transaction.OneOf_TransactionOneof) -> Bool {
@@ -300,8 +316,12 @@ public struct TW_Ethereum_Proto_Transaction {
         guard case .contractGeneric(let l) = lhs, case .contractGeneric(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
-      case (.batch, .batch): return {
-        guard case .batch(let l) = lhs, case .batch(let r) = rhs else { preconditionFailure() }
+      case (.scwBatch, .scwBatch): return {
+        guard case .scwBatch(let l) = lhs, case .scwBatch(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.scwExecute, .scwExecute): return {
+        guard case .scwExecute(let l) = lhs, case .scwExecute(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
       default: return false
@@ -423,13 +443,17 @@ public struct TW_Ethereum_Proto_Transaction {
     public init() {}
   }
 
-  /// Batched transaction for ERC-4337 wallets
-  public struct Batch {
+  /// Batch transaction to a Smart Contract Wallet (ERC-4337 and ERC-7702).
+  public struct SCWalletBatch {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
-    public var calls: [TW_Ethereum_Proto_Transaction.Batch.BatchedCall] = []
+    /// Batched calls to be executed on the smart contract wallet.
+    public var calls: [TW_Ethereum_Proto_Transaction.SCWalletBatch.BatchedCall] = []
+
+    /// Smart contract wallet type.
+    public var walletType: TW_Ethereum_Proto_SCWalletType = .simpleAccount
 
     public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -455,7 +479,39 @@ public struct TW_Ethereum_Proto_Transaction {
     public init() {}
   }
 
+  /// Execute transaction to a Smart Contract Wallet (ERC-4337 and ERC-7702).
+  public struct SCWalletExecute {
+    // SwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+    // methods supported on all messages.
+
+    /// Transaction to be executed on the smart contract wallet.
+    /// TODO currently, smart contract wallet address is specified in `SigningInput.toAddress`, but it will be refactored soon.
+    public var transaction: TW_Ethereum_Proto_Transaction {
+      get {return _storage._transaction ?? TW_Ethereum_Proto_Transaction()}
+      set {_uniqueStorage()._transaction = newValue}
+    }
+    /// Returns true if `transaction` has been explicitly set.
+    public var hasTransaction: Bool {return _storage._transaction != nil}
+    /// Clears the value of `transaction`. Subsequent reads from it will return its default value.
+    public mutating func clearTransaction() {_uniqueStorage()._transaction = nil}
+
+    /// Smart contract wallet type.
+    public var walletType: TW_Ethereum_Proto_SCWalletType {
+      get {return _storage._walletType}
+      set {_uniqueStorage()._walletType = newValue}
+    }
+
+    public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+    public init() {}
+
+    fileprivate var _storage = _StorageClass.defaultInstance
+  }
+
   public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 /// ERC-4337 structure that describes a transaction to be sent on behalf of a user
@@ -613,6 +669,7 @@ public struct TW_Ethereum_Proto_SigningInput {
   }
 
   /// Recipient's address.
+  /// TODO currently, will be moved to each `Transaction` oneof soon.
   public var toAddress: String {
     get {return _storage._toAddress}
     set {_uniqueStorage()._toAddress = newValue}
@@ -664,13 +721,8 @@ public struct TW_Ethereum_Proto_SigningInput {
     set {_uniqueStorage()._accessList = newValue}
   }
 
-  /// Smart contract account type. Used in `TransactionMode::UserOp` only.
-  public var userOperationMode: TW_Ethereum_Proto_SCAccountType {
-    get {return _storage._userOperationMode}
-    set {_uniqueStorage()._userOperationMode = newValue}
-  }
-
   /// A smart contract to which we’re delegating to.
+  /// Used in `TransactionMode::SetOp` only.
   /// Currently, we support delegation to only one authority at a time.
   public var eip7702Authority: TW_Ethereum_Proto_Authority {
     get {return _storage._eip7702Authority ?? TW_Ethereum_Proto_Authority()}
@@ -844,7 +896,7 @@ extension TW_Ethereum_Proto_TransactionMode: SwiftProtobuf._ProtoNameProviding {
   ]
 }
 
-extension TW_Ethereum_Proto_SCAccountType: SwiftProtobuf._ProtoNameProviding {
+extension TW_Ethereum_Proto_SCWalletType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     0: .same(proto: "SimpleAccount"),
     1: .same(proto: "Biz4337"),
@@ -871,152 +923,202 @@ extension TW_Ethereum_Proto_Transaction: SwiftProtobuf.Message, SwiftProtobuf._M
     4: .standard(proto: "erc721_transfer"),
     5: .standard(proto: "erc1155_transfer"),
     6: .standard(proto: "contract_generic"),
-    7: .same(proto: "batch"),
+    7: .standard(proto: "scw_batch"),
+    8: .standard(proto: "scw_execute"),
   ]
 
+  fileprivate class _StorageClass {
+    var _transactionOneof: TW_Ethereum_Proto_Transaction.OneOf_TransactionOneof?
+
+    static let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _transactionOneof = source._transactionOneof
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try {
-        var v: TW_Ethereum_Proto_Transaction.Transfer?
-        var hadOneofValue = false
-        if let current = self.transactionOneof {
-          hadOneofValue = true
-          if case .transfer(let m) = current {v = m}
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try {
+          var v: TW_Ethereum_Proto_Transaction.Transfer?
+          var hadOneofValue = false
+          if let current = _storage._transactionOneof {
+            hadOneofValue = true
+            if case .transfer(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionOneof = .transfer(v)
+          }
+        }()
+        case 2: try {
+          var v: TW_Ethereum_Proto_Transaction.ERC20Transfer?
+          var hadOneofValue = false
+          if let current = _storage._transactionOneof {
+            hadOneofValue = true
+            if case .erc20Transfer(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionOneof = .erc20Transfer(v)
+          }
+        }()
+        case 3: try {
+          var v: TW_Ethereum_Proto_Transaction.ERC20Approve?
+          var hadOneofValue = false
+          if let current = _storage._transactionOneof {
+            hadOneofValue = true
+            if case .erc20Approve(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionOneof = .erc20Approve(v)
+          }
+        }()
+        case 4: try {
+          var v: TW_Ethereum_Proto_Transaction.ERC721Transfer?
+          var hadOneofValue = false
+          if let current = _storage._transactionOneof {
+            hadOneofValue = true
+            if case .erc721Transfer(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionOneof = .erc721Transfer(v)
+          }
+        }()
+        case 5: try {
+          var v: TW_Ethereum_Proto_Transaction.ERC1155Transfer?
+          var hadOneofValue = false
+          if let current = _storage._transactionOneof {
+            hadOneofValue = true
+            if case .erc1155Transfer(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionOneof = .erc1155Transfer(v)
+          }
+        }()
+        case 6: try {
+          var v: TW_Ethereum_Proto_Transaction.ContractGeneric?
+          var hadOneofValue = false
+          if let current = _storage._transactionOneof {
+            hadOneofValue = true
+            if case .contractGeneric(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionOneof = .contractGeneric(v)
+          }
+        }()
+        case 7: try {
+          var v: TW_Ethereum_Proto_Transaction.SCWalletBatch?
+          var hadOneofValue = false
+          if let current = _storage._transactionOneof {
+            hadOneofValue = true
+            if case .scwBatch(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionOneof = .scwBatch(v)
+          }
+        }()
+        case 8: try {
+          var v: TW_Ethereum_Proto_Transaction.SCWalletExecute?
+          var hadOneofValue = false
+          if let current = _storage._transactionOneof {
+            hadOneofValue = true
+            if case .scwExecute(let m) = current {v = m}
+          }
+          try decoder.decodeSingularMessageField(value: &v)
+          if let v = v {
+            if hadOneofValue {try decoder.handleConflictingOneOf()}
+            _storage._transactionOneof = .scwExecute(v)
+          }
+        }()
+        default: break
         }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionOneof = .transfer(v)
-        }
-      }()
-      case 2: try {
-        var v: TW_Ethereum_Proto_Transaction.ERC20Transfer?
-        var hadOneofValue = false
-        if let current = self.transactionOneof {
-          hadOneofValue = true
-          if case .erc20Transfer(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionOneof = .erc20Transfer(v)
-        }
-      }()
-      case 3: try {
-        var v: TW_Ethereum_Proto_Transaction.ERC20Approve?
-        var hadOneofValue = false
-        if let current = self.transactionOneof {
-          hadOneofValue = true
-          if case .erc20Approve(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionOneof = .erc20Approve(v)
-        }
-      }()
-      case 4: try {
-        var v: TW_Ethereum_Proto_Transaction.ERC721Transfer?
-        var hadOneofValue = false
-        if let current = self.transactionOneof {
-          hadOneofValue = true
-          if case .erc721Transfer(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionOneof = .erc721Transfer(v)
-        }
-      }()
-      case 5: try {
-        var v: TW_Ethereum_Proto_Transaction.ERC1155Transfer?
-        var hadOneofValue = false
-        if let current = self.transactionOneof {
-          hadOneofValue = true
-          if case .erc1155Transfer(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionOneof = .erc1155Transfer(v)
-        }
-      }()
-      case 6: try {
-        var v: TW_Ethereum_Proto_Transaction.ContractGeneric?
-        var hadOneofValue = false
-        if let current = self.transactionOneof {
-          hadOneofValue = true
-          if case .contractGeneric(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionOneof = .contractGeneric(v)
-        }
-      }()
-      case 7: try {
-        var v: TW_Ethereum_Proto_Transaction.Batch?
-        var hadOneofValue = false
-        if let current = self.transactionOneof {
-          hadOneofValue = true
-          if case .batch(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionOneof = .batch(v)
-        }
-      }()
-      default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    switch self.transactionOneof {
-    case .transfer?: try {
-      guard case .transfer(let v)? = self.transactionOneof else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    }()
-    case .erc20Transfer?: try {
-      guard case .erc20Transfer(let v)? = self.transactionOneof else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-    }()
-    case .erc20Approve?: try {
-      guard case .erc20Approve(let v)? = self.transactionOneof else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-    }()
-    case .erc721Transfer?: try {
-      guard case .erc721Transfer(let v)? = self.transactionOneof else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
-    }()
-    case .erc1155Transfer?: try {
-      guard case .erc1155Transfer(let v)? = self.transactionOneof else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
-    }()
-    case .contractGeneric?: try {
-      guard case .contractGeneric(let v)? = self.transactionOneof else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
-    }()
-    case .batch?: try {
-      guard case .batch(let v)? = self.transactionOneof else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
-    }()
-    case nil: break
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      switch _storage._transactionOneof {
+      case .transfer?: try {
+        guard case .transfer(let v)? = _storage._transactionOneof else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      }()
+      case .erc20Transfer?: try {
+        guard case .erc20Transfer(let v)? = _storage._transactionOneof else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+      }()
+      case .erc20Approve?: try {
+        guard case .erc20Approve(let v)? = _storage._transactionOneof else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+      }()
+      case .erc721Transfer?: try {
+        guard case .erc721Transfer(let v)? = _storage._transactionOneof else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+      }()
+      case .erc1155Transfer?: try {
+        guard case .erc1155Transfer(let v)? = _storage._transactionOneof else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+      }()
+      case .contractGeneric?: try {
+        guard case .contractGeneric(let v)? = _storage._transactionOneof else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+      }()
+      case .scwBatch?: try {
+        guard case .scwBatch(let v)? = _storage._transactionOneof else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+      }()
+      case .scwExecute?: try {
+        guard case .scwExecute(let v)? = _storage._transactionOneof else { preconditionFailure() }
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+      }()
+      case nil: break
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Ethereum_Proto_Transaction, rhs: TW_Ethereum_Proto_Transaction) -> Bool {
-    if lhs.transactionOneof != rhs.transactionOneof {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._transactionOneof != rhs_storage._transactionOneof {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1274,10 +1376,11 @@ extension TW_Ethereum_Proto_Transaction.ContractGeneric: SwiftProtobuf.Message, 
   }
 }
 
-extension TW_Ethereum_Proto_Transaction.Batch: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = TW_Ethereum_Proto_Transaction.protoMessageName + ".Batch"
+extension TW_Ethereum_Proto_Transaction.SCWalletBatch: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Ethereum_Proto_Transaction.protoMessageName + ".SCWalletBatch"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "calls"),
+    2: .standard(proto: "wallet_type"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1287,6 +1390,7 @@ extension TW_Ethereum_Proto_Transaction.Batch: SwiftProtobuf.Message, SwiftProto
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.calls) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.walletType) }()
       default: break
       }
     }
@@ -1296,18 +1400,22 @@ extension TW_Ethereum_Proto_Transaction.Batch: SwiftProtobuf.Message, SwiftProto
     if !self.calls.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.calls, fieldNumber: 1)
     }
+    if self.walletType != .simpleAccount {
+      try visitor.visitSingularEnumField(value: self.walletType, fieldNumber: 2)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: TW_Ethereum_Proto_Transaction.Batch, rhs: TW_Ethereum_Proto_Transaction.Batch) -> Bool {
+  public static func ==(lhs: TW_Ethereum_Proto_Transaction.SCWalletBatch, rhs: TW_Ethereum_Proto_Transaction.SCWalletBatch) -> Bool {
     if lhs.calls != rhs.calls {return false}
+    if lhs.walletType != rhs.walletType {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-extension TW_Ethereum_Proto_Transaction.Batch.BatchedCall: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = TW_Ethereum_Proto_Transaction.Batch.protoMessageName + ".BatchedCall"
+extension TW_Ethereum_Proto_Transaction.SCWalletBatch.BatchedCall: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Ethereum_Proto_Transaction.SCWalletBatch.protoMessageName + ".BatchedCall"
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "address"),
     2: .same(proto: "amount"),
@@ -1341,10 +1449,86 @@ extension TW_Ethereum_Proto_Transaction.Batch.BatchedCall: SwiftProtobuf.Message
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: TW_Ethereum_Proto_Transaction.Batch.BatchedCall, rhs: TW_Ethereum_Proto_Transaction.Batch.BatchedCall) -> Bool {
+  public static func ==(lhs: TW_Ethereum_Proto_Transaction.SCWalletBatch.BatchedCall, rhs: TW_Ethereum_Proto_Transaction.SCWalletBatch.BatchedCall) -> Bool {
     if lhs.address != rhs.address {return false}
     if lhs.amount != rhs.amount {return false}
     if lhs.payload != rhs.payload {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Ethereum_Proto_Transaction.SCWalletExecute: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Ethereum_Proto_Transaction.protoMessageName + ".SCWalletExecute"
+  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "transaction"),
+    2: .standard(proto: "wallet_type"),
+  ]
+
+  fileprivate class _StorageClass {
+    var _transaction: TW_Ethereum_Proto_Transaction? = nil
+    var _walletType: TW_Ethereum_Proto_SCWalletType = .simpleAccount
+
+    static let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _transaction = source._transaction
+      _walletType = source._walletType
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._transaction) }()
+        case 2: try { try decoder.decodeSingularEnumField(value: &_storage._walletType) }()
+        default: break
+        }
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._transaction {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      if _storage._walletType != .simpleAccount {
+        try visitor.visitSingularEnumField(value: _storage._walletType, fieldNumber: 2)
+      }
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Ethereum_Proto_Transaction.SCWalletExecute, rhs: TW_Ethereum_Proto_Transaction.SCWalletExecute) -> Bool {
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._transaction != rhs_storage._transaction {return false}
+        if _storage._walletType != rhs_storage._walletType {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1584,7 +1768,6 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
     11: .standard(proto: "user_operation"),
     13: .standard(proto: "user_operation_v0_7"),
     12: .standard(proto: "access_list"),
-    14: .standard(proto: "user_operation_mode"),
     15: .standard(proto: "eip7702_authority"),
   ]
 
@@ -1601,7 +1784,6 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
     var _transaction: TW_Ethereum_Proto_Transaction? = nil
     var _userOperationOneof: TW_Ethereum_Proto_SigningInput.OneOf_UserOperationOneof?
     var _accessList: [TW_Ethereum_Proto_Access] = []
-    var _userOperationMode: TW_Ethereum_Proto_SCAccountType = .simpleAccount
     var _eip7702Authority: TW_Ethereum_Proto_Authority? = nil
 
     static let defaultInstance = _StorageClass()
@@ -1621,7 +1803,6 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
       _transaction = source._transaction
       _userOperationOneof = source._userOperationOneof
       _accessList = source._accessList
-      _userOperationMode = source._userOperationMode
       _eip7702Authority = source._eip7702Authority
     }
   }
@@ -1678,7 +1859,6 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
             _storage._userOperationOneof = .userOperationV07(v)
           }
         }()
-        case 14: try { try decoder.decodeSingularEnumField(value: &_storage._userOperationMode) }()
         case 15: try { try decoder.decodeSingularMessageField(value: &_storage._eip7702Authority) }()
         default: break
         }
@@ -1731,9 +1911,6 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
       try { if case .userOperationV07(let v)? = _storage._userOperationOneof {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
       } }()
-      if _storage._userOperationMode != .simpleAccount {
-        try visitor.visitSingularEnumField(value: _storage._userOperationMode, fieldNumber: 14)
-      }
       try { if let v = _storage._eip7702Authority {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 15)
       } }()
@@ -1758,7 +1935,6 @@ extension TW_Ethereum_Proto_SigningInput: SwiftProtobuf.Message, SwiftProtobuf._
         if _storage._transaction != rhs_storage._transaction {return false}
         if _storage._userOperationOneof != rhs_storage._userOperationOneof {return false}
         if _storage._accessList != rhs_storage._accessList {return false}
-        if _storage._userOperationMode != rhs_storage._userOperationMode {return false}
         if _storage._eip7702Authority != rhs_storage._eip7702Authority {return false}
         return true
       }

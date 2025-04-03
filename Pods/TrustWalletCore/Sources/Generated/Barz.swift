@@ -149,25 +149,31 @@ public struct Barz {
 
     /// Returns the encoded hash of the user operation
     ///
-    /// - Parameter chainId: The chainId of the network
-    /// - Parameter wallet: The address of the wallet
-    /// - Parameter version: The version of the wallet
-    /// - Parameter typeHash: The type hash of the transaction
-    /// - Parameter domainSeparatorHash: The domain separator hash of the wallet
-    /// - Parameter hash: The hash of the user operation
+    /// - Parameter chainId: The chainId of the network.
+    /// - Parameter codeAddress: The address of the Biz Smart Contract.
+    /// - Parameter codeName: The name of the Biz Smart Contract.
+    /// - Parameter codeVersion: The version of the Biz Smart Contract.
+    /// - Parameter typeHash: The type hash of the transaction.
+    /// - Parameter domainSeparatorHash: The domain separator hash of the wallet.
+    /// - Parameter sender: The address of the UserOperation sender.
+    /// - Parameter userOpHash: The hash of the user operation.
     /// - Returns: The encoded hash of the user operation
-    public static func getEncodedHash(chainId: Data, wallet: String, version: String, typeHash: String, domainSeparatorHash: String, hash: String) -> Data {
+    public static func getEncodedHash(chainId: Data, codeAddress: String, codeName: String, codeVersion: String, typeHash: String, domainSeparatorHash: String, sender: String, userOpHash: String) -> Data {
         let chainIdData = TWDataCreateWithNSData(chainId)
         defer {
             TWDataDelete(chainIdData)
         }
-        let walletString = TWStringCreateWithNSString(wallet)
+        let codeAddressString = TWStringCreateWithNSString(codeAddress)
         defer {
-            TWStringDelete(walletString)
+            TWStringDelete(codeAddressString)
         }
-        let versionString = TWStringCreateWithNSString(version)
+        let codeNameString = TWStringCreateWithNSString(codeName)
         defer {
-            TWStringDelete(versionString)
+            TWStringDelete(codeNameString)
+        }
+        let codeVersionString = TWStringCreateWithNSString(codeVersion)
+        defer {
+            TWStringDelete(codeVersionString)
         }
         let typeHashString = TWStringCreateWithNSString(typeHash)
         defer {
@@ -177,11 +183,15 @@ public struct Barz {
         defer {
             TWStringDelete(domainSeparatorHashString)
         }
-        let hashString = TWStringCreateWithNSString(hash)
+        let senderString = TWStringCreateWithNSString(sender)
         defer {
-            TWStringDelete(hashString)
+            TWStringDelete(senderString)
         }
-        return TWDataNSData(TWBarzGetEncodedHash(chainIdData, walletString, versionString, typeHashString, domainSeparatorHashString, hashString))
+        let userOpHashString = TWStringCreateWithNSString(userOpHash)
+        defer {
+            TWStringDelete(userOpHashString)
+        }
+        return TWDataNSData(TWBarzGetEncodedHash(chainIdData, codeAddressString, codeNameString, codeVersionString, typeHashString, domainSeparatorHashString, senderString, userOpHashString))
     }
 
     /// Signs a message using the private key
