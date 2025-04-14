@@ -11,6 +11,6 @@
 #endif
 
 
-FOUNDATION_EXPORT double SwiftProtobufVersionNumber;
-FOUNDATION_EXPORT const unsigned char SwiftProtobufVersionString[];
+FOUNDATION_EXPORT double WalletCoreSwiftProtobufVersionNumber;
+FOUNDATION_EXPORT const unsigned char WalletCoreSwiftProtobufVersionString[];
 

@@ -178,14 +178,14 @@ code_sign_if_enabled() {
 if [[ "$CONFIGURATION" == "Debug" ]]; then
   install_framework "${BUILT_PRODUCTS_DIR}/BigInt-macOS/BigInt.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/Kingfisher-macOS/Kingfisher.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/SwiftProtobuf-macOS/SwiftProtobuf.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/TrustWalletCore-macOS/WalletCore.framework"
+  install_framework "${BUILT_PRODUCTS_DIR}/WalletCoreSwiftProtobuf-macOS/WalletCoreSwiftProtobuf.framework"
 fi
 if [[ "$CONFIGURATION" == "Release" ]]; then
   install_framework "${BUILT_PRODUCTS_DIR}/BigInt-macOS/BigInt.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/Kingfisher-macOS/Kingfisher.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/SwiftProtobuf-macOS/SwiftProtobuf.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/TrustWalletCore-macOS/WalletCore.framework"
+  install_framework "${BUILT_PRODUCTS_DIR}/WalletCoreSwiftProtobuf-macOS/WalletCoreSwiftProtobuf.framework"
 fi
 if [ "${COCOAPODS_PARALLEL_CODE_SIGN}" == "true" ]; then
   wait

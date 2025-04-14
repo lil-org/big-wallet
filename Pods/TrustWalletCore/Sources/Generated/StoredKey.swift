@@ -81,6 +81,60 @@ public final class StoredKey {
         return StoredKey(rawValue: value)
     }
 
+    /// Imports an encoded private key.
+    ///
+    /// - Parameter privateKey: Non-null encoded private key
+    /// - Parameter password: Non-null block of data, password of the stored key
+    /// - Parameter coin: the coin type
+    /// - Note: Returned object needs to be deleted with \TWStoredKeyDelete
+    /// - Returns: Nullptr if the key can't be imported, the stored key otherwise
+    public static func importPrivateKeyEncoded(privateKey: String, name: String, password: Data, coin: CoinType) -> StoredKey? {
+        let privateKeyString = TWStringCreateWithNSString(privateKey)
+        defer {
+            TWStringDelete(privateKeyString)
+        }
+        let nameString = TWStringCreateWithNSString(name)
+        defer {
+            TWStringDelete(nameString)
+        }
+        let passwordData = TWDataCreateWithNSData(password)
+        defer {
+            TWDataDelete(passwordData)
+        }
+        guard let value = TWStoredKeyImportPrivateKeyEncoded(privateKeyString, nameString, passwordData, TWCoinType(rawValue: coin.rawValue)) else {
+            return nil
+        }
+        return StoredKey(rawValue: value)
+    }
+
+    /// Imports an encoded private key.
+    ///
+    /// - Parameter privateKey: Non-null encoded private key
+    /// - Parameter name: The name of the stored key to import as a non-null string
+    /// - Parameter password: Non-null block of data, password of the stored key
+    /// - Parameter coin: the coin type
+    /// - Parameter encryption: cipher encryption mode
+    /// - Note: Returned object needs to be deleted with \TWStoredKeyDelete
+    /// - Returns: Nullptr if the key can't be imported, the stored key otherwise
+    public static func importPrivateKeyEncodedWithEncryption(privateKey: String, name: String, password: Data, coin: CoinType, encryption: StoredKeyEncryption) -> StoredKey? {
+        let privateKeyString = TWStringCreateWithNSString(privateKey)
+        defer {
+            TWStringDelete(privateKeyString)
+        }
+        let nameString = TWStringCreateWithNSString(name)
+        defer {
+            TWStringDelete(nameString)
+        }
+        let passwordData = TWDataCreateWithNSData(password)
+        defer {
+            TWDataDelete(passwordData)
+        }
+        guard let value = TWStoredKeyImportPrivateKeyEncodedWithEncryption(privateKeyString, nameString, passwordData, TWCoinType(rawValue: coin.rawValue), TWStoredKeyEncryption(rawValue: encryption.rawValue)) else {
+            return nil
+        }
+        return StoredKey(rawValue: value)
+    }
+
     /// Imports an HD wallet.
     ///
     /// - Parameter mnemonic: Non-null bip39 mnemonic
@@ -187,6 +241,14 @@ public final class StoredKey {
     /// - Returns: the number of accounts associated to the given stored key
     public var accountCount: Int {
         return TWStoredKeyAccountCount(rawValue)
+    }
+
+    /// Whether the private key is encoded.
+    ///
+    /// - Parameter key: Non-null pointer to a stored key
+    /// - Returns: true if the private key is encoded, false otherwise
+    public var hasPrivateKeyEncoded: Bool {
+        return TWStoredKeyHasPrivateKeyEncoded(rawValue)
     }
 
     /// Retrieve stored key encoding parameters, as JSON string.
@@ -416,6 +478,22 @@ public final class StoredKey {
             return nil
         }
         return TWDataNSData(result)
+    }
+
+    /// Decrypts the encoded private key.
+    ///
+    /// - Parameter key: Non-null pointer to a stored key
+    /// - Parameter password: Non-null block of data, password of the stored key
+    /// - Returns: Decrypted encoded private key as a string if success, null pointer otherwise
+    public func decryptPrivateKeyEncoded(password: Data) -> String? {
+        let passwordData = TWDataCreateWithNSData(password)
+        defer {
+            TWDataDelete(passwordData)
+        }
+        guard let result = TWStoredKeyDecryptPrivateKeyEncoded(rawValue, passwordData) else {
+            return nil
+        }
+        return TWStringNSString(result)
     }
 
     /// Decrypts the mnemonic phrase.

@@ -1,0 +1,6 @@
+framework module WalletCoreSwiftProtobuf {
+  umbrella header "WalletCoreSwiftProtobuf-iOS-umbrella.h"
+
+  export *
+  module * { export * }
+}

@@ -14,6 +14,26 @@ TW_EXTERN_C_BEGIN
 TW_EXPORT_CLASS
 struct TWSolanaTransaction;
 
+/// Decode Solana transaction, update the recent blockhash and re-sign the transaction.
+/// 
+/// # Warning
+/// 
+/// This is a temporary solution. It will be removed when `Solana.proto` supports
+/// direct transaction signing.
+/// 
+/// \param encoded_tx base64 encoded Solana transaction.
+/// \param recent_blockhash base58 encoded recent blockhash.
+/// \param private_keys list of private keys that should be used to re-sign the transaction.
+/// \return serialized `Solana::Proto::SigningOutput`.
+TW_EXPORT_STATIC_METHOD TWData *_Nullable TWSolanaTransactionUpdateBlockhashAndSign(TWString *_Nonnull encodedTx, TWString *_Nonnull recentBlockhash, struct TWDataVector *_Nonnull privateKeys);
+
+/// Try to find a `ComputeBudgetInstruction::SetComputeUnitPrice` instruction in the given transaction,
+/// and returns the specified Unit Price.
+/// 
+/// \param encoded_tx base64 encoded Solana transaction.
+/// \return nullable Unit Price as a decimal string. Null if no instruction found.
+TW_EXPORT_STATIC_METHOD TWString *_Nullable TWSolanaTransactionGetComputeUnitPrice(TWString *_Nonnull encodedTx);
+
 /// Try to find a `ComputeBudgetInstruction::SetComputeUnitLimit` instruction in the given transaction,
 /// and returns the specified Unit Limit.
 /// 
@@ -43,25 +63,5 @@ TW_EXPORT_STATIC_METHOD TWString *_Nullable TWSolanaTransactionSetComputeUnitLim
 /// \param fee_payer fee payer account address. Must be a base58 encoded public key. It must NOT be in the account list yet.
 /// \return base64 encoded Solana transaction. Null if an error occurred.
 TW_EXPORT_STATIC_METHOD TWString *_Nullable TWSolanaTransactionSetFeePayer(TWString *_Nonnull encodedTx, TWString *_Nonnull feePayer);
-
-/// Decode Solana transaction, update the recent blockhash and re-sign the transaction.
-/// 
-/// # Warning
-/// 
-/// This is a temporary solution. It will be removed when `Solana.proto` supports
-/// direct transaction signing.
-/// 
-/// \param encoded_tx base64 encoded Solana transaction.
-/// \param recent_blockhash base58 encoded recent blockhash.
-/// \param private_keys list of private keys that should be used to re-sign the transaction.
-/// \return serialized `Solana::Proto::SigningOutput`.
-TW_EXPORT_STATIC_METHOD TWData *_Nullable TWSolanaTransactionUpdateBlockhashAndSign(TWString *_Nonnull encodedTx, TWString *_Nonnull recentBlockhash, struct TWDataVector *_Nonnull privateKeys);
-
-/// Try to find a `ComputeBudgetInstruction::SetComputeUnitPrice` instruction in the given transaction,
-/// and returns the specified Unit Price.
-/// 
-/// \param encoded_tx base64 encoded Solana transaction.
-/// \return nullable Unit Price as a decimal string. Null if no instruction found.
-TW_EXPORT_STATIC_METHOD TWString *_Nullable TWSolanaTransactionGetComputeUnitPrice(TWString *_Nonnull encodedTx);
 
 TW_EXTERN_C_END

@@ -18,4 +18,6 @@ public enum Derivation: UInt32, CaseIterable {
     case solanaSolana = 6
     case stratisSegwit = 7
     case bitcoinTaproot = 8
+    case pactusMainnet = 9
+    case pactusTestnet = 10
 }
