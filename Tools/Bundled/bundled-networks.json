@@ -90,7 +90,7 @@
   "130" : {
     "b" : "https://uniscan.xyz",
     "n" : "Unichain",
-    "s" : "ETH",
+    "s" : "ETH"
   },
   "1313161554" : {
     "b" : "https://aurorascan.dev",
@@ -107,7 +107,7 @@
   "1329" : {
     "b" : "https://seitrace.com",
     "n" : "Sei Network",
-    "s" : "SEI",
+    "s" : "SEI"
   },
   "13371" : {
     "b" : "https://explorer.immutable.com",
@@ -153,7 +153,7 @@
   "1868" : {
     "b" : "https://soneium.blockscout.com",
     "n" : "Soneium",
-    "s" : "ETH",
+    "s" : "ETH"
   },
   "196" : {
     "b" : "https://www.oklink.com/xlayer",
@@ -214,6 +214,11 @@
     "n" : "Kroma",
     "s" : "ETH"
   },
+  "2741" : {
+    "b" : "https://abscan.org",
+    "n" : "Abstract",
+    "s" : "ETH",
+  },
   "280" : {
     "b" : "https://goerli.explorer.zksync.io",
     "n" : "zkSync Era Testnet",
@@ -245,7 +250,7 @@
   "33139" : {
     "b" : "https://apescan.io",
     "n" : "ApeChain",
-    "s" : "APE",
+    "s" : "APE"
   },
   "338" : {
     "b" : "https://explorer.cronos.org/testnet",
@@ -261,7 +266,7 @@
   "360" : {
     "b" : "https://shapescan.xyz",
     "n" : "Shape",
-    "s" : "ETH",
+    "s" : "ETH"
   },
   "40" : {
     "b" : "https://teloscan.io",
@@ -462,7 +467,7 @@
   "747" : {
     "b" : "https://evm.flowscan.io",
     "n" : "Flow EVM Mainnet",
-    "s" : "FLOW",
+    "s" : "FLOW"
   },
   "77" : {
     "b" : "https://blockscout.com/poa/sokol",
@@ -496,7 +501,7 @@
   "80094" : {
     "b" : "https://berascan.com",
     "n" : "Berachain",
-    "s" : "BERA",
+    "s" : "BERA"
   },
   "810180" : {
     "b" : "https://explorer.zklink.io",
@@ -516,7 +521,7 @@
   "8333" : {
     "b" : "https://explorer.b3.fun",
     "n" : "B3",
-    "s" : "ETH",
+    "s" : "ETH"
   },
   "8453" : {
     "b" : "https://basescan.org",

@@ -49,6 +49,7 @@ struct BundledNodes {
         2020: "api.roninchain.com/rpc",
         2221: "evm.testnet.kava.io",
         2222: "evm.kava.io",
+        2741: "api.mainnet.abs.xyz",
         2818: "rpc.morphl2.io",
         4002: "rpc.testnet.fantom.network",
         4337: "subnets.avax.network/beam/mainnet/rpc",
