@@ -28,7 +28,7 @@
 			<key>UIApplicationShortcutItemTitle</key>
 			<string>🥹 Something wrong?</string>
 			<key>UIApplicationShortcutItemIconSymbolName</key>
-			<string>envelope</string>
+			<string>heart</string>
 			<key>UIApplicationShortcutItemSubtitle</key>
 			<string>Tap here to let us know.</string>
 		</dict>
