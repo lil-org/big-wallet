@@ -57,6 +57,7 @@ struct BundledNodes {
         5001: "rpc.testnet.mantle.xyz",
         5545: "rpc.duckchain.io",
         5611: "opbnb-testnet-rpc.bnbchain.org",
+        6342: "carrot.megaeth.com/rpc",
         7000: "zetachain-evm.blockpi.network/v1/rpc/public",
         7700: "canto.slingshot.finance",
         8217: "1rpc.io/klay",

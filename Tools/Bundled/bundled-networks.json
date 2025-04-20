@@ -217,7 +217,7 @@
   "2741" : {
     "b" : "https://abscan.org",
     "n" : "Abstract",
-    "s" : "ETH",
+    "s" : "ETH"
   },
   "280" : {
     "b" : "https://goerli.explorer.zksync.io",
@@ -431,6 +431,11 @@
     "n" : "Linea",
     "o" : true,
     "s" : "ETH"
+  },
+  "6342" : {
+    "n" : "MegaETH Testnet",
+    "s" : "ETH",
+    "t" : true
   },
   "66" : {
     "b" : "https://www.oklink.com/en/okc",
