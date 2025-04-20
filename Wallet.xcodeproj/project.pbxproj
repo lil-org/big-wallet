@@ -4007,6 +4007,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = E38F8133E71D0281EAA7ED02 /* Pods-Big Wallet iOS.debug.xcconfig */;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = AppIconSphere;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "App iOS/Wallet iOS.entitlements";
@@ -4044,6 +4045,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = ED2048BF260AFB72E7D7D176 /* Pods-Big Wallet iOS.release.xcconfig */;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = AppIconSphere;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "App iOS/Wallet iOS.entitlements";

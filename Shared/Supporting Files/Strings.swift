@@ -104,6 +104,7 @@ struct Strings {
     static let customNetworks = loc("Custom Networks")
     static let setName = loc("Set Name")
     static let editName = loc("Edit Name")
+    static let changeAppIcon = loc("Change App Icon")
     
     static let bigWallet = "Big Wallet"
     static let viewOnGithub = "GitHub"
