@@ -42,13 +42,13 @@
                                         <rect key="frame" x="0.0" y="0.0" width="414" height="366"/>
                                         <subviews>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="y1f-LV-nel">
-                                                <rect key="frame" x="145.5" y="81.5" width="123" height="123"/>
+                                                <rect key="frame" x="157" y="110" width="100" height="100"/>
                                                 <subviews>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="LaunchLogo" translatesAutoresizingMaskIntoConstraints="NO" id="Xf2-rl-Lwy">
-                                                        <rect key="frame" x="0.0" y="0.0" width="123" height="123"/>
+                                                        <rect key="frame" x="0.0" y="0.0" width="100" height="100"/>
                                                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                                                         <constraints>
-                                                            <constraint firstAttribute="width" constant="123" id="ita-Ff-gGT"/>
+                                                            <constraint firstAttribute="width" constant="100" id="ita-Ff-gGT"/>
                                                             <constraint firstAttribute="width" secondItem="Xf2-rl-Lwy" secondAttribute="height" multiplier="1:1" id="mJT-Lo-YGK"/>
                                                         </constraints>
                                                     </imageView>
@@ -64,7 +64,7 @@
                                         </subviews>
                                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                                         <constraints>
-                                            <constraint firstItem="y1f-LV-nel" firstAttribute="centerY" secondItem="eVU-cB-sMC" secondAttribute="centerY" constant="-40" id="XxH-vf-4Bc"/>
+                                            <constraint firstItem="y1f-LV-nel" firstAttribute="centerY" secondItem="eVU-cB-sMC" secondAttribute="centerY" constant="-23" id="XxH-vf-4Bc"/>
                                             <constraint firstItem="y1f-LV-nel" firstAttribute="centerX" secondItem="eVU-cB-sMC" secondAttribute="centerX" id="sOO-XQ-zml"/>
                                         </constraints>
                                     </view>
