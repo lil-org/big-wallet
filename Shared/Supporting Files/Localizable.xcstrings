@@ -1675,6 +1675,7 @@
     },
     "Change App Icon" : {
       "comment" : "14188719269104083209",
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {

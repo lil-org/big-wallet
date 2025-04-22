@@ -178,14 +178,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
     }
     
-    private func didClickToggleAppIcon() {
-        if UIApplication.shared.alternateIconName == nil {
-            UIApplication.shared.setAlternateIconName("AppIconSphere")
-        } else {
-            UIApplication.shared.setAlternateIconName(nil)
-        }
-    }
-    
     private func walletForIndexPath(_ indexPath: IndexPath) -> WalletContainer {
         let section = sections[indexPath.section]
         let items = section.items
@@ -439,13 +431,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel)
         actionSheet.addAction(howToEnableSafariExtension)
         actionSheet.addAction(appStoreAction)
-        
-#if os(iOS)
-        let toggleIconAction = UIAlertAction(title: Strings.changeAppIcon, style: .default) { [weak self] _ in
-            self?.didClickToggleAppIcon()
-        }
-        actionSheet.addAction(toggleIconAction)
-#endif
         
         actionSheet.addAction(warpcastAction)
         actionSheet.addAction(githubAction)
