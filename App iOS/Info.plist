@@ -26,11 +26,11 @@
 			<key>UIApplicationShortcutItemType</key>
 			<string>org.lil.wallet.feedback</string>
 			<key>UIApplicationShortcutItemTitle</key>
-			<string>🥹 Something wrong?</string>
+			<string>Something wrong?</string>
 			<key>UIApplicationShortcutItemIconSymbolName</key>
 			<string>heart</string>
 			<key>UIApplicationShortcutItemSubtitle</key>
-			<string>Tap here to let us know.</string>
+			<string>Tap here to leave a quick feedback.</string>
 		</dict>
 	</array>
 	<key>CFBundleName</key>
