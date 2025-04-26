@@ -1,1 +1,1 @@
-web3,metamask,ethereum,bővítmény,nft,böngésző,dapp,csatlakozz,token,defi,csere,kereskedelem,zora
+metamask,phantom,blockklánc,ethereum,böngésző,nft,dapp,kapcsolat,token,defi,csere,kereskedés,solana

@@ -1,1 +1,1 @@
-web3,metamask,ethereum,selain,nft,apuohjelma,dapp,yhdistä,token,defi,vaihda,kauppa,solana,zora
+metamask,phantom,lohkoketju,ethereum,selain,dapp,yhteys,token,defi,vaihto,kauppa,solana,nft

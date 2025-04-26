@@ -1,1 +1,1 @@
-metamask,web3,código,ethereum,extensión,nft,navegador,dapp,conectar,token,defi,intercambio
+metamask,phantom,onchain,ethereum,extension,nft,browser,dapp,connect,token,defi,swap,trade,solana
