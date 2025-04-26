@@ -39,11 +39,13 @@ struct MetadataTask: AI.Task {
         switch metadataKind {
         case .name:
             clarifications = """
-            Big Wallet, Safari, and Web3 are names that should not be translated or transliterated. do not change their spelling.
+            Big Wallet and Safari are names that should not be translated or transliterated. do not change their spelling.
             """
         case .subtitle:
             clarifications = """
-            your response should be max 30 symbols. do not translate or transliterate Safari, keep it as is.
+            do not translate or transliterate Web3 and Safari.
+            
+            your response should be max 30 symbols. make sure to keep "Crypto wallet in Safari".
             """
         case .keywords:
             clarifications = """
