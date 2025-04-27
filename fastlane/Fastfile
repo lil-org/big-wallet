@@ -44,7 +44,7 @@ lane :update_and_login do
   ENV['FASTLANE_PASSWORD'] = local_fastlane_password
 end
 
-lane :deliver_metadata do
+lane :deliver_metadata_ios do
 
   update_and_login
   
@@ -58,6 +58,12 @@ lane :deliver_metadata do
       force: true,
     )
   end
+  
+end
+
+lane :deliver_metadata_macos do
+
+  update_and_login
 
   platform :mac do
     deliver(
