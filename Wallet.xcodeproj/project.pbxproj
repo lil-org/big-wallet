@@ -2563,8 +2563,6 @@
 			dependencies = (
 			);
 			name = "Safari visionOS";
-			packageProductDependencies = (
-			);
 			productName = "Safari visionOS";
 			productReference = 2C60546F2D529A9A00779570 /* Safari visionOS.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -2671,8 +2669,6 @@
 				2CF9B10B2D526F4D00B5CE82 /* PBXTargetDependency */,
 			);
 			name = "Tests visionOS";
-			packageProductDependencies = (
-			);
 			productName = "Tests visionOS";
 			productReference = 2CF9B1092D526F4D00B5CE82 /* Tests visionOS.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -3166,13 +3162,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Big Wallet visionOS/Pods-Big Wallet visionOS-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Big Wallet visionOS/Pods-Big Wallet visionOS-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -3187,13 +3179,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Big Wallet/Pods-Big Wallet-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Big Wallet/Pods-Big Wallet-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -3208,13 +3196,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Big Wallet iOS/Pods-Big Wallet iOS-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Big Wallet iOS/Pods-Big Wallet iOS-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;

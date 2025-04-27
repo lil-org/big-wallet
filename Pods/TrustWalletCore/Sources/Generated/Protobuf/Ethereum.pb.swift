@@ -601,14 +601,46 @@ public struct TW_Ethereum_Proto_Access {
   public init() {}
 }
 
-/// [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702) authority.
-public struct TW_Ethereum_Proto_Authority {
+/// [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702) authorization.
+public struct TW_Ethereum_Proto_Authorization {
   // WalletCoreSwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the WalletCoreSwiftProtobuf.library for
   // methods supported on all messages.
 
   /// Address to be authorized, a smart contract address.
   public var address: String = String()
+
+  /// If custom_signature isn't provided, the authorization will be signed with the provided private key, nonce and chainId
+  public var customSignature: TW_Ethereum_Proto_AuthorizationCustomSignature {
+    get {return _customSignature ?? TW_Ethereum_Proto_AuthorizationCustomSignature()}
+    set {_customSignature = newValue}
+  }
+  /// Returns true if `customSignature` has been explicitly set.
+  public var hasCustomSignature: Bool {return self._customSignature != nil}
+  /// Clears the value of `customSignature`. Subsequent reads from it will return its default value.
+  public mutating func clearCustomSignature() {self._customSignature = nil}
+
+  public var unknownFields = WalletCoreSwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _customSignature: TW_Ethereum_Proto_AuthorizationCustomSignature? = nil
+}
+
+/// [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702) authorization.
+public struct TW_Ethereum_Proto_AuthorizationCustomSignature {
+  // WalletCoreSwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the WalletCoreSwiftProtobuf.library for
+  // methods supported on all messages.
+
+  /// Chain id (uint256, serialized big endian).
+  public var chainID: Data = Data()
+
+  /// Nonce, the nonce of authority.
+  public var nonce: Data = Data()
+
+  /// The signature, Hex-encoded.
+  public var signature: String = String()
 
   public var unknownFields = WalletCoreSwiftProtobuf.UnknownStorage()
 
@@ -721,17 +753,17 @@ public struct TW_Ethereum_Proto_SigningInput {
     set {_uniqueStorage()._accessList = newValue}
   }
 
-  /// A smart contract to which we’re delegating to.
+  /// EIP7702 authorization.
   /// Used in `TransactionMode::SetOp` only.
   /// Currently, we support delegation to only one authority at a time.
-  public var eip7702Authority: TW_Ethereum_Proto_Authority {
-    get {return _storage._eip7702Authority ?? TW_Ethereum_Proto_Authority()}
-    set {_uniqueStorage()._eip7702Authority = newValue}
+  public var eip7702Authorization: TW_Ethereum_Proto_Authorization {
+    get {return _storage._eip7702Authorization ?? TW_Ethereum_Proto_Authorization()}
+    set {_uniqueStorage()._eip7702Authorization = newValue}
   }
-  /// Returns true if `eip7702Authority` has been explicitly set.
-  public var hasEip7702Authority: Bool {return _storage._eip7702Authority != nil}
-  /// Clears the value of `eip7702Authority`. Subsequent reads from it will return its default value.
-  public mutating func clearEip7702Authority() {_uniqueStorage()._eip7702Authority = nil}
+  /// Returns true if `eip7702Authorization` has been explicitly set.
+  public var hasEip7702Authorization: Bool {return _storage._eip7702Authorization != nil}
+  /// Clears the value of `eip7702Authorization`. Subsequent reads from it will return its default value.
+  public mutating func clearEip7702Authorization() {_uniqueStorage()._eip7702Authorization = nil}
 
   public var unknownFields = WalletCoreSwiftProtobuf.UnknownStorage()
 
@@ -1720,10 +1752,11 @@ extension TW_Ethereum_Proto_Access: WalletCoreSwiftProtobuf.Message, WalletCoreS
   }
 }
 
-extension TW_Ethereum_Proto_Authority: WalletCoreSwiftProtobuf.Message, WalletCoreSwiftProtobuf._MessageImplementationBase, WalletCoreSwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".Authority"
+extension TW_Ethereum_Proto_Authorization: WalletCoreSwiftProtobuf.Message, WalletCoreSwiftProtobuf._MessageImplementationBase, WalletCoreSwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Authorization"
   public static let _protobuf_nameMap: WalletCoreSwiftProtobuf._NameMap = [
     2: .same(proto: "address"),
+    3: .standard(proto: "custom_signature"),
   ]
 
   public mutating func decodeMessage<D: WalletCoreSwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1733,20 +1766,73 @@ extension TW_Ethereum_Proto_Authority: WalletCoreSwiftProtobuf.Message, WalletCo
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 2: try { try decoder.decodeSingularStringField(value: &self.address) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._customSignature) }()
       default: break
       }
     }
   }
 
   public func traverse<V: WalletCoreSwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.address.isEmpty {
       try visitor.visitSingularStringField(value: self.address, fieldNumber: 2)
+    }
+    try { if let v = self._customSignature {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Ethereum_Proto_Authorization, rhs: TW_Ethereum_Proto_Authorization) -> Bool {
+    if lhs.address != rhs.address {return false}
+    if lhs._customSignature != rhs._customSignature {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Ethereum_Proto_AuthorizationCustomSignature: WalletCoreSwiftProtobuf.Message, WalletCoreSwiftProtobuf._MessageImplementationBase, WalletCoreSwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AuthorizationCustomSignature"
+  public static let _protobuf_nameMap: WalletCoreSwiftProtobuf._NameMap = [
+    1: .standard(proto: "chain_id"),
+    2: .same(proto: "nonce"),
+    3: .same(proto: "signature"),
+  ]
+
+  public mutating func decodeMessage<D: WalletCoreSwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.chainID) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.nonce) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.signature) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: WalletCoreSwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.chainID.isEmpty {
+      try visitor.visitSingularBytesField(value: self.chainID, fieldNumber: 1)
+    }
+    if !self.nonce.isEmpty {
+      try visitor.visitSingularBytesField(value: self.nonce, fieldNumber: 2)
+    }
+    if !self.signature.isEmpty {
+      try visitor.visitSingularStringField(value: self.signature, fieldNumber: 3)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: TW_Ethereum_Proto_Authority, rhs: TW_Ethereum_Proto_Authority) -> Bool {
-    if lhs.address != rhs.address {return false}
+  public static func ==(lhs: TW_Ethereum_Proto_AuthorizationCustomSignature, rhs: TW_Ethereum_Proto_AuthorizationCustomSignature) -> Bool {
+    if lhs.chainID != rhs.chainID {return false}
+    if lhs.nonce != rhs.nonce {return false}
+    if lhs.signature != rhs.signature {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1768,7 +1854,7 @@ extension TW_Ethereum_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, Walle
     11: .standard(proto: "user_operation"),
     13: .standard(proto: "user_operation_v0_7"),
     12: .standard(proto: "access_list"),
-    15: .standard(proto: "eip7702_authority"),
+    15: .standard(proto: "eip7702_authorization"),
   ]
 
   fileprivate class _StorageClass {
@@ -1784,7 +1870,7 @@ extension TW_Ethereum_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, Walle
     var _transaction: TW_Ethereum_Proto_Transaction? = nil
     var _userOperationOneof: TW_Ethereum_Proto_SigningInput.OneOf_UserOperationOneof?
     var _accessList: [TW_Ethereum_Proto_Access] = []
-    var _eip7702Authority: TW_Ethereum_Proto_Authority? = nil
+    var _eip7702Authorization: TW_Ethereum_Proto_Authorization? = nil
 
     static let defaultInstance = _StorageClass()
 
@@ -1803,7 +1889,7 @@ extension TW_Ethereum_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, Walle
       _transaction = source._transaction
       _userOperationOneof = source._userOperationOneof
       _accessList = source._accessList
-      _eip7702Authority = source._eip7702Authority
+      _eip7702Authorization = source._eip7702Authorization
     }
   }
 
@@ -1859,7 +1945,7 @@ extension TW_Ethereum_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, Walle
             _storage._userOperationOneof = .userOperationV07(v)
           }
         }()
-        case 15: try { try decoder.decodeSingularMessageField(value: &_storage._eip7702Authority) }()
+        case 15: try { try decoder.decodeSingularMessageField(value: &_storage._eip7702Authorization) }()
         default: break
         }
       }
@@ -1911,7 +1997,7 @@ extension TW_Ethereum_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, Walle
       try { if case .userOperationV07(let v)? = _storage._userOperationOneof {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
       } }()
-      try { if let v = _storage._eip7702Authority {
+      try { if let v = _storage._eip7702Authorization {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 15)
       } }()
     }
@@ -1935,7 +2021,7 @@ extension TW_Ethereum_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, Walle
         if _storage._transaction != rhs_storage._transaction {return false}
         if _storage._userOperationOneof != rhs_storage._userOperationOneof {return false}
         if _storage._accessList != rhs_storage._accessList {return false}
-        if _storage._eip7702Authority != rhs_storage._eip7702Authority {return false}
+        if _storage._eip7702Authorization != rhs_storage._eip7702Authorization {return false}
         return true
       }
       if !storagesAreEqual {return false}
