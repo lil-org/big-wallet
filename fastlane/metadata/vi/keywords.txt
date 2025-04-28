@@ -1,1 +1,1 @@
-metamask,phantom,onchain,ethereum,mởrộng,nft,trìnhduyệt,dapp,kếtnối,token,defi,giaođổi,solana
+web3,metamask,phantom,onchain,ethereum,tiện ích,trình duyệt,dapp,kết nối,token,đổi,solana

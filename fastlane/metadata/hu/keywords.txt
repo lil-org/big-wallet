@@ -1,1 +1,1 @@
-metamask,phantom,blockklánc,ethereum,böngésző,nft,dapp,kapcsolat,token,defi,csere,kereskedés,solana
+web3,metamask,phantom,onchain,ethereum,extension,browser,dapp,connect,token,defi,swap,trade,solana

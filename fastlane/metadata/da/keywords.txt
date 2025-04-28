@@ -1,1 +1,1 @@
-metamask,phantom,onchain,ethereum,udvidelse,nft,browser,dapp,forbind,token,defi,bytte,handel,solana
+web3,metamask,phantom,onchain,ethereum,udvidelse,browser,dapp,tilslut,token,defi,byt,handel,solana

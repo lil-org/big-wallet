@@ -1,1 +1,1 @@
-metamask,phantom,na_lancu,ethereum,ekstenzija,nft,preglednik,dapp,veza,token,defi,zamjena,solana
+web3,metamask,phantom,onchain,ethereum,proširenje,preglednik,dapp,spojiti,token,zamjena,solana

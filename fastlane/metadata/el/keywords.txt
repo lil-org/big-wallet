@@ -1,1 +1,1 @@
-μεταμάσκ,phantom,onchain,αιθέριο,επέκταση,nft,περιηγητής,dapp,σύνδεση,token,defi,ανταλλαγή,solana
+web3,metamask,φαντομ,οντσέιν,ethereum,επέκταση,περιηγητής,dapp,σύνδεση,token,defi,ανταλλαγή,solana

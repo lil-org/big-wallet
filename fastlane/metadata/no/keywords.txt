@@ -1,1 +1,1 @@
-metamask,phantom,onchain,ethereum,utvidelse,nft,nettleser,dapp,koble,token,defi,bytt,handel,solana
+web3,metamask,fantom,onchain,ethereum,utvidelse,nettleser,dapp,koble,token,defi,bytte,handle,solana
