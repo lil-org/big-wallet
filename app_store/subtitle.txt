@@ -1,1 +1,1 @@
-Faster crypto wallet in Safari
+Native crypto wallet in Safari
