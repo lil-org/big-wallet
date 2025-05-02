@@ -1,1 +1,1 @@
-Native crypto wallet in Safari
+Prosty portfel krypto w Safari

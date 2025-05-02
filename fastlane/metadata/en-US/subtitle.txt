@@ -1,1 +1,1 @@
-Native crypto wallet in Safari
+Simple crypto wallet in Safari
