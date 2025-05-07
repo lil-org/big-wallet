@@ -1,1 +1,1 @@
-Simple crypto wallet in Safari
+A te kriptotárcád a Safari-ban
