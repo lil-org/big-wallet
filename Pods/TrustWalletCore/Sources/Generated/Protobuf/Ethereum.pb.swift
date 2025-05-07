@@ -148,6 +148,9 @@ public enum TW_Ethereum_Proto_MessageType: WalletCoreSwiftProtobuf.Enum {
 
   /// Sign a message with Immutable X msg type.
   case immutableX // = 4
+
+  /// Sign a EIP-7702 authorization tuple.
+  case eip7702Authorization // = 5
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -161,6 +164,7 @@ public enum TW_Ethereum_Proto_MessageType: WalletCoreSwiftProtobuf.Enum {
     case 2: self = .typed
     case 3: self = .typedEip155
     case 4: self = .immutableX
+    case 5: self = .eip7702Authorization
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -172,6 +176,7 @@ public enum TW_Ethereum_Proto_MessageType: WalletCoreSwiftProtobuf.Enum {
     case .typed: return 2
     case .typedEip155: return 3
     case .immutableX: return 4
+    case .eip7702Authorization: return 5
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -188,6 +193,7 @@ extension TW_Ethereum_Proto_MessageType: CaseIterable {
     .typed,
     .typedEip155,
     .immutableX,
+    .eip7702Authorization,
   ]
 }
 
@@ -943,6 +949,7 @@ extension TW_Ethereum_Proto_MessageType: WalletCoreSwiftProtobuf._ProtoNameProvi
     2: .same(proto: "MessageType_typed"),
     3: .same(proto: "MessageType_typed_eip155"),
     4: .same(proto: "MessageType_immutable_x"),
+    5: .same(proto: "MessageType_eip7702_authorization"),
   ]
 }
 

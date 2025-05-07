@@ -10,22 +10,6 @@ import Foundation
 
 public final class MessageSigner {
 
-    /// Signs an arbitrary message to prove ownership of an address for off-chain services.
-    /// 
-    /// - Parameter coin: The given coin type to sign the message for.
-    /// - Parameter input: The serialized data of a signing input (e.g. TW.Ethereum.Proto.MessageSigningInput).
-    /// - Returns: The serialized data of a `SigningOutput` proto object. (e.g. TW.Ethereum.Proto.MessageSigningOutput).
-    public static func sign(coin: CoinType, input: Data) -> Data? {
-        let inputData = TWDataCreateWithNSData(input)
-        defer {
-            TWDataDelete(inputData)
-        }
-        guard let result = TWMessageSignerSign(TWCoinType(rawValue: coin.rawValue), inputData) else {
-            return nil
-        }
-        return TWDataNSData(result)
-    }
-
     /// Verifies a signature for a message.
     /// 
     /// - Parameter coin: The given coin type to sign the message for.
@@ -50,6 +34,22 @@ public final class MessageSigner {
             TWDataDelete(inputData)
         }
         guard let result = TWMessageSignerPreImageHashes(TWCoinType(rawValue: coin.rawValue), inputData) else {
+            return nil
+        }
+        return TWDataNSData(result)
+    }
+
+    /// Signs an arbitrary message to prove ownership of an address for off-chain services.
+    /// 
+    /// - Parameter coin: The given coin type to sign the message for.
+    /// - Parameter input: The serialized data of a signing input (e.g. TW.Ethereum.Proto.MessageSigningInput).
+    /// - Returns: The serialized data of a `SigningOutput` proto object. (e.g. TW.Ethereum.Proto.MessageSigningOutput).
+    public static func sign(coin: CoinType, input: Data) -> Data? {
+        let inputData = TWDataCreateWithNSData(input)
+        defer {
+            TWDataDelete(inputData)
+        }
+        guard let result = TWMessageSignerSign(TWCoinType(rawValue: coin.rawValue), inputData) else {
             return nil
         }
         return TWDataNSData(result)

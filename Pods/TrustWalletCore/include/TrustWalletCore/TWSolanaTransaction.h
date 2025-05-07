@@ -64,4 +64,11 @@ TW_EXPORT_STATIC_METHOD TWString *_Nullable TWSolanaTransactionSetComputeUnitLim
 /// \return base64 encoded Solana transaction. Null if an error occurred.
 TW_EXPORT_STATIC_METHOD TWString *_Nullable TWSolanaTransactionSetFeePayer(TWString *_Nonnull encodedTx, TWString *_Nonnull feePayer);
 
+/// Adds an instruction to the given transaction, and returns the updated transaction.
+/// 
+/// \param encoded_tx base64 encoded Solana transaction.
+/// \param instruction json encoded instruction. Here is an example: {"programId":"11111111111111111111111111111111","accounts":[{"pubkey":"YUz1AupPEy1vttBeDS7sXYZFhQJppcXMzjDiDx18Srf","isSigner":true,"isWritable":true},{"pubkey":"d8DiHEeHKdXkM2ZupT86mrvavhmJwUZjHPCzMiB5Lqb","isSigner":false,"isWritable":true}],"data":"3Bxs4Z6oyhaczjLK"}
+/// \return base64 encoded Solana transaction. Null if an error occurred.
+TW_EXPORT_STATIC_METHOD TWString *_Nullable TWSolanaTransactionAddInstruction(TWString *_Nonnull encodedTx, TWString *_Nonnull instruction);
+
 TW_EXTERN_C_END

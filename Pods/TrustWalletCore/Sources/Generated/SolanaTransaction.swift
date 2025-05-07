@@ -130,6 +130,26 @@ public final class SolanaTransaction {
         return TWStringNSString(result)
     }
 
+    /// Adds an instruction to the given transaction, and returns the updated transaction.
+    /// 
+    /// - Parameter encoded_tx: base64 encoded Solana transaction.
+    /// - Parameter instruction: json encoded instruction. Here is an example: {"programId":"11111111111111111111111111111111","accounts":[{"pubkey":"YUz1AupPEy1vttBeDS7sXYZFhQJppcXMzjDiDx18Srf","isSigner":true,"isWritable":true},{"pubkey":"d8DiHEeHKdXkM2ZupT86mrvavhmJwUZjHPCzMiB5Lqb","isSigner":false,"isWritable":true}],"data":"3Bxs4Z6oyhaczjLK"}
+    /// - Returns: base64 encoded Solana transaction. Null if an error occurred.
+    public static func addInstruction(encodedTx: String, instruction: String) -> String? {
+        let encodedTxString = TWStringCreateWithNSString(encodedTx)
+        defer {
+            TWStringDelete(encodedTxString)
+        }
+        let instructionString = TWStringCreateWithNSString(instruction)
+        defer {
+            TWStringDelete(instructionString)
+        }
+        guard let result = TWSolanaTransactionAddInstruction(encodedTxString, instructionString) else {
+            return nil
+        }
+        return TWStringNSString(result)
+    }
+
     let rawValue: OpaquePointer
 
     init(rawValue: OpaquePointer) {

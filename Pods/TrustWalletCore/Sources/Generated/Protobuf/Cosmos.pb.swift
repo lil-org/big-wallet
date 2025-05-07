@@ -486,6 +486,14 @@ public struct TW_Cosmos_Proto_Message {
     set {messageOneof = .thorchainDepositMessage(newValue)}
   }
 
+  public var wasmInstantiateContractMessage: TW_Cosmos_Proto_Message.WasmInstantiateContract {
+    get {
+      if case .wasmInstantiateContractMessage(let v)? = messageOneof {return v}
+      return TW_Cosmos_Proto_Message.WasmInstantiateContract()
+    }
+    set {messageOneof = .wasmInstantiateContractMessage(newValue)}
+  }
+
   public var unknownFields = WalletCoreSwiftProtobuf.UnknownStorage()
 
   /// The payload message
@@ -512,6 +520,7 @@ public struct TW_Cosmos_Proto_Message {
     case msgStrideLiquidStakingStake(TW_Cosmos_Proto_Message.MsgStrideLiquidStakingStake)
     case msgStrideLiquidStakingRedeem(TW_Cosmos_Proto_Message.MsgStrideLiquidStakingRedeem)
     case thorchainDepositMessage(TW_Cosmos_Proto_Message.THORChainDeposit)
+    case wasmInstantiateContractMessage(TW_Cosmos_Proto_Message.WasmInstantiateContract)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_Cosmos_Proto_Message.OneOf_MessageOneof, rhs: TW_Cosmos_Proto_Message.OneOf_MessageOneof) -> Bool {
@@ -605,6 +614,10 @@ public struct TW_Cosmos_Proto_Message {
       }()
       case (.thorchainDepositMessage, .thorchainDepositMessage): return {
         guard case .thorchainDepositMessage(let l) = lhs, case .thorchainDepositMessage(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.wasmInstantiateContractMessage, .wasmInstantiateContractMessage): return {
+        guard case .wasmInstantiateContractMessage(let l) = lhs, case .wasmInstantiateContractMessage(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
       default: return false
@@ -1069,6 +1082,29 @@ public struct TW_Cosmos_Proto_Message {
     /// used in case you are sending native tokens along with this message
     /// Gap in field numbering is intentional
     public var coins: [TW_Cosmos_Proto_Amount] = []
+
+    public var unknownFields = WalletCoreSwiftProtobuf.UnknownStorage()
+
+    public init() {}
+  }
+
+  /// MsgInstantiateContract defines a message for instantiating a new CosmWasm contract.
+  public struct WasmInstantiateContract {
+    // WalletCoreSwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the WalletCoreSwiftProtobuf.library for
+    // methods supported on all messages.
+
+    public var sender: String = String()
+
+    public var admin: String = String()
+
+    public var codeID: UInt64 = 0
+
+    public var label: String = String()
+
+    public var msg: Data = Data()
+
+    public var initFunds: [TW_Cosmos_Proto_Amount] = []
 
     public var unknownFields = WalletCoreSwiftProtobuf.UnknownStorage()
 
@@ -1725,6 +1761,7 @@ extension TW_Cosmos_Proto_Message: WalletCoreSwiftProtobuf.Message, WalletCoreSw
     21: .standard(proto: "msg_stride_liquid_staking_stake"),
     22: .standard(proto: "msg_stride_liquid_staking_redeem"),
     23: .standard(proto: "thorchain_deposit_message"),
+    24: .standard(proto: "wasm_instantiate_contract_message"),
   ]
 
   public mutating func decodeMessage<D: WalletCoreSwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -2019,6 +2056,19 @@ extension TW_Cosmos_Proto_Message: WalletCoreSwiftProtobuf.Message, WalletCoreSw
           self.messageOneof = .thorchainDepositMessage(v)
         }
       }()
+      case 24: try {
+        var v: TW_Cosmos_Proto_Message.WasmInstantiateContract?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .wasmInstantiateContractMessage(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .wasmInstantiateContractMessage(v)
+        }
+      }()
       default: break
       }
     }
@@ -2117,6 +2167,10 @@ extension TW_Cosmos_Proto_Message: WalletCoreSwiftProtobuf.Message, WalletCoreSw
     case .thorchainDepositMessage?: try {
       guard case .thorchainDepositMessage(let v)? = self.messageOneof else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 23)
+    }()
+    case .wasmInstantiateContractMessage?: try {
+      guard case .wasmInstantiateContractMessage(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 24)
     }()
     case nil: break
     }
@@ -2934,6 +2988,68 @@ extension TW_Cosmos_Proto_Message.WasmExecuteContractGeneric: WalletCoreSwiftPro
     if lhs.contractAddress != rhs.contractAddress {return false}
     if lhs.executeMsg != rhs.executeMsg {return false}
     if lhs.coins != rhs.coins {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Cosmos_Proto_Message.WasmInstantiateContract: WalletCoreSwiftProtobuf.Message, WalletCoreSwiftProtobuf._MessageImplementationBase, WalletCoreSwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Cosmos_Proto_Message.protoMessageName + ".WasmInstantiateContract"
+  public static let _protobuf_nameMap: WalletCoreSwiftProtobuf._NameMap = [
+    1: .same(proto: "sender"),
+    2: .same(proto: "admin"),
+    3: .standard(proto: "code_id"),
+    4: .same(proto: "label"),
+    5: .same(proto: "msg"),
+    6: .standard(proto: "init_funds"),
+  ]
+
+  public mutating func decodeMessage<D: WalletCoreSwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sender) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.admin) }()
+      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.codeID) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.label) }()
+      case 5: try { try decoder.decodeSingularBytesField(value: &self.msg) }()
+      case 6: try { try decoder.decodeRepeatedMessageField(value: &self.initFunds) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: WalletCoreSwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sender.isEmpty {
+      try visitor.visitSingularStringField(value: self.sender, fieldNumber: 1)
+    }
+    if !self.admin.isEmpty {
+      try visitor.visitSingularStringField(value: self.admin, fieldNumber: 2)
+    }
+    if self.codeID != 0 {
+      try visitor.visitSingularUInt64Field(value: self.codeID, fieldNumber: 3)
+    }
+    if !self.label.isEmpty {
+      try visitor.visitSingularStringField(value: self.label, fieldNumber: 4)
+    }
+    if !self.msg.isEmpty {
+      try visitor.visitSingularBytesField(value: self.msg, fieldNumber: 5)
+    }
+    if !self.initFunds.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.initFunds, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Cosmos_Proto_Message.WasmInstantiateContract, rhs: TW_Cosmos_Proto_Message.WasmInstantiateContract) -> Bool {
+    if lhs.sender != rhs.sender {return false}
+    if lhs.admin != rhs.admin {return false}
+    if lhs.codeID != rhs.codeID {return false}
+    if lhs.label != rhs.label {return false}
+    if lhs.msg != rhs.msg {return false}
+    if lhs.initFunds != rhs.initFunds {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
