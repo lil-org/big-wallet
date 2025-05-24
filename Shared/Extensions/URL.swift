@@ -6,7 +6,7 @@ import UniformTypeIdentifiers
 extension URL {
     
     static let x = URL(string: "https://x.com/lildotorg")!
-    static let warpcast = URL(string: "https://warpcast.com/org")!
+    static let farcaster = URL(string: "https://farcaster.xyz/org")!
     static let github = URL(string: "https://github.com/lil-org")!
     static let email = URL(string: "mailto:yo@lil.org")!
     static let quickFeedbackMail = URL(string: "mailto:yo@lil.org?subject=Big%20Wallet")!

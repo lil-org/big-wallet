@@ -110,7 +110,7 @@ class Agent: NSObject {
         let safariItem = NSMenuItem(title: Strings.enableSafariExtension, action: #selector(enableSafariExtension), keyEquivalent: "")
         let mailItem = NSMenuItem(title: Strings.dropUsALine, action: #selector(didSelectMailMenuItem), keyEquivalent: "")
         let githubItem = NSMenuItem(title: Strings.viewOnGithub, action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
-        let warpcastItem = NSMenuItem(title: Strings.viewOnWarpcast, action: #selector(didSelectWarpcastMenuItem), keyEquivalent: "")
+        let farcasterItem = NSMenuItem(title: Strings.viewOnFarcaster, action: #selector(didSelectFarcasterMenuItem), keyEquivalent: "")
         let xItem = NSMenuItem(title: Strings.viewOnX, action: #selector(didSelectXMenuItem), keyEquivalent: "")
         let appStoreItem = NSMenuItem(title: Strings.rateOnTheAppStore, action: #selector(didSelectAppStoreMenuItem), keyEquivalent: "")
         let quitItem = NSMenuItem(title: Strings.quit, action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
@@ -119,7 +119,7 @@ class Agent: NSObject {
         showItem.target = self
         safariItem.target = self
         githubItem.target = self
-        warpcastItem.target = self
+        farcasterItem.target = self
         xItem.target = self
         appStoreItem.target = self
         mailItem.target = self
@@ -137,7 +137,7 @@ class Agent: NSObject {
             menu.addItem(hideItem)
         }
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(warpcastItem)
+        menu.addItem(farcasterItem)
         menu.addItem(githubItem)
         menu.addItem(mailItem)
         menu.addItem(xItem)
@@ -161,8 +161,8 @@ class Agent: NSObject {
         NSWorkspace.shared.open(URL.x)
     }
     
-    @objc private func didSelectWarpcastMenuItem() {
-        NSWorkspace.shared.open(URL.warpcast)
+    @objc private func didSelectFarcasterMenuItem() {
+        NSWorkspace.shared.open(URL.farcaster)
     }
     
     @objc private func didSelectGitHubMenuItem() {

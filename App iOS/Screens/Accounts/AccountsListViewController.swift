@@ -416,8 +416,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let xAction = UIAlertAction(title: Strings.viewOnX, style: .default) { _ in
             UIApplication.shared.open(URL.x)
         }
-        let warpcastAction = UIAlertAction(title: Strings.viewOnWarpcast, style: .default) { _ in
-            UIApplication.shared.open(URL.warpcast)
+        let farcasterAction = UIAlertAction(title: Strings.viewOnFarcaster, style: .default) { _ in
+            UIApplication.shared.open(URL.farcaster)
         }
         let githubAction = UIAlertAction(title: Strings.viewOnGithub, style: .default) { _ in
             UIApplication.shared.open(URL.github)
@@ -432,7 +432,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         actionSheet.addAction(howToEnableSafariExtension)
         actionSheet.addAction(appStoreAction)
         
-        actionSheet.addAction(warpcastAction)
+        actionSheet.addAction(farcasterAction)
         actionSheet.addAction(githubAction)
         actionSheet.addAction(emailAction)
         actionSheet.addAction(xAction)
