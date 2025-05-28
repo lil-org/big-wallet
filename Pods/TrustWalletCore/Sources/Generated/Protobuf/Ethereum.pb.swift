@@ -760,7 +760,7 @@ public struct TW_Ethereum_Proto_SigningInput {
   }
 
   /// EIP7702 authorization.
-  /// Used in `TransactionMode::SetOp` only.
+  /// Used in `TransactionMode::SetOp` or `TransactionMode::UserOp`.
   /// Currently, we support delegation to only one authority at a time.
   public var eip7702Authorization: TW_Ethereum_Proto_Authorization {
     get {return _storage._eip7702Authorization ?? TW_Ethereum_Proto_Authorization()}
