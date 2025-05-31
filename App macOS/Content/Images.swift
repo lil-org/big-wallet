@@ -6,7 +6,7 @@ import WalletCore
 struct Images {
     
     static var statusBarIcon: NSImage { named("Status") }
-    static var zorb: NSImage { named("zorb") }
+    static var iconCircle: NSImage { named("iconCircle") }
     static var multicoinWalletPreferences: NSImage { systemName("ellipsis.rectangle") }
     static var network: NSImage { systemName("network") }
     static var circleFill: NSImage { systemName("circle.fill") }

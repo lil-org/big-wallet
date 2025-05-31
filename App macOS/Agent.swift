@@ -114,7 +114,7 @@ class Agent: NSObject {
         let xItem = NSMenuItem(title: Strings.viewOnX, action: #selector(didSelectXMenuItem), keyEquivalent: "")
         let appStoreItem = NSMenuItem(title: Strings.rateOnTheAppStore, action: #selector(didSelectAppStoreMenuItem), keyEquivalent: "")
         let quitItem = NSMenuItem(title: Strings.quit, action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
-        showItem.image = Images.zorb
+        showItem.image = Images.iconCircle
         
         showItem.target = self
         safariItem.target = self

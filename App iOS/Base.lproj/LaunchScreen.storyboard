@@ -23,7 +23,7 @@
                                         <rect key="frame" x="0.0" y="0.0" width="414" height="366"/>
                                         <subviews>
                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="ORS-yN-IWd">
-                                                <rect key="frame" x="157" y="110" width="100" height="100"/>
+                                                <rect key="frame" x="157" y="133" width="100" height="100"/>
                                                 <subviews>
                                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="LaunchLogo" translatesAutoresizingMaskIntoConstraints="NO" id="eCk-JS-1lj">
                                                         <rect key="frame" x="0.0" y="0.0" width="100" height="100"/>
@@ -46,7 +46,7 @@
                                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                                         <constraints>
                                             <constraint firstItem="ORS-yN-IWd" firstAttribute="centerX" secondItem="jkY-5h-TZS" secondAttribute="centerX" id="ikx-wR-N6d"/>
-                                            <constraint firstItem="ORS-yN-IWd" firstAttribute="centerY" secondItem="jkY-5h-TZS" secondAttribute="centerY" constant="-23" id="pFU-ef-P5Z"/>
+                                            <constraint firstItem="ORS-yN-IWd" firstAttribute="centerY" secondItem="jkY-5h-TZS" secondAttribute="centerY" id="pFU-ef-P5Z"/>
                                         </constraints>
                                     </view>
                                 </subviews>
