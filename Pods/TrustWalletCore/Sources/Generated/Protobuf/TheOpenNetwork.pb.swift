@@ -137,7 +137,8 @@ public struct TW_TheOpenNetwork_Proto_Transfer {
   public var dest: String = String()
 
   /// Amount to send in nanotons
-  public var amount: UInt64 = 0
+  /// uint128 / big endian byte order
+  public var amount: Data = Data()
 
   /// Send mode (optional, 0 by default)
   /// Learn more: https://ton.org/docs/develop/func/stdlib#send_raw_message
@@ -216,7 +217,8 @@ public struct TW_TheOpenNetwork_Proto_JettonTransfer {
   public var queryID: UInt64 = 0
 
   /// Amount of transferred jettons in elementary integer units. The real value transferred is jetton_amount multiplied by ten to the power of token decimal precision
-  public var jettonAmount: UInt64 = 0
+  /// uint128 / big endian byte order
+  public var jettonAmount: Data = Data()
 
   /// Address of the new owner of the jettons.
   public var toOwner: String = String()
@@ -225,7 +227,8 @@ public struct TW_TheOpenNetwork_Proto_JettonTransfer {
   public var responseAddress: String = String()
 
   /// Amount in nanotons to forward to recipient. Basically minimum amount - 1 nanoton should be used
-  public var forwardAmount: UInt64 = 0
+  /// uint128 / big endian byte order
+  public var forwardAmount: Data = Data()
 
   /// Optional raw one-cell BoC encoded in Base64.
   /// Can be used in the case of mintless jetton transfers.
@@ -333,7 +336,7 @@ extension TW_TheOpenNetwork_Proto_Transfer: WalletCoreSwiftProtobuf.Message, Wal
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.dest) }()
-      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.amount) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.amount) }()
       case 3: try { try decoder.decodeSingularUInt32Field(value: &self.mode) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.comment) }()
       case 5: try { try decoder.decodeSingularBoolField(value: &self.bounceable) }()
@@ -372,8 +375,8 @@ extension TW_TheOpenNetwork_Proto_Transfer: WalletCoreSwiftProtobuf.Message, Wal
     if !self.dest.isEmpty {
       try visitor.visitSingularStringField(value: self.dest, fieldNumber: 1)
     }
-    if self.amount != 0 {
-      try visitor.visitSingularUInt64Field(value: self.amount, fieldNumber: 2)
+    if !self.amount.isEmpty {
+      try visitor.visitSingularBytesField(value: self.amount, fieldNumber: 2)
     }
     if self.mode != 0 {
       try visitor.visitSingularUInt32Field(value: self.mode, fieldNumber: 3)
@@ -432,10 +435,10 @@ extension TW_TheOpenNetwork_Proto_JettonTransfer: WalletCoreSwiftProtobuf.Messag
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularUInt64Field(value: &self.queryID) }()
-      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.jettonAmount) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.jettonAmount) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.toOwner) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.responseAddress) }()
-      case 5: try { try decoder.decodeSingularUInt64Field(value: &self.forwardAmount) }()
+      case 5: try { try decoder.decodeSingularBytesField(value: &self.forwardAmount) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.customPayload) }()
       default: break
       }
@@ -446,8 +449,8 @@ extension TW_TheOpenNetwork_Proto_JettonTransfer: WalletCoreSwiftProtobuf.Messag
     if self.queryID != 0 {
       try visitor.visitSingularUInt64Field(value: self.queryID, fieldNumber: 1)
     }
-    if self.jettonAmount != 0 {
-      try visitor.visitSingularUInt64Field(value: self.jettonAmount, fieldNumber: 2)
+    if !self.jettonAmount.isEmpty {
+      try visitor.visitSingularBytesField(value: self.jettonAmount, fieldNumber: 2)
     }
     if !self.toOwner.isEmpty {
       try visitor.visitSingularStringField(value: self.toOwner, fieldNumber: 3)
@@ -455,8 +458,8 @@ extension TW_TheOpenNetwork_Proto_JettonTransfer: WalletCoreSwiftProtobuf.Messag
     if !self.responseAddress.isEmpty {
       try visitor.visitSingularStringField(value: self.responseAddress, fieldNumber: 4)
     }
-    if self.forwardAmount != 0 {
-      try visitor.visitSingularUInt64Field(value: self.forwardAmount, fieldNumber: 5)
+    if !self.forwardAmount.isEmpty {
+      try visitor.visitSingularBytesField(value: self.forwardAmount, fieldNumber: 5)
     }
     if !self.customPayload.isEmpty {
       try visitor.visitSingularStringField(value: self.customPayload, fieldNumber: 6)
