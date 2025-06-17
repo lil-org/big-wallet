@@ -66,7 +66,7 @@ struct Strings {
     static let noData = loc("There is no data yet")
     static let refresh = loc("Refresh")
     static let nothingHere = loc("Nothing here")
-    static let pleaseTypeAtLeast = loc("Please type at least 4 characters")
+    static let typeAtLeast = loc("Type at least 4 characters")
     static let unknownWebsite = loc("Unknown Website")
     static let calculating = loc("Calculating")
     static let approveTransaction = loc("Approve Transaction")

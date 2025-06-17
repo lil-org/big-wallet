@@ -117,7 +117,7 @@ class PasswordViewController: UIViewController {
                 passwordViewController.showAccountsListOnVision = showAccountsListOnVision
                 navigationController?.pushViewController(passwordViewController, animated: true)
             } else {
-                showMessageAlert(text: Strings.pleaseTypeAtLeast)
+                showMessageAlert(text: Strings.typeAtLeast)
             }
         case .repeatAfterCreate:
             if let password = passwordTextField.text, !password.isEmpty, password == passwordToRepeat {
