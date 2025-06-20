@@ -419,6 +419,14 @@ public struct TW_Polkadot_Proto_Staking {
     set {messageOneof = .rebond(newValue)}
   }
 
+  public var bondExtraAndNominate: TW_Polkadot_Proto_Staking.BondExtraAndNominate {
+    get {
+      if case .bondExtraAndNominate(let v)? = messageOneof {return v}
+      return TW_Polkadot_Proto_Staking.BondExtraAndNominate()
+    }
+    set {messageOneof = .bondExtraAndNominate(newValue)}
+  }
+
   public var unknownFields = WalletCoreSwiftProtobuf.UnknownStorage()
 
   /// Payload messsage
@@ -432,6 +440,7 @@ public struct TW_Polkadot_Proto_Staking {
     case chill(TW_Polkadot_Proto_Staking.Chill)
     case chillAndUnbond(TW_Polkadot_Proto_Staking.ChillAndUnbond)
     case rebond(TW_Polkadot_Proto_Staking.Rebond)
+    case bondExtraAndNominate(TW_Polkadot_Proto_Staking.BondExtraAndNominate)
 
   #if !swift(>=4.1)
     public static func ==(lhs: TW_Polkadot_Proto_Staking.OneOf_MessageOneof, rhs: TW_Polkadot_Proto_Staking.OneOf_MessageOneof) -> Bool {
@@ -473,6 +482,10 @@ public struct TW_Polkadot_Proto_Staking {
       }()
       case (.rebond, .rebond): return {
         guard case .rebond(let l) = lhs, case .rebond(let r) = rhs else { preconditionFailure() }
+        return l == r
+      }()
+      case (.bondExtraAndNominate, .bondExtraAndNominate): return {
+        guard case .bondExtraAndNominate(let l) = lhs, case .bondExtraAndNominate(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
       default: return false
@@ -567,6 +580,57 @@ public struct TW_Polkadot_Proto_Staking {
 
     fileprivate var _callIndices: TW_Polkadot_Proto_CallIndices? = nil
     fileprivate var _bondCallIndices: TW_Polkadot_Proto_CallIndices? = nil
+    fileprivate var _nominateCallIndices: TW_Polkadot_Proto_CallIndices? = nil
+  }
+
+  /// Bond extra, with nominators
+  public struct BondExtraAndNominate {
+    // WalletCoreSwiftProtobuf.Message conformance is added in an extension below. See the
+    // `Message` and `Message+*Additions` files in the WalletCoreSwiftProtobuf.library for
+    // methods supported on all messages.
+
+    /// amount (uint256, serialized big endian)
+    public var value: Data = Data()
+
+    /// list of nominators
+    public var nominators: [String] = []
+
+    /// Batch call indices
+    public var callIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _callIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_callIndices = newValue}
+    }
+    /// Returns true if `callIndices` has been explicitly set.
+    public var hasCallIndices: Bool {return self._callIndices != nil}
+    /// Clears the value of `callIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearCallIndices() {self._callIndices = nil}
+
+    /// Staking.BondExtra call indices
+    public var bondExtraCallIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _bondExtraCallIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_bondExtraCallIndices = newValue}
+    }
+    /// Returns true if `bondExtraCallIndices` has been explicitly set.
+    public var hasBondExtraCallIndices: Bool {return self._bondExtraCallIndices != nil}
+    /// Clears the value of `bondExtraCallIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearBondExtraCallIndices() {self._bondExtraCallIndices = nil}
+
+    /// Staking.Nominate call indices
+    public var nominateCallIndices: TW_Polkadot_Proto_CallIndices {
+      get {return _nominateCallIndices ?? TW_Polkadot_Proto_CallIndices()}
+      set {_nominateCallIndices = newValue}
+    }
+    /// Returns true if `nominateCallIndices` has been explicitly set.
+    public var hasNominateCallIndices: Bool {return self._nominateCallIndices != nil}
+    /// Clears the value of `nominateCallIndices`. Subsequent reads from it will return its default value.
+    public mutating func clearNominateCallIndices() {self._nominateCallIndices = nil}
+
+    public var unknownFields = WalletCoreSwiftProtobuf.UnknownStorage()
+
+    public init() {}
+
+    fileprivate var _callIndices: TW_Polkadot_Proto_CallIndices? = nil
+    fileprivate var _bondExtraCallIndices: TW_Polkadot_Proto_CallIndices? = nil
     fileprivate var _nominateCallIndices: TW_Polkadot_Proto_CallIndices? = nil
   }
 
@@ -1375,6 +1439,7 @@ extension TW_Polkadot_Proto_Staking: WalletCoreSwiftProtobuf.Message, WalletCore
     7: .same(proto: "chill"),
     8: .standard(proto: "chill_and_unbond"),
     9: .same(proto: "rebond"),
+    10: .standard(proto: "bond_extra_and_nominate"),
   ]
 
   public mutating func decodeMessage<D: WalletCoreSwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1500,6 +1565,19 @@ extension TW_Polkadot_Proto_Staking: WalletCoreSwiftProtobuf.Message, WalletCore
           self.messageOneof = .rebond(v)
         }
       }()
+      case 10: try {
+        var v: TW_Polkadot_Proto_Staking.BondExtraAndNominate?
+        var hadOneofValue = false
+        if let current = self.messageOneof {
+          hadOneofValue = true
+          if case .bondExtraAndNominate(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.messageOneof = .bondExtraAndNominate(v)
+        }
+      }()
       default: break
       }
     }
@@ -1546,6 +1624,10 @@ extension TW_Polkadot_Proto_Staking: WalletCoreSwiftProtobuf.Message, WalletCore
     case .rebond?: try {
       guard case .rebond(let v)? = self.messageOneof else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+    }()
+    case .bondExtraAndNominate?: try {
+      guard case .bondExtraAndNominate(let v)? = self.messageOneof else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
     }()
     case nil: break
     }
@@ -1679,6 +1761,66 @@ extension TW_Polkadot_Proto_Staking.BondAndNominate: WalletCoreSwiftProtobuf.Mes
     if lhs.nominators != rhs.nominators {return false}
     if lhs._callIndices != rhs._callIndices {return false}
     if lhs._bondCallIndices != rhs._bondCallIndices {return false}
+    if lhs._nominateCallIndices != rhs._nominateCallIndices {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension TW_Polkadot_Proto_Staking.BondExtraAndNominate: WalletCoreSwiftProtobuf.Message, WalletCoreSwiftProtobuf._MessageImplementationBase, WalletCoreSwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = TW_Polkadot_Proto_Staking.protoMessageName + ".BondExtraAndNominate"
+  public static let _protobuf_nameMap: WalletCoreSwiftProtobuf._NameMap = [
+    1: .same(proto: "value"),
+    2: .same(proto: "nominators"),
+    3: .standard(proto: "call_indices"),
+    4: .standard(proto: "bond_extra_call_indices"),
+    5: .standard(proto: "nominate_call_indices"),
+  ]
+
+  public mutating func decodeMessage<D: WalletCoreSwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.value) }()
+      case 2: try { try decoder.decodeRepeatedStringField(value: &self.nominators) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._callIndices) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._bondExtraCallIndices) }()
+      case 5: try { try decoder.decodeSingularMessageField(value: &self._nominateCallIndices) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: WalletCoreSwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.value.isEmpty {
+      try visitor.visitSingularBytesField(value: self.value, fieldNumber: 1)
+    }
+    if !self.nominators.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.nominators, fieldNumber: 2)
+    }
+    try { if let v = self._callIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._bondExtraCallIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
+    try { if let v = self._nominateCallIndices {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Polkadot_Proto_Staking.BondExtraAndNominate, rhs: TW_Polkadot_Proto_Staking.BondExtraAndNominate) -> Bool {
+    if lhs.value != rhs.value {return false}
+    if lhs.nominators != rhs.nominators {return false}
+    if lhs._callIndices != rhs._callIndices {return false}
+    if lhs._bondExtraCallIndices != rhs._bondExtraCallIndices {return false}
     if lhs._nominateCallIndices != rhs._nominateCallIndices {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
