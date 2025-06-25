@@ -359,12 +359,6 @@
     "o" : true,
     "s" : "ETH"
   },
-  "5" : {
-    "b" : "https://goerli.etherscan.io",
-    "n" : "Goerli",
-    "s" : "ETH",
-    "t" : true
-  },
   "5000" : {
     "b" : "https://explorer.mantle.xyz",
     "n" : "Mantle",

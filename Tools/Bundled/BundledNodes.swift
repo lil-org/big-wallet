@@ -4,7 +4,6 @@ struct BundledNodes {
     
     static let dict: [Int: String] = [
         1: "eth.llamarpc.com",
-        5: "ethereum-goerli.publicnode.com",
         10: "optimism.drpc.org",
         25: "evm.cronos.org",
         40: "mainnet.telos.net/evm",
