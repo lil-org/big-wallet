@@ -8,7 +8,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let agent = Agent.shared
     private let gasService = GasService.shared
     private let priceService = PriceService.shared
-    private let configurationService = ConfigurationService.shared
     private let walletsManager = WalletsManager.shared
     private let currentInstanceId = UUID().uuidString
     
@@ -36,7 +35,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         gasService.start()
         priceService.start()
         walletsManager.start()
-        configurationService.check()
         
         didFinishLaunching = true
         

@@ -94,8 +94,6 @@
 		2C728B5F2AFBE7EA00E4DD47 /* NetworksListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9931DB2AEEC0E200577C8A /* NetworksListView.swift */; };
 		2C728B612AFBFAF100E4DD47 /* Image.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C728B602AFBFAF100E4DD47 /* Image.swift */; };
 		2C728B622AFBFAF100E4DD47 /* Image.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C728B602AFBFAF100E4DD47 /* Image.swift */; };
-		2C73215A2AEE8F5200AA8A71 /* ConfigurationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7321592AEE8F5200AA8A71 /* ConfigurationService.swift */; };
-		2C73215B2AEE8F5200AA8A71 /* ConfigurationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7321592AEE8F5200AA8A71 /* ConfigurationService.swift */; };
 		2C773F5E27450B97007B04E7 /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
 		2C773F5F27450FBD007B04E7 /* ExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */; };
 		2C773F62274523DC007B04E7 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
@@ -142,7 +140,6 @@
 		2C773FE92D53C17000879A1F /* Defaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C528A15267FA8EB00CA3ADD /* Defaults.swift */; };
 		2C773FEA2D53C17000879A1F /* PriceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC0CDBD2692027E0072922A /* PriceService.swift */; };
 		2C773FEB2D53C17000879A1F /* GasService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C4C268A033100D0926A /* GasService.swift */; };
-		2C773FED2D53C17000879A1F /* ConfigurationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7321592AEE8F5200AA8A71 /* ConfigurationService.swift */; };
 		2C773FEE2D53C17000879A1F /* DappRequestProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */; };
 		2C773FEF2D53C17000879A1F /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C917428267D2A6E00049075 /* Keychain.swift */; };
 		2C773FF02D53C17000879A1F /* ReviewRequester.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CAA412426C7CD93009F3535 /* ReviewRequester.swift */; };
@@ -171,8 +168,6 @@
 		2C7740072D53C21A00879A1F /* SafariRequest+Helpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E62127B2ED2D00C8991E /* SafariRequest+Helpers.swift */; };
 		2C7740082D53C21A00879A1F /* DappRequestAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */; };
 		2C7740092D53C22000879A1F /* Blockies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944CD2AEC34EB006A711F /* Blockies.swift */; };
-		2C77400A2D53C22700879A1F /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB0BC482B13AA5100603E68 /* Secrets.swift */; };
-		2C77400B2D53C22700879A1F /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB0BC482B13AA5100603E68 /* Secrets.swift */; };
 		2C77400C2D53C22D00879A1F /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C492689F01700D0926A /* Strings.swift */; };
 		2C77400D2D53C23300879A1F /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 2CE9A7772BADC59C00579BF7 /* Localizable.xcstrings */; };
 		2C77400E2D53C24F00879A1F /* UIApplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8E88A3275FB7B9003EB8DB /* UIApplication.swift */; };
@@ -263,10 +258,6 @@
 		2C9F0B6826BDCB2E008FA3D6 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */; };
 		2CAA412526C7CD93009F3535 /* ReviewRequester.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CAA412426C7CD93009F3535 /* ReviewRequester.swift */; };
 		2CADA62C2D5271BA002C34A8 /* Tests_visionOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CADA62B2D527198002C34A8 /* Tests_visionOS.swift */; };
-		2CB0BC492B13AA5100603E68 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB0BC482B13AA5100603E68 /* Secrets.swift */; };
-		2CB0BC4A2B13AA5100603E68 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB0BC482B13AA5100603E68 /* Secrets.swift */; };
-		2CB0BC4B2B13AA5100603E68 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB0BC482B13AA5100603E68 /* Secrets.swift */; };
-		2CB0BC4C2B13AA5100603E68 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB0BC482B13AA5100603E68 /* Secrets.swift */; };
 		2CB3845A27654EA900A189B9 /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 2CB3845827654E9700A189B9 /* _locales */; };
 		2CB3845B27654EA900A189B9 /* images in Resources */ = {isa = PBXBuildFile; fileRef = 2CB3845927654E9700A189B9 /* images */; };
 		2CB3845C27654EB300A189B9 /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 2CB3845827654E9700A189B9 /* _locales */; };
@@ -488,7 +479,6 @@
 		2C1995482674C4BA00A8E370 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C1995492674C4BA00A8E370 /* Wallet macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Wallet macOS.entitlements"; sourceTree = "<group>"; };
 		2C1995552674D0F300A8E370 /* Ethereum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ethereum.swift; sourceTree = "<group>"; };
-		2C209B642AF7B3BC00FF9012 /* Secrets.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Secrets.plist; sourceTree = "<group>"; };
 		2C264BBB27B2F25E00234393 /* SafariRequest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SafariRequest.swift; sourceTree = "<group>"; };
 		2C264BC027B2F2C100234393 /* EthereumSafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumSafariRequest.swift; sourceTree = "<group>"; };
 		2C264BCF27B2F30C00234393 /* UnknownSafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnknownSafariRequest.swift; sourceTree = "<group>"; };
@@ -541,7 +531,6 @@
 		2C6F6D5B2827434800D6E8FB /* PreviewAccountTableViewCell.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = PreviewAccountTableViewCell.xib; sourceTree = "<group>"; };
 		2C6F6D5C2827434800D6E8FB /* PreviewAccountTableViewCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PreviewAccountTableViewCell.swift; sourceTree = "<group>"; };
 		2C728B602AFBFAF100E4DD47 /* Image.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Image.swift; sourceTree = "<group>"; };
-		2C7321592AEE8F5200AA8A71 /* ConfigurationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationService.swift; sourceTree = "<group>"; };
 		2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionBridge.swift; sourceTree = "<group>"; };
 		2C773F61274523DC007B04E7 /* ResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseToExtension.swift; sourceTree = "<group>"; };
 		2C78F8272683BDCC00C10670 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alert.swift; sourceTree = "<group>"; };
@@ -587,7 +576,6 @@
 		2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumNetwork.swift; sourceTree = "<group>"; };
 		2CAA412426C7CD93009F3535 /* ReviewRequester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewRequester.swift; sourceTree = "<group>"; };
 		2CADA62B2D527198002C34A8 /* Tests_visionOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests_visionOS.swift; sourceTree = "<group>"; };
-		2CB0BC482B13AA5100603E68 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		2CB3845827654E9700A189B9 /* _locales */ = {isa = PBXFileReference; lastKnownFileType = folder; path = _locales; sourceTree = "<group>"; };
 		2CB3845927654E9700A189B9 /* images */ = {isa = PBXFileReference; lastKnownFileType = folder; path = images; sourceTree = "<group>"; };
 		2CB4031A281C99C800BAEBEE /* AccountsHeaderRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsHeaderRowView.swift; sourceTree = "<group>"; };
@@ -596,7 +584,6 @@
 		2CB8BD9F2C1F6ACE006010CC /* StringTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringTask.swift; sourceTree = "<group>"; };
 		2CB8BDA22C1F6B16006010CC /* TranslateStrings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslateStrings.swift; sourceTree = "<group>"; };
 		2CB8BDA42C1F6B24006010CC /* TranslateMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslateMetadata.swift; sourceTree = "<group>"; };
-		2CBB9FA42AF7B5970047B0CD /* ci_post_clone.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = ci_post_clone.sh; sourceTree = "<group>"; };
 		2CC0CDBD2692027E0072922A /* PriceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceService.swift; sourceTree = "<group>"; };
 		2CC6EF0C275E64810040CC62 /* UIViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIViewController.swift; sourceTree = "<group>"; };
 		2CC79DF72AFD4BD6002B5A2D /* TransactionInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionInspector.swift; sourceTree = "<group>"; };
@@ -1181,7 +1168,6 @@
 				2C03EB742B069B5A00EF61F5 /* Tests iOS */,
 				2CADA62A2D527187002C34A8 /* Tests visionOS */,
 				2CE02C7B2BAA0F6700381D70 /* Tests macOS */,
-				2CBB9FA32AF7B5970047B0CD /* ci_scripts */,
 				2CF4294F2C1DBE7400AD303A /* app_store */,
 				2C622BC22BF3C52F0003B932 /* translate */,
 				2CF965C42BF4D778001E9D1B /* fastlane */,
@@ -1491,14 +1477,6 @@
 			path = helpers;
 			sourceTree = "<group>";
 		};
-		2CBB9FA32AF7B5970047B0CD /* ci_scripts */ = {
-			isa = PBXGroup;
-			children = (
-				2CBB9FA42AF7B5970047B0CD /* ci_post_clone.sh */,
-			);
-			path = ci_scripts;
-			sourceTree = SOURCE_ROOT;
-		};
 		2CC6EF0E275E64840040CC62 /* Extensions */ = {
 			isa = PBXGroup;
 			children = (
@@ -1654,7 +1632,6 @@
 				2CAA412426C7CD93009F3535 /* ReviewRequester.swift */,
 				2C901C4C268A033100D0926A /* GasService.swift */,
 				2CC79DF72AFD4BD6002B5A2D /* TransactionInspector.swift */,
-				2C7321592AEE8F5200AA8A71 /* ConfigurationService.swift */,
 				2CC0CDBD2692027E0072922A /* PriceService.swift */,
 				2C917428267D2A6E00049075 /* Keychain.swift */,
 			);
@@ -1665,9 +1642,7 @@
 			isa = PBXGroup;
 			children = (
 				2C4E26BD27564EB000265DCC /* README.md */,
-				2CB0BC482B13AA5100603E68 /* Secrets.swift */,
 				2CF16E522AF523A40098F996 /* .gitignore */,
-				2C209B642AF7B3BC00FF9012 /* Secrets.plist */,
 				2C901C492689F01700D0926A /* Strings.swift */,
 				2CE9A7772BADC59C00579BF7 /* Localizable.xcstrings */,
 				2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */,
@@ -2462,7 +2437,6 @@
 				2C85D99C274E531100160AD5 /* Run Script */,
 				2C09CB9B273979C1009AD39B /* Sources */,
 				2C09CB9C273979C1009AD39B /* Frameworks */,
-				2CB0BC4F2B13B30600603E68 /* ShellScript */,
 				2C09CB9D273979C1009AD39B /* Resources */,
 			);
 			buildRules = (
@@ -2481,7 +2455,6 @@
 				2852B9DBCCE270BEE887F6E2 /* [CP] Check Pods Manifest.lock */,
 				2C17BDC62D3D007E0015C58B /* Sources */,
 				2C17BDC72D3D007E0015C58B /* Frameworks */,
-				2C0C7A762D53D6A0009D71BD /* ShellScript */,
 				2C17BDC82D3D007E0015C58B /* Resources */,
 				7552A7E9A1F17CC6AE60ED9B /* [CP] Embed Pods Frameworks */,
 				2C6054882D529A9A00779570 /* Embed Foundation Extensions */,
@@ -2503,7 +2476,6 @@
 				4DCD1BEE8EFE26684091FA11 /* [CP] Check Pods Manifest.lock */,
 				2C1995382674C4B900A8E370 /* Sources */,
 				2C1995392674C4B900A8E370 /* Frameworks */,
-				2CB0BC4D2B13B2B800603E68 /* Run Script */,
 				2C19953A2674C4B900A8E370 /* Resources */,
 				2C09CBB8273979C1009AD39B /* Embed Foundation Extensions */,
 				C60644BC8ED1D8C789C269E9 /* [CP] Embed Pods Frameworks */,
@@ -2525,7 +2497,6 @@
 				6265A008DA639FD7AFC5E93E /* [CP] Check Pods Manifest.lock */,
 				2C5FF96B26C84F7B00B32ACC /* Sources */,
 				2C5FF96C26C84F7B00B32ACC /* Frameworks */,
-				2CB0BC4E2B13B2E300603E68 /* ShellScript */,
 				2C5FF96D26C84F7B00B32ACC /* Resources */,
 				2CCEB84627594E2A00768473 /* Embed Foundation Extensions */,
 				C8E6FC33333BE7EF81B126BB /* [CP] Embed Pods Frameworks */,
@@ -2547,7 +2518,6 @@
 				2C0C7A772D53D6F3009D71BD /* ShellScript */,
 				2C60546B2D529A9A00779570 /* Sources */,
 				2C60546C2D529A9A00779570 /* Frameworks */,
-				2C0C7A782D53D6F5009D71BD /* ShellScript */,
 				2C60546D2D529A9A00779570 /* Resources */,
 			);
 			buildRules = (
@@ -2601,7 +2571,6 @@
 				2CB3844927654C8D00A189B9 /* ShellScript */,
 				2CCEB82927594E2A00768473 /* Sources */,
 				2CCEB82A27594E2A00768473 /* Frameworks */,
-				2CB0BC502B13B32100603E68 /* ShellScript */,
 				2CCEB82B27594E2A00768473 /* Resources */,
 			);
 			buildRules = (
@@ -2914,27 +2883,6 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		2C0C7A762D53D6A0009D71BD /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$SRCROOT/Shared/Supporting Files/Secrets.plist",
-			);
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "if [ -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" ]; then\n    cp -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nelse\n    echo \"warning: 🟢🔴 YO BUNDLING EMPTY SECRETS\"\n    cp -f \"$SRCROOT/Shared/Supporting Files/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nfi\n";
-			showEnvVarsInLog = 0;
-		};
 		2C0C7A772D53D6F3009D71BD /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -2953,27 +2901,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "YARN_PATH=$(command -v yarn)\n\nif [ -z \"$YARN_PATH\" ]; then\n    echo \"warning: install yarn to make changes to the inpage script\"\nelse\n    FILE=/usr/lib/bin/yarn\n    if [ -f \"$FILE\" ]; then\n        export PATH=/usr/lib/bin:$PATH\n    else\n        export PATH=/opt/homebrew/bin:$PATH\n    fi\n\n    cd \"$PROJECT_DIR\"/Safari\\ Shared/Inpage\\ Provider\n    yarn run prebuild\n    yarn run build\nfi\n";
-			showEnvVarsInLog = 0;
-		};
-		2C0C7A782D53D6F5009D71BD /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$SRCROOT/Shared/Supporting Files/Secrets.plist",
-			);
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "if [ -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" ]; then\n    cp -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nelse\n    echo \"warning: 🟢🔴 YO BUNDLING EMPTY SECRETS\"\n    cp -f \"$SRCROOT/Shared/Supporting Files/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nfi\n";
 			showEnvVarsInLog = 0;
 		};
 		2C85D99C274E531100160AD5 /* Run Script */ = {
@@ -2995,91 +2922,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "YARN_PATH=$(command -v yarn)\n\nif [ -z \"$YARN_PATH\" ]; then\n    echo \"warning: install yarn to make changes to the inpage script\"\nelse\n    FILE=/usr/lib/bin/yarn\n    if [ -f \"$FILE\" ]; then\n        export PATH=/usr/lib/bin:$PATH\n    else\n        export PATH=/opt/homebrew/bin:$PATH\n    fi\n\n    cd \"$PROJECT_DIR\"/Safari\\ Shared/Inpage\\ Provider\n    yarn run prebuild\n    yarn run build\nfi\n";
-			showEnvVarsInLog = 0;
-		};
-		2CB0BC4D2B13B2B800603E68 /* Run Script */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$SRCROOT/Shared/Supporting Files/Secrets.plist",
-			);
-			name = "Run Script";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "if [ -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" ]; then\n    cp -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nelse\n    echo \"warning: 🟢🔴 YO BUNDLING EMPTY SECRETS\"\n    cp -f \"$SRCROOT/Shared/Supporting Files/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nfi\n";
-			showEnvVarsInLog = 0;
-		};
-		2CB0BC4E2B13B2E300603E68 /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$SRCROOT/Shared/Supporting Files/Secrets.plist",
-			);
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "if [ -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" ]; then\n    cp -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nelse\n    echo \"warning: 🟢🔴 YO BUNDLING EMPTY SECRETS\"\n    cp -f \"$SRCROOT/Shared/Supporting Files/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nfi\n";
-			showEnvVarsInLog = 0;
-		};
-		2CB0BC4F2B13B30600603E68 /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$SRCROOT/Shared/Supporting Files/Secrets.plist",
-			);
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "if [ -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" ]; then\n    cp -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nelse\n    echo \"warning: 🟢🔴 YO BUNDLING EMPTY SECRETS\"\n    cp -f \"$SRCROOT/Shared/Supporting Files/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nfi\n";
-			showEnvVarsInLog = 0;
-		};
-		2CB0BC502B13B32100603E68 /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$SRCROOT/Shared/Supporting Files/Secrets.plist",
-			);
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "if [ -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" ]; then\n    cp -f \"${HOME}/Developer/secrets/wallet/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nelse\n    echo \"warning: 🟢🔴 YO BUNDLING EMPTY SECRETS\"\n    cp -f \"$SRCROOT/Shared/Supporting Files/Secrets.plist\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Secrets.plist\"\nfi\n";
 			showEnvVarsInLog = 0;
 		};
 		2CB3844927654C8D00A189B9 /* ShellScript */ = {
@@ -3217,7 +3059,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				2CF255B2275A4A7200AE54B9 /* UserDefaults.swift in Sources */,
-				2CB0BC4B2B13AA5100603E68 /* Secrets.swift in Sources */,
 				2C264BD227B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
 				2C264BD727B5806200234393 /* InpageProvider.swift in Sources */,
 				2C8ED8D62AEA7DB200818D74 /* String.swift in Sources */,
@@ -3247,7 +3088,6 @@
 				2C773FEA2D53C17000879A1F /* PriceService.swift in Sources */,
 				2C773FF12D53C18C00879A1F /* UserDefaults.swift in Sources */,
 				2C773FEB2D53C17000879A1F /* GasService.swift in Sources */,
-				2C773FED2D53C17000879A1F /* ConfigurationService.swift in Sources */,
 				2C773FEE2D53C17000879A1F /* DappRequestProcessor.swift in Sources */,
 				2C773FEF2D53C17000879A1F /* Keychain.swift in Sources */,
 				2C7740132D53C26D00879A1F /* Haptic.swift in Sources */,
@@ -3279,7 +3119,6 @@
 				2C7740112D53C24F00879A1F /* UIView.swift in Sources */,
 				2C7740122D53C24F00879A1F /* UITableView.swift in Sources */,
 				2C773FE12D53C12900879A1F /* Ethereum.swift in Sources */,
-				2C77400A2D53C22700879A1F /* Secrets.swift in Sources */,
 				2C773FF72D53C1AA00879A1F /* Notification.swift in Sources */,
 				2C773FE22D53C12900879A1F /* EthereumRPC.swift in Sources */,
 				2C773FE42D53C14F00879A1F /* BundledNodes.swift in Sources */,
@@ -3380,7 +3219,6 @@
 				2C5C829F2822B9DF007D9488 /* Images.swift in Sources */,
 				2C4297282ADEDCBD0044357A /* PeerMeta.swift in Sources */,
 				2C528A16267FA8EB00CA3ADD /* Defaults.swift in Sources */,
-				2CB0BC492B13AA5100603E68 /* Secrets.swift in Sources */,
 				2C264BBC27B2F25E00234393 /* SafariRequest.swift in Sources */,
 				2CFAE56A28BE6292001D0799 /* NSImage.swift in Sources */,
 				2CD0B3F526A0DAA900488D92 /* NSPasteboard.swift in Sources */,
@@ -3389,7 +3227,6 @@
 				2CE3D012267F73C00032A62E /* Transaction.swift in Sources */,
 				2C90E62227B2ED2D00C8991E /* SafariRequest+Helpers.swift in Sources */,
 				2C09FC662828331D00DE9C27 /* PlatformSpecificImage.swift in Sources */,
-				2C73215A2AEE8F5200AA8A71 /* ConfigurationService.swift in Sources */,
 				2C8A09EB2675964700993638 /* ApproveViewController.swift in Sources */,
 				2C264BDC27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */,
 				2C03D1D5269B428C00EF10EA /* Notification.swift in Sources */,
@@ -3423,7 +3260,6 @@
 				2CF255A5275A48BB00AE54B9 /* ReviewRequester.swift in Sources */,
 				2CF255B6275A746000AE54B9 /* AccountsListViewController.swift in Sources */,
 				2C96D3A42763C6A800687301 /* UIView.swift in Sources */,
-				2C73215B2AEE8F5200AA8A71 /* ConfigurationService.swift in Sources */,
 				2CF25597275A46D300AE54B9 /* Defaults.swift in Sources */,
 				2CE377CC2D3A749700288FFB /* WalletsMetadataService.swift in Sources */,
 				2CF255A2275A47DD00AE54B9 /* String.swift in Sources */,
@@ -3472,7 +3308,6 @@
 				2CF255B8275A748300AE54B9 /* ApproveTransactionViewController.swift in Sources */,
 				2C8E88A4275FB7B9003EB8DB /* UIApplication.swift in Sources */,
 				2C40709427667A8600AB3D55 /* ImageWithLabelTableViewCell.swift in Sources */,
-				2CB0BC4A2B13AA5100603E68 /* Secrets.swift in Sources */,
 				2C728B5E2AFBE7EA00E4DD47 /* NetworksListView.swift in Sources */,
 				2C7A8CF12B7CF25100683E15 /* IpfsResponse.swift in Sources */,
 				2C5FF97226C84F7B00B32ACC /* AppDelegate.swift in Sources */,
@@ -3490,7 +3325,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2C77400B2D53C22700879A1F /* Secrets.swift in Sources */,
 				2C773FCC2D53A5A300879A1F /* MultipleResponseToExtension.swift in Sources */,
 				2C773FCD2D53A5A300879A1F /* ResponseToExtension.swift in Sources */,
 				2C773FFB2D53C1BD00879A1F /* FixedWidthInteger.swift in Sources */,
@@ -3541,7 +3375,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				2CE0594627640F470042D844 /* UserDefaults.swift in Sources */,
-				2CB0BC4C2B13AA5100603E68 /* Secrets.swift in Sources */,
 				2C264BD327B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
 				2C264BD827B5806200234393 /* InpageProvider.swift in Sources */,
 				2C8ED8D72AEA7DB300818D74 /* String.swift in Sources */,
