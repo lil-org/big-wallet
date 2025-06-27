@@ -22,6 +22,12 @@
     "s" : "KLAY",
     "t" : true
   },
+  "10143" : {
+    "b" : "https://testnet.monadexplorer.com",
+    "n" : "Monad Testnet",
+    "s" : "MON",
+    "t" : true
+  },
   "10200" : {
     "b" : "https://blockscout.chiadochain.net",
     "n" : "Gnosis Chiado",
@@ -235,6 +241,11 @@
     "n" : "Boba",
     "o" : true,
     "s" : "ETH"
+  },
+  "30" : {
+    "b" : "https://explorer.rsk.co",
+    "n" : "Rootstock Mainnet",
+    "s" : "RBTC",
   },
   "314" : {
     "b" : "https://filfox.info/en",
