@@ -237,6 +237,9 @@
 		2C90E62227B2ED2D00C8991E /* SafariRequest+Helpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E62127B2ED2D00C8991E /* SafariRequest+Helpers.swift */; };
 		2C90E62327B2ED2D00C8991E /* SafariRequest+Helpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E62127B2ED2D00C8991E /* SafariRequest+Helpers.swift */; };
 		2C917429267D2A6E00049075 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C917428267D2A6E00049075 /* Keychain.swift */; };
+		2C9264292E11D32900FBF476 /* liquid_glass_icon_wip.icon in Resources */ = {isa = PBXBuildFile; fileRef = 2C9264282E11D32900FBF476 /* liquid_glass_icon_wip.icon */; };
+		2C92642A2E11D32900FBF476 /* liquid_glass_icon_wip.icon in Resources */ = {isa = PBXBuildFile; fileRef = 2C9264282E11D32900FBF476 /* liquid_glass_icon_wip.icon */; };
+		2C92642B2E11D32900FBF476 /* liquid_glass_icon_wip.icon in Resources */ = {isa = PBXBuildFile; fileRef = 2C9264282E11D32900FBF476 /* liquid_glass_icon_wip.icon */; };
 		2C96D38F2762317300687301 /* AccountTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D38D2762317300687301 /* AccountTableViewCell.swift */; };
 		2C96D3902762317300687301 /* AccountTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2C96D38E2762317300687301 /* AccountTableViewCell.xib */; };
 		2C96D392276232A300687301 /* UITableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C96D391276232A300687301 /* UITableView.swift */; };
@@ -559,6 +562,7 @@
 		2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InternalSafariRequest.swift; sourceTree = "<group>"; };
 		2C90E62127B2ED2D00C8991E /* SafariRequest+Helpers.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "SafariRequest+Helpers.swift"; sourceTree = "<group>"; };
 		2C917428267D2A6E00049075 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
+		2C9264282E11D32900FBF476 /* liquid_glass_icon_wip.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = liquid_glass_icon_wip.icon; sourceTree = SOURCE_ROOT; };
 		2C96D38D2762317300687301 /* AccountTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountTableViewCell.swift; sourceTree = "<group>"; };
 		2C96D38E2762317300687301 /* AccountTableViewCell.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = AccountTableViewCell.xib; sourceTree = "<group>"; };
 		2C96D391276232A300687301 /* UITableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITableView.swift; sourceTree = "<group>"; };
@@ -1646,6 +1650,7 @@
 				2C901C492689F01700D0926A /* Strings.swift */,
 				2CE9A7772BADC59C00579BF7 /* Localizable.xcstrings */,
 				2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */,
+				2C9264282E11D32900FBF476 /* liquid_glass_icon_wip.icon */,
 			);
 			path = "Supporting Files";
 			sourceTree = "<group>";
@@ -2763,6 +2768,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2C7740182D53C26D00879A1F /* DataStateView.xib in Resources */,
+				2C92642A2E11D32900FBF476 /* liquid_glass_icon_wip.icon in Resources */,
 				2C17BDE52D3D01F30015C58B /* Assets.xcassets in Resources */,
 				2C773FE82D53C15400879A1F /* bundled-networks.json in Resources */,
 				2C0C7A752D53D62D009D71BD /* SharedAssets.xcassets in Resources */,
@@ -2784,6 +2790,7 @@
 				2CED86C12AF26114006F9E26 /* bundled-networks.json in Resources */,
 				2CE9A7782BADC59C00579BF7 /* Localizable.xcstrings in Resources */,
 				2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */,
+				2C9264292E11D32900FBF476 /* liquid_glass_icon_wip.icon in Resources */,
 				2C1995472674C4BA00A8E370 /* Main.storyboard in Resources */,
 				2C4768AE2826ECE5005E8D4D /* SharedAssets.xcassets in Resources */,
 			);
@@ -2796,6 +2803,7 @@
 				2CED86C22AF2611D006F9E26 /* bundled-networks.json in Resources */,
 				2C96D3AA2763D13400687301 /* DataStateView.xib in Resources */,
 				2C5FF97E26C84F7C00B32ACC /* LaunchScreen.storyboard in Resources */,
+				2C92642B2E11D32900FBF476 /* liquid_glass_icon_wip.icon in Resources */,
 				2C40709527667A8600AB3D55 /* ImageWithLabelTableViewCell.xib in Resources */,
 				2C4768AF2826ECE5005E8D4D /* SharedAssets.xcassets in Resources */,
 				2CC8C5A32767D3B30083FB1B /* GasPriceSliderTableViewCell.xib in Resources */,
