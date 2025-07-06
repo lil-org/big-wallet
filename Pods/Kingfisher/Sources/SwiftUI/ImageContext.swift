@@ -30,7 +30,7 @@ import Combine
 
 @available(iOS 14.0, macOS 11.0, tvOS 14.0, watchOS 7.0, *)
 extension KFImage {
-    public class Context<HoldingView: KFImageHoldingView>: @unchecked Sendable {
+    public class Context<HoldingView: KFImageHoldingView>: @unchecked Sendable where HoldingView: Sendable {
         
         private let propertyQueue = DispatchQueue(label: "com.onevcat.Kingfisher.KFImageContextPropertyQueue")
         
@@ -78,7 +78,13 @@ extension KFImage {
             get { propertyQueue.sync { _placeholder } }
             set { propertyQueue.sync { _placeholder = newValue } }
         }
-        
+
+        var _failureView: (() -> AnyView)? = nil
+        var failureView: (() -> AnyView)? {
+            get { propertyQueue.sync { _failureView } }
+            set { propertyQueue.sync { _failureView = newValue } }
+        }
+
         var _startLoadingBeforeViewAppear: Bool = false
         var startLoadingBeforeViewAppear: Bool {
             get { propertyQueue.sync { _startLoadingBeforeViewAppear } }

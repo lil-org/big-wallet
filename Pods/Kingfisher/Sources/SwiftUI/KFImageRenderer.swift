@@ -31,7 +31,7 @@ import Combine
 /// A Kingfisher compatible SwiftUI `View` to load an image from a `Source`.
 /// Declaring a `KFImage` in a `View`'s body to trigger loading from the given `Source`.
 @available(iOS 14.0, macOS 11.0, tvOS 14.0, watchOS 7.0, *)
-struct KFImageRenderer<HoldingView> : View where HoldingView: KFImageHoldingView {
+struct KFImageRenderer<HoldingView> : View where HoldingView: KFImageHoldingView & Sendable {
     
     @StateObject var binder: KFImage.ImageBinder = .init()
     let context: KFImage.Context<HoldingView>
@@ -46,7 +46,11 @@ struct KFImageRenderer<HoldingView> : View where HoldingView: KFImageHoldingView
             renderedImage().opacity(binder.loaded ? 1.0 : 0.0)
             if binder.loadedImage == nil {
                 ZStack {
-                    if let placeholder = context.placeholder {
+                    // Priority: failureView > placeholder > Color.clear
+                    // failureView is only set when image loading fails
+                    if let failureView = binder.failureView {
+                        failureView()
+                    } else if let placeholder = context.placeholder {
                         placeholder(binder.progress)
                     } else {
                         Color.clear
