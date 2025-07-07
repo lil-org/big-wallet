@@ -9,19 +9,15 @@ extension String {
     
     var cleanEvenHex: String {
         let clean = cleanHex
-        if clean.count.isMultiple(of: 2) {
-            return clean
-        } else {
-            return String.zero + clean
-        }
+        return clean.count.isMultiple(of: 2) ? clean : String.zero + clean
     }
     
     var maybeJSON: Bool {
-        return hasPrefix("{") && hasSuffix("}") && count > 3
+        hasPrefix("{") && hasSuffix("}") && count > 3
     }
     
     var isOkAsPassword: Bool {
-        return count >= 4
+        count >= 4
     }
     
     var withFirstLetterCapitalized: String {
@@ -30,19 +26,15 @@ extension String {
     }
     
     var withEllipsis: String {
-        return self + "..."
+        self + "..."
     }
     
     var cleanHex: String {
-        if hasPrefix(String.hexPrefix) {
-            return String(dropFirst(2))
-        } else {
-            return self
-        }
+        hasPrefix(String.hexPrefix) ? String(dropFirst(2)) : self
     }
     
     var withHexPrefix: String {
-        return String.hexPrefix + self
+        String.hexPrefix + self
     }
     
     static func hex<T>(_ value: T, withPrefix: Bool = false) -> String where T : BinaryInteger {
