@@ -5,7 +5,7 @@ import Foundation
 extension Bundle {
 
     private enum Keys {
-        static let identifier = "CFBundleIdentifierhmhmmhmh"
+        static let identifier = "CFBundleIdentifier"
         static let name = "CFBundleName"
         static let shortVersionString = "CFBundleShortVersionString"
     }
