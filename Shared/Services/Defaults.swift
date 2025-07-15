@@ -6,39 +6,46 @@ struct Defaults {
  
     private static let userDefaults = UserDefaults.standard
 
+    private enum Keys {
+        static let walletsAndAccountsNames = "walletsAndAccountsNames"
+        static let latestReviewRequestDate = "latestReviewRequestDate"
+        static let reviewRequestsGoodMomentsCount = "reviewRequestsGoodMomentsCount"
+        static let isHiddenFromMenuBar = "isHiddenFromMenuBar"
+    }
+
     static var walletsAndAccountsNames: [String: String]? {
         get {
-            return userDefaults.value(forKey: "walletsAndAccountsNames") as? [String: String]
+            userDefaults.object(forKey: Keys.walletsAndAccountsNames) as? [String: String]
         }
         set {
-            userDefaults.set(newValue, forKey: "walletsAndAccountsNames")
+            userDefaults.set(newValue, forKey: Keys.walletsAndAccountsNames)
         }
     }
     
     static var latestReviewRequestDate: Date? {
         get {
-            return userDefaults.value(forKey: "latestReviewRequestDate") as? Date
+            userDefaults.object(forKey: Keys.latestReviewRequestDate) as? Date
         }
         set {
-            userDefaults.set(newValue, forKey: "latestReviewRequestDate")
+            userDefaults.set(newValue, forKey: Keys.latestReviewRequestDate)
         }
     }
     
     static var reviewRequestsGoodMomentsCount: Int {
         get {
-            return userDefaults.integer(forKey: "reviewRequestsGoodMomentsCount")
+            userDefaults.integer(forKey: Keys.reviewRequestsGoodMomentsCount)
         }
         set {
-            userDefaults.set(newValue, forKey: "reviewRequestsGoodMomentsCount")
+            userDefaults.set(newValue, forKey: Keys.reviewRequestsGoodMomentsCount)
         }
     }
     
     static var isHiddenFromMenuBar: Bool {
         get {
-            return userDefaults.bool(forKey: "isHiddenFromMenuBar")
+            userDefaults.bool(forKey: Keys.isHiddenFromMenuBar)
         }
         set {
-            userDefaults.set(newValue, forKey: "isHiddenFromMenuBar")
+            userDefaults.set(newValue, forKey: Keys.isHiddenFromMenuBar)
         }
     }
     
