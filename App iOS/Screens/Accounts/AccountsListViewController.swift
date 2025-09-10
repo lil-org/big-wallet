@@ -322,7 +322,11 @@ class AccountsListViewController: UIViewController, DataStateContainer {
 #else
         let isFullscreen = false
 #endif
-        toDismissAfterResponse[requestId]?.dismiss(animated: !isFullscreen)
+        let approvalScreenToDismiss = toDismissAfterResponse[requestId]
+        if let extra = approvalScreenToDismiss?.presentedViewController {
+            extra.dismiss(animated: !isFullscreen)
+        }
+        approvalScreenToDismiss?.dismiss(animated: !isFullscreen)
         toDismissAfterResponse.removeValue(forKey: requestId)
     }
     
