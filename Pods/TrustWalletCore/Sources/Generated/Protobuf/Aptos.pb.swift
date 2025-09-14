@@ -139,29 +139,6 @@ public struct TW_Aptos_Proto_FungibleAssetTransferMessage {
   public init() {}
 }
 
-/// Necessary fields to process a ManagedTokensRegisterMessage
-public struct TW_Aptos_Proto_ManagedTokensRegisterMessage {
-  // WalletCoreSwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the WalletCoreSwiftProtobuf.library for
-  // methods supported on all messages.
-
-  /// token function to register, e.g BTC: 0x43417434fd869edee76cca2a4d2301e528a1551b1d719b75c350c3c97d15b8b9::coins::BTC
-  public var function: TW_Aptos_Proto_StructTag {
-    get {return _function ?? TW_Aptos_Proto_StructTag()}
-    set {_function = newValue}
-  }
-  /// Returns true if `function` has been explicitly set.
-  public var hasFunction: Bool {return self._function != nil}
-  /// Clears the value of `function`. Subsequent reads from it will return its default value.
-  public mutating func clearFunction() {self._function = nil}
-
-  public var unknownFields = WalletCoreSwiftProtobuf.UnknownStorage()
-
-  public init() {}
-
-  fileprivate var _function: TW_Aptos_Proto_StructTag? = nil
-}
-
 /// Necessary fields to process a CreateAccountMessage
 public struct TW_Aptos_Proto_CreateAccountMessage {
   // WalletCoreSwiftProtobuf.Message conformance is added in an extension below. See the
@@ -493,14 +470,6 @@ public struct TW_Aptos_Proto_SigningInput {
     set {transactionPayload = .nftMessage(newValue)}
   }
 
-  public var registerToken: TW_Aptos_Proto_ManagedTokensRegisterMessage {
-    get {
-      if case .registerToken(let v)? = transactionPayload {return v}
-      return TW_Aptos_Proto_ManagedTokensRegisterMessage()
-    }
-    set {transactionPayload = .registerToken(newValue)}
-  }
-
   public var liquidStakingMessage: TW_Aptos_Proto_LiquidStaking {
     get {
       if case .liquidStakingMessage(let v)? = transactionPayload {return v}
@@ -534,7 +503,6 @@ public struct TW_Aptos_Proto_SigningInput {
     case tokenTransfer(TW_Aptos_Proto_TokenTransferMessage)
     case createAccount(TW_Aptos_Proto_CreateAccountMessage)
     case nftMessage(TW_Aptos_Proto_NftMessage)
-    case registerToken(TW_Aptos_Proto_ManagedTokensRegisterMessage)
     case liquidStakingMessage(TW_Aptos_Proto_LiquidStaking)
     case tokenTransferCoins(TW_Aptos_Proto_TokenTransferCoinsMessage)
     case fungibleAssetTransfer(TW_Aptos_Proto_FungibleAssetTransferMessage)
@@ -559,10 +527,6 @@ public struct TW_Aptos_Proto_SigningInput {
       }()
       case (.nftMessage, .nftMessage): return {
         guard case .nftMessage(let l) = lhs, case .nftMessage(let r) = rhs else { preconditionFailure() }
-        return l == r
-      }()
-      case (.registerToken, .registerToken): return {
-        guard case .registerToken(let l) = lhs, case .registerToken(let r) = rhs else { preconditionFailure() }
         return l == r
       }()
       case (.liquidStakingMessage, .liquidStakingMessage): return {
@@ -862,42 +826,6 @@ extension TW_Aptos_Proto_FungibleAssetTransferMessage: WalletCoreSwiftProtobuf.M
     if lhs.metadataAddress != rhs.metadataAddress {return false}
     if lhs.to != rhs.to {return false}
     if lhs.amount != rhs.amount {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-extension TW_Aptos_Proto_ManagedTokensRegisterMessage: WalletCoreSwiftProtobuf.Message, WalletCoreSwiftProtobuf._MessageImplementationBase, WalletCoreSwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".ManagedTokensRegisterMessage"
-  public static let _protobuf_nameMap: WalletCoreSwiftProtobuf._NameMap = [
-    1: .same(proto: "function"),
-  ]
-
-  public mutating func decodeMessage<D: WalletCoreSwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._function) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: WalletCoreSwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._function {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: TW_Aptos_Proto_ManagedTokensRegisterMessage, rhs: TW_Aptos_Proto_ManagedTokensRegisterMessage) -> Bool {
-    if lhs._function != rhs._function {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1402,7 +1330,6 @@ extension TW_Aptos_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletCo
     10: .standard(proto: "token_transfer"),
     11: .standard(proto: "create_account"),
     12: .standard(proto: "nft_message"),
-    13: .standard(proto: "register_token"),
     14: .standard(proto: "liquid_staking_message"),
     15: .standard(proto: "token_transfer_coins"),
     16: .standard(proto: "fungible_asset_transfer"),
@@ -1473,19 +1400,6 @@ extension TW_Aptos_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletCo
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
           self.transactionPayload = .nftMessage(v)
-        }
-      }()
-      case 13: try {
-        var v: TW_Aptos_Proto_ManagedTokensRegisterMessage?
-        var hadOneofValue = false
-        if let current = self.transactionPayload {
-          hadOneofValue = true
-          if case .registerToken(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.transactionPayload = .registerToken(v)
         }
       }()
       case 14: try {
@@ -1578,10 +1492,6 @@ extension TW_Aptos_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletCo
     case .nftMessage?: try {
       guard case .nftMessage(let v)? = self.transactionPayload else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
-    }()
-    case .registerToken?: try {
-      guard case .registerToken(let v)? = self.transactionPayload else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
     }()
     case .liquidStakingMessage?: try {
       guard case .liquidStakingMessage(let v)? = self.transactionPayload else { preconditionFailure() }

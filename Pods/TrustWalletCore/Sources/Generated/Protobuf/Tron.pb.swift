@@ -648,9 +648,16 @@ public struct TW_Tron_Proto_SigningInput {
   }
 
   /// For direct sign in Tron, we just have to sign the txId returned by the DApp json payload.
+  /// TODO: This field can be removed in the future, as we can use raw_json.txID instead.
   public var txID: String {
     get {return _storage._txID}
     set {_uniqueStorage()._txID = newValue}
+  }
+
+  /// Raw JSON data from the DApp, which contains fields 'txID', 'raw_data' and 'raw_data_hex' normally.
+  public var rawJson: String {
+    get {return _storage._rawJson}
+    set {_uniqueStorage()._rawJson = newValue}
   }
 
   public var unknownFields = WalletCoreSwiftProtobuf.UnknownStorage()
@@ -1824,12 +1831,14 @@ extension TW_Tron_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletCor
     1: .same(proto: "transaction"),
     2: .standard(proto: "private_key"),
     3: .same(proto: "txId"),
+    4: .standard(proto: "raw_json"),
   ]
 
   fileprivate class _StorageClass {
     var _transaction: TW_Tron_Proto_Transaction? = nil
     var _privateKey: Data = Data()
     var _txID: String = String()
+    var _rawJson: String = String()
 
     static let defaultInstance = _StorageClass()
 
@@ -1839,6 +1848,7 @@ extension TW_Tron_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletCor
       _transaction = source._transaction
       _privateKey = source._privateKey
       _txID = source._txID
+      _rawJson = source._rawJson
     }
   }
 
@@ -1860,6 +1870,7 @@ extension TW_Tron_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletCor
         case 1: try { try decoder.decodeSingularMessageField(value: &_storage._transaction) }()
         case 2: try { try decoder.decodeSingularBytesField(value: &_storage._privateKey) }()
         case 3: try { try decoder.decodeSingularStringField(value: &_storage._txID) }()
+        case 4: try { try decoder.decodeSingularStringField(value: &_storage._rawJson) }()
         default: break
         }
       }
@@ -1881,6 +1892,9 @@ extension TW_Tron_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletCor
       if !_storage._txID.isEmpty {
         try visitor.visitSingularStringField(value: _storage._txID, fieldNumber: 3)
       }
+      if !_storage._rawJson.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._rawJson, fieldNumber: 4)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1893,6 +1907,7 @@ extension TW_Tron_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletCor
         if _storage._transaction != rhs_storage._transaction {return false}
         if _storage._privateKey != rhs_storage._privateKey {return false}
         if _storage._txID != rhs_storage._txID {return false}
+        if _storage._rawJson != rhs_storage._rawJson {return false}
         return true
       }
       if !storagesAreEqual {return false}
