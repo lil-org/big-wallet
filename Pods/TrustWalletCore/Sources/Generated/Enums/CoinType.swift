@@ -170,4 +170,5 @@ public enum CoinType: UInt32, CaseIterable {
     case pactus = 21888
     case sonic = 10000146
     case polymesh = 595
+    case plasma = 9745
 }
