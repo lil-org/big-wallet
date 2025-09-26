@@ -18,6 +18,7 @@ typedef TWData *_Nonnull TW_Solana_Proto_WithdrawAllStake;
 typedef TWData *_Nonnull TW_Solana_Proto_CreateTokenAccount;
 typedef TWData *_Nonnull TW_Solana_Proto_TokenTransfer;
 typedef TWData *_Nonnull TW_Solana_Proto_CreateAndTransferToken;
+typedef TWData *_Nonnull TW_Solana_Proto_TokenTransferToFeePayer;
 typedef TWData *_Nonnull TW_Solana_Proto_CreateNonceAccount;
 typedef TWData *_Nonnull TW_Solana_Proto_WithdrawNonceAccount;
 typedef TWData *_Nonnull TW_Solana_Proto_AdvanceNonceAccount;

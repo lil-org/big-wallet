@@ -27,12 +27,12 @@ public final class Barz {
 
     /// Returns the init code parameter of ERC-4337 User Operation
     /// 
-    /// - Parameter factory: The address of the factory contract.
+    /// - Parameter factory: The address of the factory contract
     /// - Parameter public_key: Public key for the verification facet
-    /// - Parameter verification_facet: The address of the verification facet.
-    /// - Parameter salt: The salt of the init code.
+    /// - Parameter verification_facet: The address of the verification facet
+    /// - Parameter salt: The salt of the init code; Must be non-negative
     /// - Returns: The init code.
-    public static func getInitCode(factory: String, publicKey: PublicKey, verificationFacet: String, salt: UInt32) -> Data? {
+    public static func getInitCode(factory: String, publicKey: PublicKey, verificationFacet: String, salt: Int32) -> Data? {
         let factoryString = TWStringCreateWithNSString(factory)
         defer {
             TWStringDelete(factoryString)
@@ -81,9 +81,9 @@ public final class Barz {
     /// 
     /// - Parameter msg_hash: Original msgHash
     /// - Parameter barzAddress: The address of Barz wallet signing the message
-    /// - Parameter chainId: The chainId of the network the verification will happen
+    /// - Parameter chainId: The chainId of the network the verification will happen; Must be non-negative
     /// - Returns: The final hash to be signed.
-    public static func getPrefixedMsgHash(msgHash: Data, barzAddress: String, chainId: UInt32) -> Data? {
+    public static func getPrefixedMsgHash(msgHash: Data, barzAddress: String, chainId: Int32) -> Data? {
         let msgHashData = TWDataCreateWithNSData(msgHash)
         defer {
             TWDataDelete(msgHashData)
@@ -111,62 +111,6 @@ public final class Barz {
             return nil
         }
         return TWDataNSData(result)
-    }
-
-    /// Computes an Authorization hash in [EIP-7702 format](https://eips.ethereum.org/EIPS/eip-7702)
-    /// `keccak256('0x05' || rlp([chain_id, address, nonce]))`.
-    /// 
-    /// - Parameter chain_id: The chain ID of the user.
-    /// - Parameter contract_address: The address of the smart contract wallet.
-    /// - Parameter nonce: The nonce of the user.
-    /// - Returns: The authorization hash.
-    public static func getAuthorizationHash(chainId: Data, contractAddress: String, nonce: Data) -> Data? {
-        let chainIdData = TWDataCreateWithNSData(chainId)
-        defer {
-            TWDataDelete(chainIdData)
-        }
-        let contractAddressString = TWStringCreateWithNSString(contractAddress)
-        defer {
-            TWStringDelete(contractAddressString)
-        }
-        let nonceData = TWDataCreateWithNSData(nonce)
-        defer {
-            TWDataDelete(nonceData)
-        }
-        guard let result = TWBarzGetAuthorizationHash(chainIdData, contractAddressString, nonceData) else {
-            return nil
-        }
-        return TWDataNSData(result)
-    }
-
-    /// Returns the signed authorization hash
-    /// 
-    /// - Parameter chain_id: The chain ID of the user.
-    /// - Parameter contract_address: The address of the smart contract wallet.
-    /// - Parameter nonce: The nonce of the user.
-    /// - Parameter private_key: The private key of the user.
-    /// - Returns: The signed authorization.
-    public static func signAuthorization(chainId: Data, contractAddress: String, nonce: Data, privateKey: String) -> String? {
-        let chainIdData = TWDataCreateWithNSData(chainId)
-        defer {
-            TWDataDelete(chainIdData)
-        }
-        let contractAddressString = TWStringCreateWithNSString(contractAddress)
-        defer {
-            TWStringDelete(contractAddressString)
-        }
-        let nonceData = TWDataCreateWithNSData(nonce)
-        defer {
-            TWDataDelete(nonceData)
-        }
-        let privateKeyString = TWStringCreateWithNSString(privateKey)
-        defer {
-            TWStringDelete(privateKeyString)
-        }
-        guard let result = TWBarzSignAuthorization(chainIdData, contractAddressString, nonceData, privateKeyString) else {
-            return nil
-        }
-        return TWStringNSString(result)
     }
 
     /// Returns the encoded hash of the user operation
@@ -237,6 +181,62 @@ public final class Barz {
             return nil
         }
         return TWDataNSData(result)
+    }
+
+    /// Computes an Authorization hash in [EIP-7702 format](https://eips.ethereum.org/EIPS/eip-7702)
+    /// `keccak256('0x05' || rlp([chain_id, address, nonce]))`.
+    /// 
+    /// - Parameter chain_id: The chain ID of the user.
+    /// - Parameter contract_address: The address of the smart contract wallet.
+    /// - Parameter nonce: The nonce of the user.
+    /// - Returns: The authorization hash.
+    public static func getAuthorizationHash(chainId: Data, contractAddress: String, nonce: Data) -> Data? {
+        let chainIdData = TWDataCreateWithNSData(chainId)
+        defer {
+            TWDataDelete(chainIdData)
+        }
+        let contractAddressString = TWStringCreateWithNSString(contractAddress)
+        defer {
+            TWStringDelete(contractAddressString)
+        }
+        let nonceData = TWDataCreateWithNSData(nonce)
+        defer {
+            TWDataDelete(nonceData)
+        }
+        guard let result = TWBarzGetAuthorizationHash(chainIdData, contractAddressString, nonceData) else {
+            return nil
+        }
+        return TWDataNSData(result)
+    }
+
+    /// Returns the signed authorization hash
+    /// 
+    /// - Parameter chain_id: The chain ID of the user.
+    /// - Parameter contract_address: The address of the smart contract wallet.
+    /// - Parameter nonce: The nonce of the user.
+    /// - Parameter private_key: The private key of the user.
+    /// - Returns: The signed authorization.
+    public static func signAuthorization(chainId: Data, contractAddress: String, nonce: Data, privateKey: String) -> String? {
+        let chainIdData = TWDataCreateWithNSData(chainId)
+        defer {
+            TWDataDelete(chainIdData)
+        }
+        let contractAddressString = TWStringCreateWithNSString(contractAddress)
+        defer {
+            TWStringDelete(contractAddressString)
+        }
+        let nonceData = TWDataCreateWithNSData(nonce)
+        defer {
+            TWDataDelete(nonceData)
+        }
+        let privateKeyString = TWStringCreateWithNSString(privateKey)
+        defer {
+            TWStringDelete(privateKeyString)
+        }
+        guard let result = TWBarzSignAuthorization(chainIdData, contractAddressString, nonceData, privateKeyString) else {
+            return nil
+        }
+        return TWStringNSString(result)
     }
 
     let rawValue: OpaquePointer

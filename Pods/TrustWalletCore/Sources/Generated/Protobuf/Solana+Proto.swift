@@ -12,6 +12,7 @@ public typealias SolanaWithdrawAllStake = TW_Solana_Proto_WithdrawAllStake
 public typealias SolanaCreateTokenAccount = TW_Solana_Proto_CreateTokenAccount
 public typealias SolanaTokenTransfer = TW_Solana_Proto_TokenTransfer
 public typealias SolanaCreateAndTransferToken = TW_Solana_Proto_CreateAndTransferToken
+public typealias SolanaTokenTransferToFeePayer = TW_Solana_Proto_TokenTransferToFeePayer
 public typealias SolanaCreateNonceAccount = TW_Solana_Proto_CreateNonceAccount
 public typealias SolanaWithdrawNonceAccount = TW_Solana_Proto_WithdrawNonceAccount
 public typealias SolanaAdvanceNonceAccount = TW_Solana_Proto_AdvanceNonceAccount

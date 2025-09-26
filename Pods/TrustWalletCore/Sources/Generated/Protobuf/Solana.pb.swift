@@ -316,6 +316,35 @@ public struct TW_Solana_Proto_CreateAndTransferToken {
   public init() {}
 }
 
+/// Transfer tokens to the feepayer
+public struct TW_Solana_Proto_TokenTransferToFeePayer {
+  // WalletCoreSwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the WalletCoreSwiftProtobuf.library for
+  // methods supported on all messages.
+
+  /// Mint address of the fee token
+  public var feeTokenMintAddress: String = String()
+
+  /// Token account address of the fee sponsor for the fee mint
+  public var feeSponsorTokenAddress: String = String()
+
+  /// Fee amount
+  public var feeAmount: UInt64 = 0
+
+  /// Sender's fee token address
+  public var feeSenderTokenAddress: String = String()
+
+  /// Note: 8-bit value
+  public var feeDecimals: UInt32 = 0
+
+  /// optional token program id
+  public var feeTokenProgramID: TW_Solana_Proto_TokenProgramId = .tokenProgram
+
+  public var unknownFields = WalletCoreSwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public struct TW_Solana_Proto_CreateNonceAccount {
   // WalletCoreSwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the WalletCoreSwiftProtobuf.library for
@@ -781,6 +810,16 @@ public struct TW_Solana_Proto_SigningInput {
   public var hasPriorityFeeLimit: Bool {return _storage._priorityFeeLimit != nil}
   /// Clears the value of `priorityFeeLimit`. Subsequent reads from it will return its default value.
   public mutating func clearPriorityFeeLimit() {_uniqueStorage()._priorityFeeLimit = nil}
+
+  /// Optional token transfer to fee payer
+  public var tokenTransferToFeePayer: TW_Solana_Proto_TokenTransferToFeePayer {
+    get {return _storage._tokenTransferToFeePayer ?? TW_Solana_Proto_TokenTransferToFeePayer()}
+    set {_uniqueStorage()._tokenTransferToFeePayer = newValue}
+  }
+  /// Returns true if `tokenTransferToFeePayer` has been explicitly set.
+  public var hasTokenTransferToFeePayer: Bool {return _storage._tokenTransferToFeePayer != nil}
+  /// Clears the value of `tokenTransferToFeePayer`. Subsequent reads from it will return its default value.
+  public mutating func clearTokenTransferToFeePayer() {_uniqueStorage()._tokenTransferToFeePayer = nil}
 
   public var unknownFields = WalletCoreSwiftProtobuf.UnknownStorage()
 
@@ -1455,6 +1494,68 @@ extension TW_Solana_Proto_CreateAndTransferToken: WalletCoreSwiftProtobuf.Messag
   }
 }
 
+extension TW_Solana_Proto_TokenTransferToFeePayer: WalletCoreSwiftProtobuf.Message, WalletCoreSwiftProtobuf._MessageImplementationBase, WalletCoreSwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TokenTransferToFeePayer"
+  public static let _protobuf_nameMap: WalletCoreSwiftProtobuf._NameMap = [
+    1: .standard(proto: "fee_token_mint_address"),
+    2: .standard(proto: "fee_sponsor_token_address"),
+    3: .standard(proto: "fee_amount"),
+    4: .standard(proto: "fee_sender_token_address"),
+    5: .standard(proto: "fee_decimals"),
+    6: .standard(proto: "fee_token_program_id"),
+  ]
+
+  public mutating func decodeMessage<D: WalletCoreSwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.feeTokenMintAddress) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.feeSponsorTokenAddress) }()
+      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.feeAmount) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.feeSenderTokenAddress) }()
+      case 5: try { try decoder.decodeSingularUInt32Field(value: &self.feeDecimals) }()
+      case 6: try { try decoder.decodeSingularEnumField(value: &self.feeTokenProgramID) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: WalletCoreSwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.feeTokenMintAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.feeTokenMintAddress, fieldNumber: 1)
+    }
+    if !self.feeSponsorTokenAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.feeSponsorTokenAddress, fieldNumber: 2)
+    }
+    if self.feeAmount != 0 {
+      try visitor.visitSingularUInt64Field(value: self.feeAmount, fieldNumber: 3)
+    }
+    if !self.feeSenderTokenAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.feeSenderTokenAddress, fieldNumber: 4)
+    }
+    if self.feeDecimals != 0 {
+      try visitor.visitSingularUInt32Field(value: self.feeDecimals, fieldNumber: 5)
+    }
+    if self.feeTokenProgramID != .tokenProgram {
+      try visitor.visitSingularEnumField(value: self.feeTokenProgramID, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: TW_Solana_Proto_TokenTransferToFeePayer, rhs: TW_Solana_Proto_TokenTransferToFeePayer) -> Bool {
+    if lhs.feeTokenMintAddress != rhs.feeTokenMintAddress {return false}
+    if lhs.feeSponsorTokenAddress != rhs.feeSponsorTokenAddress {return false}
+    if lhs.feeAmount != rhs.feeAmount {return false}
+    if lhs.feeSenderTokenAddress != rhs.feeSenderTokenAddress {return false}
+    if lhs.feeDecimals != rhs.feeDecimals {return false}
+    if lhs.feeTokenProgramID != rhs.feeTokenProgramID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension TW_Solana_Proto_CreateNonceAccount: WalletCoreSwiftProtobuf.Message, WalletCoreSwiftProtobuf._MessageImplementationBase, WalletCoreSwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CreateNonceAccount"
   public static let _protobuf_nameMap: WalletCoreSwiftProtobuf._NameMap = [
@@ -2073,6 +2174,7 @@ extension TW_Solana_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletC
     21: .standard(proto: "tx_encoding"),
     22: .standard(proto: "priority_fee_price"),
     23: .standard(proto: "priority_fee_limit"),
+    24: .standard(proto: "token_transfer_to_fee_payer"),
   ]
 
   fileprivate class _StorageClass {
@@ -2088,6 +2190,7 @@ extension TW_Solana_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletC
     var _txEncoding: TW_Solana_Proto_Encoding = .base58
     var _priorityFeePrice: TW_Solana_Proto_PriorityFeePrice? = nil
     var _priorityFeeLimit: TW_Solana_Proto_PriorityFeeLimit? = nil
+    var _tokenTransferToFeePayer: TW_Solana_Proto_TokenTransferToFeePayer? = nil
 
     static let defaultInstance = _StorageClass()
 
@@ -2106,6 +2209,7 @@ extension TW_Solana_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletC
       _txEncoding = source._txEncoding
       _priorityFeePrice = source._priorityFeePrice
       _priorityFeeLimit = source._priorityFeeLimit
+      _tokenTransferToFeePayer = source._tokenTransferToFeePayer
     }
   }
 
@@ -2291,6 +2395,7 @@ extension TW_Solana_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletC
         case 21: try { try decoder.decodeSingularEnumField(value: &_storage._txEncoding) }()
         case 22: try { try decoder.decodeSingularMessageField(value: &_storage._priorityFeePrice) }()
         case 23: try { try decoder.decodeSingularMessageField(value: &_storage._priorityFeeLimit) }()
+        case 24: try { try decoder.decodeSingularMessageField(value: &_storage._tokenTransferToFeePayer) }()
         default: break
         }
       }
@@ -2385,6 +2490,9 @@ extension TW_Solana_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletC
       try { if let v = _storage._priorityFeeLimit {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 23)
       } }()
+      try { if let v = _storage._tokenTransferToFeePayer {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 24)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -2406,6 +2514,7 @@ extension TW_Solana_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletC
         if _storage._txEncoding != rhs_storage._txEncoding {return false}
         if _storage._priorityFeePrice != rhs_storage._priorityFeePrice {return false}
         if _storage._priorityFeeLimit != rhs_storage._priorityFeeLimit {return false}
+        if _storage._tokenTransferToFeePayer != rhs_storage._tokenTransferToFeePayer {return false}
         return true
       }
       if !storagesAreEqual {return false}
