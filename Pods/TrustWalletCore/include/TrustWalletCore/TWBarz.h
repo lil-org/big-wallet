@@ -52,6 +52,24 @@ TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBarzGetPrefixedMsgHash(TWData *_Nonn
 /// \return The diamond cut code.
 TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBarzGetDiamondCutCode(TWData *_Nonnull input);
 
+/// Computes an Authorization hash in [EIP-7702 format](https://eips.ethereum.org/EIPS/eip-7702)
+/// `keccak256('0x05' || rlp([chain_id, address, nonce]))`.
+/// 
+/// \param chain_id The chain ID of the user.
+/// \param contract_address The address of the smart contract wallet.
+/// \param nonce The nonce of the user.
+/// \return The authorization hash.
+TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBarzGetAuthorizationHash(TWData *_Nonnull chainId, TWString *_Nonnull contractAddress, TWData *_Nonnull nonce);
+
+/// Returns the signed authorization hash
+/// 
+/// \param chain_id The chain ID of the user.
+/// \param contract_address The address of the smart contract wallet.
+/// \param nonce The nonce of the user.
+/// \param private_key The private key of the user.
+/// \return The signed authorization.
+TW_EXPORT_STATIC_METHOD TWString *_Nullable TWBarzSignAuthorization(TWData *_Nonnull chainId, TWString *_Nonnull contractAddress, TWData *_Nonnull nonce, TWString *_Nonnull privateKey);
+
 /// Returns the encoded hash of the user operation
 /// 
 /// \param chain_id The chain ID of the user.
@@ -71,23 +89,5 @@ TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBarzGetEncodedHash(TWData *_Nonnull 
 /// \param private_key The private key of the user.
 /// \return The signed hash.
 TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBarzGetSignedHash(TWString *_Nonnull hash, TWString *_Nonnull privateKey);
-
-/// Computes an Authorization hash in [EIP-7702 format](https://eips.ethereum.org/EIPS/eip-7702)
-/// `keccak256('0x05' || rlp([chain_id, address, nonce]))`.
-/// 
-/// \param chain_id The chain ID of the user.
-/// \param contract_address The address of the smart contract wallet.
-/// \param nonce The nonce of the user.
-/// \return The authorization hash.
-TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBarzGetAuthorizationHash(TWData *_Nonnull chainId, TWString *_Nonnull contractAddress, TWData *_Nonnull nonce);
-
-/// Returns the signed authorization hash
-/// 
-/// \param chain_id The chain ID of the user.
-/// \param contract_address The address of the smart contract wallet.
-/// \param nonce The nonce of the user.
-/// \param private_key The private key of the user.
-/// \return The signed authorization.
-TW_EXPORT_STATIC_METHOD TWString *_Nullable TWBarzSignAuthorization(TWData *_Nonnull chainId, TWString *_Nonnull contractAddress, TWData *_Nonnull nonce, TWString *_Nonnull privateKey);
 
 TW_EXTERN_C_END
