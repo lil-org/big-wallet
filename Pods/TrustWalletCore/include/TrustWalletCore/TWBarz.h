@@ -52,42 +52,4 @@ TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBarzGetPrefixedMsgHash(TWData *_Nonn
 /// \return The diamond cut code.
 TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBarzGetDiamondCutCode(TWData *_Nonnull input);
 
-/// Computes an Authorization hash in [EIP-7702 format](https://eips.ethereum.org/EIPS/eip-7702)
-/// `keccak256('0x05' || rlp([chain_id, address, nonce]))`.
-/// 
-/// \param chain_id The chain ID of the user.
-/// \param contract_address The address of the smart contract wallet.
-/// \param nonce The nonce of the user.
-/// \return The authorization hash.
-TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBarzGetAuthorizationHash(TWData *_Nonnull chainId, TWString *_Nonnull contractAddress, TWData *_Nonnull nonce);
-
-/// Returns the signed authorization hash
-/// 
-/// \param chain_id The chain ID of the user.
-/// \param contract_address The address of the smart contract wallet.
-/// \param nonce The nonce of the user.
-/// \param private_key The private key of the user.
-/// \return The signed authorization.
-TW_EXPORT_STATIC_METHOD TWString *_Nullable TWBarzSignAuthorization(TWData *_Nonnull chainId, TWString *_Nonnull contractAddress, TWData *_Nonnull nonce, TWString *_Nonnull privateKey);
-
-/// Returns the encoded hash of the user operation
-/// 
-/// \param chain_id The chain ID of the user.
-/// \param code_address The address of the smart contract wallet.
-/// \param code_name The name of the smart contract wallet.
-/// \param code_version The version of the smart contract wallet.
-/// \param type_hash The type hash of the smart contract wallet.
-/// \param domain_separator_hash The domain separator hash of the smart contract wallet.
-/// \param sender The sender of the smart contract wallet.
-/// \param user_op_hash The user operation hash of the smart contract wallet.
-/// \return The encoded hash.
-TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBarzGetEncodedHash(TWData *_Nonnull chainId, TWString *_Nonnull codeAddress, TWString *_Nonnull codeName, TWString *_Nonnull codeVersion, TWString *_Nonnull typeHash, TWString *_Nonnull domainSeparatorHash, TWString *_Nonnull sender, TWString *_Nonnull userOpHash);
-
-/// Signs a message using the private key
-/// 
-/// \param hash The hash of the user.
-/// \param private_key The private key of the user.
-/// \return The signed hash.
-TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBarzGetSignedHash(TWString *_Nonnull hash, TWString *_Nonnull privateKey);
-
 TW_EXTERN_C_END
