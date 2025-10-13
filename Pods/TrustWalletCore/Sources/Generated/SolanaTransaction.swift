@@ -151,6 +151,38 @@ public final class SolanaTransaction {
         return TWStringNSString(result)
     }
 
+    /// Inserts a SOL transfer instruction to the given transaction at the specified position, returning the updated transaction.
+    /// Please note that compute price and limit instructions should always be the first instructions if they are present in the transaction.
+    /// 
+    /// - Parameter encoded_tx: base64 encoded Solana transaction.
+    /// - Parameter insert_at: index where the instruction should be inserted. If you don't care about the position, use -1.
+    /// - Parameter from: sender account from which the lamports will be debited.
+    /// - Parameter to: receiver account to which the lamports will be transferred.
+    /// - Parameter lamports: amount of lamports to transfer, as a decimal string.
+    /// - Returns: base64 encoded Solana transaction. Null if an error occurred.
+    public static func insertTransferInstruction(encodedTx: String, insertAt: Int32, from: String, to: String, lamports: String) -> String? {
+        let encodedTxString = TWStringCreateWithNSString(encodedTx)
+        defer {
+            TWStringDelete(encodedTxString)
+        }
+        let fromString = TWStringCreateWithNSString(from)
+        defer {
+            TWStringDelete(fromString)
+        }
+        let toString = TWStringCreateWithNSString(to)
+        defer {
+            TWStringDelete(toString)
+        }
+        let lamportsString = TWStringCreateWithNSString(lamports)
+        defer {
+            TWStringDelete(lamportsString)
+        }
+        guard let result = TWSolanaTransactionInsertTransferInstruction(encodedTxString, insertAt, fromString, toString, lamportsString) else {
+            return nil
+        }
+        return TWStringNSString(result)
+    }
+
     let rawValue: OpaquePointer
 
     init(rawValue: OpaquePointer) {

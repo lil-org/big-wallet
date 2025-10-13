@@ -72,4 +72,15 @@ TW_EXPORT_STATIC_METHOD TWString *_Nullable TWSolanaTransactionSetFeePayer(TWStr
 /// \return base64 encoded Solana transaction. Null if an error occurred.
 TW_EXPORT_STATIC_METHOD TWString *_Nullable TWSolanaTransactionInsertInstruction(TWString *_Nonnull encodedTx, int32_t insertAt, TWString *_Nonnull instruction);
 
+/// Inserts a SOL transfer instruction to the given transaction at the specified position, returning the updated transaction.
+/// Please note that compute price and limit instructions should always be the first instructions if they are present in the transaction.
+/// 
+/// \param encoded_tx base64 encoded Solana transaction.
+/// \param insert_at index where the instruction should be inserted. If you don't care about the position, use -1.
+/// \param from sender account from which the lamports will be debited.
+/// \param to receiver account to which the lamports will be transferred.
+/// \param lamports amount of lamports to transfer, as a decimal string.
+/// \return base64 encoded Solana transaction. Null if an error occurred.
+TW_EXPORT_STATIC_METHOD TWString *_Nullable TWSolanaTransactionInsertTransferInstruction(TWString *_Nonnull encodedTx, int32_t insertAt, TWString *_Nonnull from, TWString *_Nonnull to, TWString *_Nonnull lamports);
+
 TW_EXTERN_C_END

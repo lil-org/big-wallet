@@ -811,7 +811,7 @@ public struct TW_Solana_Proto_SigningInput {
   /// Clears the value of `priorityFeeLimit`. Subsequent reads from it will return its default value.
   public mutating func clearPriorityFeeLimit() {_uniqueStorage()._priorityFeeLimit = nil}
 
-  /// Optional token transfer to fee payer
+  /// Optional token transfer to fee payer.
   public var tokenTransferToFeePayer: TW_Solana_Proto_TokenTransferToFeePayer {
     get {return _storage._tokenTransferToFeePayer ?? TW_Solana_Proto_TokenTransferToFeePayer()}
     set {_uniqueStorage()._tokenTransferToFeePayer = newValue}
@@ -820,6 +820,17 @@ public struct TW_Solana_Proto_SigningInput {
   public var hasTokenTransferToFeePayer: Bool {return _storage._tokenTransferToFeePayer != nil}
   /// Clears the value of `tokenTransferToFeePayer`. Subsequent reads from it will return its default value.
   public mutating func clearTokenTransferToFeePayer() {_uniqueStorage()._tokenTransferToFeePayer = nil}
+
+  /// Optional SOL transfer to fee payer. This will be the last instruction in the transaction.
+  /// https://docs.blinklabs.xyz/blink/solana/gas-sponsorship/api-reference#active-sponsorship
+  public var transferToFeePayer: TW_Solana_Proto_Transfer {
+    get {return _storage._transferToFeePayer ?? TW_Solana_Proto_Transfer()}
+    set {_uniqueStorage()._transferToFeePayer = newValue}
+  }
+  /// Returns true if `transferToFeePayer` has been explicitly set.
+  public var hasTransferToFeePayer: Bool {return _storage._transferToFeePayer != nil}
+  /// Clears the value of `transferToFeePayer`. Subsequent reads from it will return its default value.
+  public mutating func clearTransferToFeePayer() {_uniqueStorage()._transferToFeePayer = nil}
 
   public var unknownFields = WalletCoreSwiftProtobuf.UnknownStorage()
 
@@ -2175,6 +2186,7 @@ extension TW_Solana_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletC
     22: .standard(proto: "priority_fee_price"),
     23: .standard(proto: "priority_fee_limit"),
     24: .standard(proto: "token_transfer_to_fee_payer"),
+    25: .standard(proto: "transfer_to_fee_payer"),
   ]
 
   fileprivate class _StorageClass {
@@ -2191,6 +2203,7 @@ extension TW_Solana_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletC
     var _priorityFeePrice: TW_Solana_Proto_PriorityFeePrice? = nil
     var _priorityFeeLimit: TW_Solana_Proto_PriorityFeeLimit? = nil
     var _tokenTransferToFeePayer: TW_Solana_Proto_TokenTransferToFeePayer? = nil
+    var _transferToFeePayer: TW_Solana_Proto_Transfer? = nil
 
     static let defaultInstance = _StorageClass()
 
@@ -2210,6 +2223,7 @@ extension TW_Solana_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletC
       _priorityFeePrice = source._priorityFeePrice
       _priorityFeeLimit = source._priorityFeeLimit
       _tokenTransferToFeePayer = source._tokenTransferToFeePayer
+      _transferToFeePayer = source._transferToFeePayer
     }
   }
 
@@ -2396,6 +2410,7 @@ extension TW_Solana_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletC
         case 22: try { try decoder.decodeSingularMessageField(value: &_storage._priorityFeePrice) }()
         case 23: try { try decoder.decodeSingularMessageField(value: &_storage._priorityFeeLimit) }()
         case 24: try { try decoder.decodeSingularMessageField(value: &_storage._tokenTransferToFeePayer) }()
+        case 25: try { try decoder.decodeSingularMessageField(value: &_storage._transferToFeePayer) }()
         default: break
         }
       }
@@ -2493,6 +2508,9 @@ extension TW_Solana_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletC
       try { if let v = _storage._tokenTransferToFeePayer {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 24)
       } }()
+      try { if let v = _storage._transferToFeePayer {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 25)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -2515,6 +2533,7 @@ extension TW_Solana_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletC
         if _storage._priorityFeePrice != rhs_storage._priorityFeePrice {return false}
         if _storage._priorityFeeLimit != rhs_storage._priorityFeeLimit {return false}
         if _storage._tokenTransferToFeePayer != rhs_storage._tokenTransferToFeePayer {return false}
+        if _storage._transferToFeePayer != rhs_storage._transferToFeePayer {return false}
         return true
       }
       if !storagesAreEqual {return false}
