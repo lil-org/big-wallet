@@ -325,8 +325,9 @@ public struct TW_Solana_Proto_TokenTransferToFeePayer {
   /// Mint address of the fee token
   public var feeTokenMintAddress: String = String()
 
-  /// Token account address of the fee sponsor for the fee mint
-  public var feeSponsorTokenAddress: String = String()
+  /// Token account address of the fee recipient. 
+  /// Note that it could be different from the token account of the feepayer.
+  public var feeRecipientTokenAddress: String = String()
 
   /// Fee amount
   public var feeAmount: UInt64 = 0
@@ -1509,7 +1510,7 @@ extension TW_Solana_Proto_TokenTransferToFeePayer: WalletCoreSwiftProtobuf.Messa
   public static let protoMessageName: String = _protobuf_package + ".TokenTransferToFeePayer"
   public static let _protobuf_nameMap: WalletCoreSwiftProtobuf._NameMap = [
     1: .standard(proto: "fee_token_mint_address"),
-    2: .standard(proto: "fee_sponsor_token_address"),
+    2: .standard(proto: "fee_recipient_token_address"),
     3: .standard(proto: "fee_amount"),
     4: .standard(proto: "fee_sender_token_address"),
     5: .standard(proto: "fee_decimals"),
@@ -1523,7 +1524,7 @@ extension TW_Solana_Proto_TokenTransferToFeePayer: WalletCoreSwiftProtobuf.Messa
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.feeTokenMintAddress) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.feeSponsorTokenAddress) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.feeRecipientTokenAddress) }()
       case 3: try { try decoder.decodeSingularUInt64Field(value: &self.feeAmount) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.feeSenderTokenAddress) }()
       case 5: try { try decoder.decodeSingularUInt32Field(value: &self.feeDecimals) }()
@@ -1537,8 +1538,8 @@ extension TW_Solana_Proto_TokenTransferToFeePayer: WalletCoreSwiftProtobuf.Messa
     if !self.feeTokenMintAddress.isEmpty {
       try visitor.visitSingularStringField(value: self.feeTokenMintAddress, fieldNumber: 1)
     }
-    if !self.feeSponsorTokenAddress.isEmpty {
-      try visitor.visitSingularStringField(value: self.feeSponsorTokenAddress, fieldNumber: 2)
+    if !self.feeRecipientTokenAddress.isEmpty {
+      try visitor.visitSingularStringField(value: self.feeRecipientTokenAddress, fieldNumber: 2)
     }
     if self.feeAmount != 0 {
       try visitor.visitSingularUInt64Field(value: self.feeAmount, fieldNumber: 3)
@@ -1557,7 +1558,7 @@ extension TW_Solana_Proto_TokenTransferToFeePayer: WalletCoreSwiftProtobuf.Messa
 
   public static func ==(lhs: TW_Solana_Proto_TokenTransferToFeePayer, rhs: TW_Solana_Proto_TokenTransferToFeePayer) -> Bool {
     if lhs.feeTokenMintAddress != rhs.feeTokenMintAddress {return false}
-    if lhs.feeSponsorTokenAddress != rhs.feeSponsorTokenAddress {return false}
+    if lhs.feeRecipientTokenAddress != rhs.feeRecipientTokenAddress {return false}
     if lhs.feeAmount != rhs.feeAmount {return false}
     if lhs.feeSenderTokenAddress != rhs.feeSenderTokenAddress {return false}
     if lhs.feeDecimals != rhs.feeDecimals {return false}

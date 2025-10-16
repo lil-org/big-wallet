@@ -19,56 +19,57 @@ public enum HRP: UInt32, CaseIterable, CustomStringConvertible  {
     case syscoin = 7
     case verge = 8
     case cosmos = 9
-    case bitcoinCash = 10
-    case bitcoinGold = 11
-    case ioTeX = 12
-    case nervos = 13
-    case zilliqa = 14
-    case terra = 15
-    case cryptoOrg = 16
-    case kava = 17
-    case oasis = 18
-    case bluzelle = 19
-    case bandChain = 20
-    case multiversX = 21
-    case secret = 22
-    case agoric = 23
-    case binance = 24
-    case ecash = 25
-    case thorchain = 26
-    case bitcoinDiamond = 27
-    case harmony = 28
-    case cardano = 29
-    case qtum = 30
-    case pactus = 31
-    case stratis = 32
-    case nativeInjective = 33
-    case osmosis = 34
-    case terraV2 = 35
-    case coreum = 36
-    case nativeZetaChain = 37
-    case nativeCanto = 38
-    case sommelier = 39
-    case fetchAI = 40
-    case mars = 41
-    case umee = 42
-    case quasar = 43
-    case persistence = 44
-    case akash = 45
-    case noble = 46
-    case sei = 47
-    case stargaze = 48
-    case nativeEvmos = 49
-    case tia = 50
-    case dydx = 51
-    case juno = 52
-    case tbinance = 53
-    case stride = 54
-    case axelar = 55
-    case crescent = 56
-    case kujira = 57
-    case comdex = 58
-    case neutron = 59
+    case zcash = 10
+    case bitcoinCash = 11
+    case bitcoinGold = 12
+    case ioTeX = 13
+    case nervos = 14
+    case zilliqa = 15
+    case terra = 16
+    case cryptoOrg = 17
+    case kava = 18
+    case oasis = 19
+    case bluzelle = 20
+    case bandChain = 21
+    case multiversX = 22
+    case secret = 23
+    case agoric = 24
+    case binance = 25
+    case ecash = 26
+    case thorchain = 27
+    case bitcoinDiamond = 28
+    case harmony = 29
+    case cardano = 30
+    case qtum = 31
+    case pactus = 32
+    case stratis = 33
+    case nativeInjective = 34
+    case osmosis = 35
+    case terraV2 = 36
+    case coreum = 37
+    case nativeZetaChain = 38
+    case nativeCanto = 39
+    case sommelier = 40
+    case fetchAI = 41
+    case mars = 42
+    case umee = 43
+    case quasar = 44
+    case persistence = 45
+    case akash = 46
+    case noble = 47
+    case sei = 48
+    case stargaze = 49
+    case nativeEvmos = 50
+    case tia = 51
+    case dydx = 52
+    case juno = 53
+    case tbinance = 54
+    case stride = 55
+    case axelar = 56
+    case crescent = 57
+    case kujira = 58
+    case comdex = 59
+    case neutron = 60
 
     public var description: String {
         switch self {
@@ -82,6 +83,7 @@ public enum HRP: UInt32, CaseIterable, CustomStringConvertible  {
         case .syscoin: return "sys"
         case .verge: return "vg"
         case .cosmos: return "cosmos"
+        case .zcash: return "tex"
         case .bitcoinCash: return "bitcoincash"
         case .bitcoinGold: return "btg"
         case .ioTeX: return "io"
