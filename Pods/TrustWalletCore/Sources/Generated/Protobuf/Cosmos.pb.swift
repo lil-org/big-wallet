@@ -271,6 +271,10 @@ public struct TW_Cosmos_Proto_THORChainAsset {
 
   public var synth: Bool = false
 
+  public var trade: Bool = false
+
+  public var secured: Bool = false
+
   public var unknownFields = WalletCoreSwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1645,6 +1649,8 @@ extension TW_Cosmos_Proto_THORChainAsset: WalletCoreSwiftProtobuf.Message, Walle
     2: .same(proto: "symbol"),
     3: .same(proto: "ticker"),
     4: .same(proto: "synth"),
+    5: .same(proto: "trade"),
+    6: .same(proto: "secured"),
   ]
 
   public mutating func decodeMessage<D: WalletCoreSwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1657,6 +1663,8 @@ extension TW_Cosmos_Proto_THORChainAsset: WalletCoreSwiftProtobuf.Message, Walle
       case 2: try { try decoder.decodeSingularStringField(value: &self.symbol) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.ticker) }()
       case 4: try { try decoder.decodeSingularBoolField(value: &self.synth) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.trade) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.secured) }()
       default: break
       }
     }
@@ -1675,6 +1683,12 @@ extension TW_Cosmos_Proto_THORChainAsset: WalletCoreSwiftProtobuf.Message, Walle
     if self.synth != false {
       try visitor.visitSingularBoolField(value: self.synth, fieldNumber: 4)
     }
+    if self.trade != false {
+      try visitor.visitSingularBoolField(value: self.trade, fieldNumber: 5)
+    }
+    if self.secured != false {
+      try visitor.visitSingularBoolField(value: self.secured, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1683,6 +1697,8 @@ extension TW_Cosmos_Proto_THORChainAsset: WalletCoreSwiftProtobuf.Message, Walle
     if lhs.symbol != rhs.symbol {return false}
     if lhs.ticker != rhs.ticker {return false}
     if lhs.synth != rhs.synth {return false}
+    if lhs.trade != rhs.trade {return false}
+    if lhs.secured != rhs.secured {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

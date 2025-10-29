@@ -907,6 +907,13 @@ public struct TW_Polkadot_Proto_SigningInput {
     set {_uniqueStorage()._multiAddress = newValue}
   }
 
+  /// Whether to use `ChargeAssetTxPayment` extrinsic extension instead of `ChargeTransactionPayment`
+  /// when paying transaction tip in native chain token.
+  public var chargeNativeAsAssetTxPayment: Bool {
+    get {return _storage._chargeNativeAsAssetTxPayment}
+    set {_uniqueStorage()._chargeNativeAsAssetTxPayment = newValue}
+  }
+
   /// Payload message
   public var messageOneof: OneOf_MessageOneof? {
     get {return _storage._messageOneof}
@@ -2140,6 +2147,7 @@ extension TW_Polkadot_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, Walle
     8: .standard(proto: "private_key"),
     9: .same(proto: "network"),
     10: .standard(proto: "multi_address"),
+    13: .standard(proto: "charge_native_as_asset_tx_payment"),
     11: .standard(proto: "balance_call"),
     12: .standard(proto: "staking_call"),
   ]
@@ -2155,6 +2163,7 @@ extension TW_Polkadot_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, Walle
     var _privateKey: Data = Data()
     var _network: UInt32 = 0
     var _multiAddress: Bool = false
+    var _chargeNativeAsAssetTxPayment: Bool = false
     var _messageOneof: TW_Polkadot_Proto_SigningInput.OneOf_MessageOneof?
 
     static let defaultInstance = _StorageClass()
@@ -2172,6 +2181,7 @@ extension TW_Polkadot_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, Walle
       _privateKey = source._privateKey
       _network = source._network
       _multiAddress = source._multiAddress
+      _chargeNativeAsAssetTxPayment = source._chargeNativeAsAssetTxPayment
       _messageOneof = source._messageOneof
     }
   }
@@ -2227,6 +2237,7 @@ extension TW_Polkadot_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, Walle
             _storage._messageOneof = .stakingCall(v)
           }
         }()
+        case 13: try { try decoder.decodeSingularBoolField(value: &_storage._chargeNativeAsAssetTxPayment) }()
         default: break
         }
       }
@@ -2280,6 +2291,9 @@ extension TW_Polkadot_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, Walle
       }()
       case nil: break
       }
+      if _storage._chargeNativeAsAssetTxPayment != false {
+        try visitor.visitSingularBoolField(value: _storage._chargeNativeAsAssetTxPayment, fieldNumber: 13)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -2299,6 +2313,7 @@ extension TW_Polkadot_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, Walle
         if _storage._privateKey != rhs_storage._privateKey {return false}
         if _storage._network != rhs_storage._network {return false}
         if _storage._multiAddress != rhs_storage._multiAddress {return false}
+        if _storage._chargeNativeAsAssetTxPayment != rhs_storage._chargeNativeAsAssetTxPayment {return false}
         if _storage._messageOneof != rhs_storage._messageOneof {return false}
         return true
       }
