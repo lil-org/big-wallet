@@ -30,6 +30,7 @@ public enum EthereumChainID: UInt32, CaseIterable {
     case zeneon = 7332
     case base = 8453
     case plasma = 9745
+    case monad = 143
     case meter = 82
     case celo = 42220
     case linea = 59144

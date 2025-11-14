@@ -37,6 +37,7 @@ enum TWEthereumChainID {
     TWEthereumChainIDZeneon = 7332,
     TWEthereumChainIDBase = 8453,
     TWEthereumChainIDPlasma = 9745,
+    TWEthereumChainIDMonad = 143,
     TWEthereumChainIDMeter = 82,
     TWEthereumChainIDCelo = 42220,
     TWEthereumChainIDLinea = 59144,

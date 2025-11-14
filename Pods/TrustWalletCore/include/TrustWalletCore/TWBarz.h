@@ -14,21 +14,6 @@ TW_EXTERN_C_BEGIN
 TW_EXPORT_CLASS
 struct TWBarz;
 
-/// Calculate a counterfactual address for the smart contract wallet
-/// 
-/// \param input The serialized data of ContractAddressInput.
-/// \return The address.
-TW_EXPORT_STATIC_METHOD TWString *_Nullable TWBarzGetCounterfactualAddress(TWData *_Nonnull input);
-
-/// Returns the init code parameter of ERC-4337 User Operation
-/// 
-/// \param factory The address of the factory contract
-/// \param public_key Public key for the verification facet
-/// \param verification_facet The address of the verification facet
-/// \param salt The salt of the init code; Must be non-negative
-/// \return The init code.
-TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBarzGetInitCode(TWString *_Nonnull factory, struct TWPublicKey *_Nonnull publicKey, TWString *_Nonnull verificationFacet, int32_t salt);
-
 /// Converts the original ASN-encoded signature from webauthn to the format accepted by Barz
 /// 
 /// \param signature Original signature
@@ -51,5 +36,20 @@ TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBarzGetPrefixedMsgHash(TWData *_Nonn
 /// \param input The serialized data of DiamondCutInput.
 /// \return The diamond cut code.
 TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBarzGetDiamondCutCode(TWData *_Nonnull input);
+
+/// Calculate a counterfactual address for the smart contract wallet
+/// 
+/// \param input The serialized data of ContractAddressInput.
+/// \return The address.
+TW_EXPORT_STATIC_METHOD TWString *_Nullable TWBarzGetCounterfactualAddress(TWData *_Nonnull input);
+
+/// Returns the init code parameter of ERC-4337 User Operation
+/// 
+/// \param factory The address of the factory contract
+/// \param public_key Public key for the verification facet
+/// \param verification_facet The address of the verification facet
+/// \param salt The salt of the init code; Must be non-negative
+/// \return The init code.
+TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBarzGetInitCode(TWString *_Nonnull factory, struct TWPublicKey *_Nonnull publicKey, TWString *_Nonnull verificationFacet, int32_t salt);
 
 TW_EXTERN_C_END
