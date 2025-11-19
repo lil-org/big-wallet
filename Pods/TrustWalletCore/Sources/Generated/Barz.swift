@@ -10,6 +10,43 @@ import Foundation
 
 public final class Barz {
 
+    /// Calculate a counterfactual address for the smart contract wallet
+    /// 
+    /// - Parameter input: The serialized data of ContractAddressInput.
+    /// - Returns: The address.
+    public static func getCounterfactualAddress(input: Data) -> String? {
+        let inputData = TWDataCreateWithNSData(input)
+        defer {
+            TWDataDelete(inputData)
+        }
+        guard let result = TWBarzGetCounterfactualAddress(inputData) else {
+            return nil
+        }
+        return TWStringNSString(result)
+    }
+
+    /// Returns the init code parameter of ERC-4337 User Operation
+    /// 
+    /// - Parameter factory: The address of the factory contract
+    /// - Parameter public_key: Public key for the verification facet
+    /// - Parameter verification_facet: The address of the verification facet
+    /// - Parameter salt: The salt of the init code; Must be non-negative
+    /// - Returns: The init code.
+    public static func getInitCode(factory: String, publicKey: PublicKey, verificationFacet: String, salt: Int32) -> Data? {
+        let factoryString = TWStringCreateWithNSString(factory)
+        defer {
+            TWStringDelete(factoryString)
+        }
+        let verificationFacetString = TWStringCreateWithNSString(verificationFacet)
+        defer {
+            TWStringDelete(verificationFacetString)
+        }
+        guard let result = TWBarzGetInitCode(factoryString, publicKey.rawValue, verificationFacetString, salt) else {
+            return nil
+        }
+        return TWDataNSData(result)
+    }
+
     /// Converts the original ASN-encoded signature from webauthn to the format accepted by Barz
     /// 
     /// - Parameter signature: Original signature
@@ -71,43 +108,6 @@ public final class Barz {
             TWDataDelete(inputData)
         }
         guard let result = TWBarzGetDiamondCutCode(inputData) else {
-            return nil
-        }
-        return TWDataNSData(result)
-    }
-
-    /// Calculate a counterfactual address for the smart contract wallet
-    /// 
-    /// - Parameter input: The serialized data of ContractAddressInput.
-    /// - Returns: The address.
-    public static func getCounterfactualAddress(input: Data) -> String? {
-        let inputData = TWDataCreateWithNSData(input)
-        defer {
-            TWDataDelete(inputData)
-        }
-        guard let result = TWBarzGetCounterfactualAddress(inputData) else {
-            return nil
-        }
-        return TWStringNSString(result)
-    }
-
-    /// Returns the init code parameter of ERC-4337 User Operation
-    /// 
-    /// - Parameter factory: The address of the factory contract
-    /// - Parameter public_key: Public key for the verification facet
-    /// - Parameter verification_facet: The address of the verification facet
-    /// - Parameter salt: The salt of the init code; Must be non-negative
-    /// - Returns: The init code.
-    public static func getInitCode(factory: String, publicKey: PublicKey, verificationFacet: String, salt: Int32) -> Data? {
-        let factoryString = TWStringCreateWithNSString(factory)
-        defer {
-            TWStringDelete(factoryString)
-        }
-        let verificationFacetString = TWStringCreateWithNSString(verificationFacet)
-        defer {
-            TWStringDelete(verificationFacetString)
-        }
-        guard let result = TWBarzGetInitCode(factoryString, publicKey.rawValue, verificationFacetString, salt) else {
             return nil
         }
         return TWDataNSData(result)
