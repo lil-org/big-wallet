@@ -13,12 +13,6 @@ TW_EXTERN_C_BEGIN
 TW_EXPORT_CLASS
 struct TWEthereum;
 
-/// Returns the checksummed address.
-/// 
-/// \param address *non-null* string.
-/// \return the checksummed address.
-TW_EXPORT_STATIC_METHOD TWString *_Nullable TWEthereumAddressChecksummed(TWString *_Nonnull address);
-
 /// Returns the account path from address.
 /// 
 /// \param eth_address *non-null* string.
@@ -42,5 +36,11 @@ TW_EXPORT_STATIC_METHOD TWString *_Nullable TWEthereumEip1014Create2Address(TWSt
 /// \param data *non-null* data.
 /// \return the EIP-1967 proxy init code.
 TW_EXPORT_STATIC_METHOD TWData *_Nullable TWEthereumEip1967ProxyInitCode(TWString *_Nonnull logicAddress, TWData *_Nonnull data);
+
+/// Returns the checksummed address.
+/// 
+/// \param address *non-null* string.
+/// \return the checksummed address.
+TW_EXPORT_STATIC_METHOD TWString *_Nullable TWEthereumAddressChecksummed(TWString *_Nonnull address);
 
 TW_EXTERN_C_END

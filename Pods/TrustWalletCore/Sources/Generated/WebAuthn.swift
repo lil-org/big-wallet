@@ -29,12 +29,15 @@ public struct WebAuthn {
     ///
     /// - Parameter signature: ASN encoded webauthn signature: https://www.w3.org/TR/webauthn-2/#sctn-signature-attestation-types
     /// - Returns: Concatenated r and s values.
-    public static func getRSValues(signature: Data) -> Data {
+    public static func getRSValues(signature: Data) -> Data? {
         let signatureData = TWDataCreateWithNSData(signature)
         defer {
             TWDataDelete(signatureData)
         }
-        return TWDataNSData(TWWebAuthnGetRSValues(signatureData))
+        guard let result = TWWebAuthnGetRSValues(signatureData) else {
+            return nil
+        }
+        return TWDataNSData(result)
     }
 
     /// Reconstructs the original message that was signed via P256 curve. Can be used for signature validation.

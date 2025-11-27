@@ -10,21 +10,6 @@ import Foundation
 
 public final class Ethereum {
 
-    /// Returns the checksummed address.
-    /// 
-    /// - Parameter address: *non-null* string.
-    /// - Returns: the checksummed address.
-    public static func addressChecksummed(address: String) -> String? {
-        let addressString = TWStringCreateWithNSString(address)
-        defer {
-            TWStringDelete(addressString)
-        }
-        guard let result = TWEthereumAddressChecksummed(addressString) else {
-            return nil
-        }
-        return TWStringNSString(result)
-    }
-
     /// Returns the account path from address.
     /// 
     /// - Parameter eth_address: *non-null* string.
@@ -98,6 +83,21 @@ public final class Ethereum {
             return nil
         }
         return TWDataNSData(result)
+    }
+
+    /// Returns the checksummed address.
+    /// 
+    /// - Parameter address: *non-null* string.
+    /// - Returns: the checksummed address.
+    public static func addressChecksummed(address: String) -> String? {
+        let addressString = TWStringCreateWithNSString(address)
+        defer {
+            TWStringDelete(addressString)
+        }
+        guard let result = TWEthereumAddressChecksummed(addressString) else {
+            return nil
+        }
+        return TWStringNSString(result)
     }
 
     let rawValue: OpaquePointer
