@@ -20,4 +20,5 @@ public enum Derivation: UInt32, CaseIterable {
     case bitcoinTaproot = 8
     case pactusMainnet = 9
     case pactusTestnet = 10
+    case smartChainStableAccount = 11
 }

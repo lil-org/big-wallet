@@ -10,31 +10,16 @@ import Foundation
 
 public final class Ethereum {
 
-    /// Returns the account path from address.
+    /// Returns the checksummed address.
     /// 
-    /// - Parameter eth_address: *non-null* string.
-    /// - Parameter layer: *non-null* string.
-    /// - Parameter application: *non-null* string.
-    /// - Parameter index: *non-null* string.
-    /// - Returns: the account path.
-    public static func eip2645GetPath(ethAddress: String, layer: String, application: String, index: String) -> String? {
-        let ethAddressString = TWStringCreateWithNSString(ethAddress)
+    /// - Parameter address: *non-null* string.
+    /// - Returns: the checksummed address.
+    public static func addressChecksummed(address: String) -> String? {
+        let addressString = TWStringCreateWithNSString(address)
         defer {
-            TWStringDelete(ethAddressString)
+            TWStringDelete(addressString)
         }
-        let layerString = TWStringCreateWithNSString(layer)
-        defer {
-            TWStringDelete(layerString)
-        }
-        let applicationString = TWStringCreateWithNSString(application)
-        defer {
-            TWStringDelete(applicationString)
-        }
-        let indexString = TWStringCreateWithNSString(index)
-        defer {
-            TWStringDelete(indexString)
-        }
-        guard let result = TWEthereumEip2645GetPath(ethAddressString, layerString, applicationString, indexString) else {
+        guard let result = TWEthereumAddressChecksummed(addressString) else {
             return nil
         }
         return TWStringNSString(result)
@@ -85,16 +70,31 @@ public final class Ethereum {
         return TWDataNSData(result)
     }
 
-    /// Returns the checksummed address.
+    /// Returns the account path from address.
     /// 
-    /// - Parameter address: *non-null* string.
-    /// - Returns: the checksummed address.
-    public static func addressChecksummed(address: String) -> String? {
-        let addressString = TWStringCreateWithNSString(address)
+    /// - Parameter eth_address: *non-null* string.
+    /// - Parameter layer: *non-null* string.
+    /// - Parameter application: *non-null* string.
+    /// - Parameter index: *non-null* string.
+    /// - Returns: the account path.
+    public static func eip2645GetPath(ethAddress: String, layer: String, application: String, index: String) -> String? {
+        let ethAddressString = TWStringCreateWithNSString(ethAddress)
         defer {
-            TWStringDelete(addressString)
+            TWStringDelete(ethAddressString)
         }
-        guard let result = TWEthereumAddressChecksummed(addressString) else {
+        let layerString = TWStringCreateWithNSString(layer)
+        defer {
+            TWStringDelete(layerString)
+        }
+        let applicationString = TWStringCreateWithNSString(application)
+        defer {
+            TWStringDelete(applicationString)
+        }
+        let indexString = TWStringCreateWithNSString(index)
+        defer {
+            TWStringDelete(indexString)
+        }
+        guard let result = TWEthereumEip2645GetPath(ethAddressString, layerString, applicationString, indexString) else {
             return nil
         }
         return TWStringNSString(result)
