@@ -1,1 +1,1 @@
-web3,metamask,onchain,ethereum,ekstensi,peramban,dapp,hubungkan,token,defi,swap,perdagangan,solana
+web3,metamask,phantom,dompet,kripto,onchain,ethereum,solana,dapp,token,defi,swap,trade

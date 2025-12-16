@@ -1,1 +1,1 @@
-web3,metamask,phantom,lohkoketju,ethereum,selain,dapp,yhdistä,token,defi,vaihto,kauppa,solana
+web3,metamask,phantom,onchain,ethereum,lompakko,laajennus,selain,dapp,token,defi,solana

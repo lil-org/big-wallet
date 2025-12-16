@@ -1,7 +1,7 @@
-A Big Wallet egy nyílt forráskódú kripto pénztárca Safari bővítménnyel
+big wallet egy nyílt forráskódú kriptotárca safari bővítménnyel
 
-csatlakoztass egy pénztárcát bármely weboldalon Safariban a metamask gombra kattintva
+csatlakoztass tárcát bármelyik safari weboldalon egy metamask gombra kattintva
 
-támogatja az ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche és sok más hálózatot
+támogatja az ethereumot, a zorát, a base-t, a polygont, a binance smart chain-t, az optimismot, az arbitrumot, az avalanche-t, és még sok mást!
 
-a pénztárcák biztonságosan tárolódnak a kulcskarikában
+a tárcák biztonságosan a keychainben vannak tárolva

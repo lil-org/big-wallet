@@ -1,1 +1,1 @@
-web3,metamask,phantom,onjchain,ethereum,penyemak imbas,pelanjutan,dapp,sambung,tanda,swap,dagang
+web3,metamask,phantom,rantai,ethereum,sambung,token,defi,tukar,dagang,solana,wallet

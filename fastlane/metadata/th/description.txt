@@ -1,7 +1,7 @@
-Big Wallet เป็นกระเป๋าเงินคริปโตแบบโอเพนซอร์สพร้อมส่วนขยายสำหรับ Safari
+big wallet เป็นคริปโตวอลเล็ตแบบโอเพ่นซอร์สพร้อมส่วนขยายสำหรับ safari
 
-เชื่อมต่อกระเป๋าเงินบนเว็บไซต์ใดก็ได้ใน Safari โดยกดปุ่ม Metamask
+เชื่อมต่อวอลเล็ตบนเว็บไซต์ใดก็ได้ใน safari โดยคลิกปุ่ม metamask
 
-รองรับ Ethereum, Zora, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche และอื่น ๆ
+รองรับ ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche และอีกมากมาย!
 
-กระเป๋าเงินถูกเก็บไว้อย่างปลอดภัยใน Keychain
+วอลเล็ตถูกเก็บไว้อย่างปลอดภัยใน keychain

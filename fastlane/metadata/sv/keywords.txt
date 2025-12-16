@@ -1,1 +1,1 @@
-web3,metamask,fantom,onchain,ethereum,tillägg,webbläsare,dapp,anslut,token,defi,byt,solana
+web3,metamask,phantom,onchain,ethereum,plånbok,tillägg,webbläsare,dapp,token,defi,swap,solana

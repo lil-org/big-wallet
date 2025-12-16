@@ -1,7 +1,7 @@
-big wallet הוא ארנק קריפטו קוד פתוח עם הרחבה לספארי
+big wallet הוא ארנק קריפטו בקוד פתוח עם הרחבה ל-Safari
 
-חברו ארנק בכל אתר בספארי על ידי לחיצה על כפתור metamask
+התחברו עם ארנק בכל אתר ב-Safari בלחיצה על כפתור MetaMask
 
 תומך ב-ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, ועוד!
 
-הארנקים מאוחסנים בבטחה ב-keychain
+ארנקים נשמרים בצורה מאובטחת ב-Keychain

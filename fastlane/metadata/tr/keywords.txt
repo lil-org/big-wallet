@@ -1,1 +1,1 @@
-web3,metamask,fantom,ağ,ethereum,eklentisi,tarayıcı,dapp,bağlan,token,defi,takas,ticaret,solana
+web3,metamask,phantom,onchain,ethereum,cüzdan,eklenti,tarayıcı,dapp,token,defi,swap,solana

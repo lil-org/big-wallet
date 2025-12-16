@@ -1,1 +1,1 @@
-web3,metamask,phantom,onchain,ethereum,tiện ích,trình duyệt,dapp,kết nối,token,đổi,solana
+web3,metamask,phantom,onchain,ethereum,vi,ví,tiện ích,duyệt web,dapp,kết nối,token,defi,swap

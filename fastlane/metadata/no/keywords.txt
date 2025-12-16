@@ -1,1 +1,1 @@
-web3,metamask,fantom,onchain,ethereum,utvidelse,nettleser,dapp,koble,token,defi,bytte,handle,solana
+web3,metamask,phantom,onchain,ethereum,lommebok,utvidelse,nettleser,dapp,token,defi,swap

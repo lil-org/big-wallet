@@ -1,6 +1,6 @@
-big wallet adalah dompet kripto sumber terbuka dengan sambungan safari
+big wallet ialah dompet kripto sumber terbuka dengan sambungan safari
 
-sambungkan dompet pada mana-mana laman web di safari dengan mengklik butang metamask
+sambungkan dompet di mana-mana laman web dalam safari dengan mengklik butang metamask
 
 menyokong ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, dan banyak lagi!
 

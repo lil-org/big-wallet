@@ -1,7 +1,7 @@
-Big Wallet은 Safari 확장이 포함된 오픈 소스 암호화폐 지갑입니다
+big wallet는 safari 확장 기능이 있는 오픈 소스 크립토 지갑입니다
 
-Safari에서 Metamask 버튼을 클릭하여 어떤 웹사이트에서도 지갑을 연결하세요
+safari에서 어떤 웹사이트든 metamask 버튼을 눌러 지갑을 연결하세요
 
-Ethereum, Zora, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche 등 다양한 네트워크를 지원합니다
+ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche 등 다양한 네트워크를 지원합니다!
 
-지갑은 Keychain에 안전하게 저장됩니다
+지갑은 keychain에 안전하게 저장됩니다

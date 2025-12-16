@@ -1,7 +1,7 @@
-big walletは、safari拡張機能を備えたオープンソースの暗号通貨ウォレットです
+big wallet は Safari 拡張機能付きのオープンソースの暗号資産ウォレットです
 
-safariでmetamaskのボタンをクリックするだけで、任意のウェブサイトにウォレットを接続できます
+Safari で Metamask ボタンをクリックするだけで、どの Web サイトでもウォレットを接続できます
 
-ethereum、zora、base、polygon、binance smart chain、optimism、arbitrum、avalancheなどに対応！
+ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche などに対応！
 
-ウォレットはkeychainに安全に保存されています
+ウォレットは keychain に安全に保存されます
