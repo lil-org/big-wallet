@@ -25,6 +25,36 @@ public final class Ethereum {
         return TWStringNSString(result)
     }
 
+    /// Returns the account path from address.
+    /// 
+    /// - Parameter eth_address: *non-null* string.
+    /// - Parameter layer: *non-null* string.
+    /// - Parameter application: *non-null* string.
+    /// - Parameter index: *non-null* string.
+    /// - Returns: the account path.
+    public static func eip2645GetPath(ethAddress: String, layer: String, application: String, index: String) -> String? {
+        let ethAddressString = TWStringCreateWithNSString(ethAddress)
+        defer {
+            TWStringDelete(ethAddressString)
+        }
+        let layerString = TWStringCreateWithNSString(layer)
+        defer {
+            TWStringDelete(layerString)
+        }
+        let applicationString = TWStringCreateWithNSString(application)
+        defer {
+            TWStringDelete(applicationString)
+        }
+        let indexString = TWStringCreateWithNSString(index)
+        defer {
+            TWStringDelete(indexString)
+        }
+        guard let result = TWEthereumEip2645GetPath(ethAddressString, layerString, applicationString, indexString) else {
+            return nil
+        }
+        return TWStringNSString(result)
+    }
+
     /// Returns EIP-1014 Create2 address
     /// 
     /// - Parameter from: *non-null* string.
@@ -68,36 +98,6 @@ public final class Ethereum {
             return nil
         }
         return TWDataNSData(result)
-    }
-
-    /// Returns the account path from address.
-    /// 
-    /// - Parameter eth_address: *non-null* string.
-    /// - Parameter layer: *non-null* string.
-    /// - Parameter application: *non-null* string.
-    /// - Parameter index: *non-null* string.
-    /// - Returns: the account path.
-    public static func eip2645GetPath(ethAddress: String, layer: String, application: String, index: String) -> String? {
-        let ethAddressString = TWStringCreateWithNSString(ethAddress)
-        defer {
-            TWStringDelete(ethAddressString)
-        }
-        let layerString = TWStringCreateWithNSString(layer)
-        defer {
-            TWStringDelete(layerString)
-        }
-        let applicationString = TWStringCreateWithNSString(application)
-        defer {
-            TWStringDelete(applicationString)
-        }
-        let indexString = TWStringCreateWithNSString(index)
-        defer {
-            TWStringDelete(indexString)
-        }
-        guard let result = TWEthereumEip2645GetPath(ethAddressString, layerString, applicationString, indexString) else {
-            return nil
-        }
-        return TWStringNSString(result)
     }
 
     let rawValue: OpaquePointer

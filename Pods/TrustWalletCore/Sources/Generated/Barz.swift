@@ -10,6 +10,21 @@ import Foundation
 
 public final class Barz {
 
+    /// Returns the encoded diamondCut function call for Barz contract upgrades
+    /// 
+    /// - Parameter input: The serialized data of DiamondCutInput.
+    /// - Returns: The diamond cut code.
+    public static func getDiamondCutCode(input: Data) -> Data? {
+        let inputData = TWDataCreateWithNSData(input)
+        defer {
+            TWDataDelete(inputData)
+        }
+        guard let result = TWBarzGetDiamondCutCode(inputData) else {
+            return nil
+        }
+        return TWDataNSData(result)
+    }
+
     /// Calculate a counterfactual address for the smart contract wallet
     /// 
     /// - Parameter input: The serialized data of ContractAddressInput.
@@ -93,21 +108,6 @@ public final class Barz {
             TWStringDelete(barzAddressString)
         }
         guard let result = TWBarzGetPrefixedMsgHash(msgHashData, barzAddressString, chainId) else {
-            return nil
-        }
-        return TWDataNSData(result)
-    }
-
-    /// Returns the encoded diamondCut function call for Barz contract upgrades
-    /// 
-    /// - Parameter input: The serialized data of DiamondCutInput.
-    /// - Returns: The diamond cut code.
-    public static func getDiamondCutCode(input: Data) -> Data? {
-        let inputData = TWDataCreateWithNSData(input)
-        defer {
-            TWDataDelete(inputData)
-        }
-        guard let result = TWBarzGetDiamondCutCode(inputData) else {
             return nil
         }
         return TWDataNSData(result)

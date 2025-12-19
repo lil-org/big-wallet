@@ -10,22 +10,6 @@ import Foundation
 
 public final class Biz {
 
-    /// Encodes `Biz.registerSession` function call to register a session passkey public key.
-    /// 
-    /// - Parameter session_passkey_public_key: The nist256p1 (aka secp256p1) public key of the session passkey.
-    /// - Parameter valid_until_timestamp: The timestamp until which the session is valid. Big endian uint64.
-    /// - Returns: ABI-encoded function call.
-    public static func encodeRegisterSessionCall(sessionPasskeyPublicKey: PublicKey, validUntilTimestamp: Data) -> Data? {
-        let validUntilTimestampData = TWDataCreateWithNSData(validUntilTimestamp)
-        defer {
-            TWDataDelete(validUntilTimestampData)
-        }
-        guard let result = TWBizEncodeRegisterSessionCall(sessionPasskeyPublicKey.rawValue, validUntilTimestampData) else {
-            return nil
-        }
-        return TWDataNSData(result)
-    }
-
     /// Returns the encoded hash of the user operation
     /// 
     /// - Parameter chain_id: The chain ID of the user.
@@ -76,6 +60,42 @@ public final class Biz {
         return TWDataNSData(result)
     }
 
+    /// Signs a message using the private key
+    /// 
+    /// - Parameter hash: The hash of the user.
+    /// - Parameter private_key: The private key of the user.
+    /// - Returns: The signed hash.
+    public static func getSignedHash(hash: String, privateKey: String) -> Data? {
+        let hashString = TWStringCreateWithNSString(hash)
+        defer {
+            TWStringDelete(hashString)
+        }
+        let privateKeyString = TWStringCreateWithNSString(privateKey)
+        defer {
+            TWStringDelete(privateKeyString)
+        }
+        guard let result = TWBizGetSignedHash(hashString, privateKeyString) else {
+            return nil
+        }
+        return TWDataNSData(result)
+    }
+
+    /// Encodes `Biz.registerSession` function call to register a session passkey public key.
+    /// 
+    /// - Parameter session_passkey_public_key: The nist256p1 (aka secp256p1) public key of the session passkey.
+    /// - Parameter valid_until_timestamp: The timestamp until which the session is valid. Big endian uint64.
+    /// - Returns: ABI-encoded function call.
+    public static func encodeRegisterSessionCall(sessionPasskeyPublicKey: PublicKey, validUntilTimestamp: Data) -> Data? {
+        let validUntilTimestampData = TWDataCreateWithNSData(validUntilTimestamp)
+        defer {
+            TWDataDelete(validUntilTimestampData)
+        }
+        guard let result = TWBizEncodeRegisterSessionCall(sessionPasskeyPublicKey.rawValue, validUntilTimestampData) else {
+            return nil
+        }
+        return TWDataNSData(result)
+    }
+
     /// Encodes `Biz.removeSession` function call to deregister a session passkey public key.
     /// 
     /// - Parameter session_passkey_public_key: The nist256p1 (aka secp256p1) public key of the session passkey.
@@ -112,26 +132,6 @@ public final class Biz {
             TWDataDelete(inputData)
         }
         guard let result = TWBizEncodeExecuteWithPasskeySessionCall(inputData) else {
-            return nil
-        }
-        return TWDataNSData(result)
-    }
-
-    /// Signs a message using the private key
-    /// 
-    /// - Parameter hash: The hash of the user.
-    /// - Parameter private_key: The private key of the user.
-    /// - Returns: The signed hash.
-    public static func getSignedHash(hash: String, privateKey: String) -> Data? {
-        let hashString = TWStringCreateWithNSString(hash)
-        defer {
-            TWStringDelete(hashString)
-        }
-        let privateKeyString = TWStringCreateWithNSString(privateKey)
-        defer {
-            TWStringDelete(privateKeyString)
-        }
-        guard let result = TWBizGetSignedHash(hashString, privateKeyString) else {
             return nil
         }
         return TWDataNSData(result)
