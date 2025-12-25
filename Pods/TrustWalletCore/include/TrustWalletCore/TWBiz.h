@@ -7,7 +7,6 @@
 #include "TWBase.h"
 #include "TWData.h"
 #include "TWString.h"
-#include "TWPublicKey.h"
 
 TW_EXTERN_C_BEGIN
 
@@ -34,29 +33,10 @@ TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBizGetEncodedHash(TWData *_Nonnull c
 /// \return The signed hash.
 TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBizGetSignedHash(TWString *_Nonnull hash, TWString *_Nonnull privateKey);
 
-/// Encodes `Biz.registerSession` function call to register a session passkey public key.
+/// Signs and encodes `Biz.executeWithPasskeySession` function call to execute a batch of transactions.
 /// 
-/// \param session_passkey_public_key The nist256p1 (aka secp256p1) public key of the session passkey.
-/// \param valid_until_timestamp The timestamp until which the session is valid. Big endian uint64.
+/// \param input The serialized data of `Biz.ExecuteWithSignatureInput` protobuf message.
 /// \return ABI-encoded function call.
-TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBizEncodeRegisterSessionCall(struct TWPublicKey *_Nonnull sessionPasskeyPublicKey, TWData *_Nonnull validUntilTimestamp);
-
-/// Encodes `Biz.removeSession` function call to deregister a session passkey public key.
-/// 
-/// \param session_passkey_public_key The nist256p1 (aka secp256p1) public key of the session passkey.
-/// \return ABI-encoded function call.
-TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBizEncodeRemoveSessionCall(struct TWPublicKey *_Nonnull sessionPasskeyPublicKey);
-
-/// Encodes Biz Passkey Session nonce.
-/// 
-/// \param nonce The nonce of the Biz Passkey Session account.
-/// \return uint256 represented as [passkey_nonce_key_192, nonce_64].
-TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBizEncodePasskeySessionNonce(TWData *_Nonnull nonce);
-
-/// Encodes `Biz.executeWithPasskeySession` function call to execute a batch of transactions.
-/// 
-/// \param input The serialized data of `Biz.ExecuteWithPasskeySessionInput` protobuf message.
-/// \return ABI-encoded function call.
-TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBizEncodeExecuteWithPasskeySessionCall(TWData *_Nonnull input);
+TW_EXPORT_STATIC_METHOD TWData *_Nullable TWBizSignExecuteWithSignatureCall(TWData *_Nonnull input);
 
 TW_EXTERN_C_END

@@ -36,6 +36,8 @@
 #import "TWBitcoinSigHashType.h"
 #import "TWBitcoinV2Proto.h"
 #import "TWBiz.h"
+#import "TWBizPasskeySession.h"
+#import "TWBizPasskeySessionProto.h"
 #import "TWBizProto.h"
 #import "TWBlockchain.h"
 #import "TWCardano.h"

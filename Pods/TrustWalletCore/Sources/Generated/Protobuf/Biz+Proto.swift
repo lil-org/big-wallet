@@ -2,4 +2,6 @@
 //
 // Copyright © 2017 Trust Wallet.
 
-public typealias BizExecuteWithPasskeySessionInput = TW_Biz_Proto_ExecuteWithPasskeySessionInput
+public typealias BizEncodingHashParams = TW_Biz_Proto_EncodingHashParams
+public typealias BizExecution = TW_Biz_Proto_Execution
+public typealias BizExecuteWithSignatureInput = TW_Biz_Proto_ExecuteWithSignatureInput

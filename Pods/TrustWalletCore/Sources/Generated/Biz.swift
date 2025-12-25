@@ -80,58 +80,16 @@ public final class Biz {
         return TWDataNSData(result)
     }
 
-    /// Encodes `Biz.registerSession` function call to register a session passkey public key.
+    /// Signs and encodes `Biz.executeWithPasskeySession` function call to execute a batch of transactions.
     /// 
-    /// - Parameter session_passkey_public_key: The nist256p1 (aka secp256p1) public key of the session passkey.
-    /// - Parameter valid_until_timestamp: The timestamp until which the session is valid. Big endian uint64.
+    /// - Parameter input: The serialized data of `Biz.ExecuteWithSignatureInput` protobuf message.
     /// - Returns: ABI-encoded function call.
-    public static func encodeRegisterSessionCall(sessionPasskeyPublicKey: PublicKey, validUntilTimestamp: Data) -> Data? {
-        let validUntilTimestampData = TWDataCreateWithNSData(validUntilTimestamp)
-        defer {
-            TWDataDelete(validUntilTimestampData)
-        }
-        guard let result = TWBizEncodeRegisterSessionCall(sessionPasskeyPublicKey.rawValue, validUntilTimestampData) else {
-            return nil
-        }
-        return TWDataNSData(result)
-    }
-
-    /// Encodes `Biz.removeSession` function call to deregister a session passkey public key.
-    /// 
-    /// - Parameter session_passkey_public_key: The nist256p1 (aka secp256p1) public key of the session passkey.
-    /// - Returns: ABI-encoded function call.
-    public static func encodeRemoveSessionCall(sessionPasskeyPublicKey: PublicKey) -> Data? {
-        guard let result = TWBizEncodeRemoveSessionCall(sessionPasskeyPublicKey.rawValue) else {
-            return nil
-        }
-        return TWDataNSData(result)
-    }
-
-    /// Encodes Biz Passkey Session nonce.
-    /// 
-    /// - Parameter nonce: The nonce of the Biz Passkey Session account.
-    /// - Returns: uint256 represented as [passkey_nonce_key_192, nonce_64].
-    public static func encodePasskeySessionNonce(nonce: Data) -> Data? {
-        let nonceData = TWDataCreateWithNSData(nonce)
-        defer {
-            TWDataDelete(nonceData)
-        }
-        guard let result = TWBizEncodePasskeySessionNonce(nonceData) else {
-            return nil
-        }
-        return TWDataNSData(result)
-    }
-
-    /// Encodes `Biz.executeWithPasskeySession` function call to execute a batch of transactions.
-    /// 
-    /// - Parameter input: The serialized data of `Biz.ExecuteWithPasskeySessionInput` protobuf message.
-    /// - Returns: ABI-encoded function call.
-    public static func encodeExecuteWithPasskeySessionCall(input: Data) -> Data? {
+    public static func signExecuteWithSignatureCall(input: Data) -> Data? {
         let inputData = TWDataCreateWithNSData(input)
         defer {
             TWDataDelete(inputData)
         }
-        guard let result = TWBizEncodeExecuteWithPasskeySessionCall(inputData) else {
+        guard let result = TWBizSignExecuteWithSignatureCall(inputData) else {
             return nil
         }
         return TWDataNSData(result)

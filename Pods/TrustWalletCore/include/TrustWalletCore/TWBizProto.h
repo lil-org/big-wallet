@@ -8,4 +8,6 @@
 
 #include "TWData.h"
 
-typedef TWData *_Nonnull TW_Biz_Proto_ExecuteWithPasskeySessionInput;
+typedef TWData *_Nonnull TW_Biz_Proto_EncodingHashParams;
+typedef TWData *_Nonnull TW_Biz_Proto_Execution;
+typedef TWData *_Nonnull TW_Biz_Proto_ExecuteWithSignatureInput;
