@@ -1,3 +1,3 @@
-// ∅ 2025 lil org
+// ∅ 2026 lil org
 
 const isMobile = false;

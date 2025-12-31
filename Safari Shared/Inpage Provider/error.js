@@ -1,4 +1,4 @@
-// ∅ 2025 lil org
+// ∅ 2026 lil org
 // Rewrite of error.js from trust-web3-provider.
 
 "use strict";

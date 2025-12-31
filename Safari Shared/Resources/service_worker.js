@@ -1,4 +1,4 @@
-// ∅ 2025 lil org
+// ∅ 2026 lil org
 
 function handleOnMessage(request, sender, sendResponse) {
     if (request.subject === "rpc") {
