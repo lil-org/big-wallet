@@ -25,9 +25,7 @@
         "Sources/Generated/Protobuf/*.swift"
       ],
       "dependencies": {
-        "VSwiftProtobuf": [
-
-        ]
+        "VSwiftProtobuf": []
       }
     },
     {
@@ -46,9 +44,7 @@
       ],
       "libraries": "c++",
       "dependencies": {
-        "VTrustWalletCore/Types": [
-
-        ]
+        "VTrustWalletCore/Types": []
       }
     }
   ],
