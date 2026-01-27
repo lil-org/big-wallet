@@ -60,6 +60,21 @@ public final class Biz {
         return TWDataNSData(result)
     }
 
+    /// Signs and encodes `Biz.executeWithPasskeySession` function call to execute a batch of transactions.
+    /// 
+    /// - Parameter input: The serialized data of `Biz.ExecuteWithSignatureInput` protobuf message.
+    /// - Returns: ABI-encoded function call.
+    public static func signExecuteWithSignatureCall(input: Data) -> Data? {
+        let inputData = TWDataCreateWithNSData(input)
+        defer {
+            TWDataDelete(inputData)
+        }
+        guard let result = TWBizSignExecuteWithSignatureCall(inputData) else {
+            return nil
+        }
+        return TWDataNSData(result)
+    }
+
     /// Signs a message using the private key
     /// 
     /// - Parameter hash: The hash of the user.
@@ -75,21 +90,6 @@ public final class Biz {
             TWStringDelete(privateKeyString)
         }
         guard let result = TWBizGetSignedHash(hashString, privateKeyString) else {
-            return nil
-        }
-        return TWDataNSData(result)
-    }
-
-    /// Signs and encodes `Biz.executeWithPasskeySession` function call to execute a batch of transactions.
-    /// 
-    /// - Parameter input: The serialized data of `Biz.ExecuteWithSignatureInput` protobuf message.
-    /// - Returns: ABI-encoded function call.
-    public static func signExecuteWithSignatureCall(input: Data) -> Data? {
-        let inputData = TWDataCreateWithNSData(input)
-        defer {
-            TWDataDelete(inputData)
-        }
-        guard let result = TWBizSignExecuteWithSignatureCall(inputData) else {
             return nil
         }
         return TWDataNSData(result)

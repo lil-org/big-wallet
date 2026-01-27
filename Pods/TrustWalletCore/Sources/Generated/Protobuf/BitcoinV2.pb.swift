@@ -1019,8 +1019,8 @@ public struct TW_BitcoinV2_Proto_TransactionBuilder {
   public mutating func clearChangeOutput() {_uniqueStorage()._changeOutput = nil}
 
   /// The only output with a max available amount to be send.
-  /// If set, `SigningInput.outputs` and `SigningInput.change` will be ignored.
   /// The `Output.value` will be overwritten, leave default.
+  /// Note: `max_amount_output` is mutually exclusive with `outputs` and `change_output`; do not use them together.
   public var maxAmountOutput: TW_BitcoinV2_Proto_Output {
     get {return _storage._maxAmountOutput ?? TW_BitcoinV2_Proto_Output()}
     set {_uniqueStorage()._maxAmountOutput = newValue}

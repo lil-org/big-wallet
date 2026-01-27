@@ -172,4 +172,5 @@ public enum CoinType: UInt32, CaseIterable {
     case polymesh = 595
     case plasma = 9745
     case monad = 10143
+    case megaETH = 4326
 }

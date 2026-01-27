@@ -31,6 +31,7 @@ enum TWEthereumChainID {
     TWEthereumChainIDCfxevm = 1030,
     TWEthereumChainIDLightlink = 1890,
     TWEthereumChainIDMerlin = 4200,
+    TWEthereumChainIDMegaeth = 4326,
     TWEthereumChainIDMantle = 5000,
     TWEthereumChainIDBouncebit = 6001,
     TWEthereumChainIDGochain = 60,
