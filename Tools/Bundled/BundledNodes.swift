@@ -3,7 +3,7 @@ import Foundation
 struct BundledNodes {
     
     static let dict: [Int: String] = [
-        1: "eth.llamarpc.com",
+        1: "ethereum-rpc.publicnode.com",
         10: "optimism.drpc.org",
         25: "evm.cronos.org",
         30: "rootstock-mainnet.public.blastapi.io",
