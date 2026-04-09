@@ -12,6 +12,13 @@ class ApproveTransactionViewController: UIViewController {
         case gasPriceSlider
     }
     
+    private struct CellLayout {
+        let cellModels: [CellModel]
+        let feeIndex: Int
+        let gasPriceIndex: Int
+        let sliderIndex: Int?
+    }
+    
     @IBOutlet weak var tableView: UITableView! {
         didSet {
             tableView.delegate = self
@@ -30,6 +37,7 @@ class ApproveTransactionViewController: UIViewController {
     private let priceService = PriceService.shared
     private var currentGasInfo: GasService.Info?
     private var sectionModels = [[CellModel]]()
+    private var cellLayout: CellLayout?
     private var didEnableSpeedConfiguration = false
     
     private var walletId: String!
@@ -122,7 +130,7 @@ class ApproveTransactionViewController: UIViewController {
         }
     }
     
-    private func updateDisplayedTransactionInfo(initially: Bool) {
+    private func makeCellLayout() -> CellLayout {
         var cellModels: [CellModel] = [
             .textWithImage(text: peerMeta?.name ?? Strings.unknownWebsite, extraText: nil, imageURL: peerMeta?.iconURLString, image: nil),
             .textWithImage(text: account.nameOrCroppedAddress(walletId: walletId), extraText: balance, imageURL: nil, image: account.image),
@@ -133,22 +141,63 @@ class ApproveTransactionViewController: UIViewController {
         if let value = transaction.valueWithSymbol(chain: chain, price: price, withLabel: true) {
             cellModels.append(.text(text: value, oneLine: false, pro: false))
         }
+        
+        let feeIndex = cellModels.count
         cellModels.append(.text(text: transaction.feeWithSymbol(chain: chain, price: price), oneLine: false, pro: false))
+        
+        let gasPriceIndex = cellModels.count
         cellModels.append(.text(text: transaction.gasPriceWithLabel(chain: chain), oneLine: false, pro: false))
         
+        let sliderIndex: Int?
         if chain.isEthMainnet {
+            sliderIndex = cellModels.count
             cellModels.append(.gasPriceSlider)
+        } else {
+            sliderIndex = nil
         }
         
         if let diplayDataInterpretation = transaction.diplayDataInterpretation {
             cellModels.append(.text(text: diplayDataInterpretation, oneLine: false, pro: true))
         }
         
-        sectionModels[0] = cellModels
+        return CellLayout(cellModels: cellModels, feeIndex: feeIndex, gasPriceIndex: gasPriceIndex, sliderIndex: sliderIndex)
+    }
+    
+    private func updateDisplayedTransactionInfo(initially: Bool) {
+        let newCellLayout = makeCellLayout()
+        cellLayout = newCellLayout
+        sectionModels[0] = newCellLayout.cellModels
         if !initially, tableView.numberOfSections > 0 {
             tableView.reloadData()
         }
         okButton.isEnabled = transaction.hasFee
+    }
+    
+    private func refreshGasPriceRows() {
+        guard let cellLayout else { return }
+        let price = priceService.forNetwork(chain)
+        let feeModel: CellModel = .text(text: transaction.feeWithSymbol(chain: chain, price: price), oneLine: false, pro: false)
+        let gasPriceModel: CellModel = .text(text: transaction.gasPriceWithLabel(chain: chain), oneLine: false, pro: false)
+        
+        sectionModels[0][cellLayout.feeIndex] = feeModel
+        sectionModels[0][cellLayout.gasPriceIndex] = gasPriceModel
+        
+        updateVisibleTextCell(at: cellLayout.feeIndex, with: feeModel)
+        updateVisibleTextCell(at: cellLayout.gasPriceIndex, with: gasPriceModel)
+        
+        if tableView.numberOfSections > 0 {
+            UIView.performWithoutAnimation {
+                tableView.beginUpdates()
+                tableView.endUpdates()
+            }
+        }
+        okButton.isEnabled = transaction.hasFee
+    }
+    
+    private func updateVisibleTextCell(at row: Int, with model: CellModel) {
+        guard case let .text(text, oneLine, pro) = model,
+              let cell = tableView.cellForRow(at: IndexPath(row: row, section: 0)) as? MultilineLabelTableViewCell else { return }
+        cell.setup(text: text, largeFont: true, oneLine: oneLine, pro: pro)
     }
     
     private func enableSpeedConfigurationIfNeeded() {
@@ -161,8 +210,10 @@ class ApproveTransactionViewController: UIViewController {
     }
     
     private func updateGasSliderValueIfNeeded() {
-        guard didEnableSpeedConfiguration, let gasInfo = currentGasInfo else { return }
-        if let cell = tableView.cellForRow(at: IndexPath(row: 0, section: 1)) as? GasPriceSliderTableViewCell {
+        guard didEnableSpeedConfiguration,
+              let gasInfo = currentGasInfo,
+              let sliderIndex = cellLayout?.sliderIndex else { return }
+        if let cell = tableView.cellForRow(at: IndexPath(row: sliderIndex, section: 0)) as? GasPriceSliderTableViewCell {
             cell.update(value: transaction.currentGasInRelationTo(info: gasInfo), isEnabled: true)
         }
     }
@@ -254,7 +305,8 @@ extension ApproveTransactionViewController: GasPriceSliderDelegate {
     func sliderValueChanged(value: Double) {
         guard let gasInfo = currentGasInfo else { return }
         transaction.setGasPrice(value: value, inRelationTo: gasInfo)
-        updateDisplayedTransactionInfo(initially: false)
+        refreshGasPriceRows()
+        updateGasSliderValueIfNeeded()
     }
     
 }
