@@ -170,11 +170,16 @@ These decisions are required to avoid ambiguous behavior and security regression
 
 3. Mobile confirmation policy:
 - Decide whether Solana `connect` must require the same confirmation level as Ethereum `requestAccounts`.
-- Apply this policy in `content.js` request gating rules.
+- Apply this policy in both `content.js` request gating rules and `service_worker.js` mobile confirm/navigation handling.
 
 4. Solana send strategy:
 - Decide whether to keep legacy custom `signAndSendTransaction` implementation or adapt to current architecture.
 - Decide supported Solana transaction formats for v1 (legacy only vs legacy + versioned).
+
+5. Solana RPC ownership policy:
+- Decide which cluster/environment owns Solana send flows in v1.
+- Decide whether endpoint selection is fixed, bundled configuration, or user/network driven.
+- Ensure `signAndSendTransaction` does not silently inherit the legacy hardcoded mainnet-beta RPC behavior.
 
 Exit criteria:
 - These decisions are documented in this file and treated as implementation constraints.
@@ -197,6 +202,11 @@ Exit criteria:
 - Decision: _TBD_
 
 4. Solana send strategy and transaction-format scope
+- Status: pending
+- Owner: _unassigned_
+- Decision: _TBD_
+
+5. Solana RPC ownership policy
 - Status: pending
 - Owner: _unassigned_
 - Decision: _TBD_
@@ -282,9 +292,9 @@ Exit criteria:
 - Each Solana method reaches approval and returns correct response schema.
 - `switchAccount` works for Ethereum-only, Solana-only, and mixed-provider selections.
 
-## Workstream 4: Wallet/account availability and safe lookup
+## Workstream 4: Wallet/account availability, persistence, and safe lookup
 
-Goal: make Solana account retrieval reliable and safe across new and existing wallets.
+Goal: make Solana account retrieval reliable and safe across new and existing wallets without losing Solana-capable state during wallet create/import/update flows.
 
 Tasks:
 1. Update wallet/account lookup logic to use coin-aware address comparison.
@@ -292,15 +302,24 @@ Tasks:
 3. Implement chosen account-availability strategy:
 - lazy derivation, default derivation, or hybrid for mnemonic wallets.
 4. Implement explicit behavior for private-key wallets based on Workstream 0 decision.
-5. Validate create/import/update/edit-account flows after Solana addition.
+5. Update wallet create/import paths so Solana-capable mnemonic and private-key wallets are persisted under the chosen policy rather than implicitly remaining Ethereum-only.
+6. Update wallet maintenance flows so Solana account derivations survive save/update/re-encryption paths:
+- password change,
+- wallet rename/update,
+- enable/disable account edits,
+- load/save round-trips from keychain.
+7. Update account preview/suggestion helpers so Solana account availability does not depend on Ethereum `defaultCoin` assumptions.
+8. Validate create/import/update/edit-account flows after Solana addition, including mnemonic preview, account enablement, and post-update wallet recovery.
 
 Safety constraints:
 - Never sign for a Solana address that matches only after lowercasing.
 - Failing lookup must return controlled errors, not fallback to wrong accounts.
+- Wallet update/re-encryption paths must not silently drop non-Ethereum derivations or make Solana accounts undiscoverable after app restart.
 
 Exit criteria:
 - `suggestedAccounts(coin: .solana)` works for supported wallet types.
 - Existing wallets behave predictably under documented policy.
+- Solana-capable wallets retain expected accounts after import, app restart, account edits, and password-change/update flows.
 
 ## Workstream 5: UX behavior alignment
 
@@ -308,13 +327,18 @@ Goal: preserve current UX quality while adding Solana-specific behavior where re
 
 Tasks:
 1. Preserve non-EVM network-selector guard behavior on iOS/macOS account selection.
-2. Apply chosen mobile confirmation policy for Solana connect flows.
+2. Apply chosen mobile confirmation policy for Solana connect flows across both `content.js` gating and `service_worker.js` confirm/navigation UX.
 3. Validate approval metadata rendering for Solana message/transaction flows.
 4. Validate provider disconnect and account-change event behavior from JS to native and back.
+5. Define and implement explicit default preselection behavior for `switchAccount` when stored provider configuration is empty, stale, or partially invalid:
+- do not rely on Ethereum `defaultCoin` fallback behavior,
+- make mixed-provider extension-button and first-run flows deterministic,
+- preserve existing valid provider selections while recovering from malformed entries.
 
 Exit criteria:
 - No Ethereum UX regression.
 - Solana flows present coherent account identity, metadata, and disconnect behavior.
+- Empty or malformed mixed-provider configuration no longer causes `switchAccount` preselection to default implicitly to Ethereum.
 
 ## Workstream 6: Validation and regression coverage
 
@@ -339,6 +363,13 @@ Required checks:
 - mixed-provider configuration merge behavior,
 - malformed stored entries are ignored/migrated safely,
 - disconnect removes only targeted provider configuration.
+11. Wallet lifecycle and migration tests:
+- create/import for supported Solana wallet types,
+- password-change/update flows preserve Solana derivations,
+- account preview/suggestion behavior does not regress to Ethereum-only defaults.
+12. Solana send ownership tests:
+- selected RPC cluster/endpoint policy is applied consistently,
+- no hidden fallback to legacy hardcoded mainnet-beta behavior.
 
 Definition of done:
 - Manual matrix passes.
@@ -351,8 +382,9 @@ Definition of done:
 3. Mobile confirmation behavior currently tuned for Ethereum can produce unintended Solana connect UX.
 4. Wallet derivation/import behavior changed significantly; explicit mnemonic vs private-key policy is required.
 5. Legacy Solana send/sign logic may not match current architecture or supported transaction formats.
-6. Generated `inpage.js` can drift from source if rebuild is skipped.
-7. Blindly restoring old names/events can mismatch current bridge contracts and break provider expectations.
+6. Leaving Solana RPC ownership implicit can accidentally reintroduce legacy hardcoded mainnet-beta sends.
+7. Generated `inpage.js` can drift from source if rebuild is skipped.
+8. Blindly restoring old names/events can mismatch current bridge contracts and break provider expectations.
 
 ## Suggested starting point for implementation
 
