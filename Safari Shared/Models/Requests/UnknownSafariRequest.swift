@@ -38,6 +38,10 @@ extension SafariRequest {
                         guard let response = try? jsonDecoder.decode(ResponseToExtension.Ethereum.self, from: data),
                               let address = response.results?.first else { continue }
                         configurations.append(ProviderConfiguration(provider: provider, address: address, chainId: response.chainId))
+                    case .solana:
+                        guard let response = try? jsonDecoder.decode(ResponseToExtension.Solana.self, from: data),
+                              let publicKey = response.publicKey else { continue }
+                        configurations.append(ProviderConfiguration(provider: provider, address: publicKey, chainId: nil))
                     case .unknown, .multiple:
                         continue
                     }

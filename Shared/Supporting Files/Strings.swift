@@ -81,6 +81,7 @@ struct Strings {
     static let disconnect = loc("Disconnect")
     static let switchAccount = loc("Switch Account")
     static let unknownNetwork = loc("Unknown Network")
+    static let solanaTransactionSendingUnavailable = loc("Solana transaction sending is not supported yet")
     static let addAccountToConnect = loc("Add %@ account to connect")
     static let done = loc("Done")
     static let pinned = loc("Pinned")

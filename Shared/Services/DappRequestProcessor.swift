@@ -7,6 +7,13 @@ struct DappRequestProcessor {
     
     private static let walletsManager = WalletsManager.shared
     private static let ethereum = Ethereum.shared
+    private static let solana = Solana.shared
+
+    private struct PreparedSolanaSigningPayload {
+        let messageData: Data
+        let approvalSubject: ApprovalSubject
+        let approvalMessage: String
+    }
     
     static func processSafariRequest(_ request: SafariRequest, completion: @escaping (String?) -> Void) -> DappRequestAction {
         if !ExtensionBridge.hasRequest(id: request.id) {
@@ -20,60 +27,401 @@ struct DappRequestProcessor {
         switch request.body {
         case let .ethereum(body):
             return process(request: request, ethereumRequest: body, completion: completion)
+        case let .solana(body):
+            return process(request: request, solanaRequest: body, completion: completion)
         case let .unknown(body):
             switch body.method {
             case .justShowApp:
                 ExtensionBridge.respond(response: ResponseToExtension(for: request))
                 return .justShowApp
             case .switchAccount:
+                let initiallyConnectedProviders = Set(body.providerConfigurations.map { $0.provider })
                 var preselectedAccounts = body.providerConfigurations.compactMap { (configuration) -> SpecificWalletAccount? in
                     guard let coin = CoinType.correspondingToInpageProvider(configuration.provider) else { return nil }
                     return walletsManager.getSpecificAccount(coin: coin, address: configuration.address)
                 }
                 if preselectedAccounts.isEmpty {
-                    preselectedAccounts = walletsManager.suggestedAccounts()
+                    if initiallyConnectedProviders.isEmpty {
+                        preselectedAccounts = walletsManager.suggestedAccounts()
+                    } else {
+                        preselectedAccounts = walletsManager.suggestedAccounts(providers: initiallyConnectedProviders)
+                    }
                 }
                 
                 let chainId = body.providerConfigurations.compactMap { $0.chainId }.first
                 let network = Networks.withChainIdHex(chainId)
-                let initiallyConnectedProviders = Set(body.providerConfigurations.map { $0.provider })
                 let action = SelectAccountAction(peer: request.peerMeta,
                                                  coinType: nil,
                                                  selectedAccounts: Set(preselectedAccounts),
                                                  initiallyConnectedProviders: initiallyConnectedProviders,
                                                  network: network,
                                                  source: .safariExtension) { chain, specificWalletAccounts in
-                    if let chain = chain, let specificWalletAccounts = specificWalletAccounts {
-                        var specificProviderBodies = [ResponseToExtension.Body]()
-                        for specificWalletAccount in specificWalletAccounts {
-                            let account = specificWalletAccount.account
-                            switch account.coin {
-                            case .ethereum:
-                                let responseBody = ResponseToExtension.Ethereum(results: [account.address], chainId: chain.chainIdHexString)
-                                specificProviderBodies.append(.ethereum(responseBody))
-                            default:
-                                fatalError("can't select that coin")
-                            }
-                        }
-                        
-                        let providersToDisconnect = initiallyConnectedProviders.filter { provider in
-                            if let coin = CoinType.correspondingToInpageProvider(provider),
-                               specificWalletAccounts.contains(where: { $0.account.coin == coin }) {
-                                return false
-                            } else {
-                                return true
-                            }
-                        }
-                        
-                        let body = ResponseToExtension.Multiple(bodies: specificProviderBodies, providersToDisconnect: Array(providersToDisconnect))
-                        respond(to: request, body: .multiple(body), completion: completion)
-                    } else {
+                    guard let specificWalletAccounts else {
                         respond(to: request, error: Strings.canceled, completion: completion)
+                        return
                     }
+
+                    let resolvedChain = chain ?? network ?? Networks.ethereum
+                    let specificProviderBodies = specificWalletAccounts.compactMap {
+                        selectedAccountResponseBody(for: $0.account, chain: resolvedChain)
+                    }
+                    guard specificProviderBodies.count == specificWalletAccounts.count else {
+                        respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+                        return
+                    }
+
+                    let providersToDisconnect = disconnectedProviders(initiallyConnectedProviders: initiallyConnectedProviders,
+                                                                       selectedAccounts: specificWalletAccounts)
+                    let body = ResponseToExtension.Multiple(bodies: specificProviderBodies, providersToDisconnect: Array(providersToDisconnect))
+                    respond(to: request, body: .multiple(body), completion: completion)
                 }
                 return .switchAccount(action)
             }
         }
+    }
+
+    private static func process(request: SafariRequest, solanaRequest: SafariRequest.Solana, completion: @escaping (String?) -> Void) -> DappRequestAction {
+        switch solanaRequest.method {
+        case .connect:
+            return processSolanaConnectRequest(request: request, completion: completion)
+        case .signAllTransactions:
+            return processSolanaSignAllTransactionsRequest(request: request,
+                                                           solanaRequest: solanaRequest,
+                                                           completion: completion)
+        case .signMessage, .signTransaction, .signAndSendTransaction:
+            return processSolanaSigningOrSendingRequest(request: request,
+                                                        solanaRequest: solanaRequest,
+                                                        completion: completion)
+        }
+    }
+
+    private static func processSolanaConnectRequest(request: SafariRequest,
+                                                    completion: @escaping (String?) -> Void) -> DappRequestAction {
+        let action = SelectAccountAction(peer: request.peerMeta,
+                                         coinType: .solana,
+                                         selectedAccounts: Set(walletsManager.suggestedAccounts(coin: .solana)),
+                                         initiallyConnectedProviders: Set(),
+                                         network: nil,
+                                         source: .safariExtension) { _, specificWalletAccounts in
+            if let specificWalletAccount = specificWalletAccounts?.first,
+               let responseBody = solanaResponseBody(for: specificWalletAccount.account) {
+                respond(to: request, body: responseBody, completion: completion)
+            } else {
+                respond(to: request, error: Strings.canceled, completion: completion)
+            }
+        }
+        return .selectAccount(action)
+    }
+
+    private static func processSolanaSignAllTransactionsRequest(request: SafariRequest,
+                                                                solanaRequest: SafariRequest.Solana,
+                                                                completion: @escaping (String?) -> Void) -> DappRequestAction {
+        guard let messages = solanaRequest.messages else {
+            respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+            return .none
+        }
+        guard let (wallet, account) = solanaWalletAndAccount(for: request,
+                                                             publicKey: solanaRequest.publicKey,
+                                                             completion: completion) else { return .none }
+
+        let decodedMessages = messages.compactMap {
+            decodedSolanaTransactionMessage($0,
+                                            publicKey: solanaRequest.publicKey,
+                                            request: request,
+                                            completion: completion)
+        }
+        guard decodedMessages.count == messages.count else {
+            return .none
+        }
+
+        let displayMessage = Strings.data + ":\n\n" + messages.joined(separator: "\n\n")
+        return solanaApprovalAction(request: request,
+                                    wallet: wallet,
+                                    account: account,
+                                    subject: .approveTransaction,
+                                    meta: displayMessage,
+                                    completion: completion) { privateKey in
+            let results = decodedMessages.compactMap { solana.sign(messageData: $0, privateKey: privateKey) }
+            guard results.count == decodedMessages.count else {
+                respond(to: request, error: Strings.failedToSign, completion: completion)
+                return
+            }
+
+            respond(to: request, solanaResponse: .init(results: results), completion: completion)
+        }
+    }
+
+    private static func processSolanaSigningOrSendingRequest(request: SafariRequest,
+                                                             solanaRequest: SafariRequest.Solana,
+                                                             completion: @escaping (String?) -> Void) -> DappRequestAction {
+        if solanaRequest.method == .signAndSendTransaction && !solana.supportsTransactionSending {
+            respond(to: request, error: Strings.solanaTransactionSendingUnavailable, completion: completion)
+            return .none
+        }
+
+        guard let (wallet, account) = solanaWalletAndAccount(for: request,
+                                                             publicKey: solanaRequest.publicKey,
+                                                             completion: completion) else { return .none }
+
+        switch solanaRequest.method {
+        case .signAndSendTransaction:
+            if let serializedTransaction = solanaRequest.transaction {
+                return processSerializedSolanaSignAndSendRequest(request: request,
+                                                                 solanaRequest: solanaRequest,
+                                                                 serializedTransaction: serializedTransaction,
+                                                                 wallet: wallet,
+                                                                 account: account,
+                                                                 completion: completion)
+            }
+
+            guard let preparedLegacyTransaction = preparedLegacySolanaSignAndSendTransaction(request: request,
+                                                                                            solanaRequest: solanaRequest,
+                                                                                            completion: completion) else {
+                return .none
+            }
+
+            return solanaApprovalAction(request: request,
+                                        wallet: wallet,
+                                        account: account,
+                                        subject: .approveTransaction,
+                                        meta: approvalMessage(for: solanaRequest,
+                                                              canonicalMessage: preparedLegacyTransaction.approvalMessage),
+                                        completion: completion) { privateKey in
+                signAndSendSolanaTransaction(request: request,
+                                             solanaRequest: solanaRequest,
+                                             preparedLegacyTransaction: preparedLegacyTransaction,
+                                             privateKey: privateKey,
+                                             completion: completion)
+            }
+        case .signMessage, .signTransaction:
+            guard let preparedSigningPayload = preparedSolanaSigningPayload(for: request,
+                                                                            solanaRequest: solanaRequest,
+                                                                            completion: completion) else {
+                return .none
+            }
+
+            return solanaApprovalAction(request: request,
+                                        wallet: wallet,
+                                        account: account,
+                                        subject: preparedSigningPayload.approvalSubject,
+                                        meta: preparedSigningPayload.approvalMessage,
+                                        completion: completion) { privateKey in
+                guard let signed = solana.sign(messageData: preparedSigningPayload.messageData,
+                                               privateKey: privateKey) else {
+                    respond(to: request, error: Strings.failedToSign, completion: completion)
+                    return
+                }
+
+                respond(to: request, solanaResponse: .init(result: signed), completion: completion)
+            }
+        case .connect, .signAllTransactions:
+            respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+            return .none
+        }
+    }
+
+    private static func preparedSolanaSigningPayload(for request: SafariRequest,
+                                                     solanaRequest: SafariRequest.Solana,
+                                                     completion: @escaping (String?) -> Void) -> PreparedSolanaSigningPayload? {
+        guard let canonicalMessage = requiredSolanaMessage(for: request,
+                                                           solanaRequest: solanaRequest,
+                                                           completion: completion) else { return nil }
+
+        switch solanaRequest.method {
+        case .signMessage:
+            guard let messageData = solana.decodeMessage(canonicalMessage, asHex: true) else {
+                respond(to: request, error: errorMessage(for: .invalidMessage), completion: completion)
+                return nil
+            }
+
+            return PreparedSolanaSigningPayload(messageData: messageData,
+                                                approvalSubject: .signMessage,
+                                                approvalMessage: approvalMessage(for: solanaRequest,
+                                                                                 canonicalMessage: canonicalMessage,
+                                                                                 decodedMessageData: messageData))
+        case .signTransaction:
+            guard let messageData = decodedSolanaTransactionMessage(canonicalMessage,
+                                                                    publicKey: solanaRequest.publicKey,
+                                                                    request: request,
+                                                                    completion: completion)
+            else { return nil }
+
+            return PreparedSolanaSigningPayload(messageData: messageData,
+                                                approvalSubject: .approveTransaction,
+                                                approvalMessage: approvalMessage(for: solanaRequest,
+                                                                                 canonicalMessage: canonicalMessage))
+        case .connect, .signAllTransactions, .signAndSendTransaction:
+            respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+            return nil
+        }
+    }
+
+    private static func processSerializedSolanaSignAndSendRequest(request: SafariRequest,
+                                                                  solanaRequest: SafariRequest.Solana,
+                                                                  serializedTransaction: String,
+                                                                  wallet: WalletContainer,
+                                                                  account: Account,
+                                                                  completion: @escaping (String?) -> Void) -> DappRequestAction {
+        switch solana.preparedSerializedTransactionForSignAndSend(serializedTransaction: serializedTransaction,
+                                                                 publicKey: solanaRequest.publicKey) {
+        case .failure(let error):
+            respond(to: request, error: errorMessage(for: error), completion: completion)
+            return .none
+        case .success(let preparedSerializedTransaction):
+            return solanaApprovalAction(request: request,
+                                        wallet: wallet,
+                                        account: account,
+                                        subject: .approveTransaction,
+                                        meta: approvalMessage(for: solanaRequest,
+                                                              canonicalMessage: preparedSerializedTransaction.approvalMessage),
+                                        completion: completion) { privateKey in
+                signAndSendSolanaTransaction(request: request,
+                                             solanaRequest: solanaRequest,
+                                             preparedSerializedTransaction: preparedSerializedTransaction,
+                                             privateKey: privateKey,
+                                             completion: completion)
+            }
+        }
+    }
+
+    private static func preparedLegacySolanaSignAndSendTransaction(request: SafariRequest,
+                                                                   solanaRequest: SafariRequest.Solana,
+                                                                   completion: @escaping (String?) -> Void) -> Solana.PreparedLegacySignAndSendTransaction? {
+        guard let message = requiredSolanaMessage(for: request,
+                                                 solanaRequest: solanaRequest,
+                                                 completion: completion) else { return nil }
+
+        switch solana.preparedLegacySignAndSendTransaction(message: message,
+                                                           publicKey: solanaRequest.publicKey) {
+        case .failure(let error):
+            respond(to: request, error: errorMessage(for: error), completion: completion)
+            return nil
+        case .success(let preparedLegacyTransaction):
+            return preparedLegacyTransaction
+        }
+    }
+
+    private static func requiredSolanaMessage(for request: SafariRequest,
+                                              solanaRequest: SafariRequest.Solana,
+                                              completion: @escaping (String?) -> Void) -> String? {
+        guard let message = solanaRequest.message else {
+            respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+            return nil
+        }
+        return message
+    }
+
+    private static func decodedSolanaTransactionMessage(_ message: String,
+                                                        publicKey: String,
+                                                        request: SafariRequest,
+                                                        completion: @escaping (String?) -> Void) -> Data? {
+        guard let messageData = solana.decodeMessage(message, asHex: false) else {
+            respond(to: request, error: errorMessage(for: .invalidMessage), completion: completion)
+            return nil
+        }
+
+        if let validationError = solana.validationErrorForSigningTransaction(messageData: messageData,
+                                                                             publicKey: publicKey) {
+            respond(to: request, error: errorMessage(for: validationError), completion: completion)
+            return nil
+        }
+
+        return messageData
+    }
+
+    private static func approvalMessage(for solanaRequest: SafariRequest.Solana,
+                                        canonicalMessage: String,
+                                        decodedMessageData: Data? = nil) -> String {
+        if solanaRequest.method == .signMessage {
+            if solanaRequest.displayHex {
+                return canonicalMessage
+            }
+
+            guard let messageData = decodedMessageData ?? solana.decodeMessage(canonicalMessage, asHex: true),
+                  let messageText = String(data: messageData, encoding: .utf8),
+                  !messageText.isEmpty
+            else {
+                return canonicalMessage
+            }
+
+            return messageText
+        } else {
+            return Strings.data + ":\n\n" + canonicalMessage
+        }
+    }
+
+    private static func signAndSendSolanaTransaction(request: SafariRequest,
+                                                     solanaRequest: SafariRequest.Solana,
+                                                     preparedSerializedTransaction: Solana.PreparedSerializedTransaction,
+                                                     privateKey: PrivateKey,
+                                                     completion: @escaping (String?) -> Void) {
+        solana.signAndSendTransaction(preparedSerializedTransaction: preparedSerializedTransaction,
+                                      options: solanaRequest.sendOptions,
+                                      privateKey: privateKey,
+                                      completion: solanaSendTransactionResultHandler(request: request,
+                                                                                     completion: completion))
+    }
+
+    private static func signAndSendSolanaTransaction(request: SafariRequest,
+                                                     solanaRequest: SafariRequest.Solana,
+                                                     preparedLegacyTransaction: Solana.PreparedLegacySignAndSendTransaction,
+                                                     privateKey: PrivateKey,
+                                                     completion: @escaping (String?) -> Void) {
+        solana.signAndSendTransaction(preparedLegacyTransaction: preparedLegacyTransaction,
+                                      options: solanaRequest.sendOptions,
+                                      privateKey: privateKey,
+                                      completion: solanaSendTransactionResultHandler(request: request,
+                                                                                     completion: completion))
+    }
+
+    private static func solanaSendTransactionResultHandler(request: SafariRequest,
+                                                           completion: @escaping (String?) -> Void) -> (Result<String, Solana.SendTransactionError>) -> Void {
+        return { result in
+            switch result {
+            case .success(let signature):
+                respond(to: request, solanaResponse: .init(result: signature), completion: completion)
+            case .failure(let error):
+                respond(to: request, error: errorMessage(for: error), completion: completion)
+            }
+        }
+    }
+
+    private static func solanaWalletAndAccount(for request: SafariRequest,
+                                               publicKey: String,
+                                               completion: @escaping (String?) -> Void) -> (WalletContainer, Account)? {
+        guard let walletAndAccount = walletsManager.getWalletAndAccount(coin: .solana, address: publicKey) else {
+            respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+            return nil
+        }
+        return walletAndAccount
+    }
+
+    private static func solanaApprovalAction(request: SafariRequest,
+                                             wallet: WalletContainer,
+                                             account: Account,
+                                             subject: ApprovalSubject,
+                                             meta: String,
+                                             completion: @escaping (String?) -> Void,
+                                             onApprove: @escaping (PrivateKey) -> Void) -> DappRequestAction {
+        let action = SignMessageAction(provider: request.provider,
+                                       subject: subject,
+                                       walletId: wallet.id,
+                                       account: account,
+                                       meta: meta,
+                                       peerMeta: request.peerMeta) { approved in
+            guard approved else {
+                respond(to: request, error: Strings.canceled, completion: completion)
+                return
+            }
+
+            guard let privateKey = walletsManager.getPrivateKey(wallet: wallet, account: account) else {
+                respond(to: request, error: Strings.failedToSign, completion: completion)
+                return
+            }
+
+            onApprove(privateKey)
+        }
+        return .approveMessage(action)
     }
     
     private static func process(request: SafariRequest, ethereumRequest: SafariRequest.Ethereum, completion: @escaping (String?) -> Void) -> DappRequestAction {
@@ -109,9 +457,10 @@ struct DappRequestProcessor {
                                              initiallyConnectedProviders: Set(),
                                              network: nil,
                                              source: .safariExtension) { chain, specificWalletAccounts in
-                if let chain = chain, let specificWalletAccount = specificWalletAccounts?.first, specificWalletAccount.account.coin == .ethereum {
-                    let responseBody = ResponseToExtension.Ethereum(results: [specificWalletAccount.account.address], chainId: chain.chainIdHexString)
-                    respond(to: request, body: .ethereum(responseBody), completion: completion)
+                if let chain = chain,
+                   let specificWalletAccount = specificWalletAccounts?.first,
+                   let responseBody = ethereumResponseBody(for: specificWalletAccount.account, chain: chain) {
+                    respond(to: request, body: responseBody, completion: completion)
                 } else {
                     respond(to: request, error: Strings.canceled, completion: completion)
                 }
@@ -234,7 +583,52 @@ struct DappRequestProcessor {
             }
         }
     }
+
+    private static func selectedAccountResponseBody(for account: Account, chain: EthereumNetwork) -> ResponseToExtension.Body? {
+        if let responseBody = ethereumResponseBody(for: account, chain: chain) {
+            return responseBody
+        }
+        return solanaResponseBody(for: account)
+    }
+
+    private static func ethereumResponseBody(for account: Account, chain: EthereumNetwork) -> ResponseToExtension.Body? {
+        guard account.coin == .ethereum else { return nil }
+        let responseBody = ResponseToExtension.Ethereum(results: [account.address], chainId: chain.chainIdHexString)
+        return .ethereum(responseBody)
+    }
+
+    private static func solanaResponseBody(for account: Account) -> ResponseToExtension.Body? {
+        guard account.coin == .solana else { return nil }
+        let responseBody = ResponseToExtension.Solana(publicKey: account.address)
+        return .solana(responseBody)
+    }
+
+    private static func disconnectedProviders(initiallyConnectedProviders: Set<InpageProvider>,
+                                              selectedAccounts: [SpecificWalletAccount]) -> Set<InpageProvider> {
+        let selectedCoins = Set(selectedAccounts.map { $0.account.coin })
+        return initiallyConnectedProviders.filter { provider in
+            guard let coin = CoinType.correspondingToInpageProvider(provider) else {
+                return true
+            }
+            return !selectedCoins.contains(coin)
+        }
+    }
+
+    private static func errorMessage(for error: Solana.SendTransactionError) -> String {
+        switch error {
+        case .invalidMessage:
+            return Strings.somethingWentWrong
+        case .unsupportedMultiSignature, .blockhashNotFound, .unknown:
+            return Strings.failedToSend
+        case .unsupportedClusterSelection:
+            return Strings.solanaTransactionSendingUnavailable
+        }
+    }
     
+    private static func respond(to safariRequest: SafariRequest, solanaResponse: ResponseToExtension.Solana, completion: (String?) -> Void) {
+        respond(to: safariRequest, body: .solana(solanaResponse), completion: completion)
+    }
+
     private static func respond(to safariRequest: SafariRequest, body: ResponseToExtension.Body, completion: (String?) -> Void) {
         let response = ResponseToExtension(for: safariRequest, body: body)
         sendResponse(response, completion: completion)

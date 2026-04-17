@@ -11,6 +11,7 @@ class EditAccountsViewController: UIViewController {
     }
     
     var wallet: WalletContainer!
+    var selectAccountAction: SelectAccountAction?
     private let walletsManager = WalletsManager.shared
     private var cellModels = [PreviewAccountCellModel]()
     private let previewAccountsQueue = DispatchQueue(label: "org.lil.wallet.accounts", qos: .userInitiated)
@@ -18,7 +19,8 @@ class EditAccountsViewController: UIViewController {
     private var requestedPreviewFor: Int?
     private var lastPreviewDate = Date()
     private var toggledIndexes = Set<Int>()
-    private var enabledUndiscoveredAccounts = [Account]()
+    private var enabledUndiscoveredAccountKeys = Set<WalletPreviewAccountKey>()
+    private var previewCoin: CoinType? { selectAccountAction?.coinType }
     
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var tableView: UITableView! {
@@ -39,17 +41,14 @@ class EditAccountsViewController: UIViewController {
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
         navigationItem.leftBarButtonItem = UIBarButtonItem(title: Strings.cancel, style: .plain, target: self, action: #selector(dismissAnimated))
-        enabledUndiscoveredAccounts = wallet.accounts
-        guard let previewAccounts = try? walletsManager.previewAccounts(wallet: wallet, page: 0) else { return }
+        enabledUndiscoveredAccountKeys = Set(wallet.accounts.map { $0.previewAccountKey })
+        guard let previewAccounts = try? walletsManager.previewAccounts(wallet: wallet, page: 0, coin: previewCoin) else { return }
         appendPreviewAccounts(previewAccounts)
     }
     
     private func appendPreviewAccounts(_ previewAccounts: [Account]) {
         let newCellModels = previewAccounts.map { account in
-            let isEnabled = enabledUndiscoveredAccounts.first?.derivationPath == account.derivationPath
-            if isEnabled {
-                enabledUndiscoveredAccounts.removeFirst()
-            }
+            let isEnabled = enabledUndiscoveredAccountKeys.remove(account.previewAccountKey) != nil
             return PreviewAccountCellModel(account: account, isEnabled: isEnabled)
         }
         cellModels.append(contentsOf: newCellModels)
@@ -77,7 +76,8 @@ class EditAccountsViewController: UIViewController {
             dismissAnimated()
             return
         }
-        let newAccounts: [Account] = (cellModels.compactMap { $0.isEnabled ? $0.account : nil }) + enabledUndiscoveredAccounts
+        let remainingEnabledAccounts = wallet.accounts.filter { enabledUndiscoveredAccountKeys.contains($0.previewAccountKey) }
+        let newAccounts: [Account] = (cellModels.compactMap { $0.isEnabled ? $0.account : nil }) + remainingEnabledAccounts
         do {
             try walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
             dismissAnimated()
@@ -101,15 +101,17 @@ class EditAccountsViewController: UIViewController {
         }
         lastPreviewDate = Date()
         previewAccountsQueue.async { [weak self] in
-            guard let wallet = self?.wallet,
-                  let page = self?.page,
-                  let previewAccounts = try? self?.walletsManager.previewAccounts(wallet: wallet, page: page) else { return }
+            guard let self,
+                  let previewAccounts = try? self.walletsManager.previewAccounts(wallet: self.wallet,
+                                                                                 page: self.page,
+                                                                                 coin: self.previewCoin) else { return }
             DispatchQueue.main.async {
-                self?.appendPreviewAccounts(previewAccounts)
-                self?.page += 1
-                if let currentCount = self?.cellModels.count {
+                self.appendPreviewAccounts(previewAccounts)
+                self.page += 1
+                let currentCount = self.cellModels.count
+                if !previewAccounts.isEmpty {
                     let range = (currentCount - previewAccounts.count)..<currentCount
-                    self?.tableView.insertRows(at: range.map({ IndexPath(row: $0, section: 0) }), with: .fade)
+                    self.tableView.insertRows(at: range.map({ IndexPath(row: $0, section: 0) }), with: .fade)
                 }
             }
         }

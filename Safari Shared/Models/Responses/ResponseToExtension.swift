@@ -9,14 +9,17 @@ struct ResponseToExtension {
     
     enum Body {
         case ethereum(Ethereum)
+        case solana(Solana)
         case multiple(Multiple)
         
         var json: [String: Any] {
             let data: Data?
             let jsonEncoder = JSONEncoder()
-            
+
             switch self {
             case .ethereum(let body):
+                data = try? jsonEncoder.encode(body)
+            case .solana(let body):
                 data = try? jsonEncoder.encode(body)
             case .multiple(let body):
                 let dict: [String: Any] = [
@@ -26,7 +29,7 @@ struct ResponseToExtension {
                 ]
                 return dict
             }
-            
+
             if let data = data, var dict = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
                 dict["provider"] = provider.rawValue
                 return dict
@@ -39,6 +42,8 @@ struct ResponseToExtension {
             switch self {
             case .ethereum:
                 return .ethereum
+            case .solana:
+                return .solana
             case .multiple:
                 return .multiple
             }

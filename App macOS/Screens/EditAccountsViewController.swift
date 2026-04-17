@@ -21,7 +21,8 @@ class EditAccountsViewController: NSViewController {
     private var requestedPreviewFor: Int?
     private var lastPreviewDate = Date()
     private var toggledIndexes = Set<Int>()
-    private var enabledUndiscoveredAccounts = [Account]()
+    private var enabledUndiscoveredAccountKeys = Set<WalletPreviewAccountKey>()
+    private var previewCoin: CoinType? { selectAccountAction?.coinType }
     
     @IBOutlet weak var tableView: RightClickTableView! {
         didSet {
@@ -41,17 +42,14 @@ class EditAccountsViewController: NSViewController {
         cancelButton.title = Strings.cancel
         titleLabel.stringValue = Strings.editAccounts.replacingOccurrences(of: " ", with: "\n")
         
-        enabledUndiscoveredAccounts = wallet.accounts
-        guard let previewAccounts = try? walletsManager.previewAccounts(wallet: wallet, page: 0) else { return }
+        enabledUndiscoveredAccountKeys = Set(wallet.accounts.map { $0.previewAccountKey })
+        guard let previewAccounts = try? walletsManager.previewAccounts(wallet: wallet, page: 0, coin: previewCoin) else { return }
         appendPreviewAccounts(previewAccounts)
     }
     
     private func appendPreviewAccounts(_ previewAccounts: [Account]) {
         let newCellModels = previewAccounts.map { account in
-            let isEnabled = enabledUndiscoveredAccounts.first?.derivationPath == account.derivationPath
-            if isEnabled {
-                enabledUndiscoveredAccounts.removeFirst()
-            }
+            let isEnabled = enabledUndiscoveredAccountKeys.remove(account.previewAccountKey) != nil
             return PreviewAccountCellModel(account: account, isEnabled: isEnabled)
         }
         cellModels.append(contentsOf: newCellModels)
@@ -67,7 +65,8 @@ class EditAccountsViewController: NSViewController {
             return
         }
         
-        let newAccounts: [Account] = (cellModels.compactMap { $0.isEnabled ? $0.account : nil }) + enabledUndiscoveredAccounts
+        let remainingEnabledAccounts = wallet.accounts.filter { enabledUndiscoveredAccountKeys.contains($0.previewAccountKey) }
+        let newAccounts: [Account] = (cellModels.compactMap { $0.isEnabled ? $0.account : nil }) + remainingEnabledAccounts
         do {
             try walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
             showAccountsList()
@@ -83,7 +82,7 @@ class EditAccountsViewController: NSViewController {
         view.window?.contentViewController = accountsListViewController
     }
     
-    private func toggleCoinDerivation(row: Int) {
+    private func toggleAccount(at row: Int) {
         cellModels[row].isEnabled.toggle()
         okButton.isEnabled = cellModels.contains(where: { $0.isEnabled })
         if toggledIndexes.contains(row) {
@@ -108,15 +107,17 @@ class EditAccountsViewController: NSViewController {
         }
         lastPreviewDate = Date()
         previewAccountsQueue.async { [weak self] in
-            guard let wallet = self?.wallet,
-                  let page = self?.page,
-                  let previewAccounts = try? self?.walletsManager.previewAccounts(wallet: wallet, page: page) else { return }
+            guard let self,
+                  let previewAccounts = try? self.walletsManager.previewAccounts(wallet: self.wallet,
+                                                                                 page: self.page,
+                                                                                 coin: self.previewCoin) else { return }
             DispatchQueue.main.async {
-                self?.appendPreviewAccounts(previewAccounts)
-                self?.page += 1
-                if let currentCount = self?.cellModels.count {
+                self.appendPreviewAccounts(previewAccounts)
+                self.page += 1
+                let currentCount = self.cellModels.count
+                if !previewAccounts.isEmpty {
                     let range = (currentCount - previewAccounts.count)..<currentCount
-                    self?.tableView.insertRows(at: IndexSet(integersIn: range))
+                    self.tableView.insertRows(at: IndexSet(integersIn: range))
                 }
             }
         }
@@ -129,7 +130,7 @@ extension EditAccountsViewController: PreviewAccountCellDelegate {
     func didToggleCheckmark(_ sender: NSTableRowView) {
         let row = tableView.row(for: sender)
         guard row >= 0 else { return }
-        toggleCoinDerivation(row: row)
+        toggleAccount(at: row)
     }
     
 }
@@ -139,7 +140,7 @@ extension EditAccountsViewController: NSTableViewDelegate {
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
         if let rowView = tableView.rowView(atRow: row, makeIfNecessary: false) as? PreviewAccountCellView {
             rowView.toggle()
-            toggleCoinDerivation(row: row)
+            toggleAccount(at: row)
         }
         return false
     }

@@ -515,6 +515,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let editAction = UIAlertAction(title: Strings.editAccounts, style: .default) { [weak self] _ in
             let editAccountsViewController = instantiate(EditAccountsViewController.self, from: .main)
             editAccountsViewController.wallet = wallet
+            editAccountsViewController.selectAccountAction = self?.selectAccountAction
             self?.present(editAccountsViewController.inNavigationController, animated: true)
         }
         

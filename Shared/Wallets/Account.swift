@@ -2,7 +2,16 @@
 
 import WalletCore
 
+struct WalletPreviewAccountKey: Hashable {
+    let coin: CoinType
+    let derivationPath: String
+}
+
 extension Account {
+
+    var previewAccountKey: WalletPreviewAccountKey {
+        return WalletPreviewAccountKey(coin: coin, derivationPath: derivationPath)
+    }
 
     var croppedAddress: String {
         let dropFirstCount: Int

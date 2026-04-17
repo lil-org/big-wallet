@@ -38,8 +38,19 @@ extension CoinType {
         switch inpageProvider {
         case .ethereum:
             return .ethereum
+        case .solana:
+            return .solana
         case .unknown, .multiple:
             return nil
+        }
+    }
+
+    func normalizedAddress(_ address: String) -> String {
+        switch self {
+        case .ethereum:
+            return address.lowercased()
+        default:
+            return address
         }
     }
     

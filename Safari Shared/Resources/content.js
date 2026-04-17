@@ -224,7 +224,7 @@ function getFavicon() {
 function requiresConfirmation(name) {
     if (isMobile) {
         const timeDelta = Date.now() - document.loadedAt;
-        return (timeDelta < 999 || document.alwaysConfirm) && (name == "requestAccounts");
+        return (timeDelta < 999 || document.alwaysConfirm) && (name == "requestAccounts" || name == "connect");
     } else {
         return false;
     }

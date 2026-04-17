@@ -6,9 +6,8 @@ protocol SafariRequestBody {
     var responseUpdatesStoredConfiguration: Bool { get }
 }
 
-// Refactor: make codable
 struct SafariRequest {
-    
+
     let id: Int
     let name: String
     let provider: InpageProvider
@@ -19,10 +18,13 @@ struct SafariRequest {
     enum Body {
         case unknown(Unknown)
         case ethereum(Ethereum)
-        
+        case solana(Solana)
+
         var value: SafariRequestBody {
             switch self {
             case .ethereum(let body):
+                return body
+            case .solana(let body):
                 return body
             case .unknown(let body):
                 return body
@@ -70,6 +72,10 @@ struct SafariRequest {
         case .ethereum:
             if let request = Ethereum(name: name, json: jsonBody) {
                 body = .ethereum(request)
+            }
+        case .solana:
+            if let request = Solana(name: name, json: jsonBody) {
+                body = .solana(request)
             }
         case .unknown, .multiple:
             if let request = Unknown(name: name, json: jsonBody) {

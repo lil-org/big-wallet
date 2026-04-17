@@ -19,6 +19,10 @@ final class WalletsManager {
     static let shared = WalletsManager()
     private let keychain = Keychain.shared
     private let defaultCoin = CoinType.ethereum
+    private let defaultMnemonicCoinDerivations: [(coin: CoinType, derivation: Derivation)] = [
+        (.ethereum, .default),
+        (.solana, .solanaSolana),
+    ]
     private(set) var wallets = [WalletContainer]()
 
     private init() {}
@@ -63,31 +67,45 @@ final class WalletsManager {
     }
     
     func getSpecificAccount(coin: CoinType, address: String) -> SpecificWalletAccount? {
-        for wallet in wallets {
-            if let account = wallet.accounts.first(where: { $0.coin == coin && $0.address.lowercased() == address.lowercased() }) {
-                return SpecificWalletAccount(walletId: wallet.id, account: account)
-            }
+        return getWalletAndAccount(coin: coin, address: address).map { wallet, account in
+            SpecificWalletAccount(walletId: wallet.id, account: account)
         }
-        return nil
     }
     
     func suggestedAccounts(coin: CoinType? = nil) -> [SpecificWalletAccount] {
-        let coinToSelect = coin ?? defaultCoin
-        for wallet in wallets {
-            if let account = wallet.accounts.first(where: { $0.coin == coinToSelect }) {
-                return [SpecificWalletAccount(walletId: wallet.id, account: account)]
-            }
-        }
-        return []
+        return suggestedAccounts(for: [coin ?? defaultCoin])
+    }
+
+    func suggestedAccounts(providers: Set<InpageProvider>) -> [SpecificWalletAccount] {
+        guard !providers.isEmpty else { return [] }
+
+        let coins = InpageProvider.allCases
+            .filter(providers.contains)
+            .compactMap(CoinType.correspondingToInpageProvider)
+        return suggestedAccounts(for: coins)
     }
     
-    func previewAccounts(wallet: WalletContainer, page: Int) throws -> [Account] {
+    func previewAccounts(wallet: WalletContainer, page: Int, coin: CoinType? = nil) throws -> [Account] {
         guard let password = keychain.password, let hdWallet = wallet.key.wallet(password: Data(password.utf8)) else { throw Error.keychainAccessFailure }
-        let coin = defaultCoin
+        return try previewAccounts(hdWallet: hdWallet, page: page, coin: coin)
+    }
+
+    private func previewAccounts(hdWallet: HDWallet, page: Int, coin: CoinType?) throws -> [Account] {
+        guard let coin else {
+            return try defaultMnemonicCoins.flatMap { previewCoin in
+                try previewAccounts(hdWallet: hdWallet, page: page, coin: previewCoin)
+            }
+        }
+
+        if coin == .solana {
+            guard page == 0 else { return [] }
+            return [try previewSolanaAccount(hdWallet: hdWallet)]
+        }
+
         let range = (page * 21)..<((page + 1) * 21)
+        let xpub = hdWallet.getExtendedPublicKey(purpose: coin.purpose, coin: coin, version: coin.xpubVersion)
         let accounts = range.compactMap { i -> Account? in
             let dp = DerivationPath(purpose: .bip44, coin: coin.slip44Id, account: 0, change: 0, address: UInt32(i)).description
-            let xpub = hdWallet.getExtendedPublicKey(purpose: coin.purpose, coin: coin, version: .xpub)
             guard let pubkey = HDWallet.getPublicKeyFromExtended(extended: xpub, coin: coin, derivationPath: dp) else { return nil }
             let address = coin.deriveAddressFromPublicKey(publicKey: pubkey)
             let account = Account(address: address, coin: coin, derivation: .custom, derivationPath: dp, publicKey: pubkey.description, extendedPublicKey: xpub)
@@ -96,12 +114,12 @@ final class WalletsManager {
         guard accounts.count == range.count else { throw Error.failedToDeriveAccount }
         return accounts
     }
-    
+
     private func createWallet(name: String, password: String) throws -> WalletContainer {
         let key = StoredKey(name: name, password: Data(password.utf8))
         let id = makeNewWalletId()
         let wallet = WalletContainer(id: id, key: key)
-        _ = try wallet.getAccount(password: password, coin: defaultCoin)
+        try addDefaultMnemonicAccounts(to: wallet, password: password)
         wallets.append(wallet)
         try save(wallet: wallet, isUpdate: false)
         return wallet
@@ -136,7 +154,7 @@ final class WalletsManager {
         guard let key = StoredKey.importHDWallet(mnemonic: mnemonic, name: name, password: Data(encryptPassword.utf8), coin: defaultCoin) else { throw KeyStore.Error.invalidMnemonic }
         let id = makeNewWalletId()
         let wallet = WalletContainer(id: id, key: key)
-        _ = try wallet.getAccount(password: encryptPassword, coin: defaultCoin)
+        try addDefaultMnemonicAccounts(to: wallet, password: encryptPassword)
         wallets.append(wallet)
         try save(wallet: wallet, isUpdate: false)
         return wallet
@@ -250,6 +268,79 @@ final class WalletsManager {
     }
     
     private let defaultWalletName = ""
+    private lazy var defaultMnemonicCoins: [CoinType] = {
+        var previewCoins = [CoinType]()
+        var seenCoins = Set<CoinType>()
+
+        for derivation in defaultMnemonicCoinDerivations where seenCoins.insert(derivation.coin).inserted {
+            previewCoins.append(derivation.coin)
+        }
+
+        return previewCoins
+    }()
+
+    private func suggestedAccounts(for coins: [CoinType]) -> [SpecificWalletAccount] {
+        var suggestions = [SpecificWalletAccount]()
+        var seenCoins = Set<CoinType>()
+
+        for coin in coins {
+            guard seenCoins.insert(coin).inserted else { continue }
+            if let suggestion = firstSuggestedAccount(for: coin) {
+                suggestions.append(suggestion)
+            }
+        }
+
+        return suggestions
+    }
+
+    private func firstSuggestedAccount(for coin: CoinType) -> SpecificWalletAccount? {
+        for wallet in wallets {
+            if let account = wallet.accounts.first(where: { $0.coin == coin }) {
+                return SpecificWalletAccount(walletId: wallet.id, account: account)
+            }
+        }
+        return nil
+    }
+
+    private func addMnemonicAccounts(to wallet: WalletContainer,
+                                     password: String,
+                                     coinDerivations: [(coin: CoinType, derivation: Derivation)]) throws {
+        guard wallet.isMnemonic else { return }
+
+        let hdWallet = wallet.key.wallet(password: Data(password.utf8))
+        for (coin, derivation) in coinDerivations
+        where !wallet.accounts.contains(where: { $0.coin == coin && $0.derivation == derivation }) {
+            guard wallet.key.accountForCoinDerivation(coin: coin, derivation: derivation, wallet: hdWallet) != nil else {
+                throw KeyStore.Error.invalidPassword
+            }
+        }
+    }
+
+    private func addDefaultMnemonicAccounts(to wallet: WalletContainer, password: String) throws {
+        try addMnemonicAccounts(to: wallet, password: password, coinDerivations: defaultMnemonicCoinDerivations)
+    }
+
+    private func previewSolanaAccount(hdWallet: HDWallet) throws -> Account {
+        let coin = CoinType.solana
+        let derivation = Derivation.solanaSolana
+        let derivationPath = coin.derivationPathWithDerivation(derivation: derivation)
+        let privateKey = hdWallet.getKey(coin: coin, derivationPath: derivationPath)
+        let publicKey = privateKey.getPublicKey(coinType: coin)
+        let address = hdWallet.getAddressDerivation(coin: coin, derivation: derivation)
+        let extendedPublicKey = hdWallet.getExtendedPublicKeyDerivation(purpose: coin.purpose,
+                                                                        coin: coin,
+                                                                        derivation: derivation,
+                                                                        version: coin.xpubVersion)
+
+        guard !address.isEmpty else { throw Error.failedToDeriveAccount }
+
+        return Account(address: address,
+                       coin: coin,
+                       derivation: derivation,
+                       derivationPath: derivationPath,
+                       publicKey: publicKey.description,
+                       extendedPublicKey: extendedPublicKey)
+    }
     
     private func makeNewWalletId() -> String {
         let uuid = UUID().uuidString
@@ -277,10 +368,10 @@ extension WalletsManager {
     }
     
     func getWalletAndAccount(coin: CoinType, address: String) -> (WalletContainer, Account)? {
-        let needle = address.lowercased()
+        let normalizedAddress = coin.normalizedAddress(address)
         for wallet in wallets {
             for account in wallet.accounts where account.coin == coin {
-                let match = account.address.lowercased() == needle
+                let match = coin.normalizedAddress(account.address) == normalizedAddress
                 if match {
                     return (wallet, account)
                 }

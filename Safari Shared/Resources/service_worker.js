@@ -75,11 +75,7 @@ function storeLatestConfiguration(host, configuration) {
     } else if ("provider" in configuration) {
         (async () => {
             const latest = await getLatestConfiguration(host);
-            if (Array.isArray(latest)) {
-                latestArray = latest;
-            } else if (typeof latest !== "undefined" && "provider" in latest) {
-                latestArray = [latest];
-            }
+            latestArray = latestConfigurationsArray(latest);
             var shouldAdd = true;
             for (var i = 0; i < latestArray.length; i++) {
                 if (latestArray[i].provider == configuration.provider) {
@@ -96,19 +92,23 @@ function storeLatestConfiguration(host, configuration) {
     }
 }
 
+function latestConfigurationsArray(latest) {
+    if (Array.isArray(latest)) {
+        return latest.slice();
+    }
+    if (latest && Array.isArray(latest.latestConfigurations)) {
+        return latest.latestConfigurations.slice();
+    }
+    if (typeof latest !== "undefined" && latest && "provider" in latest) {
+        return [latest];
+    }
+    return [];
+}
+
 function getLatestConfiguration(host) {
     return new Promise((resolve) => {
         browser.storage.local.get(host).then(result => {
-            const latest = result[host];
-            let response = {};
-            if (Array.isArray(latest)) {
-                response.latestConfigurations = latest;
-            } else if (typeof latest !== "undefined" && "provider" in latest) {
-                response.latestConfigurations = [latest];
-            } else {
-                response.latestConfigurations = [];
-            }
-            resolve(response);
+            resolve({ latestConfigurations: latestConfigurationsArray(result[host]) });
         }).catch(() => {
             resolve({ latestConfigurations: [] });
         });

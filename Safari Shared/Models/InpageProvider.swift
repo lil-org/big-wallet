@@ -2,6 +2,6 @@
 
 import Foundation
 
-enum InpageProvider: String, Codable {
-    case ethereum, unknown, multiple
+enum InpageProvider: String, Codable, CaseIterable {
+    case ethereum, solana, unknown, multiple
 }
