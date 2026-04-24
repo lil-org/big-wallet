@@ -35,18 +35,8 @@ struct DappRequestProcessor {
                 ExtensionBridge.respond(response: ResponseToExtension(for: request))
                 return .justShowApp
             case .switchAccount:
-                let initiallyConnectedProviders = Set(body.providerConfigurations.map { $0.provider })
-                var preselectedAccounts = body.providerConfigurations.compactMap { (configuration) -> SpecificWalletAccount? in
-                    guard let coin = CoinType.correspondingToInpageProvider(configuration.provider) else { return nil }
-                    return walletsManager.getSpecificAccount(coin: coin, address: configuration.address)
-                }
-                if preselectedAccounts.isEmpty {
-                    if initiallyConnectedProviders.isEmpty {
-                        preselectedAccounts = walletsManager.suggestedAccounts()
-                    } else {
-                        preselectedAccounts = walletsManager.suggestedAccounts(providers: initiallyConnectedProviders)
-                    }
-                }
+                let initiallyConnectedProviders = connectedProviders(in: body.providerConfigurations)
+                let preselectedAccounts = preselectedAccounts(for: body.providerConfigurations)
                 
                 let chainId = body.providerConfigurations.compactMap { $0.chainId }.first
                 let network = Networks.withChainIdHex(chainId)
@@ -652,6 +642,56 @@ struct DappRequestProcessor {
         return .solana(responseBody)
     }
 
+    private static func preselectedAccounts(for providerConfigurations: [SafariRequest.Unknown.ProviderConfiguration]) -> [SpecificWalletAccount] {
+        return preselectedAccounts(for: providerConfigurations,
+                                   accountForConfiguration: { configuration in
+            guard let coin = CoinType.correspondingToInpageProvider(configuration.provider),
+                  let address = configuration.address,
+                  !address.isEmpty
+            else { return nil }
+            return walletsManager.getSpecificAccount(coin: coin, address: address)
+        }, suggestedAccountsForProviders: { providers in
+            walletsManager.suggestedAccounts(providers: providers)
+        }, defaultSuggestedAccounts: {
+            walletsManager.suggestedAccounts()
+        })
+    }
+
+    static func preselectedAccounts(for providerConfigurations: [SafariRequest.Unknown.ProviderConfiguration],
+                                    accountForConfiguration: (SafariRequest.Unknown.ProviderConfiguration) -> SpecificWalletAccount?,
+                                    suggestedAccountsForProviders: (Set<InpageProvider>) -> [SpecificWalletAccount],
+                                    defaultSuggestedAccounts: () -> [SpecificWalletAccount]) -> [SpecificWalletAccount] {
+        return preselectedAccounts(for: providerConfigurations,
+                                   accountForConfiguration: accountForConfiguration,
+                                   suggestedValuesForProviders: suggestedAccountsForProviders,
+                                   defaultSuggestedValues: defaultSuggestedAccounts)
+    }
+
+    static func preselectedAccounts<Value>(for providerConfigurations: [SafariRequest.Unknown.ProviderConfiguration],
+                                           accountForConfiguration: (SafariRequest.Unknown.ProviderConfiguration) -> Value?,
+                                           suggestedValuesForProviders: (Set<InpageProvider>) -> [Value],
+                                           defaultSuggestedValues: () -> [Value]) -> [Value] {
+        let connectedProviders = connectedProviders(in: providerConfigurations)
+        guard !connectedProviders.isEmpty else { return defaultSuggestedValues() }
+
+        var preselectedValues = [Value]()
+        var resolvedProviders = Set<InpageProvider>()
+        for configuration in providerConfigurations {
+            guard !resolvedProviders.contains(configuration.provider),
+                  CoinType.correspondingToInpageProvider(configuration.provider) != nil,
+                  let value = accountForConfiguration(configuration)
+            else { continue }
+
+            preselectedValues.append(value)
+            resolvedProviders.insert(configuration.provider)
+        }
+
+        let missingProviders = connectedProviders.subtracting(resolvedProviders)
+        guard !missingProviders.isEmpty else { return preselectedValues }
+
+        return preselectedValues + suggestedValuesForProviders(missingProviders)
+    }
+
     private static func disconnectedProviders(initiallyConnectedProviders: Set<InpageProvider>,
                                               selectedAccounts: [SpecificWalletAccount]) -> Set<InpageProvider> {
         let selectedCoins = Set(selectedAccounts.map { $0.account.coin })
@@ -661,6 +701,12 @@ struct DappRequestProcessor {
             }
             return !selectedCoins.contains(coin)
         }
+    }
+
+    private static func connectedProviders(in providerConfigurations: [SafariRequest.Unknown.ProviderConfiguration]) -> Set<InpageProvider> {
+        return Set(providerConfigurations.map { $0.provider }.filter { provider in
+            CoinType.correspondingToInpageProvider(provider) != nil
+        })
     }
 
     private static func errorMessage(for error: Solana.SendTransactionError) -> String {

@@ -13,7 +13,7 @@ extension SafariRequest {
         
         struct ProviderConfiguration {
             let provider: InpageProvider
-            let address: String
+            let address: String?
             let chainId: String?
         }
         
@@ -35,13 +35,15 @@ extension SafariRequest {
                     
                     switch provider {
                     case .ethereum:
-                        guard let response = try? jsonDecoder.decode(ResponseToExtension.Ethereum.self, from: data),
-                              let address = response.results?.first else { continue }
-                        configurations.append(ProviderConfiguration(provider: provider, address: address, chainId: response.chainId))
+                        let response = try? jsonDecoder.decode(ResponseToExtension.Ethereum.self, from: data)
+                        configurations.append(ProviderConfiguration(provider: provider,
+                                                                     address: response?.results?.first,
+                                                                     chainId: response?.chainId))
                     case .solana:
-                        guard let response = try? jsonDecoder.decode(ResponseToExtension.Solana.self, from: data),
-                              let publicKey = response.publicKey else { continue }
-                        configurations.append(ProviderConfiguration(provider: provider, address: publicKey, chainId: nil))
+                        let response = try? jsonDecoder.decode(ResponseToExtension.Solana.self, from: data)
+                        configurations.append(ProviderConfiguration(provider: provider,
+                                                                     address: response?.publicKey,
+                                                                     chainId: nil))
                     case .unknown, .multiple:
                         continue
                     }

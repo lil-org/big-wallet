@@ -158,4 +158,63 @@ final class TransactionInspectorTests: XCTestCase {
         XCTAssertEqual(devnetEndpoint.source, .publicFallback)
     }
 
+    func testSwitchAccountPreselectionPreservesResolvedAccountsAndFillsStaleProviders() {
+        let ethereumAccount = "ethereum-account"
+        let solanaAccount = "solana-account"
+        let providerConfigurations: [SafariRequest.Unknown.ProviderConfiguration] = [
+            .init(provider: .ethereum, address: "0x0000000000000000000000000000000000000abc", chainId: "0x1"),
+            .init(provider: .solana, address: "stale-solana-public-key", chainId: nil),
+        ]
+
+        let preselectedAccounts: [String] = DappRequestProcessor.preselectedAccounts(for: providerConfigurations,
+                                                                                      accountForConfiguration: { configuration in
+            guard configuration.provider == .ethereum else { return nil }
+            return ethereumAccount
+        }, suggestedValuesForProviders: { providers in
+            XCTAssertEqual(providers, [.solana])
+            return [solanaAccount]
+        }, defaultSuggestedValues: {
+            XCTFail("Expected stale provider fallback, not empty-configuration fallback")
+            return []
+        })
+
+        XCTAssertEqual(preselectedAccounts, [ethereumAccount, solanaAccount])
+    }
+
+    func testSwitchAccountPreselectionUsesMalformedProviderEntriesForSuggestions() {
+        let solanaAccount = "solana-account"
+        let providerConfigurations: [SafariRequest.Unknown.ProviderConfiguration] = [
+            .init(provider: .solana, address: nil, chainId: nil),
+        ]
+
+        let preselectedAccounts: [String] = DappRequestProcessor.preselectedAccounts(for: providerConfigurations,
+                                                                                      accountForConfiguration: { _ in nil },
+                                                                                      suggestedValuesForProviders: { providers in
+            XCTAssertEqual(providers, [.solana])
+            return [solanaAccount]
+        }, defaultSuggestedValues: {
+            XCTFail("Expected malformed provider fallback, not empty-configuration fallback")
+            return []
+        })
+
+        XCTAssertEqual(preselectedAccounts, [solanaAccount])
+    }
+
+    func testSwitchAccountPreselectionUsesExplicitDefaultForEmptyConfigurations() {
+        let ethereumAccount = "ethereum-account"
+
+        let preselectedAccounts: [String] = DappRequestProcessor.preselectedAccounts(for: [],
+                                                                                      accountForConfiguration: { _ in
+            XCTFail("Empty configuration should not resolve stored accounts")
+            return nil
+        }, suggestedValuesForProviders: { _ in
+            XCTFail("Empty configuration should use explicit default suggestions")
+            return []
+        }, defaultSuggestedValues: {
+            [ethereumAccount]
+        })
+
+        XCTAssertEqual(preselectedAccounts, [ethereumAccount])
+    }
+
 }
