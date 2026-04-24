@@ -230,7 +230,9 @@ struct DappRequestProcessor {
 
         switch solanaRequest.method {
         case .signMessage:
-            guard let messageData = solana.decodeMessage(canonicalMessage, asHex: true) else {
+            guard let signMessageEncoding = solanaRequest.signMessageEncoding,
+                  let messageData = decodedSolanaSignMessage(canonicalMessage,
+                                                             messageEncoding: signMessageEncoding) else {
                 respond(to: request, error: errorMessage(for: .invalidMessage), completion: completion)
                 return nil
             }
@@ -332,6 +334,16 @@ struct DappRequestProcessor {
         }
 
         return messageData
+    }
+
+    static func decodedSolanaSignMessage(_ message: String,
+                                         messageEncoding: SafariRequest.Solana.MessageEncoding) -> Data? {
+        switch messageEncoding {
+        case .hex:
+            return solana.decodeMessage(message, asHex: true)
+        case .utf8:
+            return message.data(using: .utf8)
+        }
     }
 
     private static func approvalMessage(for solanaRequest: SafariRequest.Solana,

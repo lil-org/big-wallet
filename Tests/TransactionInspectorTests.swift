@@ -51,6 +51,71 @@ final class TransactionInspectorTests: XCTestCase {
         XCTAssertNil(SolanaWireMessageParser.parse(message))
     }
 
+    func testSerializedSolanaSignAndSendRejectsMissingCosignerSignature() {
+        let publicKey = "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi"
+        let serializedTransaction = "9zGkjda8PRRp5ACHpyuUwsnoJdka6WLgqy33xpBTRRAXCekyUVMvq5Mj8je4vBhWVqATsModBBo9x5NQj63pwCAsmPCfxrG2HZd1qKgtjCK3S9myFjyp9yafrzU64nkVCtwjG5PhzzBfE7gVY5oTRX6t5YbRjcwoj61iKeHvdrQ7JQ7hPP3Aw8kpyTrZvMLuAUAxbtwHXJSwGsEmBdi2WBbTZJrANP7ZjwLj43bL83csLi6mPus7wxGtRjAbAvo4sWJBFYUHwNzKgsHaFKgEMYD4hszaBLCxcBqcVcCrrQdsM4YtBQLn6y9a"
+
+        switch Solana.shared.preparedSerializedTransactionForSignAndSend(serializedTransaction: serializedTransaction,
+                                                                         publicKey: publicKey) {
+        case .failure(.unsupportedMultiSignature):
+            break
+        case .failure(let error):
+            XCTFail("Expected unsupportedMultiSignature, got \(error)")
+        case .success:
+            XCTFail("Expected missing cosigner signature to be rejected")
+        }
+    }
+
+    func testSerializedSolanaSignAndSendAcceptsPresentCosignerSignature() {
+        let publicKey = "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi"
+        let serializedTransaction = "9zGkjda8PRRp5ACHpyuUwsnoJdka6WLgqy33xpBTRRAXCekyUVMvq5Mj8je4vBhWVqATsModBBo9x5NQj63pwCAsnnH8wtkDU6KFo6h9KhWo2aaCDoM1EM2VgPTNzTfx19MzSXyy3WsnUL8orxQv2n3ptDcvxJYaCxaVpKW3rMiFvu2Nsx4DyaLTJZbMPCFe313Ho5YzLShei77h5jzd4ToE13MApGzHJbHZ1WYNH71BowQijwG3zPsKLNgM6PXZhyhT5A7gxsQiymopaco7dBmLeXnrLbZLf4UrrJSHvYnvA3hsgxBewN96"
+
+        switch Solana.shared.preparedSerializedTransactionForSignAndSend(serializedTransaction: serializedTransaction,
+                                                                         publicKey: publicKey) {
+        case .success:
+            break
+        case .failure(let error):
+            XCTFail("Expected prepared transaction, got \(error)")
+        }
+    }
+
+    func testSolanaSignMessageDecodingUsesWireEncodingNotDisplayEncoding() {
+        let encodedHello = "0x68656c6c6f"
+        XCTAssertEqual(DappRequestProcessor.decodedSolanaSignMessage(encodedHello,
+                                                                     messageEncoding: .hex),
+                       Data("hello".utf8))
+        XCTAssertEqual(DappRequestProcessor.decodedSolanaSignMessage("hello",
+                                                                     messageEncoding: .utf8),
+                       Data("hello".utf8))
+        XCTAssertEqual(DappRequestProcessor.decodedSolanaSignMessage("dead",
+                                                                     messageEncoding: .utf8),
+                       Data("dead".utf8))
+        XCTAssertNil(DappRequestProcessor.decodedSolanaSignMessage("hello",
+                                                                   messageEncoding: .hex))
+        XCTAssertEqual(solanaSignMessageEncoding(display: "utf8", messageEncoding: "hex"), .hex)
+        XCTAssertEqual(solanaSignMessageEncoding(display: "utf8", messageEncoding: nil), .utf8)
+        XCTAssertNil(solanaSignMessageEncoding(display: "utf8", messageEncoding: "base58"))
+    }
+
+    private func solanaSignMessageEncoding(display: String?,
+                                           messageEncoding: String?) -> SafariRequest.Solana.MessageEncoding? {
+        var params: [String: Any] = [:]
+        if let display {
+            params["display"] = display
+        }
+        if let messageEncoding {
+            params["messageEncoding"] = messageEncoding
+        }
+
+        let json: [String: Any] = [
+            "publicKey": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+            "object": [
+                "params": params,
+            ],
+        ]
+        return SafariRequest.Solana(name: "signMessage", json: json)?.signMessageEncoding
+    }
+
     func testSolanaSendOptionsAcceptClusterHintAliases() {
         let aliases: [(String, Solana.Cluster)] = [
             ("mainnet", .mainnetBeta),

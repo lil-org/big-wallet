@@ -123,6 +123,50 @@ class BigWalletSolana extends EventEmitter {
         });
     }
 
+    normalizedHexMessage(value, errorMessage) {
+        if (typeof value !== "string") {
+            throw new ProviderRpcError(4200, errorMessage);
+        }
+
+        const rawValue = value.startsWith("0x") ? value.slice(2) : value;
+        if (rawValue.length % 2 !== 0 || !/^[0-9a-fA-F]*$/.test(rawValue)) {
+            throw new ProviderRpcError(4200, errorMessage);
+        }
+
+        return `0x${rawValue}`;
+    }
+
+    preparedSignMessageParams(params) {
+        const normalizedParams = { ...(params || {}) };
+        const errorMessage = "Big Wallet could not normalize this Solana message request";
+
+        if (!("message" in normalizedParams)) {
+            throw new ProviderRpcError(4200, errorMessage);
+        }
+
+        const signsUtf8Message = typeof normalizedParams.message === "string" &&
+            typeof normalizedParams.display === "string" &&
+            normalizedParams.display.toLowerCase() === "utf8";
+
+        if (signsUtf8Message) {
+            normalizedParams.messageEncoding = "utf8";
+            return normalizedParams;
+        }
+
+        if (typeof normalizedParams.message === "string") {
+            normalizedParams.message = this.normalizedHexMessage(normalizedParams.message, errorMessage);
+        } else {
+            try {
+                normalizedParams.message = Utils.bufferToHex(normalizedParams.message);
+            } catch (error) {
+                throw new ProviderRpcError(4200, errorMessage);
+            }
+        }
+
+        normalizedParams.messageEncoding = "hex";
+        return normalizedParams;
+    }
+
     normalizeDerivedMessage(normalizedParams, derivedMessage, errorMessage) {
         if ("message" in normalizedParams) {
             const normalizedMessage = this.normalizedBase58Value(normalizedParams.message, errorMessage);
@@ -433,9 +477,7 @@ class BigWalletSolana extends EventEmitter {
             }
             break;
         case "signMessage":
-            if (typeof payload.params.message !== "string") {
-                payload.params.message = Utils.bufferToHex(payload.params.message);
-            }
+            payload.params = this.preparedSignMessageParams(payload.params);
             this.postMessage("signMessage", payload.id, payload);
             break;
         case "signTransaction": {

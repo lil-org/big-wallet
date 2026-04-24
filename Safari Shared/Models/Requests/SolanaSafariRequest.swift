@@ -14,12 +14,29 @@ extension SafariRequest {
             case signAndSendTransaction
         }
 
+        enum MessageEncoding: Equatable {
+            case hex
+            case utf8
+
+            init?(wireValue: String) {
+                switch wireValue.lowercased() {
+                case "hex":
+                    self = .hex
+                case "utf8":
+                    self = .utf8
+                default:
+                    return nil
+                }
+            }
+        }
+
         let method: Method
         let publicKey: String
         let message: String?
         let transaction: String?
         let messages: [String]?
         let displayHex: Bool
+        let signMessageEncoding: MessageEncoding?
         let sendOptions: [String: Any]?
 
         init?(name: String, json: [String: Any]) {
@@ -34,7 +51,13 @@ extension SafariRequest {
             self.message = parameters?["message"] as? String
             self.transaction = parameters?["transaction"] as? String
             self.messages = parameters?["messages"] as? [String]
-            self.displayHex = (parameters?["display"] as? String) == "hex"
+            let display = parameters?["display"] as? String
+            self.displayHex = display?.lowercased() == "hex"
+            if let messageEncoding = parameters?["messageEncoding"] as? String {
+                self.signMessageEncoding = MessageEncoding(wireValue: messageEncoding)
+            } else {
+                self.signMessageEncoding = display?.lowercased() == "utf8" ? .utf8 : .hex
+            }
             self.sendOptions = parameters?["options"] as? [String: Any]
         }
 

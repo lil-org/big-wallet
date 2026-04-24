@@ -449,20 +449,20 @@ final class Solana {
                 return .failure(.invalidMessage)
             }
 
-            let (signerSignatureOffset, didOverflow) = signerIndex.multipliedReportingOverflow(by: signatureLength)
-            guard !didOverflow,
-                  let signerSignatureStart = parsedTransaction.transactionData.index(parsedTransaction.signaturesStartIndex,
-                                                                                    offsetBy: signerSignatureOffset,
-                                                                                    limitedBy: parsedTransaction.messageRange.lowerBound),
-                  let signerSignatureEnd = parsedTransaction.transactionData.index(signerSignatureStart,
-                                                                                  offsetBy: signatureLength,
-                                                                                  limitedBy: parsedTransaction.messageRange.lowerBound)
+            guard requiredCosignerSignaturesArePresent(in: parsedTransaction,
+                                                       excludingSignerAt: signerIndex)
+            else {
+                return .failure(.unsupportedMultiSignature)
+            }
+
+            guard let signerSignatureRange = signatureRange(in: parsedTransaction,
+                                                            signatureIndex: signerIndex)
             else {
                 return .failure(.invalidMessage)
             }
 
             return .success(PreparedSignAndSendTransaction(parsedTransaction: parsedTransaction,
-                                                           signerSignatureRange: signerSignatureStart..<signerSignatureEnd))
+                                                           signerSignatureRange: signerSignatureRange))
         }
     }
 
@@ -598,6 +598,43 @@ final class Solana {
                                           messageRange: messageRange,
                                           parsedMessage: parsedMessage,
                                           signaturesStartIndex: signaturesCount.nextIndex))
+    }
+
+    private func requiredCosignerSignaturesArePresent(in parsedTransaction: ParsedTransaction,
+                                                      excludingSignerAt signerIndex: Int) -> Bool {
+        for signatureIndex in 0..<parsedTransaction.parsedMessage.requiredSignaturesCount where signatureIndex != signerIndex {
+            guard let range = signatureRange(in: parsedTransaction, signatureIndex: signatureIndex)
+            else { return false }
+
+            if parsedTransaction.transactionData[range].allSatisfy({ $0 == 0 }) {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    private func signatureRange(in parsedTransaction: ParsedTransaction,
+                                signatureIndex: Int) -> Range<Data.Index>? {
+        guard signatureIndex >= 0,
+              signatureIndex < parsedTransaction.parsedMessage.requiredSignaturesCount
+        else {
+            return nil
+        }
+
+        let (signatureOffset, didOverflow) = signatureIndex.multipliedReportingOverflow(by: signatureLength)
+        guard !didOverflow,
+              let signatureStart = parsedTransaction.transactionData.index(parsedTransaction.signaturesStartIndex,
+                                                                           offsetBy: signatureOffset,
+                                                                           limitedBy: parsedTransaction.messageRange.lowerBound),
+              let signatureEnd = parsedTransaction.transactionData.index(signatureStart,
+                                                                         offsetBy: signatureLength,
+                                                                         limitedBy: parsedTransaction.messageRange.lowerBound)
+        else {
+            return nil
+        }
+
+        return signatureStart..<signatureEnd
     }
 
     private func preparedTransactionMessage(message: String,
