@@ -12,6 +12,9 @@ struct SolanaWireMessage {
 enum SolanaWireMessageParser {
     private static let publicKeyLength = 32
     private static let blockhashLength = 32
+    private static let versionedMessageMask: UInt8 = 0x80
+    private static let versionMask: UInt8 = 0x7f
+    private static let supportedVersionedMessageVersion: UInt8 = 0
 
     private struct Prefix {
         let requiredSignaturesCount: Int
@@ -55,9 +58,11 @@ enum SolanaWireMessageParser {
 
     private static func prefix(for messageData: Data) -> Prefix? {
         guard let firstByte = messageData.first else { return nil }
-        if firstByte & 0x80 == 0 {
+        if firstByte & versionedMessageMask == 0 {
             return Prefix(requiredSignaturesCount: Int(firstByte), accountCountOffset: 3)
         } else {
+            guard firstByte & versionMask == supportedVersionedMessageVersion else { return nil }
+
             guard let signaturesCountIndex = messageData.index(messageData.startIndex, offsetBy: 1, limitedBy: messageData.endIndex),
                   signaturesCountIndex < messageData.endIndex
             else {
@@ -141,9 +146,8 @@ final class Solana {
     private let urlSession = URLSession(configuration: .default)
     private let maxSendTransactionRetryCount = 3
 
-    // Temporary fallback until cluster selection is threaded through the
-    // request contract.
-    private let rpcURL = URL(string: "https://api.mainnet-beta.solana.com")
+    // Disabled until the bridge carries an explicit trusted cluster/RPC.
+    private let rpcURL: URL? = nil
     private let signatureLength = 64
     private let publicKeyLength = 32
 

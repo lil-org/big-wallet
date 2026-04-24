@@ -124,14 +124,15 @@ struct DappRequestProcessor {
                                                              publicKey: solanaRequest.publicKey,
                                                              completion: completion) else { return .none }
 
-        let decodedMessages = messages.compactMap {
-            decodedSolanaTransactionMessage($0,
-                                            publicKey: solanaRequest.publicKey,
-                                            request: request,
-                                            completion: completion)
-        }
-        guard decodedMessages.count == messages.count else {
-            return .none
+        var decodedMessages = [Data]()
+        decodedMessages.reserveCapacity(messages.count)
+        for message in messages {
+            guard let decodedMessage = decodedSolanaTransactionMessage(message,
+                                                                       publicKey: solanaRequest.publicKey,
+                                                                       request: request,
+                                                                       completion: completion)
+            else { return .none }
+            decodedMessages.append(decodedMessage)
         }
 
         let displayMessage = Strings.data + ":\n\n" + messages.joined(separator: "\n\n")

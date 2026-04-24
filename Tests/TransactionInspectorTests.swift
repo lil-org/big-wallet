@@ -1,5 +1,6 @@
 // ∅ 2026 lil org
 
+import Foundation
 import XCTest
 @testable import Big_Wallet
 
@@ -24,6 +25,30 @@ final class TransactionInspectorTests: XCTestCase {
     func testEmptyData() {
         let d = TransactionInspector.shared.decode(data: "0x", nameHex: "", signature: "mint(uint256,address)")
         XCTAssert(d == nil)
+    }
+
+    func testSolanaParserAcceptsVersionZeroMessages() {
+        var message = Data([0x80, 1, 0, 0, 1])
+        message.append(Data(repeating: 7, count: 32))
+        message.append(Data(repeating: 9, count: 32))
+
+        guard let parsedMessage = SolanaWireMessageParser.parse(message) else {
+            XCTFail("Expected Solana v0 message to parse")
+            return
+        }
+
+        XCTAssertEqual(parsedMessage.requiredSignaturesCount, 1)
+        XCTAssertEqual(parsedMessage.accountKeys.count, 1)
+        XCTAssertEqual(parsedMessage.blockhashRange.lowerBound, 37)
+        XCTAssertEqual(parsedMessage.blockhashRange.upperBound, 69)
+    }
+
+    func testSolanaParserRejectsUnsupportedVersionedMessages() {
+        var message = Data([0x81, 1, 0, 0, 1])
+        message.append(Data(repeating: 7, count: 32))
+        message.append(Data(repeating: 9, count: 32))
+
+        XCTAssertNil(SolanaWireMessageParser.parse(message))
     }
 
 }
