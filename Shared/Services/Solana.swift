@@ -15,10 +15,19 @@ enum SolanaWireMessageParser {
     private static let versionedMessageMask: UInt8 = 0x80
     private static let versionMask: UInt8 = 0x7f
     private static let supportedVersionedMessageVersion: UInt8 = 0
+    private static let maxReferencedAccountCount = Int(UInt8.max) + 1
 
     private struct Prefix {
         let requiredSignaturesCount: Int
+        let readOnlySignedAccountsCount: Int
+        let readOnlyUnsignedAccountsCount: Int
         let accountCountOffset: Int
+        let isVersioned: Bool
+    }
+
+    private struct ParsedInstructions {
+        let highestAccountIndex: Int?
+        let highestProgramIdIndex: Int?
     }
 
     static func parse(_ messageData: Data) -> SolanaWireMessage? {
@@ -28,12 +37,37 @@ enum SolanaWireMessageParser {
         else { return nil }
 
         guard decodedLength.length >= prefix.requiredSignaturesCount else { return nil }
+        guard prefix.readOnlySignedAccountsCount < prefix.requiredSignaturesCount else { return nil }
+        guard prefix.readOnlyUnsignedAccountsCount <= decodedLength.length - prefix.requiredSignaturesCount else { return nil }
 
         let (accountKeysLength, didOverflow) = decodedLength.length.multipliedReportingOverflow(by: publicKeyLength)
         guard !didOverflow,
               let accountKeysEndIndex = messageData.index(decodedLength.nextIndex, offsetBy: accountKeysLength, limitedBy: messageData.endIndex),
               let blockhashEndIndex = messageData.index(accountKeysEndIndex, offsetBy: blockhashLength, limitedBy: messageData.endIndex)
         else { return nil }
+
+        var cursor = blockhashEndIndex
+        guard let parsedInstructions = parseInstructions(in: messageData, cursor: &cursor) else { return nil }
+
+        let loadedAddressCount: Int
+        if prefix.isVersioned {
+            guard let parsedLoadedAddressCount = parseAddressTableLookups(in: messageData, cursor: &cursor) else { return nil }
+            loadedAddressCount = parsedLoadedAddressCount
+        } else {
+            loadedAddressCount = 0
+        }
+
+        guard cursor == messageData.endIndex else { return nil }
+
+        let (totalAddressCount, addressCountOverflow) = decodedLength.length.addingReportingOverflow(loadedAddressCount)
+        guard !addressCountOverflow else { return nil }
+        guard totalAddressCount <= maxReferencedAccountCount else { return nil }
+        if let highestProgramIdIndex = parsedInstructions.highestProgramIdIndex {
+            guard highestProgramIdIndex < decodedLength.length else { return nil }
+        }
+        if let highestInstructionAccountIndex = parsedInstructions.highestAccountIndex {
+            guard highestInstructionAccountIndex < totalAddressCount else { return nil }
+        }
 
         var accountKeys = [Data]()
         accountKeys.reserveCapacity(decodedLength.length)
@@ -59,17 +93,127 @@ enum SolanaWireMessageParser {
     private static func prefix(for messageData: Data) -> Prefix? {
         guard let firstByte = messageData.first else { return nil }
         if firstByte & versionedMessageMask == 0 {
-            return Prefix(requiredSignaturesCount: Int(firstByte), accountCountOffset: 3)
+            guard let readOnlySignedAccountsCount = byte(at: 1, in: messageData),
+                  let readOnlyUnsignedAccountsCount = byte(at: 2, in: messageData)
+            else { return nil }
+
+            return Prefix(requiredSignaturesCount: Int(firstByte),
+                          readOnlySignedAccountsCount: Int(readOnlySignedAccountsCount),
+                          readOnlyUnsignedAccountsCount: Int(readOnlyUnsignedAccountsCount),
+                          accountCountOffset: 3,
+                          isVersioned: false)
         } else {
             guard firstByte & versionMask == supportedVersionedMessageVersion else { return nil }
 
-            guard let signaturesCountIndex = messageData.index(messageData.startIndex, offsetBy: 1, limitedBy: messageData.endIndex),
-                  signaturesCountIndex < messageData.endIndex
+            guard let requiredSignaturesCount = byte(at: 1, in: messageData),
+                  let readOnlySignedAccountsCount = byte(at: 2, in: messageData),
+                  let readOnlyUnsignedAccountsCount = byte(at: 3, in: messageData)
             else {
                 return nil
             }
-            return Prefix(requiredSignaturesCount: Int(messageData[signaturesCountIndex]), accountCountOffset: 4)
+            return Prefix(requiredSignaturesCount: Int(requiredSignaturesCount),
+                          readOnlySignedAccountsCount: Int(readOnlySignedAccountsCount),
+                          readOnlyUnsignedAccountsCount: Int(readOnlyUnsignedAccountsCount),
+                          accountCountOffset: 4,
+                          isVersioned: true)
         }
+    }
+
+    private static func parseInstructions(in messageData: Data, cursor: inout Data.Index) -> ParsedInstructions? {
+        guard let instructionCount = readLength(in: messageData, cursor: &cursor) else { return nil }
+
+        var highestAccountIndex: Int?
+        var highestProgramIdIndex: Int?
+        for _ in 0..<instructionCount {
+            guard let programIdIndex = readByte(in: messageData, cursor: &cursor),
+                  let accountIndexCount = readLength(in: messageData, cursor: &cursor),
+                  let accountIndicesEndIndex = messageData.index(cursor, offsetBy: accountIndexCount, limitedBy: messageData.endIndex)
+            else {
+                return nil
+            }
+
+            guard programIdIndex != 0 else { return nil }
+
+            updateHighestIndex(&highestProgramIdIndex, with: programIdIndex)
+            var accountIndexCursor = cursor
+            while accountIndexCursor < accountIndicesEndIndex {
+                updateHighestIndex(&highestAccountIndex, with: messageData[accountIndexCursor])
+                accountIndexCursor = messageData.index(after: accountIndexCursor)
+            }
+            cursor = accountIndicesEndIndex
+
+            guard let instructionDataLength = readLength(in: messageData, cursor: &cursor),
+                  advance(&cursor, by: instructionDataLength, in: messageData)
+            else {
+                return nil
+            }
+        }
+
+        return ParsedInstructions(highestAccountIndex: highestAccountIndex,
+                                  highestProgramIdIndex: highestProgramIdIndex)
+    }
+
+    private static func updateHighestIndex(_ highestIndex: inout Int?, with index: UInt8) {
+        let index = Int(index)
+        highestIndex = highestIndex.map { max($0, index) } ?? index
+    }
+
+    private static func parseAddressTableLookups(in messageData: Data, cursor: inout Data.Index) -> Int? {
+        guard let lookupCount = readLength(in: messageData, cursor: &cursor) else { return nil }
+
+        var loadedAddressCount = 0
+        for _ in 0..<lookupCount {
+            guard advance(&cursor, by: publicKeyLength, in: messageData),
+                  let writableIndexCount = readLength(in: messageData, cursor: &cursor),
+                  advance(&cursor, by: writableIndexCount, in: messageData),
+                  let readOnlyIndexCount = readLength(in: messageData, cursor: &cursor),
+                  advance(&cursor, by: readOnlyIndexCount, in: messageData)
+            else {
+                return nil
+            }
+
+            let (lookupLoadedAddressCount, lookupOverflow) = writableIndexCount.addingReportingOverflow(readOnlyIndexCount)
+            guard !lookupOverflow, lookupLoadedAddressCount > 0 else { return nil }
+            let (combinedLoadedAddressCount, loadedAddressOverflow) = loadedAddressCount.addingReportingOverflow(lookupLoadedAddressCount)
+            guard !loadedAddressOverflow else { return nil }
+            loadedAddressCount = combinedLoadedAddressCount
+        }
+
+        return loadedAddressCount
+    }
+
+    private static func readLength(in messageData: Data, cursor: inout Data.Index) -> Int? {
+        guard let decodedLength = messageData.decodeLength(startingAt: cursor) else { return nil }
+        cursor = decodedLength.nextIndex
+        return decodedLength.length
+    }
+
+    private static func readByte(in messageData: Data, cursor: inout Data.Index) -> UInt8? {
+        guard cursor < messageData.endIndex else { return nil }
+        let byte = messageData[cursor]
+        cursor = messageData.index(after: cursor)
+        return byte
+    }
+
+    private static func advance(_ cursor: inout Data.Index, by count: Int, in messageData: Data) -> Bool {
+        guard count >= 0,
+              let nextIndex = messageData.index(cursor, offsetBy: count, limitedBy: messageData.endIndex)
+        else {
+            return false
+        }
+
+        cursor = nextIndex
+        return true
+    }
+
+    private static func byte(at offset: Int, in messageData: Data) -> UInt8? {
+        guard let index = messageData.index(messageData.startIndex, offsetBy: offset, limitedBy: messageData.endIndex),
+              index < messageData.endIndex
+        else {
+            return nil
+        }
+
+        return messageData[index]
     }
 }
 

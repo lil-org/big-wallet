@@ -6,6 +6,8 @@ import XCTest
 
 final class TransactionInspectorTests: XCTestCase {
 
+    private let solanaSerializedTransactionSignerPublicKey = "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi"
+
     func testMint() {
         let a = TransactionInspector.shared.decode(data: "0x94bf804d0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000e26067c76fdbe877f48b0a8400cf5db8b47af0fe0021fb3f", nameHex: "94bf804d", signature: "mint(uint256,address)")
         XCTAssert(a?.lowercased() == "mint(uint256,address)\n\n1\n\n0xe26067c76fdbe877f48b0a8400cf5db8b47af0fe")
@@ -28,9 +30,9 @@ final class TransactionInspectorTests: XCTestCase {
     }
 
     func testSolanaParserAcceptsVersionZeroMessages() {
-        var message = Data([0x80, 1, 0, 0, 1])
-        message.append(Data(repeating: 7, count: 32))
-        message.append(Data(repeating: 9, count: 32))
+        let message = solanaWireMessage(version: 0,
+                                        accountKeySeeds: [7],
+                                        bodyAfterBlockhash: [0, 0])
 
         guard let parsedMessage = SolanaWireMessageParser.parse(message) else {
             XCTFail("Expected Solana v0 message to parse")
@@ -43,17 +45,142 @@ final class TransactionInspectorTests: XCTestCase {
         XCTAssertEqual(parsedMessage.blockhashRange.upperBound, 69)
     }
 
+    func testSolanaParserAcceptsLegacyMessagesWithInstructions() {
+        let message = solanaWireMessage(readOnlyUnsignedAccounts: 1,
+                                        accountKeySeeds: [7, 8],
+                                        bodyAfterBlockhash: [1, 1, 1, 0, 0])
+
+        guard let parsedMessage = SolanaWireMessageParser.parse(message) else {
+            XCTFail("Expected complete legacy message to parse")
+            return
+        }
+
+        XCTAssertEqual(parsedMessage.requiredSignaturesCount, 1)
+        XCTAssertEqual(parsedMessage.accountKeys.count, 2)
+        XCTAssertEqual(parsedMessage.blockhashRange.lowerBound, 68)
+        XCTAssertEqual(parsedMessage.blockhashRange.upperBound, 100)
+    }
+
+    func testSolanaParserAcceptsVersionZeroMessagesWithAddressLookups() {
+        var bodyAfterBlockhash = Data([1, 1, 1, 2, 0])
+        bodyAfterBlockhash.append(1)
+        bodyAfterBlockhash.append(Data(repeating: 10, count: 32))
+        bodyAfterBlockhash.append(contentsOf: [1, 5, 0])
+
+        let message = solanaWireMessage(version: 0,
+                                        readOnlyUnsignedAccounts: 1,
+                                        accountKeySeeds: [7, 8],
+                                        bodyAfterBlockhash: bodyAfterBlockhash)
+
+        guard let parsedMessage = SolanaWireMessageParser.parse(message) else {
+            XCTFail("Expected complete v0 message with lookup addresses to parse")
+            return
+        }
+
+        XCTAssertEqual(parsedMessage.requiredSignaturesCount, 1)
+        XCTAssertEqual(parsedMessage.accountKeys.count, 2)
+        XCTAssertEqual(parsedMessage.blockhashRange.lowerBound, 69)
+        XCTAssertEqual(parsedMessage.blockhashRange.upperBound, 101)
+    }
+
+    func testSolanaParserRejectsIncompleteVersionZeroMessages() {
+        let message = solanaWireMessage(version: 0,
+                                        accountKeySeeds: [7],
+                                        bodyAfterBlockhash: [])
+
+        XCTAssertNil(SolanaWireMessageParser.parse(message))
+    }
+
+    func testSolanaParserRejectsTruncatedLegacyInstructionData() {
+        let message = solanaWireMessage(readOnlyUnsignedAccounts: 1,
+                                        accountKeySeeds: [7, 8],
+                                        bodyAfterBlockhash: [1, 1, 1, 0, 1])
+
+        XCTAssertNil(SolanaWireMessageParser.parse(message))
+    }
+
+    func testSolanaParserRejectsReadOnlyFeePayer() {
+        let message = solanaWireMessage(readOnlySignedAccounts: 1,
+                                        accountKeySeeds: [7],
+                                        bodyAfterBlockhash: [0])
+
+        XCTAssertNil(SolanaWireMessageParser.parse(message))
+    }
+
+    func testSolanaParserRejectsTrailingBytesAfterLegacyInstructions() {
+        let message = solanaWireMessage(accountKeySeeds: [7],
+                                        bodyAfterBlockhash: [0, 0])
+
+        XCTAssertNil(SolanaWireMessageParser.parse(message))
+    }
+
+    func testSolanaParserRejectsLegacyInstructionIndexOutsideAccountKeys() {
+        let message = solanaWireMessage(accountKeySeeds: [7],
+                                        bodyAfterBlockhash: [1, 1, 0, 0])
+
+        XCTAssertNil(SolanaWireMessageParser.parse(message))
+    }
+
+    func testSolanaParserRejectsInstructionProgramIndexAtFeePayer() {
+        let message = solanaWireMessage(readOnlyUnsignedAccounts: 1,
+                                        accountKeySeeds: [7, 8],
+                                        bodyAfterBlockhash: [1, 0, 0, 0])
+
+        XCTAssertNil(SolanaWireMessageParser.parse(message))
+    }
+
+    func testSolanaParserRejectsVersionZeroProgramIndexFromAddressLookup() {
+        var bodyAfterBlockhash = Data([1, 2, 0, 0])
+        bodyAfterBlockhash.append(1)
+        bodyAfterBlockhash.append(Data(repeating: 10, count: 32))
+        bodyAfterBlockhash.append(contentsOf: [1, 5, 0])
+
+        let message = solanaWireMessage(version: 0,
+                                        readOnlyUnsignedAccounts: 1,
+                                        accountKeySeeds: [7, 8],
+                                        bodyAfterBlockhash: bodyAfterBlockhash)
+
+        XCTAssertNil(SolanaWireMessageParser.parse(message))
+    }
+
+    func testSolanaParserRejectsEmptyAddressLookupTableEntries() {
+        var bodyAfterBlockhash = Data([0, 1])
+        bodyAfterBlockhash.append(Data(repeating: 10, count: 32))
+        bodyAfterBlockhash.append(contentsOf: [0, 0])
+
+        let message = solanaWireMessage(version: 0,
+                                        accountKeySeeds: [7],
+                                        bodyAfterBlockhash: bodyAfterBlockhash)
+
+        XCTAssertNil(SolanaWireMessageParser.parse(message))
+    }
+
+    func testSolanaParserRejectsTooManyReferencedAccounts() {
+        var bodyAfterBlockhash = Data([0, 1])
+        bodyAfterBlockhash.append(Data(repeating: 10, count: 32))
+        bodyAfterBlockhash.append(Data.encodeLength(Int(UInt8.max)))
+        bodyAfterBlockhash.append(Data((0..<Int(UInt8.max)).map { UInt8($0) }))
+        bodyAfterBlockhash.append(0)
+
+        let message = solanaWireMessage(version: 0,
+                                        readOnlyUnsignedAccounts: 1,
+                                        accountKeySeeds: [7, 8],
+                                        bodyAfterBlockhash: bodyAfterBlockhash)
+
+        XCTAssertNil(SolanaWireMessageParser.parse(message))
+    }
+
     func testSolanaParserRejectsUnsupportedVersionedMessages() {
-        var message = Data([0x81, 1, 0, 0, 1])
-        message.append(Data(repeating: 7, count: 32))
-        message.append(Data(repeating: 9, count: 32))
+        let message = solanaWireMessage(version: 1,
+                                        accountKeySeeds: [7],
+                                        bodyAfterBlockhash: [])
 
         XCTAssertNil(SolanaWireMessageParser.parse(message))
     }
 
     func testSerializedSolanaSignAndSendRejectsMissingCosignerSignature() {
-        let publicKey = "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi"
-        let serializedTransaction = "9zGkjda8PRRp5ACHpyuUwsnoJdka6WLgqy33xpBTRRAXCekyUVMvq5Mj8je4vBhWVqATsModBBo9x5NQj63pwCAsmPCfxrG2HZd1qKgtjCK3S9myFjyp9yafrzU64nkVCtwjG5PhzzBfE7gVY5oTRX6t5YbRjcwoj61iKeHvdrQ7JQ7hPP3Aw8kpyTrZvMLuAUAxbtwHXJSwGsEmBdi2WBbTZJrANP7ZjwLj43bL83csLi6mPus7wxGtRjAbAvo4sWJBFYUHwNzKgsHaFKgEMYD4hszaBLCxcBqcVcCrrQdsM4YtBQLn6y9a"
+        let publicKey = solanaSerializedTransactionSignerPublicKey
+        let serializedTransaction = "6t24vfGqc3gdHL1msMPmHDkE7aRCWD9nwgMFGiSsLMEkN3z3fK6hCk41Y9kYxHKYM4SfgppbThLWmvfrjdSwfB2eRFgvxsb26BrJZFGYm8EHNbjnzRQ3m2pjkiXd5xTBdgFFNviEF8hrVsLS9cqtGd3ktVSthWL1wbj4nkCVPGjkkCcTay1bWoVCLEZvzcLFbn1BDCMYMAhThjbQKYGpDR1TVEB6x4VR8Ha6umVUxGDQXMRcVrHdGZKT8xtf7YWn5JNNZGE3aeTMGBE75PdC3BsX8TfJbgzomc1DZnceVKN2WtWgarT3uXCf47jRCYrHj5WVAMBRagqYMBYV5Aw74iTkmUbTA1vpU1BScs7ozyW7"
 
         switch Solana.shared.preparedSerializedTransactionForSignAndSend(serializedTransaction: serializedTransaction,
                                                                          publicKey: publicKey) {
@@ -67,8 +194,8 @@ final class TransactionInspectorTests: XCTestCase {
     }
 
     func testSerializedSolanaSignAndSendAcceptsPresentCosignerSignature() {
-        let publicKey = "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi"
-        let serializedTransaction = "9zGkjda8PRRp5ACHpyuUwsnoJdka6WLgqy33xpBTRRAXCekyUVMvq5Mj8je4vBhWVqATsModBBo9x5NQj63pwCAsnnH8wtkDU6KFo6h9KhWo2aaCDoM1EM2VgPTNzTfx19MzSXyy3WsnUL8orxQv2n3ptDcvxJYaCxaVpKW3rMiFvu2Nsx4DyaLTJZbMPCFe313Ho5YzLShei77h5jzd4ToE13MApGzHJbHZ1WYNH71BowQijwG3zPsKLNgM6PXZhyhT5A7gxsQiymopaco7dBmLeXnrLbZLf4UrrJSHvYnvA3hsgxBewN96"
+        let publicKey = solanaSerializedTransactionSignerPublicKey
+        let serializedTransaction = "6t24vfGqc3gdHL1msMPmHDkE7aRCWD9nwgMFGiSsLMEkN3z3fK6hCk41Y9kYxHKYM4SfgppbThLWmvfrjdSwfB2eRPFZ3pbJhMNrBA2Gzbg3GUEMMvEPu3aukDxNtYzVDC8jNnyhAvC41eDA5aFCXdxba7TDo8qxrw7AmHXyPTVymxmJinebHHcukjJK8GHcqGJaknfeBUQyspxamAFcw8MqKtNNR18bBbqyzNrwr2MmA3bkbV9Vyko39uuVn3iz1vWXRVmoS8v4t5qXXFiMiKHyfuTwdpS5pHA7p9TeNFrqgC2TatFggbDWNogbGnV8gN52qc9Mjgs7S7ZDoWhPzhb4cPRH9Mj2RemE5ay7SmUj"
 
         switch Solana.shared.preparedSerializedTransactionForSignAndSend(serializedTransaction: serializedTransaction,
                                                                          publicKey: publicKey) {
@@ -114,6 +241,50 @@ final class TransactionInspectorTests: XCTestCase {
             ],
         ]
         return SafariRequest.Solana(name: "signMessage", json: json)?.signMessageEncoding
+    }
+
+    private func solanaWireMessage(version: UInt8? = nil,
+                                   requiredSignatures: UInt8 = 1,
+                                   readOnlySignedAccounts: UInt8 = 0,
+                                   readOnlyUnsignedAccounts: UInt8 = 0,
+                                   accountKeySeeds: [UInt8],
+                                   blockhashSeed: UInt8 = 9,
+                                   bodyAfterBlockhash: Data) -> Data {
+        var message = Data()
+        if let version {
+            message.append(UInt8(0x80) | version)
+            message.append(requiredSignatures)
+        } else {
+            message.append(requiredSignatures)
+        }
+
+        message.append(readOnlySignedAccounts)
+        message.append(readOnlyUnsignedAccounts)
+        message += Data.encodeLength(accountKeySeeds.count)
+
+        for seed in accountKeySeeds {
+            message.append(Data(repeating: seed, count: 32))
+        }
+        message.append(Data(repeating: blockhashSeed, count: 32))
+        message.append(bodyAfterBlockhash)
+
+        return message
+    }
+
+    private func solanaWireMessage(version: UInt8? = nil,
+                                   requiredSignatures: UInt8 = 1,
+                                   readOnlySignedAccounts: UInt8 = 0,
+                                   readOnlyUnsignedAccounts: UInt8 = 0,
+                                   accountKeySeeds: [UInt8],
+                                   blockhashSeed: UInt8 = 9,
+                                   bodyAfterBlockhash: [UInt8]) -> Data {
+        return solanaWireMessage(version: version,
+                                 requiredSignatures: requiredSignatures,
+                                 readOnlySignedAccounts: readOnlySignedAccounts,
+                                 readOnlyUnsignedAccounts: readOnlyUnsignedAccounts,
+                                 accountKeySeeds: accountKeySeeds,
+                                 blockhashSeed: blockhashSeed,
+                                 bodyAfterBlockhash: Data(bodyAfterBlockhash))
     }
 
     func testSolanaSendOptionsAcceptClusterHintAliases() {
