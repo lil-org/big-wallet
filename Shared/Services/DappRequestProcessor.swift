@@ -135,7 +135,7 @@ struct DappRequestProcessor {
             decodedMessages.append(decodedMessage)
         }
 
-        let displayMessage = Strings.data + ":\n\n" + messages.joined(separator: "\n\n")
+        let displayMessage = rawSolanaTransactionApprovalMessage(messages: messages)
         return solanaApprovalAction(request: request,
                                     wallet: wallet,
                                     account: account,
@@ -155,21 +155,29 @@ struct DappRequestProcessor {
     private static func processSolanaSigningOrSendingRequest(request: SafariRequest,
                                                              solanaRequest: SafariRequest.Solana,
                                                              completion: @escaping (String?) -> Void) -> DappRequestAction {
-        if solanaRequest.method == .signAndSendTransaction && !solana.supportsTransactionSending {
-            respond(to: request, error: Strings.solanaTransactionSendingUnavailable, completion: completion)
-            return .none
-        }
-
         guard let (wallet, account) = solanaWalletAndAccount(for: request,
                                                              publicKey: solanaRequest.publicKey,
                                                              completion: completion) else { return .none }
 
         switch solanaRequest.method {
         case .signAndSendTransaction:
+            let preparedSendOptions: Solana.PreparedSendOptions
+            switch Solana.preparedSendOptions(from: solanaRequest.sendOptions) {
+            case .failure(let error):
+                respond(to: request, error: errorMessage(for: error), completion: completion)
+                return .none
+            case .success(let value):
+                preparedSendOptions = value
+            }
+
+            let clusterSelection = SolanaClusterSelection(selectedCluster: preparedSendOptions.clusterHint,
+                                                          suggestedCluster: preparedSendOptions.clusterHint)
             if let serializedTransaction = solanaRequest.transaction {
                 return processSerializedSolanaSignAndSendRequest(request: request,
                                                                  solanaRequest: solanaRequest,
                                                                  serializedTransaction: serializedTransaction,
+                                                                 rpcOptions: preparedSendOptions.rpcOptions,
+                                                                 clusterSelection: clusterSelection,
                                                                  wallet: wallet,
                                                                  account: account,
                                                                  completion: completion)
@@ -187,10 +195,12 @@ struct DappRequestProcessor {
                                         subject: .approveTransaction,
                                         meta: approvalMessage(for: solanaRequest,
                                                               canonicalMessage: preparedLegacyTransaction.approvalMessage),
-                                        completion: completion) { privateKey in
+                                        clusterSelection: clusterSelection,
+                                        completion: completion) { selectedCluster, privateKey in
                 signAndSendSolanaTransaction(request: request,
-                                             solanaRequest: solanaRequest,
                                              preparedLegacyTransaction: preparedLegacyTransaction,
+                                             cluster: selectedCluster,
+                                             rpcOptions: preparedSendOptions.rpcOptions,
                                              privateKey: privateKey,
                                              completion: completion)
             }
@@ -260,11 +270,13 @@ struct DappRequestProcessor {
     private static func processSerializedSolanaSignAndSendRequest(request: SafariRequest,
                                                                   solanaRequest: SafariRequest.Solana,
                                                                   serializedTransaction: String,
+                                                                  rpcOptions: [String: Any],
+                                                                  clusterSelection: SolanaClusterSelection,
                                                                   wallet: WalletContainer,
                                                                   account: Account,
                                                                   completion: @escaping (String?) -> Void) -> DappRequestAction {
         switch solana.preparedSerializedTransactionForSignAndSend(serializedTransaction: serializedTransaction,
-                                                                 publicKey: solanaRequest.publicKey) {
+                                                                  publicKey: solanaRequest.publicKey) {
         case .failure(let error):
             respond(to: request, error: errorMessage(for: error), completion: completion)
             return .none
@@ -275,10 +287,12 @@ struct DappRequestProcessor {
                                         subject: .approveTransaction,
                                         meta: approvalMessage(for: solanaRequest,
                                                               canonicalMessage: preparedSerializedTransaction.approvalMessage),
-                                        completion: completion) { privateKey in
+                                        clusterSelection: clusterSelection,
+                                        completion: completion) { selectedCluster, privateKey in
                 signAndSendSolanaTransaction(request: request,
-                                             solanaRequest: solanaRequest,
                                              preparedSerializedTransaction: preparedSerializedTransaction,
+                                             cluster: selectedCluster,
+                                             rpcOptions: rpcOptions,
                                              privateKey: privateKey,
                                              completion: completion)
             }
@@ -289,8 +303,8 @@ struct DappRequestProcessor {
                                                                    solanaRequest: SafariRequest.Solana,
                                                                    completion: @escaping (String?) -> Void) -> Solana.PreparedLegacySignAndSendTransaction? {
         guard let message = requiredSolanaMessage(for: request,
-                                                 solanaRequest: solanaRequest,
-                                                 completion: completion) else { return nil }
+                                                  solanaRequest: solanaRequest,
+                                                  completion: completion) else { return nil }
 
         switch solana.preparedLegacySignAndSendTransaction(message: message,
                                                            publicKey: solanaRequest.publicKey) {
@@ -347,29 +361,61 @@ struct DappRequestProcessor {
 
             return messageText
         } else {
-            return Strings.data + ":\n\n" + canonicalMessage
+            return rawSolanaTransactionApprovalMessage(messages: [canonicalMessage])
+        }
+    }
+
+    private static func rawSolanaTransactionApprovalMessage(messages: [String]) -> String {
+        return Strings.rawSolanaTransactionWarning + "\n\n" + Strings.data + ":\n\n" + messages.joined(separator: "\n\n")
+    }
+
+    private static func solanaApprovalAction(request: SafariRequest,
+                                             wallet: WalletContainer,
+                                             account: Account,
+                                             subject: ApprovalSubject,
+                                             meta: String,
+                                             clusterSelection: SolanaClusterSelection,
+                                             completion: @escaping (String?) -> Void,
+                                             onApprove: @escaping (Solana.Cluster, PrivateKey) -> Void) -> DappRequestAction {
+        return solanaApprovalAction(request: request,
+                                    wallet: wallet,
+                                    account: account,
+                                    subject: subject,
+                                    meta: meta,
+                                    solanaClusterSelection: clusterSelection,
+                                    completion: completion) { privateKey in
+            guard let selectedCluster = clusterSelection.selectedCluster else {
+                respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+                return
+            }
+
+            onApprove(selectedCluster, privateKey)
         }
     }
 
     private static func signAndSendSolanaTransaction(request: SafariRequest,
-                                                     solanaRequest: SafariRequest.Solana,
                                                      preparedSerializedTransaction: Solana.PreparedSerializedTransaction,
+                                                     cluster: Solana.Cluster,
+                                                     rpcOptions: [String: Any],
                                                      privateKey: PrivateKey,
                                                      completion: @escaping (String?) -> Void) {
         solana.signAndSendTransaction(preparedSerializedTransaction: preparedSerializedTransaction,
-                                      options: solanaRequest.sendOptions,
+                                      cluster: cluster,
+                                      options: rpcOptions,
                                       privateKey: privateKey,
                                       completion: solanaSendTransactionResultHandler(request: request,
                                                                                      completion: completion))
     }
 
     private static func signAndSendSolanaTransaction(request: SafariRequest,
-                                                     solanaRequest: SafariRequest.Solana,
                                                      preparedLegacyTransaction: Solana.PreparedLegacySignAndSendTransaction,
+                                                     cluster: Solana.Cluster,
+                                                     rpcOptions: [String: Any],
                                                      privateKey: PrivateKey,
                                                      completion: @escaping (String?) -> Void) {
         solana.signAndSendTransaction(preparedLegacyTransaction: preparedLegacyTransaction,
-                                      options: solanaRequest.sendOptions,
+                                      cluster: cluster,
+                                      options: rpcOptions,
                                       privateKey: privateKey,
                                       completion: solanaSendTransactionResultHandler(request: request,
                                                                                      completion: completion))
@@ -402,6 +448,7 @@ struct DappRequestProcessor {
                                              account: Account,
                                              subject: ApprovalSubject,
                                              meta: String,
+                                             solanaClusterSelection: SolanaClusterSelection? = nil,
                                              completion: @escaping (String?) -> Void,
                                              onApprove: @escaping (PrivateKey) -> Void) -> DappRequestAction {
         let action = SignMessageAction(provider: request.provider,
@@ -409,7 +456,8 @@ struct DappRequestProcessor {
                                        walletId: wallet.id,
                                        account: account,
                                        meta: meta,
-                                       peerMeta: request.peerMeta) { approved in
+                                       peerMeta: request.peerMeta,
+                                       solanaClusterSelection: solanaClusterSelection) { approved in
             guard approved else {
                 respond(to: request, error: Strings.canceled, completion: completion)
                 return
@@ -619,10 +667,12 @@ struct DappRequestProcessor {
         switch error {
         case .invalidMessage:
             return Strings.somethingWentWrong
-        case .unsupportedMultiSignature, .blockhashNotFound, .unknown:
+        case .invalidSendOptions:
+            return Strings.unsupportedSolanaSendOptions
+        case .blockhashNotFound:
+            return Strings.solanaBlockhashNotFound
+        case .unsupportedMultiSignature, .unknown:
             return Strings.failedToSend
-        case .unsupportedClusterSelection:
-            return Strings.solanaTransactionSendingUnavailable
         }
     }
     

@@ -267,6 +267,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                                                                    walletId: action.walletId,
                                                                    meta: action.meta,
                                                                    peerMeta: action.peerMeta,
+                                                                   solanaClusterSelection: action.solanaClusterSelection,
                                                                    completion: action.completion)
             presentForExternalRequest(approveViewController.inNavigationController, id: id)
         case .approveTransaction(let action):

@@ -16512,211 +16512,1256 @@
         }
       }
     },
-    "Solana transaction sending is not supported yet" : {
-      "comment" : "Solana transaction sending unavailable message",
+    "Raw Solana transaction. Big Wallet cannot display decoded instructions for this request. Only approve if you trust this website and expected this transaction." : {
+      "comment" : "15501357516605548974",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "إرسال معاملات Solana غير مدعوم بعد"
+            "value" : "معاملة Solana خام. لا يستطيع Big Wallet عرض التعليمات التي تم فك ترميزها لهذا الطلب. وافق فقط إذا كنت تثق بهذا الموقع وكنت تتوقع هذه المعاملة."
           }
         },
         "ca" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "L’enviament de transaccions de Solana encara no és compatible"
+            "value" : "Transacció Solana en brut. Big Wallet no pot mostrar les instruccions descodificades d’aquesta sol·licitud. Aprova-la només si confies en aquest lloc web i esperaves aquesta transacció."
           }
         },
         "cs" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Odesílání transakcí Solana zatím není podporováno"
+            "value" : "Nezpracovaná transakce Solana. Big Wallet nemůže u tohoto požadavku zobrazit dekódované instrukce. Schvalte pouze v případě, že tomuto webu důvěřujete a tuto transakci jste očekávali."
           }
         },
         "da" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Afsendelse af Solana-transaktioner understøttes endnu ikke"
+            "value" : "Rå Solana-transaktion. Big Wallet kan ikke vise afkodede instruktioner for denne anmodning. Godkend kun, hvis du stoler på dette websted og forventede denne transaktion."
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Das Senden von Solana-Transaktionen wird noch nicht unterstützt"
+            "value" : "Rohe Solana-Transaktion. Big Wallet kann die dekodierten Anweisungen für diese Anfrage nicht anzeigen. Genehmige nur, wenn du dieser Website vertraust und diese Transaktion erwartet hast."
           }
         },
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Η αποστολή συναλλαγών Solana δεν υποστηρίζεται ακόμη"
+            "value" : "Ακατέργαστη συναλλαγή Solana. Το Big Wallet δεν μπορεί να εμφανίσει τις αποκωδικοποιημένες εντολές για αυτό το αίτημα. Εγκρίνετε μόνο αν εμπιστεύεστε αυτόν τον ιστότοπο και περιμένατε αυτή τη συναλλαγή."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Solana transaction sending is not supported yet"
+            "value" : "Raw Solana transaction. Big Wallet cannot display decoded instructions for this request. Only approve if you trust this website and expected this transaction."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "El envío de transacciones de Solana aún no es compatible"
+            "value" : "Transacción de Solana sin procesar. Big Wallet no puede mostrar las instrucciones decodificadas de esta solicitud. Aprueba solo si confías en este sitio web y esperabas esta transacción."
           }
         },
         "es-419" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "El envío de transacciones de Solana aún no es compatible"
+            "value" : "Transacción de Solana sin procesar. Big Wallet no puede mostrar las instrucciones decodificadas de esta solicitud. Aprueba solo si confías en este sitio web y esperabas esta transacción."
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Solana-tapahtumien lähettämistä ei tueta vielä"
+            "value" : "Raaka Solana-tapahtuma. Big Wallet ei voi näyttää tämän pyynnön purettuja ohjeita. Hyväksy vain, jos luotat tähän verkkosivustoon ja odotit tätä tapahtumaa."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "L’envoi de transactions Solana n’est pas encore pris en charge"
+            "value" : "Transaction Solana brute. Big Wallet ne peut pas afficher les instructions décodées pour cette demande. Approuvez uniquement si vous faites confiance à ce site web et si vous attendiez cette transaction."
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "שליחת עסקאות Solana עדיין אינה נתמכת"
+            "value" : "עסקת Solana גולמית. Big Wallet לא יכול להציג את ההוראות המפוענחות עבור בקשה זו. אשר רק אם אתה סומך על האתר הזה וציפית לעסקה זו."
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Solana लेनदेन भेजना अभी समर्थित नहीं है"
+            "value" : "कच्चा Solana लेनदेन। Big Wallet इस अनुरोध के लिए डिकोड किए गए निर्देश नहीं दिखा सकता। केवल तभी स्वीकृत करें जब आप इस वेबसाइट पर भरोसा करते हैं और इस लेनदेन की अपेक्षा कर रहे थे।"
           }
         },
         "hr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Slanje Solana transakcija još nije podržano"
+            "value" : "Sirova Solana transakcija. Big Wallet ne može prikazati dekodirane upute za ovaj zahtjev. Odobrite samo ako vjerujete ovoj web-stranici i očekivali ste ovu transakciju."
           }
         },
         "hu" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A Solana-tranzakciók küldése még nem támogatott"
+            "value" : "Nyers Solana-tranzakció. A Big Wallet nem tudja megjeleníteni a kérés dekódolt utasításait. Csak akkor hagyja jóvá, ha megbízik ebben a webhelyben, és számított erre a tranzakcióra."
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pengiriman transaksi Solana belum didukung"
+            "value" : "Transaksi Solana mentah. Big Wallet tidak dapat menampilkan instruksi yang didekodekan untuk permintaan ini. Setujui hanya jika Anda mempercayai situs web ini dan memang mengharapkan transaksi ini."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "L’invio di transazioni Solana non è ancora supportato"
+            "value" : "Transazione Solana grezza. Big Wallet non può mostrare le istruzioni decodificate per questa richiesta. Approva solo se ti fidi di questo sito web e ti aspettavi questa transazione."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Solanaトランザクションの送信はまだサポートされていません"
+            "value" : "未解析のSolanaトランザクションです。Big Walletはこのリクエストのデコード済み命令を表示できません。このWebサイトを信頼していて、このトランザクションを予期していた場合のみ承認してください。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Solana 트랜잭션 전송은 아직 지원되지 않습니다"
+            "value" : "원시 Solana 트랜잭션입니다. Big Wallet은 이 요청의 디코딩된 명령을 표시할 수 없습니다. 이 웹사이트를 신뢰하고 이 트랜잭션을 예상한 경우에만 승인하세요."
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Penghantaran transaksi Solana belum disokong"
+            "value" : "Transaksi Solana mentah. Big Wallet tidak dapat memaparkan arahan yang dinyahkod untuk permintaan ini. Luluskan hanya jika anda mempercayai laman web ini dan menjangkakan transaksi ini."
           }
         },
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sending av Solana-transaksjoner støttes ikke ennå"
+            "value" : "Rå Solana-transaksjon. Big Wallet kan ikke vise dekodede instruksjoner for denne forespørselen. Godkjenn bare hvis du stoler på dette nettstedet og forventet denne transaksjonen."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Het verzenden van Solana-transacties wordt nog niet ondersteund"
+            "value" : "Ruwe Solana-transactie. Big Wallet kan de gedecodeerde instructies voor dit verzoek niet weergeven. Keur alleen goed als je deze website vertrouwt en deze transactie verwachtte."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wysyłanie transakcji Solana nie jest jeszcze obsługiwane"
+            "value" : "Surowa transakcja Solana. Big Wallet nie może wyświetlić zdekodowanych instrukcji dla tego żądania. Zatwierdź tylko, jeśli ufasz tej witrynie i spodziewałeś się tej transakcji."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O envio de transações Solana ainda não é suportado"
+            "value" : "Transação Solana bruta. O Big Wallet não pode exibir as instruções decodificadas desta solicitação. Aprove somente se você confia neste site e esperava esta transação."
           }
         },
         "pt-PT" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O envio de transações Solana ainda não é suportado"
+            "value" : "Transação Solana em bruto. O Big Wallet não consegue apresentar as instruções descodificadas deste pedido. Aprove apenas se confiar neste site e esperava esta transação."
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Trimiterea tranzacțiilor Solana nu este încă acceptată"
+            "value" : "Tranzacție Solana brută. Big Wallet nu poate afișa instrucțiunile decodificate pentru această solicitare. Aprobă doar dacă ai încredere în acest site și te așteptai la această tranzacție."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Отправка транзакций Solana пока не поддерживается"
+            "value" : "Необработанная транзакция Solana. Big Wallet не может показать декодированные инструкции для этого запроса. Подтверждайте только если вы доверяете этому сайту и ожидали эту транзакцию."
           }
         },
         "sk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Odosielanie transakcií Solana zatiaľ nie je podporované"
+            "value" : "Nespracovaná transakcia Solana. Big Wallet nemôže zobraziť dekódované inštrukcie pre túto požiadavku. Schváľte iba vtedy, ak tejto webovej stránke dôverujete a túto transakciu ste očakávali."
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Att skicka Solana-transaktioner stöds inte ännu"
+            "value" : "Rå Solana-transaktion. Big Wallet kan inte visa avkodade instruktioner för den här begäran. Godkänn bara om du litar på den här webbplatsen och förväntade dig den här transaktionen."
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ยังไม่รองรับการส่งธุรกรรม Solana"
+            "value" : "ธุรกรรม Solana แบบดิบ Big Wallet ไม่สามารถแสดงคำสั่งที่ถอดรหัสแล้วสำหรับคำขอนี้ได้ อนุมัติเฉพาะเมื่อคุณไว้วางใจเว็บไซต์นี้และคาดว่าจะมีธุรกรรมนี้"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Solana işlemi gönderme henüz desteklenmiyor"
+            "value" : "Ham Solana işlemi. Big Wallet bu istek için çözümlenmiş talimatları gösteremiyor. Yalnızca bu web sitesine güveniyorsanız ve bu işlemi bekliyorsanız onaylayın."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Надсилання транзакцій Solana ще не підтримується"
+            "value" : "Необроблена транзакція Solana. Big Wallet не може показати декодовані інструкції для цього запиту. Схвалюйте лише якщо довіряєте цьому вебсайту й очікували цю транзакцію."
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Chưa hỗ trợ gửi giao dịch Solana"
+            "value" : "Giao dịch Solana thô. Big Wallet không thể hiển thị các lệnh đã giải mã cho yêu cầu này. Chỉ phê duyệt nếu bạn tin tưởng trang web này và đã dự kiến giao dịch này."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "尚不支持发送 Solana 交易"
+            "value" : "原始 Solana 交易。Big Wallet 无法显示此请求的已解码指令。只有在你信任此网站并且预期会发生这笔交易时才批准。"
+          }
+        }
+      }
+    },
+    "Configured RPC" : {
+      "comment" : "Solana RPC endpoint configured by the app",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC مُهيأ"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC configurat"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nakonfigurované RPC"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konfigureret RPC"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konfigurierter RPC"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ρυθμισμένο RPC"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configured RPC"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC configurado"
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC configurado"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Määritetty RPC"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC configuré"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC מוגדר"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "कॉन्फ़िगर किया गया RPC"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konfigurirani RPC"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konfigurált RPC"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC terkonfigurasi"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC configurato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定済み RPC"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "구성된 RPC"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC dikonfigurasikan"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konfigurert RPC"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geconfigureerde RPC"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skonfigurowane RPC"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC configurado"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC configurado"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC configurat"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Настроенный RPC"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nakonfigurované RPC"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konfigurerad RPC"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC ที่กำหนดค่าแล้ว"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yapılandırılmış RPC"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Налаштований RPC"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC đã cấu hình"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已配置的 RPC"
+          }
+        }
+      }
+    },
+    "Public RPC" : {
+      "comment" : "Solana public RPC fallback label",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC عام"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC públic"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veřejné RPC"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offentlig RPC"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffentlicher RPC"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δημόσιο RPC"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Public RPC"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC público"
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC público"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Julkinen RPC"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC public"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC ציבורי"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सार्वजनिक RPC"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Javni RPC"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nyilvános RPC"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC publik"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC pubblico"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "公開 RPC"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "공용 RPC"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC awam"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offentlig RPC"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Openbare RPC"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publiczne RPC"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC público"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC público"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC public"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Публичный RPC"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verejné RPC"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offentlig RPC"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC สาธารณะ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Herkese açık RPC"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Публічний RPC"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC công khai"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "公共 RPC"
+          }
+        }
+      }
+    },
+    "Solana blockhash not found. Check the selected network and try again." : {
+      "comment" : "Solana blockhash not found error",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لم يتم العثور على blockhash لـ Solana. تحقق من الشبكة المحددة وحاول مرة أخرى."
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No s’ha trobat el blockhash de Solana. Comprova la xarxa seleccionada i torna-ho a provar."
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blockhash Solana nebyl nalezen. Zkontrolujte vybranou síť a zkuste to znovu."
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solana-blockhash blev ikke fundet. Kontrollér det valgte netværk, og prøv igen."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solana-Blockhash nicht gefunden. Prüfe das ausgewählte Netzwerk und versuche es erneut."
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Δεν βρέθηκε το blockhash του Solana. Ελέγξτε το επιλεγμένο δίκτυο και δοκιμάστε ξανά."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solana blockhash not found. Check the selected network and try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se encontró el blockhash de Solana. Comprueba la red seleccionada e inténtalo de nuevo."
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se encontró el blockhash de Solana. Comprueba la red seleccionada e inténtalo de nuevo."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solana-blockhashia ei löytynyt. Tarkista valittu verkko ja yritä uudelleen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blockhash Solana introuvable. Vérifiez le réseau sélectionné et réessayez."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ה-blockhash של Solana לא נמצא. בדוק את הרשת שנבחרה ונסה שוב."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solana blockhash नहीं मिला। चुने गए नेटवर्क की जाँच करें और फिर कोशिश करें।"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solana blockhash nije pronađen. Provjerite odabranu mrežu i pokušajte ponovno."
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A Solana blockhash nem található. Ellenőrizze a kiválasztott hálózatot, és próbálja újra."
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blockhash Solana tidak ditemukan. Periksa jaringan yang dipilih dan coba lagi."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blockhash Solana non trovato. Controlla la rete selezionata e riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solana のブロックハッシュが見つかりません。選択したネットワークを確認して、もう一度お試しください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solana blockhash를 찾을 수 없습니다. 선택한 네트워크를 확인하고 다시 시도하세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blockhash Solana tidak ditemui. Semak rangkaian yang dipilih dan cuba lagi."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solana-blockhash ble ikke funnet. Kontroller valgt nettverk og prøv igjen."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solana-blockhash niet gevonden. Controleer het geselecteerde netwerk en probeer het opnieuw."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nie znaleziono blockhash Solana. Sprawdź wybraną sieć i spróbuj ponownie."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blockhash da Solana não encontrado. Verifique a rede selecionada e tente novamente."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blockhash da Solana não encontrado. Verifique a rede selecionada e tente novamente."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blockhash-ul Solana nu a fost găsit. Verifică rețeaua selectată și încearcă din nou."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blockhash Solana не найден. Проверьте выбранную сеть и попробуйте снова."
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blockhash Solana sa nenašiel. Skontrolujte vybranú sieť a skúste to znova."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solana-blockhash hittades inte. Kontrollera det valda nätverket och försök igen."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ไม่พบ blockhash ของ Solana โปรดตรวจสอบเครือข่ายที่เลือกแล้วลองอีกครั้ง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solana blockhash bulunamadı. Seçili ağı kontrol edip tekrar deneyin."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blockhash Solana не знайдено. Перевірте вибрану мережу й повторіть спробу."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Không tìm thấy blockhash Solana. Kiểm tra mạng đã chọn và thử lại."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未找到 Solana blockhash。请检查所选网络并重试。"
+          }
+        }
+      }
+    },
+    "Suggested by website" : {
+      "comment" : "Dapp suggested Solana cluster label",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مقترح من الموقع الإلكتروني"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suggerit pel lloc web"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Navrženo webem"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foreslået af webstedet"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Von der Website vorgeschlagen"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Προτείνεται από τον ιστότοπο"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suggested by website"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sugerido por el sitio web"
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sugerido por el sitio web"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verkkosivuston ehdottama"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suggéré par le site web"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הוצע על ידי האתר"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "वेबसाइट द्वारा सुझाया गया"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Predložila web-stranica"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A webhely javaslata"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disarankan oleh situs web"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suggerito dal sito web"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Webサイトによる提案"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "웹사이트에서 제안"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dicadangkan oleh laman web"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foreslått av nettstedet"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voorgesteld door website"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sugerowane przez witrynę"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sugerido pelo site"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sugerido pelo site"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sugerat de site"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Предложено сайтом"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Navrhnuté webovou stránkou"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Föreslaget av webbplatsen"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "แนะนำโดยเว็บไซต์"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web sitesi tarafından önerildi"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запропоновано сайтом"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Được trang web đề xuất"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网站建议"
+          }
+        }
+      }
+    },
+    "Unsupported Solana send options" : {
+      "comment" : "Unsupported Solana send options error",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خيارات إرسال Solana غير مدعومة"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opcions d’enviament de Solana no compatibles"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nepodporované možnosti odeslání Solana"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ikke-understøttede Solana-afsendelsesindstillinger"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht unterstützte Solana-Sendeoptionen"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μη υποστηριζόμενες επιλογές αποστολής Solana"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unsupported Solana send options"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opciones de envío de Solana no compatibles"
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opciones de envío de Solana no compatibles"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solana-lähetysasetuksia ei tueta"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Options d’envoi Solana non prises en charge"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אפשרויות שליחת Solana אינן נתמכות"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "असमर्थित Solana भेजने के विकल्प"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nepodržane opcije slanja Solana transakcije"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nem támogatott Solana küldési beállítások"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opsi pengiriman Solana tidak didukung"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opzioni di invio Solana non supportate"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サポートされていない Solana 送信オプション"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "지원되지 않는 Solana 전송 옵션"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pilihan penghantaran Solana tidak disokong"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solana-sendealternativer støttes ikke"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niet-ondersteunde Solana-verzendopties"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nieobsługiwane opcje wysyłania Solana"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opções de envio da Solana não compatíveis"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opções de envio Solana não suportadas"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opțiuni de trimitere Solana neacceptate"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Неподдерживаемые параметры отправки Solana"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nepodporované možnosti odoslania Solana"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solana-sändningsalternativ stöds inte"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ตัวเลือกการส่ง Solana ไม่รองรับ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desteklenmeyen Solana gönderim seçenekleri"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Непідтримувані параметри надсилання Solana"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tùy chọn gửi Solana không được hỗ trợ"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不支持的 Solana 发送选项"
           }
         }
       }

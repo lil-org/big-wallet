@@ -177,9 +177,11 @@ These decisions are required to avoid ambiguous behavior and security regression
 - Decide supported Solana transaction formats for v1 (legacy only vs legacy + versioned).
 
 5. Solana RPC ownership policy:
-- Decide which cluster/environment owns Solana send flows in v1.
-- Decide whether endpoint selection is fixed, bundled configuration, or user/network driven.
-- Ensure `signAndSendTransaction` does not silently inherit the legacy hardcoded mainnet-beta RPC behavior.
+- Big Wallet owns the broadcast cluster and RPC endpoint for Solana send flows in v1.
+- Dapps may provide an untrusted cluster hint through `options.bigWalletCluster` or `options.cluster`; the app preselects that cluster but the user can change it before approving.
+- RPC endpoint selection is config-backed via `SolanaMainnetRPCURL` / `SolanaDevnetRPCURL`, with Solana public RPC endpoints as fallback. Public fallback is allowed but not preferred for production volume.
+- `signAndSendTransaction` must not silently inherit legacy hardcoded mainnet-beta behavior.
+- The app does not auto-refresh blockhashes in v1; `BlockhashNotFound` is returned as a selected-network/blockhash error.
 
 Exit criteria:
 - These decisions are documented in this file and treated as implementation constraints.
@@ -207,9 +209,9 @@ Exit criteria:
 - Decision: _TBD_
 
 5. Solana RPC ownership policy
-- Status: pending
-- Owner: _unassigned_
-- Decision: _TBD_
+- Status: resolved
+- Owner: Big Wallet
+- Decision: Big Wallet owns cluster and RPC selection for wallet-broadcasted Solana sends. Dapp cluster hints may preselect Mainnet or Devnet, user selection is authoritative, endpoints resolve from app config before public fallback, send options are sanitized before RPC, and blockhash refresh/retry is disabled in v1.
 
 ## Workstream 1: Provider/type contract restoration
 
@@ -349,7 +351,7 @@ Required checks:
 2. `connect({ onlyIfTrusted: true })` behavior.
 3. Sign message (hex/text display handling).
 4. Sign transaction and sign all transactions.
-5. Sign and send transaction (including blockhash-not-found retry path if retained).
+5. Sign and send transaction, including selected-cluster display and blockhash-not-found error handling.
 6. Switch account with mixed provider state and provider-specific disconnects.
 7. Coin-aware address matching tests (Ethereum case-insensitive, Solana exact-case).
 8. Parser/serializer tests for Solana request and response contracts.
@@ -382,7 +384,7 @@ Definition of done:
 3. Mobile confirmation behavior currently tuned for Ethereum can produce unintended Solana connect UX.
 4. Wallet derivation/import behavior changed significantly; explicit mnemonic vs private-key policy is required.
 5. Legacy Solana send/sign logic may not match current architecture or supported transaction formats.
-6. Leaving Solana RPC ownership implicit can accidentally reintroduce legacy hardcoded mainnet-beta sends.
+6. Public Solana RPC fallback is rate-limited and should not be treated as the preferred production endpoint.
 7. Generated `inpage.js` can drift from source if rebuild is skipped.
 8. Blindly restoring old names/events can mismatch current bridge contracts and break provider expectations.
 

@@ -35,7 +35,35 @@ struct SignMessageAction {
     let account: Account
     let meta: String
     let peerMeta: PeerMeta
+    private(set) var solanaClusterSelection: SolanaClusterSelection? = nil
     let completion: (Bool) -> Void
+}
+
+final class SolanaClusterSelection {
+    var selectedCluster: Solana.Cluster?
+    let suggestedCluster: Solana.Cluster?
+    let clusters = Solana.Cluster.allCases
+
+    var selectedClusterDescription: String? {
+        guard let selectedCluster else { return nil }
+        return description(for: selectedCluster)
+    }
+
+    func description(for cluster: Solana.Cluster) -> String {
+        var components = [
+            cluster.displayName,
+            Solana.RPCConfiguration().endpoint(for: cluster).source.displayName,
+        ]
+        if cluster == suggestedCluster {
+            components.append(Strings.suggestedByWebsite)
+        }
+        return components.joined(separator: " - ")
+    }
+
+    init(selectedCluster: Solana.Cluster? = nil, suggestedCluster: Solana.Cluster? = nil) {
+        self.selectedCluster = selectedCluster
+        self.suggestedCluster = suggestedCluster
+    }
 }
 
 struct SendTransactionAction {

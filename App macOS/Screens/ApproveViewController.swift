@@ -28,8 +28,20 @@ class ApproveViewController: NSViewController {
     private var didCallCompletion = false
     private var peerMeta: PeerMeta?
     private var walletId: String!
+    private var solanaClusterSelection: SolanaClusterSelection?
+    private weak var clusterPopUpButton: NSPopUpButton?
+    private var canApprove: Bool {
+        guard let solanaClusterSelection else { return true }
+        return solanaClusterSelection.selectedCluster != nil
+    }
     
-    static func with(subject: ApprovalSubject, meta: String, account: Account, walletId: String, peerMeta: PeerMeta?, completion: @escaping (Bool) -> Void) -> ApproveViewController {
+    static func with(subject: ApprovalSubject,
+                     meta: String,
+                     account: Account,
+                     walletId: String,
+                     peerMeta: PeerMeta?,
+                     solanaClusterSelection: SolanaClusterSelection? = nil,
+                     completion: @escaping (Bool) -> Void) -> ApproveViewController {
         let new = instantiate(ApproveViewController.self)
         new.walletId = walletId
         new.completion = completion
@@ -38,6 +50,7 @@ class ApproveViewController: NSViewController {
         new.account = account
         new.approveTitle = subject.title
         new.peerMeta = peerMeta
+        new.solanaClusterSelection = solanaClusterSelection
         return new
     }
     
@@ -54,6 +67,8 @@ class ApproveViewController: NSViewController {
         
         titleLabel.stringValue = approveTitle
         updateDisplayedMeta()
+        configureSolanaClusterSelectionIfNeeded()
+        updateOkButtonState()
         if let peer = peerMeta {
             peerNameLabel.stringValue = peer.name
             if let urlString = peer.iconURLString, let url = URL(string: urlString) {
@@ -76,9 +91,55 @@ class ApproveViewController: NSViewController {
     func enableWaiting() {
         guard subject == .approveTransaction else { return }
         buttonsStackView.isHidden = true
+        clusterPopUpButton?.isHidden = true
         progressIndicator.isHidden = false
         progressIndicator.startAnimation(nil)
         titleLabel.stringValue = Strings.sendingTransaction
+    }
+
+    private func configureSolanaClusterSelectionIfNeeded() {
+        guard let solanaClusterSelection else { return }
+
+        let popUpButton = NSPopUpButton(frame: .zero, pullsDown: false)
+        popUpButton.controlSize = .small
+        popUpButton.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        popUpButton.target = self
+        popUpButton.action = #selector(solanaClusterSelectionChanged(_:))
+        popUpButton.translatesAutoresizingMaskIntoConstraints = false
+
+        popUpButton.addItem(withTitle: Strings.selectNetwork)
+        for cluster in solanaClusterSelection.clusters {
+            popUpButton.addItem(withTitle: solanaClusterSelection.description(for: cluster))
+            popUpButton.lastItem?.representedObject = cluster
+        }
+        if let selectedCluster = solanaClusterSelection.selectedCluster,
+           let index = solanaClusterSelection.clusters.firstIndex(of: selectedCluster) {
+            popUpButton.selectItem(at: index + 1)
+        }
+
+        view.addSubview(popUpButton)
+        clusterPopUpButton = popUpButton
+
+        var constraints = [
+            popUpButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            popUpButton.widthAnchor.constraint(equalToConstant: 190),
+            popUpButton.bottomAnchor.constraint(equalTo: buttonsStackView.topAnchor, constant: -3),
+        ]
+        if let scrollView = metaTextView.enclosingScrollView {
+            constraints.append(popUpButton.topAnchor.constraint(greaterThanOrEqualTo: scrollView.bottomAnchor, constant: 3))
+        }
+        NSLayoutConstraint.activate(constraints)
+    }
+
+    @objc private func solanaClusterSelectionChanged(_ sender: NSPopUpButton) {
+        guard let solanaClusterSelection else { return }
+
+        solanaClusterSelection.selectedCluster = sender.selectedItem?.representedObject as? Solana.Cluster
+        updateOkButtonState()
+    }
+
+    private func updateOkButtonState() {
+        okButton.isEnabled = canApprove
     }
     
     private func updateDisplayedMeta() {
@@ -100,6 +161,8 @@ class ApproveViewController: NSViewController {
     }
 
     @IBAction func actionButtonTapped(_ sender: Any) {
+        guard canApprove else { return }
+
         callCompletion(result: true)
     }
     
