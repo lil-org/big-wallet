@@ -38,6 +38,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private var forWalletSelection: Bool {
         return selectAccountAction != nil
     }
+
+    private var canSelectEthereumNetwork: Bool {
+        return selectAccountAction?.canSelectEthereumNetwork == true
+    }
     
     private var didAppear = false
     private var toDismissAfterResponse = [Int: UIViewController]()
@@ -126,6 +130,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             if let network = selectAccountAction.network, self.network != network {
                 selectNetwork(network)
             }
+            updateNetworkButtonVisibility()
             
             if let peer = selectAccountAction.peer {
                 websiteNameLabel.text = peer.name
@@ -332,10 +337,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     @IBAction func networkButtonTapped(_ sender: Any) {
-        guard selectAccountAction?.coinType == nil || selectAccountAction?.coinType == .ethereum else {
-            showMessageAlert(text: selectAccountAction?.coinType?.name ?? Strings.unknownNetwork)
-            return
-        }
+        guard canSelectEthereumNetwork else { return }
         
         showNetworksList()
     }
@@ -355,6 +357,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         var tintedConfiguration = UIButton.Configuration.tinted()
         tintedConfiguration.image = networkButton.configuration?.image
         networkButton.configuration = tintedConfiguration
+    }
+
+    private func updateNetworkButtonVisibility() {
+        networkButton.isHidden = !canSelectEthereumNetwork
     }
     
     @IBAction func secondaryButtonTapped(_ sender: Any) {
@@ -376,6 +382,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     @objc private func walletsChanged() {
         validateSelectedAccounts()
         updatePrimaryButton()
+        updateNetworkButtonVisibility()
         reloadData()
     }
     
@@ -697,6 +704,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
         
         updatePrimaryButton()
+        updateNetworkButtonVisibility()
         tableView.reloadData()
     }
     

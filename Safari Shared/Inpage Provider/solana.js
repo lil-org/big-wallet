@@ -209,7 +209,31 @@ class BigWalletSolana extends EventEmitter {
     }
 
     canApplyTransactionSignature(value) {
-        return !!value && typeof value.addSignature === "function";
+        return !!value && (typeof value.addSignature === "function" ||
+            this.canSetVersionedTransactionSignature(value));
+    }
+
+    canSetVersionedTransactionSignature(value) {
+        return !!value &&
+            Array.isArray(value.signatures) &&
+            this.versionedTransactionSignerPublicKeys(value) !== null &&
+            typeof value.message.header.numRequiredSignatures === "number";
+    }
+
+    versionedTransactionSignerPublicKeys(transaction) {
+        if (!transaction ||
+            !transaction.message ||
+            !transaction.message.header ||
+            !Array.isArray(transaction.message.staticAccountKeys)) {
+            return null;
+        }
+
+        return transaction.message.staticAccountKeys.slice(0,
+                                                          transaction.message.header.numRequiredSignatures);
+    }
+
+    isMatchingPublicKey(publicKey, value) {
+        return !!publicKey && !!value && typeof value.toString === "function" && publicKey.equals(value);
     }
 
     isTransactionObject(value) {
@@ -570,17 +594,10 @@ class BigWalletSolana extends EventEmitter {
             return publicKey;
         }
 
-        const isMatchingPublicKey = (value) => {
-            return !!value && typeof value.toString === "function" && publicKey.equals(value);
-        };
-
-        if (transaction.message &&
-            transaction.message.header &&
-            Array.isArray(transaction.message.staticAccountKeys)) {
-            const signerPublicKeys = transaction.message.staticAccountKeys.slice(0,
-                                                                                transaction.message.header.numRequiredSignatures);
+        const signerPublicKeys = this.versionedTransactionSignerPublicKeys(transaction);
+        if (signerPublicKeys) {
             for (let index = 0; index < signerPublicKeys.length; index++) {
-                if (isMatchingPublicKey(signerPublicKeys[index])) {
+                if (this.isMatchingPublicKey(publicKey, signerPublicKeys[index])) {
                     return signerPublicKeys[index];
                 }
             }
@@ -589,7 +606,7 @@ class BigWalletSolana extends EventEmitter {
         if (Array.isArray(transaction.signatures)) {
             for (let index = 0; index < transaction.signatures.length; index++) {
                 const signature = transaction.signatures[index];
-                if (isMatchingPublicKey(signature && signature.publicKey)) {
+                if (this.isMatchingPublicKey(publicKey, signature && signature.publicKey)) {
                     return signature.publicKey;
                 }
             }
@@ -610,13 +627,50 @@ class BigWalletSolana extends EventEmitter {
 
     applySignatureToTransaction(id, transaction, publicKey, encodedSignature) {
         try {
-            const signature = Utils.messageToBuffer(Base58.decode(encodedSignature));
-            transaction.addSignature(this.signingPublicKeyForTransaction(transaction, publicKey), signature);
-            return true;
+            const signature = Base58.decode(encodedSignature);
+            if (typeof transaction.addSignature === "function") {
+                transaction.addSignature(this.signingPublicKeyForTransaction(transaction, publicKey), signature);
+                return true;
+            }
+
+            if (this.applySignatureToVersionedTransaction(transaction, publicKey, signature)) {
+                return true;
+            }
         } catch (error) {
-            this.sendError(id, new ProviderRpcError(4200, "Big Wallet could not apply the Solana signature"));
+        }
+
+        this.sendError(id, new ProviderRpcError(4200, "Big Wallet could not apply the Solana signature"));
+        return false;
+    }
+
+    applySignatureToVersionedTransaction(transaction, publicKey, signature) {
+        if (signature.length !== 64 || !this.canSetVersionedTransactionSignature(transaction)) {
             return false;
         }
+
+        const signerIndex = this.signerIndexForVersionedTransaction(transaction, publicKey);
+        if (signerIndex === null || signerIndex >= transaction.signatures.length) {
+            return false;
+        }
+
+        transaction.signatures[signerIndex] = signature;
+        return true;
+    }
+
+    signerIndexForVersionedTransaction(transaction, publicKey) {
+        if (!publicKey || !this.canSetVersionedTransactionSignature(transaction)) {
+            return null;
+        }
+
+        const signerPublicKeys = this.versionedTransactionSignerPublicKeys(transaction);
+        for (let index = 0; index < signerPublicKeys.length; index++) {
+            const signerPublicKey = signerPublicKeys[index];
+            if (this.isMatchingPublicKey(publicKey, signerPublicKey)) {
+                return index;
+            }
+        }
+
+        return null;
     }
 
     processBigWalletResponse(id, response) {

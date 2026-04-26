@@ -78,6 +78,10 @@ class AccountsListViewController: NSViewController {
     private var wallets: [WalletContainer] {
         return walletsManager.wallets
     }
+
+    private var canSelectEthereumNetwork: Bool {
+        return selectAccountAction?.canSelectEthereumNetwork == true
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -130,9 +134,8 @@ class AccountsListViewController: NSViewController {
                 secondaryButton.keyEquivalent = ""
             }
             
-            if selectAccountAction.source == .walletConnect {
-                networkButton.isHidden = true
-            } else {
+            updateNetworkButtonVisibility()
+            if canSelectEthereumNetwork {
                 if let network = selectAccountAction.network, !network.isEthMainnet {
                     selectNetwork(network)
                 }
@@ -198,10 +201,7 @@ class AccountsListViewController: NSViewController {
     }
     
     @IBAction func networkButtonTapped(_ sender: NSButton) {
-        guard selectAccountAction?.coinType == nil || selectAccountAction?.coinType == .ethereum else {
-            Alert.showWithMessage(selectAccountAction?.coinType?.name ?? Strings.unknownNetwork, style: .informational)
-            return
-        }
+        guard canSelectEthereumNetwork else { return }
         showNetworksList()
     }
     
@@ -232,6 +232,10 @@ class AccountsListViewController: NSViewController {
     private func selectNetwork(_ network: EthereumNetwork) {
         networkButton.image = networkButton.image?.with(pointSize: 14, weight: .semibold, color: .controlAccentColor.withSystemEffect(.pressed))
         selectAccountAction?.network = network
+    }
+
+    private func updateNetworkButtonVisibility() {
+        networkButton.isHidden = !canSelectEthereumNetwork
     }
     
     private func closeAllPopupsIfNeeded() {
@@ -558,6 +562,7 @@ class AccountsListViewController: NSViewController {
         }
         
         updatePrimaryButton()
+        updateNetworkButtonVisibility()
     }
     
     private func accountCanBeSelected(_ account: Account) -> Bool {

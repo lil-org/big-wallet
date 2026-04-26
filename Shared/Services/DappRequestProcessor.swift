@@ -45,6 +45,8 @@ struct DappRequestProcessor {
                     return (message: Strings.solanaBlockhashNotFound, code: -32003, publicKey: nil)
                 case .unsupportedMultiSignature:
                     return (message: Strings.failedToSend, code: 4200, publicKey: nil)
+                case .rpcError(let message, let code):
+                    return (message: message, code: code ?? -32003, publicKey: nil)
                 case .unknown:
                     return (message: Strings.failedToSend, code: -32003, publicKey: nil)
                 }

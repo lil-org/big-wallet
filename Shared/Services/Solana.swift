@@ -267,6 +267,7 @@ final class Solana {
         case unsupportedMultiSignature
         case blockhashNotFound
         case invalidSendOptions
+        case rpcError(message: String, code: Int?)
         case unknown
     }
 
@@ -274,19 +275,121 @@ final class Solana {
         case sendTransaction
     }
 
-    private struct SendTransactionResponse: Codable {
+    private struct SendTransactionResponse: Decodable {
         let result: String?
         private let error: ResponseError?
 
-        var blockhashNotFound: Bool {
-            return error?.data?.err == "BlockhashNotFound"
+        var failure: SendTransactionError? {
+            guard let error else { return nil }
+            if error.isBlockhashNotFound {
+                return .blockhashNotFound
+            }
+
+            return .rpcError(message: error.displayMessage ?? Strings.failedToSend,
+                             code: error.code)
         }
 
-        private struct ResponseError: Codable {
+        private struct ResponseError: Decodable {
+            let code: Int?
+            let message: String?
             let data: ResponseData?
+            private let rawData: RPCErrorValue?
 
-            struct ResponseData: Codable {
-                let err: String?
+            private enum CodingKeys: String, CodingKey {
+                case code, message, data
+            }
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                code = try? container.decodeIfPresent(Int.self, forKey: .code)
+                message = try? container.decodeIfPresent(String.self, forKey: .message)
+                data = try? container.decodeIfPresent(ResponseData.self, forKey: .data)
+                rawData = try? container.decodeIfPresent(RPCErrorValue.self, forKey: .data)
+            }
+
+            var displayMessage: String? {
+                if let message, !message.isEmpty {
+                    return message
+                }
+                if let dataMessage = data?.message, !dataMessage.isEmpty {
+                    return dataMessage
+                }
+                return nil
+            }
+
+            var isBlockhashNotFound: Bool {
+                return contains("BlockhashNotFound") ||
+                    contains("blockhash not found")
+            }
+
+            func contains(_ string: String) -> Bool {
+                return message?.containsIgnoringCase(string) == true ||
+                    data?.contains(string) == true ||
+                    rawData?.contains(string) == true
+            }
+
+            struct ResponseData: Decodable {
+                let err: RPCErrorValue?
+                let message: String?
+
+                private enum CodingKeys: String, CodingKey {
+                    case err, message
+                }
+
+                init(from decoder: Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    err = try? container.decodeIfPresent(RPCErrorValue.self, forKey: .err)
+                    message = try? container.decodeIfPresent(String.self, forKey: .message)
+                }
+
+                func contains(_ string: String) -> Bool {
+                    return message?.containsIgnoringCase(string) == true ||
+                        err?.contains(string) == true
+                }
+            }
+        }
+    }
+
+    private indirect enum RPCErrorValue: Decodable {
+        case string(String)
+        case array([RPCErrorValue])
+        case object([String: RPCErrorValue])
+        case number(Double)
+        case bool(Bool)
+        case null
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if container.decodeNil() {
+                self = .null
+            } else if let value = try? container.decode(String.self) {
+                self = .string(value)
+            } else if let value = try? container.decode([RPCErrorValue].self) {
+                self = .array(value)
+            } else if let value = try? container.decode([String: RPCErrorValue].self) {
+                self = .object(value)
+            } else if let value = try? container.decode(Double.self) {
+                self = .number(value)
+            } else if let value = try? container.decode(Bool.self) {
+                self = .bool(value)
+            } else {
+                self = .null
+            }
+        }
+
+        func contains(_ string: String) -> Bool {
+            switch self {
+            case .string(let value):
+                return value.containsIgnoringCase(string)
+            case .array(let values):
+                return values.contains { $0.contains(string) }
+            case .object(let values):
+                return values.contains { key, value in
+                    key.containsIgnoringCase(string) ||
+                        value.contains(string)
+                }
+            case .number, .bool, .null:
+                return false
             }
         }
     }
@@ -645,8 +748,8 @@ final class Solana {
 
             if let result = response.result {
                 completion(.success(result))
-            } else if response.blockhashNotFound {
-                completion(.failure(.blockhashNotFound))
+            } else if let failure = response.failure {
+                completion(.failure(failure))
             } else {
                 completion(.failure(.unknown))
             }
@@ -815,6 +918,14 @@ final class Solana {
         return parsedMessage.accountKeys
             .prefix(parsedMessage.requiredSignaturesCount)
             .firstIndex(of: publicKeyData)
+    }
+
+}
+
+private extension String {
+
+    func containsIgnoringCase(_ string: String) -> Bool {
+        return range(of: string, options: .caseInsensitive) != nil
     }
 
 }

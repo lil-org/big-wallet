@@ -26,6 +26,17 @@ struct SelectAccountAction {
     enum Source {
         case walletConnect, safariExtension
     }
+
+    var canSelectEthereumNetwork: Bool {
+        guard source != .walletConnect else { return false }
+
+        if let coinType {
+            return coinType == .ethereum
+        }
+
+        return initiallyConnectedProviders.contains(.ethereum) ||
+            selectedAccounts.contains { $0.account.coin == .ethereum }
+    }
 }
 
 struct SignMessageAction {

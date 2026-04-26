@@ -84,12 +84,18 @@ class EditAccountsViewController: NSViewController {
     
     private func toggleAccount(at row: Int) {
         cellModels[row].isEnabled.toggle()
-        okButton.isEnabled = cellModels.contains(where: { $0.isEnabled })
+        updateOkButtonState()
         if toggledIndexes.contains(row) {
             toggledIndexes.remove(row)
         } else {
             toggledIndexes.insert(row)
         }
+    }
+
+    private func updateOkButtonState() {
+        let hasVisibleEnabledAccount = cellModels.contains(where: { $0.isEnabled })
+        let hasHiddenEnabledAccount = !enabledUndiscoveredAccountKeys.isEmpty
+        okButton.isEnabled = hasVisibleEnabledAccount || hasHiddenEnabledAccount
     }
     
     private func previewMoreAccountsIfNeeded() {
