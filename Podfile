@@ -10,11 +10,19 @@ end
 target 'Big Wallet' do
   platform :osx, '14.0'
   shared_pods
+
+  target 'Tests macOS' do
+    inherit! :search_paths
+  end
 end
 
 target 'Big Wallet iOS' do
   platform :ios, '17.0'
   shared_pods
+
+  target 'Tests iOS' do
+    inherit! :search_paths
+  end
 end
 
 target 'Big Wallet visionOS' do
@@ -22,6 +30,10 @@ target 'Big Wallet visionOS' do
   pod 'Kingfisher'
   pod 'VBigInt', :git => 'https://github.com/grachyov/BigInt.git', :branch => 'master'
   pod 'VTrustWalletCore', :podspec => 'https://github.com/grachyov/wallet-core/raw/master/VTrustWalletCore.podspec'
+
+  target 'Tests visionOS' do
+    inherit! :search_paths
+  end
 end
 
 post_install do |installer|

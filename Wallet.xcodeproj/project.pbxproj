@@ -39,12 +39,6 @@
 		2C264BC227B2F2C100234393 /* EthereumSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BC027B2F2C100234393 /* EthereumSafariRequest.swift */; };
 		2C264BC327B2F2C100234393 /* EthereumSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BC027B2F2C100234393 /* EthereumSafariRequest.swift */; };
 		2C264BC427B2F2C100234393 /* EthereumSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BC027B2F2C100234393 /* EthereumSafariRequest.swift */; };
-		2F1A10012E20000100A1A001 /* SolanaSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00012E20000100A1A001 /* SolanaSafariRequest.swift */; };
-		2F1A10022E20000100A1A001 /* SolanaSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00012E20000100A1A001 /* SolanaSafariRequest.swift */; };
-		2F1A10032E20000100A1A001 /* SolanaSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00012E20000100A1A001 /* SolanaSafariRequest.swift */; };
-		2F1A10042E20000100A1A001 /* SolanaSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00012E20000100A1A001 /* SolanaSafariRequest.swift */; };
-		2F1A10052E20000100A1A001 /* SolanaSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00012E20000100A1A001 /* SolanaSafariRequest.swift */; };
-		2F1A10062E20000100A1A001 /* SolanaSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00012E20000100A1A001 /* SolanaSafariRequest.swift */; };
 		2C264BD027B2F30C00234393 /* UnknownSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BCF27B2F30C00234393 /* UnknownSafariRequest.swift */; };
 		2C264BD127B2F30C00234393 /* UnknownSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BCF27B2F30C00234393 /* UnknownSafariRequest.swift */; };
 		2C264BD227B2F30C00234393 /* UnknownSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BCF27B2F30C00234393 /* UnknownSafariRequest.swift */; };
@@ -57,17 +51,8 @@
 		2C264BDD27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BDB27B5AC5400234393 /* EthereumResponseToExtension.swift */; };
 		2C264BDE27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BDB27B5AC5400234393 /* EthereumResponseToExtension.swift */; };
 		2C264BDF27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BDB27B5AC5400234393 /* EthereumResponseToExtension.swift */; };
-		2F1A10112E20000100A1A001 /* SolanaResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00022E20000100A1A001 /* SolanaResponseToExtension.swift */; };
-		2F1A10122E20000100A1A001 /* SolanaResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00022E20000100A1A001 /* SolanaResponseToExtension.swift */; };
-		2F1A10132E20000100A1A001 /* SolanaResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00022E20000100A1A001 /* SolanaResponseToExtension.swift */; };
-		2F1A10142E20000100A1A001 /* SolanaResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00022E20000100A1A001 /* SolanaResponseToExtension.swift */; };
-		2F1A10152E20000100A1A001 /* SolanaResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00022E20000100A1A001 /* SolanaResponseToExtension.swift */; };
-		2F1A10162E20000100A1A001 /* SolanaResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00022E20000100A1A001 /* SolanaResponseToExtension.swift */; };
 		2C264BEB27B6B50700234393 /* DappRequestProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */; };
 		2C264BEC27B6B50700234393 /* DappRequestProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */; };
-		2F1A10212E20000100A1A001 /* Solana.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00032E20000100A1A001 /* Solana.swift */; };
-		2F1A10222E20000100A1A001 /* Solana.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00032E20000100A1A001 /* Solana.swift */; };
-		2F1A10232E20000100A1A001 /* Solana.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00032E20000100A1A001 /* Solana.swift */; };
 		2C2AA1D228AD1DC100E35DBF /* SpecificWalletAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */; };
 		2C2AA1D328AD1DC100E35DBF /* SpecificWalletAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */; };
 		2C2AA1D528AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D428AFB1AD00E35DBF /* MultipleResponseToExtension.swift */; };
@@ -372,8 +357,26 @@
 		2CF9B1112D526F9900B5CE82 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
 		2CFAE56A28BE6292001D0799 /* NSImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CFAE56928BE6292001D0799 /* NSImage.swift */; };
 		2CFDDF4E2765417E00F89019 /* ios_specific_content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CFDDF4D2765417D00F89019 /* ios_specific_content.js */; };
+		2F1A10012E20000100A1A001 /* SolanaSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00012E20000100A1A001 /* SolanaSafariRequest.swift */; };
+		2F1A10022E20000100A1A001 /* SolanaSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00012E20000100A1A001 /* SolanaSafariRequest.swift */; };
+		2F1A10032E20000100A1A001 /* SolanaSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00012E20000100A1A001 /* SolanaSafariRequest.swift */; };
+		2F1A10042E20000100A1A001 /* SolanaSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00012E20000100A1A001 /* SolanaSafariRequest.swift */; };
+		2F1A10052E20000100A1A001 /* SolanaSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00012E20000100A1A001 /* SolanaSafariRequest.swift */; };
+		2F1A10062E20000100A1A001 /* SolanaSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00012E20000100A1A001 /* SolanaSafariRequest.swift */; };
+		2F1A10112E20000100A1A001 /* SolanaResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00022E20000100A1A001 /* SolanaResponseToExtension.swift */; };
+		2F1A10122E20000100A1A001 /* SolanaResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00022E20000100A1A001 /* SolanaResponseToExtension.swift */; };
+		2F1A10132E20000100A1A001 /* SolanaResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00022E20000100A1A001 /* SolanaResponseToExtension.swift */; };
+		2F1A10142E20000100A1A001 /* SolanaResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00022E20000100A1A001 /* SolanaResponseToExtension.swift */; };
+		2F1A10152E20000100A1A001 /* SolanaResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00022E20000100A1A001 /* SolanaResponseToExtension.swift */; };
+		2F1A10162E20000100A1A001 /* SolanaResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00022E20000100A1A001 /* SolanaResponseToExtension.swift */; };
+		2F1A10212E20000100A1A001 /* Solana.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00032E20000100A1A001 /* Solana.swift */; };
+		2F1A10222E20000100A1A001 /* Solana.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00032E20000100A1A001 /* Solana.swift */; };
+		2F1A10232E20000100A1A001 /* Solana.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00032E20000100A1A001 /* Solana.swift */; };
+		34A5E03D86150F325FB210C4 /* Pods_Tests_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ADA8B9E621EDAB7067D1E0C3 /* Pods_Tests_iOS.framework */; };
 		52B05EDE6C519B91E26B4F9C /* Pods_Big_Wallet.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9B77B7B65690D61ACCF043B2 /* Pods_Big_Wallet.framework */; };
 		80CCA7546323652DC0FE12DD /* Pods_Big_Wallet_visionOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 510059EF5B291ACA46D961C4 /* Pods_Big_Wallet_visionOS.framework */; };
+		8C31A4A8AFDCD99E9D54EDA8 /* Pods_Tests_macOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBC77052BBEC4F4C7E46D88F /* Pods_Tests_macOS.framework */; };
+		A5149F2F3460C359C4854E56 /* Pods_Tests_visionOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 58AC34D3A66FE970F831A545 /* Pods_Tests_visionOS.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -469,6 +472,7 @@
 /* Begin PBXFileReference section */
 		0D059AD126C2796200EE3023 /* ApprovalSubject.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalSubject.swift; sourceTree = "<group>"; };
 		0DC850E626B73A5900809E82 /* AuthenticationReason.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationReason.swift; sourceTree = "<group>"; };
+		1575AE7CBBB5C530F059097D /* Pods-Tests visionOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tests visionOS.release.xcconfig"; path = "Target Support Files/Pods-Tests visionOS/Pods-Tests visionOS.release.xcconfig"; sourceTree = "<group>"; };
 		2674AFF49DF692B8835F87DB /* Pods-Big Wallet.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Big Wallet.release.xcconfig"; path = "Target Support Files/Pods-Big Wallet/Pods-Big Wallet.release.xcconfig"; sourceTree = "<group>"; };
 		287EA20025C593DE505FC7A1 /* Pods-Big Wallet.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Big Wallet.debug.xcconfig"; path = "Target Support Files/Pods-Big Wallet/Pods-Big Wallet.debug.xcconfig"; sourceTree = "<group>"; };
 		2C03D1D4269B428C00EF10EA /* Notification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notification.swift; sourceTree = "<group>"; };
@@ -499,13 +503,10 @@
 		2C1995552674D0F300A8E370 /* Ethereum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ethereum.swift; sourceTree = "<group>"; };
 		2C264BBB27B2F25E00234393 /* SafariRequest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SafariRequest.swift; sourceTree = "<group>"; };
 		2C264BC027B2F2C100234393 /* EthereumSafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumSafariRequest.swift; sourceTree = "<group>"; };
-		2F1A00012E20000100A1A001 /* SolanaSafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolanaSafariRequest.swift; sourceTree = "<group>"; };
 		2C264BCF27B2F30C00234393 /* UnknownSafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnknownSafariRequest.swift; sourceTree = "<group>"; };
 		2C264BD427B5806200234393 /* InpageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InpageProvider.swift; sourceTree = "<group>"; };
 		2C264BDB27B5AC5400234393 /* EthereumResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumResponseToExtension.swift; sourceTree = "<group>"; };
-		2F1A00022E20000100A1A001 /* SolanaResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolanaResponseToExtension.swift; sourceTree = "<group>"; };
 		2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DappRequestProcessor.swift; sourceTree = "<group>"; };
-		2F1A00032E20000100A1A001 /* Solana.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Solana.swift; sourceTree = "<group>"; };
 		2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecificWalletAccount.swift; sourceTree = "<group>"; };
 		2C2AA1D428AFB1AD00E35DBF /* MultipleResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipleResponseToExtension.swift; sourceTree = "<group>"; };
 		2C3024FB28C1193100C304ED /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
@@ -1028,12 +1029,23 @@
 		2CF9B1092D526F4D00B5CE82 /* Tests visionOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Tests visionOS.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CFAE56928BE6292001D0799 /* NSImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSImage.swift; sourceTree = "<group>"; };
 		2CFDDF4D2765417D00F89019 /* ios_specific_content.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = ios_specific_content.js; sourceTree = "<group>"; };
+		2F1A00012E20000100A1A001 /* SolanaSafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolanaSafariRequest.swift; sourceTree = "<group>"; };
+		2F1A00022E20000100A1A001 /* SolanaResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolanaResponseToExtension.swift; sourceTree = "<group>"; };
+		2F1A00032E20000100A1A001 /* Solana.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Solana.swift; sourceTree = "<group>"; };
 		510059EF5B291ACA46D961C4 /* Pods_Big_Wallet_visionOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Big_Wallet_visionOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		58AC34D3A66FE970F831A545 /* Pods_Tests_visionOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Tests_visionOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		6B905E8EC100DD3534560801 /* Pods-Tests macOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tests macOS.debug.xcconfig"; path = "Target Support Files/Pods-Tests macOS/Pods-Tests macOS.debug.xcconfig"; sourceTree = "<group>"; };
+		807C364428B28D64295B0DD3 /* Pods-Tests macOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tests macOS.release.xcconfig"; path = "Target Support Files/Pods-Tests macOS/Pods-Tests macOS.release.xcconfig"; sourceTree = "<group>"; };
+		8EE002E6A67DCBF20CDE3CA3 /* Pods-Tests iOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tests iOS.release.xcconfig"; path = "Target Support Files/Pods-Tests iOS/Pods-Tests iOS.release.xcconfig"; sourceTree = "<group>"; };
 		9B77B7B65690D61ACCF043B2 /* Pods_Big_Wallet.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Big_Wallet.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		ADA8B9E621EDAB7067D1E0C3 /* Pods_Tests_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Tests_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B78DC47442AFAD950C169384 /* Pods-Big Wallet visionOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Big Wallet visionOS.debug.xcconfig"; path = "Target Support Files/Pods-Big Wallet visionOS/Pods-Big Wallet visionOS.debug.xcconfig"; sourceTree = "<group>"; };
+		CC310217A6A720A63B58C9DB /* Pods-Tests visionOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tests visionOS.debug.xcconfig"; path = "Target Support Files/Pods-Tests visionOS/Pods-Tests visionOS.debug.xcconfig"; sourceTree = "<group>"; };
+		D6D200D136B8976D14FA65C2 /* Pods-Tests iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tests iOS.debug.xcconfig"; path = "Target Support Files/Pods-Tests iOS/Pods-Tests iOS.debug.xcconfig"; sourceTree = "<group>"; };
 		E2D957850671E8B139CA5148 /* Pods_Big_Wallet_iOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Big_Wallet_iOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E38F8133E71D0281EAA7ED02 /* Pods-Big Wallet iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Big Wallet iOS.debug.xcconfig"; path = "Target Support Files/Pods-Big Wallet iOS/Pods-Big Wallet iOS.debug.xcconfig"; sourceTree = "<group>"; };
 		ED2048BF260AFB72E7D7D176 /* Pods-Big Wallet iOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Big Wallet iOS.release.xcconfig"; path = "Target Support Files/Pods-Big Wallet iOS/Pods-Big Wallet iOS.release.xcconfig"; sourceTree = "<group>"; };
+		FBC77052BBEC4F4C7E46D88F /* Pods_Tests_macOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Tests_macOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1086,6 +1098,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				34A5E03D86150F325FB210C4 /* Pods_Tests_iOS.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1100,6 +1113,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8C31A4A8AFDCD99E9D54EDA8 /* Pods_Tests_macOS.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1114,6 +1128,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A5149F2F3460C359C4854E56 /* Pods_Tests_visionOS.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2438,6 +2453,12 @@
 				ED2048BF260AFB72E7D7D176 /* Pods-Big Wallet iOS.release.xcconfig */,
 				B78DC47442AFAD950C169384 /* Pods-Big Wallet visionOS.debug.xcconfig */,
 				2C4EC2894165C237608D05F4 /* Pods-Big Wallet visionOS.release.xcconfig */,
+				D6D200D136B8976D14FA65C2 /* Pods-Tests iOS.debug.xcconfig */,
+				8EE002E6A67DCBF20CDE3CA3 /* Pods-Tests iOS.release.xcconfig */,
+				6B905E8EC100DD3534560801 /* Pods-Tests macOS.debug.xcconfig */,
+				807C364428B28D64295B0DD3 /* Pods-Tests macOS.release.xcconfig */,
+				CC310217A6A720A63B58C9DB /* Pods-Tests visionOS.debug.xcconfig */,
+				1575AE7CBBB5C530F059097D /* Pods-Tests visionOS.release.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -2449,6 +2470,9 @@
 				9B77B7B65690D61ACCF043B2 /* Pods_Big_Wallet.framework */,
 				E2D957850671E8B139CA5148 /* Pods_Big_Wallet_iOS.framework */,
 				510059EF5B291ACA46D961C4 /* Pods_Big_Wallet_visionOS.framework */,
+				ADA8B9E621EDAB7067D1E0C3 /* Pods_Tests_iOS.framework */,
+				FBC77052BBEC4F4C7E46D88F /* Pods_Tests_macOS.framework */,
+				58AC34D3A66FE970F831A545 /* Pods_Tests_visionOS.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -2576,6 +2600,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2C8612572B76BDDC00B22794 /* Build configuration list for PBXNativeTarget "Tests iOS" */;
 			buildPhases = (
+				54C1DBFB263538D58A46F453 /* [CP] Check Pods Manifest.lock */,
 				2C86124D2B76BDDC00B22794 /* Sources */,
 				2C86124E2B76BDDC00B22794 /* Frameworks */,
 				2C86124F2B76BDDC00B22794 /* Resources */,
@@ -2612,6 +2637,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2CE02C802BAA0F6700381D70 /* Build configuration list for PBXNativeTarget "Tests macOS" */;
 			buildPhases = (
+				21902859093D30883537CC66 /* [CP] Check Pods Manifest.lock */,
 				2CE02C762BAA0F6700381D70 /* Sources */,
 				2CE02C772BAA0F6700381D70 /* Frameworks */,
 				2CE02C782BAA0F6700381D70 /* Resources */,
@@ -2646,6 +2672,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2CF9B10C2D526F4D00B5CE82 /* Build configuration list for PBXNativeTarget "Tests visionOS" */;
 			buildPhases = (
+				259DC635C79B2DC4785EF720 /* [CP] Check Pods Manifest.lock */,
 				2CF9B1052D526F4D00B5CE82 /* Sources */,
 				2CF9B1062D526F4D00B5CE82 /* Frameworks */,
 				2CF9B1072D526F4D00B5CE82 /* Resources */,
@@ -2890,6 +2917,50 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		21902859093D30883537CC66 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-Tests macOS-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		259DC635C79B2DC4785EF720 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-Tests visionOS-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
 		2852B9DBCCE270BEE887F6E2 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -2989,6 +3060,28 @@
 			);
 			outputPaths = (
 				"$(DERIVED_FILE_DIR)/Pods-Big Wallet-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		54C1DBFB263538D58A46F453 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-Tests iOS-checkManifestLockResult.txt",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -4042,6 +4135,7 @@
 		};
 		2C8612582B76BDDC00B22794 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = D6D200D136B8976D14FA65C2 /* Pods-Tests iOS.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
@@ -4070,6 +4164,7 @@
 		};
 		2C8612592B76BDDC00B22794 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 8EE002E6A67DCBF20CDE3CA3 /* Pods-Tests iOS.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
@@ -4175,6 +4270,7 @@
 		};
 		2CE02C812BAA0F6700381D70 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6B905E8EC100DD3534560801 /* Pods-Tests macOS.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
@@ -4198,6 +4294,7 @@
 		};
 		2CE02C822BAA0F6700381D70 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 807C364428B28D64295B0DD3 /* Pods-Tests macOS.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
@@ -4257,6 +4354,7 @@
 		};
 		2CF9B10D2D526F4D00B5CE82 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = CC310217A6A720A63B58C9DB /* Pods-Tests visionOS.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
@@ -4284,6 +4382,7 @@
 		};
 		2CF9B10E2D526F4D00B5CE82 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 1575AE7CBBB5C530F059097D /* Pods-Tests visionOS.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
