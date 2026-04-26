@@ -143,6 +143,20 @@ final class TransactionInspectorTests: XCTestCase {
         XCTAssertNil(SolanaWireMessageParser.parse(message))
     }
 
+    func testSolanaParserRejectsVersionZeroAccountIndexOutsideReferencedAccounts() {
+        var bodyAfterBlockhash = Data([1, 1, 1, 3, 0])
+        bodyAfterBlockhash.append(1)
+        bodyAfterBlockhash.append(Data(repeating: 10, count: 32))
+        bodyAfterBlockhash.append(contentsOf: [1, 5, 0])
+
+        let message = solanaWireMessage(version: 0,
+                                        readOnlyUnsignedAccounts: 1,
+                                        accountKeySeeds: [7, 8],
+                                        bodyAfterBlockhash: bodyAfterBlockhash)
+
+        XCTAssertNil(SolanaWireMessageParser.parse(message))
+    }
+
     func testSolanaParserRejectsEmptyAddressLookupTableEntries() {
         var bodyAfterBlockhash = Data([0, 1])
         bodyAfterBlockhash.append(Data(repeating: 10, count: 32))
