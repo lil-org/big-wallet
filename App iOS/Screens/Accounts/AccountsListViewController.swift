@@ -48,6 +48,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private var preferencesItem: UIBarButtonItem?
     private var addWalletItem: UIBarButtonItem?
     private var initialContentOffset: CGFloat?
+    private var didShowAddAccountToConnectAlert = false
     
     @IBOutlet weak var bottomOverlayView: UIVisualEffectView!
     @IBOutlet weak var websiteLogoImageView: UIImageView!
@@ -141,9 +142,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                 websiteNameLabel.text = Strings.unknownWebsite
             }
             
-            if let name = selectAccountAction.coinType?.name, selectAccountAction.selectedAccounts.isEmpty, !wallets.isEmpty {
-                showMessageAlert(text: String(format: Strings.addAccountToConnect, arguments: [name]))
-            }
+            showAddAccountToConnectAlertIfNeeded()
         }
     }
     
@@ -162,6 +161,24 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                 }
             }
         }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        showAddAccountToConnectAlertIfNeeded()
+    }
+
+    private func showAddAccountToConnectAlertIfNeeded() {
+        guard !didShowAddAccountToConnectAlert,
+              isViewLoaded,
+              view.window != nil,
+              let name = selectAccountAction?.coinType?.name,
+              selectAccountAction?.selectedAccounts.isEmpty == true,
+              !wallets.isEmpty
+        else { return }
+
+        didShowAddAccountToConnectAlert = true
+        showMessageAlert(text: String(format: Strings.addAccountToConnect, arguments: [name]))
     }
     
     private func scrollToTheFirst(_ specificWalletAccounts: Set<SpecificWalletAccount>) {

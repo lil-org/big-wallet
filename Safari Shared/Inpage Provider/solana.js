@@ -56,6 +56,14 @@ class BigWalletSolana extends EventEmitter {
 
         this.didGetLatestConfiguration = false;
         this.pendingPayloads = [];
+
+        this.connect = this.connect.bind(this);
+        this.disconnect = this.disconnect.bind(this);
+        this.request = this.request.bind(this);
+        this.signMessage = this.signMessage.bind(this);
+        this.signTransaction = this.signTransaction.bind(this);
+        this.signAllTransactions = this.signAllTransactions.bind(this);
+        this.signAndSendTransaction = this.signAndSendTransaction.bind(this);
     }
 
     connect(params) {
