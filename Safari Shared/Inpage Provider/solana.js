@@ -123,6 +123,26 @@ class BigWalletSolana extends EventEmitter {
         });
     }
 
+    signAllTransactionsMessageParamName(normalizedParams) {
+        const hasParam = (name) => Object.prototype.hasOwnProperty.call(normalizedParams, name);
+        const hasMessages = hasParam("messages");
+        const hasMessage = hasParam("message") && normalizedParams.message != null;
+
+        if (hasMessages && hasMessage) {
+            throw new ProviderRpcError(4200, "Big Wallet received ambiguous Solana transaction params");
+        }
+
+        if (hasMessages) {
+            return "messages";
+        }
+
+        if (hasMessage) {
+            return "message";
+        }
+
+        return null;
+    }
+
     normalizedHexMessage(value, errorMessage) {
         if (typeof value !== "string") {
             throw new ProviderRpcError(4200, errorMessage);
@@ -232,6 +252,8 @@ class BigWalletSolana extends EventEmitter {
     preparedSignAllTransactionsParams(params) {
         const normalizedParams = { ...(params || {}) };
         let pendingRequestMetadata = null;
+        const suppliedMessageParamName = this.signAllTransactionsMessageParamName(normalizedParams);
+        const suppliedMessages = suppliedMessageParamName ? normalizedParams[suppliedMessageParamName] : null;
 
         if (Array.isArray(normalizedParams.transactions)) {
             const transactions = normalizedParams.transactions;
@@ -242,12 +264,12 @@ class BigWalletSolana extends EventEmitter {
                 return this.encodedMessageFor(transaction);
             });
 
-            if ("messages" in normalizedParams) {
-                if (!Array.isArray(normalizedParams.messages) || normalizedParams.messages.length !== derivedMessages.length) {
+            if (suppliedMessageParamName) {
+                if (!Array.isArray(suppliedMessages) || suppliedMessages.length !== derivedMessages.length) {
                     throw new ProviderRpcError(4200, "Big Wallet received mismatched Solana transaction params");
                 }
 
-                const normalizedMessages = this.normalizedBase58Messages(normalizedParams.messages,
+                const normalizedMessages = this.normalizedBase58Messages(suppliedMessages,
                                                                         "Big Wallet could not normalize this Solana transaction batch");
                 for (let index = 0; index < normalizedMessages.length; index++) {
                     if (normalizedMessages[index] !== derivedMessages[index]) {
@@ -261,9 +283,11 @@ class BigWalletSolana extends EventEmitter {
 
             pendingRequestMetadata = { transactions: transactions };
             delete normalizedParams.transactions;
-        } else if (Array.isArray(normalizedParams.messages)) {
-            normalizedParams.messages = this.normalizedBase58Messages(normalizedParams.messages,
+            delete normalizedParams.message;
+        } else if (suppliedMessageParamName && Array.isArray(suppliedMessages)) {
+            normalizedParams.messages = this.normalizedBase58Messages(suppliedMessages,
                                                                       "Big Wallet could not normalize this Solana transaction batch");
+            delete normalizedParams.message;
         } else {
             throw new ProviderRpcError(4200, "Big Wallet could not normalize this Solana transaction batch");
         }
@@ -527,6 +551,20 @@ class BigWalletSolana extends EventEmitter {
         return this.publicKey;
     }
 
+    shouldDisconnectForUnauthorizedResponse(response, pendingRequest) {
+        if (response.errorCode !== 4100 || !this.publicKey) {
+            return false;
+        }
+
+        if (typeof response.errorPublicKey === "string") {
+            return this.publicKey.toString() === response.errorPublicKey;
+        }
+
+        return pendingRequest &&
+            typeof pendingRequest.publicKey === "string" &&
+            this.publicKey.toString() === pendingRequest.publicKey;
+    }
+
     signingPublicKeyForTransaction(transaction, publicKey) {
         if (!transaction || !publicKey) {
             return publicKey;
@@ -663,7 +701,10 @@ class BigWalletSolana extends EventEmitter {
                 });
             }
         } else if ("error" in response) {
-            this.sendError(id, response.error);
+            if (this.shouldDisconnectForUnauthorizedResponse(response, pendingRequest)) {
+                this.performDisconnect();
+            }
+            this.sendError(id, response.error, response.errorCode);
         }
     }
 
@@ -695,12 +736,32 @@ class BigWalletSolana extends EventEmitter {
         }
     }
 
-    sendError(id, error) {
+    providerError(error, code) {
+        if (error instanceof Error) {
+            return error;
+        }
+
+        if (error && typeof error === "object" && typeof error.code === "number") {
+            return new ProviderRpcError(error.code, error.message || "Big Wallet request failed");
+        }
+
+        if (typeof code === "number") {
+            return new ProviderRpcError(code, error || "Big Wallet request failed");
+        }
+
+        if (typeof error === "string" && error.toLowerCase() === "canceled") {
+            return new ProviderRpcError(4001, error);
+        }
+
+        return new Error(error);
+    }
+
+    sendError(id, error, code) {
         this.idMapping.tryPopId(id);
         this.pendingRequests.delete(id);
         const callback = this.callbacks.get(id);
         if (callback) {
-            callback(error instanceof Error ? error : new Error(error), null);
+            callback(this.providerError(error, code), null);
             this.callbacks.delete(id);
         }
     }

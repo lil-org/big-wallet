@@ -186,27 +186,29 @@ These decisions are required to avoid ambiguous behavior and security regression
 Exit criteria:
 - These decisions are documented in this file and treated as implementation constraints.
 
-### Decision Log (must be filled before implementation starts)
+### Decision Log
+
+These decisions reflect the v1 Solana reintroduction implementation.
 
 1. Address matching policy by coin
-- Status: pending
-- Owner: _unassigned_
-- Decision: _TBD_
+- Status: resolved
+- Owner: Big Wallet
+- Decision: Ethereum address matching remains case-insensitive through `CoinType.normalizedAddress`; Solana and other non-EVM address matching is exact-case.
 
 2. Wallet support policy (mnemonic vs private-key behavior)
-- Status: pending
-- Owner: _unassigned_
-- Decision: _TBD_
+- Status: resolved
+- Owner: Big Wallet
+- Decision: Mnemonic-created and mnemonic-imported wallets create default Ethereum and Solana accounts. Account previews include all default mnemonic coin types. Private-key import remains Ethereum-only in this branch, so existing Ethereum-only private-key wallets do not satisfy Solana requests.
 
 3. Mobile confirmation policy for Solana `connect`
-- Status: pending
-- Owner: _unassigned_
-- Decision: _TBD_
+- Status: resolved
+- Owner: Big Wallet
+- Decision: Solana `connect` uses the same mobile confirmation and navigation flow as Ethereum `requestAccounts`.
 
 4. Solana send strategy and transaction-format scope
-- Status: pending
-- Owner: _unassigned_
-- Decision: _TBD_
+- Status: resolved
+- Owner: Big Wallet
+- Decision: Big Wallet keeps native custom `signAndSendTransaction`; it signs the wallet-owned required signature and broadcasts through the selected RPC. The v1 scope supports message-based legacy/v0 single-signer paths and serialized legacy/v0 transactions whose required cosigner signatures are already present; blockhash refresh/retry remains disabled.
 
 5. Solana RPC ownership policy
 - Status: resolved

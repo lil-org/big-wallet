@@ -50,7 +50,7 @@ struct ResponseToExtension {
         }
     }
     
-    init(for request: SafariRequest, body: Body? = nil, error: String? = nil) {
+    init(for request: SafariRequest, body: Body? = nil, error: String? = nil, errorCode: Int? = nil, errorPublicKey: String? = nil) {
         self.id = request.id
         var json: [String: Any] = [
             "id": request.id,
@@ -60,6 +60,12 @@ struct ResponseToExtension {
         if let error = error {
             json["error"] = error
             json["provider"] = request.provider.rawValue
+            if let errorCode {
+                json["errorCode"] = errorCode
+            }
+            if let errorPublicKey {
+                json["errorPublicKey"] = errorPublicKey
+            }
         }
         
         let bodyJSON = body?.json ?? [:]

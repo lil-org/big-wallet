@@ -14,12 +14,53 @@ struct DappRequestProcessor {
         let approvalSubject: ApprovalSubject
         let approvalMessage: String
     }
+
+    private enum SolanaProviderError {
+        case canceled
+        case failedToSign
+        case internalError
+        case malformedPayload
+        case unauthorized(publicKey: String)
+        case sendTransaction(Solana.SendTransactionError)
+
+        var responseError: (message: String, code: Int, publicKey: String?) {
+            switch self {
+            case .canceled:
+                return (message: Strings.canceled, code: 4001, publicKey: nil)
+            case .failedToSign:
+                return (message: Strings.failedToSign, code: -32603, publicKey: nil)
+            case .internalError:
+                return (message: Strings.somethingWentWrong, code: -32603, publicKey: nil)
+            case .malformedPayload:
+                return (message: Strings.somethingWentWrong, code: 4200, publicKey: nil)
+            case .unauthorized(let publicKey):
+                return (message: "provider is not ready", code: 4100, publicKey: publicKey)
+            case .sendTransaction(let error):
+                switch error {
+                case .invalidMessage:
+                    return (message: Strings.somethingWentWrong, code: 4200, publicKey: nil)
+                case .invalidSendOptions:
+                    return (message: Strings.unsupportedSolanaSendOptions, code: 4200, publicKey: nil)
+                case .blockhashNotFound:
+                    return (message: Strings.solanaBlockhashNotFound, code: -32003, publicKey: nil)
+                case .unsupportedMultiSignature:
+                    return (message: Strings.failedToSend, code: 4200, publicKey: nil)
+                case .unknown:
+                    return (message: Strings.failedToSend, code: -32003, publicKey: nil)
+                }
+            }
+        }
+    }
     
     static func processSafariRequest(_ request: SafariRequest, completion: @escaping (String?) -> Void) -> DappRequestAction {
         if !ExtensionBridge.hasRequest(id: request.id) {
             DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(500)) {
                 if !ExtensionBridge.hasRequest(id: request.id) {
-                    respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+                    if request.provider == .solana {
+                        respond(to: request, solanaError: .internalError, completion: completion)
+                    } else {
+                        respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+                    }
                 }
             }
         }
@@ -97,7 +138,7 @@ struct DappRequestProcessor {
                let responseBody = solanaResponseBody(for: specificWalletAccount.account) {
                 respond(to: request, body: responseBody, completion: completion)
             } else {
-                respond(to: request, error: Strings.canceled, completion: completion)
+                respond(to: request, solanaError: .canceled, completion: completion)
             }
         }
         return .selectAccount(action)
@@ -107,7 +148,7 @@ struct DappRequestProcessor {
                                                                 solanaRequest: SafariRequest.Solana,
                                                                 completion: @escaping (String?) -> Void) -> DappRequestAction {
         guard let messages = solanaRequest.messages else {
-            respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+            respond(to: request, solanaError: .malformedPayload, completion: completion)
             return .none
         }
         guard let (wallet, account) = solanaWalletAndAccount(for: request,
@@ -134,7 +175,7 @@ struct DappRequestProcessor {
                                     completion: completion) { privateKey in
             let results = decodedMessages.compactMap { solana.sign(messageData: $0, privateKey: privateKey) }
             guard results.count == decodedMessages.count else {
-                respond(to: request, error: Strings.failedToSign, completion: completion)
+                respond(to: request, solanaError: .failedToSign, completion: completion)
                 return
             }
 
@@ -154,7 +195,7 @@ struct DappRequestProcessor {
             let preparedSendOptions: Solana.PreparedSendOptions
             switch Solana.preparedSendOptions(from: solanaRequest.sendOptions) {
             case .failure(let error):
-                respond(to: request, error: errorMessage(for: error), completion: completion)
+                respond(to: request, solanaError: .sendTransaction(error), completion: completion)
                 return .none
             case .success(let value):
                 preparedSendOptions = value
@@ -209,14 +250,14 @@ struct DappRequestProcessor {
                                         completion: completion) { privateKey in
                 guard let signed = solana.sign(messageData: preparedSigningPayload.messageData,
                                                privateKey: privateKey) else {
-                    respond(to: request, error: Strings.failedToSign, completion: completion)
+                    respond(to: request, solanaError: .failedToSign, completion: completion)
                     return
                 }
 
                 respond(to: request, solanaResponse: .init(result: signed), completion: completion)
             }
         case .connect, .signAllTransactions:
-            respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+            respond(to: request, solanaError: .internalError, completion: completion)
             return .none
         }
     }
@@ -233,7 +274,7 @@ struct DappRequestProcessor {
             guard let signMessageEncoding = solanaRequest.signMessageEncoding,
                   let messageData = decodedSolanaSignMessage(canonicalMessage,
                                                              messageEncoding: signMessageEncoding) else {
-                respond(to: request, error: errorMessage(for: .invalidMessage), completion: completion)
+                respond(to: request, solanaError: .malformedPayload, completion: completion)
                 return nil
             }
 
@@ -254,7 +295,7 @@ struct DappRequestProcessor {
                                                 approvalMessage: approvalMessage(for: solanaRequest,
                                                                                  canonicalMessage: canonicalMessage))
         case .connect, .signAllTransactions, .signAndSendTransaction:
-            respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+            respond(to: request, solanaError: .internalError, completion: completion)
             return nil
         }
     }
@@ -270,7 +311,7 @@ struct DappRequestProcessor {
         switch solana.preparedSerializedTransactionForSignAndSend(serializedTransaction: serializedTransaction,
                                                                   publicKey: solanaRequest.publicKey) {
         case .failure(let error):
-            respond(to: request, error: errorMessage(for: error), completion: completion)
+            respond(to: request, solanaError: .sendTransaction(error), completion: completion)
             return .none
         case .success(let preparedSerializedTransaction):
             return solanaApprovalAction(request: request,
@@ -301,7 +342,7 @@ struct DappRequestProcessor {
         switch solana.preparedLegacySignAndSendTransaction(message: message,
                                                            publicKey: solanaRequest.publicKey) {
         case .failure(let error):
-            respond(to: request, error: errorMessage(for: error), completion: completion)
+            respond(to: request, solanaError: .sendTransaction(error), completion: completion)
             return nil
         case .success(let preparedLegacyTransaction):
             return preparedLegacyTransaction
@@ -312,7 +353,7 @@ struct DappRequestProcessor {
                                               solanaRequest: SafariRequest.Solana,
                                               completion: @escaping (String?) -> Void) -> String? {
         guard let message = solanaRequest.message else {
-            respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+            respond(to: request, solanaError: .malformedPayload, completion: completion)
             return nil
         }
         return message
@@ -323,13 +364,13 @@ struct DappRequestProcessor {
                                                         request: SafariRequest,
                                                         completion: @escaping (String?) -> Void) -> Data? {
         guard let messageData = solana.decodeMessage(message, asHex: false) else {
-            respond(to: request, error: errorMessage(for: .invalidMessage), completion: completion)
+            respond(to: request, solanaError: .sendTransaction(.invalidMessage), completion: completion)
             return nil
         }
 
         if let validationError = solana.validationErrorForSigningTransaction(messageData: messageData,
                                                                              publicKey: publicKey) {
-            respond(to: request, error: errorMessage(for: validationError), completion: completion)
+            respond(to: request, solanaError: .sendTransaction(validationError), completion: completion)
             return nil
         }
 
@@ -387,7 +428,7 @@ struct DappRequestProcessor {
                                     solanaClusterSelection: clusterSelection,
                                     completion: completion) { privateKey in
             guard let selectedCluster = clusterSelection.selectedCluster else {
-                respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+                respond(to: request, solanaError: .internalError, completion: completion)
                 return
             }
 
@@ -430,7 +471,7 @@ struct DappRequestProcessor {
             case .success(let signature):
                 respond(to: request, solanaResponse: .init(result: signature), completion: completion)
             case .failure(let error):
-                respond(to: request, error: errorMessage(for: error), completion: completion)
+                respond(to: request, solanaError: .sendTransaction(error), completion: completion)
             }
         }
     }
@@ -439,7 +480,7 @@ struct DappRequestProcessor {
                                                publicKey: String,
                                                completion: @escaping (String?) -> Void) -> (WalletContainer, Account)? {
         guard let walletAndAccount = walletsManager.getWalletAndAccount(coin: .solana, address: publicKey) else {
-            respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+            respond(to: request, solanaError: .unauthorized(publicKey: publicKey), completion: completion)
             return nil
         }
         return walletAndAccount
@@ -461,12 +502,12 @@ struct DappRequestProcessor {
                                        peerMeta: request.peerMeta,
                                        solanaClusterSelection: solanaClusterSelection) { approved in
             guard approved else {
-                respond(to: request, error: Strings.canceled, completion: completion)
+                respond(to: request, solanaError: .canceled, completion: completion)
                 return
             }
 
             guard let privateKey = walletsManager.getPrivateKey(wallet: wallet, account: account) else {
-                respond(to: request, error: Strings.failedToSign, completion: completion)
+                respond(to: request, solanaError: .failedToSign, completion: completion)
                 return
             }
 
@@ -721,19 +762,6 @@ struct DappRequestProcessor {
         })
     }
 
-    private static func errorMessage(for error: Solana.SendTransactionError) -> String {
-        switch error {
-        case .invalidMessage:
-            return Strings.somethingWentWrong
-        case .invalidSendOptions:
-            return Strings.unsupportedSolanaSendOptions
-        case .blockhashNotFound:
-            return Strings.solanaBlockhashNotFound
-        case .unsupportedMultiSignature, .unknown:
-            return Strings.failedToSend
-        }
-    }
-    
     private static func respond(to safariRequest: SafariRequest, solanaResponse: ResponseToExtension.Solana, completion: (String?) -> Void) {
         respond(to: safariRequest, body: .solana(solanaResponse), completion: completion)
     }
@@ -742,9 +770,25 @@ struct DappRequestProcessor {
         let response = ResponseToExtension(for: safariRequest, body: body)
         sendResponse(response, completion: completion)
     }
+
+    private static func respond(to safariRequest: SafariRequest, solanaError: SolanaProviderError, completion: (String?) -> Void) {
+        let responseError = solanaError.responseError
+        respond(to: safariRequest,
+                error: responseError.message,
+                errorCode: responseError.code,
+                errorPublicKey: responseError.publicKey,
+                completion: completion)
+    }
     
-    private static func respond(to safariRequest: SafariRequest, error: String, completion: (String?) -> Void) {
-        let response = ResponseToExtension(for: safariRequest, error: error)
+    private static func respond(to safariRequest: SafariRequest,
+                                error: String,
+                                errorCode: Int? = nil,
+                                errorPublicKey: String? = nil,
+                                completion: (String?) -> Void) {
+        let response = ResponseToExtension(for: safariRequest,
+                                           error: error,
+                                           errorCode: errorCode,
+                                           errorPublicKey: errorPublicKey)
         sendResponse(response, completion: completion)
     }
     

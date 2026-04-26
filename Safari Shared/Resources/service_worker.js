@@ -11,7 +11,7 @@ function handleOnMessage(request, sender, sendResponse) {
         browser.runtime.sendNativeMessage("org.lil.wallet", request.message).then(response => {
             if (typeof response !== "undefined") {
                 sendResponse(response);
-                storeConfigurationIfNeeded(request.host, response);
+                updateStoredConfigurationIfNeeded(request.host, response);
             } else {
                 if (!request.navigate) {
                     sendResponse();
@@ -30,7 +30,7 @@ function handleOnMessage(request, sender, sendResponse) {
         browser.runtime.sendNativeMessage("org.lil.wallet", request).then(response => {
             if (typeof response !== "undefined") {
                 sendResponse(response);
-                storeConfigurationIfNeeded(request.host, response);
+                updateStoredConfigurationIfNeeded(request.host, response);
             } else { sendResponse(); }
         }).catch(() => { sendResponse(); });
     } else if (request.subject === "cancelRequest") {
@@ -43,22 +43,7 @@ function handleOnMessage(request, sender, sendResponse) {
     } else if (request.subject === "disconnect") {
         const provider = request.provider;
         const host = request.host;
-        
-        getLatestConfiguration(host).then(currentConfiguration => {
-            const configurations = currentConfiguration.latestConfigurations;
-            
-            var indexToRemove = -1;
-            for (var i = 0; i < configurations.length; i++) {
-                if (configurations[i].provider == provider) {
-                    indexToRemove = i;
-                    break;
-                }
-            }
-            if (indexToRemove > -1) {
-                configurations.splice(indexToRemove, 1);
-            }
-            
-            storeLatestConfiguration(host, configurations);
+        removeLatestConfiguration(host, provider).then(() => {
             sendResponse();
         }).catch(() => { sendResponse(); });
     } else {
@@ -67,29 +52,68 @@ function handleOnMessage(request, sender, sendResponse) {
     return true;
 }
 
+const latestConfigurationWriteQueues = new Map();
+
 function storeLatestConfiguration(host, configuration) {
-    var latestArray = [];
     if (Array.isArray(configuration)) {
-        latestArray = configuration;
-        browser.storage.local.set({ [host]: latestArray }).then(() => {}).catch(() => {});
-    } else if ("provider" in configuration) {
-        (async () => {
-            const latest = await getLatestConfiguration(host);
-            latestArray = latestConfigurationsArray(latest);
-            var shouldAdd = true;
-            for (var i = 0; i < latestArray.length; i++) {
-                if (latestArray[i].provider == configuration.provider) {
-                    latestArray[i] = configuration;
-                    shouldAdd = false;
-                    break;
-                }
-            }
-            if (shouldAdd) {
-                latestArray.push(configuration);
-            }
-            browser.storage.local.set({ [host]: latestArray }).then(() => {}).catch(() => {});
-        })();
+        queueLatestConfigurationWrite(host, () => {
+            return browser.storage.local.set({ [host]: latestConfigurationsArray(configuration) });
+        });
+    } else if (configuration && "provider" in configuration) {
+        queueLatestConfigurationUpdate(host, latestArray => latestConfigurationsReplacing(latestArray, configuration));
     }
+}
+
+function latestConfigurationsReplacing(latestArray, configuration) {
+    const updatedArray = latestArray.slice();
+    for (var i = 0; i < updatedArray.length; i++) {
+        if (updatedArray[i].provider == configuration.provider) {
+            updatedArray[i] = configuration;
+            return updatedArray;
+        }
+    }
+    updatedArray.push(configuration);
+    return updatedArray;
+}
+
+function removeLatestConfiguration(host, provider) {
+    return queueLatestConfigurationUpdate(host, (latestArray) => {
+        return latestArray.filter(configuration => configuration.provider != provider);
+    });
+}
+
+function removeLatestSolanaConfigurationIfMatching(host, publicKey) {
+    return queueLatestConfigurationUpdate(host, (latestArray) => {
+        return latestArray.filter(configuration => {
+            return configuration.provider != "solana" || configuration.publicKey !== publicKey;
+        });
+    });
+}
+
+function queueLatestConfigurationUpdate(host, update) {
+    return queueLatestConfigurationWrite(host, async () => {
+        const latest = await getLatestConfiguration(host);
+        const currentArray = latestConfigurationsArray(latest);
+        const updatedArray = latestConfigurationsArray(update(currentArray));
+        await browser.storage.local.set({ [host]: updatedArray });
+    });
+}
+
+function queueLatestConfigurationWrite(host, write) {
+    const previousWrite = latestConfigurationWriteQueues.get(host) || Promise.resolve();
+    const queuedWrite = previousWrite
+        .catch(() => {})
+        .then(write);
+
+    latestConfigurationWriteQueues.set(host, queuedWrite);
+    const clearQueueIfLatest = () => {
+        if (latestConfigurationWriteQueues.get(host) === queuedWrite) {
+            latestConfigurationWriteQueues.delete(host);
+        }
+    };
+    queuedWrite.then(clearQueueIfLatest, clearQueueIfLatest);
+
+    return queuedWrite;
 }
 
 function latestConfigurationsArray(latest) {
@@ -115,10 +139,17 @@ function getLatestConfiguration(host) {
     });
 }
 
-function storeConfigurationIfNeeded(host, response) {
-    if (host.length > 0 && "configurationToStore" in response) {
-        const configuration = response.configurationToStore;
-        storeLatestConfiguration(host, configuration);
+function updateStoredConfigurationIfNeeded(host, response) {
+    if (!host || !response || typeof response !== "object") {
+        return;
+    }
+
+    if (response.errorCode === 4100 &&
+        response.provider === "solana" &&
+        typeof response.errorPublicKey === "string") {
+        removeLatestSolanaConfigurationIfMatching(host, response.errorPublicKey);
+    } else if ("configurationToStore" in response) {
+        storeLatestConfiguration(host, response.configurationToStore);
     }
 }
 
