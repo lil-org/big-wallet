@@ -10,6 +10,7 @@ struct Images {
     static var preferences: UIImage { systemName("gearshape") }
     static var circleFill: UIImage { systemName("circle.fill") }
     static var network: UIImage { systemName("network") }
+    static var solana: UIImage { named("solana") }
     
     private static func named(_ name: String) -> UIImage {
         return UIImage(named: name)!
