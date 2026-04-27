@@ -90,9 +90,9 @@ final class WalletsManager {
         return try previewAccounts(hdWallet: hdWallet, page: page, coin: coin)
     }
 
-    private func previewAccounts(hdWallet: HDWallet, page: Int, coin: CoinType?) throws -> [Account] {
+    func previewAccounts(hdWallet: HDWallet, page: Int, coin: CoinType?) throws -> [Account] {
         guard let coin else {
-            return try defaultMnemonicCoins.flatMap { previewCoin in
+            return try Self.collectPreviewAccounts(coins: defaultMnemonicCoins) { previewCoin in
                 try previewAccounts(hdWallet: hdWallet, page: page, coin: previewCoin)
             }
         }
@@ -103,7 +103,7 @@ final class WalletsManager {
         }
 
         let range = (page * 21)..<((page + 1) * 21)
-        let xpub = hdWallet.getExtendedPublicKey(purpose: coin.purpose, coin: coin, version: coin.xpubVersion)
+        let xpub = hdWallet.getExtendedPublicKey(purpose: coin.purpose, coin: coin, version: .xpub)
         let accounts = range.compactMap { i -> Account? in
             let dp = DerivationPath(purpose: .bip44, coin: coin.slip44Id, account: 0, change: 0, address: UInt32(i)).description
             guard let pubkey = HDWallet.getPublicKeyFromExtended(extended: xpub, coin: coin, derivationPath: dp) else { return nil }
@@ -112,6 +112,26 @@ final class WalletsManager {
             return account
         }
         guard accounts.count == range.count else { throw Error.failedToDeriveAccount }
+        return accounts
+    }
+
+    static func collectPreviewAccounts(coins: [CoinType],
+                                       previewAccountsForCoin: (CoinType) throws -> [Account]) throws -> [Account] {
+        var accounts = [Account]()
+        var firstError: Swift.Error?
+
+        for coin in coins {
+            do {
+                accounts.append(contentsOf: try previewAccountsForCoin(coin))
+            } catch {
+                firstError = firstError ?? error
+            }
+        }
+
+        if accounts.isEmpty, let firstError {
+            throw firstError
+        }
+
         return accounts
     }
 

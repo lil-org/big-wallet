@@ -1,6 +1,7 @@
 // ∅ 2026 lil org
 
 import Foundation
+import WalletCore
 import XCTest
 @testable import Big_Wallet
 
@@ -465,6 +466,81 @@ final class TransactionInspectorTests: XCTestCase {
         })
 
         XCTAssertEqual(preselectedAccounts, [ethereumAccount])
+    }
+
+}
+
+final class WalletsManagerPreviewTests: XCTestCase {
+
+    private enum PreviewTestError: Error {
+        case failed
+    }
+
+    private let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+
+    func testEthereumPreviewReturnsPageOfAccounts() throws {
+        let accounts = try WalletsManager.shared.previewAccounts(hdWallet: testHDWallet(), page: 0, coin: .ethereum)
+
+        XCTAssertEqual(accounts.count, 21)
+        XCTAssertTrue(accounts.allSatisfy { $0.coin == .ethereum })
+    }
+
+    func testSolanaPreviewReturnsDefaultAccountOnFirstPage() throws {
+        let accounts = try WalletsManager.shared.previewAccounts(hdWallet: testHDWallet(), page: 0, coin: .solana)
+
+        XCTAssertEqual(accounts.count, 1)
+        XCTAssertEqual(accounts.first?.coin, .solana)
+        XCTAssertEqual(accounts.first?.derivation, .solanaSolana)
+        XCTAssertEqual(accounts.first?.derivationPath, CoinType.solana.derivationPathWithDerivation(derivation: .solanaSolana))
+        XCTAssertEqual(accounts.first?.address.isEmpty, false)
+    }
+
+    func testSolanaPreviewReturnsEmptyAfterFirstPage() throws {
+        let accounts = try WalletsManager.shared.previewAccounts(hdWallet: testHDWallet(), page: 1, coin: .solana)
+
+        XCTAssertTrue(accounts.isEmpty)
+    }
+
+    func testMulticoinPreviewReturnsAvailableDefaultCoinAccounts() throws {
+        let accounts = try WalletsManager.shared.previewAccounts(hdWallet: testHDWallet(), page: 0, coin: nil)
+
+        XCTAssertEqual(accounts.filter { $0.coin == .ethereum }.count, 21)
+        XCTAssertEqual(accounts.filter { $0.coin == .solana }.count, 1)
+    }
+
+    func testMulticoinPreviewPreservesSuccessfulCoinsWhenOneFails() throws {
+        let ethereumAccount = Account(address: "0x0000000000000000000000000000000000000001",
+                                      coin: .ethereum,
+                                      derivation: .custom,
+                                      derivationPath: "m/44'/60'/0'/0/0",
+                                      publicKey: "public-key",
+                                      extendedPublicKey: "extended-public-key")
+
+        let accounts = try WalletsManager.collectPreviewAccounts(coins: [.solana, .ethereum]) { coin in
+            if coin == .solana {
+                throw PreviewTestError.failed
+            }
+
+            return [ethereumAccount]
+        }
+
+        XCTAssertEqual(accounts.count, 1)
+        XCTAssertEqual(accounts.first?.address, ethereumAccount.address)
+    }
+
+    func testMulticoinPreviewRethrowsWhenAllCoinsFail() {
+        XCTAssertThrowsError(try WalletsManager.collectPreviewAccounts(coins: [.solana]) { _ in
+            throw PreviewTestError.failed
+        })
+    }
+
+    private func testHDWallet(file: StaticString = #filePath, line: UInt = #line) throws -> HDWallet {
+        guard let wallet = HDWallet(mnemonic: mnemonic, passphrase: "") else {
+            XCTFail("Expected test mnemonic to create HD wallet", file: file, line: line)
+            throw PreviewTestError.failed
+        }
+
+        return wallet
     }
 
 }

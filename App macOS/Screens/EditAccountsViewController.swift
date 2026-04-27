@@ -45,6 +45,7 @@ class EditAccountsViewController: NSViewController {
         enabledUndiscoveredAccountKeys = Set(wallet.accounts.map { $0.previewAccountKey })
         guard let previewAccounts = try? walletsManager.previewAccounts(wallet: wallet, page: 0, coin: previewCoin) else { return }
         appendPreviewAccounts(previewAccounts)
+        tableView.reloadData()
     }
     
     private func appendPreviewAccounts(_ previewAccounts: [Account]) {
@@ -53,6 +54,7 @@ class EditAccountsViewController: NSViewController {
             return PreviewAccountCellModel(account: account, isEnabled: isEnabled)
         }
         cellModels.append(contentsOf: newCellModels)
+        updateOkButtonState()
     }
     
     @IBAction func cancelButtonTapped(_ sender: Any) {
