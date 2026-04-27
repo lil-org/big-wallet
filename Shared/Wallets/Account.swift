@@ -18,6 +18,16 @@ extension Account {
         return WalletPreviewAccountKey(coin: coin, derivationPath: derivationPath)
     }
 
+    var previewDerivationIndex: Int {
+        guard let path = DerivationPath(derivationPath) else { return 0 }
+        switch coin {
+        case .solana:
+            return Int(path.account)
+        default:
+            return Int(path.address)
+        }
+    }
+
     var croppedAddress: String {
         let dropFirstCount: Int
         switch coin {

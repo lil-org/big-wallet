@@ -17,8 +17,10 @@ class EditAccountsViewController: NSViewController {
     private let walletsManager = WalletsManager.shared
     private var cellModels = [PreviewAccountCellModel]()
     private let previewAccountsQueue = DispatchQueue(label: "org.lil.wallet.accounts", qos: .userInitiated)
+    private let previewAccountsPreloadThreshold = 10
     private var page = 1
     private var requestedPreviewFor: Int?
+    private var isPreviewingMoreAccounts = false
     private var lastPreviewDate = Date()
     private var toggledIndexes = Set<Int>()
     private var enabledUndiscoveredAccountKeys = Set<WalletPreviewAccountKey>()
@@ -101,27 +103,34 @@ class EditAccountsViewController: NSViewController {
     }
     
     private func previewMoreAccountsIfNeeded() {
-        guard requestedPreviewFor != cellModels.count else { return }
+        guard !isPreviewingMoreAccounts, requestedPreviewFor != cellModels.count else { return }
         requestedPreviewFor = cellModels.count
+        isPreviewingMoreAccounts = true
         previewMoreAccounts()
     }
     
     private func previewMoreAccounts() {
         guard Date().timeIntervalSince(lastPreviewDate) > 0.23 else {
-            previewAccountsQueue.asyncAfter(deadline: .now() + .milliseconds(230)) { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(230)) { [weak self] in
                 self?.previewMoreAccounts()
             }
             return
         }
         lastPreviewDate = Date()
+        let requestedPage = page
         previewAccountsQueue.async { [weak self] in
-            guard let self,
-                  let previewAccounts = try? self.walletsManager.previewAccounts(wallet: self.wallet,
-                                                                                 page: self.page,
-                                                                                 coin: self.previewCoin) else { return }
+            guard let self else { return }
+            let previewAccounts = try? self.walletsManager.previewAccounts(wallet: self.wallet,
+                                                                           page: requestedPage,
+                                                                           coin: self.previewCoin)
             DispatchQueue.main.async {
+                self.isPreviewingMoreAccounts = false
+                guard let previewAccounts else {
+                    self.requestedPreviewFor = nil
+                    return
+                }
                 self.appendPreviewAccounts(previewAccounts)
-                self.page += 1
+                self.page = requestedPage + 1
                 let currentCount = self.cellModels.count
                 if !previewAccounts.isEmpty {
                     let range = (currentCount - previewAccounts.count)..<currentCount
@@ -160,9 +169,9 @@ extension EditAccountsViewController: NSTableViewDataSource {
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let model = cellModels[row]
         let rowView = tableView.makeViewOfType(PreviewAccountCellView.self, owner: self)
-        rowView.setup(title: model.account.nameOrCroppedAddress(walletId: wallet.id), index: row, image: model.account.image, isEnabled: model.isEnabled, delegate: self)
+        rowView.setup(title: model.account.nameOrCroppedAddress(walletId: wallet.id), index: model.account.previewDerivationIndex, image: model.account.image, isEnabled: model.isEnabled, delegate: self)
         
-        if row >= cellModels.count - 20 {
+        if row >= cellModels.count - previewAccountsPreloadThreshold {
             previewMoreAccountsIfNeeded()
         }
         

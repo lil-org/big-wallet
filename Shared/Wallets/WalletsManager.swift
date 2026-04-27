@@ -17,6 +17,7 @@ final class WalletsManager {
     }
     
     static let shared = WalletsManager()
+    private static let previewAccountsPageSize = 11
     private let keychain = Keychain.shared
     private let defaultCoin = CoinType.ethereum
     private let defaultMnemonicCoinDerivations: [(coin: CoinType, derivation: Derivation)] = [
@@ -97,12 +98,9 @@ final class WalletsManager {
             }
         }
 
-        if coin == .solana {
-            guard page == 0 else { return [] }
-            return [try previewSolanaAccount(hdWallet: hdWallet)]
-        }
+        if coin == .solana { return try previewSolanaAccounts(hdWallet: hdWallet, page: page) }
 
-        let range = (page * 21)..<((page + 1) * 21)
+        let range = Self.previewAccountIndexRange(page: page)
         let xpub = hdWallet.getExtendedPublicKey(purpose: coin.purpose, coin: coin, version: .xpub)
         let accounts = range.compactMap { i -> Account? in
             let dp = DerivationPath(purpose: .bip44, coin: coin.slip44Id, account: 0, change: 0, address: UInt32(i)).description
@@ -117,19 +115,35 @@ final class WalletsManager {
 
     static func collectPreviewAccounts(coins: [CoinType],
                                        previewAccountsForCoin: (CoinType) throws -> [Account]) throws -> [Account] {
-        var accounts = [Account]()
+        var accountGroups = [[Account]]()
         var firstError: Swift.Error?
 
         for coin in coins {
             do {
-                accounts.append(contentsOf: try previewAccountsForCoin(coin))
+                accountGroups.append(try previewAccountsForCoin(coin))
             } catch {
                 firstError = firstError ?? error
             }
         }
 
+        let accounts = interleaved(accountGroups)
         if accounts.isEmpty, let firstError {
             throw firstError
+        }
+
+        return accounts
+    }
+
+    private static func interleaved(_ accountGroups: [[Account]]) -> [Account] {
+        let totalCount = accountGroups.reduce(0) { $0 + $1.count }
+        let maxCount = accountGroups.map { $0.count }.max() ?? 0
+        var accounts = [Account]()
+        accounts.reserveCapacity(totalCount)
+
+        for index in 0..<maxCount {
+            for group in accountGroups where index < group.count {
+                accounts.append(group[index])
+            }
         }
 
         return accounts
@@ -340,26 +354,51 @@ final class WalletsManager {
         try addMnemonicAccounts(to: wallet, password: password, coinDerivations: defaultMnemonicCoinDerivations)
     }
 
-    private func previewSolanaAccount(hdWallet: HDWallet) throws -> Account {
+    private static func previewAccountIndexRange(page: Int) -> Range<Int> {
+        let start = page * previewAccountsPageSize
+        return start..<(start + previewAccountsPageSize)
+    }
+
+    private func previewSolanaAccounts(hdWallet: HDWallet, page: Int) throws -> [Account] {
         let coin = CoinType.solana
-        let derivation = Derivation.solanaSolana
-        let derivationPath = coin.derivationPathWithDerivation(derivation: derivation)
-        let privateKey = hdWallet.getKey(coin: coin, derivationPath: derivationPath)
-        let publicKey = privateKey.getPublicKey(coinType: coin)
-        let address = hdWallet.getAddressDerivation(coin: coin, derivation: derivation)
-        let extendedPublicKey = hdWallet.getExtendedPublicKeyDerivation(purpose: coin.purpose,
-                                                                        coin: coin,
-                                                                        derivation: derivation,
-                                                                        version: coin.xpubVersion)
+        let accounts = Self.previewAccountIndexRange(page: page).map { accountIndex in
+            let derivation = accountIndex == 0 ? Derivation.solanaSolana : .custom
+            let derivationPath = Self.solanaDerivationPath(accountIndex: accountIndex)
+            let privateKey = hdWallet.getKey(coin: coin, derivationPath: derivationPath)
+            let publicKey = privateKey.getPublicKey(coinType: coin)
+            let address = coin.deriveAddressFromPublicKey(publicKey: publicKey)
+            let extendedPublicKey = solanaExtendedPublicKey(hdWallet: hdWallet, accountIndex: accountIndex)
 
-        guard !address.isEmpty else { throw Error.failedToDeriveAccount }
+            return Account(address: address,
+                           coin: coin,
+                           derivation: derivation,
+                           derivationPath: derivationPath,
+                           publicKey: publicKey.description,
+                           extendedPublicKey: extendedPublicKey)
+        }
 
-        return Account(address: address,
-                       coin: coin,
-                       derivation: derivation,
-                       derivationPath: derivationPath,
-                       publicKey: publicKey.description,
-                       extendedPublicKey: extendedPublicKey)
+        guard accounts.allSatisfy({ !$0.address.isEmpty }) else { throw Error.failedToDeriveAccount }
+        return accounts
+    }
+
+    private static func solanaDerivationPath(accountIndex: Int) -> String {
+        return "m/44'/\(CoinType.solana.slip44Id)'/\(accountIndex)'/0'"
+    }
+
+    private func solanaExtendedPublicKey(hdWallet: HDWallet, accountIndex: Int) -> String {
+        let coin = CoinType.solana
+        guard accountIndex != 0 else {
+            return hdWallet.getExtendedPublicKeyDerivation(purpose: coin.purpose,
+                                                           coin: coin,
+                                                           derivation: .solanaSolana,
+                                                           version: coin.xpubVersion)
+        }
+
+        return hdWallet.getExtendedPublicKeyAccount(purpose: coin.purpose,
+                                                    coin: coin,
+                                                    derivation: .solanaSolana,
+                                                    version: coin.xpubVersion,
+                                                    account: UInt32(accountIndex))
     }
     
     private func makeNewWalletId() -> String {
