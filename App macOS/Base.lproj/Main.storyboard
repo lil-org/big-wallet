@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.Cocoa.Storyboard.XIB" version="3.0" toolsVersion="23504" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
+<document type="com.apple.InterfaceBuilder3.Cocoa.Storyboard.XIB" version="3.0" toolsVersion="24765" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
     <dependencies>
         <deployment identifier="macosx"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="23504"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="24765"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <scenes>
@@ -745,10 +745,10 @@ wallet</string>
                                 </textFieldCell>
                             </textField>
                             <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="12" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="OMb-fe-Srm">
-                                <rect key="frame" x="72" y="32" width="107" height="28"/>
+                                <rect key="frame" x="64" y="32" width="123" height="28"/>
                                 <subviews>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="h7j-aQ-ZXs">
-                                        <rect key="frame" x="-6" y="-6" width="72" height="40"/>
+                                        <rect key="frame" x="0.0" y="0.0" width="68" height="28"/>
                                         <buttonCell key="cell" type="push" title="cancel" bezelStyle="rounded" alignment="center" controlSize="large" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="Nwp-G5-xI6">
                                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="system"/>
@@ -761,7 +761,7 @@ Gw
                                         </connections>
                                     </button>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="t6z-sy-JB9">
-                                        <rect key="frame" x="66" y="-6" width="47" height="40"/>
+                                        <rect key="frame" x="80" y="0.0" width="43" height="28"/>
                                         <buttonCell key="cell" type="push" title="ok" bezelStyle="rounded" alignment="center" controlSize="large" enabled="NO" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="WW9-Lc-I9e">
                                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="system"/>
@@ -845,7 +845,7 @@ DQ
                                                     </textFieldCell>
                                                     <prototypeCellViews>
                                                         <tableCellView identifier="AccountCellView" id="Lp1-Zy-70c" customClass="AccountCellView" customModule="Big_Wallet" customModuleProvider="target">
-                                                            <rect key="frame" x="0.0" y="0.0" width="247" height="40"/>
+                                                            <rect key="frame" x="0.0" y="0.0" width="248" height="40"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
                                                                 <customView translatesAutoresizingMaskIntoConstraints="NO" id="NCN-NG-n35">
@@ -894,11 +894,11 @@ DQ
                                                             </connections>
                                                         </tableCellView>
                                                         <tableCellView identifier="AccountsHeaderRowView" id="HeR-ji-8cK" customClass="AccountsHeaderRowView" customModule="Big_Wallet" customModuleProvider="target">
-                                                            <rect key="frame" x="0.0" y="40" width="247" height="40"/>
+                                                            <rect key="frame" x="0.0" y="40" width="248" height="40"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
                                                                 <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="VIM-Pg-2r3">
-                                                                    <rect key="frame" x="69" y="2" width="109.5" height="14"/>
+                                                                    <rect key="frame" x="70" y="2" width="109.5" height="14"/>
                                                                     <buttonCell key="cell" type="inline" title="multicoin wallet" bezelStyle="inline" image="ellipsis.rectangle" catalog="system" imagePosition="right" alignment="center" state="on" inset="2" id="jI9-6q-eSx">
                                                                         <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                                                         <font key="font" metaFont="systemSemibold" size="11"/>
@@ -918,7 +918,7 @@ DQ
                                                             </connections>
                                                         </tableCellView>
                                                         <tableCellView identifier="AddAccountOptionCellView" id="1KM-PS-nEo" customClass="AddAccountOptionCellView" customModule="Big_Wallet" customModuleProvider="target">
-                                                            <rect key="frame" x="0.0" y="80" width="247" height="44"/>
+                                                            <rect key="frame" x="0.0" y="80" width="248" height="44"/>
                                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                             <subviews>
                                                                 <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="fCe-vX-CRz">
@@ -972,9 +972,9 @@ DQ
                                     <autoresizingMask key="autoresizingMask"/>
                                 </scroller>
                             </scrollView>
-                            <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="ngQ-Bn-Kwd">
+                            <button focusRingType="none" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="ngQ-Bn-Kwd">
                                 <rect key="frame" x="203" y="354" width="35" height="34"/>
-                                <buttonCell key="cell" type="inline" title="+" bezelStyle="inline" imagePosition="overlaps" alignment="center" lineBreakMode="truncatingTail" state="on" imageScaling="proportionallyDown" inset="2" id="JVh-da-a0h">
+                                <buttonCell key="cell" type="inline" title="+" bezelStyle="inline" imagePosition="overlaps" alignment="center" lineBreakMode="truncatingTail" state="on" focusRingType="none" imageScaling="proportionallyDown" inset="2" id="JVh-da-a0h">
                                     <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                     <font key="font" metaFont="systemBold" size="29"/>
                                 </buttonCell>
@@ -1023,10 +1023,10 @@ DQ
                                 </customSpacing>
                             </stackView>
                             <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="10" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="CWc-Db-L0d">
-                                <rect key="frame" x="34" y="20" width="182" height="28"/>
+                                <rect key="frame" x="26" y="20" width="198" height="28"/>
                                 <subviews>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="x8R-fO-ffb">
-                                        <rect key="frame" x="-6" y="-6" width="72" height="40"/>
+                                        <rect key="frame" x="0.0" y="0.0" width="68" height="28"/>
                                         <buttonCell key="cell" type="push" title="cancel" bezelStyle="rounded" alignment="center" controlSize="large" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="tEk-C9-Zxh">
                                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="system"/>
@@ -1039,7 +1039,7 @@ Gw
                                         </connections>
                                     </button>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="9Zg-Xa-E1f">
-                                        <rect key="frame" x="64" y="-6" width="44" height="40"/>
+                                        <rect key="frame" x="78" y="0.0" width="32" height="28"/>
                                         <buttonCell key="cell" type="push" bezelStyle="rounded" image="network" catalog="system" imagePosition="only" alignment="center" controlSize="large" borderStyle="border" inset="2" id="GSi-6A-TgZ">
                                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="system"/>
@@ -1052,7 +1052,7 @@ Gw
                                         </connections>
                                     </button>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="sfH-TT-fxb">
-                                        <rect key="frame" x="106" y="-6" width="82" height="40"/>
+                                        <rect key="frame" x="120" y="0.0" width="78" height="28"/>
                                         <buttonCell key="cell" type="push" title="connect" bezelStyle="rounded" alignment="center" controlSize="large" enabled="NO" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="A0m-eU-I2u">
                                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="system"/>
@@ -1134,10 +1134,10 @@ DQ
                                 </textFieldCell>
                             </textField>
                             <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="12" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="PTt-zv-8aY">
-                                <rect key="frame" x="108" y="32" width="35" height="28"/>
+                                <rect key="frame" x="104" y="32" width="43" height="28"/>
                                 <subviews>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="R7c-Oj-Adu">
-                                        <rect key="frame" x="-6" y="-6" width="47" height="40"/>
+                                        <rect key="frame" x="0.0" y="0.0" width="43" height="28"/>
                                         <buttonCell key="cell" type="push" title="ok" bezelStyle="rounded" alignment="center" controlSize="large" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="aLn-BL-hyz">
                                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="system"/>
@@ -1195,10 +1195,10 @@ DQ
                                 </textFieldCell>
                             </textField>
                             <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="12" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="Oc8-WJ-ABp">
-                                <rect key="frame" x="72" y="32" width="107" height="28"/>
+                                <rect key="frame" x="64" y="32" width="123" height="28"/>
                                 <subviews>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="orP-ex-jdo">
-                                        <rect key="frame" x="-6" y="-6" width="72" height="40"/>
+                                        <rect key="frame" x="0.0" y="0.0" width="68" height="28"/>
                                         <buttonCell key="cell" type="push" title="cancel" bezelStyle="rounded" alignment="center" controlSize="large" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="DGh-ds-l2H">
                                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="system"/>
@@ -1211,7 +1211,7 @@ Gw
                                         </connections>
                                     </button>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="xdD-3r-3YP">
-                                        <rect key="frame" x="66" y="-6" width="47" height="40"/>
+                                        <rect key="frame" x="80" y="0.0" width="43" height="28"/>
                                         <buttonCell key="cell" type="push" title="ok" bezelStyle="rounded" alignment="center" controlSize="large" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="O71-BW-3Sb">
                                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="system"/>
@@ -1267,7 +1267,7 @@ DQ
                                     <autoresizingMask key="autoresizingMask"/>
                                 </scroller>
                                 <scroller key="verticalScroller" wantsLayer="YES" verticalHuggingPriority="750" horizontal="NO" id="GFp-c5-pAF">
-                                    <rect key="frame" x="173" y="1" width="16" height="182"/>
+                                    <rect key="frame" x="172" y="1" width="17" height="182"/>
                                     <autoresizingMask key="autoresizingMask"/>
                                 </scroller>
                             </scrollView>
@@ -1352,10 +1352,10 @@ DQ
                                 </textFieldCell>
                             </textField>
                             <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="12" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="uA2-QK-zWz">
-                                <rect key="frame" x="72" y="32" width="107" height="28"/>
+                                <rect key="frame" x="64" y="32" width="123" height="28"/>
                                 <subviews>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="cWf-at-SKV">
-                                        <rect key="frame" x="-6" y="-6" width="72" height="40"/>
+                                        <rect key="frame" x="0.0" y="0.0" width="68" height="28"/>
                                         <buttonCell key="cell" type="push" title="cancel" bezelStyle="rounded" alignment="center" controlSize="large" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="r4y-I1-eGI">
                                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="system"/>
@@ -1368,7 +1368,7 @@ Gw
                                         </connections>
                                     </button>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="N8k-Bq-UNz">
-                                        <rect key="frame" x="66" y="-6" width="47" height="40"/>
+                                        <rect key="frame" x="80" y="0.0" width="43" height="28"/>
                                         <buttonCell key="cell" type="push" title="ok" bezelStyle="rounded" alignment="center" controlSize="large" enabled="NO" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="SbB-to-6AA">
                                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="system"/>
@@ -1456,10 +1456,10 @@ DQ
                                 </textFieldCell>
                             </textField>
                             <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="12" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="zQX-EK-b8k">
-                                <rect key="frame" x="82" y="32" width="87" height="28"/>
+                                <rect key="frame" x="78" y="32" width="95" height="28"/>
                                 <subviews>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="ADG-H0-CZa">
-                                        <rect key="frame" x="-6" y="-6" width="99" height="40"/>
+                                        <rect key="frame" x="0.0" y="0.0" width="95" height="28"/>
                                         <buttonCell key="cell" type="push" title="get started" bezelStyle="rounded" alignment="center" controlSize="large" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="jgC-3I-6bj">
                                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="system"/>
@@ -1526,10 +1526,10 @@ DQ
                                 </textFieldCell>
                             </textField>
                             <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="12" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="MlF-7E-1Jg">
-                                <rect key="frame" x="72" y="32" width="107" height="28"/>
+                                <rect key="frame" x="64" y="32" width="123" height="28"/>
                                 <subviews>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="sUu-V8-fLA">
-                                        <rect key="frame" x="-6" y="-6" width="72" height="40"/>
+                                        <rect key="frame" x="0.0" y="0.0" width="68" height="28"/>
                                         <buttonCell key="cell" type="push" title="cancel" bezelStyle="rounded" alignment="center" controlSize="large" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="i8C-YK-VwR">
                                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="system"/>
@@ -1542,7 +1542,7 @@ Gw
                                         </connections>
                                     </button>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="JBO-6Q-5eC">
-                                        <rect key="frame" x="66" y="-6" width="47" height="40"/>
+                                        <rect key="frame" x="80" y="0.0" width="43" height="28"/>
                                         <buttonCell key="cell" type="push" title="ok" bezelStyle="rounded" alignment="center" controlSize="large" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="U44-9K-bLF">
                                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="system"/>
@@ -1598,7 +1598,7 @@ DQ
                                     <autoresizingMask key="autoresizingMask"/>
                                 </scroller>
                                 <scroller key="verticalScroller" wantsLayer="YES" verticalHuggingPriority="750" horizontal="NO" id="bKL-hk-a9Y">
-                                    <rect key="frame" x="173" y="1" width="16" height="169"/>
+                                    <rect key="frame" x="172" y="1" width="17" height="169"/>
                                     <autoresizingMask key="autoresizingMask"/>
                                 </scroller>
                             </scrollView>
@@ -1617,7 +1617,7 @@ DQ
                                         </textFieldCell>
                                     </textField>
                                     <slider horizontalHuggingPriority="500" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="oWb-y6-1VO">
-                                        <rect key="frame" x="22" y="0.0" width="116" height="17"/>
+                                        <rect key="frame" x="24" y="0.0" width="112" height="16"/>
                                         <sliderCell key="cell" controlSize="mini" enabled="NO" state="on" alignment="left" maxValue="100" doubleValue="33.333333333333336" tickMarkPosition="below" numberOfTickMarks="4" sliderType="linear" id="8pg-D3-7EG"/>
                                         <connections>
                                             <action selector="sliderValueChanged:" target="eky-J7-eog" id="iz9-9b-wNa"/>
@@ -1677,7 +1677,7 @@ DQ
                                 </customSpacing>
                             </stackView>
                             <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="xby-TM-Wec">
-                                <rect key="frame" x="28" y="111" width="194" height="14"/>
+                                <rect key="frame" x="28" y="112" width="194" height="14"/>
                                 <textFieldCell key="cell" lineBreakMode="truncatingTail" alignment="center" id="606-Ge-1Pk">
                                     <font key="font" metaFont="smallSystem"/>
                                     <color key="textColor" name="secondaryLabelColor" catalog="System" colorSpace="catalog"/>
@@ -1685,7 +1685,7 @@ DQ
                                 </textFieldCell>
                             </textField>
                             <button translatesAutoresizingMaskIntoConstraints="NO" id="qg7-RB-Lb5">
-                                <rect key="frame" x="225" y="389" width="22" height="13"/>
+                                <rect key="frame" x="223" y="389" width="24" height="13"/>
                                 <buttonCell key="cell" type="inline" bezelStyle="inline" image="gearshape" catalog="system" imagePosition="only" alignment="center" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="PhG-pk-F2I">
                                     <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                     <font key="font" metaFont="smallSystemBold"/>
@@ -1757,10 +1757,10 @@ accounts</string>
                                 </textFieldCell>
                             </textField>
                             <stackView distribution="fill" orientation="horizontal" alignment="top" spacing="12" horizontalStackHuggingPriority="249.99998474121094" verticalStackHuggingPriority="249.99998474121094" detachesHiddenViews="YES" translatesAutoresizingMaskIntoConstraints="NO" id="bAd-EM-gsp">
-                                <rect key="frame" x="72" y="32" width="107" height="28"/>
+                                <rect key="frame" x="64" y="32" width="123" height="28"/>
                                 <subviews>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="Jtf-rz-QKY">
-                                        <rect key="frame" x="-6" y="-6" width="72" height="40"/>
+                                        <rect key="frame" x="0.0" y="0.0" width="68" height="28"/>
                                         <buttonCell key="cell" type="push" title="cancel" bezelStyle="rounded" alignment="center" controlSize="large" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="Won-bf-72n">
                                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="system"/>
@@ -1773,7 +1773,7 @@ Gw
                                         </connections>
                                     </button>
                                     <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="Uo7-Nz-7jr">
-                                        <rect key="frame" x="66" y="-6" width="47" height="40"/>
+                                        <rect key="frame" x="80" y="0.0" width="43" height="28"/>
                                         <buttonCell key="cell" type="push" title="ok" bezelStyle="rounded" alignment="center" controlSize="large" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="f2b-g9-GH8">
                                             <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                             <font key="font" metaFont="system"/>
@@ -1832,7 +1832,7 @@ DQ
                                                                     </textFieldCell>
                                                                 </textField>
                                                                 <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="6Jb-Gf-h0p">
-                                                                    <rect key="frame" x="180" y="7" width="18" height="18"/>
+                                                                    <rect key="frame" x="180" y="8" width="16" height="16"/>
                                                                     <buttonCell key="cell" type="check" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="DsM-7u-00M">
                                                                         <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                                                                         <font key="font" metaFont="system"/>
