@@ -310,6 +310,8 @@ final class TransactionInspectorTests: XCTestCase {
             ("solana:mainnet", .mainnetBeta),
             ("devnet", .devnet),
             ("solana:devnet", .devnet),
+            ("testnet", .testnet),
+            ("solana:testnet", .testnet),
         ]
 
         for (alias, expectedCluster) in aliases {
@@ -323,7 +325,7 @@ final class TransactionInspectorTests: XCTestCase {
     }
 
     func testSolanaSendOptionsRejectInvalidAndConflictingClusterHints() {
-        switch Solana.preparedSendOptions(from: ["cluster": "testnet"]) {
+        switch Solana.preparedSendOptions(from: ["cluster": "localnet"]) {
         case .failure(.invalidSendOptions):
             break
         default:
@@ -344,18 +346,23 @@ final class TransactionInspectorTests: XCTestCase {
             "bigWalletCluster": "solana:devnet",
             "encoding": "base58",
             "skipPreflight": false,
+            "commitment": "finalized",
             "preflightCommitment": "confirmed",
+            "mode": "serial",
             "maxRetries": 2,
             "minContextSlot": 123,
             "rpcURL": "https://example.com",
         ]) {
         case .success(let options):
             XCTAssertEqual(options.clusterHint, .devnet)
+            XCTAssertEqual(options.confirmationCommitment, .finalized)
             XCTAssertEqual(options.rpcOptions["encoding"] as? String, "base64")
             XCTAssertEqual(options.rpcOptions["skipPreflight"] as? Bool, false)
             XCTAssertEqual(options.rpcOptions["preflightCommitment"] as? String, "confirmed")
             XCTAssertEqual(options.rpcOptions["maxRetries"] as? Int, 2)
             XCTAssertEqual(options.rpcOptions["minContextSlot"] as? Int, 123)
+            XCTAssertNil(options.rpcOptions["commitment"])
+            XCTAssertNil(options.rpcOptions["mode"])
             XCTAssertNil(options.rpcOptions["rpcURL"])
             XCTAssertNil(options.rpcOptions["cluster"])
             XCTAssertNil(options.rpcOptions["bigWalletCluster"])
@@ -368,6 +375,9 @@ final class TransactionInspectorTests: XCTestCase {
         let invalidOptions: [[String: Any]] = [
             ["skipPreflight": true],
             ["preflightCommitment": "unsafe"],
+            ["commitment": "unsafe"],
+            ["mode": "parallel"],
+            ["mode": "unsafe"],
             ["maxRetries": -1],
             ["minContextSlot": 1.5],
         ]
@@ -386,6 +396,7 @@ final class TransactionInspectorTests: XCTestCase {
         let configuration = Solana.RPCConfiguration(infoDictionary: [
             "SolanaMainnetRPCURL": "https://mainnet.example.com",
             "SolanaDevnetRPCURL": "https://devnet.example.com",
+            "SolanaTestnetRPCURL": "https://testnet.example.com",
         ])
 
         let mainnetEndpoint = configuration.endpoint(for: .mainnetBeta)
@@ -395,6 +406,10 @@ final class TransactionInspectorTests: XCTestCase {
         let devnetEndpoint = configuration.endpoint(for: .devnet)
         XCTAssertEqual(devnetEndpoint.url.absoluteString, "https://devnet.example.com")
         XCTAssertEqual(devnetEndpoint.source, .configured)
+
+        let testnetEndpoint = configuration.endpoint(for: .testnet)
+        XCTAssertEqual(testnetEndpoint.url.absoluteString, "https://testnet.example.com")
+        XCTAssertEqual(testnetEndpoint.source, .configured)
     }
 
     func testSolanaRPCConfigurationFallsBackToPublicEndpoints() {
@@ -407,6 +422,10 @@ final class TransactionInspectorTests: XCTestCase {
         let devnetEndpoint = configuration.endpoint(for: .devnet)
         XCTAssertEqual(devnetEndpoint.url.absoluteString, "https://api.devnet.solana.com")
         XCTAssertEqual(devnetEndpoint.source, .publicFallback)
+
+        let testnetEndpoint = configuration.endpoint(for: .testnet)
+        XCTAssertEqual(testnetEndpoint.url.absoluteString, "https://api.testnet.solana.com")
+        XCTAssertEqual(testnetEndpoint.source, .publicFallback)
     }
 
     func testSwitchAccountPreselectionPreservesResolvedAccountsAndFillsStaleProviders() {

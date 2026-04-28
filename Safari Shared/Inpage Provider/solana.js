@@ -8,6 +8,40 @@ import Base58 from "./base58";
 import ProviderRpcError from "./error";
 import { EventEmitter } from "events";
 
+const walletName = "Big Wallet";
+const walletStandardVersion = "1.0.0";
+const solanaSignMessageFeatureVersion = "1.1.0";
+const solanaMainnetChain = "solana:mainnet";
+const solanaDevnetChain = "solana:devnet";
+const solanaTestnetChain = "solana:testnet";
+const solanaChains = Object.freeze([solanaMainnetChain, solanaDevnetChain, solanaTestnetChain]);
+const solanaSupportedTransactionVersions = Object.freeze(["legacy", 0]);
+const walletStandardRegisterEvent = "wallet-standard:register-wallet";
+const walletStandardAppReadyEvent = "wallet-standard:app-ready";
+const standardChangeEvent = "change";
+const standardConnect = "standard:connect";
+const standardDisconnect = "standard:disconnect";
+const standardEvents = "standard:events";
+const solanaSignAndSendTransaction = "solana:signAndSendTransaction";
+const solanaSignTransaction = "solana:signTransaction";
+const solanaSignMessage = "solana:signMessage";
+const invalidSolanaMessageRequest = "Big Wallet could not normalize this Solana message request";
+const invalidSolanaSignatureResponse = "Big Wallet received an invalid Solana signature response";
+const invalidSolanaTransactionBatchRequest = "Big Wallet could not normalize this Solana transaction batch";
+const invalidSolanaTransactionRequest = "Big Wallet could not normalize this Solana transaction request";
+const invalidSolanaTransactionOptions = "Big Wallet received unsupported Solana transaction options";
+const ambiguousSolanaTransactionParams = "Big Wallet received ambiguous Solana transaction params";
+const mismatchedSolanaTransactionParams = "Big Wallet received mismatched Solana transaction params";
+const mismatchedSolanaTransactionSignatures = "Big Wallet received mismatched Solana transaction signatures";
+const providerNotReadyMessage = "provider is not ready";
+const solanaSignatureApplicationError = "Big Wallet could not apply the Solana signature";
+const unsupportedSolanaChain = "Big Wallet does not support this Solana chain";
+const solanaAccountFeatures = Object.freeze([
+    solanaSignAndSendTransaction,
+    solanaSignTransaction,
+    solanaSignMessage,
+]);
+
 class PublicKey {
 
     constructor(value) {
@@ -56,6 +90,11 @@ class BigWalletSolana extends EventEmitter {
 
         this.didGetLatestConfiguration = false;
         this.pendingPayloads = [];
+        this.standardChangeListeners = new Set();
+        this.standardAccountsByAddress = new Map();
+        this.standardRegisteredHosts = typeof WeakSet !== "undefined" ? new WeakSet() : null;
+        this.standardWalletFeatures = null;
+        this.standardWallet = null;
 
         this.connect = this.connect.bind(this);
         this.disconnect = this.disconnect.bind(this);
@@ -64,6 +103,12 @@ class BigWalletSolana extends EventEmitter {
         this.signTransaction = this.signTransaction.bind(this);
         this.signAllTransactions = this.signAllTransactions.bind(this);
         this.signAndSendTransaction = this.signAndSendTransaction.bind(this);
+        this.standardConnect = this.standardConnect.bind(this);
+        this.standardDisconnect = this.standardDisconnect.bind(this);
+        this.standardOn = this.standardOn.bind(this);
+        this.standardSignAndSendTransaction = this.standardSignAndSendTransaction.bind(this);
+        this.standardSignTransaction = this.standardSignTransaction.bind(this);
+        this.standardSignMessage = this.standardSignMessage.bind(this);
     }
 
     connect(params) {
@@ -87,10 +132,14 @@ class BigWalletSolana extends EventEmitter {
         const didChangeAccount = this.publicKey !== null;
         this.isConnected = false;
         this.publicKey = null;
+        this.standardAccountsByAddress.clear();
         if (didChangeAccount) {
             this.emit("accountChanged", null);
         }
         this.emit("disconnect");
+        if (didChangeAccount) {
+            this.emitStandardChange({ accounts: this.standardAccounts() });
+        }
         return Promise.resolve(true);
     }
 
@@ -110,6 +159,423 @@ class BigWalletSolana extends EventEmitter {
         }
 
         return null;
+    }
+
+    standardPublicKeyBytes(publicKey) {
+        return new Uint8Array(publicKey.toBytes());
+    }
+
+    standardAccountForPublicKey(publicKey) {
+        const address = publicKey.toString();
+        let account = this.standardAccountsByAddress.get(address);
+        if (!account) {
+            const publicKeyBytes = this.standardPublicKeyBytes(publicKey);
+            account = Object.freeze({
+                address: address,
+                get publicKey() {
+                    return publicKeyBytes.slice();
+                },
+                chains: solanaChains,
+                features: solanaAccountFeatures,
+                label: walletName,
+            });
+            this.standardAccountsByAddress.set(address, account);
+        }
+        return account;
+    }
+
+    standardAccounts() {
+        return this.publicKey ? [this.standardAccountForPublicKey(this.publicKey)] : [];
+    }
+
+    currentPublicKeyString() {
+        return this.publicKey ? this.publicKey.toString() : null;
+    }
+
+    emitStandardAccountChangeIfNeeded(previousPublicKey) {
+        if (previousPublicKey !== this.currentPublicKeyString()) {
+            if (previousPublicKey) {
+                this.standardAccountsByAddress.delete(previousPublicKey);
+            }
+            this.emitStandardChange({ accounts: this.standardAccounts() });
+        }
+    }
+
+    standardFeatures() {
+        if (this.standardWalletFeatures) {
+            return this.standardWalletFeatures;
+        }
+
+        this.standardWalletFeatures = Object.freeze({
+            [standardConnect]: Object.freeze({
+                version: walletStandardVersion,
+                connect: this.standardConnect,
+            }),
+            [standardDisconnect]: Object.freeze({
+                version: walletStandardVersion,
+                disconnect: this.standardDisconnect,
+            }),
+            [standardEvents]: Object.freeze({
+                version: walletStandardVersion,
+                on: this.standardOn,
+            }),
+            [solanaSignAndSendTransaction]: Object.freeze({
+                version: walletStandardVersion,
+                supportedTransactionVersions: solanaSupportedTransactionVersions,
+                signAndSendTransaction: this.standardSignAndSendTransaction,
+            }),
+            [solanaSignTransaction]: Object.freeze({
+                version: walletStandardVersion,
+                supportedTransactionVersions: solanaSupportedTransactionVersions,
+                signTransaction: this.standardSignTransaction,
+            }),
+            [solanaSignMessage]: Object.freeze({
+                version: solanaSignMessageFeatureVersion,
+                signMessage: this.standardSignMessage,
+            }),
+        });
+        return this.standardWalletFeatures;
+    }
+
+    registerWalletStandard(options) {
+        if (this.standardWallet) {
+            return this.standardWallet;
+        }
+
+        const icon = options && options.icon ? options.icon : "";
+        const provider = this;
+        this.standardWallet = Object.freeze({
+            get version() {
+                return walletStandardVersion;
+            },
+            get name() {
+                return walletName;
+            },
+            get icon() {
+                return icon;
+            },
+            get chains() {
+                return solanaChains;
+            },
+            get features() {
+                return provider.standardFeatures();
+            },
+            get accounts() {
+                return provider.standardAccounts();
+            },
+        });
+
+        this.dispatchWalletStandardRegistration(this.standardWallet);
+        return this.standardWallet;
+    }
+
+    dispatchWalletStandardRegistration(wallet) {
+        const registeredHosts = this.standardRegisteredHosts;
+        const callback = (registration) => {
+            if (registration && typeof registration.register === "function") {
+                if (registeredHosts && (typeof registration === "object" || typeof registration === "function")) {
+                    if (registeredHosts.has(registration)) {
+                        return;
+                    }
+                    registeredHosts.add(registration);
+                }
+                registration.register(wallet);
+            }
+        };
+        try {
+            window.dispatchEvent(new CustomEvent(walletStandardRegisterEvent, { detail: callback }));
+        } catch (error) {
+            try {
+                const event = new Event(walletStandardRegisterEvent, {
+                    bubbles: false,
+                    cancelable: false,
+                    composed: false,
+                });
+                Object.defineProperty(event, "detail", { value: callback });
+                window.dispatchEvent(event);
+            } catch (fallbackError) {
+                console.error("Big Wallet: wallet-standard registration failed", fallbackError);
+            }
+        }
+
+        try {
+            window.addEventListener(walletStandardAppReadyEvent, (event) => {
+                callback(event.detail);
+            });
+        } catch (error) {
+            console.error("Big Wallet: wallet-standard app-ready listener failed", error);
+        }
+
+        try {
+            window.navigator.wallets = window.navigator.wallets || [];
+            window.navigator.wallets.push(callback);
+        } catch (error) {
+            // Some injected contexts expose a read-only navigator; event registration remains authoritative.
+        }
+    }
+
+    standardOn(event, listener) {
+        if (event !== standardChangeEvent) {
+            return () => {};
+        }
+
+        this.standardChangeListeners.add(listener);
+        return () => {
+            this.standardChangeListeners.delete(listener);
+        };
+    }
+
+    emitStandardChange(properties) {
+        for (const listener of this.standardChangeListeners) {
+            try {
+                listener(properties);
+            } catch (error) {
+                console.error("Big Wallet: wallet-standard change listener failed", error);
+            }
+        }
+    }
+
+    async standardConnect(input) {
+        if (input && input.silent === true) {
+            if (this.didGetLatestConfiguration && !this.publicKey) {
+                return { accounts: [] };
+            }
+
+            try {
+                await this.connect({ onlyIfTrusted: true });
+            } catch (error) {
+                if (error && error.code === 4100) {
+                    return { accounts: [] };
+                }
+                throw error;
+            }
+
+            return { accounts: this.standardAccounts() };
+        }
+
+        await this.connect();
+        return { accounts: this.standardAccounts() };
+    }
+
+    async standardDisconnect() {
+        await this.disconnect();
+    }
+
+    assertStandardAccount(account) {
+        if (!this.publicKey || !account || account.address !== this.publicKey.toString()) {
+            throw new ProviderRpcError(4100, providerNotReadyMessage);
+        }
+    }
+
+    assertSupportedStandardChain(chain, isRequired) {
+        if ((!isRequired && typeof chain === "undefined") || solanaChains.includes(chain)) {
+            return;
+        }
+
+        throw new ProviderRpcError(4200, unsupportedSolanaChain);
+    }
+
+    normalizedStandardBytes(value, errorMessage) {
+        const bytes = this.bytesFor(value);
+        if (bytes) {
+            return bytes;
+        }
+
+        throw new ProviderRpcError(4200, errorMessage);
+    }
+
+    standardBytesSnapshot(value, errorMessage) {
+        return new Uint8Array(this.normalizedStandardBytes(value, errorMessage));
+    }
+
+    standardSignatureBytes(value) {
+        const signature = this.standardBytesSnapshot(value, invalidSolanaSignatureResponse);
+        if (signature.length !== 64) {
+            throw new ProviderRpcError(4200, invalidSolanaSignatureResponse);
+        }
+
+        return signature;
+    }
+
+    standardBase58Signature(value) {
+        try {
+            return this.standardSignatureBytes(Base58.decode(value));
+        } catch (error) {
+            if (error instanceof ProviderRpcError) {
+                throw error;
+            }
+            throw new ProviderRpcError(4200, invalidSolanaSignatureResponse);
+        }
+    }
+
+    standardSignAndSendOptions(input) {
+        const options = { ...((input && input.options) || {}) };
+        if (typeof options.mode !== "undefined" && options.mode !== "serial") {
+            throw new ProviderRpcError(4200, invalidSolanaTransactionOptions);
+        }
+
+        if (input && input.chain) {
+            options.bigWalletCluster = input.chain;
+        }
+
+        return options;
+    }
+
+    decodeShortVec(bytes, offset) {
+        let value = 0;
+        let shift = 0;
+        let cursor = offset;
+
+        while (cursor < bytes.length) {
+            const element = bytes[cursor];
+            cursor += 1;
+
+            if (shift >= 32) {
+                throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
+            }
+
+            value += (element & 0x7f) * Math.pow(2, shift);
+            if ((element & 0x80) === 0) {
+                return { value: value, offset: cursor };
+            }
+
+            shift += 7;
+        }
+
+        throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
+    }
+
+    signerDetailsForMessage(messageBytes, publicKeyBytes) {
+        if (messageBytes.length === 0) {
+            throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
+        }
+
+        const firstByte = messageBytes[0];
+        let requiredSignaturesCount;
+        let accountCountOffset;
+
+        if ((firstByte & 0x80) === 0) {
+            requiredSignaturesCount = firstByte;
+            accountCountOffset = 3;
+        } else {
+            const version = firstByte & 0x7f;
+            if (version !== 0 || messageBytes.length < 4) {
+                throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
+            }
+            requiredSignaturesCount = messageBytes[1];
+            accountCountOffset = 4;
+        }
+
+        const accountCount = this.decodeShortVec(messageBytes, accountCountOffset);
+        if (accountCount.value < requiredSignaturesCount) {
+            throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
+        }
+
+        const accountKeysStart = accountCount.offset;
+        const accountKeysLength = accountCount.value * 32;
+        if (accountKeysStart + accountKeysLength > messageBytes.length) {
+            throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
+        }
+
+        for (let index = 0; index < requiredSignaturesCount; index++) {
+            const keyOffset = accountKeysStart + index * 32;
+            let didMatch = true;
+            for (let byteIndex = 0; byteIndex < 32; byteIndex++) {
+                if (messageBytes[keyOffset + byteIndex] !== publicKeyBytes[byteIndex]) {
+                    didMatch = false;
+                    break;
+                }
+            }
+            if (didMatch) {
+                return {
+                    requiredSignaturesCount: requiredSignaturesCount,
+                    signerIndex: index,
+                };
+            }
+        }
+
+        throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
+    }
+
+    preparedStandardTransaction(transaction) {
+        const transactionBytes = this.standardBytesSnapshot(transaction, invalidSolanaTransactionRequest);
+        const signatureCount = this.decodeShortVec(transactionBytes, 0);
+        if (signatureCount.value <= 0) {
+            throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
+        }
+
+        const signaturesStart = signatureCount.offset;
+        const messageStart = signaturesStart + signatureCount.value * 64;
+        if (messageStart >= transactionBytes.length) {
+            throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
+        }
+
+        const messageBytes = transactionBytes.slice(messageStart);
+        const signerPublicKey = this.standardPublicKeyBytes(this.publicKey);
+        const signerDetails = this.signerDetailsForMessage(messageBytes, signerPublicKey);
+        if (signatureCount.value !== signerDetails.requiredSignaturesCount ||
+            signerDetails.signerIndex >= signatureCount.value) {
+            throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
+        }
+
+        return {
+            transactionBytes: transactionBytes,
+            messageBytes: messageBytes,
+            signatureOffset: signaturesStart + signerDetails.signerIndex * 64,
+        };
+    }
+
+    async standardSignMessage(...inputs) {
+        const outputs = [];
+        for (const input of inputs) {
+            this.assertStandardAccount(input && input.account);
+            const message = this.standardBytesSnapshot(input.message, invalidSolanaMessageRequest);
+            const response = await this.signMessage(message);
+            outputs.push({
+                signedMessage: message,
+                signature: this.standardSignatureBytes(response.signature),
+            });
+        }
+        return outputs;
+    }
+
+    async standardSignTransaction(...inputs) {
+        const outputs = [];
+        for (const input of inputs) {
+            this.assertStandardAccount(input && input.account);
+            this.assertSupportedStandardChain(input && input.chain, false);
+            const prepared = this.preparedStandardTransaction(input.transaction);
+            const payload = this.signTransactionPayload(Base58.encode(prepared.messageBytes));
+            this.trackPendingRequest(payload.id);
+            const response = await this.request(payload);
+            const signature = this.standardBase58Signature(response.signature);
+
+            const signedTransaction = new Uint8Array(prepared.transactionBytes);
+            signedTransaction.set(signature, prepared.signatureOffset);
+            outputs.push({ signedTransaction: signedTransaction });
+        }
+        return outputs;
+    }
+
+    async standardSignAndSendTransaction(...inputs) {
+        const preparedInputs = inputs.map((input) => {
+            this.assertStandardAccount(input && input.account);
+            this.assertSupportedStandardChain(input && input.chain, true);
+            return {
+                account: input.account,
+                transaction: this.standardBytesSnapshot(input.transaction, invalidSolanaTransactionRequest),
+                options: this.standardSignAndSendOptions(input),
+            };
+        });
+
+        const outputs = [];
+        for (const preparedInput of preparedInputs) {
+            const response = await this.signAndSendTransaction(preparedInput.transaction, preparedInput.options);
+            outputs.push({
+                signature: this.standardBase58Signature(response.signature),
+            });
+        }
+        return outputs;
     }
 
     normalizedBase58Value(value, errorMessage) {
@@ -137,7 +603,7 @@ class BigWalletSolana extends EventEmitter {
         const hasMessage = hasParam("message") && normalizedParams.message != null;
 
         if (hasMessages && hasMessage) {
-            throw new ProviderRpcError(4200, "Big Wallet received ambiguous Solana transaction params");
+            throw new ProviderRpcError(4200, ambiguousSolanaTransactionParams);
         }
 
         if (hasMessages) {
@@ -166,7 +632,7 @@ class BigWalletSolana extends EventEmitter {
 
     preparedSignMessageParams(params) {
         const normalizedParams = { ...(params || {}) };
-        const errorMessage = "Big Wallet could not normalize this Solana message request";
+        const errorMessage = invalidSolanaMessageRequest;
 
         if (!("message" in normalizedParams)) {
             throw new ProviderRpcError(4200, errorMessage);
@@ -199,7 +665,7 @@ class BigWalletSolana extends EventEmitter {
         if ("message" in normalizedParams) {
             const normalizedMessage = this.normalizedBase58Value(normalizedParams.message, errorMessage);
             if (normalizedMessage !== derivedMessage) {
-                throw new ProviderRpcError(4200, "Big Wallet received mismatched Solana transaction params");
+                throw new ProviderRpcError(4200, mismatchedSolanaTransactionParams);
             }
             normalizedParams.message = normalizedMessage;
         } else {
@@ -262,17 +728,17 @@ class BigWalletSolana extends EventEmitter {
 
         if ("transaction" in normalizedParams && this.isTransactionObject(normalizedParams.transaction)) {
             const transaction = normalizedParams.transaction;
-            this.assertCanSignTransactionObject(transaction, "Big Wallet could not normalize this Solana transaction request");
+            this.assertCanSignTransactionObject(transaction, invalidSolanaTransactionRequest);
             const derivedMessage = this.encodedMessageFor(transaction);
             this.normalizeDerivedMessage(normalizedParams,
                                          derivedMessage,
-                                         "Big Wallet could not normalize this Solana transaction request");
+                                         invalidSolanaTransactionRequest);
             pendingRequestMetadata = { transactions: [transaction] };
             delete normalizedParams.transaction;
         } else if ("message" in normalizedParams) {
-            normalizedParams.message = this.normalizedBase58Value(normalizedParams.message, "Big Wallet could not normalize this Solana transaction request");
+            normalizedParams.message = this.normalizedBase58Value(normalizedParams.message, invalidSolanaTransactionRequest);
         } else {
-            throw new ProviderRpcError(4200, "Big Wallet could not normalize this Solana transaction request");
+            throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
         }
 
         return {
@@ -290,7 +756,7 @@ class BigWalletSolana extends EventEmitter {
         if (Array.isArray(normalizedParams.transactions)) {
             const transactions = normalizedParams.transactions;
             transactions.forEach((transaction) => {
-                this.assertCanSignTransactionObject(transaction, "Big Wallet could not normalize this Solana transaction batch");
+                this.assertCanSignTransactionObject(transaction, invalidSolanaTransactionBatchRequest);
             });
             const derivedMessages = transactions.map((transaction) => {
                 return this.encodedMessageFor(transaction);
@@ -298,14 +764,14 @@ class BigWalletSolana extends EventEmitter {
 
             if (suppliedMessageParamName) {
                 if (!Array.isArray(suppliedMessages) || suppliedMessages.length !== derivedMessages.length) {
-                    throw new ProviderRpcError(4200, "Big Wallet received mismatched Solana transaction params");
+                    throw new ProviderRpcError(4200, mismatchedSolanaTransactionParams);
                 }
 
                 const normalizedMessages = this.normalizedBase58Messages(suppliedMessages,
-                                                                        "Big Wallet could not normalize this Solana transaction batch");
+                                                                        invalidSolanaTransactionBatchRequest);
                 for (let index = 0; index < normalizedMessages.length; index++) {
                     if (normalizedMessages[index] !== derivedMessages[index]) {
-                        throw new ProviderRpcError(4200, "Big Wallet received mismatched Solana transaction params");
+                        throw new ProviderRpcError(4200, mismatchedSolanaTransactionParams);
                     }
                 }
                 normalizedParams.messages = normalizedMessages;
@@ -318,10 +784,10 @@ class BigWalletSolana extends EventEmitter {
             delete normalizedParams.message;
         } else if (suppliedMessageParamName && Array.isArray(suppliedMessages)) {
             normalizedParams.messages = this.normalizedBase58Messages(suppliedMessages,
-                                                                      "Big Wallet could not normalize this Solana transaction batch");
+                                                                      invalidSolanaTransactionBatchRequest);
             delete normalizedParams.message;
         } else {
-            throw new ProviderRpcError(4200, "Big Wallet could not normalize this Solana transaction batch");
+            throw new ProviderRpcError(4200, invalidSolanaTransactionBatchRequest);
         }
 
         return {
@@ -332,7 +798,7 @@ class BigWalletSolana extends EventEmitter {
 
     preparedSignAndSendTransactionParams(params) {
         const normalizedParams = { ...(params || {}) };
-        const errorMessage = "Big Wallet could not normalize this Solana transaction request";
+        const errorMessage = invalidSolanaTransactionRequest;
 
         if ("transaction" in normalizedParams && this.isTransactionObject(normalizedParams.transaction)) {
             const transaction = normalizedParams.transaction;
@@ -416,10 +882,13 @@ class BigWalletSolana extends EventEmitter {
         throw new ProviderRpcError(4200, "Big Wallet does not support this Solana transaction format");
     }
 
+    signTransactionPayload(message) {
+        return { method: "signTransaction", params: { message: message }, id: Utils.genId() };
+    }
+
     signTransaction(transaction) {
         this.assertCanSignTransactionObject(transaction, "Big Wallet could not sign this Solana transaction");
-        const params = { message: this.encodedMessageFor(transaction) };
-        const payload = { method: "signTransaction", params: params, id: Utils.genId() };
+        const payload = this.signTransactionPayload(this.encodedMessageFor(transaction));
         this.trackPendingRequest(payload.id, { transactions: [transaction] });
         return this.request(payload);
     }
@@ -647,7 +1116,7 @@ class BigWalletSolana extends EventEmitter {
         } catch (error) {
         }
 
-        this.sendError(id, new ProviderRpcError(4200, "Big Wallet could not apply the Solana signature"));
+        this.sendError(id, new ProviderRpcError(4200, solanaSignatureApplicationError));
         return false;
     }
 
@@ -683,6 +1152,7 @@ class BigWalletSolana extends EventEmitter {
 
     processBigWalletResponse(id, response) {
         if (response.name === "didLoadLatestConfiguration") {
+            const previousPublicKey = this.currentPublicKeyString();
             this.didGetLatestConfiguration = true;
 
             if ("publicKey" in response) {
@@ -692,6 +1162,8 @@ class BigWalletSolana extends EventEmitter {
                 this.publicKey = null;
                 this.isConnected = false;
             }
+
+            this.emitStandardAccountChangeIfNeeded(previousPublicKey);
 
             for (const payload of this.pendingPayloads) {
                 this.processPayloadSafely(payload);
@@ -704,6 +1176,7 @@ class BigWalletSolana extends EventEmitter {
         const requestPublicKey = this.publicKeyForPendingRequest(pendingRequest);
 
         if ("publicKey" in response) {
+            const previousPublicKey = this.currentPublicKeyString();
             this.isConnected = true;
             const publicKey = new PublicKey(response.publicKey);
             this.publicKey = publicKey;
@@ -711,6 +1184,7 @@ class BigWalletSolana extends EventEmitter {
                 this.sendResponse(id, { publicKey: publicKey });
             }
             this.emitConnect(publicKey);
+            this.emitStandardAccountChangeIfNeeded(previousPublicKey);
             if (response.name === "switchAccount") {
                 this.emit("accountChanged", publicKey);
             }
@@ -719,7 +1193,7 @@ class BigWalletSolana extends EventEmitter {
                 pendingRequest &&
                 Array.isArray(pendingRequest.transactions)) {
                 if (!requestPublicKey) {
-                    this.sendError(id, new ProviderRpcError(4100, "provider is not ready"));
+                    this.sendError(id, new ProviderRpcError(4100, providerNotReadyMessage));
                     return;
                 }
                 const transaction = pendingRequest.transactions[0];
@@ -735,18 +1209,18 @@ class BigWalletSolana extends EventEmitter {
             }
         } else if ("results" in response) {
             if (!Array.isArray(response.results)) {
-                this.sendError(id, new ProviderRpcError(4200, "Big Wallet received an invalid Solana signature response"));
+                this.sendError(id, new ProviderRpcError(4200, invalidSolanaSignatureResponse));
                 return;
             }
 
             if (pendingRequest && Array.isArray(pendingRequest.transactions)) {
                 if (!requestPublicKey) {
-                    this.sendError(id, new ProviderRpcError(4100, "provider is not ready"));
+                    this.sendError(id, new ProviderRpcError(4100, providerNotReadyMessage));
                     return;
                 }
                 const transactions = pendingRequest.transactions;
                 if (response.results.length !== transactions.length) {
-                    this.sendError(id, new ProviderRpcError(4200, "Big Wallet received mismatched Solana transaction signatures"));
+                    this.sendError(id, new ProviderRpcError(4200, mismatchedSolanaTransactionSignatures));
                     return;
                 }
 
@@ -766,13 +1240,13 @@ class BigWalletSolana extends EventEmitter {
             if (this.shouldDisconnectForUnauthorizedResponse(response, pendingRequest)) {
                 this.performDisconnect();
             }
-            this.sendError(id, response.error, response.errorCode);
+            this.sendError(id, response.error, response.errorCode, this.errorDataForResponse(response));
         }
     }
 
     postMessage(handler, id, data) {
         if (handler !== "connect" && !this.publicKey) {
-            this.sendError(id, new ProviderRpcError(4100, "provider is not ready"));
+            this.sendError(id, new ProviderRpcError(4100, providerNotReadyMessage));
             return;
         }
 
@@ -798,17 +1272,30 @@ class BigWalletSolana extends EventEmitter {
         }
     }
 
-    providerError(error, code) {
+    errorDataForResponse(response) {
+        if (typeof response.errorSignature === "string") {
+            return { signature: response.errorSignature };
+        }
+
+        return undefined;
+    }
+
+    providerError(error, code, data) {
         if (error instanceof Error) {
+            if (typeof data !== "undefined" &&
+                typeof error.data === "undefined" &&
+                typeof error.code === "number") {
+                return new ProviderRpcError(error.code, error.message || "Big Wallet request failed", data);
+            }
             return error;
         }
 
         if (error && typeof error === "object" && typeof error.code === "number") {
-            return new ProviderRpcError(error.code, error.message || "Big Wallet request failed");
+            return new ProviderRpcError(error.code, error.message || "Big Wallet request failed", data);
         }
 
         if (typeof code === "number") {
-            return new ProviderRpcError(code, error || "Big Wallet request failed");
+            return new ProviderRpcError(code, error || "Big Wallet request failed", data);
         }
 
         if (typeof error === "string" && error.toLowerCase() === "canceled") {
@@ -818,12 +1305,12 @@ class BigWalletSolana extends EventEmitter {
         return new Error(error);
     }
 
-    sendError(id, error, code) {
+    sendError(id, error, code, data) {
         this.idMapping.tryPopId(id);
         this.pendingRequests.delete(id);
         const callback = this.callbacks.get(id);
         if (callback) {
-            callback(this.providerError(error, code), null);
+            callback(this.providerError(error, code, data), null);
             this.callbacks.delete(id);
         }
     }

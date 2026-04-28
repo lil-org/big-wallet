@@ -4,10 +4,13 @@
 "use strict";
 
 class ProviderRpcError extends Error {
-    constructor(code, message) {
+    constructor(code, message, data) {
         super();
         this.code = code;
         this.message = message;
+        if (typeof data !== "undefined") {
+            this.data = data;
+        }
     }
     
     toString() {

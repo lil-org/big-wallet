@@ -15,6 +15,20 @@ struct DappRequestProcessor {
         let approvalMessage: String
     }
 
+    private struct SolanaProviderResponseError {
+        let message: String
+        let code: Int
+        let publicKey: String?
+        let signature: String?
+
+        init(message: String, code: Int, publicKey: String? = nil, signature: String? = nil) {
+            self.message = message
+            self.code = code
+            self.publicKey = publicKey
+            self.signature = signature
+        }
+    }
+
     private enum SolanaProviderError {
         case canceled
         case failedToSign
@@ -23,32 +37,36 @@ struct DappRequestProcessor {
         case unauthorized(publicKey: String)
         case sendTransaction(Solana.SendTransactionError)
 
-        var responseError: (message: String, code: Int, publicKey: String?) {
+        var responseError: SolanaProviderResponseError {
             switch self {
             case .canceled:
-                return (message: Strings.canceled, code: 4001, publicKey: nil)
+                return .init(message: Strings.canceled, code: 4001)
             case .failedToSign:
-                return (message: Strings.failedToSign, code: -32603, publicKey: nil)
+                return .init(message: Strings.failedToSign, code: -32603)
             case .internalError:
-                return (message: Strings.somethingWentWrong, code: -32603, publicKey: nil)
+                return .init(message: Strings.somethingWentWrong, code: -32603)
             case .malformedPayload:
-                return (message: Strings.somethingWentWrong, code: 4200, publicKey: nil)
+                return .init(message: Strings.somethingWentWrong, code: 4200)
             case .unauthorized(let publicKey):
-                return (message: "provider is not ready", code: 4100, publicKey: publicKey)
+                return .init(message: Strings.providerNotReady, code: 4100, publicKey: publicKey)
             case .sendTransaction(let error):
                 switch error {
                 case .invalidMessage:
-                    return (message: Strings.somethingWentWrong, code: 4200, publicKey: nil)
+                    return .init(message: Strings.somethingWentWrong, code: 4200)
                 case .invalidSendOptions:
-                    return (message: Strings.unsupportedSolanaSendOptions, code: 4200, publicKey: nil)
+                    return .init(message: Strings.unsupportedSolanaSendOptions, code: 4200)
                 case .blockhashNotFound:
-                    return (message: Strings.solanaBlockhashNotFound, code: -32003, publicKey: nil)
+                    return .init(message: Strings.solanaBlockhashNotFound, code: -32003)
+                case .confirmationFailed(let signature, let message, let code):
+                    return .init(message: message, code: code ?? -32005, signature: signature)
+                case .confirmationTimedOut(let signature):
+                    return .init(message: Strings.solanaConfirmationTimedOut, code: -32005, signature: signature)
                 case .unsupportedMultiSignature:
-                    return (message: Strings.failedToSend, code: 4200, publicKey: nil)
+                    return .init(message: Strings.failedToSend, code: 4200)
                 case .rpcError(let message, let code):
-                    return (message: message, code: code ?? -32003, publicKey: nil)
+                    return .init(message: message, code: code ?? -32003)
                 case .unknown:
-                    return (message: Strings.failedToSend, code: -32003, publicKey: nil)
+                    return .init(message: Strings.failedToSend, code: -32003)
                 }
             }
         }
@@ -209,7 +227,7 @@ struct DappRequestProcessor {
                 return processSerializedSolanaSignAndSendRequest(request: request,
                                                                  solanaRequest: solanaRequest,
                                                                  serializedTransaction: serializedTransaction,
-                                                                 rpcOptions: preparedSendOptions.rpcOptions,
+                                                                 sendOptions: preparedSendOptions,
                                                                  clusterSelection: clusterSelection,
                                                                  wallet: wallet,
                                                                  account: account,
@@ -233,7 +251,7 @@ struct DappRequestProcessor {
                 signAndSendSolanaTransaction(request: request,
                                              preparedLegacyTransaction: preparedLegacyTransaction,
                                              cluster: selectedCluster,
-                                             rpcOptions: preparedSendOptions.rpcOptions,
+                                             sendOptions: preparedSendOptions,
                                              privateKey: privateKey,
                                              completion: completion)
             }
@@ -305,7 +323,7 @@ struct DappRequestProcessor {
     private static func processSerializedSolanaSignAndSendRequest(request: SafariRequest,
                                                                   solanaRequest: SafariRequest.Solana,
                                                                   serializedTransaction: String,
-                                                                  rpcOptions: [String: Any],
+                                                                  sendOptions: Solana.PreparedSendOptions,
                                                                   clusterSelection: SolanaClusterSelection,
                                                                   wallet: WalletContainer,
                                                                   account: Account,
@@ -327,7 +345,7 @@ struct DappRequestProcessor {
                 signAndSendSolanaTransaction(request: request,
                                              preparedSerializedTransaction: preparedSerializedTransaction,
                                              cluster: selectedCluster,
-                                             rpcOptions: rpcOptions,
+                                             sendOptions: sendOptions,
                                              privateKey: privateKey,
                                              completion: completion)
             }
@@ -441,12 +459,12 @@ struct DappRequestProcessor {
     private static func signAndSendSolanaTransaction(request: SafariRequest,
                                                      preparedSerializedTransaction: Solana.PreparedSerializedTransaction,
                                                      cluster: Solana.Cluster,
-                                                     rpcOptions: [String: Any],
+                                                     sendOptions: Solana.PreparedSendOptions,
                                                      privateKey: PrivateKey,
                                                      completion: @escaping (String?) -> Void) {
         solana.signAndSendTransaction(preparedSerializedTransaction: preparedSerializedTransaction,
                                       cluster: cluster,
-                                      options: rpcOptions,
+                                      sendOptions: sendOptions,
                                       privateKey: privateKey,
                                       completion: solanaSendTransactionResultHandler(request: request,
                                                                                      completion: completion))
@@ -455,12 +473,12 @@ struct DappRequestProcessor {
     private static func signAndSendSolanaTransaction(request: SafariRequest,
                                                      preparedLegacyTransaction: Solana.PreparedLegacySignAndSendTransaction,
                                                      cluster: Solana.Cluster,
-                                                     rpcOptions: [String: Any],
+                                                     sendOptions: Solana.PreparedSendOptions,
                                                      privateKey: PrivateKey,
                                                      completion: @escaping (String?) -> Void) {
         solana.signAndSendTransaction(preparedLegacyTransaction: preparedLegacyTransaction,
                                       cluster: cluster,
-                                      options: rpcOptions,
+                                      sendOptions: sendOptions,
                                       privateKey: privateKey,
                                       completion: solanaSendTransactionResultHandler(request: request,
                                                                                      completion: completion))
@@ -779,6 +797,7 @@ struct DappRequestProcessor {
                 error: responseError.message,
                 errorCode: responseError.code,
                 errorPublicKey: responseError.publicKey,
+                errorSignature: responseError.signature,
                 completion: completion)
     }
     
@@ -786,11 +805,13 @@ struct DappRequestProcessor {
                                 error: String,
                                 errorCode: Int? = nil,
                                 errorPublicKey: String? = nil,
+                                errorSignature: String? = nil,
                                 completion: (String?) -> Void) {
         let response = ResponseToExtension(for: safariRequest,
                                            error: error,
                                            errorCode: errorCode,
-                                           errorPublicKey: errorPublicKey)
+                                           errorPublicKey: errorPublicKey,
+                                           errorSignature: errorSignature)
         sendResponse(response, completion: completion)
     }
     

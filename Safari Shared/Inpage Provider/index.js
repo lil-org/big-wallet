@@ -17,6 +17,8 @@ window.bigwallet.disconnect = (provider) => {
     window.postMessage(disconnectRequest, "*");
 };
 
+const bigWalletIcon = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAyNCIgaGVpZ2h0PSIxMDI0IiB2aWV3Qm94PSIwIDAgMTAyNCAxMDI0IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cmVjdCB3aWR0aD0iMTAyNCIgaGVpZ2h0PSIxMDI0IiBmaWxsPSJ3aGl0ZSIvPgo8cGF0aCBkPSJNODI3IDUxMkM4MjcgMzM4LjAzMSA2ODUuOTY5IDE5NyA1MTIgMTk3QzMzOC4wMzEgMTk3IDE5NyAzMzguMDMxIDE5NyA1MTJDMTk3IDY4NS45NjkgMzM4LjAzMSA4MjcgNTEyIDgyN0M2ODUuOTY5IDgyNyA4MjcgNjg1Ljk2OSA4MjcgNTEyWiIgZmlsbD0idXJsKCNwYWludDBfbGluZWFyXzFfMTQpIi8+CjxkZWZzPgo8bGluZWFyR3JhZGllbnQgaWQ9InBhaW50MF9saW5lYXJfMV8xNCIgeDE9IjUxMiIgeTE9IjE5NyIgeDI9IjUxMiIgeTI9IjgyNyIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPgo8c3RvcCBzdG9wLWNvbG9yPSIjNjJDQ0Y5Ii8+CjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzAwN0FGRiIvPgo8L2xpbmVhckdyYWRpZW50Pgo8L2RlZnM+Cjwvc3ZnPgo=';
+
 // - MARK: Ethereum
 
 const ethereumProvider = new BigWalletEthereum();
@@ -33,6 +35,7 @@ window.bigwallet.solana = solanaProvider;
 window.solana = solanaProvider;
 window.phantom = window.phantom || {};
 window.phantom.solana = solanaProvider;
+solanaProvider.registerWalletStandard({ icon: bigWalletIcon });
 window.dispatchEvent(new Event("solana#initialized"));
 
 const providers = {
@@ -48,7 +51,7 @@ function announceProvider() {
     const info = {
         uuid: "08ac99d0-ec2b-4088-8599-c9f7eede344e",
         name: "Big Wallet",
-        icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAyNCIgaGVpZ2h0PSIxMDI0IiB2aWV3Qm94PSIwIDAgMTAyNCAxMDI0IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cmVjdCB3aWR0aD0iMTAyNCIgaGVpZ2h0PSIxMDI0IiBmaWxsPSJ3aGl0ZSIvPgo8cGF0aCBkPSJNODI3IDUxMkM4MjcgMzM4LjAzMSA2ODUuOTY5IDE5NyA1MTIgMTk3QzMzOC4wMzEgMTk3IDE5NyAzMzguMDMxIDE5NyA1MTJDMTk3IDY4NS45NjkgMzM4LjAzMSA4MjcgNTEyIDgyN0M2ODUuOTY5IDgyNyA4MjcgNjg1Ljk2OSA4MjcgNTEyWiIgZmlsbD0idXJsKCNwYWludDBfbGluZWFyXzFfMTQpIi8+CjxkZWZzPgo8bGluZWFyR3JhZGllbnQgaWQ9InBhaW50MF9saW5lYXJfMV8xNCIgeDE9IjUxMiIgeTE9IjE5NyIgeDI9IjUxMiIgeTI9IjgyNyIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPgo8c3RvcCBzdG9wLWNvbG9yPSIjNjJDQ0Y5Ii8+CjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzAwN0FGRiIvPgo8L2xpbmVhckdyYWRpZW50Pgo8L2RlZnM+Cjwvc3ZnPgo=',
+        icon: bigWalletIcon,
         rdns: "org.lil.wallet"
     };
     window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: Object.freeze({ info, provider: ethereumProvider }), }));

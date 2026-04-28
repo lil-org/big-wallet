@@ -222,6 +222,7 @@ final class Solana {
     enum Cluster: String, CaseIterable {
         case mainnetBeta
         case devnet
+        case testnet
 
         var displayName: String {
             switch self {
@@ -229,6 +230,8 @@ final class Solana {
                 return "Mainnet"
             case .devnet:
                 return "Devnet"
+            case .testnet:
+                return "Testnet"
             }
         }
 
@@ -238,6 +241,8 @@ final class Solana {
                 return "SolanaMainnetRPCURL"
             case .devnet:
                 return "SolanaDevnetRPCURL"
+            case .testnet:
+                return "SolanaTestnetRPCURL"
             }
         }
 
@@ -247,6 +252,8 @@ final class Solana {
                 return "https://api.mainnet.solana.com"
             case .devnet:
                 return "https://api.devnet.solana.com"
+            case .testnet:
+                return "https://api.testnet.solana.com"
             }
         }
 
@@ -256,6 +263,8 @@ final class Solana {
                 self = .mainnetBeta
             case "devnet", "solana:devnet":
                 self = .devnet
+            case "testnet", "solana:testnet":
+                self = .testnet
             default:
                 return nil
             }
@@ -267,17 +276,41 @@ final class Solana {
         case unsupportedMultiSignature
         case blockhashNotFound
         case invalidSendOptions
+        case confirmationFailed(signature: String, message: String, code: Int?)
+        case confirmationTimedOut(signature: String)
         case rpcError(message: String, code: Int?)
         case unknown
     }
 
+    enum Commitment: String, Decodable {
+        case processed
+        case confirmed
+        case finalized
+
+        func satisfies(_ requestedCommitment: Commitment) -> Bool {
+            return confirmationRank >= requestedCommitment.confirmationRank
+        }
+
+        private var confirmationRank: Int {
+            switch self {
+            case .processed:
+                return 0
+            case .confirmed:
+                return 1
+            case .finalized:
+                return 2
+            }
+        }
+    }
+
     private enum Method: String {
+        case getSignatureStatuses
         case sendTransaction
     }
 
     private struct SendTransactionResponse: Decodable {
         let result: String?
-        private let error: ResponseError?
+        private let error: RPCResponseError?
 
         var failure: SendTransactionError? {
             guard let error else { return nil }
@@ -285,67 +318,148 @@ final class Solana {
                 return .blockhashNotFound
             }
 
-            return .rpcError(message: error.displayMessage ?? Strings.failedToSend,
-                             code: error.code)
+            return error.sendTransactionFailure
+        }
+    }
+
+    private struct SignatureStatusesResponse: Decodable {
+        private let result: ResultValue?
+        private let error: RPCResponseError?
+
+        var status: SignatureStatus? {
+            guard let values = result?.value, !values.isEmpty else { return nil }
+            return values[0]
         }
 
-        private struct ResponseError: Decodable {
-            let code: Int?
+        var failure: SendTransactionError? {
+            guard let error else { return nil }
+            return error.sendTransactionFailure
+        }
+
+        struct ResultValue: Decodable {
+            let value: [SignatureStatus?]
+        }
+    }
+
+    private struct SignatureStatus: Decodable {
+        let err: RPCErrorValue?
+        let confirmations: Int?
+        let confirmationStatus: Commitment?
+        private let didReturnConfirmations: Bool
+
+        private enum CodingKeys: String, CodingKey {
+            case err, confirmations, confirmationStatus
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            err = try? container.decodeIfPresent(RPCErrorValue.self, forKey: .err)
+            if container.contains(.confirmations) {
+                if (try? container.decodeNil(forKey: .confirmations)) == true {
+                    didReturnConfirmations = true
+                    confirmations = nil
+                } else if let decodedConfirmations = try? container.decode(Int.self, forKey: .confirmations),
+                          decodedConfirmations >= 0 {
+                    didReturnConfirmations = true
+                    confirmations = decodedConfirmations
+                } else {
+                    didReturnConfirmations = false
+                    confirmations = nil
+                }
+            } else {
+                didReturnConfirmations = false
+                confirmations = nil
+            }
+            confirmationStatus = try? container.decodeIfPresent(Commitment.self, forKey: .confirmationStatus)
+        }
+
+        var failure: SendTransactionError? {
+            guard let err else { return nil }
+            return .rpcError(message: err.displayMessage ?? Strings.failedToSend,
+                             code: nil)
+        }
+
+        func satisfies(_ commitment: Commitment) -> Bool {
+            if let confirmationStatus {
+                return confirmationStatus.satisfies(commitment)
+            }
+
+            // Older RPC nodes may omit `confirmationStatus`; a present status
+            // still proves the transaction reached at least processed. Fall
+            // back to legacy `confirmations` for stronger commitments.
+            switch commitment {
+            case .processed:
+                return err == nil
+            case .confirmed:
+                guard didReturnConfirmations else { return false }
+                return confirmations == nil || (confirmations ?? 0) > 0
+            case .finalized:
+                return didReturnConfirmations && confirmations == nil
+            }
+        }
+    }
+
+    private struct RPCResponseError: Decodable {
+        let code: Int?
+        let message: String?
+        let data: ResponseData?
+        private let rawData: RPCErrorValue?
+
+        private enum CodingKeys: String, CodingKey {
+            case code, message, data
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            code = try? container.decodeIfPresent(Int.self, forKey: .code)
+            message = try? container.decodeIfPresent(String.self, forKey: .message)
+            data = try? container.decodeIfPresent(ResponseData.self, forKey: .data)
+            rawData = try? container.decodeIfPresent(RPCErrorValue.self, forKey: .data)
+        }
+
+        var displayMessage: String? {
+            if let message, !message.isEmpty {
+                return message
+            }
+            if let dataMessage = data?.message, !dataMessage.isEmpty {
+                return dataMessage
+            }
+            return rawData?.displayMessage
+        }
+
+        var sendTransactionFailure: SendTransactionError {
+            return .rpcError(message: displayMessage ?? Strings.failedToSend,
+                             code: code)
+        }
+
+        var isBlockhashNotFound: Bool {
+            return contains("BlockhashNotFound") ||
+                contains("blockhash not found")
+        }
+
+        func contains(_ string: String) -> Bool {
+            return message?.containsIgnoringCase(string) == true ||
+                data?.contains(string) == true ||
+                rawData?.contains(string) == true
+        }
+
+        struct ResponseData: Decodable {
+            let err: RPCErrorValue?
             let message: String?
-            let data: ResponseData?
-            private let rawData: RPCErrorValue?
 
             private enum CodingKeys: String, CodingKey {
-                case code, message, data
+                case err, message
             }
 
             init(from decoder: Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
-                code = try? container.decodeIfPresent(Int.self, forKey: .code)
+                err = try? container.decodeIfPresent(RPCErrorValue.self, forKey: .err)
                 message = try? container.decodeIfPresent(String.self, forKey: .message)
-                data = try? container.decodeIfPresent(ResponseData.self, forKey: .data)
-                rawData = try? container.decodeIfPresent(RPCErrorValue.self, forKey: .data)
-            }
-
-            var displayMessage: String? {
-                if let message, !message.isEmpty {
-                    return message
-                }
-                if let dataMessage = data?.message, !dataMessage.isEmpty {
-                    return dataMessage
-                }
-                return nil
-            }
-
-            var isBlockhashNotFound: Bool {
-                return contains("BlockhashNotFound") ||
-                    contains("blockhash not found")
             }
 
             func contains(_ string: String) -> Bool {
                 return message?.containsIgnoringCase(string) == true ||
-                    data?.contains(string) == true ||
-                    rawData?.contains(string) == true
-            }
-
-            struct ResponseData: Decodable {
-                let err: RPCErrorValue?
-                let message: String?
-
-                private enum CodingKeys: String, CodingKey {
-                    case err, message
-                }
-
-                init(from decoder: Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    err = try? container.decodeIfPresent(RPCErrorValue.self, forKey: .err)
-                    message = try? container.decodeIfPresent(String.self, forKey: .message)
-                }
-
-                func contains(_ string: String) -> Bool {
-                    return message?.containsIgnoringCase(string) == true ||
-                        err?.contains(string) == true
-                }
+                    err?.contains(string) == true
             }
         }
     }
@@ -374,6 +488,21 @@ final class Solana {
                 self = .bool(value)
             } else {
                 self = .null
+            }
+        }
+
+        var displayMessage: String? {
+            switch self {
+            case .string(let value):
+                return value.isEmpty ? nil : value
+            case .array(let values):
+                let messages = values.compactMap { $0.displayMessage }
+                return messages.isEmpty ? nil : messages.joined(separator: ", ")
+            case .object(let values):
+                return values["message"]?.displayMessage ??
+                    values["err"]?.displayMessage
+            case .number, .bool, .null:
+                return nil
             }
         }
 
@@ -421,6 +550,7 @@ final class Solana {
     struct PreparedSendOptions {
         let clusterHint: Cluster?
         let rpcOptions: [String: Any]
+        let confirmationCommitment: Commitment?
     }
 
     struct RPCEndpoint {
@@ -481,6 +611,10 @@ final class Solana {
     private let urlSession = URLSession(configuration: .default)
     private let signatureLength = 64
     private let publicKeyLength = 32
+    private let signatureStatusInitialPollInterval: TimeInterval = 0.5
+    private let signatureStatusMaxPollInterval: TimeInterval = 2
+    private let signatureStatusPollBackoffMultiplier: TimeInterval = 1.5
+    private let signatureStatusPollTimeout: TimeInterval = 45
     private static let clusterHintOptionKeys = ["bigWalletCluster", "cluster"]
     private static let allowedPreflightCommitments = Set(["processed", "confirmed", "finalized"])
 
@@ -492,17 +626,26 @@ final class Solana {
         case .failure(let error):
             return .failure(error)
         case .success(let clusterHint):
+            let confirmationCommitment: Commitment?
+            switch confirmationCommitment(from: options) {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let value):
+                confirmationCommitment = value
+            }
+
             guard let rpcOptions = sanitizedRPCOptions(from: options) else {
                 return .failure(.invalidSendOptions)
             }
 
             return .success(PreparedSendOptions(clusterHint: clusterHint,
-                                                rpcOptions: rpcOptions))
+                                                rpcOptions: rpcOptions,
+                                                confirmationCommitment: confirmationCommitment))
         }
     }
 
     private static func clusterHint(from options: [String: Any]) -> Result<Cluster?, SendTransactionError> {
-        var parsedHints = [Cluster]()
+        var parsedHint: Cluster?
         for key in clusterHintOptionKeys {
             guard let value = options[key] else { continue }
             guard let rawValue = value as? String,
@@ -511,14 +654,22 @@ final class Solana {
                 return .failure(.invalidSendOptions)
             }
 
-            parsedHints.append(cluster)
+            if let parsedHint, parsedHint != cluster {
+                return .failure(.invalidSendOptions)
+            }
+            parsedHint = cluster
         }
 
-        guard Set(parsedHints).count <= 1 else {
+        return .success(parsedHint)
+    }
+
+    private static func confirmationCommitment(from options: [String: Any]) -> Result<Commitment?, SendTransactionError> {
+        guard let value = options["commitment"] else { return .success(nil) }
+        guard let rawValue = value as? String,
+              let commitment = Commitment(rawValue: rawValue) else {
             return .failure(.invalidSendOptions)
         }
-
-        return .success(parsedHints.first)
+        return .success(commitment)
     }
 
     private static func sanitizedRPCOptions(from options: [String: Any]) -> [String: Any]? {
@@ -543,6 +694,13 @@ final class Solana {
                     return nil
                 }
                 sanitizedOptions[key] = commitment
+            case "commitment":
+                continue
+            case "mode":
+                guard let mode = value as? String, mode == "serial" else {
+                    return nil
+                }
+                continue
             case "maxRetries", "minContextSlot":
                 guard let intValue = nonNegativeInt(from: value) else {
                     return nil
@@ -620,7 +778,7 @@ final class Solana {
 
     func signAndSendTransaction(preparedSerializedTransaction: PreparedSerializedTransaction,
                                 cluster: Cluster,
-                                options: [String: Any],
+                                sendOptions: PreparedSendOptions,
                                 privateKey: PrivateKey,
                                 completion: @escaping (Result<String, SendTransactionError>) -> Void) {
         switch signedTransactionForSignAndSend(preparedSerializedTransaction: preparedSerializedTransaction,
@@ -628,13 +786,13 @@ final class Solana {
         case .failure(let error):
             completion(.failure(error))
         case .success(let signedTransaction):
-            sendTransaction(signed: signedTransaction, cluster: cluster, options: options, completion: completion)
+            sendTransaction(signed: signedTransaction, cluster: cluster, sendOptions: sendOptions, completion: completion)
         }
     }
 
     func signAndSendTransaction(preparedLegacyTransaction: PreparedLegacySignAndSendTransaction,
                                 cluster: Cluster,
-                                options: [String: Any],
+                                sendOptions: PreparedSendOptions,
                                 privateKey: PrivateKey,
                                 completion: @escaping (Result<String, SendTransactionError>) -> Void) {
         guard let signedData = signatureData(digest: preparedLegacyTransaction.messageData, privateKey: privateKey),
@@ -645,7 +803,7 @@ final class Solana {
             return
         }
 
-        sendTransaction(signed: raw, cluster: cluster, options: options, completion: completion)
+        sendTransaction(signed: raw, cluster: cluster, sendOptions: sendOptions, completion: completion)
     }
 
     func signedTransactionForSignAndSend(preparedSerializedTransaction: PreparedSerializedTransaction,
@@ -735,10 +893,10 @@ final class Solana {
 
     private func sendTransaction(signed: String,
                                  cluster: Cluster,
-                                 options: [String: Any],
+                                 sendOptions: PreparedSendOptions,
                                  completion: @escaping (Result<String, SendTransactionError>) -> Void) {
         var parameters: [Any] = [signed]
-        parameters.append(options)
+        parameters.append(sendOptions.rpcOptions)
 
         performRequest(method: .sendTransaction, cluster: cluster, parameters: parameters) { (response: SendTransactionResponse?) in
             guard let response else {
@@ -747,12 +905,141 @@ final class Solana {
             }
 
             if let result = response.result {
-                completion(.success(result))
+                if let confirmationCommitment = sendOptions.confirmationCommitment {
+                    self.confirmTransaction(signature: result,
+                                            commitment: confirmationCommitment,
+                                            cluster: cluster,
+                                            deadline: Date().addingTimeInterval(self.signatureStatusPollTimeout),
+                                            nextPollInterval: self.signatureStatusInitialPollInterval,
+                                            lastStatusFailure: nil,
+                                            completion: completion)
+                } else {
+                    completion(.success(result))
+                }
             } else if let failure = response.failure {
                 completion(.failure(failure))
             } else {
                 completion(.failure(.unknown))
             }
+        }
+    }
+
+    private func confirmTransaction(signature: String,
+                                    commitment: Commitment,
+                                    cluster: Cluster,
+                                    deadline: Date,
+                                    nextPollInterval: TimeInterval,
+                                    lastStatusFailure: SendTransactionError?,
+                                    completion: @escaping (Result<String, SendTransactionError>) -> Void) {
+        guard Date() <= deadline else {
+            completion(.failure(lastStatusFailure ?? .confirmationTimedOut(signature: signature)))
+            return
+        }
+
+        let parameters: [Any] = [
+            [signature],
+            ["searchTransactionHistory": true],
+        ]
+        performRequest(method: .getSignatureStatuses,
+                       cluster: cluster,
+                       parameters: parameters) { (response: SignatureStatusesResponse?) in
+            guard let response else {
+                self.scheduleConfirmationRetry(signature: signature,
+                                               commitment: commitment,
+                                               cluster: cluster,
+                                               deadline: deadline,
+                                               nextPollInterval: nextPollInterval,
+                                               lastStatusFailure: lastStatusFailure,
+                                               completion: completion)
+                return
+            }
+
+            if let failure = response.failure {
+                self.scheduleConfirmationRetry(signature: signature,
+                                               commitment: commitment,
+                                               cluster: cluster,
+                                               deadline: deadline,
+                                               nextPollInterval: nextPollInterval,
+                                               lastStatusFailure: self.confirmationFailure(signature: signature,
+                                                                                          failure: failure),
+                                               completion: completion)
+                return
+            }
+
+            guard let status = response.status else {
+                self.scheduleConfirmationRetry(signature: signature,
+                                               commitment: commitment,
+                                               cluster: cluster,
+                                               deadline: deadline,
+                                               nextPollInterval: nextPollInterval,
+                                               lastStatusFailure: nil,
+                                               completion: completion)
+                return
+            }
+
+            if let failure = status.failure {
+                completion(.failure(self.confirmationFailure(signature: signature, failure: failure)))
+                return
+            }
+
+            if status.satisfies(commitment) {
+                completion(.success(signature))
+                return
+            }
+
+            self.scheduleConfirmationRetry(signature: signature,
+                                           commitment: commitment,
+                                           cluster: cluster,
+                                           deadline: deadline,
+                                           nextPollInterval: nextPollInterval,
+                                           lastStatusFailure: nil,
+                                           completion: completion)
+        }
+    }
+
+    private func scheduleConfirmationRetry(signature: String,
+                                           commitment: Commitment,
+                                           cluster: Cluster,
+                                           deadline: Date,
+                                           nextPollInterval: TimeInterval,
+                                           lastStatusFailure: SendTransactionError?,
+                                           completion: @escaping (Result<String, SendTransactionError>) -> Void) {
+        let remainingTime = deadline.timeIntervalSinceNow
+        guard remainingTime > 0 else {
+            completion(.failure(lastStatusFailure ?? .confirmationTimedOut(signature: signature)))
+            return
+        }
+
+        let delay = min(nextPollInterval, remainingTime)
+        let followingPollInterval = min(nextPollInterval * signatureStatusPollBackoffMultiplier,
+                                        signatureStatusMaxPollInterval)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            self.confirmTransaction(signature: signature,
+                                    commitment: commitment,
+                                    cluster: cluster,
+                                    deadline: deadline,
+                                    nextPollInterval: followingPollInterval,
+                                    lastStatusFailure: lastStatusFailure,
+                                    completion: completion)
+        }
+    }
+
+    private func confirmationFailure(signature: String, failure: SendTransactionError) -> SendTransactionError {
+        switch failure {
+        case .rpcError(let message, let code):
+            return .confirmationFailed(signature: signature,
+                                       message: message,
+                                       code: code)
+        case .confirmationFailed, .confirmationTimedOut:
+            return failure
+        case .blockhashNotFound:
+            return .confirmationFailed(signature: signature,
+                                       message: Strings.solanaBlockhashNotFound,
+                                       code: -32003)
+        case .invalidMessage, .invalidSendOptions, .unsupportedMultiSignature, .unknown:
+            return .confirmationFailed(signature: signature,
+                                       message: Strings.failedToSend,
+                                       code: nil)
         }
     }
 
