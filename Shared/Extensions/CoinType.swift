@@ -23,12 +23,8 @@ extension CoinType {
             return [(Strings.viewOnSolanaExplorer, URL(string: "https://explorer.solana.com/address/\(address)")!)]
         case .ethereum:
             return [
-                (Strings.viewOn + " " + "Etherscan", URL(string: "https://etherscan.io/address/\(address)")!),
-                (Strings.viewOn + " " + "Superscan", URL(string: "https://thesuperscan.io/address/\(address)")!),
-                (Strings.viewOn + " " + "Blockscan", URL(string: "https://blockscan.com/address/\(address)")!)
+                (Strings.viewOn + " " + "Etherscan", URL(string: "https://etherscan.io/address/\(address)")!)
             ]
-        case .near:
-            return [(Strings.viewOnNearExplorer, URL(string: "https://explorer.near.org/accounts/\(address)")!)]
         default:
             fatalError(Strings.somethingWentWrong)
         }
