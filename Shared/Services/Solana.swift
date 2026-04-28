@@ -626,12 +626,12 @@ final class Solana {
         case .failure(let error):
             return .failure(error)
         case .success(let clusterHint):
-            let confirmationCommitment: Commitment?
+            let parsedConfirmationCommitment: Commitment?
             switch confirmationCommitment(from: options) {
             case .failure(let error):
                 return .failure(error)
             case .success(let value):
-                confirmationCommitment = value
+                parsedConfirmationCommitment = value
             }
 
             guard let rpcOptions = sanitizedRPCOptions(from: options) else {
@@ -640,7 +640,7 @@ final class Solana {
 
             return .success(PreparedSendOptions(clusterHint: clusterHint,
                                                 rpcOptions: rpcOptions,
-                                                confirmationCommitment: confirmationCommitment))
+                                                confirmationCommitment: parsedConfirmationCommitment))
         }
     }
 
