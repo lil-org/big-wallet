@@ -91,8 +91,7 @@ private enum SolanaAccountIcon {
 
     private static func makeImage(seed: String, logo: PlatformSpecificImage) -> PlatformSpecificImage {
         #if os(iOS) || os(visionOS)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
+        let format = UIGraphicsImageRendererFormat.default()
 
         return UIGraphicsImageRenderer(size: canvasSize, format: format).image { _ in
             backgroundColor(seed: seed).setFill()
