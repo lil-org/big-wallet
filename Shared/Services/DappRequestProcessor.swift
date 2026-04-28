@@ -186,7 +186,8 @@ struct DappRequestProcessor {
             decodedMessages.append(decodedMessage)
         }
 
-        let displayMessage = rawSolanaTransactionApprovalMessage(messages: messages)
+        let displayMessage = solanaTransactionApprovalMessage(messages: messages,
+                                                              decodedMessages: decodedMessages)
         return solanaApprovalAction(request: request,
                                     wallet: wallet,
                                     account: account,
@@ -244,8 +245,8 @@ struct DappRequestProcessor {
                                         wallet: wallet,
                                         account: account,
                                         subject: .approveTransaction,
-                                        meta: approvalMessage(for: solanaRequest,
-                                                              canonicalMessage: preparedLegacyTransaction.approvalMessage),
+                                        meta: solanaTransactionApprovalMessage(message: preparedLegacyTransaction.approvalMessage,
+                                                                               messageData: preparedLegacyTransaction.messageData),
                                         clusterSelection: clusterSelection,
                                         completion: completion) { selectedCluster, privateKey in
                 signAndSendSolanaTransaction(request: request,
@@ -312,8 +313,8 @@ struct DappRequestProcessor {
 
             return PreparedSolanaSigningPayload(messageData: messageData,
                                                 approvalSubject: .approveTransaction,
-                                                approvalMessage: approvalMessage(for: solanaRequest,
-                                                                                 canonicalMessage: canonicalMessage))
+                                                approvalMessage: solanaTransactionApprovalMessage(message: canonicalMessage,
+                                                                                                  messageData: messageData))
         case .connect, .signAllTransactions, .signAndSendTransaction:
             respond(to: request, solanaError: .internalError, completion: completion)
             return nil
@@ -338,8 +339,8 @@ struct DappRequestProcessor {
                                         wallet: wallet,
                                         account: account,
                                         subject: .approveTransaction,
-                                        meta: approvalMessage(for: solanaRequest,
-                                                              canonicalMessage: preparedSerializedTransaction.approvalMessage),
+                                        meta: solanaTransactionApprovalMessage(message: preparedSerializedTransaction.approvalMessage,
+                                                                               messageData: preparedSerializedTransaction.messageData),
                                         clusterSelection: clusterSelection,
                                         completion: completion) { selectedCluster, privateKey in
                 signAndSendSolanaTransaction(request: request,
@@ -424,12 +425,18 @@ struct DappRequestProcessor {
 
             return messageText
         } else {
-            return rawSolanaTransactionApprovalMessage(messages: [canonicalMessage])
+            return SolanaTransactionSummaryFormatter.rawApprovalMessage(messages: [canonicalMessage])
         }
     }
 
-    private static func rawSolanaTransactionApprovalMessage(messages: [String]) -> String {
-        return Strings.rawSolanaTransactionWarning + "\n\n" + Strings.data + ":\n\n" + messages.joined(separator: "\n\n")
+    private static func solanaTransactionApprovalMessage(message: String, messageData: Data) -> String {
+        return SolanaTransactionSummaryFormatter.approvalMessage(messageData: messageData,
+                                                                 encodedMessages: [message])
+    }
+
+    private static func solanaTransactionApprovalMessage(messages: [String], decodedMessages: [Data]) -> String {
+        return SolanaTransactionSummaryFormatter.approvalMessage(encodedMessages: messages,
+                                                                 messageDataList: decodedMessages)
     }
 
     private static func solanaApprovalAction(request: SafariRequest,
@@ -535,7 +542,7 @@ struct DappRequestProcessor {
         }
         return .approveMessage(action)
     }
-    
+
     private static func process(request: SafariRequest, ethereumRequest: SafariRequest.Ethereum, completion: @escaping (String?) -> Void) -> DappRequestAction {
         let peerMeta = request.peerMeta
         lazy var walletAndAccount = walletsManager.getWalletAndAccount(coin: .ethereum, address: ethereumRequest.address)
