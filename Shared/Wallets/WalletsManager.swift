@@ -194,10 +194,38 @@ final class WalletsManager {
         return wallet
     }
 
-    func exportPrivateKey(wallet: WalletContainer) throws -> Data {
+    func exportPrivateKey(wallet: WalletContainer, account: Account? = nil) throws -> String {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
-        guard let key = wallet.key.decryptPrivateKey(password: Data(password.utf8)) else { throw KeyStore.Error.invalidPassword }
-        return key
+        guard let account = account ?? wallet.accounts.first else { throw KeyStore.Error.accountNotFound }
+        let privateKey = try wallet.privateKey(password: password, account: account)
+        return Self.privateKeyExportString(privateKey: privateKey, coin: account.coin)
+    }
+
+    static func privateKeyExportString(privateKey: PrivateKey, coin: CoinType) -> String {
+        switch coin {
+        case .solana:
+            return solanaSecretKeyExportString(privateKey: privateKey)
+        default:
+            return hexPrivateKeyExportString(privateKey: privateKey)
+        }
+    }
+
+    private static func solanaSecretKeyExportString(privateKey: PrivateKey) -> String {
+        var secretKey = privateKey.data
+        defer { secretKey.resetBytes(in: 0..<secretKey.count) }
+
+        if secretKey.count == 32 {
+            secretKey.append(privateKey.getPublicKey(coinType: .solana).data)
+        }
+
+        return Base58.encodeNoCheck(data: secretKey)
+    }
+
+    private static func hexPrivateKeyExportString(privateKey: PrivateKey) -> String {
+        var privateKeyData = privateKey.data
+        defer { privateKeyData.resetBytes(in: 0..<privateKeyData.count) }
+
+        return privateKeyData.hexString
     }
 
     func exportMnemonic(wallet: WalletContainer) throws -> String {

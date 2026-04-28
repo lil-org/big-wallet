@@ -475,16 +475,13 @@ class AccountsListViewController: NSViewController {
         let secret: String
         let showingMnemonic = wallet.isMnemonic && specificAccount == nil
         
-        if let account = specificAccount, wallet.isMnemonic {
-            if let hex = walletsManager.getPrivateKey(wallet: wallet, account: account)?.data.hexString {
-                secret = hex
-            } else {
-                return
-            }
+        if let account = specificAccount {
+            guard let privateKeyString = try? walletsManager.exportPrivateKey(wallet: wallet, account: account) else { return }
+            secret = privateKeyString
         } else if wallet.isMnemonic, let mnemonicString = try? walletsManager.exportMnemonic(wallet: wallet) {
             secret = mnemonicString
-        } else if let data = try? walletsManager.exportPrivateKey(wallet: wallet) {
-            secret = data.hexString
+        } else if let privateKeyString = try? walletsManager.exportPrivateKey(wallet: wallet) {
+            secret = privateKeyString
         } else {
             return
         }
