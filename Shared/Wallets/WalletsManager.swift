@@ -15,9 +15,16 @@ final class WalletsManager {
     enum InputValidationResult {
         case valid, invalid, requiresPassword
     }
+
+    struct PrivateKeyImport {
+        let privateKey: PrivateKey
+        let coin: CoinType
+    }
     
     static let shared = WalletsManager()
     private static let previewAccountsPageSize = 11
+    private static let solanaBase58SecretKeyLengthRange = 32...88
+    private static let maxSolanaSecretKeyByteArrayStringLength = 1024
     private let keychain = Keychain.shared
     private let defaultCoin = CoinType.ethereum
     private let defaultMnemonicCoinDerivations: [(coin: CoinType, derivation: Derivation)] = [
@@ -36,8 +43,8 @@ final class WalletsManager {
         let trimmedInput = input.singleSpaced
         if Mnemonic.isValid(mnemonic: trimmedInput) {
             return .valid
-        } else if let data = Data(hexString: trimmedInput) {
-            return PrivateKey.isValid(data: data, curve: defaultCoin.curve) ? .valid : .invalid
+        } else if Self.privateKeyImport(from: trimmedInput) != nil {
+            return .valid
         } else {
             return input.maybeJSON ? .requiresPassword : .invalid
         }
@@ -58,8 +65,8 @@ final class WalletsManager {
         let trimmedInput = input.singleSpaced
         if Mnemonic.isValid(mnemonic: trimmedInput) {
             return try importMnemonic(trimmedInput, name: name, encryptPassword: password)
-        } else if let data = Data(hexString: trimmedInput), PrivateKey.isValid(data: data, curve: defaultCoin.curve), let privateKey = PrivateKey(data: data) {
-            return try importPrivateKey(privateKey, name: name, password: password, coin: defaultCoin, onlyToKeychain: false)
+        } else if let privateKeyImport = Self.privateKeyImport(from: trimmedInput) {
+            return try importPrivateKey(privateKeyImport.privateKey, name: name, password: password, coin: privateKeyImport.coin, onlyToKeychain: false)
         } else if input.maybeJSON, let inputPassword = inputPassword, let json = input.data(using: .utf8) {
             return try importJSON(json, name: name, password: inputPassword, newPassword: password, coin: defaultCoin, onlyToKeychain: false)
         } else {
@@ -210,6 +217,90 @@ final class WalletsManager {
         }
     }
 
+    static func privateKeyImport(from input: String) -> PrivateKeyImport? {
+        if let ethereumPrivateKey = ethereumPrivateKeyImport(from: input) {
+            return PrivateKeyImport(privateKey: ethereumPrivateKey, coin: .ethereum)
+        }
+
+        if let solanaPrivateKey = solanaPrivateKeyImport(from: input) {
+            return PrivateKeyImport(privateKey: solanaPrivateKey, coin: .solana)
+        }
+
+        return nil
+    }
+
+    private static func ethereumPrivateKeyImport(from input: String) -> PrivateKey? {
+        guard let data = Data(hexString: input),
+              PrivateKey.isValid(data: data, curve: CoinType.ethereum.curve)
+        else { return nil }
+
+        var privateKeyData = data
+        defer { privateKeyData.resetBytes(in: 0..<privateKeyData.count) }
+        return PrivateKey(data: privateKeyData)
+    }
+
+    private static func solanaPrivateKeyImport(from input: String) -> PrivateKey? {
+        if solanaBase58SecretKeyLengthRange.contains(input.count),
+           let secretKey = Base58.decodeNoCheck(string: input) {
+            return solanaPrivateKeyImport(secretKey: secretKey)
+        }
+
+        if let secretKey = solanaSecretKeyData(fromByteArrayString: input) {
+            return solanaPrivateKeyImport(secretKey: secretKey)
+        }
+
+        return nil
+    }
+
+    private static func solanaSecretKeyData(fromByteArrayString input: String) -> Data? {
+        guard input.hasPrefix("["),
+              input.hasSuffix("]"),
+              input.count <= maxSolanaSecretKeyByteArrayStringLength,
+              let inputData = input.data(using: .utf8),
+              let jsonObject = try? JSONSerialization.jsonObject(with: inputData),
+              let values = jsonObject as? [Any],
+              values.count == 32 || values.count == 64
+        else { return nil }
+
+        var secretKey = Data()
+        secretKey.reserveCapacity(values.count)
+
+        for value in values {
+            guard !(value is Bool), let number = value as? NSNumber else { return nil }
+            let byteValue = number.doubleValue
+            guard byteValue.rounded() == byteValue,
+                  byteValue >= Double(UInt8.min),
+                  byteValue <= Double(UInt8.max)
+            else { return nil }
+            secretKey.append(UInt8(byteValue))
+        }
+
+        return secretKey
+    }
+
+    private static func solanaPrivateKeyImport(secretKey: Data) -> PrivateKey? {
+        var secretKeyData = secretKey
+        defer { secretKeyData.resetBytes(in: 0..<secretKeyData.count) }
+
+        switch secretKeyData.count {
+        case 32:
+            guard PrivateKey.isValid(data: secretKeyData, curve: CoinType.solana.curve) else { return nil }
+            return PrivateKey(data: secretKeyData)
+        case 64:
+            var privateKeyData = Data(secretKeyData.prefix(32))
+            defer { privateKeyData.resetBytes(in: 0..<privateKeyData.count) }
+            guard PrivateKey.isValid(data: privateKeyData, curve: CoinType.solana.curve),
+                  let privateKey = PrivateKey(data: privateKeyData)
+            else { return nil }
+
+            let expectedPublicKey = privateKey.getPublicKey(coinType: .solana).data
+            let exportedPublicKey = Data(secretKeyData.suffix(32))
+            return exportedPublicKey == expectedPublicKey ? privateKey : nil
+        default:
+            return nil
+        }
+    }
+
     private static func solanaSecretKeyExportString(privateKey: PrivateKey) -> String {
         var secretKey = privateKey.data
         defer { secretKey.resetBytes(in: 0..<secretKey.count) }
@@ -292,17 +383,22 @@ final class WalletsManager {
         guard var privateKeyData = wallet.key.decryptPrivateKey(password: Data(password.utf8)) else { throw KeyStore.Error.invalidPassword }
         defer { privateKeyData.resetBytes(in: 0..<privateKeyData.count) }
         let enabledAccounts = wallet.accounts
+        let reimportedCoin: CoinType
         
         if let mnemonic = checkMnemonic(privateKeyData),
            let key = StoredKey.importHDWallet(mnemonic: mnemonic, name: newName, password: Data(newPassword.utf8), coin: defaultCoin) {
-            wallets[index].key = key
-        } else if let key = StoredKey.importPrivateKey(privateKey: privateKeyData, name: newName, password: Data(newPassword.utf8), coin: defaultCoin) {
+            reimportedCoin = defaultCoin
             wallets[index].key = key
         } else {
-            throw KeyStore.Error.invalidKey
+            let privateKeyCoin = enabledAccounts.first?.coin ?? defaultCoin
+            guard let key = StoredKey.importPrivateKey(privateKey: privateKeyData, name: newName, password: Data(newPassword.utf8), coin: privateKeyCoin) else {
+                throw KeyStore.Error.invalidKey
+            }
+            reimportedCoin = privateKeyCoin
+            wallets[index].key = key
         }
         
-        wallets[index].key.removeAccountForCoin(coin: defaultCoin)
+        wallets[index].key.removeAccountForCoin(coin: reimportedCoin)
         for account in enabledAccounts {
             wallets[index].key.addAccountDerivation(address: account.address,
                                                     coin: account.coin,
