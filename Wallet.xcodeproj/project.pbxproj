@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -271,6 +271,7 @@
 		2CB8BDA02C1F6ACE006010CC /* StringTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB8BD9F2C1F6ACE006010CC /* StringTask.swift */; };
 		2CB8BDA32C1F6B16006010CC /* TranslateStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB8BDA22C1F6B16006010CC /* TranslateStrings.swift */; };
 		2CB8BDA52C1F6B24006010CC /* TranslateMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB8BDA42C1F6B24006010CC /* TranslateMetadata.swift */; };
+		2CB9B5662FA24A1F00F094FB /* Big Wallet Ambient.app in CopyFiles */ = {isa = PBXBuildFile; fileRef = 2CB9B54F2FA23F0600F094FB /* Big Wallet Ambient.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2CC0CDBE2692027E0072922A /* PriceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC0CDBD2692027E0072922A /* PriceService.swift */; };
 		2CC6EF0D275E64810040CC62 /* UIViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC6EF0C275E64810040CC62 /* UIViewController.swift */; };
 		2CC79DF82AFD4BD6002B5A2D /* TransactionInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC79DF72AFD4BD6002B5A2D /* TransactionInspector.swift */; };
@@ -401,6 +402,13 @@
 			remoteGlobalIDString = 2C5FF96E26C84F7B00B32ACC;
 			remoteInfo = "Wallet iOS";
 		};
+		2CB9B55F2FA240DE00F094FB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2C1995342674C4B900A8E370 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2CB9B54E2FA23F0600F094FB;
+			remoteInfo = "Big Wallet Ambient";
+		};
 		2CCEB84327594E2A00768473 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 2C1995342674C4B900A8E370 /* Project object */;
@@ -455,6 +463,16 @@
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 1;
+		};
+		2CB9B5652FA24A0A00F094FB /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Helpers;
+			dstSubfolderSpec = 1;
+			files = (
+				2CB9B5662FA24A1F00F094FB /* Big Wallet Ambient.app in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 		2CCEB84627594E2A00768473 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -607,6 +625,7 @@
 		2CB8BD9F2C1F6ACE006010CC /* StringTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringTask.swift; sourceTree = "<group>"; };
 		2CB8BDA22C1F6B16006010CC /* TranslateStrings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslateStrings.swift; sourceTree = "<group>"; };
 		2CB8BDA42C1F6B24006010CC /* TranslateMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslateMetadata.swift; sourceTree = "<group>"; };
+		2CB9B54F2FA23F0600F094FB /* Big Wallet Ambient.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Big Wallet Ambient.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CC0CDBD2692027E0072922A /* PriceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceService.swift; sourceTree = "<group>"; };
 		2CC6EF0C275E64810040CC62 /* UIViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIViewController.swift; sourceTree = "<group>"; };
 		2CC79DF72AFD4BD6002B5A2D /* TransactionInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionInspector.swift; sourceTree = "<group>"; };
@@ -1048,6 +1067,10 @@
 		FBC77052BBEC4F4C7E46D88F /* Pods_Tests_macOS.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Tests_macOS.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		2CB9B5502FA23F0600F094FB /* Big Wallet Ambient */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = "Big Wallet Ambient"; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
 /* Begin PBXFrameworksBuildPhase section */
 		2C09CB9C273979C1009AD39B /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
@@ -1099,6 +1122,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				34A5E03D86150F325FB210C4 /* Pods_Tests_iOS.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2CB9B54C2FA23F0600F094FB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1208,6 +1238,7 @@
 				2CF4294F2C1DBE7400AD303A /* app_store */,
 				2C622BC22BF3C52F0003B932 /* translate */,
 				2CF965C42BF4D778001E9D1B /* fastlane */,
+				2CB9B5502FA23F0600F094FB /* Big Wallet Ambient */,
 				2C19953D2674C4B900A8E370 /* Products */,
 				AA97AE0C21DC8732F06C98F1 /* Pods */,
 				D66A976372772850C3C45413 /* Frameworks */,
@@ -1228,6 +1259,7 @@
 				2C17BDCA2D3D007E0015C58B /* Big Wallet.app */,
 				2CF9B1092D526F4D00B5CE82 /* Tests visionOS.xctest */,
 				2C60546F2D529A9A00779570 /* Safari visionOS.appex */,
+				2CB9B54F2FA23F0600F094FB /* Big Wallet Ambient.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -2529,11 +2561,13 @@
 				2C19953A2674C4B900A8E370 /* Resources */,
 				2C09CBB8273979C1009AD39B /* Embed Foundation Extensions */,
 				C60644BC8ED1D8C789C269E9 /* [CP] Embed Pods Frameworks */,
+				2CB9B5652FA24A0A00F094FB /* CopyFiles */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				2C09CBB7273979C1009AD39B /* PBXTargetDependency */,
+				2CB9B5602FA240DE00F094FB /* PBXTargetDependency */,
 			);
 			name = "Big Wallet";
 			productName = "Ecrypted Ink";
@@ -2615,6 +2649,28 @@
 			productReference = 2C8612512B76BDDC00B22794 /* Tests iOS.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		2CB9B54E2FA23F0600F094FB /* Big Wallet Ambient */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2CB9B55C2FA23F0700F094FB /* Build configuration list for PBXNativeTarget "Big Wallet Ambient" */;
+			buildPhases = (
+				2CB9B54B2FA23F0600F094FB /* Sources */,
+				2CB9B54C2FA23F0600F094FB /* Frameworks */,
+				2CB9B54D2FA23F0600F094FB /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2CB9B5502FA23F0600F094FB /* Big Wallet Ambient */,
+			);
+			name = "Big Wallet Ambient";
+			packageProductDependencies = (
+			);
+			productName = "Big Wallet Ambient";
+			productReference = 2CB9B54F2FA23F0600F094FB /* Big Wallet Ambient.app */;
+			productType = "com.apple.product-type.application";
+		};
 		2CCEB82C27594E2A00768473 /* Safari iOS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2CCEB84927594E2A00768473 /* Build configuration list for PBXNativeTarget "Safari iOS" */;
@@ -2694,7 +2750,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastSwiftUpdateCheck = 1620;
+				LastSwiftUpdateCheck = 2640;
 				LastUpgradeCheck = 1630;
 				TargetAttributes = {
 					2C09CB9E273979C1009AD39B = {
@@ -2718,6 +2774,9 @@
 					2C8612502B76BDDC00B22794 = {
 						CreatedOnToolsVersion = 15.2;
 						TestTargetID = 2C5FF96E26C84F7B00B32ACC;
+					};
+					2CB9B54E2FA23F0600F094FB = {
+						CreatedOnToolsVersion = 26.4.1;
 					};
 					2CCEB82C27594E2A00768473 = {
 						CreatedOnToolsVersion = 13.1;
@@ -2782,6 +2841,7 @@
 			projectRoot = "";
 			targets = (
 				2C19953B2674C4B900A8E370 /* Big Wallet */,
+				2CB9B54E2FA23F0600F094FB /* Big Wallet Ambient */,
 				2C5FF96E26C84F7B00B32ACC /* Big Wallet iOS */,
 				2C17BDC92D3D007E0015C58B /* Big Wallet visionOS */,
 				2C09CB9E273979C1009AD39B /* Safari macOS */,
@@ -2880,6 +2940,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		2C86124F2B76BDDC00B22794 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2CB9B54D2FA23F0600F094FB /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -3118,9 +3185,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Big Wallet visionOS/Pods-Big Wallet visionOS-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Big Wallet visionOS/Pods-Big Wallet visionOS-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -3135,9 +3206,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Big Wallet/Pods-Big Wallet-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Big Wallet/Pods-Big Wallet-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -3152,9 +3227,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Big Wallet iOS/Pods-Big Wallet iOS-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Big Wallet iOS/Pods-Big Wallet iOS-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -3493,6 +3572,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2CB9B54B2FA23F0600F094FB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2CCEB82927594E2A00768473 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -3565,6 +3651,11 @@
 			isa = PBXTargetDependency;
 			target = 2C5FF96E26C84F7B00B32ACC /* Big Wallet iOS */;
 			targetProxy = 2C8612552B76BDDC00B22794 /* PBXContainerItemProxy */;
+		};
+		2CB9B5602FA240DE00F094FB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2CB9B54E2FA23F0600F094FB /* Big Wallet Ambient */;
+			targetProxy = 2CB9B55F2FA240DE00F094FB /* PBXContainerItemProxy */;
 		};
 		2CCEB84427594E2A00768473 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -4190,6 +4281,115 @@
 			};
 			name = Release;
 		};
+		2CB9B55A2FA23F0700F094FB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_ENTITLEMENTS = "Big Wallet Ambient/Big Wallet Ambient.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 136;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Big-Wallet-Ambient-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet Ambient";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.87;
+				PRODUCT_BUNDLE_IDENTIFIER = org.lil.wallet.ambient;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		2CB9B55B2FA23F0700F094FB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_ENTITLEMENTS = "Big Wallet Ambient/Big Wallet Ambient.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 136;
+				DEVELOPMENT_TEAM = 8DXC3N7E7P;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Big-Wallet-Ambient-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Big Wallet Ambient";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.87;
+				PRODUCT_BUNDLE_IDENTIFIER = org.lil.wallet.ambient;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		2CCEB84727594E2A00768473 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -4478,6 +4678,15 @@
 			buildConfigurations = (
 				2C8612582B76BDDC00B22794 /* Debug */,
 				2C8612592B76BDDC00B22794 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2CB9B55C2FA23F0700F094FB /* Build configuration list for PBXNativeTarget "Big Wallet Ambient" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2CB9B55A2FA23F0700F094FB /* Debug */,
+				2CB9B55B2FA23F0700F094FB /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
