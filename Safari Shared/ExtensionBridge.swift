@@ -12,10 +12,12 @@ struct ExtensionBridge {
     
     private static var initiatedRequests: Set<Int> {
         get {
-            Set(defaults?.array(forKey: "initiatedRequests") as? [Int] ?? [])
+            SharedDefaults.synchronize()
+            return Set(defaults?.array(forKey: "initiatedRequests") as? [Int] ?? [])
         }
         set {
             defaults?.set(Array(newValue), forKey: "initiatedRequests")
+            SharedDefaults.synchronize()
         }
     }
     
@@ -31,9 +33,14 @@ struct ExtensionBridge {
             return false
         }
     }
+
+    static func hasPendingRequest(id: Int) -> Bool {
+        return initiatedRequests.contains(id)
+    }
     
     static func respond(response: ResponseToExtension) {
         defaults?.set(response.json, forKey: key(id: response.id))
+        SharedDefaults.synchronize()
     }
     
     static func removeRequest(id: Int) {
@@ -43,10 +50,12 @@ struct ExtensionBridge {
     static func removeResponse(id: Int) {
         let key = key(id: id)
         defaults?.removeObject(forKey: key)
+        SharedDefaults.synchronize()
     }
     
     static func getResponse(id: Int) -> [String: AnyHashable]? {
         let key = key(id: id)
+        SharedDefaults.synchronize()
         return defaults?.value(forKey: key) as? [String: AnyHashable]
     }
     

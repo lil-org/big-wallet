@@ -1,6 +1,7 @@
 // ∅ 2026 lil org
 
 import Cocoa
+import Kingfisher
 import WalletCore
 
 class ApproveViewController: NSViewController {

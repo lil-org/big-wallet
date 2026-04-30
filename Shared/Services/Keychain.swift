@@ -54,6 +54,11 @@ struct Keychain {
         guard let data = password.data(using: .utf8) else { return }
         save(data: data, key: .password)
     }
+
+    func createPasswordIfMissing(_ password: String) -> Bool {
+        guard let data = password.data(using: .utf8) else { return false }
+        return saveIfMissing(data: data, key: .password)
+    }
     
     // MARK: - WalletCore
     
@@ -102,15 +107,24 @@ struct Keychain {
     }
     
     private func save(data: Data, key: ItemKey) {
-        let query: [String: Any] = [
+        let query = saveQuery(data: data, key: key)
+        SecItemDelete(query as CFDictionary)
+        SecItemAdd(query as CFDictionary, nil)
+    }
+
+    private func saveIfMissing(data: Data, key: ItemKey) -> Bool {
+        let query = saveQuery(data: data, key: key)
+        return SecItemAdd(query as CFDictionary, nil) == errSecSuccess
+    }
+
+    private func saveQuery(data: Data, key: ItemKey) -> [String: Any] {
+        return [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key.stringValue,
             kSecValueData as String: data,
             kSecAttrAccessGroup as String: accessGroup,
             kSecUseDataProtectionKeychain as String: true
         ]
-        SecItemDelete(query as CFDictionary)
-        SecItemAdd(query as CFDictionary, nil)
     }
     
     private func allStoredItemsKeys() -> [String] {

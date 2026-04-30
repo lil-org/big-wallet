@@ -1,6 +1,7 @@
 // ∅ 2026 lil org
 
 import Cocoa
+import Kingfisher
 import WalletCore
 
 class AccountsListViewController: NSViewController {
@@ -472,15 +473,19 @@ class AccountsListViewController: NSViewController {
     }
     
     private func showKey(wallet: WalletContainer, specificAccount: Account?) {
+        guard let currentWallet = walletsManager.currentWallet(id: wallet.id) else { return }
+
         let secret: String
-        let showingMnemonic = wallet.isMnemonic && specificAccount == nil
+        let showingMnemonic = currentWallet.isMnemonic && specificAccount == nil
         
         if let account = specificAccount {
-            guard let privateKeyString = try? walletsManager.exportPrivateKey(wallet: wallet, account: account) else { return }
+            guard currentWallet.hasAccountMatching(account),
+                  let privateKeyString = try? walletsManager.exportPrivateKey(wallet: currentWallet, account: account)
+            else { return }
             secret = privateKeyString
-        } else if wallet.isMnemonic, let mnemonicString = try? walletsManager.exportMnemonic(wallet: wallet) {
+        } else if currentWallet.isMnemonic, let mnemonicString = try? walletsManager.exportMnemonic(wallet: currentWallet) {
             secret = mnemonicString
-        } else if let privateKeyString = try? walletsManager.exportPrivateKey(wallet: wallet) {
+        } else if let privateKeyString = try? walletsManager.exportPrivateKey(wallet: currentWallet) {
             secret = privateKeyString
         } else {
             return

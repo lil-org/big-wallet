@@ -88,9 +88,7 @@ struct Window {
     private static func closeAll() {
         isClosingAllWindows = true
         NSApplication.shared.windows.forEach { window in
-            if window.className != "NSStatusBarWindow" {
-                window.close()
-            }
+            window.close()
         }
         isClosingAllWindows = false
     }

@@ -3,15 +3,7 @@
 import Cocoa
 
 class Alert: NSAlert {
-    
-    override func runModal() -> NSApplication.ModalResponse {
-        defer {
-            Agent.shared.statusBarButtonIsBlocked = false
-        }
-        Agent.shared.statusBarButtonIsBlocked = true
-        return super.runModal()
-    }
-    
+
     static func showWithMessage(_ message: String, style: NSAlert.Style) {
         let alert = Alert()
         alert.messageText = message

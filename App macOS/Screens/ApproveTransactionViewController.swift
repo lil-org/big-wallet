@@ -58,7 +58,14 @@ class ApproveTransactionViewController: NSViewController {
         okButton.title = Strings.ok
         cancelButton.title = Strings.cancel
         
-        priceService.update()
+        priceService.update { [weak self] in
+            self?.updateTextView()
+        }
+        if chain.isEthMainnet {
+            gasService.update { [weak self] in
+                self?.updateInterface()
+            }
+        }
         titleLabel.stringValue = Strings.sendTransaction
         setSpeedConfigurationViews(enabled: false)
         updateInterface()

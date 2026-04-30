@@ -4,14 +4,55 @@
 import Foundation
 import WalletCore
 
-final class WalletsManager {
+struct WalletStoreSync {
+
+    private static let senderProcessId = String(ProcessInfo.processInfo.processIdentifier)
+
+    static func postLocalChange() {
+        NotificationCenter.default.post(name: .walletsChanged, object: nil)
+    }
+
+    static func postLocalAndExternalChange(defaultsAlreadySynchronized: Bool = false) {
+        if !defaultsAlreadySynchronized {
+            Defaults.synchronize()
+        }
+        postLocalChange()
+        postExternalChange()
+    }
+
+#if os(macOS)
+    static func startObserving(_ observer: Any, selector: Selector) {
+        DistributedNotificationCenter.default().addObserver(observer,
+                                                            selector: selector,
+                                                            name: .walletStoreChanged,
+                                                            object: nil,
+                                                            suspensionBehavior: .deliverImmediately)
+    }
+
+    static func isExternalChange(_ notification: Notification) -> Bool {
+        guard let sender = notification.object as? String else { return true }
+        return sender != senderProcessId
+    }
+
+    private static func postExternalChange() {
+        DistributedNotificationCenter.default().post(name: .walletStoreChanged, object: senderProcessId)
+    }
+#else
+    static func startObserving(_ observer: Any, selector: Selector) {}
+    static func isExternalChange(_ notification: Notification) -> Bool { false }
+    private static func postExternalChange() {}
+#endif
+
+}
+
+final class WalletsManager: NSObject {
 
     enum Error: Swift.Error {
         case keychainAccessFailure
         case invalidInput
         case failedToDeriveAccount
     }
-    
+
     enum InputValidationResult {
         case valid, invalid, requiresPassword
     }
@@ -20,7 +61,7 @@ final class WalletsManager {
         let privateKey: PrivateKey
         let coin: CoinType
     }
-    
+
     static let shared = WalletsManager()
     private static let previewAccountsPageSize = 11
     private static let solanaBase58SecretKeyLengthRange = 32...88
@@ -33,12 +74,17 @@ final class WalletsManager {
     ]
     private(set) var wallets = [WalletContainer]()
 
-    private init() {}
+    private var isObservingExternalChanges = false
+
+    private override init() {
+        super.init()
+    }
 
     func start() {
-        try? loadWalletsFromKeychain()
+        reloadWalletsFromKeychain()
+        startObservingExternalChanges()
     }
-    
+
     func validateWalletInput(_ input: String) -> InputValidationResult {
         let trimmedInput = input.singleSpaced
         if Mnemonic.isValid(mnemonic: trimmedInput) {
@@ -49,16 +95,16 @@ final class WalletsManager {
             return input.maybeJSON ? .requiresPassword : .invalid
         }
     }
-    
+
     func createWallet() throws -> WalletContainer {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         return try createWallet(name: defaultWalletName, password: password)
     }
-    
+
     func getWallet(id: String) -> WalletContainer? {
         return wallets.first(where: { $0.id == id })
     }
-    
+
     func addWallet(input: String, inputPassword: String?) throws -> WalletContainer {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         let name = defaultWalletName
@@ -73,13 +119,13 @@ final class WalletsManager {
             throw Error.invalidInput
         }
     }
-    
+
     func getSpecificAccount(coin: CoinType, address: String) -> SpecificWalletAccount? {
         return getWalletAndAccount(coin: coin, address: address).map { wallet, account in
             SpecificWalletAccount(walletId: wallet.id, account: account)
         }
     }
-    
+
     func suggestedAccounts(coin: CoinType? = nil) -> [SpecificWalletAccount] {
         return suggestedAccounts(for: [coin ?? defaultCoin])
     }
@@ -92,7 +138,7 @@ final class WalletsManager {
             .compactMap(CoinType.correspondingToInpageProvider)
         return suggestedAccounts(for: coins)
     }
-    
+
     func previewAccounts(wallet: WalletContainer, page: Int, coin: CoinType? = nil) throws -> [Account] {
         guard let password = keychain.password, let hdWallet = wallet.key.wallet(password: Data(password.utf8)) else { throw Error.keychainAccessFailure }
         return try previewAccounts(hdWallet: hdWallet, page: page, coin: coin)
@@ -206,6 +252,14 @@ final class WalletsManager {
         guard let account = account ?? wallet.accounts.first else { throw KeyStore.Error.accountNotFound }
         let privateKey = try wallet.privateKey(password: password, account: account)
         return Self.privateKeyExportString(privateKey: privateKey, coin: account.coin)
+    }
+
+    func exportPrivateKey(walletId: String, account: Account? = nil) throws -> String {
+        guard let wallet = currentWallet(id: walletId) else { throw KeyStore.Error.accountNotFound }
+        if let account {
+            guard wallet.hasAccountMatching(account) else { throw KeyStore.Error.accountNotFound }
+        }
+        return try exportPrivateKey(wallet: wallet, account: account)
     }
 
     static func privateKeyExportString(privateKey: PrivateKey, coin: CoinType) -> String {
@@ -325,6 +379,11 @@ final class WalletsManager {
         return mnemonic
     }
 
+    func exportMnemonic(walletId: String) throws -> String {
+        guard let wallet = currentWallet(id: walletId) else { throw KeyStore.Error.accountNotFound }
+        return try exportMnemonic(wallet: wallet)
+    }
+
     func update(wallet: WalletContainer, newPassword: String) throws {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         try update(wallet: wallet, password: password, newPassword: newPassword, newName: wallet.key.name)
@@ -337,29 +396,58 @@ final class WalletsManager {
         defer { privateKey.resetBytes(in: 0..<privateKey.count) }
         wallets.remove(at: index)
         try keychain.removeWallet(id: wallet.id)
+        WalletsMetadataService.removeMetadataForWallet(wallet, postChange: false)
         postWalletsChangedNotification()
-        WalletsMetadataService.removeMetadataForWallet(wallet)
     }
 
     func destroy() throws {
         wallets.removeAll(keepingCapacity: false)
         try keychain.removeAllWallets()
+        WalletsMetadataService.removeAllMetadata(postChange: false)
+        postWalletsChangedNotification()
     }
-    
-    private func loadWalletsFromKeychain() throws {
-        let ids = keychain.getAllWalletsIds()
-        for id in ids {
-            guard let data = keychain.getWalletData(id: id), let key = StoredKey.importJSON(json: data) else { continue }
-            let wallet = WalletContainer(id: id, key: key)
-            wallets.append(wallet)
-        }
+
+    private func reloadWalletsFromKeychain() {
+        wallets = keychain.getAllWalletsIds().compactMap { currentWallet(id: $0) }
     }
-    
+
+    func currentWallet(id: String) -> WalletContainer? {
+        guard let data = keychain.getWalletData(id: id), let key = StoredKey.importJSON(json: data) else { return nil }
+        return WalletContainer(id: id, key: key)
+    }
+
     func update(wallet: WalletContainer, enabledAccounts: [Account]) throws {
+        guard let currentWallet = currentWallet(id: wallet.id) else { throw KeyStore.Error.accountNotFound }
+
+        let originalKeys = Set(wallet.accounts.map { $0.previewAccountKey })
+        let enabledKeys = Set(enabledAccounts.map { $0.previewAccountKey })
+        let disabledByThisEdit = originalKeys.subtracting(enabledKeys)
+
+        var mergedAccounts = currentWallet.accounts.filter { !disabledByThisEdit.contains($0.previewAccountKey) }
+        var mergedKeys = Set(mergedAccounts.map { $0.previewAccountKey })
+        for account in enabledAccounts where !originalKeys.contains(account.previewAccountKey) && !mergedKeys.contains(account.previewAccountKey) {
+            mergedAccounts.append(account)
+            mergedKeys.insert(account.previewAccountKey)
+        }
+
+        try replaceAccounts(in: currentWallet, with: mergedAccounts)
+    }
+
+    func update(wallet: WalletContainer, removeAccounts toRemove: [Account]) throws {
+        guard let currentWallet = currentWallet(id: wallet.id) else { throw KeyStore.Error.accountNotFound }
+
+        let keysToRemove = Set(toRemove.map { $0.previewAccountKey })
+        let remainingAccounts = currentWallet.accounts.filter { !keysToRemove.contains($0.previewAccountKey) }
+        try replaceAccounts(in: currentWallet, with: remainingAccounts)
+    }
+
+    private func replaceAccounts(in wallet: WalletContainer, with accounts: [Account]) throws {
+        guard !accounts.isEmpty else { throw Error.invalidInput }
+
         for account in wallet.accounts {
             wallet.key.removeAccountForCoinDerivationPath(coin: account.coin, derivationPath: account.derivationPath)
         }
-        for account in enabledAccounts {
+        for account in accounts {
             wallet.key.addAccountDerivation(address: account.address,
                                             coin: account.coin,
                                             derivation: account.derivation,
@@ -369,22 +457,14 @@ final class WalletsManager {
         }
         try save(wallet: wallet, isUpdate: true)
     }
-    
-    func update(wallet: WalletContainer, removeAccounts toRemove: [Account]) throws {
-        for account in toRemove {
-            wallet.key.removeAccountForCoinDerivationPath(coin: account.coin, derivationPath: account.derivationPath)
-        }
-        
-        try save(wallet: wallet, isUpdate: true)
-    }
-    
+
     private func update(wallet: WalletContainer, password: String, newPassword: String, newName: String) throws {
         guard let index = wallets.firstIndex(of: wallet) else { throw KeyStore.Error.accountNotFound }
         guard var privateKeyData = wallet.key.decryptPrivateKey(password: Data(password.utf8)) else { throw KeyStore.Error.invalidPassword }
         defer { privateKeyData.resetBytes(in: 0..<privateKeyData.count) }
         let enabledAccounts = wallet.accounts
         let reimportedCoin: CoinType
-        
+
         if let mnemonic = checkMnemonic(privateKeyData),
            let key = StoredKey.importHDWallet(mnemonic: mnemonic, name: newName, password: Data(newPassword.utf8), coin: defaultCoin) {
             reimportedCoin = defaultCoin
@@ -397,7 +477,7 @@ final class WalletsManager {
             reimportedCoin = privateKeyCoin
             wallets[index].key = key
         }
-        
+
         wallets[index].key.removeAccountForCoin(coin: reimportedCoin)
         for account in enabledAccounts {
             wallets[index].key.addAccountDerivation(address: account.address,
@@ -407,7 +487,7 @@ final class WalletsManager {
                                                     publicKey: account.publicKey,
                                                     extendedPublicKey: account.extendedPublicKey)
         }
-        
+
         try save(wallet: wallets[index], isUpdate: true)
     }
 
@@ -418,13 +498,31 @@ final class WalletsManager {
         } else {
             try keychain.saveWallet(id: wallet.id, data: data)
         }
+        if let index = wallets.firstIndex(of: wallet) {
+            wallets[index] = wallet
+        }
         postWalletsChangedNotification()
     }
-    
+
     private func postWalletsChangedNotification() {
-        NotificationCenter.default.post(name: .walletsChanged, object: nil)
+        WalletStoreSync.postLocalAndExternalChange()
     }
-    
+
+    private func startObservingExternalChanges() {
+        guard !isObservingExternalChanges else { return }
+        isObservingExternalChanges = true
+        WalletStoreSync.startObserving(self, selector: #selector(externalWalletStoreChanged(_:)))
+    }
+
+    @objc private func externalWalletStoreChanged(_ notification: Notification) {
+        guard WalletStoreSync.isExternalChange(notification) else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.reloadWalletsFromKeychain()
+            WalletsMetadataService.reload()
+            WalletStoreSync.postLocalChange()
+        }
+    }
+
     private let defaultWalletName = ""
     private lazy var defaultMnemonicCoins: [CoinType] = {
         var previewCoins = [CoinType]()
@@ -524,32 +622,35 @@ final class WalletsManager {
                                                     version: coin.xpubVersion,
                                                     account: UInt32(accountIndex))
     }
-    
+
     private func makeNewWalletId() -> String {
         let uuid = UUID().uuidString
         let date = Date().timeIntervalSince1970
         let walletId = "\(uuid)-\(date)"
         return walletId
     }
-    
+
 }
 
 extension WalletsManager {
-    
+
     func getPrivateKey(wallet: WalletContainer, account: Account) -> PrivateKey? {
-        guard let password = Keychain.shared.password else { return nil }
+        return getPrivateKey(walletId: wallet.id, account: account)
+    }
+
+    func getPrivateKey(walletId: String, account: Account) -> PrivateKey? {
+        guard let password = Keychain.shared.password,
+              let wallet = currentWallet(id: walletId)
+        else { return nil }
+        guard wallet.hasAccountMatching(account) else { return nil }
         return try? wallet.privateKey(password: password, account: account)
     }
-    
+
     func getPrivateKey(coin: CoinType, address: String) -> PrivateKey? {
-        guard let password = Keychain.shared.password else { return nil }
-        if let (wallet, account) = getWalletAndAccount(coin: coin, address: address) {
-            return try? wallet.privateKey(password: password, account: account)
-        } else {
-            return nil
-        }
+        guard let (wallet, account) = getWalletAndAccount(coin: coin, address: address) else { return nil }
+        return getPrivateKey(walletId: wallet.id, account: account)
     }
-    
+
     func getWalletAndAccount(coin: CoinType, address: String) -> (WalletContainer, Account)? {
         let normalizedAddress = coin.normalizedAddress(address)
         for wallet in wallets {
@@ -562,5 +663,18 @@ extension WalletsManager {
         }
         return nil
     }
-    
+
+}
+
+extension WalletContainer {
+
+    func hasAccountMatching(_ account: Account) -> Bool {
+        let normalizedAddress = account.coin.normalizedAddress(account.address)
+        return accounts.contains { currentAccount in
+            currentAccount.coin == account.coin &&
+            currentAccount.derivationPath == account.derivationPath &&
+            account.coin.normalizedAddress(currentAccount.address) == normalizedAddress
+        }
+    }
+
 }

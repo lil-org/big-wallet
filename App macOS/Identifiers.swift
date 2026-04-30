@@ -5,5 +5,16 @@ import Foundation
 struct Identifiers {
     
     static let safariExtensionBundle = "org.lil.wallet.Safari"
+    static let macOSAppBundle = "org.lil.wallet"
+    static let macOSAmbientBundle = "org.lil.wallet.ambient"
     
+}
+
+enum CurrentApp {
+
+    // Only the dock app may initialize the shared keychain password.
+    static var canCreatePassword: Bool {
+        return Bundle.main.bundleIdentifier == Identifiers.macOSAppBundle
+    }
+
 }

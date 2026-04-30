@@ -265,8 +265,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         
         let action: DappRequestAction
         let id: Int
-        if let prefix = ["https://lil.org/extension?query=", "bigwallet://safari?request="].first(where: { inputLinkString.hasPrefix($0) == true }),
-           let request = SafariRequest(query: String(inputLinkString.dropFirst(prefix.count))) {
+        if let request = SafariRequest(urlString: inputLinkString) {
             id = request.id
             action = DappRequestProcessor.processSafariRequest(request) { [weak self] hash in
                 self?.redirectBack(requestId: id)

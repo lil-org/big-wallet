@@ -146,10 +146,14 @@ class GasService {
     var currentInfo: Info?
     
     func start() {
-        getMessage()
+        getMessage(scheduleNextRequest: true)
     }
     
-    private func getMessage() {
+    func update(completion: (() -> Void)? = nil) {
+        getMessage(scheduleNextRequest: false, completion: completion)
+    }
+
+    private func getMessage(scheduleNextRequest: Bool, completion: (() -> Void)? = nil) {
         let url = URL(string: "https://api.blocknative.com/gasprices/blockprices?chainid=1&confidenceLevels=70,80,90,99")!
         let dataTask = urlSession.dataTask(with: url) { [weak self] (data, _, _) in
             guard let self else { return }
@@ -158,10 +162,13 @@ class GasService {
                let info = message.info {
                 DispatchQueue.main.async {
                     self.currentInfo = info
+                    completion?()
                 }
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(30)) {
-                self.getMessage()
+            if scheduleNextRequest {
+                DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(30)) {
+                    self.getMessage(scheduleNextRequest: true)
+                }
             }
         }
         dataTask.resume()

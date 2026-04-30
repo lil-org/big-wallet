@@ -2,6 +2,11 @@
 
 import Foundation
 import WalletCore
+#if os(visionOS)
+import VSwiftProtobuf
+#else
+import WalletCoreSwiftProtobuf
+#endif
 import BigInt
 
 struct Ethereum {

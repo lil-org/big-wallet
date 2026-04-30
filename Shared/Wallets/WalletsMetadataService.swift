@@ -3,44 +3,63 @@
 import WalletCore
 
 struct WalletsMetadataService {
-    
+
     private init() {}
-    
+
     private static var names = Defaults.walletsAndAccountsNames ?? [:]
-    
+
+    static func reload() {
+        names = currentNames()
+    }
+
     static func getWalletName(wallet: WalletContainer) -> String? {
         return names[itemKey(walletId: wallet.id, account: nil)]
     }
-    
+
     static func saveWalletName(_ name: String?, wallet: WalletContainer) {
         saveItemName(name, wallet: wallet, account: nil)
     }
-    
+
     static func getAccountName(walletId: String, account: Account) -> String? {
         return names[itemKey(walletId: walletId, account: account)]
     }
-    
+
     static func saveAccountName(_ name: String?, wallet: WalletContainer, account: Account) {
         saveItemName(name, wallet: wallet, account: account)
     }
-    
-    static func removeMetadataForWallet(_ wallet: WalletContainer) {
-        for key in names.keys where key.hasPrefix(wallet.id) {
+
+    static func removeMetadataForWallet(_ wallet: WalletContainer, postChange: Bool = true) {
+        names = currentNames()
+        for key in names.keys.filter({ isMetadataKey($0, forWalletId: wallet.id) }) {
             names.removeValue(forKey: key)
         }
-        Defaults.walletsAndAccountsNames = names
+        saveNames(postChange: postChange)
     }
-    
+
+    static func removeAllMetadata(postChange: Bool = true) {
+        names = currentNames()
+        names.removeAll(keepingCapacity: false)
+        saveNames(postChange: postChange)
+    }
+
     private static func saveItemName(_ name: String?, wallet: WalletContainer, account: Account?) {
+        names = currentNames()
         let key = itemKey(walletId: wallet.id, account: account)
         if let name = name, !name.isEmpty {
             names[key] = name
         } else {
             names.removeValue(forKey: key)
         }
-        Defaults.walletsAndAccountsNames = names
+        saveNames()
     }
-    
+
+    private static func saveNames(postChange: Bool = true) {
+        Defaults.walletsAndAccountsNames = names
+        if postChange {
+            WalletStoreSync.postLocalAndExternalChange(defaultsAlreadySynchronized: true)
+        }
+    }
+
     private static func itemKey(walletId: String, account: Account?) -> String {
         if let account = account {
             return "\(walletId)-\((account.coin.rawValue))-\(account.derivationPath)"
@@ -48,5 +67,14 @@ struct WalletsMetadataService {
             return walletId
         }
     }
-    
+
+    private static func isMetadataKey(_ key: String, forWalletId walletId: String) -> Bool {
+        return key == walletId || key.hasPrefix("\(walletId)-")
+    }
+
+    private static func currentNames() -> [String: String] {
+        Defaults.synchronize()
+        return Defaults.walletsAndAccountsNames ?? [:]
+    }
+
 }

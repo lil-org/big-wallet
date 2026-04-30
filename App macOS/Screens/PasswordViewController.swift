@@ -22,6 +22,15 @@ class PasswordViewController: NSViewController {
     private var passwordToRepeat: String?
     private var completion: ((Bool) -> Void)?
     private var didCallCompletion = false
+
+    private var isCreatingPassword: Bool {
+        switch mode {
+        case .create, .repeatAfterCreate:
+            return true
+        case .enter:
+            return false
+        }
+    }
     
     @IBOutlet weak var reasonLabel: NSTextField!
     @IBOutlet weak var cancelButton: NSButton!
@@ -47,6 +56,14 @@ class PasswordViewController: NSViewController {
         } else {
             reasonLabel.stringValue = ""
         }
+        NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
+        DispatchQueue.main.async { [weak self] in
+            self?.walletsChanged()
+        }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     override func viewDidAppear() {
@@ -77,8 +94,24 @@ class PasswordViewController: NSViewController {
         case .repeatAfterCreate:
             let repeated = passwordTextField.stringValue
             if repeated == passwordToRepeat {
-                keychain.save(password: repeated)
+                guard CurrentApp.canCreatePassword else {
+                    callCompletion(result: false)
+                    return
+                }
+                guard keychain.password == nil else {
+                    leaveCreateFlowForExistingPassword()
+                    return
+                }
+                guard keychain.createPasswordIfMissing(repeated) else {
+                    if keychain.password != nil {
+                        leaveCreateFlowForExistingPassword()
+                    } else {
+                        Alert.showWithMessage(Strings.somethingWentWrong, style: .informational)
+                    }
+                    return
+                }
                 callCompletion(result: true)
+                WalletStoreSync.postLocalAndExternalChange()
             }
         case .enter:
             if keychain.password == passwordTextField.stringValue {
@@ -101,8 +134,18 @@ class PasswordViewController: NSViewController {
     private func callCompletion(result: Bool) {
         if !didCallCompletion {
             didCallCompletion = true
+            NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
             completion?(result)
         }
+    }
+
+    @objc private func walletsChanged() {
+        guard isCreatingPassword, keychain.password != nil else { return }
+        leaveCreateFlowForExistingPassword()
+    }
+
+    private func leaveCreateFlowForExistingPassword() {
+        callCompletion(result: false)
     }
     
 }

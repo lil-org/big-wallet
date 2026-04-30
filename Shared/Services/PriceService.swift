@@ -42,8 +42,8 @@ class PriceService {
         getPrice(scheduleNextRequest: true)
     }
     
-    func update() {
-        getPrice(scheduleNextRequest: false)
+    func update(completion: (() -> Void)? = nil) {
+        getPrice(scheduleNextRequest: false, completion: completion)
     }
     
     func forNetwork(_ network: EthereumNetwork) -> Double? {
@@ -64,13 +64,14 @@ class PriceService {
         }
     }
     
-    private func getPrice(scheduleNextRequest: Bool) {
+    private func getPrice(scheduleNextRequest: Bool, completion: (() -> Void)? = nil) {
         let url = URL(string: "https://api.coingecko.com/api/v3/simple/price?ids=\(idsQuery)&vs_currencies=usd")!
         let dataTask = urlSession.dataTask(with: url) { [weak self] (data, _, _) in
             if let data = data,
                let pricesResponse = try? self?.jsonDecoder.decode(Prices.self, from: data) {
                 DispatchQueue.main.async {
                     self?.currentPrices = pricesResponse
+                    completion?()
                 }
             }
             if scheduleNextRequest {

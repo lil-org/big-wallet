@@ -533,7 +533,7 @@ struct DappRequestProcessor {
                 return
             }
 
-            guard let privateKey = walletsManager.getPrivateKey(wallet: wallet, account: account) else {
+            guard let privateKey = walletsManager.getPrivateKey(walletId: wallet.id, account: account) else {
                 respond(to: request, solanaError: .failedToSign, completion: completion)
                 return
             }
@@ -546,8 +546,7 @@ struct DappRequestProcessor {
     private static func process(request: SafariRequest, ethereumRequest: SafariRequest.Ethereum, completion: @escaping (String?) -> Void) -> DappRequestAction {
         let peerMeta = request.peerMeta
         lazy var walletAndAccount = walletsManager.getWalletAndAccount(coin: .ethereum, address: ethereumRequest.address)
-        lazy var privateKey = walletsManager.getPrivateKey(coin: .ethereum, address: ethereumRequest.address)
-        
+
         switch ethereumRequest.method {
         case .addEthereumChain:
             if let chainToAdd = EthereumNetworkFromDapp.from(ethereumRequest.parameters) {
@@ -587,10 +586,12 @@ struct DappRequestProcessor {
             return .selectAccount(action)
         case .signTypedMessage:
             if let walletAndAccount = walletAndAccount,
-               let raw = ethereumRequest.raw,
-               let privateKey = privateKey {
-                let action = SignMessageAction(provider: request.provider, subject: .signTypedData, walletId: walletAndAccount.0.id, account: walletAndAccount.1, meta: raw, peerMeta: peerMeta) { approved in
+               let raw = ethereumRequest.raw {
+                let walletId = walletAndAccount.0.id
+                let account = walletAndAccount.1
+                let action = SignMessageAction(provider: request.provider, subject: .signTypedData, walletId: walletId, account: account, meta: raw, peerMeta: peerMeta) { approved in
                     if approved {
+                        guard let privateKey = ethereumPrivateKey(walletId: walletId, account: account, request: request, completion: completion) else { return }
                         signTypedData(privateKey: privateKey, raw: raw, request: request, completion: completion)
                     } else {
                         respond(to: request, error: Strings.failedToSign, completion: completion)
@@ -602,10 +603,12 @@ struct DappRequestProcessor {
             }
         case .signMessage:
             if let data = ethereumRequest.message,
-               let walletAndAccount = walletAndAccount,
-               let privateKey = privateKey {
-                let action = SignMessageAction(provider: request.provider, subject: .signMessage, walletId: walletAndAccount.0.id, account: walletAndAccount.1, meta: data.hexString, peerMeta: peerMeta) { approved in
+               let walletAndAccount = walletAndAccount {
+                let walletId = walletAndAccount.0.id
+                let account = walletAndAccount.1
+                let action = SignMessageAction(provider: request.provider, subject: .signMessage, walletId: walletId, account: account, meta: data.hexString, peerMeta: peerMeta) { approved in
                     if approved {
+                        guard let privateKey = ethereumPrivateKey(walletId: walletId, account: account, request: request, completion: completion) else { return }
                         signMessage(privateKey: privateKey, data: data, request: request, completion: completion)
                     } else {
                         respond(to: request, error: Strings.failedToSign, completion: completion)
@@ -617,11 +620,13 @@ struct DappRequestProcessor {
             }
         case .signPersonalMessage:
             if let data = ethereumRequest.message,
-               let walletAndAccount = walletAndAccount,
-               let privateKey = privateKey {
+               let walletAndAccount = walletAndAccount {
+                let walletId = walletAndAccount.0.id
+                let account = walletAndAccount.1
                 let text = String(data: data, encoding: .utf8) ?? data.hexString
-                let action = SignMessageAction(provider: request.provider, subject: .signPersonalMessage, walletId: walletAndAccount.0.id, account: walletAndAccount.1, meta: text, peerMeta: peerMeta) { approved in
+                let action = SignMessageAction(provider: request.provider, subject: .signPersonalMessage, walletId: walletId, account: account, meta: text, peerMeta: peerMeta) { approved in
                     if approved {
+                        guard let privateKey = ethereumPrivateKey(walletId: walletId, account: account, request: request, completion: completion) else { return }
                         signPersonalMessage(privateKey: privateKey, data: data, request: request, completion: completion)
                     } else {
                         respond(to: request, error: Strings.failedToSign, completion: completion)
@@ -635,14 +640,16 @@ struct DappRequestProcessor {
             if let transaction = ethereumRequest.transaction,
                let chainId = ethereumRequest.currentChainId,
                let chain = Networks.withChainId(chainId),
-               let walletAndAccount = walletAndAccount,
-               let privateKey = privateKey {
+               let walletAndAccount = walletAndAccount {
+                let walletId = walletAndAccount.0.id
+                let account = walletAndAccount.1
                 let action = SendTransactionAction(provider: request.provider,
                                                    transaction: transaction,
-                                                   chain: chain, walletId: walletAndAccount.0.id,
-                                                   account: walletAndAccount.1,
+                                                   chain: chain, walletId: walletId,
+                                                   account: account,
                                                    peerMeta: peerMeta) { transaction in
                     if let transaction = transaction {
+                        guard let privateKey = ethereumPrivateKey(walletId: walletId, account: account, request: request, completion: completion) else { return }
                         sendTransaction(privateKey: privateKey, transaction: transaction, network: chain, respondTo: request, completion: completion)
                     } else {
                         respond(to: request, error: Strings.canceled, completion: completion)
@@ -663,6 +670,14 @@ struct DappRequestProcessor {
             respond(to: request, error: Strings.somethingWentWrong, completion: completion)
         }
         return .none
+    }
+
+    private static func ethereumPrivateKey(walletId: String, account: Account, request: SafariRequest, completion: (String?) -> Void) -> PrivateKey? {
+        guard let privateKey = walletsManager.getPrivateKey(walletId: walletId, account: account) else {
+            respond(to: request, error: Strings.failedToSign, completion: completion)
+            return nil
+        }
+        return privateKey
     }
     
     private static func signTypedData(privateKey: PrivateKey, raw: String, request: SafariRequest, completion: (String?) -> Void) {

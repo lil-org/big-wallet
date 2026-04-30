@@ -24,6 +24,7 @@ class EditAccountsViewController: NSViewController {
     private var lastPreviewDate = Date()
     private var toggledIndexes = Set<Int>()
     private var enabledUndiscoveredAccountKeys = Set<WalletPreviewAccountKey>()
+    private var previewGeneration = 0
     private var previewCoin: CoinType? { selectAccountAction?.coinType }
     
     @IBOutlet weak var tableView: RightClickTableView! {
@@ -43,11 +44,12 @@ class EditAccountsViewController: NSViewController {
         okButton.title = Strings.ok
         cancelButton.title = Strings.cancel
         titleLabel.stringValue = Strings.editAccounts.replacingOccurrences(of: " ", with: "\n")
-        
-        enabledUndiscoveredAccountKeys = Set(wallet.accounts.map { $0.previewAccountKey })
-        guard let previewAccounts = try? walletsManager.previewAccounts(wallet: wallet, page: 0, coin: previewCoin) else { return }
-        appendPreviewAccounts(previewAccounts)
-        tableView.reloadData()
+        NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
+        resetPreviewAccounts()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     private func appendPreviewAccounts(_ previewAccounts: [Account]) {
@@ -80,6 +82,8 @@ class EditAccountsViewController: NSViewController {
     }
     
     private func showAccountsList() {
+        previewGeneration += 1
+        NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
         let accountsListViewController = instantiate(AccountsListViewController.self)
         accountsListViewController.selectAccountAction = selectAccountAction
         accountsListViewController.getBackToRect = getBackToRect
@@ -101,6 +105,47 @@ class EditAccountsViewController: NSViewController {
         let hasHiddenEnabledAccount = !enabledUndiscoveredAccountKeys.isEmpty
         okButton.isEnabled = hasVisibleEnabledAccount || hasHiddenEnabledAccount
     }
+
+    private func resetPreviewAccounts() {
+        previewGeneration += 1
+        page = 1
+        requestedPreviewFor = nil
+        isPreviewingMoreAccounts = false
+        toggledIndexes.removeAll()
+        cellModels.removeAll()
+        enabledUndiscoveredAccountKeys = Set(wallet.accounts.map { $0.previewAccountKey })
+
+        guard let previewAccounts = try? walletsManager.previewAccounts(wallet: wallet, page: 0, coin: previewCoin) else {
+            updateOkButtonState()
+            tableView.reloadData()
+            return
+        }
+
+        appendPreviewAccounts(previewAccounts)
+        tableView.reloadData()
+    }
+
+    @objc private func walletsChanged() {
+        guard let currentWallet = walletsManager.currentWallet(id: wallet.id) else {
+            showAccountsList()
+            return
+        }
+
+        let previousAccountKeys = Set(wallet.accounts.map { $0.previewAccountKey })
+        let currentAccountKeys = Set(currentWallet.accounts.map { $0.previewAccountKey })
+        wallet = currentWallet
+
+        guard previousAccountKeys != currentAccountKeys else {
+            tableView.reloadData()
+            return
+        }
+
+        if toggledIndexes.isEmpty {
+            resetPreviewAccounts()
+        } else {
+            showAccountsList()
+        }
+    }
     
     private func previewMoreAccountsIfNeeded() {
         guard !isPreviewingMoreAccounts, requestedPreviewFor != cellModels.count else { return }
@@ -116,14 +161,22 @@ class EditAccountsViewController: NSViewController {
             }
             return
         }
+        guard let previewWallet = wallet else {
+            isPreviewingMoreAccounts = false
+            requestedPreviewFor = nil
+            return
+        }
         lastPreviewDate = Date()
         let requestedPage = page
-        previewAccountsQueue.async { [weak self] in
+        let generation = previewGeneration
+        let requestedPreviewCoin = previewCoin
+        previewAccountsQueue.async { [weak self, previewWallet, requestedPreviewCoin] in
             guard let self else { return }
-            let previewAccounts = try? self.walletsManager.previewAccounts(wallet: self.wallet,
+            let previewAccounts = try? self.walletsManager.previewAccounts(wallet: previewWallet,
                                                                            page: requestedPage,
-                                                                           coin: self.previewCoin)
+                                                                           coin: requestedPreviewCoin)
             DispatchQueue.main.async {
+                guard self.previewGeneration == generation else { return }
                 self.isPreviewingMoreAccounts = false
                 guard let previewAccounts else {
                     self.requestedPreviewFor = nil

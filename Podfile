@@ -16,6 +16,11 @@ target 'Big Wallet' do
   end
 end
 
+target 'Big Wallet Ambient' do
+  platform :osx, '14.0'
+  shared_pods
+end
+
 target 'Big Wallet iOS' do
   platform :ios, '17.0'
   shared_pods

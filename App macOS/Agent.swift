@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import Cocoa
-import SafariServices
 import LocalAuthentication
 import WalletCore
 
@@ -14,39 +13,66 @@ class Agent: NSObject {
     static let shared = Agent()
     
     private let walletsManager = WalletsManager.shared
+    private static let deferredExternalRequestMaxAge: TimeInterval = 5 * 60
     
     private override init() { super.init() }
-    private var statusBarItem: NSStatusItem!
-    private lazy var hasPassword = Keychain.shared.password != nil
     private var didEnterPasswordOnStart = false
     
     private var didStartInitialLAEvaluation = false
     private var didCompleteInitialLAEvaluation = false
-    private var initialExternalRequest: ExternalRequest?
+    private var initialExternalRequest: DeferredExternalRequest?
+
+    private struct DeferredExternalRequest {
+        let request: ExternalRequest
+        let createdAt = Date()
+
+        var canBeProcessed: Bool {
+            return !isExpired && request.isPending
+        }
+
+        private var isExpired: Bool {
+            return Date().timeIntervalSince(createdAt) > Agent.deferredExternalRequestMaxAge
+        }
+
+        func isSameDeferredRequest(as other: DeferredExternalRequest) -> Bool {
+            return createdAt == other.createdAt && request.matches(other.request)
+        }
+    }
     
-    var statusBarButtonIsBlocked = false
-    
-    func start() {
-        open()
-        setupStatusBarItem()
+    private var hasPassword: Bool {
+        return Keychain.shared.password != nil
+    }
+
+    func start(openOnLaunch: Bool) {
+        NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
+        if openOnLaunch {
+            open()
+        }
     }
     
     func showInitialScreen(externalRequest: ExternalRequest?) {
         let isEvaluatingInitialLA = didStartInitialLAEvaluation && !didCompleteInitialLAEvaluation
         guard !isEvaluatingInitialLA else {
-            if externalRequest != nil {
-                initialExternalRequest = externalRequest
-            }
+            deferInitialExternalRequest(externalRequest)
             return
         }
         
         guard hasPassword else {
+            guard CurrentApp.canCreatePassword else {
+                deferInitialExternalRequest(externalRequest)
+                DockAppLauncher.openDockApp()
+                return
+            }
             let welcomeViewController = WelcomeViewController.new { [weak self] createdPassword in
-                guard createdPassword else { return }
-                self?.didEnterPasswordOnStart = true
-                self?.didCompleteInitialLAEvaluation = true
-                self?.hasPassword = true
-                self?.showInitialScreen(externalRequest: externalRequest)
+                guard let self else { return }
+                if createdPassword {
+                    self.didEnterPasswordOnStart = true
+                    self.didCompleteInitialLAEvaluation = true
+                } else {
+                    guard self.hasPassword else { return }
+                    self.didEnterPasswordOnStart = false
+                }
+                self.showInitialScreen(externalRequest: externalRequest)
             }
             let windowController = Window.showNew(closeOthers: true)
             windowController.contentViewController = welcomeViewController
@@ -63,9 +89,19 @@ class Agent: NSObject {
             return
         }
         
-        let request = externalRequest ?? initialExternalRequest
+        let deferredRequest = initialExternalRequest
+        let request = externalRequest ?? deferredRequest?.request
+        if let externalRequest = externalRequest,
+           let deferredRequest = deferredRequest,
+           !deferredRequest.request.matches(externalRequest) {
+            deferredRequest.request.cancelIfPending()
+        }
         initialExternalRequest = nil
         if let request = request {
+            if externalRequest == nil, let deferredRequest, !deferredRequest.canBeProcessed {
+                deferredRequest.request.cancelIfPending()
+                return
+            }
             processExternalRequest(request)
         } else {
             let accountsList = instantiate(AccountsListViewController.self)
@@ -115,103 +151,36 @@ class Agent: NSObject {
         }
         windowController.contentViewController = approveViewController
     }
-    
-    lazy private var statusBarMenu: NSMenu = {
-        let menu = NSMenu(title: Strings.bigWallet)
-        
-        let showItem = NSMenuItem(title: Strings.showWallets, action: #selector(didSelectShowMenuItem), keyEquivalent: "")
-        let safariItem = NSMenuItem(title: Strings.enableSafariExtension, action: #selector(enableSafariExtension), keyEquivalent: "")
-        let mailItem = NSMenuItem(title: Strings.dropUsALine, action: #selector(didSelectMailMenuItem), keyEquivalent: "")
-        let githubItem = NSMenuItem(title: Strings.viewOnGithub, action: #selector(didSelectGitHubMenuItem), keyEquivalent: "")
-        let xItem = NSMenuItem(title: Strings.viewOnX, action: #selector(didSelectXMenuItem), keyEquivalent: "")
-        let appStoreItem = NSMenuItem(title: Strings.rateOnTheAppStore, action: #selector(didSelectAppStoreMenuItem), keyEquivalent: "")
-        let quitItem = NSMenuItem(title: Strings.quit, action: #selector(didSelectQuitMenuItem), keyEquivalent: "q")
-        showItem.image = Images.iconCircle
-        
-        showItem.target = self
-        safariItem.target = self
-        githubItem.target = self
-        xItem.target = self
-        appStoreItem.target = self
-        mailItem.target = self
-        quitItem.target = self
-        
-        menu.delegate = self
-        menu.addItem(showItem)
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(safariItem)
-        menu.addItem(appStoreItem)
-        if !Defaults.isHiddenFromMenuBar {
-            menu.addItem(NSMenuItem.separator())
-            let hideItem = NSMenuItem(title: Strings.hideFromMenuBar, action: #selector(didSelectHideItem), keyEquivalent: "")
-            hideItem.target = self
-            menu.addItem(hideItem)
-        }
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(githubItem)
-        menu.addItem(mailItem)
-        menu.addItem(xItem)
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(quitItem)
-        return menu
-    }()
-    
-    @objc private func didSelectHideItem() {
-        Defaults.isHiddenFromMenuBar = true
-        statusBarItem.isVisible = false
-        statusBarItem.button?.removeFromSuperview()
-        statusBarItem.button?.window?.close()
-    }
-    
-    @objc private func didSelectAppStoreMenuItem() {
-        ReviewRequster.didClickAppStoreReviewButton()
-    }
-    
-    @objc private func didSelectXMenuItem() {
-        NSWorkspace.shared.open(URL.x)
-    }
-    
-    @objc private func didSelectGitHubMenuItem() {
-        NSWorkspace.shared.open(URL.github)
-    }
-    
-    @objc func enableSafariExtension() {
-        SFSafariApplication.showPreferencesForExtension(withIdentifier: Identifiers.safariExtensionBundle)
-    }
-    
-    @objc private func didSelectMailMenuItem() {
-        NSWorkspace.shared.open(URL.email)
-    }
-    
-    @objc private func didSelectShowMenuItem() {
-        open()
-    }
-    
-    @objc private func didSelectQuitMenuItem() {
-        NSApp.terminate(nil)
-    }
-    
-    private func setupStatusBarItem() {
-        if !Defaults.isHiddenFromMenuBar {
-            let statusBar = NSStatusBar.system
-            statusBarItem = statusBar.statusItem(withLength: NSStatusItem.squareLength)
-            statusBarItem.button?.image = Images.statusBarIcon
-            statusBarItem.button?.target = self
-            statusBarItem.button?.action = #selector(statusBarButtonClicked(sender:))
-            statusBarItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
-            statusBarItem.isVisible = true
-        }
-    }
-    
-    @objc private func statusBarButtonClicked(sender: NSStatusBarButton) {
-        guard !statusBarButtonIsBlocked, let event = NSApp.currentEvent, event.type == .rightMouseUp || event.type == .leftMouseUp else { return }
-        
-        statusBarItem.menu = statusBarMenu
-        statusBarItem.button?.performClick(nil)
-    }
-    
+
     func open() {
-        showInitialScreen(externalRequest: .none)
+        showInitialScreen(externalRequest: nil)
+    }
+
+    @objc private func walletsChanged() {
+        guard let deferredRequest = initialExternalRequest, hasPassword else { return }
+        guard deferredRequest.canBeProcessed else {
+            deferredRequest.request.cancelIfPending()
+            initialExternalRequest = nil
+            return
+        }
+        showInitialScreen(externalRequest: nil)
+    }
+
+    private func deferInitialExternalRequest(_ request: ExternalRequest?) {
+        guard let request else { return }
+        if let deferredRequest = initialExternalRequest, !deferredRequest.request.matches(request) {
+            deferredRequest.request.cancelIfPending()
+        }
+        let deferredRequest = DeferredExternalRequest(request: request)
+        initialExternalRequest = deferredRequest
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.deferredExternalRequestMaxAge) { [weak self] in
+            guard let self,
+                  let currentDeferredRequest = self.initialExternalRequest,
+                  currentDeferredRequest.isSameDeferredRequest(as: deferredRequest)
+            else { return }
+            currentDeferredRequest.request.cancelIfPending()
+            self.initialExternalRequest = nil
+        }
     }
     
     func askAuthentication(on: NSWindow?, getBackTo: NSViewController? = nil, browser: Browser?, onStart: Bool, reason: AuthenticationReason, completion: @escaping (Bool) -> Void) {
@@ -321,10 +290,54 @@ class Agent: NSObject {
     
 }
 
-extension Agent: NSMenuDelegate {
-    
-    func menuDidClose(_ menu: NSMenu) {
-        statusBarItem.menu = nil
+private extension Agent.ExternalRequest {
+
+    var isPending: Bool {
+        switch self {
+        case .safari(let request):
+            return ExtensionBridge.hasPendingRequest(id: request.id)
+        }
     }
-    
+
+    func cancelIfPending() {
+        switch self {
+        case .safari(let request):
+            guard ExtensionBridge.hasPendingRequest(id: request.id) else { return }
+            ExtensionBridge.removeRequest(id: request.id)
+            ExtensionBridge.respond(response: ResponseToExtension(for: request, error: Strings.canceled))
+        }
+    }
+
+    func matches(_ other: Agent.ExternalRequest) -> Bool {
+        switch (self, other) {
+        case (.safari(let lhs), .safari(let rhs)):
+            return lhs.id == rhs.id
+        }
+    }
+
+}
+
+private enum DockAppLauncher {
+
+    static func openDockApp() {
+        guard let dockAppURL = dockAppURL else { return }
+
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(at: dockAppURL, configuration: configuration)
+    }
+
+    private static var dockAppURL: URL? {
+        guard Bundle.main.bundleIdentifier == Identifiers.macOSAmbientBundle else { return nil }
+
+        var url = Bundle.main.bundleURL
+        for _ in 0..<3 {
+            url.deleteLastPathComponent()
+        }
+        guard url.pathExtension == "app",
+              FileManager.default.fileExists(atPath: url.path)
+        else { return nil }
+        return url
+    }
+
 }

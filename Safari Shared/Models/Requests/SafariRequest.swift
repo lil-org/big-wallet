@@ -8,6 +8,10 @@ protocol SafariRequestBody {
 
 struct SafariRequest {
 
+    private static let appRequestURLPrefix = "bigwallet://safari?request="
+    private static let webRequestURLPrefix = "https://lil.org/extension?query="
+    private static let requestURLPrefixes = [appRequestURLPrefix, webRequestURLPrefix]
+
     let id: Int
     let name: String
     let provider: InpageProvider
@@ -32,6 +36,20 @@ struct SafariRequest {
         }
     }
     
+    static func appRequestURL(query: String) -> URL? {
+        return URL(string: appRequestURLPrefix + query)
+    }
+
+    init?(appRequestURLString: String) {
+        guard appRequestURLString.hasPrefix(Self.appRequestURLPrefix) else { return nil }
+        self.init(query: String(appRequestURLString.dropFirst(Self.appRequestURLPrefix.count)))
+    }
+
+    init?(urlString: String) {
+        guard let prefix = Self.requestURLPrefixes.first(where: { urlString.hasPrefix($0) }) else { return nil }
+        self.init(query: String(urlString.dropFirst(prefix.count)))
+    }
+
     init?(query: String) {
         guard let parametersString = query.removingPercentEncoding,
               let data = parametersString.data(using: .utf8),

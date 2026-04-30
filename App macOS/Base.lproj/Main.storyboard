@@ -50,7 +50,7 @@
                                         <menuItem isSeparatorItem="YES" id="kCx-OE-vgT"/>
                                         <menuItem title="Quit Big Wallet" keyEquivalent="q" id="4sb-4s-VLi">
                                             <connections>
-                                                <action selector="performClose:" target="Ady-hI-5gd" id="W3D-CJ-kQe"/>
+                                                <action selector="terminate:" target="Ady-hI-5gd" id="W3D-CJ-kQe"/>
                                             </connections>
                                         </menuItem>
                                     </items>

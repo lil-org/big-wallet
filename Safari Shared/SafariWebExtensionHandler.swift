@@ -40,7 +40,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             }
         } else if let query = String(data: data, encoding: .utf8)?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                   let request = SafariRequest(query: query),
-                  let url = URL(string: "bigwallet://safari?request=\(query)") {
+                  let url = SafariRequest.appRequestURL(query: query) {
             if case let .ethereum(ethereumRequest) = request.body, ethereumRequest.method == .switchEthereumChain {
                 if let switchToChainId = ethereumRequest.switchToChainId, Nodes.knowsNode(chainId: switchToChainId) {
                     let chainId = String.hex(switchToChainId, withPrefix: true)
@@ -54,7 +54,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             } else {
                 ExtensionBridge.makeRequest(id: request.id)
 #if os(macOS)
-                NSWorkspace.shared.open(url)
+                openAmbientApp(with: url)
 #endif
                 context.cancelRequest(withError: HandlerError.empty)
             }
@@ -98,5 +98,34 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         (context ?? rpcRequestResponseContext)?.completeRequest(returningItems: [item], completionHandler: nil)
         rpcRequestResponseContext = nil
     }
+
+#if os(macOS)
+    private func openAmbientApp(with requestURL: URL) {
+        guard let ambientAppURL else {
+            NSWorkspace.shared.open(requestURL)
+            return
+        }
+
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.open([requestURL], withApplicationAt: ambientAppURL, configuration: configuration) { _, error in
+            if error != nil {
+                NSWorkspace.shared.open(requestURL)
+            }
+        }
+    }
+
+    private var ambientAppURL: URL? {
+        var containingAppURL = Bundle.main.bundleURL
+        for _ in 0..<3 {
+            containingAppURL.deleteLastPathComponent()
+        }
+
+        guard containingAppURL.pathExtension == "app" else { return nil }
+        let url = containingAppURL.appendingPathComponent("Contents/Helpers/Big Wallet Ambient.app")
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return url
+    }
+#endif
     
 }

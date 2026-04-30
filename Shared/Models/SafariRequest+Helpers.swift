@@ -1,6 +1,7 @@
 // ∅ 2026 lil org
 
 import Foundation
+import WalletCore
 
 extension SafariRequest.Ethereum {
     

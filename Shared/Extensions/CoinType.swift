@@ -30,7 +30,7 @@ extension CoinType {
         }
     }
     
-    static func correspondingToInpageProvider(_ inpageProvider: InpageProvider) -> CoinType? {
+    nonisolated static func correspondingToInpageProvider(_ inpageProvider: InpageProvider) -> CoinType? {
         switch inpageProvider {
         case .ethereum:
             return .ethereum
