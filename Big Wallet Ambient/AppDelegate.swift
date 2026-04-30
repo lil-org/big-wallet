@@ -7,6 +7,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let agent = Agent.shared
     private let walletsManager = WalletsManager.shared
+    private let currentInstanceId = UUID().uuidString
 
     private var didFinishLaunching = false
     private var initialExternalRequest: Agent.ExternalRequest?
@@ -33,6 +34,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             initialExternalRequest = nil
             agent.showInitialScreen(externalRequest: externalRequest)
         }
+
+        DistributedNotificationCenter.default().post(name: .ambientAgentMustTerminate, object: currentInstanceId)
+        DistributedNotificationCenter.default().addObserver(self,
+                                                            selector: #selector(terminateInstance(_:)),
+                                                            name: .ambientAgentMustTerminate,
+                                                            object: nil,
+                                                            suspensionBehavior: .deliverImmediately)
     }
 
     func application(_ application: NSApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([NSUserActivityRestoring]) -> Void) -> Bool {
@@ -56,5 +64,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             initialExternalRequest = externalRequest
         }
     }
+
+    func applicationWillTerminate(_ aNotification: Notification) {
+        DistributedNotificationCenter.default().removeObserver(self, name: .ambientAgentMustTerminate, object: nil)
+    }
+
+    @objc private func terminateInstance(_ notification: Notification) {
+        guard let senderId = notification.object as? String, senderId != currentInstanceId else { return }
+        NSApplication.shared.terminate(nil)
+    }
+
+}
+
+private extension Notification.Name {
+
+    static let ambientAgentMustTerminate = Notification.Name("org.lil.wallet.ambient.terminateOtherInstances")
 
 }
