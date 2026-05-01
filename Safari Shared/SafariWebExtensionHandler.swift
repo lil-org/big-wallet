@@ -143,7 +143,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         }
 
         guard containingAppURL.pathExtension == "app" else { return nil }
-        let url = containingAppURL.appendingPathComponent("Contents/Helpers/Big Wallet Ambient.app")
+        let url = containingAppURL.appendingPathComponent("Contents/Helpers/Big Wallet.app")
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
         return url
     }
