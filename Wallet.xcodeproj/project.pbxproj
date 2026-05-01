@@ -4233,7 +4233,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 287EA20025C593DE505FC7A1 /* Pods-Big Wallet.debug.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = liquid_glass_icon_wip;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "App macOS/Supporting Files/Wallet macOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -4264,7 +4264,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 2674AFF49DF692B8835F87DB /* Pods-Big Wallet.release.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = liquid_glass_icon_wip;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "App macOS/Supporting Files/Wallet macOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -4296,7 +4296,7 @@
 			baseConfigurationReference = E38F8133E71D0281EAA7ED02 /* Pods-Big Wallet iOS.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "";
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = liquid_glass_icon_wip;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "App iOS/Wallet iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
@@ -4334,7 +4334,7 @@
 			baseConfigurationReference = ED2048BF260AFB72E7D7D176 /* Pods-Big Wallet iOS.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "";
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = liquid_glass_icon_wip;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "App iOS/Wallet iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
@@ -4542,7 +4542,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 3065818E05850844966A0FFE /* Pods-Big Wallet Ambient.debug.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = liquid_glass_icon_wip;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -4595,7 +4595,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 495430AA22668CD3FB1785FA /* Pods-Big Wallet Ambient.release.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = liquid_glass_icon_wip;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
