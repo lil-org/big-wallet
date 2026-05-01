@@ -320,7 +320,9 @@ final class WalletsManager: NSObject {
         secretKey.reserveCapacity(values.count)
 
         for value in values {
-            guard !(value is Bool), let number = value as? NSNumber else { return nil }
+            guard let number = value as? NSNumber,
+                  CFGetTypeID(number) != CFBooleanGetTypeID()
+            else { return nil }
             let byteValue = number.doubleValue
             guard byteValue.rounded() == byteValue,
                   byteValue >= Double(UInt8.min),

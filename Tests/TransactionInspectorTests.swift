@@ -149,7 +149,7 @@ final class TransactionInspectorTests: XCTestCase {
         let source = Data(repeating: 3, count: 32)
         let destination = Data(repeating: 4, count: 32)
         let mint = Data(repeating: 5, count: 32)
-        let multisigOwner = Data(repeating: 6, count: 32)
+        let multisigAuthority = Data(repeating: 6, count: 32)
         let trailingAccount = Data(repeating: 7, count: 32)
         let message = solanaWireMessage(requiredSignatures: 2,
                                         readOnlySignedAccounts: 1,
@@ -160,7 +160,7 @@ final class TransactionInspectorTests: XCTestCase {
                                             source,
                                             destination,
                                             mint,
-                                            multisigOwner,
+                                            multisigAuthority,
                                             trailingAccount,
                                             Base58.decodeNoCheck(string: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")!,
                                         ],
@@ -171,7 +171,7 @@ final class TransactionInspectorTests: XCTestCase {
         let approval = SolanaTransactionSummaryFormatter.approvalMessage(messageData: message,
                                                                          encodedMessages: ["encoded"])
 
-        XCTAssertTrue(approval.contains("Owner: \(Base58.encodeNoCheck(data: multisigOwner))"))
+        XCTAssertTrue(approval.contains("Authority: \(Base58.encodeNoCheck(data: multisigAuthority))"))
         XCTAssertTrue(approval.contains("Additional signer 1: \(Base58.encodeNoCheck(data: firstSigner)) - signer - writable"))
         XCTAssertTrue(approval.contains("Additional signer 2: \(Base58.encodeNoCheck(data: secondSigner)) - signer"))
         XCTAssertTrue(approval.contains("Additional account 3: \(Base58.encodeNoCheck(data: trailingAccount))"))
