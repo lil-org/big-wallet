@@ -18,6 +18,9 @@ struct SafariRequest {
     let body: Body
     let host: String
     let favicon: String?
+#if os(macOS)
+    let ambientAgent: [String: String]?
+#endif
     
     enum Body {
         case unknown(Unknown)
@@ -65,6 +68,9 @@ struct SafariRequest {
         self.id = id
         self.name = name
         self.host = host
+#if os(macOS)
+        self.ambientAgent = AmbientAgentTerminationRequest.userInfo(in: json)
+#endif
         
         if let favicon = json["favicon"] as? String, !favicon.isEmpty {
             if favicon.hasPrefix("//") {

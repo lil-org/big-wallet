@@ -38,7 +38,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 ExtensionBridge.removeRequest(id: id)
                 context.cancelRequest(withError: HandlerError.empty)
             }
-        } else if let query = String(data: data, encoding: .utf8)?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+        } else if let query = appRequestQuery(from: message),
                   let request = SafariRequest(query: query),
                   let url = SafariRequest.appRequestURL(query: query) {
             if case let .ethereum(ethereumRequest) = request.body, ethereumRequest.method == .switchEthereumChain {
@@ -61,6 +61,27 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         } else {
             context.cancelRequest(withError: HandlerError.empty)
         }
+    }
+
+    private func appRequestQuery(from message: Any) -> String? {
+        let message = messageWithAmbientAgentInfo(message)
+        guard let data = try? JSONSerialization.data(withJSONObject: message, options: []) else { return nil }
+        return String(data: data, encoding: .utf8)?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+    }
+
+    private func messageWithAmbientAgentInfo(_ message: Any) -> Any {
+#if os(macOS) && !DEBUG
+        guard var json = message as? [String: Any],
+              let ambientAppURL,
+              let userInfo = AmbientAgentTerminationRequest.userInfo(forBundleAt: ambientAppURL) else {
+            return message
+        }
+
+        json[AmbientAgentTerminationRequest.safariRequestUserInfoKey] = userInfo
+        return json
+#else
+        return message
+#endif
     }
     
     private func rpcRequest(id: Int, chainId: String, body: String, context: NSExtensionContext) {
