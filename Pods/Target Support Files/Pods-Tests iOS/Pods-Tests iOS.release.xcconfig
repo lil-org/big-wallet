@@ -1,8 +1,8 @@
 CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO
-FRAMEWORK_SEARCH_PATHS = $(inherited) "${PODS_CONFIGURATION_BUILD_DIR}/BigInt-iOS" "${PODS_CONFIGURATION_BUILD_DIR}/TrustWalletCore-iOS" "${PODS_CONFIGURATION_BUILD_DIR}/WalletCoreSwiftProtobuf-iOS" "${PODS_ROOT}/TrustWalletCore" "${PODS_XCFRAMEWORKS_BUILD_DIR}/TrustWalletCore/Core"
+FRAMEWORK_SEARCH_PATHS = $(inherited) "${PODS_CONFIGURATION_BUILD_DIR}/TrustWalletCore-iOS" "${PODS_CONFIGURATION_BUILD_DIR}/WalletCoreSwiftProtobuf-iOS" "${PODS_ROOT}/TrustWalletCore" "${PODS_XCFRAMEWORKS_BUILD_DIR}/TrustWalletCore/Core"
 GCC_PREPROCESSOR_DEFINITIONS = $(inherited) COCOAPODS=1
-HEADER_SEARCH_PATHS = $(inherited) "${PODS_CONFIGURATION_BUILD_DIR}/BigInt-iOS/BigInt.framework/Headers" "${PODS_CONFIGURATION_BUILD_DIR}/TrustWalletCore-iOS/WalletCore.framework/Headers" "${PODS_CONFIGURATION_BUILD_DIR}/WalletCoreSwiftProtobuf-iOS/WalletCoreSwiftProtobuf.framework/Headers"
-OTHER_LDFLAGS = $(inherited) -l"c++" -framework "BigInt" -framework "WalletCore" -framework "WalletCoreSwiftProtobuf"
+HEADER_SEARCH_PATHS = $(inherited) "${PODS_CONFIGURATION_BUILD_DIR}/TrustWalletCore-iOS/WalletCore.framework/Headers" "${PODS_CONFIGURATION_BUILD_DIR}/WalletCoreSwiftProtobuf-iOS/WalletCoreSwiftProtobuf.framework/Headers"
+OTHER_LDFLAGS = $(inherited) -l"c++" -framework "WalletCore" -framework "WalletCoreSwiftProtobuf"
 PODS_BUILD_DIR = ${BUILD_DIR}
 PODS_CONFIGURATION_BUILD_DIR = ${PODS_BUILD_DIR}/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)
 PODS_PODFILE_DIR_PATH = ${SRCROOT}/.

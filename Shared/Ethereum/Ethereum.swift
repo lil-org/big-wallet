@@ -7,7 +7,6 @@ import VSwiftProtobuf
 #else
 import WalletCoreSwiftProtobuf
 #endif
-import BigInt
 
 struct Ethereum {
 
@@ -22,9 +21,9 @@ struct Ethereum {
     static let shared = Ethereum()
     private let rpc = EthereumRPC()
     
-    func getBalance(network: EthereumNetwork, address: String, completion: @escaping (BigInt) -> Void) {
+    func getBalance(network: EthereumNetwork, address: String, completion: @escaping (BigUInt) -> Void) {
         rpc.getBalance(rpcUrl: network.nodeURLString, for: address) { result in
-            guard case let .success(hex) = result, let balance = BigInt(hexString: hex) else { return }
+            guard case let .success(hex) = result, let balance = BigUInt(hexString: hex) else { return }
             DispatchQueue.main.async { completion(balance) }
         }
     }

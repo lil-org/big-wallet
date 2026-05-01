@@ -2,7 +2,6 @@ inhibit_all_warnings!
 use_frameworks!
 
 def shared_pods
-  pod 'BigInt'
   pod 'TrustWalletCore'
 end
 
@@ -31,7 +30,6 @@ end
 
 target 'Big Wallet visionOS' do
   platform :visionos, '1.0'
-  pod 'VBigInt', :git => 'https://github.com/grachyov/BigInt.git', :branch => 'master'
   pod 'VTrustWalletCore', :podspec => 'https://github.com/grachyov/wallet-core/raw/master/VTrustWalletCore.podspec'
 
   target 'Tests visionOS' do

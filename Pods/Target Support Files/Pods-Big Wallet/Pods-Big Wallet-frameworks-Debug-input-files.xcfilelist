@@ -1,4 +1,3 @@
 ${PODS_ROOT}/Target Support Files/Pods-Big Wallet/Pods-Big Wallet-frameworks.sh
-${BUILT_PRODUCTS_DIR}/BigInt-macOS/BigInt.framework
 ${BUILT_PRODUCTS_DIR}/TrustWalletCore-macOS/WalletCore.framework
 ${BUILT_PRODUCTS_DIR}/WalletCoreSwiftProtobuf-macOS/WalletCoreSwiftProtobuf.framework

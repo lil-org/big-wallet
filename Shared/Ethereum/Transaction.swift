@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import Foundation
-import BigInt
 
 struct Transaction {
     var id = UUID()
@@ -37,7 +36,7 @@ struct Transaction {
     }
     
     var gasPriceGwei: String? {
-        guard let gasPrice = gasPrice, let value = BigInt(hexString: gasPrice) else { return nil }
+        guard let gasPrice = gasPrice, let value = BigUInt(hexString: gasPrice) else { return nil }
         return value.gwei
     }
     
@@ -78,8 +77,8 @@ struct Transaction {
     func feeWithSymbol(chain: EthereumNetwork, price: Double?) -> String {
         let feeString: String
         if let gasPriceString = gasPrice, let gasString = gas,
-           let gasPrice = BigInt(hexString: gasPriceString),
-           let gas = BigInt(hexString: gasString) {
+           let gasPrice = BigUInt(hexString: gasPriceString),
+           let gas = BigUInt(hexString: gasString) {
             let fee = gas * gasPrice
             let costString = chain.mightShowPrice ? cost(value: fee, price: price) : ""
             feeString = fee.eth(shortest: true) + " \(chain.symbol)" + costString
@@ -97,26 +96,25 @@ struct Transaction {
         }
     }
     
-    mutating func setCustomGasPriceGwei(value: Double) {
-        let decimalNumber = NSDecimalNumber(floatLiteral: value)
-        let weiDecimal = decimalNumber.multiplying(byPowerOf10: 9)
-        let formatter = NumberFormatter()
-        formatter.maximumFractionDigits = 0
-        let hex = String.hex(BigInt(stringLiteral: formatter.string(from: weiDecimal) ?? .zero))
+    @discardableResult
+    mutating func setCustomGasPriceGwei(value: Double) -> Bool {
+        guard let wei = Self.roundedWei(fromGwei: value) else { return false }
+        let hex = wei.hexString
         if gasPrice != hex {
             id = UUID()
             gasPrice = hex
         }
+        return true
     }
     
     func valueWithSymbol(chain: EthereumNetwork, price: Double?, withLabel: Bool) -> String? {
-        guard let value = value, let value = BigInt(hexString: value) else { return nil }
+        guard let value = value, let value = BigUInt(hexString: value) else { return nil }
         let costString = chain.mightShowPrice ? cost(value: value, price: price) : ""
         let valueString = "\(value.eth()) \(chain.symbol)" + costString
         return withLabel ? "\(Strings.value): " + valueString : valueString
     }
     
-    private func cost(value: BigInt, price: Double?) -> String {
+    private func cost(value: BigUInt, price: Double?) -> String {
         guard let price = price else { return "" }
         let ethValue = value.ethDouble
         let cost = NSNumber(floatLiteral: price * ethValue)
@@ -164,6 +162,23 @@ struct Transaction {
     
     private mutating func setGasPrice(value: UInt) {
         gasPrice = String.hex(value)
+    }
+
+    private static func roundedWei(fromGwei value: Double) -> BigUInt? {
+        guard value.isFinite, value >= 0 else { return nil }
+
+        let rounding = NSDecimalNumberHandler(roundingMode: .bankers,
+                                              scale: 0,
+                                              raiseOnExactness: false,
+                                              raiseOnOverflow: false,
+                                              raiseOnUnderflow: false,
+                                              raiseOnDivideByZero: false)
+        let weiDecimal = NSDecimalNumber(value: value).multiplying(byPowerOf10: 9, withBehavior: rounding)
+        guard weiDecimal != NSDecimalNumber.notANumber else { return nil }
+
+        let roundedWei = weiDecimal.rounding(accordingToBehavior: rounding)
+        guard roundedWei != NSDecimalNumber.notANumber else { return nil }
+        return BigUInt(decimalString: roundedWei.stringValue)
     }
     
     func currentGasInRelationTo(info: GasService.Info) -> Double {

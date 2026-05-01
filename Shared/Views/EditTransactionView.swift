@@ -63,8 +63,7 @@ struct EditTransactionView: View {
     
     private func didUpdateGasPrice() {
         if !gasPrice.isEmpty, let gasPriceNumber = Double(gasPrice) {
-            transaction.setCustomGasPriceGwei(value: gasPriceNumber)
-            canProceedWithOK = true
+            canProceedWithOK = transaction.setCustomGasPriceGwei(value: gasPriceNumber)
         } else {
             canProceedWithOK = false
         }
