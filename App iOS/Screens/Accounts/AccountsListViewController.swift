@@ -136,7 +136,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             if let peer = selectAccountAction.peer {
                 websiteNameLabel.text = peer.name
                 if let urlString = peer.iconURLString, let url = URL(string: urlString) {
-                    websiteLogoImageView.kf.setImage(with: url)
+                    websiteLogoImageView.setRemoteImage(with: url)
                 }
             } else {
                 websiteNameLabel.text = Strings.unknownWebsite

@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import Cocoa
-import Kingfisher
 import WalletCore
 
 class AccountsListViewController: NSViewController {
@@ -172,8 +171,8 @@ class AccountsListViewController: NSViewController {
             websiteNameStackView.isHidden = false
             
             if websiteLogoImageView.image == nil, let urlString = peer.iconURLString, let url = URL(string: urlString) {
-                websiteLogoImageView.kf.setImage(with: url) { [weak websiteLogoImageView] result in
-                    if case .success = result {
+                websiteLogoImageView.setRemoteImage(with: url) { [weak websiteLogoImageView] didLoad in
+                    if didLoad {
                         websiteLogoImageView?.layer?.backgroundColor = NSColor.clear.cgColor
                         websiteLogoImageView?.layer?.cornerRadius = 0
                     }

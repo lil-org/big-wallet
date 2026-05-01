@@ -23,6 +23,10 @@
 		2C09FC602828078C00DE9C27 /* AccountsHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09FC5E2828078C00DE9C27 /* AccountsHeaderView.swift */; };
 		2C09FC662828331D00DE9C27 /* PlatformSpecificImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09FC652828331D00DE9C27 /* PlatformSpecificImage.swift */; };
 		2C09FC672828331D00DE9C27 /* PlatformSpecificImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09FC652828331D00DE9C27 /* PlatformSpecificImage.swift */; };
+		2F5E10012FA5000000F0000 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */; };
+		2F5E10022FA5000000F0000 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */; };
+		2F5E10032FA5000000F0000 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */; };
+		2F5E10042FA5000000F0000 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */; };
 		2C0C7A752D53D62D009D71BD /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */; };
 		2C134BA627553EC500DAFBDB /* Browser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C134BA527553EC500DAFBDB /* Browser.swift */; };
 		2C17BDE32D3D01F30015C58B /* Big_Wallet_visionOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C17BDDF2D3D01F30015C58B /* Big_Wallet_visionOSApp.swift */; };
@@ -593,6 +597,7 @@
 		2C09FC5D2828078C00DE9C27 /* AccountsHeaderView.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = AccountsHeaderView.xib; sourceTree = "<group>"; };
 		2C09FC5E2828078C00DE9C27 /* AccountsHeaderView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AccountsHeaderView.swift; sourceTree = "<group>"; };
 		2C09FC652828331D00DE9C27 /* PlatformSpecificImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformSpecificImage.swift; sourceTree = "<group>"; };
+		2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImageLoader.swift; sourceTree = "<group>"; };
 		2C134BA527553EC500DAFBDB /* Browser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Browser.swift; sourceTree = "<group>"; };
 		2C17BDCA2D3D007E0015C58B /* Big Wallet.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Big Wallet.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C17BDDE2D3D01F30015C58B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -1803,6 +1808,7 @@
 			children = (
 				2C528A15267FA8EB00CA3ADD /* Defaults.swift */,
 				2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */,
+				2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */,
 				2F1A00032E20000100A1A001 /* Solana.swift */,
 				2CAA412426C7CD93009F3535 /* ReviewRequester.swift */,
 				2C901C4C268A033100D0926A /* GasService.swift */,
@@ -3519,6 +3525,7 @@
 				2C7740042D53C21A00879A1F /* AuthenticationReason.swift in Sources */,
 				2C7740052D53C21A00879A1F /* SpecificWalletAccount.swift in Sources */,
 				2C7740062D53C21A00879A1F /* PlatformSpecificImage.swift in Sources */,
+				2F5E10012FA5000000F0000 /* RemoteImageLoader.swift in Sources */,
 				2C7740072D53C21A00879A1F /* SafariRequest+Helpers.swift in Sources */,
 				2C7740082D53C21A00879A1F /* DappRequestAction.swift in Sources */,
 				2C7740002D53C20B00879A1F /* EditTransactionView.swift in Sources */,
@@ -3602,6 +3609,7 @@
 				2CE3D012267F73C00032A62E /* Transaction.swift in Sources */,
 				2C90E62227B2ED2D00C8991E /* SafariRequest+Helpers.swift in Sources */,
 				2C09FC662828331D00DE9C27 /* PlatformSpecificImage.swift in Sources */,
+				2F5E10022FA5000000F0000 /* RemoteImageLoader.swift in Sources */,
 				2C8A09EB2675964700993638 /* ApproveViewController.swift in Sources */,
 				2C264BDC27B5AC5400234393 /* EthereumResponseToExtension.swift in Sources */,
 				2F1A10112E20000100A1A001 /* SolanaResponseToExtension.swift in Sources */,
@@ -3677,6 +3685,7 @@
 				2CF255AD275A48CF00AE54B9 /* EthereumNetwork.swift in Sources */,
 				2CF2559C275A477F00AE54B9 /* ApprovalSubject.swift in Sources */,
 				2C09FC672828331D00DE9C27 /* PlatformSpecificImage.swift in Sources */,
+				2F5E10032FA5000000F0000 /* RemoteImageLoader.swift in Sources */,
 				2C264BD627B5806200234393 /* InpageProvider.swift in Sources */,
 				2CE0594427640EB40042D844 /* ExtensionBridge.swift in Sources */,
 				2CF255B1275A4A1800AE54B9 /* ResponseToExtension.swift in Sources */,
@@ -3822,6 +3831,7 @@
 				2CF2676F1861169B92F690A4 /* Transaction.swift in Sources */,
 				2C60964FCD7D7729CC2F5390 /* SafariRequest+Helpers.swift in Sources */,
 				2CD179BB4ADFB6932786B2B0 /* PlatformSpecificImage.swift in Sources */,
+				2F5E10042FA5000000F0000 /* RemoteImageLoader.swift in Sources */,
 				2CB60814E6923588E3BDCAD1 /* ApproveViewController.swift in Sources */,
 				2CA151C7D2BD0E90CDFDC181 /* EthereumResponseToExtension.swift in Sources */,
 				2C49DCF53A3134EBD4CA5619 /* SolanaResponseToExtension.swift in Sources */,

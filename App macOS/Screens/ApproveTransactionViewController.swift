@@ -2,7 +2,6 @@
 
 import Cocoa
 import WalletCore
-import Kingfisher
 
 class ApproveTransactionViewController: NSViewController {
     
@@ -79,8 +78,8 @@ class ApproveTransactionViewController: NSViewController {
         if let peer = peerMeta {
             peerNameLabel.stringValue = peer.name
             if let urlString = peer.iconURLString, let url = URL(string: urlString) {
-                peerLogoImageView.kf.setImage(with: url) { [weak peerLogoImageView] result in
-                    if case .success = result {
+                peerLogoImageView.setRemoteImage(with: url) { [weak peerLogoImageView] didLoad in
+                    if didLoad {
                         peerLogoImageView?.layer?.backgroundColor = NSColor.clear.cgColor
                         peerLogoImageView?.layer?.cornerRadius = 0
                     }

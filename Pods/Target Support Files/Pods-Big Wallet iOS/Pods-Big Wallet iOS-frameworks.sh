@@ -177,13 +177,11 @@ code_sign_if_enabled() {
 
 if [[ "$CONFIGURATION" == "Debug" ]]; then
   install_framework "${BUILT_PRODUCTS_DIR}/BigInt-iOS/BigInt.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/Kingfisher-iOS/Kingfisher.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/TrustWalletCore-iOS/WalletCore.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/WalletCoreSwiftProtobuf-iOS/WalletCoreSwiftProtobuf.framework"
 fi
 if [[ "$CONFIGURATION" == "Release" ]]; then
   install_framework "${BUILT_PRODUCTS_DIR}/BigInt-iOS/BigInt.framework"
-  install_framework "${BUILT_PRODUCTS_DIR}/Kingfisher-iOS/Kingfisher.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/TrustWalletCore-iOS/WalletCore.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/WalletCoreSwiftProtobuf-iOS/WalletCoreSwiftProtobuf.framework"
 fi

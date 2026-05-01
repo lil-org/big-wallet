@@ -1,6 +1,5 @@
 PODS:
   - BigInt (5.2.0)
-  - Kingfisher (8.8.0)
   - TrustWalletCore (4.6.0):
     - TrustWalletCore/Core (= 4.6.0)
   - TrustWalletCore/Core (4.6.0):
@@ -19,7 +18,6 @@ PODS:
 
 DEPENDENCIES:
   - BigInt
-  - Kingfisher
   - TrustWalletCore
   - VBigInt (from `https://github.com/grachyov/BigInt.git`, branch `master`)
   - VTrustWalletCore (from `https://github.com/grachyov/wallet-core/raw/master/VTrustWalletCore.podspec`)
@@ -27,7 +25,6 @@ DEPENDENCIES:
 SPEC REPOS:
   trunk:
     - BigInt
-    - Kingfisher
     - TrustWalletCore
     - VSwiftProtobuf
     - WalletCoreSwiftProtobuf
@@ -46,13 +43,12 @@ CHECKOUT OPTIONS:
 
 SPEC CHECKSUMS:
   BigInt: f668a80089607f521586bbe29513d708491ef2f7
-  Kingfisher: beeaf65ed57dfa710d416aea4093277e8a9b1968
   TrustWalletCore: a63eef893eeb285c3f689d2bfc89673419f65474
   VBigInt: 0cb96b7ea4319327359d2c8a7692e6902b29b2d7
   VSwiftProtobuf: 90ccd59c4535da3d7618b2ff910543ef46bfa9c0
   VTrustWalletCore: 8d45e6187f1085797b965bf8ccc601ddfdf9e966
   WalletCoreSwiftProtobuf: a4798576a2d309511fc45f81843d348732ec571d
 
-PODFILE CHECKSUM: b1bc8769b78edaceea942bff6640d90e8027aa2c
+PODFILE CHECKSUM: 4adb2d539030c9263edb34aefe585cc7d7e404ac
 
 COCOAPODS: 1.16.2

@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import UIKit
-import Kingfisher
 
 class ImageWithLabelTableViewCell: UITableViewCell {
 
@@ -17,14 +16,14 @@ class ImageWithLabelTableViewCell: UITableViewCell {
             iconImageView.layer.cornerRadius = 15
             iconImageView.tintColor = .secondaryLabel
         } else if let urlString = imageURL, let url = URL(string: urlString) {
-            iconImageView.kf.setImage(with: url)
+            iconImageView.setRemoteImage(with: url)
             iconImageView.tintColor = .secondarySystemFill
         }
     }
     
     override func prepareForReuse() {
         super.prepareForReuse()
-        iconImageView.kf.cancelDownloadTask()
+        iconImageView.cancelRemoteImageLoad()
         iconImageView.image = Images.circleFill
         iconImageView.layer.cornerRadius = 0
         iconImageView.tintColor = .secondarySystemFill
