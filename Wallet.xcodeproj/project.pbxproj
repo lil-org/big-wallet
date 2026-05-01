@@ -7,6 +7,30 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2F2A00000000000000000002 /* SolanaTestFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A00000000000000000001 /* SolanaTestFixtures.swift */; };
+		2F2A00000000000000000003 /* SolanaTestFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A00000000000000000001 /* SolanaTestFixtures.swift */; };
+		2F2A00000000000000000004 /* SolanaTestFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A00000000000000000001 /* SolanaTestFixtures.swift */; };
+		2F2A00000000000000000006 /* SolanaWireMessageParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A00000000000000000005 /* SolanaWireMessageParserTests.swift */; };
+		2F2A00000000000000000007 /* SolanaWireMessageParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A00000000000000000005 /* SolanaWireMessageParserTests.swift */; };
+		2F2A00000000000000000008 /* SolanaWireMessageParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A00000000000000000005 /* SolanaWireMessageParserTests.swift */; };
+		2F2A0000000000000000000A /* SolanaTransactionSummaryFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A00000000000000000009 /* SolanaTransactionSummaryFormatterTests.swift */; };
+		2F2A0000000000000000000B /* SolanaTransactionSummaryFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A00000000000000000009 /* SolanaTransactionSummaryFormatterTests.swift */; };
+		2F2A0000000000000000000C /* SolanaTransactionSummaryFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A00000000000000000009 /* SolanaTransactionSummaryFormatterTests.swift */; };
+		2F2A0000000000000000000E /* SolanaPreparedTransactionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A0000000000000000000D /* SolanaPreparedTransactionTests.swift */; };
+		2F2A0000000000000000000F /* SolanaPreparedTransactionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A0000000000000000000D /* SolanaPreparedTransactionTests.swift */; };
+		2F2A00000000000000000010 /* SolanaPreparedTransactionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A0000000000000000000D /* SolanaPreparedTransactionTests.swift */; };
+		2F2A00000000000000000012 /* SolanaOptionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A00000000000000000011 /* SolanaOptionsTests.swift */; };
+		2F2A00000000000000000013 /* SolanaOptionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A00000000000000000011 /* SolanaOptionsTests.swift */; };
+		2F2A00000000000000000014 /* SolanaOptionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A00000000000000000011 /* SolanaOptionsTests.swift */; };
+		2F2A00000000000000000016 /* DappRequestProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A00000000000000000015 /* DappRequestProcessorTests.swift */; };
+		2F2A00000000000000000017 /* DappRequestProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A00000000000000000015 /* DappRequestProcessorTests.swift */; };
+		2F2A00000000000000000018 /* DappRequestProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A00000000000000000015 /* DappRequestProcessorTests.swift */; };
+		2F2A0000000000000000001A /* WalletsManagerPrivateKeyImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A00000000000000000019 /* WalletsManagerPrivateKeyImportTests.swift */; };
+		2F2A0000000000000000001B /* WalletsManagerPrivateKeyImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A00000000000000000019 /* WalletsManagerPrivateKeyImportTests.swift */; };
+		2F2A0000000000000000001C /* WalletsManagerPrivateKeyImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A00000000000000000019 /* WalletsManagerPrivateKeyImportTests.swift */; };
+		2F2A0000000000000000001E /* WalletsManagerPreviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A0000000000000000001D /* WalletsManagerPreviewTests.swift */; };
+		2F2A0000000000000000001F /* WalletsManagerPreviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A0000000000000000001D /* WalletsManagerPreviewTests.swift */; };
+		2F2A00000000000000000020 /* WalletsManagerPreviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2A0000000000000000001D /* WalletsManagerPreviewTests.swift */; };
 		05F2236042D2D092C4195BF6 /* Pods_Big_Wallet_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E2D957850671E8B139CA5148 /* Pods_Big_Wallet_iOS.framework */; };
 		0D059AD226C2796200EE3023 /* ApprovalSubject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D059AD126C2796200EE3023 /* ApprovalSubject.swift */; };
 		0DC850E726B73A5900809E82 /* AuthenticationReason.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC850E626B73A5900809E82 /* AuthenticationReason.swift */; };
@@ -579,6 +603,14 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		2F2A00000000000000000001 /* SolanaTestFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolanaTestFixtures.swift; sourceTree = "<group>"; };
+		2F2A00000000000000000005 /* SolanaWireMessageParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolanaWireMessageParserTests.swift; sourceTree = "<group>"; };
+		2F2A00000000000000000009 /* SolanaTransactionSummaryFormatterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolanaTransactionSummaryFormatterTests.swift; sourceTree = "<group>"; };
+		2F2A0000000000000000000D /* SolanaPreparedTransactionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolanaPreparedTransactionTests.swift; sourceTree = "<group>"; };
+		2F2A00000000000000000011 /* SolanaOptionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolanaOptionsTests.swift; sourceTree = "<group>"; };
+		2F2A00000000000000000015 /* DappRequestProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DappRequestProcessorTests.swift; sourceTree = "<group>"; };
+		2F2A00000000000000000019 /* WalletsManagerPrivateKeyImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsManagerPrivateKeyImportTests.swift; sourceTree = "<group>"; };
+		2F2A0000000000000000001D /* WalletsManagerPreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsManagerPreviewTests.swift; sourceTree = "<group>"; };
 		0D059AD126C2796200EE3023 /* ApprovalSubject.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalSubject.swift; sourceTree = "<group>"; };
 		0DC850E626B73A5900809E82 /* AuthenticationReason.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationReason.swift; sourceTree = "<group>"; };
 		1575AE7CBBB5C530F059097D /* Pods-Tests visionOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Tests visionOS.release.xcconfig"; path = "Target Support Files/Pods-Tests visionOS/Pods-Tests visionOS.release.xcconfig"; sourceTree = "<group>"; };
@@ -1283,7 +1315,15 @@
 			isa = PBXGroup;
 			children = (
 				2C0000012FA7000000000001 /* BigUIntTests.swift */,
+				2F2A00000000000000000015 /* DappRequestProcessorTests.swift */,
+				2F2A00000000000000000011 /* SolanaOptionsTests.swift */,
+				2F2A0000000000000000000D /* SolanaPreparedTransactionTests.swift */,
+				2F2A00000000000000000001 /* SolanaTestFixtures.swift */,
+				2F2A00000000000000000009 /* SolanaTransactionSummaryFormatterTests.swift */,
+				2F2A00000000000000000005 /* SolanaWireMessageParserTests.swift */,
 				2C03EB892B069BFD00EF61F5 /* TransactionInspectorTests.swift */,
+				2F2A00000000000000000019 /* WalletsManagerPrivateKeyImportTests.swift */,
+				2F2A0000000000000000001D /* WalletsManagerPreviewTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -3798,6 +3838,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2F2A00000000000000000002 /* SolanaTestFixtures.swift in Sources */,
+				2F2A00000000000000000006 /* SolanaWireMessageParserTests.swift in Sources */,
+				2F2A0000000000000000000A /* SolanaTransactionSummaryFormatterTests.swift in Sources */,
+				2F2A0000000000000000000E /* SolanaPreparedTransactionTests.swift in Sources */,
+				2F2A00000000000000000012 /* SolanaOptionsTests.swift in Sources */,
+				2F2A00000000000000000016 /* DappRequestProcessorTests.swift in Sources */,
+				2F2A0000000000000000001A /* WalletsManagerPrivateKeyImportTests.swift in Sources */,
+				2F2A0000000000000000001E /* WalletsManagerPreviewTests.swift in Sources */,
 				2C86125B2B76BDF300B22794 /* TransactionInspectorTests.swift in Sources */,
 				2C0000022FA7000000000001 /* BigUIntTests.swift in Sources */,
 				2C86125D2B76BE2800B22794 /* Tests_iOS.swift in Sources */,
@@ -3919,6 +3967,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2F2A00000000000000000003 /* SolanaTestFixtures.swift in Sources */,
+				2F2A00000000000000000007 /* SolanaWireMessageParserTests.swift in Sources */,
+				2F2A0000000000000000000B /* SolanaTransactionSummaryFormatterTests.swift in Sources */,
+				2F2A0000000000000000000F /* SolanaPreparedTransactionTests.swift in Sources */,
+				2F2A00000000000000000013 /* SolanaOptionsTests.swift in Sources */,
+				2F2A00000000000000000017 /* DappRequestProcessorTests.swift in Sources */,
+				2F2A0000000000000000001B /* WalletsManagerPrivateKeyImportTests.swift in Sources */,
+				2F2A0000000000000000001F /* WalletsManagerPreviewTests.swift in Sources */,
 				2CE02C832BAA0F9800381D70 /* TransactionInspectorTests.swift in Sources */,
 				2C0000032FA7000000000001 /* BigUIntTests.swift in Sources */,
 				2CE02C7D2BAA0F6700381D70 /* Tests_macOS.swift in Sources */,
@@ -3940,6 +3996,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2F2A00000000000000000004 /* SolanaTestFixtures.swift in Sources */,
+				2F2A00000000000000000008 /* SolanaWireMessageParserTests.swift in Sources */,
+				2F2A0000000000000000000C /* SolanaTransactionSummaryFormatterTests.swift in Sources */,
+				2F2A00000000000000000010 /* SolanaPreparedTransactionTests.swift in Sources */,
+				2F2A00000000000000000014 /* SolanaOptionsTests.swift in Sources */,
+				2F2A00000000000000000018 /* DappRequestProcessorTests.swift in Sources */,
+				2F2A0000000000000000001C /* WalletsManagerPrivateKeyImportTests.swift in Sources */,
+				2F2A00000000000000000020 /* WalletsManagerPreviewTests.swift in Sources */,
 				2CF9B10F2D526F7C00B5CE82 /* TransactionInspectorTests.swift in Sources */,
 				2C0000042FA7000000000001 /* BigUIntTests.swift in Sources */,
 				2CADA62C2D5271BA002C34A8 /* Tests_visionOS.swift in Sources */,
