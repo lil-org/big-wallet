@@ -1,6 +1,7 @@
 // ∅ 2026 lil org
 
 import Cocoa
+import SafariServices
 import WalletCore
 
 class AccountsListViewController: NSViewController {
@@ -10,6 +11,7 @@ class AccountsListViewController: NSViewController {
     private var cellModels = [CellModel]()
     private var didCallCompletion = false
     private var didAppear = false
+    private var preferencesButton: NSButton?
     var selectAccountAction: SelectAccountAction?
     var newWalletId: String?
     var getBackToRect: CGRect?
@@ -82,6 +84,10 @@ class AccountsListViewController: NSViewController {
     private var canSelectEthereumNetwork: Bool {
         return selectAccountAction?.canSelectEthereumNetwork == true
     }
+
+    private var shouldShowPreferencesButton: Bool {
+        return CurrentApp.isDockApp && selectAccountAction == nil
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -90,6 +96,7 @@ class AccountsListViewController: NSViewController {
         secondaryButton.title = Strings.cancel
         
         validateSelectedAccounts()
+        setupPreferencesButtonIfNeeded()
         reloadHeader()
         updateBottomButtons()
         updateCellModels()
@@ -164,6 +171,7 @@ class AccountsListViewController: NSViewController {
         }
         
         addButton.isHidden = wallets.isEmpty
+        preferencesButton?.isHidden = !shouldShowPreferencesButton
         
         if canSelectAccount, let peer = selectAccountAction?.peer {
             websiteNameLabel.stringValue = peer.name
@@ -183,6 +191,33 @@ class AccountsListViewController: NSViewController {
             websiteNameStackView.isHidden = true
         }
     }
+
+    private func setupPreferencesButtonIfNeeded() {
+        guard shouldShowPreferencesButton else { return }
+
+        let button = NSButton(image: Images.preferences.with(pointSize: 18, weight: .regular) ?? Images.preferences,
+                              target: self,
+                              action: #selector(preferencesButtonTapped(_:)))
+        button.bezelStyle = .inline
+        button.focusRingType = .none
+        button.isBordered = false
+        button.imagePosition = .imageOnly
+        button.toolTip = Strings.bigWallet
+        button.translatesAutoresizingMaskIntoConstraints = false
+
+        let menu = NSMenu(title: Strings.bigWallet)
+        menu.delegate = self
+        button.menu = menu
+
+        view.addSubview(button)
+        NSLayoutConstraint.activate([
+            button.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            button.centerYAnchor.constraint(equalTo: addButton.centerYAnchor),
+            button.widthAnchor.constraint(equalToConstant: 35),
+            button.heightAnchor.constraint(equalToConstant: 34)
+        ])
+        preferencesButton = button
+    }
     
     @IBAction func addButtonTapped(_ sender: NSButton) {
         let menu = sender.menu
@@ -198,6 +233,27 @@ class AccountsListViewController: NSViewController {
         origin.x += sender.frame.width
         origin.y += sender.frame.height
         menu?.popUp(positioning: nil, at: origin, in: view)
+    }
+
+    @objc private func preferencesButtonTapped(_ sender: NSButton) {
+        guard shouldShowPreferencesButton, let menu = sender.menu else { return }
+
+        menu.addItem(preferencesMenuItem(title: Strings.enableSafariExtension, action: #selector(didClickEnableSafariExtension)))
+        menu.addItem(preferencesMenuItem(title: Strings.rateOnTheAppStore, action: #selector(didClickRateOnTheAppStore)))
+        menu.addItem(.separator())
+        menu.addItem(preferencesMenuItem(title: Strings.viewOnGithub, action: #selector(didClickViewOnGithub)))
+        menu.addItem(preferencesMenuItem(title: Strings.dropUsALine, action: #selector(didClickDropUsALine)))
+        menu.addItem(preferencesMenuItem(title: Strings.viewOnX, action: #selector(didClickViewOnX)))
+
+        var origin = sender.frame.origin
+        origin.y += sender.frame.height
+        menu.popUp(positioning: nil, at: origin, in: view)
+    }
+
+    private func preferencesMenuItem(title: String, action: Selector) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        item.target = self
+        return item
     }
     
     @IBAction func networkButtonTapped(_ sender: NSButton) {
@@ -357,6 +413,31 @@ class AccountsListViewController: NSViewController {
         if let url = sender.representedObject as? URL {
             NSWorkspace.shared.open(url)
         }
+    }
+
+    @objc private func didClickEnableSafariExtension() {
+        SFSafariApplication.showPreferencesForExtension(withIdentifier: Identifiers.safariExtensionBundle) { error in
+            guard error != nil else { return }
+            DispatchQueue.main.async {
+                NSWorkspace.shared.open(URL.iosSafariGuide)
+            }
+        }
+    }
+
+    @objc private func didClickRateOnTheAppStore() {
+        ReviewRequster.didClickAppStoreReviewButton()
+    }
+
+    @objc private func didClickViewOnGithub() {
+        NSWorkspace.shared.open(URL.github)
+    }
+
+    @objc private func didClickDropUsALine() {
+        NSWorkspace.shared.open(URL.email)
+    }
+
+    @objc private func didClickViewOnX() {
+        NSWorkspace.shared.open(URL.x)
     }
     
     @objc private func didClickCopyAddress(_ sender: AnyObject) {
@@ -768,6 +849,8 @@ extension AccountsListViewController: NSMenuDelegate {
     
     func menuDidClose(_ menu: NSMenu) {
         if menu === addButton.menu {
+            menu.removeAllItems()
+        } else if let preferencesMenu = preferencesButton?.menu, menu === preferencesMenu {
             menu.removeAllItems()
         } else if menu === tableView.menu {
             tableView.deselectedRow = tableView.selectedRow
