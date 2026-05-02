@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import Foundation
-import WalletCore
 
 private struct RPCResponse: Codable {
     let id: Int
@@ -49,7 +48,7 @@ class EthereumRPC {
     
     private func unsafeResolveENS(rpcUrl: String, address: String, completion: @escaping (Result<String, Error>) -> Void) {
         let reverseRecord = "\(address.lowercased().cleanHex).addr.reverse"
-        let nameHash = namehash(reverseRecord).hexString
+        let nameHash = WalletCrypto.hexString(data: namehash(reverseRecord))
         let params: [Any] = [
             [
                 "to": ensResolver,
@@ -60,7 +59,7 @@ class EthereumRPC {
         request(method: "eth_call", params: params, rpcUrl: rpcUrl) { result in
             switch result {
             case .success(let success):
-                if let data = Data(hexString: String(success.cleanHex.dropFirst(64))),
+                if let data = WalletCrypto.hexData(string: String(success.cleanHex.dropFirst(64))),
                    let ens = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .controlCharacters) {
                     completion(.success(ens))
                 } else {
@@ -76,7 +75,7 @@ class EthereumRPC {
         let params: [Any] = [
             [
                 "to": ensResolver,
-                "data": "0x3b3b57de" + namehash(ens).hexString
+                "data": "0x3b3b57de" + WalletCrypto.hexString(data: namehash(ens))
             ],
             "latest"
         ]
@@ -152,8 +151,8 @@ class EthereumRPC {
         if !name.isEmpty {
             name.split(separator: ".").reversed().forEach { label in
                 guard let data = label.data(using: .utf8) else { return }
-                node.append(Hash.keccak256(data: data))
-                node = Hash.keccak256(data: node)
+                node.append(WalletCrypto.keccak256(data: data))
+                node = WalletCrypto.keccak256(data: node)
             }
         }
         return node

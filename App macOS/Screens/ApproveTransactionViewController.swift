@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import Cocoa
-import WalletCore
 
 class ApproveTransactionViewController: NSViewController {
     
@@ -35,12 +34,12 @@ class ApproveTransactionViewController: NSViewController {
     private var didCallCompletion = false
     private var didEnableSpeedConfiguration = false
     private var peerMeta: PeerMeta?
-    private var account: Account!
+    private var account: WalletAccount!
     private var walletId: String!
     private var balance: String?
     private var suggestedNonceAndGasPrice: (nonce: String?, gasPrice: String?)?
     
-    static func with(transaction: Transaction, chain: EthereumNetwork, account: Account, walletId: String, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
+    static func with(transaction: Transaction, chain: EthereumNetwork, account: WalletAccount, walletId: String, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self)
         new.walletId = walletId
         new.account = account

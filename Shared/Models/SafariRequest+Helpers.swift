@@ -1,13 +1,12 @@
 // ∅ 2026 lil org
 
 import Foundation
-import WalletCore
 
 extension SafariRequest.Ethereum {
     
     var message: Data? {
         if let dataString = parameters?["data"] as? String {
-            if let data = Data(hexString: dataString) {
+            if let data = WalletCrypto.hexData(string: dataString) {
                 return data
             } else {
                 return dataString.data(using: .utf8)
@@ -35,9 +34,9 @@ extension SafariRequest.Ethereum {
     
     var signatureAndMessage: (signature: Data, message: Data)? {
         if let signatureHexString = parameters?["signature"] as? String,
-           let signatureData = Data(hexString: signatureHexString),
+           let signatureData = WalletCrypto.hexData(string: signatureHexString),
            let messageHexString = parameters?["message"] as? String,
-           let messageData = Data(hexString: messageHexString) {
+           let messageData = WalletCrypto.hexData(string: messageHexString) {
             return (signatureData, messageData)
         } else {
             return nil

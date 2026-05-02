@@ -1,6 +1,5 @@
 // ∅ 2026 lil org
 
-import WalletCore
 
 struct WalletsMetadataService {
 
@@ -20,11 +19,11 @@ struct WalletsMetadataService {
         saveItemName(name, wallet: wallet, account: nil)
     }
 
-    static func getAccountName(walletId: String, account: Account) -> String? {
+    static func getAccountName(walletId: String, account: WalletAccount) -> String? {
         return names[itemKey(walletId: walletId, account: account)]
     }
 
-    static func saveAccountName(_ name: String?, wallet: WalletContainer, account: Account) {
+    static func saveAccountName(_ name: String?, wallet: WalletContainer, account: WalletAccount) {
         saveItemName(name, wallet: wallet, account: account)
     }
 
@@ -42,7 +41,7 @@ struct WalletsMetadataService {
         saveNames(postChange: postChange)
     }
 
-    private static func saveItemName(_ name: String?, wallet: WalletContainer, account: Account?) {
+    private static func saveItemName(_ name: String?, wallet: WalletContainer, account: WalletAccount?) {
         names = currentNames()
         let key = itemKey(walletId: wallet.id, account: account)
         if let name = name, !name.isEmpty {
@@ -60,7 +59,7 @@ struct WalletsMetadataService {
         }
     }
 
-    private static func itemKey(walletId: String, account: Account?) -> String {
+    private static func itemKey(walletId: String, account: WalletAccount?) -> String {
         if let account = account {
             return "\(walletId)-\((account.coin.rawValue))-\(account.derivationPath)"
         } else {

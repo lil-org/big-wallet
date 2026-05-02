@@ -5,27 +5,20 @@ import UIKit
 #elseif os(macOS)
 import Cocoa
 #endif
-import WalletCore
 
 struct WalletPreviewAccountKey: Hashable {
-    let coin: CoinType
+    let coin: WalletCoin
     let derivationPath: String
 }
 
-extension Account {
+extension WalletAccount {
 
     var previewAccountKey: WalletPreviewAccountKey {
         return WalletPreviewAccountKey(coin: coin, derivationPath: derivationPath)
     }
 
     var previewDerivationIndex: Int {
-        guard let path = DerivationPath(derivationPath) else { return 0 }
-        switch coin {
-        case .solana:
-            return Int(path.account)
-        default:
-            return Int(path.address)
-        }
+        return WalletCrypto.previewDerivationIndex(derivationPath: derivationPath, coin: coin)
     }
 
     var croppedAddress: String {
@@ -35,8 +28,6 @@ extension Account {
             dropFirstCount = 2
         case .near, .solana:
             dropFirstCount = 0
-        default:
-            fatalError(Strings.somethingWentWrong)
         }
         let withoutCommonPart = String(address.dropFirst(dropFirstCount))
         return withoutCommonPart.prefix(4) + "..." + withoutCommonPart.suffix(4)
@@ -48,7 +39,7 @@ extension Account {
             return Blockies(seed: address.lowercased()).createImage()
         case .solana:
             return SolanaAccountIcon.image(seed: address, logo: Images.solana)
-        default:
+        case .near:
             return Images.circleFill
         }
     }

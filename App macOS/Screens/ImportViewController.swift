@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import Cocoa
-import WalletCore
 
 class ImportViewController: NSViewController {
     

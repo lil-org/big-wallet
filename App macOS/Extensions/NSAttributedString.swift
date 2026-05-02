@@ -1,10 +1,10 @@
 // ∅ 2026 lil org
 
-import WalletCore
+import AppKit
 
 extension NSAttributedString {
     
-    static func accountImageAttachment(account: Account) -> NSAttributedString {
+    static func accountImageAttachment(account: WalletAccount) -> NSAttributedString {
         let attachment = NSTextAttachment()
         attachment.image = account.image?.withCornerRadius(7)
         attachment.bounds = CGRect(x: 0, y: 0, width: 14, height: 14)

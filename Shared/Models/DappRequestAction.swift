@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import Foundation
-import WalletCore
 
 enum DappRequestAction {
     case none
@@ -16,7 +15,7 @@ enum DappRequestAction {
 
 struct SelectAccountAction {
     let peer: PeerMeta?
-    let coinType: CoinType?
+    let coinType: WalletCoin?
     var selectedAccounts: Set<SpecificWalletAccount>
     let initiallyConnectedProviders: Set<InpageProvider>
     var network: EthereumNetwork?
@@ -43,7 +42,7 @@ struct SignMessageAction {
     let provider: InpageProvider
     let subject: ApprovalSubject
     let walletId: String
-    let account: Account
+    let account: WalletAccount
     let meta: String
     let peerMeta: PeerMeta
     private(set) var solanaClusterSelection: SolanaClusterSelection? = nil
@@ -82,7 +81,7 @@ struct SendTransactionAction {
     let transaction: Transaction
     let chain: EthereumNetwork
     let walletId: String
-    let account: Account
+    let account: WalletAccount
     let peerMeta: PeerMeta
     let completion: (Transaction?) -> Void
 }

@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import Foundation
-import WalletCore
 import XCTest
 @testable import Big_Wallet
 
@@ -14,7 +13,7 @@ final class SolanaTransactionSummaryFormatterTests: XCTestCase {
                                         accountKeys: [
                                             payer,
                                             recipient,
-                                            Base58.decodeNoCheck(string: "11111111111111111111111111111111")!,
+                                            WalletCrypto.base58Decode(string: "11111111111111111111111111111111")!,
                                         ],
                                         bodyAfterBlockhash: SolanaMessageFixture.instruction(programIdIndex: 2,
                                                                         accountIndices: [0, 1],
@@ -24,8 +23,8 @@ final class SolanaTransactionSummaryFormatterTests: XCTestCase {
                                                                          encodedMessages: ["encoded"])
 
         XCTAssertTrue(approval.contains("Transfer 0.000005 SOL"))
-        XCTAssertTrue(approval.contains("From: \(Base58.encodeNoCheck(data: payer)) - signer - writable"))
-        XCTAssertTrue(approval.contains("To: \(Base58.encodeNoCheck(data: recipient)) - writable"))
+        XCTAssertTrue(approval.contains("From: \(WalletCrypto.base58Encode(data: payer)) - signer - writable"))
+        XCTAssertTrue(approval.contains("To: \(WalletCrypto.base58Encode(data: recipient)) - writable"))
         XCTAssertTrue(approval.contains("Data:\n\nencoded"))
     }
 
@@ -41,7 +40,7 @@ final class SolanaTransactionSummaryFormatterTests: XCTestCase {
                                             source,
                                             destination,
                                             mint,
-                                            Base58.decodeNoCheck(string: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")!,
+                                            WalletCrypto.base58Decode(string: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")!,
                                         ],
                                         bodyAfterBlockhash: SolanaMessageFixture.instruction(programIdIndex: 4,
                                                                         accountIndices: [1, 3, 2, 0],
@@ -51,8 +50,8 @@ final class SolanaTransactionSummaryFormatterTests: XCTestCase {
                                                                          encodedMessages: ["encoded"])
 
         XCTAssertTrue(approval.contains("SPL Token transfer 1.25"))
-        XCTAssertTrue(approval.contains("Mint: \(Base58.encodeNoCheck(data: mint))"))
-        XCTAssertTrue(approval.contains("Authority: \(Base58.encodeNoCheck(data: authority)) - signer - writable"))
+        XCTAssertTrue(approval.contains("Mint: \(WalletCrypto.base58Encode(data: mint))"))
+        XCTAssertTrue(approval.contains("Authority: \(WalletCrypto.base58Encode(data: authority)) - signer - writable"))
     }
 
     func testSolanaSummaryIncludesTokenMultisigSignerAccounts() {
@@ -74,7 +73,7 @@ final class SolanaTransactionSummaryFormatterTests: XCTestCase {
                                             mint,
                                             multisigAuthority,
                                             trailingAccount,
-                                            Base58.decodeNoCheck(string: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")!,
+                                            WalletCrypto.base58Decode(string: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")!,
                                         ],
                                         bodyAfterBlockhash: SolanaMessageFixture.instruction(programIdIndex: 7,
                                                                         accountIndices: [2, 4, 3, 5, 0, 1, 6],
@@ -83,10 +82,10 @@ final class SolanaTransactionSummaryFormatterTests: XCTestCase {
         let approval = SolanaTransactionSummaryFormatter.approvalMessage(messageData: message,
                                                                          encodedMessages: ["encoded"])
 
-        XCTAssertTrue(approval.contains("Authority: \(Base58.encodeNoCheck(data: multisigAuthority))"))
-        XCTAssertTrue(approval.contains("Additional signer 1: \(Base58.encodeNoCheck(data: firstSigner)) - signer - writable"))
-        XCTAssertTrue(approval.contains("Additional signer 2: \(Base58.encodeNoCheck(data: secondSigner)) - signer"))
-        XCTAssertTrue(approval.contains("Additional account 3: \(Base58.encodeNoCheck(data: trailingAccount))"))
+        XCTAssertTrue(approval.contains("Authority: \(WalletCrypto.base58Encode(data: multisigAuthority))"))
+        XCTAssertTrue(approval.contains("Additional signer 1: \(WalletCrypto.base58Encode(data: firstSigner)) - signer - writable"))
+        XCTAssertTrue(approval.contains("Additional signer 2: \(WalletCrypto.base58Encode(data: secondSigner)) - signer"))
+        XCTAssertTrue(approval.contains("Additional account 3: \(WalletCrypto.base58Encode(data: trailingAccount))"))
     }
 
     func testSolanaSummaryLabelsUncheckedTokenAmountsAsRaw() {
@@ -99,7 +98,7 @@ final class SolanaTransactionSummaryFormatterTests: XCTestCase {
                                             authority,
                                             source,
                                             destination,
-                                            Base58.decodeNoCheck(string: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")!,
+                                            WalletCrypto.base58Decode(string: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")!,
                                         ],
                                         bodyAfterBlockhash: SolanaMessageFixture.instruction(programIdIndex: 3,
                                                                         accountIndices: [1, 2, 0],
@@ -117,7 +116,7 @@ final class SolanaTransactionSummaryFormatterTests: XCTestCase {
         let payer = Data(repeating: 7, count: 32)
         let firstRecipient = Data(repeating: 8, count: 32)
         let secondRecipient = Data(repeating: 9, count: 32)
-        let systemProgram = Base58.decodeNoCheck(string: "11111111111111111111111111111111")!
+        let systemProgram = WalletCrypto.base58Decode(string: "11111111111111111111111111111111")!
         let firstMessage = SolanaMessageFixture.wireMessage(readOnlyUnsignedAccounts: 1,
                                              accountKeys: [payer, firstRecipient, systemProgram],
                                              bodyAfterBlockhash: SolanaMessageFixture.instruction(programIdIndex: 2,
@@ -159,11 +158,11 @@ final class SolanaTransactionSummaryFormatterTests: XCTestCase {
             associatedTokenAccount,
             owner,
             mint,
-            Base58.decodeNoCheck(string: "11111111111111111111111111111111")!,
-            Base58.decodeNoCheck(string: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")!,
-            Base58.decodeNoCheck(string: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")!,
-            Base58.decodeNoCheck(string: "ComputeBudget111111111111111111111111111111")!,
-            Base58.decodeNoCheck(string: "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr")!,
+            WalletCrypto.base58Decode(string: "11111111111111111111111111111111")!,
+            WalletCrypto.base58Decode(string: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")!,
+            WalletCrypto.base58Decode(string: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")!,
+            WalletCrypto.base58Decode(string: "ComputeBudget111111111111111111111111111111")!,
+            WalletCrypto.base58Decode(string: "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr")!,
             unknownProgram,
         ]
         var bodyAfterBlockhash = Data.encodeLength(4)
@@ -219,9 +218,9 @@ final class SolanaTransactionSummaryFormatterTests: XCTestCase {
                                             associatedTokenAccount,
                                             owner,
                                             mint,
-                                            Base58.decodeNoCheck(string: "11111111111111111111111111111111")!,
-                                            Base58.decodeNoCheck(string: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")!,
-                                            Base58.decodeNoCheck(string: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")!,
+                                            WalletCrypto.base58Decode(string: "11111111111111111111111111111111")!,
+                                            WalletCrypto.base58Decode(string: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")!,
+                                            WalletCrypto.base58Decode(string: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")!,
                                         ],
                                         bodyAfterBlockhash: SolanaMessageFixture.instruction(programIdIndex: 6,
                                                                         accountIndices: [0, 1, 2, 3, 4, 5],
@@ -241,8 +240,8 @@ final class SolanaTransactionSummaryFormatterTests: XCTestCase {
         let ownerAssociatedTokenAccount = Data(repeating: 4, count: 32)
         let nestedTokenMint = Data(repeating: 5, count: 32)
         let ownerTokenMint = Data(repeating: 6, count: 32)
-        let tokenProgram = Base58.decodeNoCheck(string: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")!
-        let associatedTokenProgram = Base58.decodeNoCheck(string: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")!
+        let tokenProgram = WalletCrypto.base58Decode(string: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")!
+        let associatedTokenProgram = WalletCrypto.base58Decode(string: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")!
         let message = SolanaMessageFixture.wireMessage(requiredSignatures: 1,
                                         readOnlyUnsignedAccounts: 4,
                                         accountKeys: [
@@ -263,12 +262,12 @@ final class SolanaTransactionSummaryFormatterTests: XCTestCase {
                                                                          encodedMessages: ["encoded"])
 
         XCTAssertTrue(approval.contains("Recover nested associated token account"))
-        XCTAssertTrue(approval.contains("Nested associated token account: \(Base58.encodeNoCheck(data: nestedAssociatedTokenAccount)) - writable"))
-        XCTAssertTrue(approval.contains("Nested token mint: \(Base58.encodeNoCheck(data: nestedTokenMint))"))
-        XCTAssertTrue(approval.contains("Destination associated token account: \(Base58.encodeNoCheck(data: destinationAssociatedTokenAccount)) - writable"))
-        XCTAssertTrue(approval.contains("Owner associated token account: \(Base58.encodeNoCheck(data: ownerAssociatedTokenAccount)) - writable"))
-        XCTAssertTrue(approval.contains("Owner token mint: \(Base58.encodeNoCheck(data: ownerTokenMint))"))
-        XCTAssertTrue(approval.contains("Wallet: \(Base58.encodeNoCheck(data: wallet)) - signer - writable"))
+        XCTAssertTrue(approval.contains("Nested associated token account: \(WalletCrypto.base58Encode(data: nestedAssociatedTokenAccount)) - writable"))
+        XCTAssertTrue(approval.contains("Nested token mint: \(WalletCrypto.base58Encode(data: nestedTokenMint))"))
+        XCTAssertTrue(approval.contains("Destination associated token account: \(WalletCrypto.base58Encode(data: destinationAssociatedTokenAccount)) - writable"))
+        XCTAssertTrue(approval.contains("Owner associated token account: \(WalletCrypto.base58Encode(data: ownerAssociatedTokenAccount)) - writable"))
+        XCTAssertTrue(approval.contains("Owner token mint: \(WalletCrypto.base58Encode(data: ownerTokenMint))"))
+        XCTAssertTrue(approval.contains("Wallet: \(WalletCrypto.base58Encode(data: wallet)) - signer - writable"))
         XCTAssertFalse(approval.contains("Payer:"))
     }
 

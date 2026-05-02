@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import Foundation
-import WalletCore
 
 struct SolanaCompiledInstruction: Equatable {
     let programIdIndex: Int
@@ -379,13 +378,13 @@ enum SolanaTransactionSummaryFormatter {
         let isUnknown: Bool
     }
 
-    private static let systemProgramID = Base58.decodeNoCheck(string: "11111111111111111111111111111111")!
-    private static let tokenProgramID = Base58.decodeNoCheck(string: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")!
-    private static let token2022ProgramID = Base58.decodeNoCheck(string: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")!
-    private static let associatedTokenProgramID = Base58.decodeNoCheck(string: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")!
-    private static let computeBudgetProgramID = Base58.decodeNoCheck(string: "ComputeBudget111111111111111111111111111111")!
-    private static let memoProgramID = Base58.decodeNoCheck(string: "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr")!
-    private static let legacyMemoProgramID = Base58.decodeNoCheck(string: "Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo")!
+    private static let systemProgramID = WalletCrypto.base58Decode(string: "11111111111111111111111111111111")!
+    private static let tokenProgramID = WalletCrypto.base58Decode(string: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")!
+    private static let token2022ProgramID = WalletCrypto.base58Decode(string: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")!
+    private static let associatedTokenProgramID = WalletCrypto.base58Decode(string: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")!
+    private static let computeBudgetProgramID = WalletCrypto.base58Decode(string: "ComputeBudget111111111111111111111111111111")!
+    private static let memoProgramID = WalletCrypto.base58Decode(string: "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr")!
+    private static let legacyMemoProgramID = WalletCrypto.base58Decode(string: "Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo")!
 
     static func approvalMessage(messageData: Data, encodedMessages: [String]) -> String {
         guard let parsedMessage = SolanaWireMessageParser.parse(messageData) else {
@@ -444,7 +443,7 @@ enum SolanaTransactionSummaryFormatter {
         if let feePayer = message.feePayer {
             lines.append("Fee payer: \(address(feePayer))")
         }
-        lines.append("Recent blockhash: \(Base58.encodeNoCheck(data: messageData.subdata(in: message.blockhashRange)))")
+        lines.append("Recent blockhash: \(WalletCrypto.base58Encode(data: messageData.subdata(in: message.blockhashRange)))")
         lines.append("Required signers: \(message.requiredSignaturesCount)")
         lines.append("Writable accounts: \(writableAccountCount(message))")
         lines.append("Instructions: \(message.instructions.count)")
@@ -865,14 +864,14 @@ enum SolanaTransactionSummaryFormatter {
     }
 
     private static func address(_ data: Data) -> String {
-        return Base58.encodeNoCheck(data: data)
+        return WalletCrypto.base58Encode(data: data)
     }
 
     private static func shortHex(_ data: Data) -> String {
         guard !data.isEmpty else { return "empty" }
         let prefix = data.prefix(8)
         let suffix = data.count > prefix.count ? "..." : ""
-        return "0x" + prefix.hexString + suffix
+        return "0x" + WalletCrypto.hexString(data: prefix) + suffix
     }
 
     private static func solAmount(_ lamports: UInt64) -> String {
@@ -1423,12 +1422,12 @@ final class Solana {
         return number.intValue
     }
 
-    func sign(message: String, asHex: Bool, privateKey: PrivateKey) -> String? {
+    func sign(message: String, asHex: Bool, privateKey: WalletPrivateKey) -> String? {
         guard let messageData = decodeMessage(message, asHex: asHex) else { return nil }
         return sign(messageData: messageData, privateKey: privateKey)
     }
 
-    func sign(messageData: Data, privateKey: PrivateKey) -> String? {
+    func sign(messageData: Data, privateKey: WalletPrivateKey) -> String? {
         return sign(digest: messageData, privateKey: privateKey)
     }
 
@@ -1441,13 +1440,13 @@ final class Solana {
     }
 
     func decodeMessage(_ message: String, asHex: Bool) -> Data? {
-        return asHex ? Data(hexString: message) : Base58.decodeNoCheck(string: message)
+        return asHex ? WalletCrypto.hexData(string: message) : WalletCrypto.base58Decode(string: message)
     }
 
     func preparedSerializedTransactionForSignAndSend(serializedTransaction: String,
                                                      publicKey: String) -> Result<PreparedSerializedTransaction, SendTransactionError> {
         return preparedSignAndSend(serializedTransaction: serializedTransaction, publicKey: publicKey).map { preparedTransaction in
-            PreparedSerializedTransaction(approvalMessage: Base58.encodeNoCheck(data: preparedTransaction.parsedTransaction.messageData),
+            PreparedSerializedTransaction(approvalMessage: WalletCrypto.base58Encode(data: preparedTransaction.parsedTransaction.messageData),
                                          preparedTransaction: preparedTransaction)
         }
     }
@@ -1464,7 +1463,7 @@ final class Solana {
     func signAndSendTransaction(preparedSerializedTransaction: PreparedSerializedTransaction,
                                 cluster: Cluster,
                                 sendOptions: PreparedSendOptions,
-                                privateKey: PrivateKey,
+                                privateKey: WalletPrivateKey,
                                 completion: @escaping (Result<String, SendTransactionError>) -> Void) {
         switch signedTransactionForSignAndSend(preparedSerializedTransaction: preparedSerializedTransaction,
                                                privateKey: privateKey) {
@@ -1478,7 +1477,7 @@ final class Solana {
     func signAndSendTransaction(preparedLegacyTransaction: PreparedLegacySignAndSendTransaction,
                                 cluster: Cluster,
                                 sendOptions: PreparedSendOptions,
-                                privateKey: PrivateKey,
+                                privateKey: WalletPrivateKey,
                                 completion: @escaping (Result<String, SendTransactionError>) -> Void) {
         guard let signedData = signatureData(digest: preparedLegacyTransaction.messageData, privateKey: privateKey),
               let raw = compileTransactionData(messageData: preparedLegacyTransaction.messageData,
@@ -1492,7 +1491,7 @@ final class Solana {
     }
 
     func signedTransactionForSignAndSend(preparedSerializedTransaction: PreparedSerializedTransaction,
-                                         privateKey: PrivateKey) -> Result<String, SendTransactionError> {
+                                         privateKey: WalletPrivateKey) -> Result<String, SendTransactionError> {
         let prepared = preparedSerializedTransaction.preparedTransaction
         guard let signedData = signatureData(digest: prepared.parsedTransaction.messageData, privateKey: privateKey),
               let signedTransaction = compileTransactionData(transactionData: prepared.parsedTransaction.transactionData,
@@ -1728,13 +1727,13 @@ final class Solana {
         }
     }
 
-    private func sign(digest: Data, privateKey: PrivateKey) -> String? {
+    private func sign(digest: Data, privateKey: WalletPrivateKey) -> String? {
         guard let signedData = signatureData(digest: digest, privateKey: privateKey) else { return nil }
-        return Base58.encodeNoCheck(data: signedData)
+        return WalletCrypto.base58Encode(data: signedData)
     }
 
-    private func signatureData(digest: Data, privateKey: PrivateKey) -> Data? {
-        return privateKey.sign(digest: digest, curve: CoinType.solana.curve)
+    private func signatureData(digest: Data, privateKey: WalletPrivateKey) -> Data? {
+        return privateKey.sign(digest: digest, coin: .solana)
     }
 
     private func compileTransactionData(messageData: Data,
@@ -1788,7 +1787,7 @@ final class Solana {
     }
 
     private func parsedTransaction(serializedTransaction: String) -> Result<ParsedTransaction, SendTransactionError> {
-        guard let transactionData = Base58.decodeNoCheck(string: serializedTransaction),
+        guard let transactionData = WalletCrypto.base58Decode(string: serializedTransaction),
               let signaturesCount = transactionData.decodeLength(startingAt: transactionData.startIndex)
         else {
             return .failure(.invalidMessage)
@@ -1884,7 +1883,7 @@ final class Solana {
     }
 
     private func signerIndex(in parsedMessage: SolanaWireMessage, for publicKey: String) -> Int? {
-        guard let publicKeyData = Base58.decodeNoCheck(string: publicKey),
+        guard let publicKeyData = WalletCrypto.base58Decode(string: publicKey),
               publicKeyData.count == publicKeyLength
         else {
             return nil

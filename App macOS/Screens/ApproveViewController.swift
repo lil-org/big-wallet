@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import Cocoa
-import WalletCore
 
 class ApproveViewController: NSViewController {
     
@@ -23,7 +22,7 @@ class ApproveViewController: NSViewController {
     private var subject: ApprovalSubject!
     private var approveTitle: String!
     private var meta: String!
-    private var account: Account!
+    private var account: WalletAccount!
     private var completion: ((Bool) -> Void)!
     private var didCallCompletion = false
     private var peerMeta: PeerMeta?
@@ -37,7 +36,7 @@ class ApproveViewController: NSViewController {
     
     static func with(subject: ApprovalSubject,
                      meta: String,
-                     account: Account,
+                     account: WalletAccount,
                      walletId: String,
                      peerMeta: PeerMeta?,
                      solanaClusterSelection: SolanaClusterSelection? = nil,

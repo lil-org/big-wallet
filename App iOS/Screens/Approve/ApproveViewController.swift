@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import UIKit
-import WalletCore
 
 class ApproveViewController: UIViewController {
     
@@ -26,7 +25,7 @@ class ApproveViewController: UIViewController {
     private var cellModels = [CellModel]()
     
     private var approveTitle: String!
-    private var account: Account!
+    private var account: WalletAccount!
     private var walletId: String!
     private var meta: String!
     private var completion: ((Bool) -> Void)!
@@ -42,7 +41,7 @@ class ApproveViewController: UIViewController {
     
     static func with(subject: ApprovalSubject,
                      provider: InpageProvider,
-                     account: Account,
+                     account: WalletAccount,
                      walletId: String,
                      meta: String,
                      peerMeta: PeerMeta?,

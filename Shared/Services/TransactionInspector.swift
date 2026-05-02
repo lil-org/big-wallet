@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import Foundation
-import WalletCore
 
 struct TransactionInspector {
     
@@ -49,8 +48,8 @@ struct TransactionInspector {
         let abi = [nameHex: dict]
         if let abiData = try? JSONSerialization.data(withJSONObject: abi),
            let abiString = String(data: abiData, encoding: .utf8),
-           let callData = Data(hexString: data),
-           let decoded = EthereumAbi.decodeCall(data: callData, abi: abiString),
+           let callData = WalletCrypto.hexData(string: data),
+           let decoded = WalletCrypto.decodeEthereumCall(data: callData, abi: abiString),
            let decodedData = decoded.data(using: .utf8),
            let decodedInputs = (try? JSONSerialization.jsonObject(with: decodedData) as? [String: Any])?["inputs"] as? [[String: Any]] {
             let values = decodedInputs.compactMap { flatValueFrom(input: $0) }

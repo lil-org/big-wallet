@@ -60,7 +60,7 @@ struct Keychain {
         return saveIfMissing(data: data, key: .password)
     }
     
-    // MARK: - WalletCore
+    // MARK: - Wallet Storage
     
     func getAllWalletsIds() -> [String] {
         let allKeys = allStoredItemsKeys()

@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import UIKit
-import WalletCore
 import SwiftUI
 
 class ApproveTransactionViewController: UIViewController {
@@ -41,7 +40,7 @@ class ApproveTransactionViewController: UIViewController {
     private var didEnableSpeedConfiguration = false
     
     private var walletId: String!
-    private var account: Account!
+    private var account: WalletAccount!
     private var transaction: Transaction!
     private var chain: EthereumNetwork!
     private var completion: ((Transaction?) -> Void)!
@@ -53,7 +52,7 @@ class ApproveTransactionViewController: UIViewController {
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var cancelButton: UIButton!
     
-    static func with(transaction: Transaction, chain: EthereumNetwork, account: Account, walletId: String, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
+    static func with(transaction: Transaction, chain: EthereumNetwork, account: WalletAccount, walletId: String, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self, from: .main)
         new.walletId = walletId
         new.transaction = transaction

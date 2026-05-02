@@ -1,8 +1,8 @@
 // ∅ 2026 lil org
 
-import WalletCore
+import Foundation
 
-extension CoinType {
+extension WalletCoin {
     
     var name: String {
         switch self {
@@ -12,8 +12,6 @@ extension CoinType {
             return "Ethereum"
         case .near:
             return "Near"
-        default:
-            fatalError(Strings.somethingWentWrong)
         }
     }
     
@@ -25,12 +23,12 @@ extension CoinType {
             return [
                 (Strings.viewOn + " " + "Etherscan", URL(string: "https://etherscan.io/address/\(address)")!)
             ]
-        default:
+        case .near:
             fatalError(Strings.somethingWentWrong)
         }
     }
     
-    nonisolated static func correspondingToInpageProvider(_ inpageProvider: InpageProvider) -> CoinType? {
+    nonisolated static func correspondingToInpageProvider(_ inpageProvider: InpageProvider) -> WalletCoin? {
         switch inpageProvider {
         case .ethereum:
             return .ethereum
@@ -45,7 +43,7 @@ extension CoinType {
         switch self {
         case .ethereum:
             return address.lowercased()
-        default:
+        case .solana, .near:
             return address
         }
     }

@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import Foundation
-import WalletCore
 
 struct DappRequestProcessor {
     
@@ -327,7 +326,7 @@ struct DappRequestProcessor {
                                                                   sendOptions: Solana.PreparedSendOptions,
                                                                   clusterSelection: SolanaClusterSelection,
                                                                   wallet: WalletContainer,
-                                                                  account: Account,
+                                                                  account: WalletAccount,
                                                                   completion: @escaping (String?) -> Void) -> DappRequestAction {
         switch solana.preparedSerializedTransactionForSignAndSend(serializedTransaction: serializedTransaction,
                                                                   publicKey: solanaRequest.publicKey) {
@@ -441,12 +440,12 @@ struct DappRequestProcessor {
 
     private static func solanaApprovalAction(request: SafariRequest,
                                              wallet: WalletContainer,
-                                             account: Account,
+                                             account: WalletAccount,
                                              subject: ApprovalSubject,
                                              meta: String,
                                              clusterSelection: SolanaClusterSelection,
                                              completion: @escaping (String?) -> Void,
-                                             onApprove: @escaping (Solana.Cluster, PrivateKey) -> Void) -> DappRequestAction {
+                                             onApprove: @escaping (Solana.Cluster, WalletPrivateKey) -> Void) -> DappRequestAction {
         return solanaApprovalAction(request: request,
                                     wallet: wallet,
                                     account: account,
@@ -467,7 +466,7 @@ struct DappRequestProcessor {
                                                      preparedSerializedTransaction: Solana.PreparedSerializedTransaction,
                                                      cluster: Solana.Cluster,
                                                      sendOptions: Solana.PreparedSendOptions,
-                                                     privateKey: PrivateKey,
+                                                     privateKey: WalletPrivateKey,
                                                      completion: @escaping (String?) -> Void) {
         solana.signAndSendTransaction(preparedSerializedTransaction: preparedSerializedTransaction,
                                       cluster: cluster,
@@ -481,7 +480,7 @@ struct DappRequestProcessor {
                                                      preparedLegacyTransaction: Solana.PreparedLegacySignAndSendTransaction,
                                                      cluster: Solana.Cluster,
                                                      sendOptions: Solana.PreparedSendOptions,
-                                                     privateKey: PrivateKey,
+                                                     privateKey: WalletPrivateKey,
                                                      completion: @escaping (String?) -> Void) {
         solana.signAndSendTransaction(preparedLegacyTransaction: preparedLegacyTransaction,
                                       cluster: cluster,
@@ -505,7 +504,7 @@ struct DappRequestProcessor {
 
     private static func solanaWalletAndAccount(for request: SafariRequest,
                                                publicKey: String,
-                                               completion: @escaping (String?) -> Void) -> (WalletContainer, Account)? {
+                                               completion: @escaping (String?) -> Void) -> (WalletContainer, WalletAccount)? {
         guard let walletAndAccount = walletsManager.getWalletAndAccount(coin: .solana, address: publicKey) else {
             respond(to: request, solanaError: .unauthorized(publicKey: publicKey), completion: completion)
             return nil
@@ -515,12 +514,12 @@ struct DappRequestProcessor {
 
     private static func solanaApprovalAction(request: SafariRequest,
                                              wallet: WalletContainer,
-                                             account: Account,
+                                             account: WalletAccount,
                                              subject: ApprovalSubject,
                                              meta: String,
                                              solanaClusterSelection: SolanaClusterSelection? = nil,
                                              completion: @escaping (String?) -> Void,
-                                             onApprove: @escaping (PrivateKey) -> Void) -> DappRequestAction {
+                                             onApprove: @escaping (WalletPrivateKey) -> Void) -> DappRequestAction {
         let action = SignMessageAction(provider: request.provider,
                                        subject: subject,
                                        walletId: wallet.id,
@@ -606,7 +605,7 @@ struct DappRequestProcessor {
                let walletAndAccount = walletAndAccount {
                 let walletId = walletAndAccount.0.id
                 let account = walletAndAccount.1
-                let action = SignMessageAction(provider: request.provider, subject: .signMessage, walletId: walletId, account: account, meta: data.hexString, peerMeta: peerMeta) { approved in
+                let action = SignMessageAction(provider: request.provider, subject: .signMessage, walletId: walletId, account: account, meta: WalletCrypto.hexString(data: data), peerMeta: peerMeta) { approved in
                     if approved {
                         guard let privateKey = ethereumPrivateKey(walletId: walletId, account: account, request: request, completion: completion) else { return }
                         signMessage(privateKey: privateKey, data: data, request: request, completion: completion)
@@ -623,7 +622,7 @@ struct DappRequestProcessor {
                let walletAndAccount = walletAndAccount {
                 let walletId = walletAndAccount.0.id
                 let account = walletAndAccount.1
-                let text = String(data: data, encoding: .utf8) ?? data.hexString
+                let text = String(data: data, encoding: .utf8) ?? WalletCrypto.hexString(data: data)
                 let action = SignMessageAction(provider: request.provider, subject: .signPersonalMessage, walletId: walletId, account: account, meta: text, peerMeta: peerMeta) { approved in
                     if approved {
                         guard let privateKey = ethereumPrivateKey(walletId: walletId, account: account, request: request, completion: completion) else { return }
@@ -672,7 +671,7 @@ struct DappRequestProcessor {
         return .none
     }
 
-    private static func ethereumPrivateKey(walletId: String, account: Account, request: SafariRequest, completion: (String?) -> Void) -> PrivateKey? {
+    private static func ethereumPrivateKey(walletId: String, account: WalletAccount, request: SafariRequest, completion: (String?) -> Void) -> WalletPrivateKey? {
         guard let privateKey = walletsManager.getPrivateKey(walletId: walletId, account: account) else {
             respond(to: request, error: Strings.failedToSign, completion: completion)
             return nil
@@ -680,7 +679,7 @@ struct DappRequestProcessor {
         return privateKey
     }
     
-    private static func signTypedData(privateKey: PrivateKey, raw: String, request: SafariRequest, completion: (String?) -> Void) {
+    private static func signTypedData(privateKey: WalletPrivateKey, raw: String, request: SafariRequest, completion: (String?) -> Void) {
         if let signed = try? ethereum.sign(typedData: raw, privateKey: privateKey) {
             respond(to: request, body: .ethereum(.init(result: signed)), completion: completion)
         } else {
@@ -688,7 +687,7 @@ struct DappRequestProcessor {
         }
     }
     
-    private static func signMessage(privateKey: PrivateKey, data: Data, request: SafariRequest, completion: (String?) -> Void) {
+    private static func signMessage(privateKey: WalletPrivateKey, data: Data, request: SafariRequest, completion: (String?) -> Void) {
         if let signed = try? ethereum.sign(data: data, privateKey: privateKey) {
             respond(to: request, body: .ethereum(.init(result: signed)), completion: completion)
         } else {
@@ -696,7 +695,7 @@ struct DappRequestProcessor {
         }
     }
     
-    private static func signPersonalMessage(privateKey: PrivateKey, data: Data, request: SafariRequest, completion: (String?) -> Void) {
+    private static func signPersonalMessage(privateKey: WalletPrivateKey, data: Data, request: SafariRequest, completion: (String?) -> Void) {
         if let signed = try? ethereum.signPersonalMessage(data: data, privateKey: privateKey) {
             respond(to: request, body: .ethereum(.init(result: signed)), completion: completion)
         } else {
@@ -704,7 +703,7 @@ struct DappRequestProcessor {
         }
     }
      
-    private static func sendTransaction(privateKey: PrivateKey, transaction: Transaction, network: EthereumNetwork, respondTo: SafariRequest?, completion: @escaping (String?) -> Void) {
+    private static func sendTransaction(privateKey: WalletPrivateKey, transaction: Transaction, network: EthereumNetwork, respondTo: SafariRequest?, completion: @escaping (String?) -> Void) {
         ethereum.send(transaction: transaction, privateKey: privateKey, network: network) { hash in
             if let request = respondTo {
                 if let hash = hash {
@@ -718,20 +717,20 @@ struct DappRequestProcessor {
         }
     }
 
-    private static func selectedAccountResponseBody(for account: Account, chain: EthereumNetwork) -> ResponseToExtension.Body? {
+    private static func selectedAccountResponseBody(for account: WalletAccount, chain: EthereumNetwork) -> ResponseToExtension.Body? {
         if let responseBody = ethereumResponseBody(for: account, chain: chain) {
             return responseBody
         }
         return solanaResponseBody(for: account)
     }
 
-    private static func ethereumResponseBody(for account: Account, chain: EthereumNetwork) -> ResponseToExtension.Body? {
+    private static func ethereumResponseBody(for account: WalletAccount, chain: EthereumNetwork) -> ResponseToExtension.Body? {
         guard account.coin == .ethereum else { return nil }
         let responseBody = ResponseToExtension.Ethereum(results: [account.address], chainId: chain.chainIdHexString)
         return .ethereum(responseBody)
     }
 
-    private static func solanaResponseBody(for account: Account) -> ResponseToExtension.Body? {
+    private static func solanaResponseBody(for account: WalletAccount) -> ResponseToExtension.Body? {
         guard account.coin == .solana else { return nil }
         let responseBody = ResponseToExtension.Solana(publicKey: account.address)
         return .solana(responseBody)
@@ -740,7 +739,7 @@ struct DappRequestProcessor {
     private static func preselectedAccounts(for providerConfigurations: [SafariRequest.Unknown.ProviderConfiguration]) -> [SpecificWalletAccount] {
         return preselectedAccounts(for: providerConfigurations,
                                    accountForConfiguration: { configuration in
-            guard let coin = CoinType.correspondingToInpageProvider(configuration.provider),
+            guard let coin = WalletCoin.correspondingToInpageProvider(configuration.provider),
                   let address = configuration.address,
                   !address.isEmpty
             else { return nil }
@@ -773,7 +772,7 @@ struct DappRequestProcessor {
         var resolvedProviders = Set<InpageProvider>()
         for configuration in providerConfigurations {
             guard !resolvedProviders.contains(configuration.provider),
-                  CoinType.correspondingToInpageProvider(configuration.provider) != nil,
+                  WalletCoin.correspondingToInpageProvider(configuration.provider) != nil,
                   let value = accountForConfiguration(configuration)
             else { continue }
 
@@ -791,7 +790,7 @@ struct DappRequestProcessor {
                                               selectedAccounts: [SpecificWalletAccount]) -> Set<InpageProvider> {
         let selectedCoins = Set(selectedAccounts.map { $0.account.coin })
         return initiallyConnectedProviders.filter { provider in
-            guard let coin = CoinType.correspondingToInpageProvider(provider) else {
+            guard let coin = WalletCoin.correspondingToInpageProvider(provider) else {
                 return true
             }
             return !selectedCoins.contains(coin)
@@ -800,7 +799,7 @@ struct DappRequestProcessor {
 
     private static func connectedProviders(in providerConfigurations: [SafariRequest.Unknown.ProviderConfiguration]) -> Set<InpageProvider> {
         return Set(providerConfigurations.map { $0.provider }.filter { provider in
-            CoinType.correspondingToInpageProvider(provider) != nil
+            WalletCoin.correspondingToInpageProvider(provider) != nil
         })
     }
 

@@ -1,12 +1,11 @@
 // ∅ 2026 lil org
 
 import UIKit
-import WalletCore
 
 class EditAccountsViewController: UIViewController {
     
     struct PreviewAccountCellModel {
-        let account: Account
+        let account: WalletAccount
         var isEnabled: Bool
     }
     
@@ -22,7 +21,7 @@ class EditAccountsViewController: UIViewController {
     private var lastPreviewDate = Date()
     private var toggledIndexes = Set<Int>()
     private var enabledUndiscoveredAccountKeys = Set<WalletPreviewAccountKey>()
-    private var previewCoin: CoinType? { selectAccountAction?.coinType }
+    private var previewCoin: WalletCoin? { selectAccountAction?.coinType }
     
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var tableView: UITableView! {
@@ -49,7 +48,7 @@ class EditAccountsViewController: UIViewController {
         tableView.reloadData()
     }
     
-    private func appendPreviewAccounts(_ previewAccounts: [Account]) {
+    private func appendPreviewAccounts(_ previewAccounts: [WalletAccount]) {
         let newCellModels = previewAccounts.map { account in
             let isEnabled = enabledUndiscoveredAccountKeys.remove(account.previewAccountKey) != nil
             return PreviewAccountCellModel(account: account, isEnabled: isEnabled)
@@ -87,7 +86,7 @@ class EditAccountsViewController: UIViewController {
             return
         }
         let remainingEnabledAccounts = wallet.accounts.filter { enabledUndiscoveredAccountKeys.contains($0.previewAccountKey) }
-        let newAccounts: [Account] = (cellModels.compactMap { $0.isEnabled ? $0.account : nil }) + remainingEnabledAccounts
+        let newAccounts: [WalletAccount] = (cellModels.compactMap { $0.isEnabled ? $0.account : nil }) + remainingEnabledAccounts
         do {
             try walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
             dismissAnimated()

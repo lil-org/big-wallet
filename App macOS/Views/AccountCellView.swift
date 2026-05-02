@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import Cocoa
-import WalletCore
 
 class AccountCellView: NSTableRowView {
     
@@ -19,7 +18,7 @@ class AccountCellView: NSTableRowView {
         wantsLayer = true
     }
     
-    func setup(account: Account, walletId: String, isSelected: Bool, isDisabled: Bool) {
+    func setup(account: WalletAccount, walletId: String, isSelected: Bool, isDisabled: Bool) {
         addressImageView.image = account.image
         addressTextField.stringValue = account.nameOrCroppedAddress(walletId: walletId)
         setSelected(isSelected)

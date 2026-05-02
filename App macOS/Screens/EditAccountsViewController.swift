@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import Cocoa
-import WalletCore
 
 class EditAccountsViewController: NSViewController {
     
@@ -10,7 +9,7 @@ class EditAccountsViewController: NSViewController {
     var selectAccountAction: SelectAccountAction?
     
     struct PreviewAccountCellModel {
-        let account: Account
+        let account: WalletAccount
         var isEnabled: Bool
     }
     
@@ -25,7 +24,7 @@ class EditAccountsViewController: NSViewController {
     private var toggledIndexes = Set<Int>()
     private var enabledUndiscoveredAccountKeys = Set<WalletPreviewAccountKey>()
     private var previewGeneration = 0
-    private var previewCoin: CoinType? { selectAccountAction?.coinType }
+    private var previewCoin: WalletCoin? { selectAccountAction?.coinType }
     
     @IBOutlet weak var tableView: RightClickTableView! {
         didSet {
@@ -52,7 +51,7 @@ class EditAccountsViewController: NSViewController {
         NotificationCenter.default.removeObserver(self)
     }
     
-    private func appendPreviewAccounts(_ previewAccounts: [Account]) {
+    private func appendPreviewAccounts(_ previewAccounts: [WalletAccount]) {
         let newCellModels = previewAccounts.map { account in
             let isEnabled = enabledUndiscoveredAccountKeys.remove(account.previewAccountKey) != nil
             return PreviewAccountCellModel(account: account, isEnabled: isEnabled)
@@ -72,7 +71,7 @@ class EditAccountsViewController: NSViewController {
         }
         
         let remainingEnabledAccounts = wallet.accounts.filter { enabledUndiscoveredAccountKeys.contains($0.previewAccountKey) }
-        let newAccounts: [Account] = (cellModels.compactMap { $0.isEnabled ? $0.account : nil }) + remainingEnabledAccounts
+        let newAccounts: [WalletAccount] = (cellModels.compactMap { $0.isEnabled ? $0.account : nil }) + remainingEnabledAccounts
         do {
             try walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
             showAccountsList()

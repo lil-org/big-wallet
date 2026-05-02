@@ -2,7 +2,6 @@
 
 import Cocoa
 import SafariServices
-import WalletCore
 
 class AccountsListViewController: NSViewController {
 
@@ -20,7 +19,7 @@ class AccountsListViewController: NSViewController {
         case mnemonicWalletHeader(walletIndex: Int)
         case privateKeyWalletsHeader
         case mnemonicAccount(walletIndex: Int, accountIndex: Int)
-        case privateKeyAccount(walletIndex: Int)
+        case privateKeyAccount(walletIndex: Int, account: WalletAccount)
         case addAccountOption(AddAccountOption)
     }
     
@@ -331,7 +330,7 @@ class AccountsListViewController: NSViewController {
         let blinkIndexes = cellModels.enumerated().compactMap { (index, model) -> Int? in
             if case let .mnemonicAccount(walletIndex, _) = model {
                 return walletIndex == newWalletIndex ? index : nil
-            } else if case let .privateKeyAccount(walletIndex: walletIndex) = model {
+            } else if case let .privateKeyAccount(walletIndex: walletIndex, account: _) = model {
                 return walletIndex == newWalletIndex ? index : nil
             } else {
                 return nil
@@ -363,8 +362,8 @@ class AccountsListViewController: NSViewController {
             switch cellModel {
             case let .mnemonicAccount(walletIndex, accountIndex):
                 return walletIndex == specificWalletIndex && accountIndex == specificAccountIndex
-            case let .privateKeyAccount(walletIndex):
-                return walletIndex == specificWalletIndex
+            case let .privateKeyAccount(walletIndex: walletIndex, account: account):
+                return walletIndex == specificWalletIndex && account == specificWalletAccount.account
             default:
                 return false
             }
@@ -385,7 +384,7 @@ class AccountsListViewController: NSViewController {
         guard row >= 0 else { return nil }
         let item = cellModels[row]
         switch item {
-        case let .privateKeyAccount(walletIndex: walletIndex):
+        case let .privateKeyAccount(walletIndex: walletIndex, account: _):
             return wallets[walletIndex]
         case let .mnemonicAccount(walletIndex: walletIndex, accountIndex: _):
             return wallets[walletIndex]
@@ -396,12 +395,12 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-    private func accountForRow(_ row: Int) -> Account? {
+    private func accountForRow(_ row: Int) -> WalletAccount? {
         guard row >= 0 else { return nil }
         let item = cellModels[row]
         switch item {
-        case let .privateKeyAccount(walletIndex: walletIndex):
-            return wallets[walletIndex].accounts.first
+        case let .privateKeyAccount(walletIndex: _, account: account):
+            return account
         case let .mnemonicAccount(walletIndex: walletIndex, accountIndex: accountIndex):
             return wallets[walletIndex].accounts[accountIndex]
         default:
@@ -534,7 +533,7 @@ class AccountsListViewController: NSViewController {
         warnBeforeShowingKey(wallet: wallet, specificAccount: account)
     }
     
-    private func warnBeforeShowingKey(wallet: WalletContainer, specificAccount: Account?) {
+    private func warnBeforeShowingKey(wallet: WalletContainer, specificAccount: WalletAccount?) {
         let alert = Alert()
         let showingMnemonic = wallet.isMnemonic && specificAccount == nil
         alert.messageText = showingMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
@@ -552,7 +551,7 @@ class AccountsListViewController: NSViewController {
         }
     }
     
-    private func showKey(wallet: WalletContainer, specificAccount: Account?) {
+    private func showKey(wallet: WalletContainer, specificAccount: WalletAccount?) {
         guard let currentWallet = walletsManager.currentWallet(id: wallet.id) else { return }
 
         let secret: String
@@ -595,7 +594,9 @@ class AccountsListViewController: NSViewController {
             let wallet = wallets[index]
             
             guard wallet.isMnemonic else {
-                privateKeyAccountCellModels.append(.privateKeyAccount(walletIndex: index))
+                if let account = wallet.accounts.first {
+                    privateKeyAccountCellModels.append(.privateKeyAccount(walletIndex: index, account: account))
+                }
                 continue
             }
             
@@ -647,7 +648,7 @@ class AccountsListViewController: NSViewController {
         updateNetworkButtonVisibility()
     }
     
-    private func accountCanBeSelected(_ account: Account) -> Bool {
+    private func accountCanBeSelected(_ account: WalletAccount) -> Bool {
         return selectAccountAction?.coinType == nil || selectAccountAction?.coinType == account.coin
     }
     
@@ -659,7 +660,7 @@ extension AccountsListViewController: TableViewMenuSource {
         guard let menu = tableView.menu else { return nil }
 
         let item = cellModels[row]
-        let account: Account
+        let account: WalletAccount
         let wallet: WalletContainer
         
         switch item {
@@ -668,9 +669,9 @@ extension AccountsListViewController: TableViewMenuSource {
         case let .mnemonicAccount(walletIndex: walletIndex, accountIndex: accountIndex):
             wallet = wallets[walletIndex]
             account = wallet.accounts[accountIndex]
-        case let .privateKeyAccount(walletIndex: walletIndex):
+        case let .privateKeyAccount(walletIndex: walletIndex, account: privateKeyAccount):
             wallet = wallets[walletIndex]
-            account = wallet.accounts[0]
+            account = privateKeyAccount
         }
         
         menu.removeAllItems()
@@ -754,15 +755,15 @@ extension AccountsListViewController: NSTableViewDelegate {
         let model = cellModels[row]
         
         let wallet: WalletContainer
-        let account: Account
+        let account: WalletAccount
         
         switch model {
         case let .mnemonicAccount(walletIndex: walletIndex, accountIndex: accountIndex):
             wallet = wallets[walletIndex]
             account = wallet.accounts[accountIndex]
-        case let .privateKeyAccount(walletIndex: walletIndex):
+        case let .privateKeyAccount(walletIndex: walletIndex, account: privateKeyAccount):
             wallet = wallets[walletIndex]
-            account = wallet.accounts[0]
+            account = privateKeyAccount
         case let .addAccountOption(addAccountOption):
             switch addAccountOption {
             case .createNew:
@@ -795,10 +796,9 @@ extension AccountsListViewController: NSTableViewDataSource {
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let model = cellModels[row]
         switch model {
-        case let .privateKeyAccount(walletIndex: walletIndex):
+        case let .privateKeyAccount(walletIndex: walletIndex, account: account):
             let wallet = wallets[walletIndex]
             let rowView = tableView.makeViewOfType(AccountCellView.self, owner: self)
-            let account = wallet.accounts[0]
             let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
             let isSelected = selectAccountAction?.selectedAccounts.contains(specificWalletAccount) == true
             rowView.setup(account: account, walletId: wallet.id, isSelected: isSelected, isDisabled: !accountCanBeSelected(account))

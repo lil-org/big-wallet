@@ -2,7 +2,6 @@
 
 import UIKit
 import SwiftUI
-import WalletCore
 
 class AccountsListViewController: UIViewController, DataStateContainer {
     
@@ -22,7 +21,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     enum CellModel {
         case mnemonicAccount(walletIndex: Int, accountIndex: Int)
-        case privateKeyAccount(walletIndex: Int)
+        case privateKeyAccount(walletIndex: Int, account: WalletAccount)
     }
     
     private var sections = [Section]()
@@ -188,8 +187,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                 switch cellModel {
                 case let .mnemonicAccount(walletIndex, accountIndex):
                     account = SpecificWalletAccount(walletId: wallets[walletIndex].id, account: wallets[walletIndex].accounts[accountIndex])
-                case let .privateKeyAccount(walletIndex):
-                    account = SpecificWalletAccount(walletId: wallets[walletIndex].id, account: wallets[walletIndex].accounts[0])
+                case let .privateKeyAccount(walletIndex: walletIndex, account: privateKeyAccount):
+                    account = SpecificWalletAccount(walletId: wallets[walletIndex].id, account: privateKeyAccount)
                 }
                 if specificWalletAccounts.contains(account) {
                     let indexPath = IndexPath(row: row, section: sectionIndex)
@@ -216,18 +215,18 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         switch item {
         case let .mnemonicAccount(walletIndex: walletIndex, accountIndex: _):
             return wallets[walletIndex]
-        case let .privateKeyAccount(walletIndex: walletIndex):
+        case let .privateKeyAccount(walletIndex: walletIndex, account: _):
             return wallets[walletIndex]
         }
     }
     
-    private func accountForIndexPath(_ indexPath: IndexPath) -> Account {
+    private func accountForIndexPath(_ indexPath: IndexPath) -> WalletAccount {
         let item = sections[indexPath.section].items[indexPath.row]
         switch item {
         case let .mnemonicAccount(walletIndex: walletIndex, accountIndex: accountIndex):
             return wallets[walletIndex].accounts[accountIndex]
-        case let .privateKeyAccount(walletIndex: walletIndex):
-            return wallets[walletIndex].accounts[0]
+        case let .privateKeyAccount(walletIndex: _, account: account):
+            return account
         }
     }
     
@@ -243,7 +242,9 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             let wallet = wallets[index]
             
             guard wallet.isMnemonic else {
-                privateKeyAccountCellModels.append(.privateKeyAccount(walletIndex: index))
+                if let account = wallet.accounts.first {
+                    privateKeyAccountCellModels.append(.privateKeyAccount(walletIndex: index, account: account))
+                }
                 continue
             }
             
@@ -497,7 +498,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         showKey(wallet: wallet, specificAccount: nil)
     }
     
-    private func showKey(wallet: WalletContainer, specificAccount: Account?) {
+    private func showKey(wallet: WalletContainer, specificAccount: WalletAccount?) {
         let secret: String
         let showingMnemonic = wallet.isMnemonic && specificAccount == nil
         
@@ -573,7 +574,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
     }
     
-    private func didSelectNameActionForAccount(_ account: Account, wallet: WalletContainer) {
+    private func didSelectNameActionForAccount(_ account: WalletAccount, wallet: WalletContainer) {
         let initialText = account.name(walletId: wallet.id)
         let nameActionTitle = initialText == nil ? Strings.setName : Strings.editName
         showTextInputAlert(title: nameActionTitle, message: nil, initialText: initialText, placeholder: account.croppedAddress) { [weak self] newName in
@@ -584,7 +585,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
     }
     
-    private func showActionsForAccount(_ account: Account, wallet: WalletContainer, cell: UITableViewCell?) {
+    private func showActionsForAccount(_ account: WalletAccount, wallet: WalletContainer, cell: UITableViewCell?) {
         let actionSheet = UIAlertController(title: account.coin.name, message: account.address, preferredStyle: .actionSheet)
         actionSheet.popoverPresentationController?.sourceView = cell
         
@@ -637,7 +638,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(actionSheet, animated: true)
     }
     
-    private func attemptToRemoveAccount(_ account: Account, fromWallet wallet: WalletContainer) {
+    private func attemptToRemoveAccount(_ account: WalletAccount, fromWallet wallet: WalletContainer) {
         guard wallet.accounts.count > 1 else {
             warnOnLastAccountRemovalAttempt(wallet: wallet)
             return
@@ -684,7 +685,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         reloadData()
     }
     
-    private func didTapExportWallet(_ wallet: WalletContainer, specificAccount: Account?) {
+    private func didTapExportWallet(_ wallet: WalletContainer, specificAccount: WalletAccount?) {
         let willExportMnemonic = wallet.isMnemonic && specificAccount == nil
         let title = willExportMnemonic ? Strings.secretWordsGiveFullAccess : Strings.privateKeyGivesFullAccess
         let alert = UIAlertController(title: title, message: specificAccount?.nameOrCroppedAddress(walletId: wallet.id), preferredStyle: .alert)
@@ -721,7 +722,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         tableView.reloadData()
     }
     
-    private func accountCanBeSelected(_ account: Account) -> Bool {
+    private func accountCanBeSelected(_ account: WalletAccount) -> Bool {
         return selectAccountAction?.coinType == nil || selectAccountAction?.coinType == account.coin
     }
     

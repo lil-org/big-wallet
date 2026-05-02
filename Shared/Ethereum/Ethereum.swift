@@ -1,12 +1,6 @@
 // ∅ 2026 lil org
 
 import Foundation
-import WalletCore
-#if os(visionOS)
-import VSwiftProtobuf
-#else
-import WalletCoreSwiftProtobuf
-#endif
 
 struct Ethereum {
 
@@ -28,30 +22,26 @@ struct Ethereum {
         }
     }
     
-    func sign(data: Data, privateKey: WalletCore.PrivateKey) throws -> String {
+    func sign(data: Data, privateKey: WalletPrivateKey) throws -> String {
         return try sign(data: data, privateKey: privateKey, addPrefix: false)
     }
     
-    func signPersonalMessage(data: Data, privateKey: WalletCore.PrivateKey) throws -> String {
+    func signPersonalMessage(data: Data, privateKey: WalletPrivateKey) throws -> String {
         return try sign(data: data, privateKey: privateKey, addPrefix: true)
     }
     
     func recover(signature: Data, message: Data) -> String? {
-        guard let hash = prefixedDataHash(data: message),
-              let publicKey = PublicKey.recover(signature: signature, message: hash),
-              PublicKey.isValid(data: publicKey.data, type: publicKey.keyType) else {
-                  return nil
-              }
-        return CoinType.ethereum.deriveAddressFromPublicKey(publicKey: publicKey)
+        guard let hash = prefixedDataHash(data: message) else { return nil }
+        return WalletCrypto.recoverEthereumAddress(signature: signature, messageHash: hash)
     }
     
     private func prefixedDataHash(data: Data) -> Data? {
         let prefixString = "\u{19}Ethereum Signed Message:\n" + String(data.count)
         guard let prefixData = prefixString.data(using: .utf8) else { return nil }
-        return Hash.keccak256(data: prefixData + data)
+        return WalletCrypto.keccak256(data: prefixData + data)
     }
     
-    private func sign(data: Data, privateKey: WalletCore.PrivateKey, addPrefix: Bool) throws -> String {
+    private func sign(data: Data, privateKey: WalletPrivateKey, addPrefix: Bool) throws -> String {
         let digest: Data
         if addPrefix {
             guard let prefixedData = prefixedDataHash(data: data) else { throw Error.failedToSign }
@@ -60,16 +50,16 @@ struct Ethereum {
             digest = data
         }
         
-        guard var signed = privateKey.sign(digest: digest, curve: CoinType.ethereum.curve) else { throw Error.failedToSign }
+        guard var signed = privateKey.sign(digest: digest, coin: .ethereum) else { throw Error.failedToSign }
         signed[64] += 27
-        return signed.hexString.withHexPrefix
+        return WalletCrypto.hexString(data: signed).withHexPrefix
     }
     
-    func sign(typedData: String, privateKey: WalletCore.PrivateKey) throws -> String {
-        let digest = EthereumAbi.encodeTyped(messageJson: typedData)
-        guard var signed = privateKey.sign(digest: digest, curve: CoinType.ethereum.curve) else { throw Error.failedToSign }
+    func sign(typedData: String, privateKey: WalletPrivateKey) throws -> String {
+        let digest = WalletCrypto.ethereumTypedDataDigest(messageJson: typedData)
+        guard var signed = privateKey.sign(digest: digest, coin: .ethereum) else { throw Error.failedToSign }
         signed[64] += 27
-        return signed.hexString.withHexPrefix
+        return WalletCrypto.hexString(data: signed).withHexPrefix
     }
     
     func prepareTransaction(_ transaction: Transaction, forceGasCheck: Bool, network: EthereumNetwork, completion: @escaping (Transaction) -> Void) {
@@ -110,38 +100,30 @@ struct Ethereum {
         }
     }
     
-    func send(transaction: Transaction, privateKey: WalletCore.PrivateKey, network: EthereumNetwork, completion: @escaping (String?) -> Void) {
+    func send(transaction: Transaction, privateKey: WalletPrivateKey, network: EthereumNetwork, completion: @escaping (String?) -> Void) {
         guard let nonceHex = transaction.nonce?.cleanEvenHex,
               let gasPriceHex = transaction.gasPrice?.cleanEvenHex,
               let gasHex = transaction.gas?.cleanEvenHex,
               let valueHex = transaction.value?.cleanEvenHex,
-              let chainID = Data(hexString: network.chainIdHexString.cleanEvenHex),
-              let nonce = Data(hexString: nonceHex),
-              let gasPrice = Data(hexString: gasPriceHex),
-              let gasLimit = Data(hexString: gasHex),
-              let amount = Data(hexString: valueHex),
-              let data = Data(hexString: transaction.data.cleanEvenHex) else {
+              let chainID = WalletCrypto.hexData(string: network.chainIdHexString.cleanEvenHex),
+              let nonce = WalletCrypto.hexData(string: nonceHex),
+              let gasPrice = WalletCrypto.hexData(string: gasPriceHex),
+              let gasLimit = WalletCrypto.hexData(string: gasHex),
+              let amount = WalletCrypto.hexData(string: valueHex),
+              let data = WalletCrypto.hexData(string: transaction.data.cleanEvenHex) else {
             completion(nil)
             return
         }
         
-        let input = EthereumSigningInput.with {
-            $0.chainID = chainID
-            $0.nonce = nonce
-            $0.gasPrice = gasPrice
-            $0.gasLimit = gasLimit
-            $0.toAddress = transaction.to
-            $0.privateKey = privateKey.data
-            $0.transaction = EthereumTransaction.with {
-                $0.contractGeneric = EthereumTransaction.ContractGeneric.with {
-                    $0.amount = amount
-                    $0.data = data
-                }
-            }
-        }
-        
-        let output: EthereumSigningOutput = AnySigner.sign(input: input, coin: .ethereum)
-        rpc.sendRawTransaction(rpcUrl: network.nodeURLString, signedTxData: output.encoded.hexString.withHexPrefix) { result in
+        let signedTransaction = WalletCrypto.signEthereumTransaction(chainID: chainID,
+                                                                     nonce: nonce,
+                                                                     gasPrice: gasPrice,
+                                                                     gasLimit: gasLimit,
+                                                                     toAddress: transaction.to,
+                                                                     privateKey: privateKey,
+                                                                     amount: amount,
+                                                                     data: data)
+        rpc.sendRawTransaction(rpcUrl: network.nodeURLString, signedTxData: WalletCrypto.hexString(data: signedTransaction).withHexPrefix) { result in
             DispatchQueue.main.async {
                 if case let .success(txHash) = result {
                      completion(txHash)

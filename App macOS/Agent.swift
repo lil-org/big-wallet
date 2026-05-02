@@ -2,7 +2,6 @@
 
 import Cocoa
 import LocalAuthentication
-import WalletCore
 
 class Agent: NSObject {
     
@@ -110,7 +109,7 @@ class Agent: NSObject {
         }
     }
     
-    func showApprove(windowController: NSWindowController, browser: Browser?, transaction: Transaction, account: Account, walletId: String, chain: EthereumNetwork, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) {
+    func showApprove(windowController: NSWindowController, browser: Browser?, transaction: Transaction, account: WalletAccount, walletId: String, chain: EthereumNetwork, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) {
         let window = windowController.window
         let approveViewController = ApproveTransactionViewController.with(transaction: transaction, chain: chain, account: account, walletId: walletId, peerMeta: peerMeta) { [weak self, weak window] transaction in
             if transaction != nil {
@@ -128,7 +127,7 @@ class Agent: NSObject {
                      browser: Browser?,
                      subject: ApprovalSubject,
                      meta: String,
-                     account: Account,
+                     account: WalletAccount,
                      walletId: String,
                      peerMeta: PeerMeta?,
                      solanaClusterSelection: SolanaClusterSelection? = nil,

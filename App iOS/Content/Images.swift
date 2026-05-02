@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import UIKit
-import WalletCore
 
 struct Images {
     
