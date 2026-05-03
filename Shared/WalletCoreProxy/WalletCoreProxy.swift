@@ -34,6 +34,15 @@ enum WalletCoin: UInt32, Hashable {
     var slip44Id: UInt32 {
         return walletCoreCoin.slip44Id
     }
+
+    fileprivate var extendedPublicKeyVersion: HDVersion {
+        switch self {
+        case .ethereum:
+            return .xpub
+        case .solana, .near:
+            return walletCoreCoin.xpubVersion
+        }
+    }
 }
 
 enum WalletDerivation: Hashable {
@@ -157,7 +166,7 @@ struct WalletHDWallet {
         return walletCoreWallet.getExtendedPublicKeyDerivation(purpose: walletCoreCoin.purpose,
                                                                coin: walletCoreCoin,
                                                                derivation: derivation.walletCoreDerivation,
-                                                               version: walletCoreCoin.xpubVersion)
+                                                               version: coin.extendedPublicKeyVersion)
     }
 
     func extendedPublicKeyAccount(coin: WalletCoin, derivation: WalletDerivation, account: UInt32) -> String {
@@ -165,7 +174,7 @@ struct WalletHDWallet {
         return walletCoreWallet.getExtendedPublicKeyAccount(purpose: walletCoreCoin.purpose,
                                                             coin: walletCoreCoin,
                                                             derivation: derivation.walletCoreDerivation,
-                                                            version: walletCoreCoin.xpubVersion,
+                                                            version: coin.extendedPublicKeyVersion,
                                                             account: account)
     }
 }
@@ -499,15 +508,40 @@ private extension WalletCoin {
 }
 
 #if DEBUG
+struct WalletRawAccountForTesting: Equatable {
+    let address: String
+    let coinRawValue: UInt32
+    let derivationRawValue: UInt32
+    let derivationPath: String
+    let publicKey: String
+    let extendedPublicKey: String
+}
+
 extension WalletStoredKey {
 
-    func addUnsupportedAccountForTesting() {
-        walletCoreKey.addAccountDerivation(address: "1BoatSLRHtKNngkdXEeobR76b53LETtpyT",
-                                           coin: .bitcoin,
-                                           derivation: .default,
-                                           derivationPath: "m/44'/0'/0'/0/0",
-                                           publicKey: "02c6047f9441ed7d6d3045406e95c07cd85a7f05a2a6a5821ea4e9d4e3e60c29c",
-                                           extendedPublicKey: "")
+    func addUnsupportedAccountForTesting(_ account: WalletRawAccountForTesting) {
+        guard let coin = CoinType(rawValue: account.coinRawValue),
+              let derivation = Derivation(rawValue: account.derivationRawValue) else {
+            preconditionFailure("Invalid raw WalletCore account test vector")
+        }
+
+        walletCoreKey.addAccountDerivation(address: account.address,
+                                           coin: coin,
+                                           derivation: derivation,
+                                           derivationPath: account.derivationPath,
+                                           publicKey: account.publicKey,
+                                           extendedPublicKey: account.extendedPublicKey)
+    }
+
+    func rawAccountForTesting(index: Int) -> WalletRawAccountForTesting? {
+        guard let account = walletCoreKey.account(index: index) else { return nil }
+
+        return WalletRawAccountForTesting(address: account.address,
+                                          coinRawValue: account.coin.rawValue,
+                                          derivationRawValue: account.derivation.rawValue,
+                                          derivationPath: account.derivationPath,
+                                          publicKey: account.publicKey,
+                                          extendedPublicKey: account.extendedPublicKey)
     }
 
 }
