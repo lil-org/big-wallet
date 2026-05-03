@@ -20,10 +20,29 @@ enum WalletCoreProxyTestVectors {
     static let mixedWhitespaceMnemonic = " abandon  abandon abandon\tabandon abandon abandon abandon abandon abandon abandon abandon about "
     static let password = Data("password".utf8)
     static let wrongPassword = Data("wrong-password".utf8)
+    static let longPassword = Data(repeating: 0x70, count: 1024)
+
+    static let base58KnownVectors: [(data: Data, encoded: String)] = [
+        (data(hex: "61"), "2g"),
+        (data(hex: "626262"), "a3gV"),
+        (data(hex: "636363"), "aPEr"),
+        (data(hex: "73696d706c792061206c6f6e6720737472696e67"), "2cFupjhnEsSn59qHXstmK2ffpLv2"),
+        (data(hex: "00"), "1"),
+        (data(hex: "00000001"), "1112"),
+        (data(hex: "ffffffff"), "7YXq9G"),
+        (data(hex: "000102030405060708090a0b0c0d0e0f"), "12drXXUifSrRnXLGbXg8E"),
+    ]
+
+    static let keccakBinaryVectors: [(name: String, data: Data, digest: String)] = [
+        ("zero 32 bytes", Data(repeating: 0, count: 32), "290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563"),
+        ("all byte values", Data((0...255).map { UInt8($0) }), "dc924469b334aed2a19fac7252e9961aea41f8d91996366029dbe0884229bf36"),
+        ("long binary payload", Data(repeating: 0xab, count: 1024), "1549e03b2fd519bc2621fee2b4f0e94e796658d7b94c952316fdf05b98d23b25"),
+    ]
 
     static let sequentialPrivateKey = Data(1...32)
     static let onePrivateKey = Data(repeating: 0, count: 31) + Data([1])
     static let zeroPrivateKey = Data(repeating: 0, count: 32)
+    static let secp256k1PrivateKeyBelowCurveOrder = data(hex: "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140")
     static let secp256k1PrivateKeyAtCurveOrder = data(hex: "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141")
     static let secp256k1PrivateKeyAboveCurveOrder = data(hex: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
     static let secpPrivateKey = data(hex: "afeefca74d9a325cf1d6b6911d61a65c32afa8e02bd5e78e2e4ac2910bab45f5")
@@ -43,6 +62,10 @@ enum WalletCoreProxyTestVectors {
     static let sequentialSolanaAddress = "9C6hybhQ6Aycep9jaUnP6uL9ZYvDjUp1aSkFWPUFJtpj"
     static let oneEthereumAddress = "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf"
     static let oneSolanaAddress = "6ASf5EcmmEHTgDJ4X4ZT5vT6iHVJBXPg5AN5YoTCpGWt"
+    static let secp256k1PrivateKeyBelowCurveOrderEthereumPublicKey = "0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798b7c52588d95c3b9aa25b0403f1eef75702e84bb7597aabe663b82f6f04ef2777"
+    static let secp256k1PrivateKeyBelowCurveOrderEthereumAddress = "0x80C0dbf239224071c59dD8970ab9d542E3414aB2"
+    static let secp256k1PrivateKeyBelowCurveOrderSolanaPublicKey = "db829af23b58dbea3bd1d0ef9c97afd3f2ee04df984425fafa84c30fe340a1d4"
+    static let secp256k1PrivateKeyBelowCurveOrderSolanaAddress = "Fmso3DbsuWGKrXsDVayLu13dbGqTuXW5a2b5BLCo2o47"
     static let secp256k1PrivateKeyAtCurveOrderSolanaPublicKey = "e4edb845d09d604c6063dbafbc8c7e36068362949f84ffeb2eeccac68761dc5d"
     static let secp256k1PrivateKeyAtCurveOrderSolanaAddress = "GQeCMLHLy3hDXZy96751SBKwwmG6cEjFXULsQ4iyi5PA"
     static let secp256k1PrivateKeyAboveCurveOrderSolanaPublicKey = "76a1592044a6e4f511265bca73a604d90b0529d1df602be30a19a9257660d1f5"
@@ -61,6 +84,10 @@ enum WalletCoreProxyTestVectors {
     static let abandonEthereumAddress = "0x9858EfFD232B4033E47d90003D41EC34EcaEda94"
     static let abandonEthereumSecondAddress = "0x6Fac4D18c912343BF86fa7049364Dd4E424Ab9C0"
     static let abandonEthereumSecondPublicKey = "049fd0991d0222b4e1339c1a1a5b5f6d9f6a96672a3247b638ee6156d9ea877a2f1735e3a9260940e4c2225c344a8cea6c7b6a6057d0eb90a9a875f446c131031d"
+    static let abandonEthereumChangeZeroAddress = "0x399Db6Ed32539fbDF44c3e7678b5b428e378F666"
+    static let abandonEthereumChangeZeroPublicKey = "04abdc0424e5a951abb5e12df771738e269566fc170dfe8a5f0dae27052a1685590ed3baf090b916db5f923ae4c5d34aba23466c172027e17749f0c8f579f0935b"
+    static let abandonEthereumChangeOneAddress = "0x26db4d065800Bd118928848E69A1cBF956Cff1D0"
+    static let abandonEthereumChangeOnePublicKey = "04dd553226bc6d4d2efafabfe7600a10d4d069de1371dd3207a293fb96766b307376605b0580017eb8e3ee5202d613fca46d7befcbbe3303ccc1da9d32f8fd4e96"
     static let abandonSolanaDefaultExtendedPublicKey = "xpub6BwjtyUeq36Y418KAz1FZTzryD9MXUSuKeYVyfbhN8ffEWEWYNAEhM6Seg6nj5t9RmAZQpWQk4R1VxfefwwTiWMBPPWHNEaABFUAy9Mv2Hc"
 
     static let solanaAddressFromPublicKey = "Cw98eCpH6kkCCVadhei4UNi6VxszmVwSxqypns33Ssr2"
@@ -71,6 +98,10 @@ enum WalletCoreProxyTestVectors {
     static let solanaMessageSignature = "2iBZ6zrQRKHcbD8NWmm552gU5vGvh1dk3XV4jxnyEdRKm8up8AeQk1GFr9pJokSmchw7i9gMtNyFBdDt8tBxM1cG"
     static let solanaEmptyMessageSignature = "3SBCToyrhSQZkB4sqHJvUurrzv5c5Y17W5qY5cbHH2XWBzAkB2yWM6NuwUV7ytapKn6xwp77bbtoQYvAsbySWU3q"
     static let solanaZeroMessageSignature = "4iXB9qCBysmuLa9cttk9yYfx7SE9FpD9z79zzcPNWCurYgxGjTkpbcRtVBdic3s1Q1xZHEYYdud3yNKftYHqyo7u"
+    static let solanaBinaryMessage = data(hex: "000102ff48656c6c6f")
+    static let solanaBinaryMessageSignature = "21mmPTuCnWosSwBT5PPpYGYCbietfKW7B4b1mvogJ3s1rEojKy8MgqMGYWx4wx13VsJH3GeBMLAqE6vBF28eStcW"
+    static let solanaLongMessage = Data((0..<128).map { UInt8($0) })
+    static let solanaLongMessageSignature = "4bYXqrzTP31C1W7VDGpAubaYfS5CJTjY8HYFTUDKNJ2fFrMDkR4fNwELQtNwfUKqyd9q35ev81ymkZS6EEi1RY7t"
     static let ethereumRawSignDigest = data(hex: "3f891fda3704f0368dab65fa81ebe616f4aa2a0854995da4dc0b59d2cadbd64f")
     static let ethereumOverlongRawSignDigest = data(hex: "3f891fda3704f0368dab65fa81ebe616f4aa2a0854995da4dc0b59d2cadbd64faa")
     static let ethereumZeroRawSignDigest = Data(repeating: 0, count: 32)
@@ -83,6 +114,10 @@ enum WalletCoreProxyTestVectors {
     static let ethereumEmptyPersonalMessageSignature = "0x75ee6bac1fd86fef91281b5d4be96f157ffa82ea581fcf00f3e673eaa5f319fe62fa633166c9599f952d748cdebd01fa2ababbba3d95b972c969c45eaaff00d81c"
     static let ethereumBinaryPersonalMessage = data(hex: "000102ff48656c6c6f")
     static let ethereumBinaryPersonalMessageSignature = "0xd99a610559e2efb64a00bf5f7cfae4b3c81db68776e188e1e5328fa250920643730c4251db430c62522a1a2fd0b970c0d9e32dc2d45d53e4a3fdb57b3f5008b11c"
+    static let ethereumNewlinePersonalMessage = Data("Line one\nLine two".utf8)
+    static let ethereumNewlinePersonalMessageSignature = "0x8c7645a57f7fe39f85c0e45bc3a8fbdc9c270f0e3db75f0a17f0c7c84202e3c8496628ae440ad3d1aad4f3da9cb12295804ff6328fbdf9661b4b41455b1abeef1b"
+    static let ethereumLongPersonalMessage = Data((0..<128).map { UInt8($0) })
+    static let ethereumLongPersonalMessageSignature = "0x9fbf231ec5ebfabea35a2994bcc79b77875b71023aae0269983c05cb264eadc6302ae5ad4201ccb99847177382707803711ebb6b0f67c8907639e431e831e5e61b"
     static let ethereumSignerAddress = "0xd0972E2312518Ca15A2304D56ff9cc0b7ea0Ea37"
     static let ethereumTypedDataSignature = "0x590ef5a00564df1ef0f0fdb0a4d517d0090344c267c75e9580dea40a67569eb3129449b460da5dfca0366093d0ecf8416151aed6dba8903c28d0c327c69e05661c"
 
@@ -455,9 +490,11 @@ enum WalletCoreProxyTestVectors {
     static let signedERC20Transaction = "f8aa808509c7652400830130b9946b175474e89094c44da98b954eedeac495271d0f80b844a9059cbb0000000000000000000000005322b34c88ed0691971bf52a7047448f0f4efc840000000000000000000000000000000000000000000000001bc16d674ec8000025a0724c62ad4fbf47346b02de06e603e013f26f26b56fdc0be7ba3d6273401d98cea0032131cae15da7ddcda66963e8bef51ca0d9962bfef0547d3f02597a4a58c931"
     static let signedEmptySendTransaction = "f85f8001825208940000000000000000000000000000000000000001808026a043b16e8e5617621fe2b209d803f4271b1debce20e59f7275d101b20538a8938aa06f3280d17c64af0100109ddbf1b635035ee29bb2848e062cdac082a5977cbf83"
     static let signedOneWeiTransaction = "f85f8001825208940000000000000000000000000000000000000001018026a0799bab69dff6408b09598df6fff2b06074214c9affbd2adfef376df21a4a41a3a0151fff9b870fd736b9b760e061035f46fa8502932af5a6559da1e71e5f986bc0"
+    static let signedEmptyChainIDTransaction = "f85f800182520894000000000000000000000000000000000000000180801ca00ec1695e83877837a0f8c23d4ce5edb611b503e67a0fc9ea0292718e4dba58d7a051cba1536e66a6d04addb29a4144281eff12683fde7111d5e306f58d8c328884"
     static let signedNativeTransferTransaction = "f86c098504a817c800825208943535353535353535353535353535353535353535880de0b6b3a76400008025a028ef61340bd939bc2195fe537567866003e1a15d3c71ff63e1590620aa636276a067cbe9d8997f761aecb703304b3800ccf555c9f3dc64214b297fb1966a3b6d83"
     static let signedDataOnlyTransaction = "f869808509c7652400830130b9946b175474e89094c44da98b954eedeac495271d0f8084deadbeef25a0372f1792338dd8fd0a1be8901c6dd79faa412936eb5c62d053639663630fa540a01ffd8afd49f74806135d76623344e2b3a45571880acca8a5ec88b66a085650e0"
     static let signedChainThreeOneWeiTransaction = "f864068504a817c80082520894353535353535353535353535353535353535353501802aa0e059a80a438240f955e8fd75dc852f1e87a20c0c22f842a4a251e69527ba0d7da075ef56fc4a39b1201f3058471a054dd02f209926a2aadf67815761991b627f45"
+    static let signedBaseChainOneWeiTransaction = "f866068504a817c800825208943535353535353535353535353535353535353535018082422ea0a21c950697a9926a6aca62f1ec6e22602e12918f21acb4522ba7a0e851b3ac1da0789de2323b18c9b15bb7926a95d89c20ba365b38e70d03cd21eeeaf18e229569"
 
     static let solanaSequentialSeedBase58 = "4wBqpZM9xaSheZzJSMawUKKwhdpChKbZ5eu5ky4Vigw"
     static let solanaSequentialSecretKeyBase58 = "2Ana1pUpv2ZbMVkwF5FXapYeBEjdxDatLn7nvJkhgTSdZd8hbDHTd21as7EAsg7ypityqfsw2pMQKJcVDVcAEsd"
