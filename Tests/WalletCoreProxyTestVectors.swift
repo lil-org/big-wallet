@@ -32,7 +32,6 @@ enum WalletCoreProxyTestVectors {
     static let walletCoreHDEthereumAddress = "0x27Ef5cDBe01777D62438AfFeb695e33fC2335979"
     static let coinAddressEthereumAddress = "0x8f348F300873Fd5DA36950B2aC75a26584584feE"
     static let coinAddressSolanaAddress = "2bUBiBNZyD29gP1oV6de7nxowMLoDBtopMMTGgMvjG5m"
-    static let coinAddressNearAddress = "0c91f6106ff835c0195d5388565a2d69e25038a7e23d26198f85caf6594117ec"
     static let multiAccountEthereumAddress = "0x494f60cb6Ac2c8F5E1393aD9FdBdF4Ad589507F7"
     static let multiAccountEthereumPublicKey = "04cc32a479080d83fdcf69966713f0aad1bc1dc3ecf873b034894e84259841bc1c9b122717803e68905220ff54952d3f5ea2ab2698ca31f843addf94ae73fae9fd"
     static let abandonEthereumExtendedPublicKey = "xpub6DCoCpSuQZB2jawqnGMEPS63ePKWkwWPH4TU45Q7LPXWuNd8TMtVxRrgjtEshuqpK3mdhaWHPFsBngh5GFZaM6si3yZdUsT8ddYM3PwnATt"
@@ -40,12 +39,11 @@ enum WalletCoreProxyTestVectors {
     static let abandonEthereumSecondAddress = "0x6Fac4D18c912343BF86fa7049364Dd4E424Ab9C0"
     static let abandonEthereumSecondPublicKey = "049fd0991d0222b4e1339c1a1a5b5f6d9f6a96672a3247b638ee6156d9ea877a2f1735e3a9260940e4c2225c344a8cea6c7b6a6057d0eb90a9a875f446c131031d"
     static let abandonSolanaDefaultExtendedPublicKey = "xpub6BwjtyUeq36Y418KAz1FZTzryD9MXUSuKeYVyfbhN8ffEWEWYNAEhM6Seg6nj5t9RmAZQpWQk4R1VxfefwwTiWMBPPWHNEaABFUAy9Mv2Hc"
-    static let abandonNearDefaultExtendedPublicKey = "xpub6DVyUnweRi8KSxhSMJuRTMAGD7MWdU2QdrJAPguZtQsLZg8Dh4DBZyCRGAWqWh62WZENXkTjPYLmtjpj7vLzBCy2JvPipAgQyAP8t5ZiowE"
+
     static let solanaAddressFromPublicKey = "Cw98eCpH6kkCCVadhei4UNi6VxszmVwSxqypns33Ssr2"
 
     static let solanaMessage = Data("Hello world".utf8)
     static let solanaMessageSignature = "2iBZ6zrQRKHcbD8NWmm552gU5vGvh1dk3XV4jxnyEdRKm8up8AeQk1GFr9pJokSmchw7i9gMtNyFBdDt8tBxM1cG"
-    static let nearMessageSignature = "2iBZ6zrQRKHcbD8NWmm552gU5vGvh1dk3XV4jxnyEdRKm8up8AeQk1GFr9pJokSmchw7i9gMtNyFBdDt8tBxM1cG"
     static let ethereumPersonalMessage = Data("Foo".utf8)
     static let ethereumPersonalMessageSignature = "0x21a779d499957e7fd39392d49a079679009e60e492d9654a148829be43d2490736ec72bc4a5644047d979c3cf4ebe2c1c514044cf436b063cb89fc6676be71101b"
     static let ethereumSignerAddress = "0xd0972E2312518Ca15A2304D56ff9cc0b7ea0Ea37"
@@ -116,7 +114,6 @@ enum WalletCoreProxyTestVectors {
     static let walletCoreJSONMixedAccountPassword = Data("e28ddf66cec05c1fc09939a00628b230459202b2493fccac288038ef37815723".utf8)
     static let walletCoreJSONMixedAccountMnemonic = "often tobacco bread scare imitate song kind common bar forest yard wisdom"
     static let walletCoreJSONMixedAccountEthereumAddress = "0x33F44330cc4253cCd4ce4224186DB9baCe2190ea"
-    static let walletCoreJSONMixedAccountNearAddress = "NEARzwYRo7ArKyLBdmAU7XiMzz4kgYgrfM3VxCn6H9PXnPaAoZuSB"
     static let walletCoreJSONMixedAccountFixture = data(utf8: """
     {
       "activeAccounts": [{
@@ -129,9 +126,6 @@ enum WalletCoreProxyTestVectors {
       }, {
         "address": "bnb1njuczq3hgvupu2vnczrjz7rc8x4uxlmhjyq95z",
         "derivationPath": "m/44'/714'/0'/0/0"
-      }, {
-        "address": "NEARzwYRo7ArKyLBdmAU7XiMzz4kgYgrfM3VxCn6H9PXnPaAoZuSB",
-        "derivationPath": "m/44'/397'/0'"
       }],
       "crypto": {
         "cipher": "aes-128-ctr",

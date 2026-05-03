@@ -18,7 +18,6 @@ enum WalletKeyStoreError: Swift.Error {
 enum WalletCoin: UInt32, Hashable {
     case ethereum = 60
     case solana = 501
-    case near = 397
 
     fileprivate var walletCoreCoin: CoinType {
         switch self {
@@ -26,8 +25,6 @@ enum WalletCoin: UInt32, Hashable {
             return .ethereum
         case .solana:
             return .solana
-        case .near:
-            return .near
         }
     }
 
@@ -39,7 +36,7 @@ enum WalletCoin: UInt32, Hashable {
         switch self {
         case .ethereum:
             return .xpub
-        case .solana, .near:
+        case .solana:
             return walletCoreCoin.xpubVersion
         }
     }
@@ -498,8 +495,6 @@ private extension WalletCoin {
             self = .ethereum
         case .solana:
             self = .solana
-        case .near:
-            self = .near
         default:
             return nil
         }

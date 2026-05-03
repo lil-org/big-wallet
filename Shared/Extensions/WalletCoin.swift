@@ -10,8 +10,6 @@ extension WalletCoin {
             return "Solana"
         case .ethereum:
             return "Ethereum"
-        case .near:
-            return "Near"
         }
     }
     
@@ -23,8 +21,6 @@ extension WalletCoin {
             return [
                 (Strings.viewOn + " " + "Etherscan", URL(string: "https://etherscan.io/address/\(address)")!)
             ]
-        case .near:
-            fatalError(Strings.somethingWentWrong)
         }
     }
     
@@ -43,7 +39,7 @@ extension WalletCoin {
         switch self {
         case .ethereum:
             return address.lowercased()
-        case .solana, .near:
+        case .solana:
             return address
         }
     }

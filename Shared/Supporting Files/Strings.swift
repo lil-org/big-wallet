@@ -76,7 +76,6 @@ struct Strings {
     static let removingTheLastAccount = loc("Removing the last account removes the wallet as well")
     static let selectNetworkOptionally = loc("Select Network")
     static let data = loc("Data")
-    static let viewOnNearExplorer = loc("View on Near explorer")
     static let sendingTransaction = loc("Sending transaction")
     static let disconnect = loc("Disconnect")
     static let switchAccount = loc("Switch Account")

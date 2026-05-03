@@ -26,7 +26,7 @@ extension WalletAccount {
         switch coin {
         case .ethereum:
             dropFirstCount = 2
-        case .near, .solana:
+        case .solana:
             dropFirstCount = 0
         }
         let withoutCommonPart = String(address.dropFirst(dropFirstCount))
@@ -39,8 +39,6 @@ extension WalletAccount {
             return Blockies(seed: address.lowercased()).createImage()
         case .solana:
             return SolanaAccountIcon.image(seed: address, logo: Images.solana)
-        case .near:
-            return Images.circleFill
         }
     }
     
