@@ -108,6 +108,10 @@ public enum TW_Common_Proto_SigningError: WalletCoreSwiftProtobuf.Enum {
 
   /// Requested amount is too low (less dust).
   case errorDustAmountRequested // = 25
+
+  /// The transaction hash does not match the hash derived from the raw transaction data.
+  /// This can indicate a tampered or malformed transaction input.
+  case errorTxHashMismatch // = 26
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -142,6 +146,7 @@ public enum TW_Common_Proto_SigningError: WalletCoreSwiftProtobuf.Enum {
     case 23: self = .errorInvalidRequestedTokenAmount
     case 24: self = .errorNotSupported
     case 25: self = .errorDustAmountRequested
+    case 26: self = .errorTxHashMismatch
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -174,6 +179,7 @@ public enum TW_Common_Proto_SigningError: WalletCoreSwiftProtobuf.Enum {
     case .errorInvalidRequestedTokenAmount: return 23
     case .errorNotSupported: return 24
     case .errorDustAmountRequested: return 25
+    case .errorTxHashMismatch: return 26
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -211,6 +217,7 @@ extension TW_Common_Proto_SigningError: CaseIterable {
     .errorInvalidRequestedTokenAmount,
     .errorNotSupported,
     .errorDustAmountRequested,
+    .errorTxHashMismatch,
   ]
 }
 
@@ -246,5 +253,6 @@ extension TW_Common_Proto_SigningError: WalletCoreSwiftProtobuf._ProtoNameProvid
     23: .same(proto: "Error_invalid_requested_token_amount"),
     24: .same(proto: "Error_not_supported"),
     25: .same(proto: "Error_dust_amount_requested"),
+    26: .same(proto: "Error_tx_hash_mismatch"),
   ]
 }

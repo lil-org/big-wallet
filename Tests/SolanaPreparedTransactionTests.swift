@@ -3,9 +3,33 @@
 import XCTest
 @testable import Big_Wallet
 
+private typealias Vectors = WalletCoreProxyTestVectors
+
 final class SolanaPreparedTransactionTests: XCTestCase {
 
     private let serializedTransactionSignerPublicKey = "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi"
+
+    func testSolanaMessageSigningWrappersMatchProxyVectors() throws {
+        let privateKey = try XCTUnwrap(WalletPrivateKey(data: Vectors.solanaSigningPrivateKey))
+
+        XCTAssertEqual(Solana.shared.sign(messageData: Vectors.solanaMessage, privateKey: privateKey),
+                       Vectors.solanaMessageSignature)
+        XCTAssertEqual(Solana.shared.sign(message: Vectors.solanaMessageBase58, asHex: false, privateKey: privateKey),
+                       Vectors.solanaMessageSignature)
+        XCTAssertEqual(Solana.shared.sign(message: Vectors.solanaMessageHex, asHex: true, privateKey: privateKey),
+                       Vectors.solanaMessageSignature)
+        XCTAssertEqual(Solana.shared.sign(messageData: Data(), privateKey: privateKey),
+                       Vectors.solanaEmptyMessageSignature)
+        XCTAssertEqual(Solana.shared.sign(message: "", asHex: true, privateKey: privateKey),
+                       Vectors.solanaEmptyMessageSignature)
+        XCTAssertEqual(Solana.shared.sign(messageData: Data(repeating: 0, count: 32), privateKey: privateKey),
+                       Vectors.solanaZeroMessageSignature)
+
+        XCTAssertNil(Solana.shared.sign(message: "", asHex: false, privateKey: privateKey))
+        XCTAssertNil(Solana.shared.sign(message: "0OIl", asHex: false, privateKey: privateKey))
+        XCTAssertNil(Solana.shared.sign(message: "abc", asHex: true, privateKey: privateKey))
+        XCTAssertNil(Solana.shared.sign(message: "0X00", asHex: true, privateKey: privateKey))
+    }
 
     func testSerializedSolanaSignAndSendRejectsMissingCosignerSignature() {
         let publicKey = serializedTransactionSignerPublicKey
@@ -30,6 +54,27 @@ final class SolanaPreparedTransactionTests: XCTestCase {
                                                                          publicKey: publicKey) {
         case .success:
             break
+        case .failure(let error):
+            XCTFail("Expected prepared transaction, got \(error)")
+        }
+    }
+
+    func testSerializedSolanaSignAndSendProducesDeterministicSignedTransaction() throws {
+        let privateKey = try XCTUnwrap(WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey))
+
+        switch Solana.shared.preparedSerializedTransactionForSignAndSend(serializedTransaction: Vectors.solanaPreparedSerializedTransaction,
+                                                                         publicKey: Vectors.solanaPreparedSignerPublicKey) {
+        case .success(let preparedTransaction):
+            XCTAssertEqual(preparedTransaction.approvalMessage, Vectors.solanaPreparedApprovalMessage)
+            XCTAssertEqual(WalletCrypto.base58Encode(data: preparedTransaction.messageData), Vectors.solanaPreparedApprovalMessage)
+
+            switch Solana.shared.signedTransactionForSignAndSend(preparedSerializedTransaction: preparedTransaction,
+                                                                 privateKey: privateKey) {
+            case .success(let signedTransaction):
+                XCTAssertEqual(signedTransaction, Vectors.solanaPreparedSignedTransactionBase64)
+            case .failure(let error):
+                XCTFail("Expected signed transaction, got \(error)")
+            }
         case .failure(let error):
             XCTFail("Expected prepared transaction, got \(error)")
         }

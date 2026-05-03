@@ -67,6 +67,12 @@ public struct TW_Aeternity_Proto_SigningOutput {
   /// Signature, Base58 with checksum
   public var signature: String = String()
 
+  /// error code, 0 is ok, other codes will be treated as errors
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  /// error description
+  public var errorMessage: String = String()
+
   public var unknownFields = WalletCoreSwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -155,6 +161,8 @@ extension TW_Aeternity_Proto_SigningOutput: WalletCoreSwiftProtobuf.Message, Wal
   public static let _protobuf_nameMap: WalletCoreSwiftProtobuf._NameMap = [
     1: .same(proto: "encoded"),
     2: .same(proto: "signature"),
+    3: .same(proto: "error"),
+    4: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: WalletCoreSwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -165,6 +173,8 @@ extension TW_Aeternity_Proto_SigningOutput: WalletCoreSwiftProtobuf.Message, Wal
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.encoded) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.signature) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -177,12 +187,20 @@ extension TW_Aeternity_Proto_SigningOutput: WalletCoreSwiftProtobuf.Message, Wal
     if !self.signature.isEmpty {
       try visitor.visitSingularStringField(value: self.signature, fieldNumber: 2)
     }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 3)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Aeternity_Proto_SigningOutput, rhs: TW_Aeternity_Proto_SigningOutput) -> Bool {
     if lhs.encoded != rhs.encoded {return false}
     if lhs.signature != rhs.signature {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

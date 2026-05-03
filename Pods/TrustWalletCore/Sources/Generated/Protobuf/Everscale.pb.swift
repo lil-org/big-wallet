@@ -179,6 +179,12 @@ public struct TW_Everscale_Proto_SigningOutput {
 
   public var encoded: String = String()
 
+  /// error code, 0 is ok, other codes will be treated as errors
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  /// error description
+  public var errorMessage: String = String()
+
   public var unknownFields = WalletCoreSwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -326,6 +332,8 @@ extension TW_Everscale_Proto_SigningOutput: WalletCoreSwiftProtobuf.Message, Wal
   public static let protoMessageName: String = _protobuf_package + ".SigningOutput"
   public static let _protobuf_nameMap: WalletCoreSwiftProtobuf._NameMap = [
     1: .same(proto: "encoded"),
+    2: .same(proto: "error"),
+    3: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: WalletCoreSwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -335,6 +343,8 @@ extension TW_Everscale_Proto_SigningOutput: WalletCoreSwiftProtobuf.Message, Wal
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.encoded) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -344,11 +354,19 @@ extension TW_Everscale_Proto_SigningOutput: WalletCoreSwiftProtobuf.Message, Wal
     if !self.encoded.isEmpty {
       try visitor.visitSingularStringField(value: self.encoded, fieldNumber: 1)
     }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 2)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Everscale_Proto_SigningOutput, rhs: TW_Everscale_Proto_SigningOutput) -> Bool {
     if lhs.encoded != rhs.encoded {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

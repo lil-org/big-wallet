@@ -4,6 +4,8 @@ import Foundation
 import XCTest
 @testable import Big_Wallet
 
+private typealias Vectors = WalletCoreProxyTestVectors
+
 final class WalletsManagerPrivateKeyImportTests: XCTestCase {
 
     private enum TestError: Error {
@@ -24,37 +26,26 @@ final class WalletsManagerPrivateKeyImportTests: XCTestCase {
         XCTAssertEqual(decoded.count, 64)
         XCTAssertEqual(Data(decoded.prefix(32)), privateKeyData)
         XCTAssertEqual(Data(decoded.suffix(32)), privateKey.publicKeyData(coin: .solana))
+        XCTAssertEqual(exported, Vectors.solanaSequentialSecretKeyBase58)
         XCTAssertNotEqual(exported, WalletCrypto.hexString(data: privateKeyData))
     }
 
-    func testSolanaPrivateKeyImportAcceptsPhantomSecretKeyFormat() throws {
-        let privateKey = try testPrivateKey()
-
-        let exported = WalletsManager.privateKeyExportString(privateKey: privateKey, coin: .solana)
-        let imported = WalletsManager.privateKeyImport(from: exported)
+    func testSolanaPrivateKeyImportAcceptsPhantomSecretKeyFormat() {
+        let imported = WalletsManager.privateKeyImport(from: Vectors.solanaSequentialSecretKeyBase58)
 
         XCTAssertEqual(imported?.coin, .solana)
         assertPrivateKey(imported?.privateKey, equals: privateKeyData)
     }
 
     func testSolanaPrivateKeyImportAcceptsBase58SeedFormat() {
-        let exported = WalletCrypto.base58Encode(data: privateKeyData)
-        let imported = WalletsManager.privateKeyImport(from: exported)
+        let imported = WalletsManager.privateKeyImport(from: Vectors.solanaSequentialSeedBase58)
 
         XCTAssertEqual(imported?.coin, .solana)
         assertPrivateKey(imported?.privateKey, equals: privateKeyData)
     }
 
-    func testSolanaPrivateKeyImportAcceptsByteArraySecretKeyFormat() throws {
-        let privateKey = try testPrivateKey()
-
-        let byteArrayString = privateKey.withData { privateKeyData in
-            var secretKey = privateKeyData
-            defer { secretKey.resetBytes(in: 0..<secretKey.count) }
-            secretKey.append(privateKey.publicKeyData(coin: .solana))
-            return "[" + secretKey.map(String.init).joined(separator: ",") + "]"
-        }
-        let imported = WalletsManager.privateKeyImport(from: byteArrayString)
+    func testSolanaPrivateKeyImportAcceptsByteArraySecretKeyFormat() {
+        let imported = WalletsManager.privateKeyImport(from: Vectors.solanaSequentialSecretKeyByteArray)
 
         XCTAssertEqual(imported?.coin, .solana)
         assertPrivateKey(imported?.privateKey, equals: privateKeyData)
@@ -65,6 +56,24 @@ final class WalletsManagerPrivateKeyImportTests: XCTestCase {
         let byteArrayString = "[" + secretKey.map(String.init).joined(separator: ",") + "]"
 
         XCTAssertNil(WalletsManager.privateKeyImport(from: byteArrayString))
+    }
+
+    func testSolanaPrivateKeyImportRejectsInvalidByteArrayValues() {
+        let thirtyOneOnes = Array(repeating: "1", count: 31)
+        let invalidInputs = [
+            byteArrayString(["true"] + thirtyOneOnes),
+            byteArrayString(["1.5"] + thirtyOneOnes),
+            byteArrayString(["-1"] + thirtyOneOnes),
+            byteArrayString(["256"] + thirtyOneOnes),
+            byteArrayString(["\"1\""] + thirtyOneOnes),
+            byteArrayString(["1"]),
+            byteArrayString(Array(repeating: "1", count: 65)),
+            "[1,2",
+        ]
+
+        for input in invalidInputs {
+            XCTAssertNil(WalletsManager.privateKeyImport(from: input), "Expected invalid byte array to be rejected: \(input)")
+        }
     }
 
     func testSolanaPrivateKeyImportRejectsMismatchedPublicKey() throws {
@@ -78,6 +87,15 @@ final class WalletsManagerPrivateKeyImportTests: XCTestCase {
         }
 
         XCTAssertNil(WalletsManager.privateKeyImport(from: exported))
+    }
+
+    func testSolanaPrivateKeyImportRejectsBadBase58Seeds() {
+        let invalidAlphabetSeed = String(repeating: "1", count: 31) + "0"
+
+        XCTAssertNil(WalletsManager.privateKeyImport(from: "11111111111111111111111111111111"))
+        XCTAssertEqual(invalidAlphabetSeed.count, 32)
+        XCTAssertNil(WalletCrypto.base58Decode(string: invalidAlphabetSeed))
+        XCTAssertNil(WalletsManager.privateKeyImport(from: invalidAlphabetSeed))
     }
 
     func testEthereumPrivateKeyExportStaysHex() throws {
@@ -94,6 +112,26 @@ final class WalletsManagerPrivateKeyImportTests: XCTestCase {
 
         XCTAssertEqual(imported?.coin, .ethereum)
         assertPrivateKey(imported?.privateKey, equals: privateKeyData)
+    }
+
+    func testEthereumPrivateKeyImportRejectsInvalidHexKeys() {
+        XCTAssertNil(WalletsManager.privateKeyImport(from: WalletCrypto.hexString(data: Vectors.zeroPrivateKey)))
+        XCTAssertNil(WalletsManager.privateKeyImport(from: WalletCrypto.hexString(data: Data(repeating: 1, count: 31))))
+        XCTAssertNil(WalletsManager.privateKeyImport(from: WalletCrypto.hexString(data: Data(repeating: 1, count: 33))))
+        XCTAssertNil(WalletsManager.privateKeyImport(from: WalletCrypto.hexString(data: Vectors.secp256k1PrivateKeyAtCurveOrder)))
+        XCTAssertNil(WalletsManager.privateKeyImport(from: WalletCrypto.hexString(data: Vectors.secp256k1PrivateKeyAboveCurveOrder)))
+        XCTAssertNil(WalletsManager.privateKeyImport(from: "0X" + WalletCrypto.hexString(data: privateKeyData)))
+    }
+
+    func testEthereumPrivateKeyImportAcceptsBase58DecodableHexThatIsInvalidForSolana() throws {
+        let input = Vectors.ethereumHexThatDecodesAsInvalidSolanaSecretBase58
+        let decodedAsBase58 = try XCTUnwrap(WalletCrypto.base58Decode(string: input))
+        let imported = WalletsManager.privateKeyImport(from: input)
+
+        XCTAssertEqual(decodedAsBase58.count, 64)
+        XCTAssertEqual(Data(decodedAsBase58.prefix(32)), Vectors.zeroPrivateKey)
+        XCTAssertEqual(imported?.coin, .ethereum)
+        assertPrivateKey(imported?.privateKey, equals: Vectors.data(hex: input))
     }
 
     private func testPrivateKey(file: StaticString = #filePath, line: UInt = #line) throws -> WalletPrivateKey {
@@ -116,6 +154,10 @@ final class WalletsManagerPrivateKeyImportTests: XCTestCase {
         privateKey.withData {
             XCTAssertEqual($0, expectedData, file: file, line: line)
         }
+    }
+
+    private func byteArrayString(_ values: [String]) -> String {
+        return "[" + values.joined(separator: ",") + "]"
     }
 
 }

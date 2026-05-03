@@ -1,9 +1,9 @@
 PODS:
-  - TrustWalletCore (4.6.0):
-    - TrustWalletCore/Core (= 4.6.0)
-  - TrustWalletCore/Core (4.6.0):
+  - TrustWalletCore (4.6.6):
+    - TrustWalletCore/Core (= 4.6.6)
+  - TrustWalletCore/Core (4.6.6):
     - TrustWalletCore/Types
-  - TrustWalletCore/Types (4.6.0):
+  - TrustWalletCore/Types (4.6.6):
     - WalletCoreSwiftProtobuf
   - VSwiftProtobuf (5.0.0)
   - VTrustWalletCore (7.7.7):
@@ -29,7 +29,7 @@ EXTERNAL SOURCES:
     :podspec: https://github.com/grachyov/wallet-core/raw/master/VTrustWalletCore.podspec
 
 SPEC CHECKSUMS:
-  TrustWalletCore: a63eef893eeb285c3f689d2bfc89673419f65474
+  TrustWalletCore: d43c498a3ae9ed0bb20f415d6b7de50e8108f549
   VSwiftProtobuf: 90ccd59c4535da3d7618b2ff910543ef46bfa9c0
   VTrustWalletCore: 8d45e6187f1085797b965bf8ccc601ddfdf9e966
   WalletCoreSwiftProtobuf: a4798576a2d309511fc45f81843d348732ec571d

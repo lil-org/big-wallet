@@ -11,7 +11,7 @@ import Foundation
 public final class Biz {
 
     /// Returns the encoded hash of the user operation
-    /// 
+    ///
     /// - Parameter chain_id: The chain ID of the user.
     /// - Parameter code_address: The address of the smart contract wallet.
     /// - Parameter code_name: The name of the smart contract wallet.
@@ -60,23 +60,8 @@ public final class Biz {
         return TWDataNSData(result)
     }
 
-    /// Signs and encodes `Biz.executeWithPasskeySession` function call to execute a batch of transactions.
-    /// 
-    /// - Parameter input: The serialized data of `Biz.ExecuteWithSignatureInput` protobuf message.
-    /// - Returns: ABI-encoded function call.
-    public static func signExecuteWithSignatureCall(input: Data) -> Data? {
-        let inputData = TWDataCreateWithNSData(input)
-        defer {
-            TWDataDelete(inputData)
-        }
-        guard let result = TWBizSignExecuteWithSignatureCall(inputData) else {
-            return nil
-        }
-        return TWDataNSData(result)
-    }
-
     /// Signs a message using the private key
-    /// 
+    ///
     /// - Parameter hash: The hash of the user.
     /// - Parameter private_key: The private key of the user.
     /// - Returns: The signed hash.
@@ -90,6 +75,21 @@ public final class Biz {
             TWStringDelete(privateKeyString)
         }
         guard let result = TWBizGetSignedHash(hashString, privateKeyString) else {
+            return nil
+        }
+        return TWDataNSData(result)
+    }
+
+    /// Signs and encodes `Biz.executeWithPasskeySession` function call to execute a batch of transactions.
+    ///
+    /// - Parameter input: The serialized data of `Biz.ExecuteWithSignatureInput` protobuf message.
+    /// - Returns: ABI-encoded function call.
+    public static func signExecuteWithSignatureCall(input: Data) -> Data? {
+        let inputData = TWDataCreateWithNSData(input)
+        defer {
+            TWDataDelete(inputData)
+        }
+        guard let result = TWBizSignExecuteWithSignatureCall(inputData) else {
             return nil
         }
         return TWDataNSData(result)

@@ -647,14 +647,20 @@ public struct TW_Tron_Proto_SigningInput {
     set {_uniqueStorage()._privateKey = newValue}
   }
 
-  /// For direct sign in Tron, we just have to sign the txId returned by the DApp json payload.
-  /// TODO: This field can be removed in the future, as we can use raw_json.txID instead.
-  public var txID: String {
-    get {return _storage._txID}
-    set {_uniqueStorage()._txID = newValue}
-  }
-
-  /// Raw JSON data from the DApp, which contains fields 'txID', 'raw_data' and 'raw_data_hex' normally.
+  /// Optional. Raw transaction JSON as returned by a Tron node or DApp, containing at least the fields:
+  /// - 'txID'        – the expected transaction hash (hex-encoded SHA-256 of the raw bytes).
+  /// - 'raw_data'    – structured transaction fields (used to deserialize the transaction).
+  /// - 'raw_data_hex'– hex-encoded serialized transaction bytes (used to compute and verify the hash, if provided).
+  ///
+  /// When this field is set, `transaction` is ignored. The library will:
+  ///   1. Deserialize the transaction from `raw_data` into the internal Tron protobuf representation.
+  ///   2. Re-serialize it to bytes and compute SHA-256, then compare against `txID`.
+  ///   3. On success, sign and encode the transaction as usual.
+  ///
+  /// Possible errors:
+  /// - `Error_invalid_params`    - `rawJson` is not a valid JSON string or missing required fields (`txID`, `raw_data`, `raw_data_hex`).
+  /// - `Error_tx_hash_mismatch`  – `txID` does not match SHA-256(`raw_data_hex`), indicating a tampered or malformed input.
+  /// - `Error_not_supported`     – `rawJson` could not be deserialized as a known TronInternal protobuf message (i.e. not supported).
   public var rawJson: String {
     get {return _storage._rawJson}
     set {_uniqueStorage()._rawJson = newValue}
@@ -1830,14 +1836,12 @@ extension TW_Tron_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletCor
   public static let _protobuf_nameMap: WalletCoreSwiftProtobuf._NameMap = [
     1: .same(proto: "transaction"),
     2: .standard(proto: "private_key"),
-    3: .same(proto: "txId"),
     4: .standard(proto: "raw_json"),
   ]
 
   fileprivate class _StorageClass {
     var _transaction: TW_Tron_Proto_Transaction? = nil
     var _privateKey: Data = Data()
-    var _txID: String = String()
     var _rawJson: String = String()
 
     static let defaultInstance = _StorageClass()
@@ -1847,7 +1851,6 @@ extension TW_Tron_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletCor
     init(copying source: _StorageClass) {
       _transaction = source._transaction
       _privateKey = source._privateKey
-      _txID = source._txID
       _rawJson = source._rawJson
     }
   }
@@ -1869,7 +1872,6 @@ extension TW_Tron_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletCor
         switch fieldNumber {
         case 1: try { try decoder.decodeSingularMessageField(value: &_storage._transaction) }()
         case 2: try { try decoder.decodeSingularBytesField(value: &_storage._privateKey) }()
-        case 3: try { try decoder.decodeSingularStringField(value: &_storage._txID) }()
         case 4: try { try decoder.decodeSingularStringField(value: &_storage._rawJson) }()
         default: break
         }
@@ -1889,9 +1891,6 @@ extension TW_Tron_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletCor
       if !_storage._privateKey.isEmpty {
         try visitor.visitSingularBytesField(value: _storage._privateKey, fieldNumber: 2)
       }
-      if !_storage._txID.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._txID, fieldNumber: 3)
-      }
       if !_storage._rawJson.isEmpty {
         try visitor.visitSingularStringField(value: _storage._rawJson, fieldNumber: 4)
       }
@@ -1906,7 +1905,6 @@ extension TW_Tron_Proto_SigningInput: WalletCoreSwiftProtobuf.Message, WalletCor
         let rhs_storage = _args.1
         if _storage._transaction != rhs_storage._transaction {return false}
         if _storage._privateKey != rhs_storage._privateKey {return false}
-        if _storage._txID != rhs_storage._txID {return false}
         if _storage._rawJson != rhs_storage._rawJson {return false}
         return true
       }

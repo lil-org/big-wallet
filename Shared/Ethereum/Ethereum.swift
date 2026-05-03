@@ -23,11 +23,12 @@ struct Ethereum {
     }
     
     func sign(data: Data, privateKey: WalletPrivateKey) throws -> String {
-        return try sign(data: data, privateKey: privateKey, addPrefix: false)
+        return try sign(digest: data, privateKey: privateKey)
     }
     
     func signPersonalMessage(data: Data, privateKey: WalletPrivateKey) throws -> String {
-        return try sign(data: data, privateKey: privateKey, addPrefix: true)
+        guard let digest = prefixedDataHash(data: data) else { throw Error.failedToSign }
+        return try sign(digest: digest, privateKey: privateKey)
     }
     
     func recover(signature: Data, message: Data) -> String? {
@@ -41,15 +42,7 @@ struct Ethereum {
         return WalletCrypto.keccak256(data: prefixData + data)
     }
     
-    private func sign(data: Data, privateKey: WalletPrivateKey, addPrefix: Bool) throws -> String {
-        let digest: Data
-        if addPrefix {
-            guard let prefixedData = prefixedDataHash(data: data) else { throw Error.failedToSign }
-            digest = prefixedData
-        } else {
-            digest = data
-        }
-        
+    private func sign(digest: Data, privateKey: WalletPrivateKey) throws -> String {
         guard var signed = privateKey.sign(digest: digest, coin: .ethereum) else { throw Error.failedToSign }
         signed[64] += 27
         return WalletCrypto.hexString(data: signed).withHexPrefix
@@ -57,9 +50,7 @@ struct Ethereum {
     
     func sign(typedData: String, privateKey: WalletPrivateKey) throws -> String {
         let digest = WalletCrypto.ethereumTypedDataDigest(messageJson: typedData)
-        guard var signed = privateKey.sign(digest: digest, coin: .ethereum) else { throw Error.failedToSign }
-        signed[64] += 27
-        return WalletCrypto.hexString(data: signed).withHexPrefix
+        return try sign(digest: digest, privateKey: privateKey)
     }
     
     func prepareTransaction(_ transaction: Transaction, forceGasCheck: Bool, network: EthereumNetwork, completion: @escaping (Transaction) -> Void) {

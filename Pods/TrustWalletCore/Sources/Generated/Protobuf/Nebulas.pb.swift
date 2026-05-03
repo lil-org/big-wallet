@@ -76,6 +76,12 @@ public struct TW_Nebulas_Proto_SigningOutput {
   /// Encoded transaction
   public var raw: String = String()
 
+  /// error code, 0 is ok, other codes will be treated as errors
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  /// error description
+  public var errorMessage: String = String()
+
   public var unknownFields = WalletCoreSwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -248,6 +254,8 @@ extension TW_Nebulas_Proto_SigningOutput: WalletCoreSwiftProtobuf.Message, Walle
     1: .same(proto: "algorithm"),
     2: .same(proto: "signature"),
     3: .same(proto: "raw"),
+    4: .same(proto: "error"),
+    5: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: WalletCoreSwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -259,6 +267,8 @@ extension TW_Nebulas_Proto_SigningOutput: WalletCoreSwiftProtobuf.Message, Walle
       case 1: try { try decoder.decodeSingularUInt32Field(value: &self.algorithm) }()
       case 2: try { try decoder.decodeSingularBytesField(value: &self.signature) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.raw) }()
+      case 4: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -274,6 +284,12 @@ extension TW_Nebulas_Proto_SigningOutput: WalletCoreSwiftProtobuf.Message, Walle
     if !self.raw.isEmpty {
       try visitor.visitSingularStringField(value: self.raw, fieldNumber: 3)
     }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 4)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -281,6 +297,8 @@ extension TW_Nebulas_Proto_SigningOutput: WalletCoreSwiftProtobuf.Message, Walle
     if lhs.algorithm != rhs.algorithm {return false}
     if lhs.signature != rhs.signature {return false}
     if lhs.raw != rhs.raw {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -160,6 +160,12 @@ public struct TW_Zilliqa_Proto_SigningOutput {
   /// JSON transaction with signature
   public var json: String = String()
 
+  /// error code, 0 is ok, other codes will be treated as errors
+  public var error: TW_Common_Proto_SigningError = .ok
+
+  /// error description
+  public var errorMessage: String = String()
+
   public var unknownFields = WalletCoreSwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -392,6 +398,8 @@ extension TW_Zilliqa_Proto_SigningOutput: WalletCoreSwiftProtobuf.Message, Walle
   public static let _protobuf_nameMap: WalletCoreSwiftProtobuf._NameMap = [
     1: .same(proto: "signature"),
     2: .same(proto: "json"),
+    3: .same(proto: "error"),
+    4: .standard(proto: "error_message"),
   ]
 
   public mutating func decodeMessage<D: WalletCoreSwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -402,6 +410,8 @@ extension TW_Zilliqa_Proto_SigningOutput: WalletCoreSwiftProtobuf.Message, Walle
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.signature) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.json) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.error) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.errorMessage) }()
       default: break
       }
     }
@@ -414,12 +424,20 @@ extension TW_Zilliqa_Proto_SigningOutput: WalletCoreSwiftProtobuf.Message, Walle
     if !self.json.isEmpty {
       try visitor.visitSingularStringField(value: self.json, fieldNumber: 2)
     }
+    if self.error != .ok {
+      try visitor.visitSingularEnumField(value: self.error, fieldNumber: 3)
+    }
+    if !self.errorMessage.isEmpty {
+      try visitor.visitSingularStringField(value: self.errorMessage, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: TW_Zilliqa_Proto_SigningOutput, rhs: TW_Zilliqa_Proto_SigningOutput) -> Bool {
     if lhs.signature != rhs.signature {return false}
     if lhs.json != rhs.json {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.errorMessage != rhs.errorMessage {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

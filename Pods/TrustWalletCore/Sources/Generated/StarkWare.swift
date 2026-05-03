@@ -14,13 +14,16 @@ public struct StarkWare {
     ///
     /// - Parameter derivationPath: non-null StarkEx Derivation path
     /// - Parameter signature: valid eth signature
-    /// - Returns:  The private key for the specified derivation path/signature
-    public static func getStarkKeyFromSignature(derivationPath: DerivationPath, signature: String) -> PrivateKey {
+    /// - Returns:  The private key for the specified derivation path/signature, or `nullptr` if the signature or derivation path is invalid or an internal error occurs.
+    public static func getStarkKeyFromSignature(derivationPath: DerivationPath, signature: String) -> PrivateKey? {
         let signatureString = TWStringCreateWithNSString(signature)
         defer {
             TWStringDelete(signatureString)
         }
-        return PrivateKey(rawValue: TWStarkWareGetStarkKeyFromSignature(derivationPath.rawValue, signatureString))
+        guard let value = TWStarkWareGetStarkKeyFromSignature(derivationPath.rawValue, signatureString) else {
+            return nil
+        }
+        return PrivateKey(rawValue: value)
     }
 
 
