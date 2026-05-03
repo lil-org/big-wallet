@@ -2,11 +2,6 @@
 
 import Foundation
 import WalletCore
-#if os(visionOS)
-import VSwiftProtobuf
-#else
-import WalletCoreSwiftProtobuf
-#endif
 
 enum WalletKeyStoreError: Swift.Error {
     case invalidPassword

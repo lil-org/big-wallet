@@ -1,6 +1,0 @@
-framework module Pods_Big_Wallet_Ambient {
-  umbrella header "Pods-Big Wallet Ambient-umbrella.h"
-
-  export *
-  module * { export * }
-}

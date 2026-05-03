@@ -1,8 +1,0 @@
-// SPDX-License-Identifier: Apache-2.0
-//
-// Copyright © 2017 Trust Wallet.
-
-public typealias BizPasskeySessionEncodingHashParams = TW_BizPasskeySession_Proto_EncodingHashParams
-public typealias BizPasskeySessionExecution = TW_BizPasskeySession_Proto_Execution
-public typealias BizPasskeySessionExecuteWithPasskeySessionInput = TW_BizPasskeySession_Proto_ExecuteWithPasskeySessionInput
-public typealias BizPasskeySessionExecuteWithSignatureInput = TW_BizPasskeySession_Proto_ExecuteWithSignatureInput

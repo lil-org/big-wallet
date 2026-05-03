@@ -9,5 +9,4 @@ download on the [app store](https://lil.org/get)
 
 ## development
 
-* `pod install`
 * run the xcode project

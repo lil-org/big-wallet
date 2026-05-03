@@ -1,6 +1,0 @@
-framework module WalletCore {
-  umbrella header "TrustWalletCore-iOS-umbrella.h"
-
-  export *
-  module * { export * }
-}
