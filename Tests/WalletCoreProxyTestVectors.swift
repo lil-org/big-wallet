@@ -8,6 +8,7 @@ enum WalletCoreProxyTestVectors {
     static let walletCoreHDMnemonic = "ripple scissors kick mammal hire column oak again sun offer wealth tomorrow wagon turn fatal"
     static let coinAddressMnemonic = "shoot island position soft burden budget tooth cruel issue economy destroy above"
     static let multiAccountMnemonic = "team engine square letter hero song dizzy scrub tornado fabric divert saddle"
+    static let valid15WordMnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon address"
     static let valid18WordMnemonic = "find view amazing inject mistake school zone ticket deposit edit deer fuel expect pioneer alpha mirror joke private"
     static let valid21WordMnemonic = "tiger parent future endorse chuckle crazy seat tomato orient prevent swarm nerve duty crazy chief cruel purity team happy strategy level"
     static let zeroEntropy24WordMnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art"
@@ -29,6 +30,9 @@ enum WalletCoreProxyTestVectors {
         (data(hex: "73696d706c792061206c6f6e6720737472696e67"), "2cFupjhnEsSn59qHXstmK2ffpLv2"),
         (data(hex: "00"), "1"),
         (data(hex: "00000001"), "1112"),
+        (Data(repeating: 0, count: 8), "11111111"),
+        (Data(repeating: 0, count: 32), "11111111111111111111111111111111"),
+        (Data(repeating: 0, count: 31) + Data([1]), "11111111111111111111111111111112"),
         (data(hex: "ffffffff"), "7YXq9G"),
         (data(hex: "000102030405060708090a0b0c0d0e0f"), "12drXXUifSrRnXLGbXg8E"),
         (data(hex: "00769bdff96a02f9135a1d19b749db6a78fe07dc90c3507da5"), "1Bp9U1ogV3A14FMvKbRJms7ctyso4Z4Tcx"),
@@ -51,6 +55,8 @@ enum WalletCoreProxyTestVectors {
     static let ethereumSignerPrivateKey = data(hex: "03a9ca895dca1623c7dfd69693f7b4111f5d819d2e145536e0b03c136025a25d")
     static let solanaAddressPrivateKey = data(hex: "a1269039e4ffdf43687852d7247a295f0b5bc55e6dda031cffaa3295ca0a9d7a")
     static let solanaSigningPrivateKey = data(hex: "44f480ca27711895586074a14c552e58cc52e66a58edb6c58cf9b9b7295d4a2d")
+    static let upstreamSolanaPrivateKeyBase58 = "A7psj2GW7ZMdY4E5hJq14KMeYg7HFjULSsWSrTXZLvYr"
+    static let upstreamSolanaPrivateKey = data(hex: "8778cc93c6596387e751d2dc693bbd93e434bd233bc5b68a826c56131821cb63")
     static let ethereumTransactionPrivateKey = data(hex: "608dcb1742bb3fb7aec002074e3420e4fab7d00cced79ccdac53ed5b27138151")
     static let ethereumNativeTransferPrivateKey = data(hex: "4646464646464646464646464646464646464646464646464646464646464646")
 
@@ -58,6 +64,7 @@ enum WalletCoreProxyTestVectors {
     static let secpCompressedPublicKey = "0399c6f51ad6f98c9c583f8e92bb7758ab2ca9a04110c0a1126ec43e5453d196c1"
     static let solanaAddressPublicKey = "b14f1d4e6bc93589ae1a0c2c5f462c8041ff8b295c27515a993c516363ef276b"
     static let solanaSigningPublicKey = "ee6d61a89fc8f9909585a996bb0d2b2ac69ae23b5acf39a19f32631239ba06f9"
+    static let upstreamSolanaPublicKey = "66c2f508c9c555cacc9fb26d88e88dd54e210bb5a8bce5687f60d7e75c4cd07f"
     static let secpEthereumAddress = "0xAc1ec44E4f0ca7D172B7803f6836De87Fb72b309"
     static let sequentialEthereumPublicKey = "0484bf7562262bbd6940085748f3be6afa52ae317155181ece31b66351ccffa4b08cc43d63b2859d469fee15f31c9edb5324266e6fd0407e87382d60fc4511acd8"
     static let sequentialSolanaPublicKey = "79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664"
@@ -103,6 +110,7 @@ enum WalletCoreProxyTestVectors {
     static let solanaMessageBase58 = "JxF12TrwXzT5jvT"
     static let solanaMessageHex = "48656c6c6f20776f726c64"
     static let solanaMessageSignature = "2iBZ6zrQRKHcbD8NWmm552gU5vGvh1dk3XV4jxnyEdRKm8up8AeQk1GFr9pJokSmchw7i9gMtNyFBdDt8tBxM1cG"
+    static let upstreamSolanaMessageSignature = "4x6F63Lqqi1nAjJpZfE4Kg77W3ep7gvHMtX9ZAAqfHbGi4FGFwmZ8jkwCLsejAR58dSQEkJ6WsmGsF9EfobwuCUR"
     static let solanaEmptyMessageSignature = "3SBCToyrhSQZkB4sqHJvUurrzv5c5Y17W5qY5cbHH2XWBzAkB2yWM6NuwUV7ytapKn6xwp77bbtoQYvAsbySWU3q"
     static let solanaZeroMessageSignature = "4iXB9qCBysmuLa9cttk9yYfx7SE9FpD9z79zzcPNWCurYgxGjTkpbcRtVBdic3s1Q1xZHEYYdud3yNKftYHqyo7u"
     static let solanaBinaryMessage = data(hex: "000102ff48656c6c6f")
@@ -125,6 +133,10 @@ enum WalletCoreProxyTestVectors {
     static let ethereumBinaryPersonalMessageSignature = "0xd99a610559e2efb64a00bf5f7cfae4b3c81db68776e188e1e5328fa250920643730c4251db430c62522a1a2fd0b970c0d9e32dc2d45d53e4a3fdb57b3f5008b11c"
     static let ethereumNewlinePersonalMessage = Data("Line one\nLine two".utf8)
     static let ethereumNewlinePersonalMessageSignature = "0x8c7645a57f7fe39f85c0e45bc3a8fbdc9c270f0e3db75f0a17f0c7c84202e3c8496628ae440ad3d1aad4f3da9cb12295804ff6328fbdf9661b4b41455b1abeef1b"
+    static let ethereumTenBytePersonalMessage = Data((0..<10).map { UInt8($0) })
+    static let ethereumTenBytePersonalMessageSignature = "0xfa2af2f02003c243b39207e539577b1894ef52303d50176402230b6648d27d503c864508750cfa31e3f1a880bf1d04eec808262f872a837d7b53679c9059aa8c1c"
+    static let ethereumHundredBytePersonalMessage = Data((0..<100).map { UInt8($0) })
+    static let ethereumHundredBytePersonalMessageSignature = "0x7c5e2ba49687f8ef47eda07b8744a3dc99063d62790a114fc9901c2d4d8655e938936f3189f5d0c84908d97fdae13b76a1a5f724f01f9a49e3c7c3203cb896db1b"
     static let ethereumLongPersonalMessage = Data((0..<128).map { UInt8($0) })
     static let ethereumLongPersonalMessageSignature = "0x9fbf231ec5ebfabea35a2994bcc79b77875b71023aae0269983c05cb264eadc6302ae5ad4201ccb99847177382707803711ebb6b0f67c8907639e431e831e5e61b"
     static let ethereumSignerAddress = "0xd0972E2312518Ca15A2304D56ff9cc0b7ea0Ea37"
@@ -132,7 +144,19 @@ enum WalletCoreProxyTestVectors {
 
     static let abandonEthereumAccountOneExtendedPublicKey = "xpub6DCoCpSuQZB2k9PnGSMK9tinTK8kx3hcv7F4BWwhs5N2wnwGiLg17r9J7j2JcYP9gkip3sC87J1F99YxeBHGuFMg6ejA8qQEKSuzzaKvqBR"
     static let abandonEthereumAccountTwoExtendedPublicKey = "xpub6DCoCpSuQZB2ot5sZMhVj1zbCa9smR2h7YGPfJjzjauzsnCqqp8GHwUQTDMrFK2gExmmpCjspBVanYdRaTg3H1eyxyG1ddXfZyNT2JRAYWk"
+    static let abandonEthereumAccountOnePath = "m/44'/60'/1'/0/0"
+    static let abandonEthereumAccountOnePrivateKey = data(hex: "318470c858f622e48a80120a1fc3c8460d67a7bf31b3273a6d27d4c013f2f8d3")
+    static let abandonEthereumAccountOnePublicKey = "048ccc8186e5933e845afd096cc6d3f2fdb25fbe4db4864b944619afa8e4e8bd5eaf3729f0c745606b41ed7a542d37469acd4f52db2b0e5a4ca23544c886c2a479"
     static let abandonEthereumAccountOneAddress = "0x78839F6054d7ed13918bAe0473BA31b1Ca9D7265"
+    static let abandonEthereumChangeOneAddressNinePath = "m/44'/60'/0'/1/9"
+    static let abandonEthereumChangeOneAddressNinePrivateKey = data(hex: "cbf10fa95d7494e379c2e038355c4b9ef66747b806bd8d76ec980cd0e067e744")
+    static let abandonEthereumChangeOneAddressNinePublicKey = "04d326160dc751e8a0bd2e6a2028e792cc49412bcbb5b5191398d0943c7ca0cc93cfb63128f5038de7fa35263925519bf99e12e5fc79aa6f4537192ab7a082655d"
+    static let abandonEthereumChangeOneAddressNineAddress = "0x20992617602d2472680ea8d9b606DEB69931b6b9"
+    static let abandonSolanaDefaultPath = "m/44'/501'/0'"
+    static let abandonSolanaDefaultPrivateKey = data(hex: "ec252c5d95bcf80a4b22df119cedd4ae1aed07364578e8d43bdfa0435625dbd1")
+    static let abandonSolanaDefaultPublicKey = "e9b6062841bb977ad21de71ec961900633c26f21384e015b014a637a61499547"
+    static let abandonSolanaDefaultAddress = "GjJyeC1r2RgkuoCWMyPYkCWSGSGLcz266EaAkLA27AhL"
+    static let upstreamSolanaAddress = "7v91N7iZ9mNicL8WfG6cgSCKyRXydQjLh6UYBWwm6y1Q"
 
     static let abandonEthereumHDVectors: [(index: Int, path: String, privateKey: Data, publicKey: String, address: String)] = [
         (0, "m/44'/60'/0'/0/0", data(hex: "1ab42cc412b618bdea3a599e3c9bae199ebf030895b039e9db1e30dafb12b727"), "0437b0bb7a8288d38ed49a524b5dc98cff3eb5ca824c9f9dc0dfdb3d9cd600f299a6179912b7451c09896c4098eca7ce6b2e58330672795e847c4d6af44e024230", "0x9858EfFD232B4033E47d90003D41EC34EcaEda94"),
@@ -369,6 +393,8 @@ enum WalletCoreProxyTestVectors {
         }
     }
     """
+    static let typedDataMinifiedJSON = #"{"types":{"EIP712Domain":[{"name":"name","type":"string"},{"name":"version","type":"string"},{"name":"chainId","type":"uint256"},{"name":"verifyingContract","type":"address"}],"Person":[{"name":"name","type":"string"},{"name":"wallets","type":"address[]"}],"Mail":[{"name":"from","type":"Person"},{"name":"to","type":"Person[]"},{"name":"contents","type":"string"}]},"primaryType":"Mail","domain":{"name":"Ether Mail","version":"1","chainId":1,"verifyingContract":"0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"},"message":{"from":{"name":"Cow","wallets":["CD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826","DeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF"]},"to":[{"name":"Bob","wallets":["bBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB","B0BdaBea57B0BDABeA57b0bdABEA57b0BDabEa57","B0B0b0b0b0b0B000000000000000000000000000"]}],"contents":"Hello, Bob!"}}"#
+    static let typedDataReorderedJSON = #"{"message":{"contents":"Hello, Bob!","to":[{"wallets":["bBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB","B0BdaBea57B0BDABeA57b0bdABEA57b0BDabEa57","B0B0b0b0b0b0B000000000000000000000000000"],"name":"Bob"}],"from":{"wallets":["CD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826","DeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF"],"name":"Cow"}},"domain":{"verifyingContract":"0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC","chainId":1,"version":"1","name":"Ether Mail"},"primaryType":"Mail","types":{"Mail":[{"type":"Person","name":"from"},{"type":"Person[]","name":"to"},{"type":"string","name":"contents"}],"Person":[{"type":"string","name":"name"},{"type":"address[]","name":"wallets"}],"EIP712Domain":[{"type":"string","name":"name"},{"type":"string","name":"version"},{"type":"uint256","name":"chainId"},{"type":"address","name":"verifyingContract"}]}}"#
     static let permitTypedDataJSON = """
     {
         "types": {
@@ -496,11 +522,21 @@ enum WalletCoreProxyTestVectors {
     )
     static let abiTupleJSON = #"{"0badc0de":{"constant":false,"inputs":[{"name":"order","type":"tuple","components":[{"name":"maker","type":"address"},{"name":"amount","type":"uint256"},{"name":"active","type":"bool"}]}],"name":"submit","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}}"#
     static let abiTupleDecodedCall = #"{"function":"submit((address,uint256,bool))","inputs":[{"name":"order","type":"tuple","components":[{"name":"maker","type":"address","value":"0xd0972E2312518Ca15A2304D56ff9cc0b7ea0Ea37"},{"name":"amount","type":"uint256","value":"42"},{"name":"active","type":"bool","value":true}]}]}"#
+    static let abiNestedTupleCall = data(hex:
+        "feedface" +
+        "000000000000000000000000d0972e2312518ca15a2304d56ff9cc0b7ea0ea37" +
+        "0000000000000000000000000000000000000000000000000000000000000001" +
+        "00000000000000000000000000000000000000000000000000000000000003e8" +
+        "0000000000000000000000000000000000000000000000000000000000000001"
+    )
+    static let abiNestedTupleJSON = #"{"feedface":{"constant":false,"inputs":[{"name":"order","type":"tuple","components":[{"name":"maker","type":"address"},{"name":"limits","type":"tuple","components":[{"name":"min","type":"uint256"},{"name":"max","type":"uint256"}]},{"name":"active","type":"bool"}]}],"name":"submitNested","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}}"#
+    static let abiNestedTupleDecodedCall = #"{"function":"submitNested((address,(uint256,uint256),bool))","inputs":[{"name":"order","type":"tuple","components":[{"name":"maker","type":"address","value":"0xd0972E2312518Ca15A2304D56ff9cc0b7ea0Ea37"},{"name":"limits","type":"tuple","components":[{"name":"min","type":"uint256","value":"1"},{"name":"max","type":"uint256","value":"1000"}]},{"name":"active","type":"bool","value":true}]}]}"#
     static let abiDecodeFixtures: [(name: String, data: Data, abi: String, decoded: String)] = [
         ("erc20 transfer", abiERC20TransferCall, abiERC20TransferJSON, abiERC20TransferDecodedCall),
         ("static and dynamic bytes", abiStaticAndDynamicBytesCall, abiStaticAndDynamicBytesJSON, abiStaticAndDynamicBytesDecodedCall),
         ("dynamic and fixed arrays", abiArrayCall, abiArrayJSON, abiArrayDecodedCall),
         ("tuple", abiTupleCall, abiTupleJSON, abiTupleDecodedCall),
+        ("nested tuple", abiNestedTupleCall, abiNestedTupleJSON, abiNestedTupleDecodedCall),
     ]
 
     static let signedERC20Transaction = "f8aa808509c7652400830130b9946b175474e89094c44da98b954eedeac495271d0f80b844a9059cbb0000000000000000000000005322b34c88ed0691971bf52a7047448f0f4efc840000000000000000000000000000000000000000000000001bc16d674ec8000025a0724c62ad4fbf47346b02de06e603e013f26f26b56fdc0be7ba3d6273401d98cea0032131cae15da7ddcda66963e8bef51ca0d9962bfef0547d3f02597a4a58c931"
@@ -511,6 +547,7 @@ enum WalletCoreProxyTestVectors {
     static let signedDataOnlyTransaction = "f869808509c7652400830130b9946b175474e89094c44da98b954eedeac495271d0f8084deadbeef25a0372f1792338dd8fd0a1be8901c6dd79faa412936eb5c62d053639663630fa540a01ffd8afd49f74806135d76623344e2b3a45571880acca8a5ec88b66a085650e0"
     static let signedChainThreeOneWeiTransaction = "f864068504a817c80082520894353535353535353535353535353535353535353501802aa0e059a80a438240f955e8fd75dc852f1e87a20c0c22f842a4a251e69527ba0d7da075ef56fc4a39b1201f3058471a054dd02f209926a2aadf67815761991b627f45"
     static let signedBaseChainOneWeiTransaction = "f866068504a817c800825208943535353535353535353535353535353535353535018082422ea0a21c950697a9926a6aca62f1ec6e22602e12918f21acb4522ba7a0e851b3ac1da0789de2323b18c9b15bb7926a95d89c20ba365b38e70d03cd21eeeaf18e229569"
+    static let signedMaxAmountTransaction = "f87f8001825208940000000000000000000000000000000000000001a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8026a0290fd3f701bfce04a0fda10afa145fe7034bbd13ec15a708a6f78f32cc718172a029aa515cf7011ac218be998c15e14547ec3be6e4ca9a9d5671730aa1e21b7bdb"
 
     static let solanaSequentialSeedBase58 = "4wBqpZM9xaSheZzJSMawUKKwhdpChKbZ5eu5ky4Vigw"
     static let solanaSequentialSecretKeyBase58 = "2Ana1pUpv2ZbMVkwF5FXapYeBEjdxDatLn7nvJkhgTSdZd8hbDHTd21as7EAsg7ypityqfsw2pMQKJcVDVcAEsd"
