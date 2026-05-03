@@ -272,6 +272,7 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
                        Vectors.ethereumRawSignature)
         XCTAssertEqual(try Ethereum.shared.sign(data: Vectors.ethereumMaxRawSignDigest, privateKey: privateKey),
                        Vectors.ethereumMaxRawSignature)
+        XCTAssertNil(privateKey.sign(digest: Vectors.ethereumZeroRawSignDigest, coin: .ethereum))
         XCTAssertEqual(try Ethereum.shared.sign(typedData: Vectors.typedDataJSON, privateKey: privateKey),
                        Vectors.ethereumTypedDataSignature)
         XCTAssertEqual(try Ethereum.shared.sign(typedData: Vectors.permitTypedDataJSON, privateKey: privateKey),
