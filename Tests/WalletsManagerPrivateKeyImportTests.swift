@@ -51,6 +51,20 @@ final class WalletsManagerPrivateKeyImportTests: XCTestCase {
         assertPrivateKey(imported?.privateKey, equals: privateKeyData)
     }
 
+    func testSolanaPrivateKeyImportAcceptsByteArraySeedAndWhitespaceSecretKeyFormats() {
+        let seedByteArray = "[ " + privateKeyData.map(String.init).joined(separator: " , ") + " ]"
+        let secretKeyWithWhitespace = Vectors.solanaSequentialSecretKeyByteArray
+            .replacingOccurrences(of: ",", with: ", ")
+
+        let importedSeed = WalletsManager.privateKeyImport(from: seedByteArray)
+        let importedSecretKey = WalletsManager.privateKeyImport(from: secretKeyWithWhitespace)
+
+        XCTAssertEqual(importedSeed?.coin, .solana)
+        XCTAssertEqual(importedSecretKey?.coin, .solana)
+        assertPrivateKey(importedSeed?.privateKey, equals: privateKeyData)
+        assertPrivateKey(importedSecretKey?.privateKey, equals: privateKeyData)
+    }
+
     func testSolanaPrivateKeyImportRejectsByteArraySecretKeyWithInvalidLength() {
         let secretKey = Data(1...33)
         let byteArrayString = "[" + secretKey.map(String.init).joined(separator: ",") + "]"
@@ -68,6 +82,10 @@ final class WalletsManagerPrivateKeyImportTests: XCTestCase {
             byteArrayString(["\"1\""] + thirtyOneOnes),
             byteArrayString(["1"]),
             byteArrayString(Array(repeating: "1", count: 65)),
+            byteArrayString(Array(repeating: "1", count: 31) + ["[]"]),
+            "{}",
+            "[[]]",
+            "[1,]",
             "[1,2",
         ]
 
@@ -87,6 +105,14 @@ final class WalletsManagerPrivateKeyImportTests: XCTestCase {
         }
 
         XCTAssertNil(WalletsManager.privateKeyImport(from: exported))
+    }
+
+    func testSolanaPrivateKeyImportRejectsByteArraySecretKeyWithMismatchedPublicKey() {
+        var mismatchedSecretKey = privateKeyData
+        mismatchedSecretKey.append(Data(repeating: 7, count: 32))
+        let byteArrayString = "[" + mismatchedSecretKey.map(String.init).joined(separator: ",") + "]"
+
+        XCTAssertNil(WalletsManager.privateKeyImport(from: byteArrayString))
     }
 
     func testSolanaPrivateKeyImportRejectsBadBase58Seeds() {

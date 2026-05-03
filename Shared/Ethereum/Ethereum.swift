@@ -43,9 +43,16 @@ struct Ethereum {
     }
     
     private func sign(digest: Data, privateKey: WalletPrivateKey) throws -> String {
-        guard var signed = privateKey.sign(digest: digest, coin: .ethereum) else { throw Error.failedToSign }
+        guard isSupportedSigningDigest(digest),
+              var signed = privateKey.sign(digest: digest, coin: .ethereum),
+              signed.count == 65,
+              signed[64] <= 1 else { throw Error.failedToSign }
         signed[64] += 27
         return WalletCrypto.hexString(data: signed).withHexPrefix
+    }
+
+    private func isSupportedSigningDigest(_ digest: Data) -> Bool {
+        return digest.count == 32 && digest.contains { $0 != 0 }
     }
     
     func sign(typedData: String, privateKey: WalletPrivateKey) throws -> String {

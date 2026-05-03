@@ -370,6 +370,7 @@ enum WalletCrypto {
     }
 
     static func publicKeyDescriptionFromExtended(extended: String, coin: WalletCoin, derivationPath: String) -> String? {
+        guard DerivationPath(derivationPath) != nil else { return nil }
         return HDWallet.getPublicKeyFromExtended(extended: extended,
                                                  coin: coin.walletCoreCoin,
                                                  derivationPath: derivationPath)?.description
@@ -380,6 +381,7 @@ enum WalletCrypto {
                                              derivation: WalletDerivation,
                                              derivationPath: String) -> WalletAccount? {
         let walletCoreCoin = coin.walletCoreCoin
+        guard DerivationPath(derivationPath) != nil else { return nil }
         guard let publicKey = HDWallet.getPublicKeyFromExtended(extended: extended,
                                                                 coin: walletCoreCoin,
                                                                 derivationPath: derivationPath) else { return nil }
@@ -397,6 +399,7 @@ enum WalletCrypto {
     static func addressFromPublicKeyDescription(_ publicKeyDescription: String, coin: WalletCoin) -> String {
         let walletCoreCoin = coin.walletCoreCoin
         guard let publicKeyData = hexData(publicKeyDescription),
+              isSupportedPublicKeyData(publicKeyData, coin: coin),
               PublicKey.isValid(data: publicKeyData, type: walletCoreCoin.publicKeyType),
               let publicKey = PublicKey(data: publicKeyData, type: walletCoreCoin.publicKeyType)
         else { return "" }
@@ -405,7 +408,8 @@ enum WalletCrypto {
 
     static func addressFromPublicKeyData(_ publicKeyData: Data, coin: WalletCoin) -> String {
         let walletCoreCoin = coin.walletCoreCoin
-        guard PublicKey.isValid(data: publicKeyData, type: walletCoreCoin.publicKeyType),
+        guard isSupportedPublicKeyData(publicKeyData, coin: coin),
+              PublicKey.isValid(data: publicKeyData, type: walletCoreCoin.publicKeyType),
               let publicKey = PublicKey(data: publicKeyData, type: walletCoreCoin.publicKeyType)
         else { return "" }
         return walletCoreCoin.deriveAddressFromPublicKey(publicKey: publicKey)
@@ -483,6 +487,15 @@ enum WalletCrypto {
             return byte - 87
         default:
             return nil
+        }
+    }
+
+    private static func isSupportedPublicKeyData(_ data: Data, coin: WalletCoin) -> Bool {
+        switch coin {
+        case .solana:
+            return data.count == 32 || (data.count == 33 && data.first == 0x01)
+        case .ethereum:
+            return true
         }
     }
 }
