@@ -2,6 +2,27 @@
 
 import Foundation
 
+enum BigEndianWordData {
+    static func encode(_ words: [UInt32], minLength: Int = 0) -> Data {
+        var bytes = [UInt8]()
+        bytes.reserveCapacity(max(minLength, words.count * 4))
+
+        for word in words.reversed() {
+            bytes.append(UInt8((word >> 24) & 0xff))
+            bytes.append(UInt8((word >> 16) & 0xff))
+            bytes.append(UInt8((word >> 8) & 0xff))
+            bytes.append(UInt8(word & 0xff))
+        }
+
+        let leadingZeroCount = bytes.firstIndex { $0 != 0 } ?? bytes.count
+        bytes.removeFirst(leadingZeroCount)
+        if bytes.count < minLength {
+            bytes.insert(contentsOf: Array(repeating: 0, count: minLength - bytes.count), at: 0)
+        }
+        return Data(bytes)
+    }
+}
+
 struct BigUInt: Equatable, Hashable, Comparable, Sendable, ExpressibleByIntegerLiteral, CustomStringConvertible {
 
     typealias IntegerLiteralType = UInt64
@@ -21,6 +42,15 @@ struct BigUInt: Equatable, Hashable, Comparable, Sendable, ExpressibleByIntegerL
         let low = UInt32(truncatingIfNeeded: value)
         let high = UInt32(value >> 32)
         words = high == 0 ? (low == 0 ? [] : [low]) : [low, high]
+    }
+
+    init(data: Data) {
+        self.init()
+
+        for byte in data {
+            multiply(bySmall: 256)
+            add(small: UInt32(byte))
+        }
     }
 
     init?(decimalString text: String) {
@@ -88,6 +118,10 @@ struct BigUInt: Equatable, Hashable, Comparable, Sendable, ExpressibleByIntegerL
             return String(repeating: "0", count: 8 - part.count) + part
         }.joined()
         return prefix + String(mostSignificant, radix: 16) + rest
+    }
+
+    func toData(minLength: Int = 0) -> Data {
+        return BigEndianWordData.encode(words, minLength: minLength)
     }
 
     func eth(shortest: Bool = false) -> String {

@@ -40,6 +40,14 @@ final class BigUIntTests: XCTestCase {
         XCTAssertNil(BigUInt(decimalString: "12349A"))
     }
 
+    func testBigEndianDataRoundTrip() {
+        XCTAssertEqual(BigUInt(data: Data()).description, "0")
+        XCTAssertEqual(BigUInt(data: Data([0, 0, 1])).hexString, "1")
+        XCTAssertEqual(BigUInt(data: Data([0x12, 0x34, 0xab, 0xcd])).toData(), Data([0x12, 0x34, 0xab, 0xcd]))
+        XCTAssertEqual(BigUInt(1).toData(minLength: 4), Data([0, 0, 0, 1]))
+        XCTAssertEqual(BigUInt().toData(minLength: 2), Data([0, 0]))
+    }
+
     func testMultiplication() {
         let sample = BigUInt(hexString: "123456789abcdef")!
         XCTAssertEqual((BigUInt() * sample).description, "0")
