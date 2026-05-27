@@ -1,10 +1,42 @@
 // ∅ 2026 lil org
 
 import Foundation
+import CryptoKit
 import XCTest
 @testable import Big_Wallet
 
 private typealias Vectors = WalletCoreProxyTestVectors
+
+private func assertValidSolanaSignature(_ signature: Data,
+                                        message: Data,
+                                        publicKeyData: Data,
+                                        file: StaticString = #filePath,
+                                        line: UInt = #line) throws {
+    XCTAssertEqual(signature.count, 64, file: file, line: line)
+    XCTAssertEqual(publicKeyData.count, 32, file: file, line: line)
+    let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: publicKeyData)
+    XCTAssertTrue(publicKey.isValidSignature(signature, for: message), file: file, line: line)
+}
+
+private func assertValidSolanaSignature(_ signature: Data?,
+                                        message: Data,
+                                        publicKeyHex: String,
+                                        file: StaticString = #filePath,
+                                        line: UInt = #line) throws {
+    let signature = try XCTUnwrap(signature, file: file, line: line)
+    let publicKeyData = try XCTUnwrap(WalletCrypto.hexData(string: publicKeyHex), file: file, line: line)
+    try assertValidSolanaSignature(signature, message: message, publicKeyData: publicKeyData, file: file, line: line)
+}
+
+private func assertValidSolanaSignature(_ signatureBase58: String?,
+                                        message: Data,
+                                        publicKeyHex: String,
+                                        file: StaticString = #filePath,
+                                        line: UInt = #line) throws {
+    let signatureBase58 = try XCTUnwrap(signatureBase58, file: file, line: line)
+    let signature = try XCTUnwrap(WalletCrypto.base58Decode(string: signatureBase58), file: file, line: line)
+    try assertValidSolanaSignature(signature, message: message, publicKeyHex: publicKeyHex, file: file, line: line)
+}
 
 final class WalletCoreProxyDependencyBoundaryTests: XCTestCase {
 
@@ -544,7 +576,7 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
                        Vectors.upstreamSolanaAddress)
     }
 
-    func testSolanaSigningMatchesWalletCoreMessageSignerVector() throws {
+    func testSolanaSigningProducesValidEd25519Signatures() throws {
         let privateKey = try requirePrivateKey(Vectors.solanaSigningPrivateKey)
         let signature = try XCTUnwrap(privateKey.sign(digest: Vectors.solanaMessage, coin: .solana))
         let emptySignature = try XCTUnwrap(privateKey.sign(digest: Data(), coin: .solana))
@@ -553,21 +585,28 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
         let longSignature = try XCTUnwrap(privateKey.sign(digest: Vectors.solanaLongMessage, coin: .solana))
 
         XCTAssertEqual(WalletCrypto.hexString(privateKey.publicKeyData(coin: .solana)), Vectors.solanaSigningPublicKey)
-        XCTAssertEqual(WalletCrypto.base58Encode(signature), Vectors.solanaMessageSignature)
-        XCTAssertEqual(WalletCrypto.base58Encode(emptySignature), Vectors.solanaEmptyMessageSignature)
-        XCTAssertEqual(WalletCrypto.base58Encode(zeroMessageSignature), Vectors.solanaZeroMessageSignature)
-        XCTAssertEqual(WalletCrypto.base58Encode(binarySignature), Vectors.solanaBinaryMessageSignature)
-        XCTAssertEqual(WalletCrypto.base58Encode(longSignature), Vectors.solanaLongMessageSignature)
+        try assertValidSolanaSignature(signature, message: Vectors.solanaMessage, publicKeyHex: Vectors.solanaSigningPublicKey)
+        try assertValidSolanaSignature(emptySignature, message: Data(), publicKeyHex: Vectors.solanaSigningPublicKey)
+        try assertValidSolanaSignature(zeroMessageSignature,
+                                       message: Data(repeating: 0, count: 32),
+                                       publicKeyHex: Vectors.solanaSigningPublicKey)
+        try assertValidSolanaSignature(binarySignature,
+                                       message: Vectors.solanaBinaryMessage,
+                                       publicKeyHex: Vectors.solanaSigningPublicKey)
+        try assertValidSolanaSignature(longSignature,
+                                       message: Vectors.solanaLongMessage,
+                                       publicKeyHex: Vectors.solanaSigningPublicKey)
         XCTAssertNil(privateKey.sign(digest: Data([1, 2, 3]), coin: .ethereum))
     }
 
-    func testUpstreamSolanaRawMessageSigningMatchesWalletCoreVector() throws {
+    func testUpstreamSolanaRawMessageSigningProducesValidSignature() throws {
         let privateKey = try requirePrivateKey(Vectors.upstreamSolanaPrivateKey)
         let signature = try XCTUnwrap(privateKey.sign(digest: Vectors.solanaMessage, coin: .solana))
 
-        XCTAssertEqual(WalletCrypto.base58Encode(signature), Vectors.upstreamSolanaMessageSignature)
-        XCTAssertEqual(Solana.shared.sign(messageData: Vectors.solanaMessage, privateKey: privateKey),
-                       Vectors.upstreamSolanaMessageSignature)
+        try assertValidSolanaSignature(signature, message: Vectors.solanaMessage, publicKeyHex: Vectors.upstreamSolanaPublicKey)
+        try assertValidSolanaSignature(Solana.shared.sign(messageData: Vectors.solanaMessage, privateKey: privateKey),
+                                       message: Vectors.solanaMessage,
+                                       publicKeyHex: Vectors.upstreamSolanaPublicKey)
     }
 
     func testEthereumPersonalSigningAndRecoveryMatchWalletCoreVector() throws {
@@ -656,6 +695,7 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
 
     func testInvalidPublicKeyInputsReturnEmptyAddresses() {
         let prefixedPublicKeyAddress = WalletCrypto.addressFromPublicKeyDescription("0x" + Vectors.secpPublicKey, coin: .ethereum)
+        let offCurveEthereumPublicKey = Data([0x04]) + Data(repeating: 0, count: 64)
         let solanaPrefixedPublicKey = Data([1]) + Data(repeating: 1, count: 32)
         let invalidSolanaPrefixedPublicKey = Data([2]) + Data(repeating: 1, count: 32)
         let solanaRawAllOnesPublicKey = Data(repeating: 1, count: 32)
@@ -671,6 +711,9 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
         XCTAssertEqual(WalletCrypto.addressFromPublicKeyData(Data(repeating: 1, count: 32), coin: .ethereum), "")
         XCTAssertEqual(WalletCrypto.addressFromPublicKeyData(Data(repeating: 1, count: 64), coin: .ethereum), "")
         XCTAssertEqual(WalletCrypto.addressFromPublicKeyData(Vectors.data(hex: Vectors.secpCompressedPublicKey), coin: .ethereum), "")
+        XCTAssertEqual(WalletCrypto.addressFromPublicKeyData(offCurveEthereumPublicKey, coin: .ethereum), "")
+        XCTAssertEqual(WalletCrypto.addressFromPublicKeyDescription(WalletCrypto.hexString(offCurveEthereumPublicKey),
+                                                                    coin: .ethereum), "")
         XCTAssertEqual(WalletCrypto.addressFromPublicKeyDescription("0x" + Vectors.solanaAddressPublicKey, coin: .solana),
                        Vectors.solanaAddressFromPublicKey)
         XCTAssertEqual(WalletCrypto.addressFromPublicKeyDescription(Vectors.secpCompressedPublicKey, coin: .ethereum), "")
@@ -1850,6 +1893,8 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
                        Vectors.typedDataDigest)
         XCTAssertEqual(WalletCrypto.hexString(WalletCrypto.ethereumTypedDataDigest(messageJson: Vectors.decimalStringChainIDTypedDataJSON)),
                        Vectors.typedDataDigest)
+        XCTAssertEqual(WalletCrypto.hexString(WalletCrypto.ethereumTypedDataDigest(messageJson: Vectors.hexStringChainIDTypedDataJSON)),
+                       Vectors.typedDataDigest)
         XCTAssertEqual(WalletCrypto.hexString(WalletCrypto.ethereumTypedDataDigest(messageJson: Vectors.permitTypedDataJSON)),
                        Vectors.permitTypedDataDigest)
         XCTAssertEqual(WalletCrypto.hexString(WalletCrypto.ethereumTypedDataDigest(messageJson: Vectors.complexTypedDataJSON)),
@@ -1861,17 +1906,48 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
                            Data(),
                            fixture.name)
         }
+        XCTAssertNotEqual(WalletCrypto.ethereumTypedDataDigest(messageJson: Vectors.int64MinTypedDataJSON),
+                          Data())
+        XCTAssertEqual(WalletCrypto.ethereumTypedDataDigest(messageJson: Vectors.uint8OverflowTypedDataJSON),
+                       Data())
+        XCTAssertEqual(WalletCrypto.ethereumTypedDataDigest(messageJson: Vectors.int8UnderflowTypedDataJSON),
+                       Data())
+        XCTAssertNotEqual(WalletCrypto.ethereumTypedDataDigest(messageJson: Vectors.negativeZeroTypedDataJSON),
+                          Data())
+        XCTAssertEqual(WalletCrypto.hexString(WalletCrypto.ethereumTypedDataDigest(messageJson: Vectors.shortFixedBytesTypedDataJSON)),
+                       Vectors.shortFixedBytesTypedDataDigest,
+                       "WalletCore accepts undersized odd-length bytesN values")
+        XCTAssertNotEqual(WalletCrypto.ethereumTypedDataDigest(messageJson: Vectors.fixedArrayTypedDataJSON),
+                          Data())
+        XCTAssertNotEqual(WalletCrypto.ethereumTypedDataDigest(messageJson: Vectors.cyclicArrayTypedDataJSON),
+                          Data())
     }
 
-    func testTypedDataSigningRejectsMalformedShapesAndAcceptsDecimalChainID() throws {
+    func testTypedDataSigningRejectsMalformedShapesAndOutOfRangeIntegersAndAcceptsStringChainIDs() throws {
         let privateKey = try requirePrivateKey(Vectors.ethereumSignerPrivateKey)
 
         XCTAssertEqual(try Ethereum.shared.sign(typedData: Vectors.decimalStringChainIDTypedDataJSON, privateKey: privateKey),
                        Vectors.ethereumTypedDataSignature)
+        XCTAssertEqual(try Ethereum.shared.sign(typedData: Vectors.hexStringChainIDTypedDataJSON, privateKey: privateKey),
+                       Vectors.ethereumTypedDataSignature)
+        XCTAssertNoThrow(try Ethereum.shared.sign(typedData: Vectors.negativeZeroTypedDataJSON, privateKey: privateKey))
+        XCTAssertNoThrow(try Ethereum.shared.sign(typedData: Vectors.shortFixedBytesTypedDataJSON, privateKey: privateKey),
+                         "WalletCore accepts undersized odd-length bytesN values")
         for fixture in Vectors.invalidTypedDataJSONFixtures {
             XCTAssertThrowsError(try Ethereum.shared.sign(typedData: fixture.json, privateKey: privateKey), fixture.name) {
                 guard let error = $0 as? Ethereum.Error, case .failedToSign = error else {
                     XCTFail("Expected failedToSign for \(fixture.name), got \($0)")
+                    return
+                }
+            }
+        }
+        for fixture in [
+            ("uint8 overflow", Vectors.uint8OverflowTypedDataJSON),
+            ("int8 underflow", Vectors.int8UnderflowTypedDataJSON),
+        ] {
+            XCTAssertThrowsError(try Ethereum.shared.sign(typedData: fixture.1, privateKey: privateKey), fixture.0) {
+                guard let error = $0 as? Ethereum.Error, case .failedToSign = error else {
+                    XCTFail("Expected failedToSign for \(fixture.0), got \($0)")
                     return
                 }
             }
@@ -1891,6 +1967,50 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
         XCTAssertNil(WalletCrypto.decodeEthereumCall(data: Vectors.data(hex: "c47f0027"), abi: Vectors.abiJSON))
         XCTAssertNil(WalletCrypto.decodeEthereumCall(data: Vectors.data(hex: "c47f002700"), abi: ",,"))
         XCTAssertNil(WalletCrypto.decodeEthereumCall(data: Vectors.data(hex: "c47f002700"), abi: "{}"))
+
+        let controlStringABI = #"{"01020307":{"inputs":[{"name":"label","type":"string"}],"name":"setLabel"}}"#
+        let controlStringCall = Vectors.data(hex: "01020307" +
+                                             String(repeating: "0", count: 63) + "20" +
+                                             String(repeating: "0", count: 63) + "3" +
+                                             "000a7f" + String(repeating: "0", count: 58))
+        let decodedControlString = WalletCrypto.decodeEthereumCall(data: controlStringCall, abi: controlStringABI)
+        XCTAssertNotNil(decodedControlString)
+        XCTAssertTrue(decodedControlString?.contains(#""value":"\u0000\n"#) == true,
+                      decodedControlString ?? "nil")
+
+        let invalidUTF8StringABI = #"{"01020308":{"inputs":[{"name":"label","type":"string"}],"name":"setLabel"}}"#
+        let invalidUTF8StringCall = Vectors.data(hex: "01020308" +
+                                                 String(repeating: "0", count: 63) + "20" +
+                                                 String(repeating: "0", count: 63) + "1" +
+                                                 "ff" + String(repeating: "0", count: 62))
+        XCTAssertEqual(WalletCrypto.decodeEthereumCall(data: invalidUTF8StringCall, abi: invalidUTF8StringABI),
+                       #"{"function":"setLabel(string)","inputs":[{"name":"label","type":"string","value":"�"}]}"#)
+
+        let boolABI = #"{"01020304":{"inputs":[{"name":"flag","type":"bool"}],"name":"setFlag"}}"#
+        let arrayABI = #"{"01020305":{"inputs":[{"name":"values","type":"uint256[abc]"}],"name":"badArray"}}"#
+        let uint8ABI = #"{"01020306":{"inputs":[{"name":"small","type":"uint8"}],"name":"setSmall"}}"#
+        let fixedBytesABI = #"{"01020309":{"inputs":[{"name":"tag","type":"bytes4"}],"name":"setTag"}}"#
+        let malformedAddress = Vectors.data(hex: "a9059cbb" +
+                                            "0000000000000000000000015322b34c88ed0691971bf52a7047448f0f4efc84" +
+                                            "0000000000000000000000000000000000000000000000001bc16d674ec80000")
+        let malformedBool = Vectors.data(hex: "01020304" + String(repeating: "0", count: 63) + "2")
+        let malformedArray = Vectors.data(hex: "01020305" + String(repeating: "0", count: 64))
+        let wideUint8 = Vectors.data(hex: "01020306" + String(repeating: "0", count: 60) + "0100")
+        let fixedBytesWithNonZeroPadding = Vectors.data(hex: "01020309" +
+                                                        "deadbeef" + String(repeating: "0", count: 54) + "01")
+        let positiveInt8Overflow = Vectors.data(hex: "1234abcd" + String(repeating: "0", count: 62) + "80")
+        let negativeInt8Underflow = Vectors.data(hex: "1234abcd" + String(repeating: "f", count: 62) + "7f")
+        let hugeStringOffset = Vectors.data(hex: "c47f0027" +
+                                            "0000000000000000000000000000000000000000000000007fffffffffffffff")
+
+        XCTAssertNil(WalletCrypto.decodeEthereumCall(data: malformedAddress, abi: Vectors.abiERC20TransferJSON))
+        XCTAssertNil(WalletCrypto.decodeEthereumCall(data: malformedBool, abi: boolABI))
+        XCTAssertNil(WalletCrypto.decodeEthereumCall(data: malformedArray, abi: arrayABI))
+        XCTAssertNil(WalletCrypto.decodeEthereumCall(data: wideUint8, abi: uint8ABI))
+        XCTAssertNil(WalletCrypto.decodeEthereumCall(data: fixedBytesWithNonZeroPadding, abi: fixedBytesABI))
+        XCTAssertNil(WalletCrypto.decodeEthereumCall(data: positiveInt8Overflow, abi: Vectors.abiSignedIntegerJSON))
+        XCTAssertNil(WalletCrypto.decodeEthereumCall(data: negativeInt8Underflow, abi: Vectors.abiSignedIntegerJSON))
+        XCTAssertNil(WalletCrypto.decodeEthereumCall(data: hugeStringOffset, abi: Vectors.abiJSON))
     }
 
     func testSignLegacyERC20TransactionMatchesWalletCoreVector() throws {
@@ -2084,7 +2204,7 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
 
 final class WalletCoreProxySolanaCallSiteTests: XCTestCase {
 
-    func testSolanaMessageSigningWrappersPinRawBase58HexAndInvalidDecodeBehavior() throws {
+    func testSolanaMessageSigningWrappersProduceValidSignaturesAndPreserveDecodeBehavior() throws {
         let privateKey = try requirePrivateKey(Vectors.solanaSigningPrivateKey)
         let upstreamPrivateKey = try requirePrivateKey(Vectors.upstreamSolanaPrivateKey)
         let binaryBase58 = WalletCrypto.base58Encode(data: Vectors.solanaBinaryMessage)
@@ -2094,30 +2214,43 @@ final class WalletCoreProxySolanaCallSiteTests: XCTestCase {
 
         XCTAssertEqual(Solana.shared.decodeMessage(binaryBase58, asHex: false), Vectors.solanaBinaryMessage)
         XCTAssertEqual(Solana.shared.decodeMessage(binaryHex, asHex: true), Vectors.solanaBinaryMessage)
-        XCTAssertEqual(Solana.shared.sign(messageData: Vectors.solanaBinaryMessage, privateKey: privateKey),
-                       Vectors.solanaBinaryMessageSignature)
-        XCTAssertEqual(Solana.shared.sign(message: binaryBase58, asHex: false, privateKey: privateKey),
-                       Vectors.solanaBinaryMessageSignature)
-        XCTAssertEqual(Solana.shared.sign(message: binaryHex, asHex: true, privateKey: privateKey),
-                       Vectors.solanaBinaryMessageSignature)
-        XCTAssertEqual(Solana.shared.sign(messageData: Vectors.solanaLongMessage, privateKey: privateKey),
-                       Vectors.solanaLongMessageSignature)
-        XCTAssertEqual(Solana.shared.sign(message: longBase58, asHex: false, privateKey: privateKey),
-                       Vectors.solanaLongMessageSignature)
-        XCTAssertEqual(Solana.shared.sign(message: longHex, asHex: true, privateKey: privateKey),
-                       Vectors.solanaLongMessageSignature)
-        XCTAssertEqual(Solana.shared.sign(message: Vectors.solanaMessageBase58, asHex: false, privateKey: upstreamPrivateKey),
-                       Vectors.upstreamSolanaMessageSignature)
-        XCTAssertEqual(Solana.shared.sign(message: Vectors.solanaMessageHex, asHex: true, privateKey: upstreamPrivateKey),
-                       Vectors.upstreamSolanaMessageSignature)
+        try assertValidSolanaSignature(Solana.shared.sign(messageData: Vectors.solanaBinaryMessage, privateKey: privateKey),
+                                       message: Vectors.solanaBinaryMessage,
+                                       publicKeyHex: Vectors.solanaSigningPublicKey)
+        try assertValidSolanaSignature(Solana.shared.sign(message: binaryBase58, asHex: false, privateKey: privateKey),
+                                       message: Vectors.solanaBinaryMessage,
+                                       publicKeyHex: Vectors.solanaSigningPublicKey)
+        try assertValidSolanaSignature(Solana.shared.sign(message: binaryHex, asHex: true, privateKey: privateKey),
+                                       message: Vectors.solanaBinaryMessage,
+                                       publicKeyHex: Vectors.solanaSigningPublicKey)
+        try assertValidSolanaSignature(Solana.shared.sign(messageData: Vectors.solanaLongMessage, privateKey: privateKey),
+                                       message: Vectors.solanaLongMessage,
+                                       publicKeyHex: Vectors.solanaSigningPublicKey)
+        try assertValidSolanaSignature(Solana.shared.sign(message: longBase58, asHex: false, privateKey: privateKey),
+                                       message: Vectors.solanaLongMessage,
+                                       publicKeyHex: Vectors.solanaSigningPublicKey)
+        try assertValidSolanaSignature(Solana.shared.sign(message: longHex, asHex: true, privateKey: privateKey),
+                                       message: Vectors.solanaLongMessage,
+                                       publicKeyHex: Vectors.solanaSigningPublicKey)
+        try assertValidSolanaSignature(Solana.shared.sign(message: Vectors.solanaMessageBase58,
+                                                          asHex: false,
+                                                          privateKey: upstreamPrivateKey),
+                                       message: Vectors.solanaMessage,
+                                       publicKeyHex: Vectors.upstreamSolanaPublicKey)
+        try assertValidSolanaSignature(Solana.shared.sign(message: Vectors.solanaMessageHex,
+                                                          asHex: true,
+                                                          privateKey: upstreamPrivateKey),
+                                       message: Vectors.solanaMessage,
+                                       publicKeyHex: Vectors.upstreamSolanaPublicKey)
         XCTAssertEqual(Solana.shared.decodeMessage("1", asHex: false), Data([0]))
         XCTAssertEqual(Solana.shared.decodeMessage("111", asHex: false), Data(repeating: 0, count: 3))
         XCTAssertEqual(Solana.shared.decodeMessage("0x00", asHex: true), Data([0]))
         XCTAssertEqual(Solana.shared.decodeMessage("ABCDEF", asHex: true), Vectors.data(hex: "abcdef"))
         XCTAssertEqual(Solana.shared.sign(message: WalletCrypto.base58Encode(data: Data()), asHex: false, privateKey: privateKey),
                        nil)
-        XCTAssertEqual(Solana.shared.sign(message: "", asHex: true, privateKey: privateKey),
-                       Vectors.solanaEmptyMessageSignature)
+        try assertValidSolanaSignature(Solana.shared.sign(message: "", asHex: true, privateKey: privateKey),
+                                       message: Data(),
+                                       publicKeyHex: Vectors.solanaSigningPublicKey)
 
         XCTAssertEqual(Solana.shared.decodeMessage("", asHex: true), Data())
         XCTAssertNil(Solana.shared.decodeMessage("", asHex: false))

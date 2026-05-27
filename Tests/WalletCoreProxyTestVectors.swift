@@ -41,6 +41,7 @@ enum WalletCoreProxyTestVectors {
 
     static let keccakBinaryVectors: [(name: String, data: Data, digest: String)] = [
         ("zero 32 bytes", Data(repeating: 0, count: 32), "290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563"),
+        ("rate boundary minus one", Data(repeating: 0, count: 135), "29e3704feeca7fb9ba229f0fa04d9b36449cf3ad6e1d85d9cfff3a10df9abc3e"),
         ("all byte values", Data((0...255).map { UInt8($0) }), "dc924469b334aed2a19fac7252e9961aea41f8d91996366029dbe0884229bf36"),
         ("long binary payload", Data(repeating: 0xab, count: 1024), "1549e03b2fd519bc2621fee2b4f0e94e796658d7b94c952316fdf05b98d23b25"),
     ]
@@ -335,6 +336,7 @@ enum WalletCoreProxyTestVectors {
     static let typedDataDigest = "a85c2e2b118698e88db68a8105b794a8cc7cec074e89ef991cb4f5f533819cc2"
     static let permitTypedDataDigest = "8e234d3348fdfb087478de9d65c030e111fafc3abc824ee2ee1a2fe9e938b592"
     static let complexTypedDataDigest = "aea54d086891128eb6108615e38873a455602a1f39ac88292408c0a311485ec8"
+    static let shortFixedBytesTypedDataDigest = "b972f221377cfab15ee3c98e70712b52d2fa022ce91eeb17c2cb347054a40dba"
     static let permitTypedDataSignature = "0x1ebbd25f52fac9e961055fef6d721b64111cec07a6e608b43906c1ec5eed7af0087936763d38beb188b1f0fbde802a9d427f6dfb96288c2e7096bbc1f2966c2d1c"
     static let complexTypedDataSignature = "0xb28af5ba51dc58c0fc8fcf5bcbda747921a10932c72bf5e9aed54c70a61f84311a559c41020af10b026dec561f6ba62a35aebede40a6b0414c7840c9532d95a31b"
     static let malformedTypedDataJSON = "not json"
@@ -344,7 +346,23 @@ enum WalletCoreProxyTestVectors {
         ("unknown primary type", #"{"types":{"EIP712Domain":[]},"primaryType":"Missing","domain":{},"message":{}}"#),
         ("invalid address field", #"{"types":{"EIP712Domain":[],"Person":[{"name":"wallet","type":"address"}]},"primaryType":"Person","domain":{},"message":{"wallet":"not an address"}}"#),
         ("invalid decimal chain id", #"{"types":{"EIP712Domain":[{"name":"chainId","type":"uint256"}],"Person":[{"name":"name","type":"string"}]},"primaryType":"Person","domain":{"chainId":"not-number"},"message":{"name":"Bob"}}"#),
+        ("empty hex chain id", #"{"types":{"EIP712Domain":[{"name":"chainId","type":"uint256"}],"Person":[{"name":"name","type":"string"}]},"primaryType":"Person","domain":{"chainId":"0x"},"message":{"name":"Bob"}}"#),
+        ("signed hex integer", #"{"types":{"EIP712Domain":[],"Order":[{"name":"side","type":"int8"}]},"primaryType":"Order","domain":{},"message":{"side":"0x01"}}"#),
+        ("signed odd hex integer", #"{"types":{"EIP712Domain":[],"Order":[{"name":"side","type":"int8"}]},"primaryType":"Order","domain":{},"message":{"side":"0x1"}}"#),
+        ("signed empty hex integer", #"{"types":{"EIP712Domain":[],"Order":[{"name":"side","type":"int8"}]},"primaryType":"Order","domain":{},"message":{"side":"0x"}}"#),
+        ("fractional integer", #"{"types":{"EIP712Domain":[],"Order":[{"name":"quantity","type":"uint16"}]},"primaryType":"Order","domain":{},"message":{"quantity":1.5}}"#),
+        ("malformed type field", #"{"types":{"EIP712Domain":[],"Order":[{"name":"quantity"}]},"primaryType":"Order","domain":{},"message":{"quantity":1}}"#),
+        ("recursive type with invalid value", #"{"types":{"EIP712Domain":[],"Node":[{"name":"next","type":"Node"}]},"primaryType":"Node","domain":{},"message":{"next":{}}}"#),
+        ("fixed array length mismatch", #"{"types":{"EIP712Domain":[],"Order":[{"name":"fills","type":"uint8[2]"}]},"primaryType":"Order","domain":{},"message":{"fills":[1,2,3]}}"#),
     ]
+    static let int64MinTypedDataJSON = #"{"types":{"EIP712Domain":[],"Order":[{"name":"side","type":"int64"}]},"primaryType":"Order","domain":{},"message":{"side":"-9223372036854775808"}}"#
+    static let uint8OverflowTypedDataJSON = #"{"types":{"EIP712Domain":[],"Order":[{"name":"fills","type":"uint8[]"}]},"primaryType":"Order","domain":{},"message":{"fills":[1,2,256]}}"#
+    static let int8UnderflowTypedDataJSON = #"{"types":{"EIP712Domain":[],"Order":[{"name":"side","type":"int8"}]},"primaryType":"Order","domain":{},"message":{"side":-129}}"#
+    static let negativeZeroTypedDataJSON = #"{"types":{"EIP712Domain":[],"Order":[{"name":"side","type":"int8"}]},"primaryType":"Order","domain":{},"message":{"side":"-0"}}"#
+    // WalletCore accepts this undersized, odd-length bytesN value for EIP-712 parity.
+    static let shortFixedBytesTypedDataJSON = #"{"types":{"EIP712Domain":[],"Order":[{"name":"tag","type":"bytes4"}]},"primaryType":"Order","domain":{},"message":{"tag":"0xabc"}}"#
+    static let fixedArrayTypedDataJSON = #"{"types":{"EIP712Domain":[],"Order":[{"name":"fills","type":"uint8[2]"}]},"primaryType":"Order","domain":{},"message":{"fills":[1,2]}}"#
+    static let cyclicArrayTypedDataJSON = #"{"types":{"EIP712Domain":[],"Node":[{"name":"children","type":"Node[]"},{"name":"name","type":"string"}]},"primaryType":"Node","domain":{},"message":{"children":[],"name":"root"}}"#
     static let typedDataJSON = """
     {
         "types": {
@@ -484,6 +502,7 @@ enum WalletCoreProxyTestVectors {
     }
     """
     static let decimalStringChainIDTypedDataJSON = typedDataJSON.replacingOccurrences(of: "\"chainId\": 1", with: "\"chainId\": \"1\"")
+    static let hexStringChainIDTypedDataJSON = typedDataJSON.replacingOccurrences(of: "\"chainId\": 1", with: "\"chainId\": \"0x1\"")
 
     static let abiEncodedCall = data(hex: "c47f0027000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000086465616462656566000000000000000000000000000000000000000000000000")
     static let abiJSON = #"{"c47f0027":{"constant":false,"inputs":[{"name":"name","type":"string"}],"name":"setName","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}}"#
@@ -531,12 +550,32 @@ enum WalletCoreProxyTestVectors {
     )
     static let abiNestedTupleJSON = #"{"feedface":{"constant":false,"inputs":[{"name":"order","type":"tuple","components":[{"name":"maker","type":"address"},{"name":"limits","type":"tuple","components":[{"name":"min","type":"uint256"},{"name":"max","type":"uint256"}]},{"name":"active","type":"bool"}]}],"name":"submitNested","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}}"#
     static let abiNestedTupleDecodedCall = #"{"function":"submitNested((address,(uint256,uint256),bool))","inputs":[{"name":"order","type":"tuple","components":[{"name":"maker","type":"address","value":"0xd0972E2312518Ca15A2304D56ff9cc0b7ea0Ea37"},{"name":"limits","type":"tuple","components":[{"name":"min","type":"uint256","value":"1"},{"name":"max","type":"uint256","value":"1000"}]},{"name":"active","type":"bool","value":true}]}]}"#
+    static let abiSignedIntegerCall = data(hex:
+        "1234abcd" +
+        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    )
+    static let abiSignedIntegerJSON = #"{"1234abcd":{"constant":false,"inputs":[{"name":"delta","type":"int8"}],"name":"setDelta","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}}"#
+    static let abiSignedIntegerDecodedCall = #"{"function":"setDelta(int8)","inputs":[{"name":"delta","type":"int8","value":"-1"}]}"#
+    static let abiFixedDynamicArrayCall = data(hex:
+        "87654321" +
+        "0000000000000000000000000000000000000000000000000000000000000020" +
+        "0000000000000000000000000000000000000000000000000000000000000040" +
+        "0000000000000000000000000000000000000000000000000000000000000080" +
+        "0000000000000000000000000000000000000000000000000000000000000001" +
+        "6100000000000000000000000000000000000000000000000000000000000000" +
+        "0000000000000000000000000000000000000000000000000000000000000002" +
+        "6262000000000000000000000000000000000000000000000000000000000000"
+    )
+    static let abiFixedDynamicArrayJSON = #"{"87654321":{"constant":false,"inputs":[{"name":"labels","type":"string[2]"}],"name":"setLabels","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}}"#
+    static let abiFixedDynamicArrayDecodedCall = #"{"function":"setLabels(string[2])","inputs":[{"name":"labels","type":"string[2]","value":["a","bb"]}]}"#
     static let abiDecodeFixtures: [(name: String, data: Data, abi: String, decoded: String)] = [
         ("erc20 transfer", abiERC20TransferCall, abiERC20TransferJSON, abiERC20TransferDecodedCall),
         ("static and dynamic bytes", abiStaticAndDynamicBytesCall, abiStaticAndDynamicBytesJSON, abiStaticAndDynamicBytesDecodedCall),
         ("dynamic and fixed arrays", abiArrayCall, abiArrayJSON, abiArrayDecodedCall),
         ("tuple", abiTupleCall, abiTupleJSON, abiTupleDecodedCall),
         ("nested tuple", abiNestedTupleCall, abiNestedTupleJSON, abiNestedTupleDecodedCall),
+        ("signed integer", abiSignedIntegerCall, abiSignedIntegerJSON, abiSignedIntegerDecodedCall),
+        ("fixed dynamic array", abiFixedDynamicArrayCall, abiFixedDynamicArrayJSON, abiFixedDynamicArrayDecodedCall),
     ]
 
     static let signedERC20Transaction = "f8aa808509c7652400830130b9946b175474e89094c44da98b954eedeac495271d0f80b844a9059cbb0000000000000000000000005322b34c88ed0691971bf52a7047448f0f4efc840000000000000000000000000000000000000000000000001bc16d674ec8000025a0724c62ad4fbf47346b02de06e603e013f26f26b56fdc0be7ba3d6273401d98cea0032131cae15da7ddcda66963e8bef51ca0d9962bfef0547d3f02597a4a58c931"
