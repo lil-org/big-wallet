@@ -110,14 +110,8 @@ enum WalletCoreProxyTestVectors {
     static let solanaMessage = Data("Hello world".utf8)
     static let solanaMessageBase58 = "JxF12TrwXzT5jvT"
     static let solanaMessageHex = "48656c6c6f20776f726c64"
-    static let solanaMessageSignature = "2iBZ6zrQRKHcbD8NWmm552gU5vGvh1dk3XV4jxnyEdRKm8up8AeQk1GFr9pJokSmchw7i9gMtNyFBdDt8tBxM1cG"
-    static let upstreamSolanaMessageSignature = "4x6F63Lqqi1nAjJpZfE4Kg77W3ep7gvHMtX9ZAAqfHbGi4FGFwmZ8jkwCLsejAR58dSQEkJ6WsmGsF9EfobwuCUR"
-    static let solanaEmptyMessageSignature = "3SBCToyrhSQZkB4sqHJvUurrzv5c5Y17W5qY5cbHH2XWBzAkB2yWM6NuwUV7ytapKn6xwp77bbtoQYvAsbySWU3q"
-    static let solanaZeroMessageSignature = "4iXB9qCBysmuLa9cttk9yYfx7SE9FpD9z79zzcPNWCurYgxGjTkpbcRtVBdic3s1Q1xZHEYYdud3yNKftYHqyo7u"
     static let solanaBinaryMessage = data(hex: "000102ff48656c6c6f")
-    static let solanaBinaryMessageSignature = "21mmPTuCnWosSwBT5PPpYGYCbietfKW7B4b1mvogJ3s1rEojKy8MgqMGYWx4wx13VsJH3GeBMLAqE6vBF28eStcW"
     static let solanaLongMessage = Data((0..<128).map { UInt8($0) })
-    static let solanaLongMessageSignature = "4bYXqrzTP31C1W7VDGpAubaYfS5CJTjY8HYFTUDKNJ2fFrMDkR4fNwELQtNwfUKqyd9q35ev81ymkZS6EEi1RY7t"
     static let ethereumRawSignDigest = data(hex: "3f891fda3704f0368dab65fa81ebe616f4aa2a0854995da4dc0b59d2cadbd64f")
     static let ethereumOverlongRawSignDigest = data(hex: "3f891fda3704f0368dab65fa81ebe616f4aa2a0854995da4dc0b59d2cadbd64faa")
     static let ethereumZeroRawSignDigest = Data(repeating: 0, count: 32)
@@ -260,7 +254,7 @@ enum WalletCoreProxyTestVectors {
         cryptoKey: "crypto",
         cipher: "aes-256-ctr",
         ciphertext: "59534779fa36ff0613646b52eb477af86bf94c877f97b6ab7f6c63e02d298152",
-        mac: "cf270bca8353d38ddeb8169aa9df45cf6001deb7fbc7fabcc0448b5857718350"
+        mac: "f1f9dc0124067b87ecbc44a199312e8c7311492e54dbf8737dcd59f4d0fa1a0c"
     )
 
     static let walletCoreJSONMnemonicPassword = Data("password".utf8)
@@ -597,7 +591,6 @@ enum WalletCoreProxyTestVectors {
     static let solanaPreparedSignerPublicKey = "H3imdwa5VQMB5V6yBNyrWwPdSKs4k9Pcpsu4diogoAcg"
     static let solanaPreparedSerializedTransaction = "4smDpCXsnHgmoapt2q3Hx3gdVHty7Vta81VAZYPSmzNSHXjtvyfJu4qz1WMHCx2MVXACDb6QY6B1V7CD2u9bgVEGWjqi5gjLcz2PDvti8vYQs7gAZu1DEPmutwqpvUo8T7GjTBKsBLD8fb8Q3N5WKf6K3vj5o3wiZHHv4BkgaXkQ4aoq1PnyxoRpajUXPL3kif4xbSGP9uwSci17SHyEhs5spxyD5sXztX"
     static let solanaPreparedApprovalMessage = "Ax4iqYdG9oPfJ69gGc6GB8JVZZ4AWaXH8UFGWuGwEV4qSnjzcnggaXudEKtSpDUM6vNz6xFAwjP2JepUv5RLf8FV5Mg1Dsnawvpv8PePBsHkHafXas7z2WxqkvhrThXa8HZWzWSQF"
-    static let solanaPreparedSignedTransactionBase64 = "ASOwhMKmQHx0GUNT+6f9wK7I50y7GUKGMIjAiwAtzVjc04WE1GiUEz3bL4GHmbHj16TIOyxQRjHXpsz9Bpo/CwsBAAEC7m1hqJ/I+ZCVhamWuw0rKsaa4jtazzmhnzJjEjm6BvkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJAA=="
 
     static func data(hex: String) -> Data {
         let hexString = hex.hasPrefix("0x") ? String(hex.dropFirst(2)) : hex

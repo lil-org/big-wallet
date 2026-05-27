@@ -90,6 +90,15 @@ final class WalletsManagerPreviewTests: XCTestCase {
         }
     }
 
+    func testPreviewRejectsOutOfRangePagesWithoutTrapping() throws {
+        let hdWallet = try testHDWallet()
+
+        for coin in [WalletCoin.ethereum, .solana] {
+            assertPreviewRejectsPage(-1, coin: coin, hdWallet: hdWallet)
+            assertPreviewRejectsPage(Int.max, coin: coin, hdWallet: hdWallet)
+        }
+    }
+
     func testMulticoinPreviewReturnsInterleavedPageOfAccounts() throws {
         let accounts = try WalletsManager.shared.previewAccounts(hdWallet: testHDWallet(), page: 0, coin: nil)
         let ethereumIndexTen = try XCTUnwrap(Vectors.abandonEthereumHDVectors.first { $0.index == 10 })
@@ -177,6 +186,21 @@ final class WalletsManagerPreviewTests: XCTestCase {
         }
 
         return wallet
+    }
+
+    private func assertPreviewRejectsPage(_ page: Int,
+                                          coin: WalletCoin,
+                                          hdWallet: WalletHDWallet,
+                                          file: StaticString = #filePath,
+                                          line: UInt = #line) {
+        XCTAssertThrowsError(try WalletsManager.shared.previewAccounts(hdWallet: hdWallet, page: page, coin: coin),
+                             file: file,
+                             line: line) { error in
+            guard case WalletsManager.Error.failedToDeriveAccount = error else {
+                XCTFail("Expected failedToDeriveAccount, got \(error)", file: file, line: line)
+                return
+            }
+        }
     }
 
     private func assertPreviewAccount(_ account: WalletAccount,

@@ -71,11 +71,11 @@ final class WalletCoreProxyDependencyBoundaryTests: XCTestCase {
                                            options: .regularExpression) != nil)
     }
 
-    func testProductionSwiftUsesWalletCoreOnlyThroughProxy() throws {
+    func testProductionSwiftDoesNotImportWalletCore() throws {
         let sourceRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let allowedRelativePath = "Shared/WalletCoreProxy/WalletCoreProxy.swift"
+        let walletProxyRelativeDirectory = "Shared/WalletCoreProxy/"
         let productionDirectories = [
             "App iOS",
             "App macOS",
@@ -114,7 +114,7 @@ final class WalletCoreProxyDependencyBoundaryTests: XCTestCase {
         let fileManager = FileManager.default
         var scanFailures: [String] = []
         var scannedSwiftFileCount = 0
-        var foundAllowedProxyFile = false
+        var foundWalletProxySource = false
         var violations: [String] = []
 
         for directoryName in productionDirectories {
@@ -135,19 +135,13 @@ final class WalletCoreProxyDependencyBoundaryTests: XCTestCase {
 
             for case let fileURL as URL in enumerator where fileURL.pathExtension == "swift" {
                 let relativePath = fileURL.path.replacingOccurrences(of: sourceRoot.path + "/", with: "")
-                if relativePath == allowedRelativePath {
-                    foundAllowedProxyFile = true
-                    if (try? String(contentsOf: fileURL, encoding: .utf8)) == nil {
-                        scanFailures.append("Could not read \(relativePath)")
-                    }
-                    continue
-                }
-
                 guard let contents = try? String(contentsOf: fileURL, encoding: .utf8) else {
                     scanFailures.append("Could not read \(relativePath)")
                     continue
                 }
 
+                let isWalletProxySource = relativePath.hasPrefix(walletProxyRelativeDirectory)
+                if isWalletProxySource { foundWalletProxySource = true }
                 scannedSwiftFileCount += 1
                 let codeOnlyContents = Self.sourceWithCommentsAndStringLiteralsBlanked(contents)
                 for (lineIndex, line) in codeOnlyContents.components(separatedBy: .newlines).enumerated() {
@@ -156,6 +150,7 @@ final class WalletCoreProxyDependencyBoundaryTests: XCTestCase {
                     }
                 }
 
+                guard !isWalletProxySource else { continue }
                 for typeName in forbiddenGeneratedTypeNames {
                     let pattern = #"(?<![A-Za-z0-9_])"# + NSRegularExpression.escapedPattern(for: typeName) + #"(?![A-Za-z0-9_])"#
                     if let range = codeOnlyContents.range(of: pattern, options: .regularExpression) {
@@ -165,17 +160,17 @@ final class WalletCoreProxyDependencyBoundaryTests: XCTestCase {
             }
         }
 
-        if !foundAllowedProxyFile {
-            scanFailures.append("Did not find allowed WalletCore proxy file: \(allowedRelativePath)")
+        if !foundWalletProxySource {
+            scanFailures.append("Did not find wallet proxy directory: \(walletProxyRelativeDirectory)")
         }
         if scannedSwiftFileCount == 0 {
-            scanFailures.append("Scanned 0 production Swift files outside \(allowedRelativePath)")
+            scanFailures.append("Scanned 0 production Swift files")
         }
 
         XCTAssertTrue(scanFailures.isEmpty,
                       "WalletCore dependency boundary scan did not cover expected sources:\n" + scanFailures.joined(separator: "\n"))
         XCTAssertTrue(violations.isEmpty,
-                      "WalletCore dependency must remain isolated to \(allowedRelativePath):\n" + violations.joined(separator: "\n"))
+                      "WalletCore imports are forbidden and generated type names must remain isolated to \(walletProxyRelativeDirectory):\n" + violations.joined(separator: "\n"))
     }
 
     private static func isImport(_ line: String, of module: String) -> Bool {
@@ -347,6 +342,14 @@ final class WalletCoreProxyCoinAndCryptoTests: XCTestCase {
 
         XCTAssertEqual(WalletCoin.ethereum.slip44Id, 60)
         XCTAssertEqual(WalletCoin.solana.slip44Id, 501)
+
+        XCTAssertEqual(WalletDerivation.default.rawValue, 0)
+        XCTAssertEqual(WalletDerivation.custom.rawValue, 1)
+        XCTAssertEqual(WalletDerivation.solanaSolana.rawValue, 6)
+        XCTAssertEqual(WalletDerivation(rawValue: 0), .default)
+        XCTAssertEqual(WalletDerivation(rawValue: 1), .custom)
+        XCTAssertEqual(WalletDerivation(rawValue: 6), .solanaSolana)
+        XCTAssertEqual(WalletDerivation(rawValue: 8), .custom)
     }
 
     func testMnemonicValidationAliases() {
@@ -542,6 +545,64 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
                        Vectors.secpEthereumAddress)
     }
 
+    func testSecp256k1BackendRejectsInvalidPrivateKeys() {
+        XCTAssertFalse(Secp256k1.isValidPrivateKey(Vectors.zeroPrivateKey))
+        XCTAssertFalse(Secp256k1.isValidPrivateKey(Data(repeating: 1, count: 31)))
+        XCTAssertFalse(Secp256k1.isValidPrivateKey(Data(repeating: 1, count: 33)))
+        XCTAssertFalse(Secp256k1.isValidPrivateKey(Vectors.secp256k1PrivateKeyAtCurveOrder))
+        XCTAssertFalse(Secp256k1.isValidPrivateKey(Vectors.secp256k1PrivateKeyAboveCurveOrder))
+        XCTAssertNil(Secp256k1.publicKey(privateKey: Vectors.zeroPrivateKey, compressed: false))
+        XCTAssertNil(Secp256k1.publicKey(privateKey: Vectors.secp256k1PrivateKeyAtCurveOrder, compressed: false))
+    }
+
+    func testSecp256k1BackendSerializesCompressedAndUncompressedPublicKeys() throws {
+        let uncompressed = try XCTUnwrap(Secp256k1.publicKey(privateKey: Vectors.secpPrivateKey, compressed: false))
+        let compressed = try XCTUnwrap(Secp256k1.publicKey(privateKey: Vectors.secpPrivateKey, compressed: true))
+
+        XCTAssertEqual(WalletCrypto.hexString(uncompressed), Vectors.secpPublicKey)
+        XCTAssertEqual(WalletCrypto.hexString(compressed), Vectors.secpCompressedPublicKey)
+        XCTAssertEqual(Secp256k1.uncompressedPublicKey(fromCompressed: compressed), uncompressed)
+        XCTAssertEqual(Secp256k1.compressedPublicKey(fromUncompressed: uncompressed), compressed)
+        XCTAssertTrue(Secp256k1.isValidPublicKey(uncompressed))
+        XCTAssertFalse(Secp256k1.isValidPublicKey(compressed))
+    }
+
+    func testSecp256k1BackendRecoverableSignatureShapeAndRecoveryIDNormalization() throws {
+        let signature = try XCTUnwrap(Secp256k1.sign(digest: Vectors.ethereumHelloRawSignDigest,
+                                                     privateKey: Vectors.secpPrivateKey))
+        let publicKey = try XCTUnwrap(Secp256k1.publicKey(privateKey: Vectors.secpPrivateKey, compressed: false))
+
+        XCTAssertEqual(signature.count, 65)
+        XCTAssertLessThan(signature[64], 4)
+        XCTAssertEqual(Secp256k1.recoverPublicKey(signature: signature,
+                                                  digest: Vectors.ethereumHelloRawSignDigest),
+                       publicKey)
+
+        var ethereumSignature = signature
+        ethereumSignature[64] += 27
+        XCTAssertEqual(Secp256k1.recoverPublicKey(signature: ethereumSignature,
+                                                  digest: Vectors.ethereumHelloRawSignDigest),
+                       publicKey)
+
+        var invalidRecoveryIDSignature = signature
+        invalidRecoveryIDSignature[64] = 31
+        XCTAssertNil(Secp256k1.recoverPublicKey(signature: invalidRecoveryIDSignature,
+                                                digest: Vectors.ethereumHelloRawSignDigest))
+    }
+
+    func testSecp256k1BackendCombinesPublicKeysForXpubChildDerivation() throws {
+        let privateKey = Vectors.secpPrivateKey
+        let tweak = Vectors.onePrivateKey
+        let publicKey = try XCTUnwrap(Secp256k1.publicKey(privateKey: privateKey, compressed: false))
+        let tweakPublicKey = try XCTUnwrap(Secp256k1.publicKey(privateKey: tweak, compressed: false))
+        let childPrivateKey = try XCTUnwrap(Secp256k1.addPrivateKey(privateKey, tweak: tweak))
+        let expectedChildPublicKey = try XCTUnwrap(Secp256k1.publicKey(privateKey: childPrivateKey, compressed: false))
+
+        XCTAssertEqual(Secp256k1.addPublicKeys(publicKey, tweakPublicKey), expectedChildPublicKey)
+        XCTAssertNil(Secp256k1.addPrivateKey(privateKey, tweak: Vectors.secp256k1PrivateKeyAtCurveOrder))
+        XCTAssertNil(Secp256k1.addPublicKeys(Data([1, 2, 3]), tweakPublicKey))
+    }
+
     func testEthereumRawSigningPinsWalletCoreSecp256k1Vector() throws {
         let privateKey = try requirePrivateKey(Vectors.secpPrivateKey)
         let rawSignature = try XCTUnwrap(privateKey.sign(digest: Vectors.ethereumHelloRawSignDigest, coin: .ethereum))
@@ -695,10 +756,10 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
 
     func testInvalidPublicKeyInputsReturnEmptyAddresses() {
         let prefixedPublicKeyAddress = WalletCrypto.addressFromPublicKeyDescription("0x" + Vectors.secpPublicKey, coin: .ethereum)
-        let offCurveEthereumPublicKey = Data([0x04]) + Data(repeating: 0, count: 64)
         let solanaPrefixedPublicKey = Data([1]) + Data(repeating: 1, count: 32)
         let invalidSolanaPrefixedPublicKey = Data([2]) + Data(repeating: 1, count: 32)
         let solanaRawAllOnesPublicKey = Data(repeating: 1, count: 32)
+        let offCurveEthereumPublicKey = Data([0x04]) + Data(repeating: 0, count: 64)
 
         XCTAssertEqual(WalletCrypto.addressFromPublicKeyDescription("not hex", coin: .ethereum), "")
         XCTAssertFalse(prefixedPublicKeyAddress.isEmpty)
@@ -710,10 +771,10 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
         XCTAssertEqual(WalletCrypto.addressFromPublicKeyData(Data(repeating: 1, count: 31), coin: .ethereum), "")
         XCTAssertEqual(WalletCrypto.addressFromPublicKeyData(Data(repeating: 1, count: 32), coin: .ethereum), "")
         XCTAssertEqual(WalletCrypto.addressFromPublicKeyData(Data(repeating: 1, count: 64), coin: .ethereum), "")
-        XCTAssertEqual(WalletCrypto.addressFromPublicKeyData(Vectors.data(hex: Vectors.secpCompressedPublicKey), coin: .ethereum), "")
         XCTAssertEqual(WalletCrypto.addressFromPublicKeyData(offCurveEthereumPublicKey, coin: .ethereum), "")
         XCTAssertEqual(WalletCrypto.addressFromPublicKeyDescription(WalletCrypto.hexString(offCurveEthereumPublicKey),
                                                                     coin: .ethereum), "")
+        XCTAssertEqual(WalletCrypto.addressFromPublicKeyData(Vectors.data(hex: Vectors.secpCompressedPublicKey), coin: .ethereum), "")
         XCTAssertEqual(WalletCrypto.addressFromPublicKeyDescription("0x" + Vectors.solanaAddressPublicKey, coin: .solana),
                        Vectors.solanaAddressFromPublicKey)
         XCTAssertEqual(WalletCrypto.addressFromPublicKeyDescription(Vectors.secpCompressedPublicKey, coin: .ethereum), "")
@@ -735,6 +796,250 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
         XCTAssertEqual(WalletCrypto.addressFromPublicKeyData(solanaPrefixedPublicKey, coin: .solana),
                        Vectors.solanaAllOnesPublicKeyAddress)
         XCTAssertEqual(WalletCrypto.addressFromPublicKeyData(invalidSolanaPrefixedPublicKey, coin: .solana), "")
+    }
+
+}
+
+final class WalletCoreProxyPerformanceGateTests: XCTestCase {
+
+    private enum WalletCoreBaselineCeilingMilliseconds {
+        static let scryptDefaultDerive = 1_000.0
+        static let scryptWalletCoreJSONImport = 1_000.0
+        static let secp256k1PublicKey = 25.0
+        static let secp256k1Sign = 15.0
+        static let ed25519Sign = 15.0
+    }
+
+    private enum PerformanceThresholdResolution: Equatable {
+        case success(Double)
+        case skipped(String)
+        case failure(String)
+    }
+
+    func testPerformanceGateThresholdResolutionSkipsUnlessBaselineIsConfigured() {
+        let thresholdEnv = "TEST_CRYPTO_PERF_MS"
+
+        XCTAssertEqual(Self.performanceThreshold("test operation",
+                                                 thresholdEnv: thresholdEnv,
+                                                 baselineCeilingMilliseconds: 10,
+                                                 environment: [thresholdEnv: "5"]),
+                       .success(5))
+        assertPerformanceThresholdSkipped(Self.performanceThreshold("test operation",
+                                                                   thresholdEnv: thresholdEnv,
+                                                                   baselineCeilingMilliseconds: 10,
+                                                                   environment: [:]),
+                                          contains: "not configured")
+        XCTAssertEqual(Self.performanceThreshold("test operation",
+                                                 thresholdEnv: thresholdEnv,
+                                                 baselineCeilingMilliseconds: 10,
+                                                 environment: [thresholdEnv: "10"]),
+                       .success(10))
+        XCTAssertEqual(Self.performanceThreshold("test operation",
+                                                 thresholdEnv: thresholdEnv,
+                                                 baselineCeilingMilliseconds: 10,
+                                                 environment: [thresholdEnv: "0.25"]),
+                       .success(0.25))
+        assertPerformanceThresholdFailure(Self.performanceThreshold("test operation",
+                                                                   thresholdEnv: thresholdEnv,
+                                                                   baselineCeilingMilliseconds: 0,
+                                                                   environment: [thresholdEnv: "1"]),
+                                          contains: "positive")
+        assertPerformanceThresholdSkipped(Self.performanceThreshold("test operation",
+                                                                   thresholdEnv: thresholdEnv,
+                                                                   baselineCeilingMilliseconds: 10,
+                                                                   environment: [thresholdEnv: ""]),
+                                          contains: "not configured")
+        assertPerformanceThresholdFailure(Self.performanceThreshold("test operation",
+                                                                   thresholdEnv: thresholdEnv,
+                                                                   baselineCeilingMilliseconds: 10,
+                                                                   environment: [thresholdEnv: "not-a-number"]),
+                                          contains: "positive")
+        assertPerformanceThresholdFailure(Self.performanceThreshold("test operation",
+                                                                   thresholdEnv: thresholdEnv,
+                                                                   baselineCeilingMilliseconds: 10,
+                                                                   environment: [thresholdEnv: "11"]),
+                                          contains: "sanity ceiling")
+    }
+
+    func testScryptDefaultDerivationPerformanceGate() throws {
+        try Self.assertReleasePerformance("scrypt default KDF",
+                                          thresholdEnv: "WALLETCORE_PROXY_PERF_SCRYPT_DERIVE_MS",
+                                          baselineCeilingMilliseconds: WalletCoreBaselineCeilingMilliseconds.scryptDefaultDerive) {
+            let derivedKey = Scrypt.deriveKey(password: Vectors.password,
+                                              salt: Data(repeating: 1, count: 32),
+                                              n: 1 << 14,
+                                              r: 8,
+                                              p: 4,
+                                              dkLen: 32)
+            XCTAssertEqual(derivedKey.count, 32)
+            XCTAssertFalse(derivedKey.isEmpty)
+            return derivedKey.count
+        }
+    }
+
+    func testScryptDefaultParametersAndSequentialDerivationVectors() {
+        XCTAssertTrue(Scrypt.parametersAreValid(n: 1 << 14, r: 8, p: 4, dkLen: 32))
+        XCTAssertTrue(Scrypt.parametersAreValid(n: 1 << 18, r: 1, p: 8, dkLen: 32))
+
+        XCTAssertEqual(Scrypt.deriveKey(password: Data(),
+                                        salt: Data(),
+                                        n: 16,
+                                        r: 1,
+                                        p: 1,
+                                        dkLen: 64),
+                       Vectors.data(hex: "77d6576238657b203b19ca42c18a0497f16b4844e3074ae8dfdffa3fede21442fcd0069ded0948f8326a753a0fc81f17e8d3e0fb2e0d3628cf35e20c38d18906"))
+        XCTAssertEqual(Scrypt.deriveKey(password: Data("password".utf8),
+                                        salt: Data("NaCl".utf8),
+                                        n: 16,
+                                        r: 8,
+                                        p: 4,
+                                        dkLen: 64),
+                       Vectors.data(hex: "d2143988ad24256a73275725c17155de75b463ec7bec2ada394fc56049b9bfba41d44d4da149c3e71d19c09ae8d5a98af6ca14f291a1bf032fb2f993aca706ac"))
+        XCTAssertEqual(Scrypt.deriveKey(password: Vectors.password,
+                                        salt: Data(repeating: 1, count: 32),
+                                        n: 16,
+                                        r: 1,
+                                        p: 8,
+                                        dkLen: 32),
+                       Vectors.data(hex: "cfc5f9af09819ae06de095f0f9b2e73d12ff7d3d39d7716842d2676a82f1b93a"))
+    }
+
+    func testScryptWalletCoreJSONImportPerformanceGate() throws {
+        try Self.assertReleasePerformance("scrypt WalletCore JSON import KDF",
+                                          thresholdEnv: "WALLETCORE_PROXY_PERF_SCRYPT_WALLETCORE_JSON_IMPORT_MS",
+                                          baselineCeilingMilliseconds: WalletCoreBaselineCeilingMilliseconds.scryptWalletCoreJSONImport) {
+            let derivedKey = Scrypt.deriveKey(password: Vectors.walletCoreJSONPrivateKeyPassword,
+                                              salt: Vectors.data(hex: "ab0c7876052600dd703518d6fc3fe8984592145b591fc8fb5c6d43190334ba19"),
+                                              n: 1 << 18,
+                                              r: 1,
+                                              p: 8,
+                                              dkLen: 32)
+            return derivedKey.count
+        }
+    }
+
+    func testSecp256k1PublicKeyPerformanceGate() throws {
+        try Self.assertReleasePerformance("secp256k1 public key derivation",
+                                          thresholdEnv: "WALLETCORE_PROXY_PERF_SECP256K1_PUBLIC_KEY_MS",
+                                          baselineCeilingMilliseconds: WalletCoreBaselineCeilingMilliseconds.secp256k1PublicKey,
+                                          iterations: 5) {
+            Secp256k1.publicKey(privateKey: Vectors.secpPrivateKey, compressed: false)?.count ?? 0
+        }
+    }
+
+    func testSecp256k1SigningPerformanceGate() throws {
+        try Self.assertReleasePerformance("secp256k1 signing",
+                                          thresholdEnv: "WALLETCORE_PROXY_PERF_SECP256K1_SIGN_MS",
+                                          baselineCeilingMilliseconds: WalletCoreBaselineCeilingMilliseconds.secp256k1Sign,
+                                          iterations: 5) {
+            Secp256k1.sign(digest: Vectors.ethereumRawSignDigest, privateKey: Vectors.secpPrivateKey)?.count ?? 0
+        }
+    }
+
+    func testEd25519SigningPerformanceGate() throws {
+        try Self.assertReleasePerformance("Ed25519 signing",
+                                          thresholdEnv: "WALLETCORE_PROXY_PERF_ED25519_SIGN_MS",
+                                          baselineCeilingMilliseconds: WalletCoreBaselineCeilingMilliseconds.ed25519Sign,
+                                          iterations: 5) {
+            Ed25519.sign(message: Vectors.solanaMessage, seed: Vectors.solanaSigningPrivateKey)?.count ?? 0
+        }
+    }
+
+    private static func assertReleasePerformance(_ name: String,
+                                                 thresholdEnv: String,
+                                                 baselineCeilingMilliseconds: Double,
+                                                 iterations: Int = 1,
+                                                 file: StaticString = #filePath,
+                                                 line: UInt = #line,
+                                                 operation: () -> Int) throws {
+#if DEBUG
+        throw XCTSkip("Release-only crypto performance gate.")
+#else
+        guard iterations > 0 else {
+            XCTFail("\(name) performance gate must run at least one iteration", file: file, line: line)
+            return
+        }
+
+        let environment = ProcessInfo.processInfo.environment
+        let thresholdMilliseconds: Double
+        switch Self.performanceThreshold(name,
+                                         thresholdEnv: thresholdEnv,
+                                         baselineCeilingMilliseconds: baselineCeilingMilliseconds,
+                                         environment: environment) {
+        case .success(let milliseconds):
+            thresholdMilliseconds = milliseconds
+        case .skipped(let message):
+            throw XCTSkip(message)
+        case .failure(let message):
+            XCTFail(message, file: file, line: line)
+            return
+        }
+
+        var resultSum = 0
+        let start = DispatchTime.now().uptimeNanoseconds
+        for _ in 0..<iterations {
+            resultSum += operation()
+        }
+        let elapsedNanoseconds = DispatchTime.now().uptimeNanoseconds - start
+        let averageMilliseconds = Double(elapsedNanoseconds) / 1_000_000.0 / Double(iterations)
+
+        XCTAssertGreaterThan(resultSum, 0, "\(name) produced no result", file: file, line: line)
+        XCTAssertLessThanOrEqual(averageMilliseconds,
+                                 thresholdMilliseconds,
+                                 "\(name) averaged \(averageMilliseconds)ms, above WalletCore baseline \(thresholdMilliseconds)ms",
+                                 file: file,
+                                 line: line)
+#endif
+    }
+
+    private static func performanceThreshold(_ name: String,
+                                             thresholdEnv: String,
+                                             baselineCeilingMilliseconds: Double,
+                                             environment: [String: String]) -> PerformanceThresholdResolution {
+        guard baselineCeilingMilliseconds > 0 else {
+            return .failure("\(name) WalletCore baseline sanity ceiling must be a positive millisecond value")
+        }
+
+        guard let rawBaseline = environment[thresholdEnv] else {
+            return .skipped("\(thresholdEnv) is not configured for \(name)")
+        }
+        let trimmedBaseline = rawBaseline.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedBaseline.isEmpty else {
+            return .skipped("\(thresholdEnv) is not configured for \(name)")
+        }
+
+        guard let baselineMilliseconds = Double(trimmedBaseline), baselineMilliseconds > 0 else {
+            return .failure("\(thresholdEnv) must be a positive millisecond value for \(name)")
+        }
+
+        guard baselineMilliseconds <= baselineCeilingMilliseconds else {
+            return .failure("\(thresholdEnv)=\(baselineMilliseconds)ms is above the WalletCore baseline " +
+                            "sanity ceiling \(baselineCeilingMilliseconds)ms for \(name)")
+        }
+
+        return .success(baselineMilliseconds)
+    }
+
+    private func assertPerformanceThresholdSkipped(_ resolution: PerformanceThresholdResolution,
+                                                   contains expectedSubstring: String,
+                                                   file: StaticString = #filePath,
+                                                   line: UInt = #line) {
+        guard case .skipped(let message) = resolution else {
+            XCTFail("Expected performance threshold skip, got \(resolution)", file: file, line: line)
+            return
+        }
+        XCTAssertTrue(message.contains(expectedSubstring), "\(message) does not contain \(expectedSubstring)", file: file, line: line)
+    }
+
+    private func assertPerformanceThresholdFailure(_ resolution: PerformanceThresholdResolution,
+                                                   contains expectedSubstring: String,
+                                                   file: StaticString = #filePath,
+                                                   line: UInt = #line) {
+        guard case .failure(let message) = resolution else {
+            XCTFail("Expected performance threshold failure, got \(resolution)", file: file, line: line)
+            return
+        }
+        XCTAssertTrue(message.contains(expectedSubstring), "\(message) does not contain \(expectedSubstring)", file: file, line: line)
     }
 
 }
@@ -887,6 +1192,8 @@ final class WalletCoreProxyHDWalletTests: XCTestCase {
         XCTAssertEqual(accountOneXpub, Vectors.abandonEthereumAccountOneExtendedPublicKey)
         XCTAssertEqual(wallet.extendedPublicKeyAccount(coin: .ethereum, derivation: .default, account: 2),
                        Vectors.abandonEthereumAccountTwoExtendedPublicKey)
+        XCTAssertEqual(wallet.extendedPublicKeyAccount(coin: .ethereum, derivation: .default, account: 0x80000000), "")
+        XCTAssertEqual(wallet.extendedPublicKeyAccount(coin: .ethereum, derivation: .default, account: UInt32.max), "")
         XCTAssertEqual(firstPublicKey, firstAccount.publicKey)
         XCTAssertEqual(firstAccount.address, Vectors.abandonEthereumAddress)
         XCTAssertEqual(firstAccount.coin, .ethereum)
@@ -932,6 +1239,8 @@ final class WalletCoreProxyHDWalletTests: XCTestCase {
             "m/44'/60'/0'/0/not-number",
             "m/44'//0",
             "m/44'/60'/0'/0/-1",
+            "m/44'/60'/0'/0/2147483648",
+            "m/44'/60'/2147483648'/0/0",
         ]
 
         for path in invalidPaths {
@@ -945,6 +1254,38 @@ final class WalletCoreProxyHDWalletTests: XCTestCase {
                                                                    derivationPath: path),
                          path)
         }
+    }
+
+    func testInvalidHDDerivationPathsReturnInertKeys() throws {
+        let wallet = try requireHDWallet(mnemonic: Vectors.abandonMnemonic)
+        let invalidEthereumKey = wallet.getKey(coin: .ethereum, derivationPath: "m/44'/60'/0'/0/2147483648")
+        let invalidSolanaKey = wallet.getKey(coin: .solana, derivationPath: "m/44'/501'/2147483648'")
+
+        invalidEthereumKey.withData { XCTAssertTrue($0.isEmpty) }
+        invalidSolanaKey.withData { XCTAssertTrue($0.isEmpty) }
+        XCTAssertTrue(invalidEthereumKey.publicKeyData(coin: .ethereum).isEmpty)
+        XCTAssertTrue(invalidSolanaKey.publicKeyData(coin: .solana).isEmpty)
+        XCTAssertEqual(invalidEthereumKey.publicKeyDescription(coin: .ethereum), "")
+        XCTAssertEqual(invalidSolanaKey.publicKeyDescription(coin: .solana), "")
+        XCTAssertNil(invalidEthereumKey.sign(digest: Vectors.ethereumRawSignDigest, coin: .ethereum))
+        XCTAssertNil(invalidSolanaKey.sign(digest: Vectors.solanaMessage, coin: .solana))
+        XCTAssertEqual(WalletCrypto.previewDerivationIndex(derivationPath: "m/44'/60'/0'/0/2147483648",
+                                                           coin: .ethereum),
+                       0)
+    }
+
+    func testExtendedPublicKeyRejectsOffCurveCompressedPublicKeys() throws {
+        let invalidCompressedPublicKey = Data([0x02]) + Data(repeating: 0xff, count: 32)
+        let invalidXpub = xpub(publicKey: invalidCompressedPublicKey)
+        let path = WalletCrypto.bip44DerivationPath(coin: .ethereum, account: 0, change: 0, address: 0)
+
+        XCTAssertNil(WalletCrypto.publicKeyDescriptionFromExtended(extended: invalidXpub,
+                                                                   coin: .ethereum,
+                                                                   derivationPath: path))
+        XCTAssertNil(WalletCrypto.accountFromExtendedPublicKey(extended: invalidXpub,
+                                                               coin: .ethereum,
+                                                               derivation: .custom,
+                                                               derivationPath: path))
     }
 
     func testEthereumExtendedPublicKeyPinsWalletCorePathMismatchQuirks() throws {
@@ -1029,6 +1370,14 @@ final class WalletCoreProxyHDWalletTests: XCTestCase {
                        line: line)
     }
 
+    private func xpub(publicKey: Data) -> String {
+        return BIP32.serializeExtendedPublicKey(publicKey: publicKey,
+                                                chainCode: Data(repeating: 0x11, count: 32),
+                                                depth: 3,
+                                                parentFingerprint: 0,
+                                                childNumber: 0x80000000)
+    }
+
 }
 
 final class WalletCoreProxyStoredKeyTests: XCTestCase {
@@ -1104,6 +1453,12 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
                                            derivationPath: "m/44'/60'/0'/0/0",
                                            publicKey: Vectors.walletCoreJSONMnemonicDerivedEthereumPublicKey,
                                            extendedPublicKey: "")
+        let filledStoredAccount = WalletAccount(address: Vectors.walletCoreJSONMnemonicStoredEthereumAddress,
+                                                coin: .ethereum,
+                                                derivation: .default,
+                                                derivationPath: "m/44'/60'/0'/0/0",
+                                                publicKey: Vectors.walletCoreJSONMnemonicDerivedEthereumPublicKey,
+                                                extendedPublicKey: "")
         let key = try XCTUnwrap(WalletStoredKey.importJSON(json: Vectors.walletCoreJSONMnemonicFixture))
 
         XCTAssertEqual(key.name, "")
@@ -1121,6 +1476,10 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
         XCTAssertNil(key.privateKey(coin: .ethereum, password: Vectors.wrongPassword))
 
         let wallet = try XCTUnwrap(key.wallet(password: Vectors.walletCoreJSONMnemonicPassword))
+        XCTAssertEqual(key.accountForCoin(coin: .ethereum, wallet: wallet), filledStoredAccount)
+        XCTAssertEqual(key.accountCount, 1)
+        XCTAssertEqual(key.account(index: 0), storedAccount)
+
         let privateKey = try XCTUnwrap(key.privateKey(coin: .ethereum, password: Vectors.walletCoreJSONMnemonicPassword))
         let publicKey = privateKey.publicKeyDescription(coin: .ethereum)
         let derivedAddress = WalletCrypto.addressFromPublicKeyDescription(publicKey, coin: .ethereum)
@@ -1133,7 +1492,7 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
     }
 
     func testGeneratedStoredKeyPropertiesAndFailures() throws {
-        let key = WalletStoredKey(name: "empty", password: Vectors.password)
+        let key = try XCTUnwrap(WalletStoredKey(name: "empty", password: Vectors.password))
         let mnemonic = try XCTUnwrap(key.decryptMnemonic(password: Vectors.password))
         let decryptedPayload = try XCTUnwrap(key.decryptPrivateKey(password: Vectors.password))
         let exportedJSON = try XCTUnwrap(key.exportJSON())
@@ -1160,6 +1519,94 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
         XCTAssertNil(reimported.decryptMnemonic(password: Vectors.wrongPassword))
     }
 
+    func testMnemonicPrivateKeyLookupAddsDefaultAccountWhenStoredPathIsMalformed() throws {
+        let key = try requireStoredMnemonicKey(coin: .ethereum)
+        let invalidPath = "m/44'/60'/0'/0/2147483648"
+        let invalidAccount = WalletAccount(address: Vectors.secpEthereumAddress,
+                                           coin: .ethereum,
+                                           derivation: .custom,
+                                           derivationPath: invalidPath,
+                                           publicKey: "",
+                                           extendedPublicKey: "")
+        let expectedDefaultAccount = WalletAccount(address: Vectors.multiAccountEthereumAddress,
+                                                   coin: .ethereum,
+                                                   derivation: .default,
+                                                   derivationPath: "m/44'/60'/0'/0/0",
+                                                   publicKey: Vectors.multiAccountEthereumPublicKey,
+                                                   extendedPublicKey: "")
+
+        key.removeAccountForCoin(coin: .ethereum)
+        key.addAccountDerivation(address: invalidAccount.address,
+                                 coin: invalidAccount.coin,
+                                 derivation: invalidAccount.derivation,
+                                 derivationPath: invalidAccount.derivationPath,
+                                 publicKey: invalidAccount.publicKey,
+                                 extendedPublicKey: invalidAccount.extendedPublicKey)
+
+        XCTAssertEqual(key.accountForCoin(coin: .ethereum, wallet: nil), invalidAccount)
+        let privateKey = try XCTUnwrap(key.privateKey(coin: .ethereum, password: Vectors.password))
+        XCTAssertEqual(privateKey.publicKeyDescription(coin: .ethereum), Vectors.multiAccountEthereumPublicKey)
+        XCTAssertEqual(key.accountCount, 2)
+        XCTAssertEqual(key.account(index: 0), invalidAccount)
+        XCTAssertEqual(key.account(index: 1), expectedDefaultAccount)
+
+        let container = WalletContainer(id: "malformed-path", key: key)
+        XCTAssertThrowsError(try container.privateKey(password: "password", account: invalidAccount))
+    }
+
+    func testMnemonicPrivateKeyLookupUsesMatchedStoredPathEvenWhenMalformed() throws {
+        let key = try requireStoredMnemonicKey(coin: .ethereum)
+        let expectedDefaultAccount = try XCTUnwrap(key.account(index: 0))
+        let wallet = try XCTUnwrap(key.wallet(password: Vectors.password))
+        let invalidPath = "m/44'/60'/0'/0/2147483648"
+        let invalidAccount = WalletAccount(address: expectedDefaultAccount.address,
+                                           coin: .ethereum,
+                                           derivation: .default,
+                                           derivationPath: invalidPath,
+                                           publicKey: "",
+                                           extendedPublicKey: "")
+
+        key.removeAccountForCoin(coin: .ethereum)
+        key.addAccountDerivation(address: invalidAccount.address,
+                                 coin: invalidAccount.coin,
+                                 derivation: invalidAccount.derivation,
+                                 derivationPath: invalidAccount.derivationPath,
+                                 publicKey: invalidAccount.publicKey,
+                                 extendedPublicKey: invalidAccount.extendedPublicKey)
+
+        XCTAssertEqual(key.accountForCoinDerivation(coin: .ethereum, derivation: .default, wallet: wallet),
+                       invalidAccount)
+        XCTAssertEqual(key.accountCount, 1)
+        XCTAssertEqual(key.account(index: 0), invalidAccount)
+        XCTAssertNil(key.privateKey(coin: .ethereum, password: Vectors.password))
+        XCTAssertEqual(key.accountCount, 1)
+    }
+
+    func testMnemonicAccountLookupFillsMissingAddressWithoutMutatingStoredAccount() throws {
+        let key = try requireStoredMnemonicKey(coin: .ethereum)
+        let expectedDefaultAccount = try XCTUnwrap(key.account(index: 0))
+        let wallet = try XCTUnwrap(key.wallet(password: Vectors.password))
+        let missingAddressAccount = WalletAccount(address: "",
+                                                  coin: .ethereum,
+                                                  derivation: .default,
+                                                  derivationPath: expectedDefaultAccount.derivationPath,
+                                                  publicKey: expectedDefaultAccount.publicKey,
+                                                  extendedPublicKey: "")
+
+        key.removeAccountForCoin(coin: .ethereum)
+        key.addAccountDerivation(address: missingAddressAccount.address,
+                                 coin: missingAddressAccount.coin,
+                                 derivation: missingAddressAccount.derivation,
+                                 derivationPath: missingAddressAccount.derivationPath,
+                                 publicKey: missingAddressAccount.publicKey,
+                                 extendedPublicKey: missingAddressAccount.extendedPublicKey)
+
+        XCTAssertEqual(key.accountForCoin(coin: .ethereum, wallet: nil), missingAddressAccount)
+        XCTAssertEqual(key.accountForCoin(coin: .ethereum, wallet: wallet), expectedDefaultAccount)
+        XCTAssertEqual(key.accountCount, 1)
+        XCTAssertEqual(key.account(index: 0), missingAddressAccount)
+    }
+
     func testStoredKeyAccountIndexBoundsReturnNil() throws {
         let key = try requireStoredMnemonicKey(coin: .ethereum)
 
@@ -1178,6 +1625,7 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
         let privateKeyJSON = try XCTUnwrap(privateKey.exportJSON())
         let reimportedPrivateKey = try XCTUnwrap(WalletStoredKey.importJSON(json: privateKeyJSON))
 
+        try assertExportedJSON(privateKeyJSON, doesNotLeak: [WalletCrypto.hexString(Vectors.secpPrivateKey)])
         XCTAssertEqual(privateKey.decryptPrivateKey(password: Data()), Vectors.secpPrivateKey)
         XCTAssertNil(privateKey.decryptPrivateKey(password: Vectors.password))
         XCTAssertEqual(reimportedPrivateKey.decryptPrivateKey(password: Data()), Vectors.secpPrivateKey)
@@ -1193,6 +1641,7 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
         let wallet = try XCTUnwrap(reimportedMnemonicKey.wallet(password: Data()))
         let solanaAccount = try XCTUnwrap(reimportedMnemonicKey.accountForCoin(coin: .solana, wallet: wallet))
 
+        try assertExportedJSON(mnemonicJSON, doesNotLeak: [Vectors.multiAccountMnemonic])
         XCTAssertEqual(mnemonicKey.decryptMnemonic(password: Data()), Vectors.multiAccountMnemonic)
         XCTAssertNil(mnemonicKey.decryptMnemonic(password: Vectors.password))
         XCTAssertEqual(reimportedMnemonicKey.decryptMnemonic(password: Data()), Vectors.multiAccountMnemonic)
@@ -1203,8 +1652,8 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
     }
 
     func testGeneratedStoredKeysUseFreshMnemonicEntropy() throws {
-        let firstKey = WalletStoredKey(name: "generated", password: Vectors.password)
-        let secondKey = WalletStoredKey(name: "generated", password: Vectors.password)
+        let firstKey = try XCTUnwrap(WalletStoredKey(name: "generated", password: Vectors.password))
+        let secondKey = try XCTUnwrap(WalletStoredKey(name: "generated", password: Vectors.password))
         let firstMnemonic = try XCTUnwrap(firstKey.decryptMnemonic(password: Vectors.password))
         let secondMnemonic = try XCTUnwrap(secondKey.decryptMnemonic(password: Vectors.password))
         let firstPayload = try XCTUnwrap(firstKey.decryptPrivateKey(password: Vectors.password))
@@ -1214,6 +1663,8 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
         let firstReimported = try XCTUnwrap(WalletStoredKey.importJSON(json: firstJSON))
         let secondReimported = try XCTUnwrap(WalletStoredKey.importJSON(json: secondJSON))
 
+        try assertExportedJSON(firstJSON, doesNotLeak: [firstMnemonic])
+        try assertExportedJSON(secondJSON, doesNotLeak: [secondMnemonic])
         XCTAssertTrue(firstKey.isMnemonic)
         XCTAssertTrue(secondKey.isMnemonic)
         XCTAssertTrue(WalletCrypto.isValidMnemonic(firstMnemonic))
@@ -1229,7 +1680,7 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
     }
 
     func testGeneratedStoredKeyDerivesAndPersistsDefaultMnemonicAccounts() throws {
-        let key = WalletStoredKey(name: "generated", password: Vectors.password)
+        let key = try XCTUnwrap(WalletStoredKey(name: "generated", password: Vectors.password))
         let wallet = try XCTUnwrap(key.wallet(password: Vectors.password))
 
         XCTAssertNil(key.accountForCoinDerivation(coin: .ethereum, derivation: .default, wallet: nil))
@@ -1258,6 +1709,8 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
 
         let exportedJSON = try XCTUnwrap(key.exportJSON())
         let reimported = try XCTUnwrap(WalletStoredKey.importJSON(json: exportedJSON))
+        try assertExportedJSON(exportedJSON, doesNotLeak: [Vectors.multiAccountMnemonic])
+
         XCTAssertEqual(reimported.accountCount, 2)
         XCTAssertEqual(reimported.account(index: 0), ethereumAccount)
         XCTAssertEqual(reimported.account(index: 1), solanaAccount)
@@ -1330,6 +1783,24 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
                                                    with: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
     }
 
+    func testStoredKeyImportRejectsUnsafeKDFParameters() throws {
+        let scryptFixture = try XCTUnwrap(String(data: Vectors.walletCoreJSONPrivateKeyFixture, encoding: .utf8))
+        let pbkdf2Fixture = try XCTUnwrap(String(data: Vectors.walletCoreJSONVariantPrivateKeyFixtures[0].json, encoding: .utf8))
+
+        let mutations = [
+            (fixture: scryptFixture, target: #""p": 8"#, replacement: #""p": 9"#),
+            (fixture: scryptFixture, target: #""n": 262144"#, replacement: #""n": 262145"#),
+            (fixture: pbkdf2Fixture, target: #""c": 1024"#, replacement: #""c": 0"#),
+            (fixture: pbkdf2Fixture, target: #""dklen": 32"#, replacement: #""dklen": 0"#),
+            (fixture: pbkdf2Fixture, target: #""prf": "hmac-sha256""#, replacement: #""prf": "hmac-sha512""#),
+            (fixture: pbkdf2Fixture, target: #""cipher": "aes-128-ctr""#, replacement: #""cipher": "aes-512-ctr""#),
+        ]
+        for mutation in mutations {
+            let json = mutation.fixture.replacingOccurrences(of: mutation.target, with: mutation.replacement)
+            XCTAssertNil(WalletStoredKey.importJSON(json: Data(json.utf8)))
+        }
+    }
+
     func testStoredKeyImportsSolanaSeedsAtSecp256k1CurveOrderBoundary() throws {
         try assertStoredSolanaPrivateKeyImport(privateKeyData: Vectors.secp256k1PrivateKeyBelowCurveOrder,
                                                expectedPublicKey: Vectors.secp256k1PrivateKeyBelowCurveOrderSolanaPublicKey,
@@ -1368,12 +1839,23 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
         XCTAssertEqual(privateKey.publicKeyDescription(coin: .ethereum), Vectors.secpPublicKey)
         XCTAssertNil(key.decryptPrivateKey(password: Vectors.wrongPassword))
         XCTAssertNil(key.privateKey(coin: .ethereum, password: Vectors.wrongPassword))
+        XCTAssertNil(key.privateKey(coin: .solana, password: Vectors.password))
         try assertExportedJSON(exportedJSON, doesNotLeak: [WalletCrypto.hexString(Vectors.secpPrivateKey)])
+
+        var explicitUnknownTypeObject = try XCTUnwrap(JSONSerialization.jsonObject(with: exportedJSON) as? [String: Any])
+        explicitUnknownTypeObject["type"] = "hardware"
+        let explicitUnknownTypeJSON = try JSONSerialization.data(withJSONObject: explicitUnknownTypeObject, options: [.sortedKeys])
+        let explicitUnknownTypeKey = try XCTUnwrap(WalletStoredKey.importJSON(json: explicitUnknownTypeJSON))
+
+        XCTAssertFalse(explicitUnknownTypeKey.isMnemonic)
+        XCTAssertEqual(explicitUnknownTypeKey.account(index: 0), expectedAccount)
+        XCTAssertNotNil(explicitUnknownTypeKey.privateKey(coin: .ethereum, password: Vectors.password))
 
         XCTAssertEqual(reimported.accountCount, key.accountCount)
         XCTAssertEqual(reimported.account(index: 0), expectedAccount)
         XCTAssertEqual(reimported.accountForCoin(coin: .ethereum, wallet: nil), expectedAccount)
         XCTAssertEqual(reimported.decryptPrivateKey(password: Vectors.password), Vectors.secpPrivateKey)
+        XCTAssertNil(reimported.privateKey(coin: .solana, password: Vectors.password))
         XCTAssertNil(WalletStoredKey.importJSON(json: Data("{}".utf8)))
         XCTAssertNil(WalletStoredKey.importJSON(json: Data("not json".utf8)))
     }
@@ -1399,12 +1881,14 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
         XCTAssertEqual(key.decryptPrivateKey(password: Vectors.password), Vectors.solanaAddressPrivateKey)
         XCTAssertEqual(privateKey.publicKeyDescription(coin: .solana), Vectors.solanaAddressPublicKey)
         XCTAssertNil(key.privateKey(coin: .solana, password: Vectors.wrongPassword))
+        XCTAssertNil(key.privateKey(coin: .ethereum, password: Vectors.password))
         try assertExportedJSON(exportedJSON, doesNotLeak: [WalletCrypto.hexString(Vectors.solanaAddressPrivateKey)])
 
         XCTAssertEqual(reimported.accountCount, key.accountCount)
         XCTAssertEqual(reimported.account(index: 0), expectedAccount)
         XCTAssertEqual(reimported.accountForCoin(coin: .solana, wallet: nil), expectedAccount)
         XCTAssertEqual(reimported.decryptPrivateKey(password: Vectors.password), Vectors.solanaAddressPrivateKey)
+        XCTAssertNil(reimported.privateKey(coin: .ethereum, password: Vectors.password))
     }
 
     func testStoredKeyRoundTripsLongPasswordsForPrivateKeyAndMnemonicImports() throws {
@@ -1415,6 +1899,7 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
         let privateKeyJSON = try XCTUnwrap(privateKey.exportJSON())
         let reimportedPrivateKey = try XCTUnwrap(WalletStoredKey.importJSON(json: privateKeyJSON))
 
+        try assertExportedJSON(privateKeyJSON, doesNotLeak: [WalletCrypto.hexString(Vectors.secpPrivateKey)])
         XCTAssertEqual(privateKey.decryptPrivateKey(password: Vectors.longPassword), Vectors.secpPrivateKey)
         XCTAssertNil(privateKey.decryptPrivateKey(password: Vectors.password))
         XCTAssertEqual(reimportedPrivateKey.decryptPrivateKey(password: Vectors.longPassword), Vectors.secpPrivateKey)
@@ -1427,11 +1912,41 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
         let mnemonicJSON = try XCTUnwrap(mnemonicKey.exportJSON())
         let reimportedMnemonicKey = try XCTUnwrap(WalletStoredKey.importJSON(json: mnemonicJSON))
 
+        try assertExportedJSON(mnemonicJSON, doesNotLeak: [Vectors.multiAccountMnemonic])
         XCTAssertEqual(mnemonicKey.decryptMnemonic(password: Vectors.longPassword), Vectors.multiAccountMnemonic)
         XCTAssertEqual(mnemonicKey.decryptPrivateKey(password: Vectors.longPassword), Data(Vectors.multiAccountMnemonic.utf8))
         XCTAssertNil(mnemonicKey.decryptMnemonic(password: Vectors.password))
         XCTAssertEqual(reimportedMnemonicKey.decryptMnemonic(password: Vectors.longPassword), Vectors.multiAccountMnemonic)
         XCTAssertNil(reimportedMnemonicKey.wallet(password: Vectors.password))
+    }
+
+    func testReencryptedStoredKeysUseExportScryptDefaults() throws {
+        let originalPrivateKey = try requireStoredPrivateKey(privateKey: Vectors.secpPrivateKey, coin: .ethereum)
+        let privateKeyPayload = try XCTUnwrap(originalPrivateKey.decryptPrivateKey(password: Vectors.password))
+        let reencryptedPrivateKey = try XCTUnwrap(WalletStoredKey.importPrivateKey(privateKey: privateKeyPayload,
+                                                                                   name: "renamed-private",
+                                                                                   password: Vectors.longPassword,
+                                                                                   coin: .ethereum))
+        let reencryptedPrivateKeyJSON = try XCTUnwrap(reencryptedPrivateKey.exportJSON())
+
+        try assertExportedJSON(reencryptedPrivateKeyJSON,
+                               doesNotLeak: [WalletCrypto.hexString(Vectors.secpPrivateKey)])
+        XCTAssertEqual(reencryptedPrivateKey.name, "renamed-private")
+        XCTAssertEqual(reencryptedPrivateKey.decryptPrivateKey(password: Vectors.longPassword), Vectors.secpPrivateKey)
+        XCTAssertNil(reencryptedPrivateKey.decryptPrivateKey(password: Vectors.password))
+
+        let originalMnemonicKey = try requireStoredMnemonicKey(coin: .ethereum)
+        let mnemonic = try XCTUnwrap(originalMnemonicKey.decryptMnemonic(password: Vectors.password))
+        let reencryptedMnemonicKey = try XCTUnwrap(WalletStoredKey.importHDWallet(mnemonic: mnemonic,
+                                                                                  name: "renamed-mnemonic",
+                                                                                  password: Vectors.longPassword,
+                                                                                  coin: .ethereum))
+        let reencryptedMnemonicJSON = try XCTUnwrap(reencryptedMnemonicKey.exportJSON())
+
+        try assertExportedJSON(reencryptedMnemonicJSON, doesNotLeak: [mnemonic])
+        XCTAssertEqual(reencryptedMnemonicKey.name, "renamed-mnemonic")
+        XCTAssertEqual(reencryptedMnemonicKey.decryptMnemonic(password: Vectors.longPassword), mnemonic)
+        XCTAssertNil(reencryptedMnemonicKey.decryptMnemonic(password: Vectors.password))
     }
 
     func testImportEthereumHDWalletPinsInitialAccountAndMnemonicRoundTrip() throws {
@@ -1495,6 +2010,7 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
         let solanaAccount = try XCTUnwrap(key.accountForCoinDerivation(coin: .solana,
                                                                         derivation: .solanaSolana,
                                                                         wallet: wallet))
+        let defaultPrivateKey = try XCTUnwrap(key.privateKey(coin: .solana, password: Vectors.password))
         XCTAssertNil(key.accountForCoinDerivation(coin: .solana, derivation: .solanaSolana, wallet: nil))
 
         let exportedJSON = try XCTUnwrap(key.exportJSON())
@@ -1517,6 +2033,8 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
         XCTAssertEqual(solanaAccount.address, "CgWJeEWkiYqosy1ba7a3wn9HAQuHyK48xs3LM4SSDc1C")
         XCTAssertEqual(solanaAccount.derivation, .solanaSolana)
         XCTAssertEqual(solanaAccount.derivationPath, "m/44'/501'/0'/0'")
+        XCTAssertEqual(defaultPrivateKey.publicKeyDescription(coin: .solana), defaultAccount.publicKey)
+        XCTAssertNotEqual(defaultPrivateKey.publicKeyDescription(coin: .solana), solanaAccount.publicKey)
         XCTAssertEqual(reimported.decryptMnemonic(password: Vectors.password), Vectors.multiAccountMnemonic)
         XCTAssertEqual(reimportedMnemonicPayload, Data(Vectors.multiAccountMnemonic.utf8))
         XCTAssertEqual(reimported.accountCount, key.accountCount)
@@ -1571,6 +2089,110 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
             XCTAssertEqual(key.accountForCoinDerivation(coin: .ethereum, derivation: .default, wallet: wallet), ethereumAccount)
             XCTAssertEqual(key.accountCount, 2)
         }
+    }
+
+    func testLegacyMatchingAccountIsEnrichedWithoutDuplicating() throws {
+        let key = try requireStoredMnemonicKey(coin: .ethereum)
+        let expectedAccount = try XCTUnwrap(key.account(index: 0))
+        let exportedJSON = try XCTUnwrap(key.exportJSON())
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: exportedJSON) as? [String: Any])
+        var activeAccounts = try XCTUnwrap(object["activeAccounts"] as? [[String: Any]])
+
+        activeAccounts[0].removeValue(forKey: "publicKey")
+        activeAccounts[0].removeValue(forKey: "extendedPublicKey")
+        object["activeAccounts"] = activeAccounts
+
+        let legacyJSON = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+        let imported = try XCTUnwrap(WalletStoredKey.importJSON(json: legacyJSON))
+        let legacyAccount = try XCTUnwrap(imported.account(index: 0))
+        let wallet = try XCTUnwrap(imported.wallet(password: Vectors.password))
+
+        XCTAssertEqual(imported.accountCount, 1)
+        XCTAssertEqual(legacyAccount.address, expectedAccount.address)
+        XCTAssertEqual(legacyAccount.publicKey, "")
+        XCTAssertEqual(imported.accountForCoin(coin: .ethereum, wallet: nil), legacyAccount)
+
+        let enrichedAccount = try XCTUnwrap(imported.accountForCoin(coin: .ethereum, wallet: wallet))
+
+        XCTAssertEqual(enrichedAccount, expectedAccount)
+        XCTAssertEqual(imported.accountCount, 1)
+        XCTAssertEqual(imported.account(index: 0), legacyAccount)
+        XCTAssertEqual(imported.accountForCoinDerivation(coin: .ethereum, derivation: .default, wallet: wallet),
+                       expectedAccount)
+        XCTAssertEqual(imported.accountCount, 1)
+        XCTAssertEqual(imported.account(index: 0), legacyAccount)
+    }
+
+    func testLegacyMatchingAccountWithConflictingPublicKeyKeepsStoredAccountByAddress() throws {
+        let key = try requireStoredMnemonicKey(coin: .ethereum)
+        let expectedAccount = try XCTUnwrap(key.account(index: 0))
+        let exportedJSON = try XCTUnwrap(key.exportJSON())
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: exportedJSON) as? [String: Any])
+        var activeAccounts = try XCTUnwrap(object["activeAccounts"] as? [[String: Any]])
+
+        activeAccounts[0]["publicKey"] = Vectors.secpPublicKey
+        activeAccounts[0].removeValue(forKey: "extendedPublicKey")
+        object["activeAccounts"] = activeAccounts
+
+        let legacyJSON = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+        let imported = try XCTUnwrap(WalletStoredKey.importJSON(json: legacyJSON))
+        let legacyAccount = try XCTUnwrap(imported.account(index: 0))
+        let wallet = try XCTUnwrap(imported.wallet(password: Vectors.password))
+
+        XCTAssertEqual(imported.accountCount, 1)
+        XCTAssertEqual(legacyAccount.address, expectedAccount.address)
+        XCTAssertEqual(legacyAccount.publicKey, Vectors.secpPublicKey)
+
+        let matchedAccount = try XCTUnwrap(imported.accountForCoin(coin: .ethereum, wallet: wallet))
+
+        XCTAssertEqual(matchedAccount, legacyAccount)
+        XCTAssertEqual(imported.accountCount, 1)
+        XCTAssertEqual(imported.account(index: 0), legacyAccount)
+        XCTAssertEqual(imported.accountForCoinDerivation(coin: .ethereum, derivation: .default, wallet: wallet),
+                       legacyAccount)
+        XCTAssertEqual(imported.accountCount, 1)
+    }
+
+    func testLegacySolanaSolanaAccountWithMissingDerivationMatchesByAddressWithoutMutating() throws {
+        let key = try requireStoredMnemonicKey(coin: .solana)
+        let wallet = try XCTUnwrap(key.wallet(password: Vectors.password))
+        let defaultAccount = try XCTUnwrap(key.accountForCoin(coin: .solana, wallet: wallet))
+        let solanaAccount = try XCTUnwrap(key.accountForCoinDerivation(coin: .solana,
+                                                                        derivation: .solanaSolana,
+                                                                        wallet: wallet))
+        let exportedJSON = try XCTUnwrap(key.exportJSON())
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: exportedJSON) as? [String: Any])
+        var activeAccounts = try XCTUnwrap(object["activeAccounts"] as? [[String: Any]])
+        activeAccounts[1].removeValue(forKey: "derivation")
+        activeAccounts[1].removeValue(forKey: "publicKey")
+        activeAccounts[1].removeValue(forKey: "extendedPublicKey")
+        object["activeAccounts"] = activeAccounts
+
+        let legacyJSON = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+        let imported = try XCTUnwrap(WalletStoredKey.importJSON(json: legacyJSON))
+        let importedWallet = try XCTUnwrap(imported.wallet(password: Vectors.password))
+        let storedSolanaAccount = WalletAccount(address: solanaAccount.address,
+                                                coin: .solana,
+                                                derivation: .default,
+                                                derivationPath: solanaAccount.derivationPath,
+                                                publicKey: "",
+                                                extendedPublicKey: "")
+        let filledSolanaAccount = WalletAccount(address: solanaAccount.address,
+                                                coin: .solana,
+                                                derivation: .default,
+                                                derivationPath: solanaAccount.derivationPath,
+                                                publicKey: solanaAccount.publicKey,
+                                                extendedPublicKey: "")
+
+        XCTAssertEqual(imported.accountCount, 2)
+        XCTAssertEqual(imported.account(index: 0), defaultAccount)
+        XCTAssertEqual(imported.account(index: 1), storedSolanaAccount)
+        XCTAssertEqual(imported.accountForCoinDerivation(coin: .solana,
+                                                         derivation: .solanaSolana,
+                                                         wallet: importedWallet),
+                       filledSolanaAccount)
+        XCTAssertEqual(imported.accountCount, 2)
+        XCTAssertEqual(imported.account(index: 1), storedSolanaAccount)
     }
 
     func testAddAndRemoveAccountsByCoinAndDerivationPath() throws {
@@ -1818,9 +2440,15 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
         let jsonString = try XCTUnwrap(String(data: json, encoding: .utf8), file: file, line: line)
         let jsonObject = try JSONSerialization.jsonObject(with: json)
         let topLevel = try XCTUnwrap(jsonObject as? [String: Any], file: file, line: line)
+        let crypto = try XCTUnwrap(topLevel["crypto"] as? [String: Any], file: file, line: line)
+        let kdfParams = try XCTUnwrap(crypto["kdfparams"] as? [String: Any], file: file, line: line)
 
         XCTAssertEqual(topLevel["version"] as? Int, 3, file: file, line: line)
-        XCTAssertNotNil(topLevel["crypto"] as? [String: Any], file: file, line: line)
+        XCTAssertEqual(crypto["kdf"] as? String, "scrypt", file: file, line: line)
+        XCTAssertEqual(kdfParams["n"] as? Int, 1 << 14, file: file, line: line)
+        XCTAssertEqual(kdfParams["r"] as? Int, 8, file: file, line: line)
+        XCTAssertEqual(kdfParams["p"] as? Int, 4, file: file, line: line)
+        XCTAssertEqual(kdfParams["dklen"] as? Int, 32, file: file, line: line)
         for forbiddenValue in forbiddenValues where !forbiddenValue.isEmpty {
             XCTAssertFalse(jsonString.contains(forbiddenValue),
                            "Exported JSON leaked \(forbiddenValue)",
@@ -1916,7 +2544,7 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
                           Data())
         XCTAssertEqual(WalletCrypto.hexString(WalletCrypto.ethereumTypedDataDigest(messageJson: Vectors.shortFixedBytesTypedDataJSON)),
                        Vectors.shortFixedBytesTypedDataDigest,
-                       "WalletCore accepts undersized odd-length bytesN values")
+                       "WalletCore accepts undersized odd-length EIP-712 bytesN values")
         XCTAssertNotEqual(WalletCrypto.ethereumTypedDataDigest(messageJson: Vectors.fixedArrayTypedDataJSON),
                           Data())
         XCTAssertNotEqual(WalletCrypto.ethereumTypedDataDigest(messageJson: Vectors.cyclicArrayTypedDataJSON),
@@ -1932,7 +2560,7 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
                        Vectors.ethereumTypedDataSignature)
         XCTAssertNoThrow(try Ethereum.shared.sign(typedData: Vectors.negativeZeroTypedDataJSON, privateKey: privateKey))
         XCTAssertNoThrow(try Ethereum.shared.sign(typedData: Vectors.shortFixedBytesTypedDataJSON, privateKey: privateKey),
-                         "WalletCore accepts undersized odd-length bytesN values")
+                         "WalletCore accepts undersized odd-length EIP-712 bytesN values")
         for fixture in Vectors.invalidTypedDataJSONFixtures {
             XCTAssertThrowsError(try Ethereum.shared.sign(typedData: fixture.json, privateKey: privateKey), fixture.name) {
                 guard let error = $0 as? Ethereum.Error, case .failedToSign = error else {
@@ -1962,29 +2590,34 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
                            fixture.decoded,
                            fixture.name)
         }
+
+        let controlStringABI = #"{"01020307":{"inputs":[{"name":"name","type":"string"}],"name":"setName"}}"#
+        let controlStringCall = Vectors.data(hex: "01020307" +
+                                             "0000000000000000000000000000000000000000000000000000000000000020" +
+                                             "0000000000000000000000000000000000000000000000000000000000000006" +
+                                             "610062080c1f" + String(repeating: "0", count: 52))
+        let controlStringDecoded = #"{"function":"setName(string)","inputs":[{"name":"name","type":"string","value":"a\u0000b\b\f\u001f"}]}"#
+        let decodedControlString = WalletCrypto.decodeEthereumCall(data: controlStringCall, abi: controlStringABI)
+        XCTAssertEqual(decodedControlString, controlStringDecoded)
+        let reparsedControlString = decodedControlString?.data(using: .utf8).flatMap {
+            try? JSONSerialization.jsonObject(with: $0)
+        }
+        XCTAssertNotNil(reparsedControlString)
+
+        let invalidUTF8StringABI = #"{"01020308":{"inputs":[{"name":"name","type":"string"}],"name":"setName"}}"#
+        let invalidUTF8StringCall = Vectors.data(hex: "01020308" +
+                                                 "0000000000000000000000000000000000000000000000000000000000000020" +
+                                                 "0000000000000000000000000000000000000000000000000000000000000003" +
+                                                 "61ff62" + String(repeating: "0", count: 58))
+        let invalidUTF8StringDecoded = #"{"function":"setName(string)","inputs":[{"name":"name","type":"string","value":"a"# + "\u{fffd}" + #"b"}]}"#
+        XCTAssertEqual(WalletCrypto.decodeEthereumCall(data: invalidUTF8StringCall, abi: invalidUTF8StringABI),
+                       invalidUTF8StringDecoded)
+
         XCTAssertNil(WalletCrypto.decodeEthereumCall(data: Data(), abi: Vectors.abiJSON))
         XCTAssertNil(WalletCrypto.decodeEthereumCall(data: Vectors.data(hex: "ffffffff"), abi: Vectors.abiJSON))
         XCTAssertNil(WalletCrypto.decodeEthereumCall(data: Vectors.data(hex: "c47f0027"), abi: Vectors.abiJSON))
         XCTAssertNil(WalletCrypto.decodeEthereumCall(data: Vectors.data(hex: "c47f002700"), abi: ",,"))
         XCTAssertNil(WalletCrypto.decodeEthereumCall(data: Vectors.data(hex: "c47f002700"), abi: "{}"))
-
-        let controlStringABI = #"{"01020307":{"inputs":[{"name":"label","type":"string"}],"name":"setLabel"}}"#
-        let controlStringCall = Vectors.data(hex: "01020307" +
-                                             String(repeating: "0", count: 63) + "20" +
-                                             String(repeating: "0", count: 63) + "3" +
-                                             "000a7f" + String(repeating: "0", count: 58))
-        let decodedControlString = WalletCrypto.decodeEthereumCall(data: controlStringCall, abi: controlStringABI)
-        XCTAssertNotNil(decodedControlString)
-        XCTAssertTrue(decodedControlString?.contains(#""value":"\u0000\n"#) == true,
-                      decodedControlString ?? "nil")
-
-        let invalidUTF8StringABI = #"{"01020308":{"inputs":[{"name":"label","type":"string"}],"name":"setLabel"}}"#
-        let invalidUTF8StringCall = Vectors.data(hex: "01020308" +
-                                                 String(repeating: "0", count: 63) + "20" +
-                                                 String(repeating: "0", count: 63) + "1" +
-                                                 "ff" + String(repeating: "0", count: 62))
-        XCTAssertEqual(WalletCrypto.decodeEthereumCall(data: invalidUTF8StringCall, abi: invalidUTF8StringABI),
-                       #"{"function":"setLabel(string)","inputs":[{"name":"label","type":"string","value":"�"}]}"#)
 
         let boolABI = #"{"01020304":{"inputs":[{"name":"flag","type":"bool"}],"name":"setFlag"}}"#
         let arrayABI = #"{"01020305":{"inputs":[{"name":"values","type":"uint256[abc]"}],"name":"badArray"}}"#
@@ -2015,22 +2648,26 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
 
     func testSignLegacyERC20TransactionMatchesWalletCoreVector() throws {
         let privateKey = try requirePrivateKey(Vectors.ethereumTransactionPrivateKey)
-        let signedTransaction = WalletCrypto.signEthereumTransaction(chainID: Vectors.data(hex: "01"),
-                                                                     nonce: Data(),
-                                                                     gasPrice: Vectors.data(hex: "09c7652400"),
-                                                                     gasLimit: Vectors.data(hex: "0130b9"),
-                                                                     toAddress: "0x6b175474e89094c44da98b954eedeac495271d0f",
-                                                                     privateKey: privateKey,
-                                                                     amount: Data(),
-                                                                     data: Vectors.data(hex: "a9059cbb0000000000000000000000005322b34c88ed0691971bf52a7047448f0f4efc840000000000000000000000000000000000000000000000001bc16d674ec80000"))
-        let emptySendTransaction = WalletCrypto.signEthereumTransaction(chainID: Vectors.data(hex: "01"),
-                                                                        nonce: Data(),
-                                                                        gasPrice: Vectors.data(hex: "01"),
-                                                                        gasLimit: Vectors.data(hex: "5208"),
-                                                                        toAddress: "0x0000000000000000000000000000000000000001",
-                                                                        privateKey: privateKey,
-                                                                        amount: Data(),
-                                                                        data: Data())
+        let signedTransaction = try XCTUnwrap(WalletCrypto.signEthereumTransaction(
+            chainID: Vectors.data(hex: "01"),
+            nonce: Data(),
+            gasPrice: Vectors.data(hex: "09c7652400"),
+            gasLimit: Vectors.data(hex: "0130b9"),
+            toAddress: "0x6b175474e89094c44da98b954eedeac495271d0f",
+            privateKey: privateKey,
+            amount: Data(),
+            data: Vectors.data(hex: "a9059cbb0000000000000000000000005322b34c88ed0691971bf52a7047448f0f4efc840000000000000000000000000000000000000000000000001bc16d674ec80000")
+        ))
+        let emptySendTransaction = try XCTUnwrap(WalletCrypto.signEthereumTransaction(
+            chainID: Vectors.data(hex: "01"),
+            nonce: Data(),
+            gasPrice: Vectors.data(hex: "01"),
+            gasLimit: Vectors.data(hex: "5208"),
+            toAddress: "0x0000000000000000000000000000000000000001",
+            privateKey: privateKey,
+            amount: Data(),
+            data: Data()
+        ))
 
         XCTAssertEqual(WalletCrypto.hexString(signedTransaction), Vectors.signedERC20Transaction)
         XCTAssertEqual(WalletCrypto.hexString(emptySendTransaction), Vectors.signedEmptySendTransaction)
@@ -2040,44 +2677,50 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
             "0x000000000000000000000000000000000000000g",
             "0x00000000000000000000000000000000000000001",
         ] {
-            XCTAssertTrue(WalletCrypto.signEthereumTransaction(chainID: Vectors.data(hex: "01"),
-                                                               nonce: Data(),
-                                                               gasPrice: Vectors.data(hex: "01"),
-                                                               gasLimit: Vectors.data(hex: "5208"),
-                                                               toAddress: invalidAddress,
-                                                               privateKey: privateKey,
-                                                               amount: Data(),
-                                                               data: Data()).isEmpty,
-                          invalidAddress)
+            XCTAssertNil(WalletCrypto.signEthereumTransaction(chainID: Vectors.data(hex: "01"),
+                                                              nonce: Data(),
+                                                              gasPrice: Vectors.data(hex: "01"),
+                                                              gasLimit: Vectors.data(hex: "5208"),
+                                                              toAddress: invalidAddress,
+                                                              privateKey: privateKey,
+                                                              amount: Data(),
+                                                              data: Data()),
+                         invalidAddress)
         }
     }
 
     func testSignLegacyTransactionPinsDataAndAlternateChainIDVectors() throws {
         let privateKey = try requirePrivateKey(Vectors.ethereumTransactionPrivateKey)
-        let dataOnlyTransaction = WalletCrypto.signEthereumTransaction(chainID: Vectors.data(hex: "01"),
-                                                                       nonce: Data(),
-                                                                       gasPrice: Vectors.data(hex: "09c7652400"),
-                                                                       gasLimit: Vectors.data(hex: "0130b9"),
-                                                                       toAddress: "0x6b175474e89094c44da98b954eedeac495271d0f",
-                                                                       privateKey: privateKey,
-                                                                       amount: Data(),
-                                                                       data: Vectors.data(hex: "deadbeef"))
-        let mixedCaseDataOnlyTransaction = WalletCrypto.signEthereumTransaction(chainID: Vectors.data(hex: "01"),
-                                                                                nonce: Data(),
-                                                                                gasPrice: Vectors.data(hex: "09c7652400"),
-                                                                                gasLimit: Vectors.data(hex: "0130b9"),
-                                                                                toAddress: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
-                                                                                privateKey: privateKey,
-                                                                                amount: Data(),
-                                                                                data: Vectors.data(hex: "deadbeef"))
-        let alternateChainIDTransaction = WalletCrypto.signEthereumTransaction(chainID: Vectors.data(hex: "03"),
-                                                                               nonce: Vectors.data(hex: "06"),
-                                                                               gasPrice: Vectors.data(hex: "04a817c800"),
-                                                                               gasLimit: Vectors.data(hex: "5208"),
-                                                                               toAddress: "0x3535353535353535353535353535353535353535",
-                                                                               privateKey: privateKey,
-                                                                               amount: Vectors.data(hex: "01"),
-                                                                               data: Data())
+        let dataOnlyTransaction = try XCTUnwrap(WalletCrypto.signEthereumTransaction(
+            chainID: Vectors.data(hex: "01"),
+            nonce: Data(),
+            gasPrice: Vectors.data(hex: "09c7652400"),
+            gasLimit: Vectors.data(hex: "0130b9"),
+            toAddress: "0x6b175474e89094c44da98b954eedeac495271d0f",
+            privateKey: privateKey,
+            amount: Data(),
+            data: Vectors.data(hex: "deadbeef")
+        ))
+        let mixedCaseDataOnlyTransaction = try XCTUnwrap(WalletCrypto.signEthereumTransaction(
+            chainID: Vectors.data(hex: "01"),
+            nonce: Data(),
+            gasPrice: Vectors.data(hex: "09c7652400"),
+            gasLimit: Vectors.data(hex: "0130b9"),
+            toAddress: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+            privateKey: privateKey,
+            amount: Data(),
+            data: Vectors.data(hex: "deadbeef")
+        ))
+        let alternateChainIDTransaction = try XCTUnwrap(WalletCrypto.signEthereumTransaction(
+            chainID: Vectors.data(hex: "03"),
+            nonce: Vectors.data(hex: "06"),
+            gasPrice: Vectors.data(hex: "04a817c800"),
+            gasLimit: Vectors.data(hex: "5208"),
+            toAddress: "0x3535353535353535353535353535353535353535",
+            privateKey: privateKey,
+            amount: Vectors.data(hex: "01"),
+            data: Data()
+        ))
 
         XCTAssertEqual(WalletCrypto.hexString(dataOnlyTransaction), Vectors.signedDataOnlyTransaction)
         XCTAssertEqual(WalletCrypto.hexString(mixedCaseDataOnlyTransaction), Vectors.signedDataOnlyTransaction)
@@ -2086,36 +2729,42 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
 
     func testSignLegacyTransactionPinsMultiByteChainIDVector() throws {
         let privateKey = try requirePrivateKey(Vectors.ethereumTransactionPrivateKey)
-        let signedTransaction = WalletCrypto.signEthereumTransaction(chainID: Vectors.data(hex: "2105"),
-                                                                     nonce: Vectors.data(hex: "06"),
-                                                                     gasPrice: Vectors.data(hex: "04a817c800"),
-                                                                     gasLimit: Vectors.data(hex: "5208"),
-                                                                     toAddress: "0x3535353535353535353535353535353535353535",
-                                                                     privateKey: privateKey,
-                                                                     amount: Vectors.data(hex: "01"),
-                                                                     data: Data())
+        let signedTransaction = try XCTUnwrap(WalletCrypto.signEthereumTransaction(
+            chainID: Vectors.data(hex: "2105"),
+            nonce: Vectors.data(hex: "06"),
+            gasPrice: Vectors.data(hex: "04a817c800"),
+            gasLimit: Vectors.data(hex: "5208"),
+            toAddress: "0x3535353535353535353535353535353535353535",
+            privateKey: privateKey,
+            amount: Vectors.data(hex: "01"),
+            data: Data()
+        ))
 
         XCTAssertEqual(WalletCrypto.hexString(signedTransaction), Vectors.signedBaseChainOneWeiTransaction)
     }
 
     func testSignLegacyTransactionNormalizesLeadingZeroQuantityFields() throws {
         let privateKey = try requirePrivateKey(Vectors.ethereumTransactionPrivateKey)
-        let leadingZeroEmptySend = WalletCrypto.signEthereumTransaction(chainID: Vectors.data(hex: "0001"),
-                                                                        nonce: Vectors.data(hex: "00"),
-                                                                        gasPrice: Vectors.data(hex: "0001"),
-                                                                        gasLimit: Vectors.data(hex: "005208"),
-                                                                        toAddress: "0x0000000000000000000000000000000000000001",
-                                                                        privateKey: privateKey,
-                                                                        amount: Vectors.data(hex: "0000"),
-                                                                        data: Data())
-        let leadingZeroOneWei = WalletCrypto.signEthereumTransaction(chainID: Vectors.data(hex: "0001"),
-                                                                     nonce: Vectors.data(hex: "00"),
-                                                                     gasPrice: Vectors.data(hex: "0001"),
-                                                                     gasLimit: Vectors.data(hex: "005208"),
-                                                                     toAddress: "0x0000000000000000000000000000000000000001",
-                                                                     privateKey: privateKey,
-                                                                     amount: Vectors.data(hex: "0001"),
-                                                                     data: Data())
+        let leadingZeroEmptySend = try XCTUnwrap(WalletCrypto.signEthereumTransaction(
+            chainID: Vectors.data(hex: "0001"),
+            nonce: Vectors.data(hex: "00"),
+            gasPrice: Vectors.data(hex: "0001"),
+            gasLimit: Vectors.data(hex: "005208"),
+            toAddress: "0x0000000000000000000000000000000000000001",
+            privateKey: privateKey,
+            amount: Vectors.data(hex: "0000"),
+            data: Data()
+        ))
+        let leadingZeroOneWei = try XCTUnwrap(WalletCrypto.signEthereumTransaction(
+            chainID: Vectors.data(hex: "0001"),
+            nonce: Vectors.data(hex: "00"),
+            gasPrice: Vectors.data(hex: "0001"),
+            gasLimit: Vectors.data(hex: "005208"),
+            toAddress: "0x0000000000000000000000000000000000000001",
+            privateKey: privateKey,
+            amount: Vectors.data(hex: "0001"),
+            data: Data()
+        ))
 
         XCTAssertEqual(WalletCrypto.hexString(leadingZeroEmptySend), Vectors.signedEmptySendTransaction)
         XCTAssertEqual(WalletCrypto.hexString(leadingZeroOneWei), Vectors.signedOneWeiTransaction)
@@ -2123,28 +2772,32 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
 
     func testSignLegacyTransactionPinsEmptyChainIDWalletCoreBehavior() throws {
         let privateKey = try requirePrivateKey(Vectors.ethereumTransactionPrivateKey)
-        let signedTransaction = WalletCrypto.signEthereumTransaction(chainID: Data(),
-                                                                     nonce: Data(),
-                                                                     gasPrice: Vectors.data(hex: "01"),
-                                                                     gasLimit: Vectors.data(hex: "5208"),
-                                                                     toAddress: "0x0000000000000000000000000000000000000001",
-                                                                     privateKey: privateKey,
-                                                                     amount: Data(),
-                                                                     data: Data())
+        let signedTransaction = try XCTUnwrap(WalletCrypto.signEthereumTransaction(
+            chainID: Data(),
+            nonce: Data(),
+            gasPrice: Vectors.data(hex: "01"),
+            gasLimit: Vectors.data(hex: "5208"),
+            toAddress: "0x0000000000000000000000000000000000000001",
+            privateKey: privateKey,
+            amount: Data(),
+            data: Data()
+        ))
 
         XCTAssertEqual(WalletCrypto.hexString(signedTransaction), Vectors.signedEmptyChainIDTransaction)
     }
 
     func testSignLegacyNativeTransferMatchesWalletCoreVector() throws {
         let privateKey = try requirePrivateKey(Vectors.ethereumNativeTransferPrivateKey)
-        let signedTransaction = WalletCrypto.signEthereumTransaction(chainID: Vectors.data(hex: "01"),
-                                                                     nonce: Vectors.data(hex: "09"),
-                                                                     gasPrice: Vectors.data(hex: "04a817c800"),
-                                                                     gasLimit: Vectors.data(hex: "5208"),
-                                                                     toAddress: "0x3535353535353535353535353535353535353535",
-                                                                     privateKey: privateKey,
-                                                                     amount: Vectors.data(hex: "0de0b6b3a7640000"),
-                                                                     data: Data())
+        let signedTransaction = try XCTUnwrap(WalletCrypto.signEthereumTransaction(
+            chainID: Vectors.data(hex: "01"),
+            nonce: Vectors.data(hex: "09"),
+            gasPrice: Vectors.data(hex: "04a817c800"),
+            gasLimit: Vectors.data(hex: "5208"),
+            toAddress: "0x3535353535353535353535353535353535353535",
+            privateKey: privateKey,
+            amount: Vectors.data(hex: "0de0b6b3a7640000"),
+            data: Data()
+        ))
 
         XCTAssertEqual(WalletCrypto.hexString(signedTransaction), Vectors.signedNativeTransferTransaction)
     }
@@ -2152,28 +2805,37 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
     func testSignLegacyTransactionAmountBoundaryCases() throws {
         let privateKey = try requirePrivateKey(Vectors.ethereumTransactionPrivateKey)
 
-        func signAmount(_ amount: Data) -> Data {
-            return WalletCrypto.signEthereumTransaction(chainID: Vectors.data(hex: "01"),
-                                                        nonce: Data(),
-                                                        gasPrice: Vectors.data(hex: "01"),
-                                                        gasLimit: Vectors.data(hex: "5208"),
-                                                        toAddress: "0x0000000000000000000000000000000000000001",
-                                                        privateKey: privateKey,
-                                                        amount: amount,
-                                                        data: Data())
+        func signAmount(_ amount: Data) throws -> Data {
+            return try XCTUnwrap(WalletCrypto.signEthereumTransaction(chainID: Vectors.data(hex: "01"),
+                                                                     nonce: Data(),
+                                                                     gasPrice: Vectors.data(hex: "01"),
+                                                                     gasLimit: Vectors.data(hex: "5208"),
+                                                                     toAddress: "0x0000000000000000000000000000000000000001",
+                                                                     privateKey: privateKey,
+                                                                     amount: amount,
+                                                                     data: Data()))
         }
 
-        let emptyAmountTransaction = signAmount(Data())
-        let zeroAmountTransaction = signAmount(Vectors.data(hex: "00"))
-        let oneWeiTransaction = signAmount(Vectors.data(hex: "01"))
-        let leadingZeroOneWeiTransaction = signAmount(Vectors.data(hex: "0001"))
-        let maxAmountTransaction = signAmount(Data(repeating: 0xff, count: 32))
+        let emptyAmountTransaction = try signAmount(Data())
+        let zeroAmountTransaction = try signAmount(Vectors.data(hex: "00"))
+        let oneWeiTransaction = try signAmount(Vectors.data(hex: "01"))
+        let leadingZeroOneWeiTransaction = try signAmount(Vectors.data(hex: "0001"))
+        let maxAmountTransaction = try signAmount(Data(repeating: 0xff, count: 32))
 
         XCTAssertEqual(WalletCrypto.hexString(emptyAmountTransaction), Vectors.signedEmptySendTransaction)
         XCTAssertEqual(zeroAmountTransaction, emptyAmountTransaction)
         XCTAssertEqual(WalletCrypto.hexString(oneWeiTransaction), Vectors.signedOneWeiTransaction)
         XCTAssertEqual(leadingZeroOneWeiTransaction, oneWeiTransaction)
         XCTAssertEqual(WalletCrypto.hexString(maxAmountTransaction), Vectors.signedMaxAmountTransaction)
+    }
+
+    func testLegacyTransactionSignatureVRejectsUnsupportedRecoveryIDs() {
+        XCTAssertEqual(EthereumTransactionSigner.legacySignatureV(chainID: Data(), recovery: 0), Data([27]))
+        XCTAssertEqual(EthereumTransactionSigner.legacySignatureV(chainID: Data(), recovery: 1), Data([28]))
+        XCTAssertEqual(EthereumTransactionSigner.legacySignatureV(chainID: Vectors.data(hex: "01"), recovery: 0), Data([37]))
+        XCTAssertEqual(EthereumTransactionSigner.legacySignatureV(chainID: Vectors.data(hex: "0001"), recovery: 1), Data([38]))
+        XCTAssertNil(EthereumTransactionSigner.legacySignatureV(chainID: Vectors.data(hex: "01"), recovery: 2))
+        XCTAssertNil(EthereumTransactionSigner.legacySignatureV(chainID: Vectors.data(hex: "01"), recovery: 3))
     }
 
     func testRecoverEthereumAddressRejectsMalformedInputs() throws {
