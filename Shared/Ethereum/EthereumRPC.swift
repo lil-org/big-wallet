@@ -103,11 +103,17 @@ class EthereumRPC {
     }
     
     func estimateGas(rpcUrl: String, transaction: Transaction, completion: @escaping (Result<String, Error>) -> Void) {
-        var dict: [String: Any] = ["from": transaction.from, "to": transaction.to, "data": transaction.data]
+        let dict = Self.estimateGasTransactionObject(for: transaction)
+        request(method: "eth_estimateGas", params: [dict], rpcUrl: rpcUrl, completion: completion)
+    }
+
+    static func estimateGasTransactionObject(for transaction: Transaction) -> [String: Any] {
+        var dict: [String: Any] = ["from": transaction.from, "data": transaction.data]
+        if !transaction.to.isEmpty { dict["to"] = transaction.to }
         if let gasPrice = transaction.gasPrice { dict["gasPrice"] = gasPrice }
         if let gas = transaction.gas { dict["gas"] = gas }
         if let value = transaction.value, value != String.hexPrefix, value != "0" { dict["value"] = value }
-        request(method: "eth_estimateGas", params: [dict], rpcUrl: rpcUrl, completion: completion)
+        return dict
     }
     
     func sendRawTransaction(rpcUrl: String, signedTxData: String, completion: @escaping (Result<String, Error>) -> Void) {

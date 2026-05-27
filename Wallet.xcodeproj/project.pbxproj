@@ -510,6 +510,34 @@
 		2F4D00812FAA000000000000 /* precomputed_ecmult_gen.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007B2FAA000000000000 /* precomputed_ecmult_gen.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
 		2F4D00822FAA000000000000 /* precomputed_ecmult_gen.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007B2FAA000000000000 /* precomputed_ecmult_gen.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
 		2F4D00832FAA000000000000 /* precomputed_ecmult_gen.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007B2FAA000000000000 /* precomputed_ecmult_gen.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
+		2F4D00012FAA000000000000 /* WalletCoreProxyStoredKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00002FAA000000000000 /* WalletCoreProxyStoredKey.swift */; };
+		2F4D00022FAA000000000000 /* WalletCoreProxyStoredKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00002FAA000000000000 /* WalletCoreProxyStoredKey.swift */; };
+		2F4D00032FAA000000000000 /* WalletCoreProxyStoredKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00002FAA000000000000 /* WalletCoreProxyStoredKey.swift */; };
+		2F4D00042FAA000000000000 /* WalletCoreProxyStoredKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00002FAA000000000000 /* WalletCoreProxyStoredKey.swift */; };
+		2F4D00112FAA000000000000 /* WalletCoreProxyEncoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00102FAA000000000000 /* WalletCoreProxyEncoding.swift */; };
+		2F4D00122FAA000000000000 /* WalletCoreProxyEncoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00102FAA000000000000 /* WalletCoreProxyEncoding.swift */; };
+		2F4D00132FAA000000000000 /* WalletCoreProxyEncoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00102FAA000000000000 /* WalletCoreProxyEncoding.swift */; };
+		2F4D00142FAA000000000000 /* WalletCoreProxyEncoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00102FAA000000000000 /* WalletCoreProxyEncoding.swift */; };
+		2F4D00212FAA000000000000 /* WalletCoreProxyEthereum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00202FAA000000000000 /* WalletCoreProxyEthereum.swift */; };
+		2F4D00222FAA000000000000 /* WalletCoreProxyEthereum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00202FAA000000000000 /* WalletCoreProxyEthereum.swift */; };
+		2F4D00232FAA000000000000 /* WalletCoreProxyEthereum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00202FAA000000000000 /* WalletCoreProxyEthereum.swift */; };
+		2F4D00242FAA000000000000 /* WalletCoreProxyEthereum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00202FAA000000000000 /* WalletCoreProxyEthereum.swift */; };
+		2F4D00312FAA000000000000 /* WalletCoreProxyCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00302FAA000000000000 /* WalletCoreProxyCrypto.swift */; };
+		2F4D00322FAA000000000000 /* WalletCoreProxyCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00302FAA000000000000 /* WalletCoreProxyCrypto.swift */; };
+		2F4D00332FAA000000000000 /* WalletCoreProxyCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00302FAA000000000000 /* WalletCoreProxyCrypto.swift */; };
+		2F4D00342FAA000000000000 /* WalletCoreProxyCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00302FAA000000000000 /* WalletCoreProxyCrypto.swift */; };
+		2F4D00412FAA000000000000 /* WalletCoreProxySecp256k1.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00402FAA000000000000 /* WalletCoreProxySecp256k1.swift */; };
+		2F4D00422FAA000000000000 /* WalletCoreProxySecp256k1.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00402FAA000000000000 /* WalletCoreProxySecp256k1.swift */; };
+		2F4D00432FAA000000000000 /* WalletCoreProxySecp256k1.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00402FAA000000000000 /* WalletCoreProxySecp256k1.swift */; };
+		2F4D00442FAA000000000000 /* WalletCoreProxySecp256k1.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00402FAA000000000000 /* WalletCoreProxySecp256k1.swift */; };
+		2F4D00512FAA000000000000 /* WalletCoreProxyHD.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00502FAA000000000000 /* WalletCoreProxyHD.swift */; };
+		2F4D00522FAA000000000000 /* WalletCoreProxyHD.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00502FAA000000000000 /* WalletCoreProxyHD.swift */; };
+		2F4D00532FAA000000000000 /* WalletCoreProxyHD.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00502FAA000000000000 /* WalletCoreProxyHD.swift */; };
+		2F4D00542FAA000000000000 /* WalletCoreProxyHD.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00502FAA000000000000 /* WalletCoreProxyHD.swift */; };
+		2F4D00612FAA000000000000 /* WalletCoreProxyBIP39WordList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00602FAA000000000000 /* WalletCoreProxyBIP39WordList.swift */; };
+		2F4D00622FAA000000000000 /* WalletCoreProxyBIP39WordList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00602FAA000000000000 /* WalletCoreProxyBIP39WordList.swift */; };
+		2F4D00632FAA000000000000 /* WalletCoreProxyBIP39WordList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00602FAA000000000000 /* WalletCoreProxyBIP39WordList.swift */; };
+		2F4D00642FAA000000000000 /* WalletCoreProxyBIP39WordList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00602FAA000000000000 /* WalletCoreProxyBIP39WordList.swift */; };
 		2F4C00112FA8000000000000 /* WalletCoreProxyParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00102FA8000000000000 /* WalletCoreProxyParityTests.swift */; };
 		2F4C00122FA8000000000000 /* WalletCoreProxyParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00102FA8000000000000 /* WalletCoreProxyParityTests.swift */; };
 		2F4C00132FA8000000000000 /* WalletCoreProxyParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00102FA8000000000000 /* WalletCoreProxyParityTests.swift */; };
@@ -1203,11 +1231,18 @@
 		2F2A00000000000000000019 /* WalletsManagerPrivateKeyImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsManagerPrivateKeyImportTests.swift; sourceTree = "<group>"; };
 		2F2A0000000000000000001D /* WalletsManagerPreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsManagerPreviewTests.swift; sourceTree = "<group>"; };
 		2F4C00002FA8000000000000 /* WalletCoreProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxy.swift; sourceTree = "<group>"; };
+		2F4D00002FAA000000000000 /* WalletCoreProxyStoredKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyStoredKey.swift; sourceTree = "<group>"; };
+		2F4D00102FAA000000000000 /* WalletCoreProxyEncoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyEncoding.swift; sourceTree = "<group>"; };
+		2F4D00202FAA000000000000 /* WalletCoreProxyEthereum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyEthereum.swift; sourceTree = "<group>"; };
+		2F4D00302FAA000000000000 /* WalletCoreProxyCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyCrypto.swift; sourceTree = "<group>"; };
+		2F4D00402FAA000000000000 /* WalletCoreProxySecp256k1.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxySecp256k1.swift; sourceTree = "<group>"; };
 		2F4D00702FAA000000000000 /* secp256k1.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Secp256k1Backend/secp256k1/src/secp256k1.c; sourceTree = "<group>"; };
 		2F4D00712FAA000000000000 /* big_wallet_secp256k1_shim.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Secp256k1Backend/big_wallet_secp256k1_shim.c; sourceTree = "<group>"; };
 		2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ScryptBackend/big_wallet_scrypt_shim.c; sourceTree = "<group>"; };
 		2F4D007A2FAA000000000000 /* precomputed_ecmult.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Secp256k1Backend/secp256k1/src/precomputed_ecmult.c; sourceTree = "<group>"; };
 		2F4D007B2FAA000000000000 /* precomputed_ecmult_gen.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c; sourceTree = "<group>"; };
+		2F4D00502FAA000000000000 /* WalletCoreProxyHD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyHD.swift; sourceTree = "<group>"; };
+		2F4D00602FAA000000000000 /* WalletCoreProxyBIP39WordList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyBIP39WordList.swift; sourceTree = "<group>"; };
 		2F4C00102FA8000000000000 /* WalletCoreProxyParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyParityTests.swift; sourceTree = "<group>"; };
 		2F4C00142FA9000000000000 /* WalletCoreProxyTestVectors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyTestVectors.swift; sourceTree = "<group>"; };
 		2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImageLoader.swift; sourceTree = "<group>"; };
@@ -2640,11 +2675,18 @@
 			isa = PBXGroup;
 			children = (
 				2F4C00002FA8000000000000 /* WalletCoreProxy.swift */,
+				2F4D00002FAA000000000000 /* WalletCoreProxyStoredKey.swift */,
+				2F4D00102FAA000000000000 /* WalletCoreProxyEncoding.swift */,
+				2F4D00202FAA000000000000 /* WalletCoreProxyEthereum.swift */,
+				2F4D00302FAA000000000000 /* WalletCoreProxyCrypto.swift */,
+				2F4D00402FAA000000000000 /* WalletCoreProxySecp256k1.swift */,
 				2F4D00702FAA000000000000 /* secp256k1.c */,
 				2F4D007A2FAA000000000000 /* precomputed_ecmult.c */,
 				2F4D007B2FAA000000000000 /* precomputed_ecmult_gen.c */,
 				2F4D00712FAA000000000000 /* big_wallet_secp256k1_shim.c */,
 				2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */,
+				2F4D00502FAA000000000000 /* WalletCoreProxyHD.swift */,
+				2F4D00602FAA000000000000 /* WalletCoreProxyBIP39WordList.swift */,
 			);
 			path = WalletCoreProxy;
 			sourceTree = "<group>";
@@ -3330,11 +3372,18 @@
 				2C773FFD2D53C1C800879A1F /* Account.swift in Sources */,
 				2C773FFE2D53C1C800879A1F /* WalletsManager.swift in Sources */,
 				2F4C00042FA8000000000000 /* WalletCoreProxy.swift in Sources */,
+				2F4D00032FAA000000000000 /* WalletCoreProxyStoredKey.swift in Sources */,
+				2F4D00132FAA000000000000 /* WalletCoreProxyEncoding.swift in Sources */,
+				2F4D00232FAA000000000000 /* WalletCoreProxyEthereum.swift in Sources */,
+				2F4D00332FAA000000000000 /* WalletCoreProxyCrypto.swift in Sources */,
+				2F4D00432FAA000000000000 /* WalletCoreProxySecp256k1.swift in Sources */,
 				2F4D00742FAA000000000000 /* secp256k1.c in Sources */,
 				2F4D007E2FAA000000000000 /* precomputed_ecmult.c in Sources */,
 				2F4D00822FAA000000000000 /* precomputed_ecmult_gen.c in Sources */,
 				2F4D00782FAA000000000000 /* big_wallet_secp256k1_shim.c in Sources */,
 				2F4D00A32FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */,
+				2F4D00532FAA000000000000 /* WalletCoreProxyHD.swift in Sources */,
+				2F4D00632FAA000000000000 /* WalletCoreProxyBIP39WordList.swift in Sources */,
 				2CF9B1112D526F9900B5CE82 /* String.swift in Sources */,
 				2C773FC92D53A5A300879A1F /* MultipleResponseToExtension.swift in Sources */,
 				2C77401B2D53CBEC00879A1F /* AccountTableViewCell.swift in Sources */,
@@ -3381,11 +3430,18 @@
 				2C901C4A2689F01700D0926A /* Strings.swift in Sources */,
 				2C2AA1D228AD1DC100E35DBF /* SpecificWalletAccount.swift in Sources */,
 				2F4C00022FA8000000000000 /* WalletCoreProxy.swift in Sources */,
+				2F4D00012FAA000000000000 /* WalletCoreProxyStoredKey.swift in Sources */,
+				2F4D00112FAA000000000000 /* WalletCoreProxyEncoding.swift in Sources */,
+				2F4D00212FAA000000000000 /* WalletCoreProxyEthereum.swift in Sources */,
+				2F4D00312FAA000000000000 /* WalletCoreProxyCrypto.swift in Sources */,
+				2F4D00412FAA000000000000 /* WalletCoreProxySecp256k1.swift in Sources */,
 				2F4D00722FAA000000000000 /* secp256k1.c in Sources */,
 				2F4D007C2FAA000000000000 /* precomputed_ecmult.c in Sources */,
 				2F4D00802FAA000000000000 /* precomputed_ecmult_gen.c in Sources */,
 				2F4D00762FAA000000000000 /* big_wallet_secp256k1_shim.c in Sources */,
 				2F4D00A12FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */,
+				2F4D00512FAA000000000000 /* WalletCoreProxyHD.swift in Sources */,
+				2F4D00612FAA000000000000 /* WalletCoreProxyBIP39WordList.swift in Sources */,
 				2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */,
 				2C9B2C6D2D38416800D56607 /* SharedDefaults.swift in Sources */,
 				2CC0CDBE2692027E0072922A /* PriceService.swift in Sources */,
@@ -3543,11 +3599,18 @@
 				2C5FF97426C84F7B00B32ACC /* SceneDelegate.swift in Sources */,
 				2CF2559E275A479800AE54B9 /* WalletsManager.swift in Sources */,
 				2F4C00032FA8000000000000 /* WalletCoreProxy.swift in Sources */,
+				2F4D00022FAA000000000000 /* WalletCoreProxyStoredKey.swift in Sources */,
+				2F4D00122FAA000000000000 /* WalletCoreProxyEncoding.swift in Sources */,
+				2F4D00222FAA000000000000 /* WalletCoreProxyEthereum.swift in Sources */,
+				2F4D00322FAA000000000000 /* WalletCoreProxyCrypto.swift in Sources */,
+				2F4D00422FAA000000000000 /* WalletCoreProxySecp256k1.swift in Sources */,
 				2F4D00732FAA000000000000 /* secp256k1.c in Sources */,
 				2F4D007D2FAA000000000000 /* precomputed_ecmult.c in Sources */,
 				2F4D00812FAA000000000000 /* precomputed_ecmult_gen.c in Sources */,
 				2F4D00772FAA000000000000 /* big_wallet_secp256k1_shim.c in Sources */,
 				2F4D00A22FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */,
+				2F4D00522FAA000000000000 /* WalletCoreProxyHD.swift in Sources */,
+				2F4D00622FAA000000000000 /* WalletCoreProxyBIP39WordList.swift in Sources */,
 				2C90E62327B2ED2D00C8991E /* SafariRequest+Helpers.swift in Sources */,
 				2CC79DF92AFD4BD6002B5A2D /* TransactionInspector.swift in Sources */,
 				2C2AA1D628AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
@@ -3685,11 +3748,18 @@
 				2CE5BC415A831696EE25E651 /* MultipleResponseToExtension.swift in Sources */,
 				2CAE21DEE08852ED5A87648D /* DappRequestProcessor.swift in Sources */,
 				2F4C00052FA8000000000000 /* WalletCoreProxy.swift in Sources */,
+				2F4D00042FAA000000000000 /* WalletCoreProxyStoredKey.swift in Sources */,
+				2F4D00142FAA000000000000 /* WalletCoreProxyEncoding.swift in Sources */,
+				2F4D00242FAA000000000000 /* WalletCoreProxyEthereum.swift in Sources */,
+				2F4D00342FAA000000000000 /* WalletCoreProxyCrypto.swift in Sources */,
+				2F4D00442FAA000000000000 /* WalletCoreProxySecp256k1.swift in Sources */,
 				2F4D00752FAA000000000000 /* secp256k1.c in Sources */,
 				2F4D007F2FAA000000000000 /* precomputed_ecmult.c in Sources */,
 				2F4D00832FAA000000000000 /* precomputed_ecmult_gen.c in Sources */,
 				2F4D00792FAA000000000000 /* big_wallet_secp256k1_shim.c in Sources */,
 				2F4D00A42FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */,
+				2F4D00542FAA000000000000 /* WalletCoreProxyHD.swift in Sources */,
+				2F4D00642FAA000000000000 /* WalletCoreProxyBIP39WordList.swift in Sources */,
 				2CF2676F1861169B92F690A4 /* Transaction.swift in Sources */,
 				2C60964FCD7D7729CC2F5390 /* SafariRequest+Helpers.swift in Sources */,
 				2CD179BB4ADFB6932786B2B0 /* PlatformSpecificImage.swift in Sources */,
@@ -4054,7 +4124,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				MACOSX_DEPLOYMENT_TARGET = 10.15;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -4113,7 +4183,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				MACOSX_DEPLOYMENT_TARGET = 10.15;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;

@@ -562,6 +562,22 @@ enum WalletCoreProxyTestVectors {
     )
     static let abiFixedDynamicArrayJSON = #"{"87654321":{"constant":false,"inputs":[{"name":"labels","type":"string[2]"}],"name":"setLabels","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}}"#
     static let abiFixedDynamicArrayDecodedCall = #"{"function":"setLabels(string[2])","inputs":[{"name":"labels","type":"string[2]","value":["a","bb"]}]}"#
+    static let abiStaticArrayThenValueCall = data(hex:
+        "face0001" +
+        "0000000000000000000000000000000000000000000000000000000000000001" +
+        "0000000000000000000000000000000000000000000000000000000000000002" +
+        "0000000000000000000000000000000000000000000000000000000000000003"
+    )
+    static let abiStaticArrayThenValueJSON = #"{"face0001":{"inputs":[{"name":"values","type":"uint256[2]"},{"name":"tail","type":"uint256"}],"name":"staticArrayThenValue"}}"#
+    static let abiStaticArrayThenValueDecodedCall = #"{"function":"staticArrayThenValue(uint256[2],uint256)","inputs":[{"name":"values","type":"uint256[2]","value":["1","2"]},{"name":"tail","type":"uint256","value":"3"}]}"#
+    static let abiStaticTupleThenValueCall = data(hex:
+        "face0002" +
+        "0000000000000000000000000000000000000000000000000000000000000005" +
+        "0000000000000000000000000000000000000000000000000000000000000001" +
+        "0000000000000000000000000000000000000000000000000000000000000009"
+    )
+    static let abiStaticTupleThenValueJSON = #"{"face0002":{"inputs":[{"name":"item","type":"tuple","components":[{"name":"amount","type":"uint256"},{"name":"enabled","type":"bool"}]},{"name":"tail","type":"uint256"}],"name":"staticTupleThenValue"}}"#
+    static let abiStaticTupleThenValueDecodedCall = #"{"function":"staticTupleThenValue((uint256,bool),uint256)","inputs":[{"name":"item","type":"tuple","components":[{"name":"amount","type":"uint256","value":"5"},{"name":"enabled","type":"bool","value":true}]},{"name":"tail","type":"uint256","value":"9"}]}"#
     static let abiDecodeFixtures: [(name: String, data: Data, abi: String, decoded: String)] = [
         ("erc20 transfer", abiERC20TransferCall, abiERC20TransferJSON, abiERC20TransferDecodedCall),
         ("static and dynamic bytes", abiStaticAndDynamicBytesCall, abiStaticAndDynamicBytesJSON, abiStaticAndDynamicBytesDecodedCall),
@@ -570,6 +586,8 @@ enum WalletCoreProxyTestVectors {
         ("nested tuple", abiNestedTupleCall, abiNestedTupleJSON, abiNestedTupleDecodedCall),
         ("signed integer", abiSignedIntegerCall, abiSignedIntegerJSON, abiSignedIntegerDecodedCall),
         ("fixed dynamic array", abiFixedDynamicArrayCall, abiFixedDynamicArrayJSON, abiFixedDynamicArrayDecodedCall),
+        ("static array followed by value", abiStaticArrayThenValueCall, abiStaticArrayThenValueJSON, abiStaticArrayThenValueDecodedCall),
+        ("static tuple followed by value", abiStaticTupleThenValueCall, abiStaticTupleThenValueJSON, abiStaticTupleThenValueDecodedCall),
     ]
 
     static let signedERC20Transaction = "f8aa808509c7652400830130b9946b175474e89094c44da98b954eedeac495271d0f80b844a9059cbb0000000000000000000000005322b34c88ed0691971bf52a7047448f0f4efc840000000000000000000000000000000000000000000000001bc16d674ec8000025a0724c62ad4fbf47346b02de06e603e013f26f26b56fdc0be7ba3d6273401d98cea0032131cae15da7ddcda66963e8bef51ca0d9962bfef0547d3f02597a4a58c931"
@@ -578,6 +596,7 @@ enum WalletCoreProxyTestVectors {
     static let signedEmptyChainIDTransaction = "f85f800182520894000000000000000000000000000000000000000180801ca00ec1695e83877837a0f8c23d4ce5edb611b503e67a0fc9ea0292718e4dba58d7a051cba1536e66a6d04addb29a4144281eff12683fde7111d5e306f58d8c328884"
     static let signedNativeTransferTransaction = "f86c098504a817c800825208943535353535353535353535353535353535353535880de0b6b3a76400008025a028ef61340bd939bc2195fe537567866003e1a15d3c71ff63e1590620aa636276a067cbe9d8997f761aecb703304b3800ccf555c9f3dc64214b297fb1966a3b6d83"
     static let signedDataOnlyTransaction = "f869808509c7652400830130b9946b175474e89094c44da98b954eedeac495271d0f8084deadbeef25a0372f1792338dd8fd0a1be8901c6dd79faa412936eb5c62d053639663630fa540a01ffd8afd49f74806135d76623344e2b3a45571880acca8a5ec88b66a085650e0"
+    static let signedContractCreationTransaction = "f8508001825208808085600160005525a0b394daa1ea267cadcb9eb20f1882c9872cc6ac897a54fde24cc2f893589017f7a0232f544e0fc5ca86cf09bc59aa26f63f310c28baec61b857a195b12f30f41fbb"
     static let signedChainThreeOneWeiTransaction = "f864068504a817c80082520894353535353535353535353535353535353535353501802aa0e059a80a438240f955e8fd75dc852f1e87a20c0c22f842a4a251e69527ba0d7da075ef56fc4a39b1201f3058471a054dd02f209926a2aadf67815761991b627f45"
     static let signedBaseChainOneWeiTransaction = "f866068504a817c800825208943535353535353535353535353535353535353535018082422ea0a21c950697a9926a6aca62f1ec6e22602e12918f21acb4522ba7a0e851b3ac1da0789de2323b18c9b15bb7926a95d89c20ba365b38e70d03cd21eeeaf18e229569"
     static let signedMaxAmountTransaction = "f87f8001825208940000000000000000000000000000000000000001a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8026a0290fd3f701bfce04a0fda10afa145fe7034bbd13ec15a708a6f78f32cc718172a029aa515cf7011ac218be998c15e14547ec3be6e4ca9a9d5671730aa1e21b7bdb"

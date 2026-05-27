@@ -43,16 +43,12 @@ struct Ethereum {
     }
     
     private func sign(digest: Data, privateKey: WalletPrivateKey) throws -> String {
-        guard isSupportedSigningDigest(digest),
+        guard WalletCrypto.isSupportedEthereumSigningDigest(digest),
               var signed = privateKey.sign(digest: digest, coin: .ethereum),
               signed.count == 65,
               signed[64] <= 1 else { throw Error.failedToSign }
         signed[64] += 27
         return WalletCrypto.hexString(data: signed).withHexPrefix
-    }
-
-    private func isSupportedSigningDigest(_ digest: Data) -> Bool {
-        return digest.count == 32 && digest.contains { $0 != 0 }
     }
     
     func sign(typedData: String, privateKey: WalletPrivateKey) throws -> String {
@@ -90,7 +86,7 @@ struct Ethereum {
             }
         }
         
-        if transaction.interpretation == nil {
+        if Self.shouldInspect(transaction) {
             TransactionInspector.shared.interpret(data: transaction.data) { interpretation in
                 transaction.interpretation = interpretation
                 completion(transaction)
@@ -113,14 +109,17 @@ struct Ethereum {
             return
         }
         
-        let signedTransaction = WalletCrypto.signEthereumTransaction(chainID: chainID,
-                                                                     nonce: nonce,
-                                                                     gasPrice: gasPrice,
-                                                                     gasLimit: gasLimit,
-                                                                     toAddress: transaction.to,
-                                                                     privateKey: privateKey,
-                                                                     amount: amount,
-                                                                     data: data)
+        guard let signedTransaction = WalletCrypto.signEthereumTransaction(chainID: chainID,
+                                                                           nonce: nonce,
+                                                                           gasPrice: gasPrice,
+                                                                           gasLimit: gasLimit,
+                                                                           toAddress: transaction.to,
+                                                                           privateKey: privateKey,
+                                                                           amount: amount,
+                                                                           data: data) else {
+            completion(nil)
+            return
+        }
         rpc.sendRawTransaction(rpcUrl: network.nodeURLString, signedTxData: WalletCrypto.hexString(data: signedTransaction).withHexPrefix) { result in
             DispatchQueue.main.async {
                 if case let .success(txHash) = result {
@@ -130,6 +129,10 @@ struct Ethereum {
                 }
             }
         }
+    }
+
+    static func shouldInspect(_ transaction: Transaction) -> Bool {
+        return transaction.interpretation == nil && !transaction.to.isEmpty
     }
     
     private func getGas(network: EthereumNetwork, transaction: Transaction, completion: @escaping (String?) -> Void) {

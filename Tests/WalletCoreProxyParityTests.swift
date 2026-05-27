@@ -1410,6 +1410,7 @@ final class WalletCoreProxyHDWalletTests: XCTestCase {
         let firstPath = WalletCrypto.bip44DerivationPath(coin: .ethereum, account: 0, change: 0, address: 0)
         let mismatchedAccountPath = WalletCrypto.bip44DerivationPath(coin: .ethereum, account: 1, change: 0, address: 0)
         let mismatchedCoinPath = "m/44'/501'/0'/0'"
+        let hardenedChangeAndAddressPath = "m/44'/60'/0'/0'/0'"
         let firstPublicKey = try XCTUnwrap(WalletCrypto.publicKeyDescriptionFromExtended(extended: xpub,
                                                                                          coin: .ethereum,
                                                                                          derivationPath: firstPath))
@@ -1431,6 +1432,17 @@ final class WalletCoreProxyHDWalletTests: XCTestCase {
                                                                  coin: .ethereum,
                                                                  derivation: .custom,
                                                                  derivationPath: mismatchedCoinPath)?.address,
+                       Vectors.abandonEthereumAddress)
+        // WalletCore derives xpub children from raw change/address values only, so hardened
+        // markers in those positions are accepted even though xpub derivation cannot honor them.
+        XCTAssertEqual(WalletCrypto.publicKeyDescriptionFromExtended(extended: xpub,
+                                                                     coin: .ethereum,
+                                                                     derivationPath: hardenedChangeAndAddressPath),
+                       firstPublicKey)
+        XCTAssertEqual(WalletCrypto.accountFromExtendedPublicKey(extended: xpub,
+                                                                 coin: .ethereum,
+                                                                 derivation: .custom,
+                                                                 derivationPath: hardenedChangeAndAddressPath)?.address,
                        Vectors.abandonEthereumAddress)
     }
 
@@ -1554,6 +1566,47 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
                            Vectors.secpEthereumAddress,
                            fixture.name)
         }
+    }
+
+    func testImportsWalletCoreJSONTruncatesFractionalCoinAndDerivationNumbers() throws {
+        let fixtureObject = try XCTUnwrap(JSONSerialization.jsonObject(with: Vectors.walletCoreJSONPrivateKeyFixture) as? [String: Any])
+        let expectedTopLevelAccount = WalletAccount(address: Vectors.walletCoreJSONPrivateKeyAddress,
+                                                    coin: .solana,
+                                                    derivation: .default,
+                                                    derivationPath: "m/44'/501'/0'",
+                                                    publicKey: "",
+                                                    extendedPublicKey: "")
+        let expectedActiveAccount = WalletAccount(address: Vectors.walletCoreJSONPrivateKeyAddress,
+                                                  coin: .ethereum,
+                                                  derivation: .solanaSolana,
+                                                  derivationPath: "m/44'/501'/0'/0/0",
+                                                  publicKey: "",
+                                                  extendedPublicKey: "")
+
+        var topLevelObject = fixtureObject
+        topLevelObject["coin"] = NSNumber(value: 501.9)
+        let topLevelJSON = try JSONSerialization.data(withJSONObject: topLevelObject, options: [.sortedKeys])
+        let topLevelKey = try XCTUnwrap(WalletStoredKey.importJSON(json: topLevelJSON))
+
+        XCTAssertEqual(topLevelKey.accountCount, 1)
+        XCTAssertEqual(topLevelKey.account(index: 0), expectedTopLevelAccount)
+        XCTAssertEqual(topLevelKey.accountForCoin(coin: .solana, wallet: nil), expectedTopLevelAccount)
+
+        var activeAccountsObject = fixtureObject
+        activeAccountsObject["activeAccounts"] = [
+            [
+                "address": Vectors.walletCoreJSONPrivateKeyAddress,
+                "coin": NSNumber(value: 60.9),
+                "derivation": NSNumber(value: 6.9),
+                "derivationPath": "m/44'/501'/0'/0/0",
+            ],
+        ]
+        let activeAccountsJSON = try JSONSerialization.data(withJSONObject: activeAccountsObject, options: [.sortedKeys])
+        let activeAccountsKey = try XCTUnwrap(WalletStoredKey.importJSON(json: activeAccountsJSON))
+
+        XCTAssertEqual(activeAccountsKey.accountCount, 1)
+        XCTAssertEqual(activeAccountsKey.account(index: 0), expectedActiveAccount)
+        XCTAssertEqual(activeAccountsKey.accountForCoin(coin: .ethereum, wallet: nil), expectedActiveAccount)
     }
 
     func testImportsWalletCoreMnemonicJSONFixture() throws {
@@ -2788,6 +2841,7 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
         XCTAssertEqual(WalletCrypto.hexString(signedTransaction), Vectors.signedERC20Transaction)
         XCTAssertEqual(WalletCrypto.hexString(emptySendTransaction), Vectors.signedEmptySendTransaction)
         for invalidAddress in [
+            "0x",
             "0xdeadbeef",
             "deadbeef",
             "0x000000000000000000000000000000000000000g",
@@ -2841,6 +2895,22 @@ final class WalletCoreProxyEthereumTests: XCTestCase {
         XCTAssertEqual(WalletCrypto.hexString(dataOnlyTransaction), Vectors.signedDataOnlyTransaction)
         XCTAssertEqual(WalletCrypto.hexString(mixedCaseDataOnlyTransaction), Vectors.signedDataOnlyTransaction)
         XCTAssertEqual(WalletCrypto.hexString(alternateChainIDTransaction), Vectors.signedChainThreeOneWeiTransaction)
+    }
+
+    func testSignLegacyContractCreationTransactionMatchesWalletCoreVector() throws {
+        let privateKey = try requirePrivateKey(Vectors.ethereumTransactionPrivateKey)
+        let signedTransaction = try XCTUnwrap(WalletCrypto.signEthereumTransaction(
+            chainID: Vectors.data(hex: "01"),
+            nonce: Data(),
+            gasPrice: Vectors.data(hex: "01"),
+            gasLimit: Vectors.data(hex: "5208"),
+            toAddress: "",
+            privateKey: privateKey,
+            amount: Data(),
+            data: Vectors.data(hex: "6001600055")
+        ))
+
+        XCTAssertEqual(WalletCrypto.hexString(signedTransaction), Vectors.signedContractCreationTransaction)
     }
 
     func testSignLegacyTransactionPinsMultiByteChainIDVector() throws {
@@ -2991,6 +3061,7 @@ final class WalletCoreProxySolanaCallSiteTests: XCTestCase {
         let longHex = WalletCrypto.hexString(data: Vectors.solanaLongMessage)
 
         XCTAssertEqual(Solana.shared.decodeMessage(binaryBase58, asHex: false), Vectors.solanaBinaryMessage)
+        XCTAssertEqual(Solana.shared.decodeTransactionMessage(binaryBase58), Vectors.solanaBinaryMessage)
         XCTAssertEqual(Solana.shared.decodeMessage(binaryHex, asHex: true), Vectors.solanaBinaryMessage)
         try assertValidSolanaSignature(Solana.shared.sign(messageData: Vectors.solanaBinaryMessage, privateKey: privateKey),
                                        message: Vectors.solanaBinaryMessage,
@@ -3038,6 +3109,22 @@ final class WalletCoreProxySolanaCallSiteTests: XCTestCase {
         XCTAssertNil(Solana.shared.decodeMessage("00\n", asHex: true))
         XCTAssertNil(Solana.shared.sign(message: "0OIl", asHex: false, privateKey: privateKey))
         XCTAssertNil(Solana.shared.sign(message: "abc", asHex: true, privateKey: privateKey))
+    }
+
+    func testSolanaTransactionMessageDecodeRejectsOverlongBase58Payload() {
+        let message = String(repeating: "z", count: Solana.maxBase58EncodedWirePayloadLength + 1)
+
+        XCTAssertNil(Solana.shared.decodeTransactionMessage(message))
+        XCTAssertEqual(Solana.shared.validationErrorForSigningTransaction(message: message,
+                                                                          publicKey: Vectors.solanaAllOnesPublicKeyAddress),
+                       .invalidMessage)
+    }
+
+    func testSolanaTransactionMessageDecodeRejectsOverlongDecodedPayload() {
+        let message = String(repeating: "1", count: Solana.maxWirePayloadLength + 1)
+        XCTAssertLessThanOrEqual(message.utf8.count, Solana.maxBase58EncodedWirePayloadLength)
+
+        XCTAssertNil(Solana.shared.decodeTransactionMessage(message))
     }
 
 }

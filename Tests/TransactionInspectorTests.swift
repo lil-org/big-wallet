@@ -8,6 +8,26 @@ private typealias Vectors = WalletCoreProxyTestVectors
 
 final class TransactionInspectorTests: XCTestCase {
 
+    func testEthereumPreparationDoesNotInspectContractCreationInitcode() {
+        let contractCreation = Transaction(from: "0x0000000000000000000000000000000000000001",
+                                           to: "",
+                                           nonce: nil,
+                                           gasPrice: "0x1",
+                                           gas: "0x5208",
+                                           value: "0x",
+                                           data: "0x6001600055")
+        let contractCall = Transaction(from: "0x0000000000000000000000000000000000000001",
+                                       to: "0x0000000000000000000000000000000000000002",
+                                       nonce: nil,
+                                       gasPrice: "0x1",
+                                       gas: "0x5208",
+                                       value: "0x",
+                                       data: "0x6001600055")
+
+        XCTAssertFalse(Ethereum.shouldInspect(contractCreation))
+        XCTAssertTrue(Ethereum.shouldInspect(contractCall))
+    }
+
     func testMint() {
         let a = TransactionInspector.shared.decode(data: "0x94bf804d0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000e26067c76fdbe877f48b0a8400cf5db8b47af0fe0021fb3f", nameHex: "94bf804d", signature: "mint(uint256,address)")
         XCTAssert(a?.lowercased() == "mint(uint256,address)\n\n1\n\n0xe26067c76fdbe877f48b0a8400cf5db8b47af0fe")

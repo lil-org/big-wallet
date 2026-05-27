@@ -64,6 +64,16 @@ final class BigUIntTests: XCTestCase {
         XCTAssertEqual((maxUInt128 * maxUInt128).hexString, "fffffffffffffffffffffffffffffffe00000000000000000000000000000001")
     }
 
+    func testSubtraction() {
+        XCTAssertEqual((BigUInt(7) - BigUInt(3)).description, "4")
+        XCTAssertEqual((BigUInt(0x1_0000_0000) - BigUInt(1)).hexString, "ffffffff")
+
+        let twoTo256 = BigUInt(hexString: "10000000000000000000000000000000000000000000000000000000000000000")!
+        let twoTo256MinusOne = String(repeating: "f", count: 64)
+        XCTAssertEqual((twoTo256 - BigUInt(1)).hexString, twoTo256MinusOne)
+        XCTAssertEqual((BigUInt(hexString: twoTo256MinusOne)! - BigUInt(hexString: twoTo256MinusOne)!).description, "0")
+    }
+
     func testEthAndGweiFormatting() {
         XCTAssertEqual(BigUInt(decimalString: "1000000000000000000")?.eth(), "1")
         XCTAssertEqual(BigUInt(decimalString: "1000000000000000000")?.eth(shortest: true), "1")

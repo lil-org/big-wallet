@@ -198,6 +198,30 @@ struct BigUInt: Equatable, Hashable, Comparable, Sendable, ExpressibleByIntegerL
         return result
     }
 
+    static func - (lhs: BigUInt, rhs: BigUInt) -> BigUInt {
+        precondition(lhs >= rhs, "BigUInt subtraction underflow")
+
+        var result = BigUInt()
+        result.words = lhs.words
+
+        var borrow: Int64 = 0
+        for index in result.words.indices {
+            let left = Int64(result.words[index])
+            let right = index < rhs.words.count ? Int64(rhs.words[index]) : 0
+            var difference = left - right - borrow
+            if difference < 0 {
+                difference += 1 << 32
+                borrow = 1
+            } else {
+                borrow = 0
+            }
+            result.words[index] = UInt32(difference)
+        }
+
+        result.normalize()
+        return result
+    }
+
     static func * (lhs: BigUInt, rhs: BigUInt) -> BigUInt {
         guard !lhs.isZero, !rhs.isZero else { return BigUInt() }
 

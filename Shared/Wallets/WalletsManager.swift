@@ -150,16 +150,14 @@ final class WalletsManager: NSObject {
             }
         }
 
-        if coin == .solana { return try previewSolanaAccounts(hdWallet: hdWallet, page: page) }
-
-        let range = Self.previewAccountIndexRange(page: page)
-        let xpub = hdWallet.extendedPublicKey(coin: coin)
-        let accounts = range.compactMap { i -> WalletAccount? in
-            let dp = WalletCrypto.bip44DerivationPath(coin: coin, account: 0, change: 0, address: UInt32(i))
-            return WalletCrypto.accountFromExtendedPublicKey(extended: xpub, coin: coin, derivation: .custom, derivationPath: dp)
+        switch coin {
+        case .ethereum:
+            guard let range = Self.previewAccountIndexRange(page: page) else { throw Error.failedToDeriveAccount }
+            guard let accounts = hdWallet.ethereumPreviewAccounts(accountRange: range) else { throw Error.failedToDeriveAccount }
+            return accounts
+        case .solana:
+            return try previewSolanaAccounts(hdWallet: hdWallet, page: page)
         }
-        guard accounts.count == range.count else { throw Error.failedToDeriveAccount }
-        return accounts
     }
 
     static func collectPreviewAccounts(coins: [WalletCoin],
@@ -199,7 +197,7 @@ final class WalletsManager: NSObject {
     }
 
     private func createWallet(name: String, password: String) throws -> WalletContainer {
-        let key = WalletStoredKey(name: name, password: Data(password.utf8))
+        guard let key = WalletStoredKey(name: name, password: Data(password.utf8)) else { throw WalletKeyStoreError.invalidKey }
         let id = makeNewWalletId()
         let wallet = WalletContainer(id: id, key: key)
         try addDefaultMnemonicAccounts(to: wallet, password: password)
@@ -577,44 +575,25 @@ final class WalletsManager: NSObject {
         try addMnemonicAccounts(to: wallet, password: password, coinDerivations: defaultMnemonicCoinDerivations)
     }
 
-    private static func previewAccountIndexRange(page: Int) -> Range<Int> {
-        let start = page * previewAccountsPageSize
-        return start..<(start + previewAccountsPageSize)
+    private static func previewAccountIndexRange(page: Int) -> Range<Int>? {
+        guard page >= 0 else { return nil }
+
+        let startResult = page.multipliedReportingOverflow(by: previewAccountsPageSize)
+        guard !startResult.overflow else { return nil }
+
+        let endResult = startResult.partialValue.addingReportingOverflow(previewAccountsPageSize)
+        guard !endResult.overflow else { return nil }
+
+        let end = endResult.partialValue
+        guard UInt32(exactly: end - 1) != nil else { return nil }
+
+        return startResult.partialValue..<end
     }
 
     private func previewSolanaAccounts(hdWallet: WalletHDWallet, page: Int) throws -> [WalletAccount] {
-        let coin = WalletCoin.solana
-        let accounts = Self.previewAccountIndexRange(page: page).map { accountIndex in
-            let derivation = accountIndex == 0 ? WalletDerivation.solanaSolana : .custom
-            let derivationPath = Self.solanaDerivationPath(accountIndex: accountIndex)
-            let privateKey = hdWallet.getKey(coin: coin, derivationPath: derivationPath)
-            let publicKey = privateKey.publicKeyDescription(coin: coin)
-            let address = WalletCrypto.addressFromPublicKeyDescription(publicKey, coin: coin)
-            let extendedPublicKey = solanaExtendedPublicKey(hdWallet: hdWallet, accountIndex: accountIndex)
-
-            return WalletAccount(address: address,
-                           coin: coin,
-                           derivation: derivation,
-                           derivationPath: derivationPath,
-                           publicKey: publicKey,
-                           extendedPublicKey: extendedPublicKey)
-        }
-
-        guard accounts.allSatisfy({ !$0.address.isEmpty }) else { throw Error.failedToDeriveAccount }
+        guard let range = Self.previewAccountIndexRange(page: page) else { throw Error.failedToDeriveAccount }
+        guard let accounts = hdWallet.solanaPreviewAccounts(accountRange: range) else { throw Error.failedToDeriveAccount }
         return accounts
-    }
-
-    private static func solanaDerivationPath(accountIndex: Int) -> String {
-        return "m/44'/\(WalletCoin.solana.slip44Id)'/\(accountIndex)'/0'"
-    }
-
-    private func solanaExtendedPublicKey(hdWallet: WalletHDWallet, accountIndex: Int) -> String {
-        let coin = WalletCoin.solana
-        guard accountIndex != 0 else {
-            return hdWallet.extendedPublicKeyDerivation(coin: coin, derivation: .solanaSolana)
-        }
-
-        return hdWallet.extendedPublicKeyAccount(coin: coin, derivation: .solanaSolana, account: UInt32(accountIndex))
     }
 
     private func makeNewWalletId() -> String {

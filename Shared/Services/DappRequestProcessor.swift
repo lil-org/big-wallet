@@ -383,7 +383,7 @@ struct DappRequestProcessor {
                                                         publicKey: String,
                                                         request: SafariRequest,
                                                         completion: @escaping (String?) -> Void) -> Data? {
-        guard let messageData = solana.decodeMessage(message, asHex: false) else {
+        guard let messageData = solana.decodeTransactionMessage(message) else {
             respond(to: request, solanaError: .sendTransaction(.invalidMessage), completion: completion)
             return nil
         }

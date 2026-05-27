@@ -119,6 +119,46 @@ final class SolanaPreparedTransactionTests: XCTestCase {
         }
     }
 
+    func testSerializedSolanaSignAndSendRejectsOverlongBase58Transaction() {
+        let serializedTransaction = String(repeating: "z", count: Solana.maxBase58EncodedWirePayloadLength + 1)
+
+        switch Solana.shared.preparedSerializedTransactionForSignAndSend(serializedTransaction: serializedTransaction,
+                                                                         publicKey: serializedTransactionSignerPublicKey) {
+        case .failure(.invalidMessage):
+            break
+        case .failure(let error):
+            XCTFail("Expected invalidMessage, got \(error)")
+        case .success:
+            XCTFail("Expected overlong serialized transaction to be rejected")
+        }
+    }
+
+    func testSerializedSolanaSignAndSendRejectsOverlongDecodedTransaction() throws {
+        let signerPublicKey = try XCTUnwrap(WalletCrypto.base58Decode(string: serializedTransactionSignerPublicKey))
+        let message = SolanaMessageFixture.wireMessage(readOnlyUnsignedAccounts: 1,
+                                                        accountKeys: [signerPublicKey, Data(repeating: 0, count: 32)],
+                                                        bodyAfterBlockhash: SolanaMessageFixture.instruction(programIdIndex: 1,
+                                                                                                             accountIndices: [0],
+                                                                                                             data: Data(repeating: 7, count: 1_062)))
+        var transactionData = Data.encodeLength(1)
+        transactionData += Data(repeating: 0, count: 64)
+        transactionData += message
+        XCTAssertEqual(transactionData.count, Solana.maxWirePayloadLength + 1)
+
+        let serializedTransaction = WalletCrypto.base58Encode(data: transactionData)
+        XCTAssertLessThanOrEqual(serializedTransaction.utf8.count, Solana.maxBase58EncodedWirePayloadLength)
+
+        switch Solana.shared.preparedSerializedTransactionForSignAndSend(serializedTransaction: serializedTransaction,
+                                                                         publicKey: serializedTransactionSignerPublicKey) {
+        case .failure(.invalidMessage):
+            break
+        case .failure(let error):
+            XCTFail("Expected invalidMessage, got \(error)")
+        case .success:
+            XCTFail("Expected overlong decoded transaction to be rejected")
+        }
+    }
+
     private func signerSignature(in transactionData: Data,
                                  signerPublicKey: String,
                                  file: StaticString = #filePath,

@@ -72,7 +72,7 @@ struct SolanaWireMessage {
 enum SolanaWireMessageParser {
     private static let publicKeyLength = 32
     private static let blockhashLength = 32
-    private static let maxMessageLength = 1_232
+    private static let maxMessageLength = Solana.maxWirePayloadLength
     private static let versionedMessageMask: UInt8 = 0x80
     private static let versionMask: UInt8 = 0x7f
     private static let supportedVersionedMessageVersion: UInt8 = 0
@@ -1291,6 +1291,8 @@ final class Solana {
     }
 
     static let shared = Solana()
+    static let maxWirePayloadLength = 1_232
+    static let maxBase58EncodedWirePayloadLength = 1_683
 
     private let urlSession = URLSession(configuration: .default)
     private let signatureLength = 64
@@ -1441,6 +1443,13 @@ final class Solana {
 
     func decodeMessage(_ message: String, asHex: Bool) -> Data? {
         return asHex ? WalletCrypto.hexData(string: message) : WalletCrypto.base58Decode(string: message)
+    }
+
+    func decodeTransactionMessage(_ message: String) -> Data? {
+        guard Self.isValidBase58EncodedWirePayload(message),
+              let messageData = decodeMessage(message, asHex: false),
+              messageData.count <= Self.maxWirePayloadLength else { return nil }
+        return messageData
     }
 
     func preparedSerializedTransactionForSignAndSend(serializedTransaction: String,
@@ -1787,7 +1796,12 @@ final class Solana {
     }
 
     private func parsedTransaction(serializedTransaction: String) -> Result<ParsedTransaction, SendTransactionError> {
+        guard Self.isValidBase58EncodedWirePayload(serializedTransaction) else {
+            return .failure(.invalidMessage)
+        }
+
         guard let transactionData = WalletCrypto.base58Decode(string: serializedTransaction),
+              transactionData.count <= Self.maxWirePayloadLength,
               let signaturesCount = transactionData.decodeLength(startingAt: transactionData.startIndex)
         else {
             return .failure(.invalidMessage)
@@ -1860,7 +1874,7 @@ final class Solana {
 
     private func preparedTransactionMessage(message: String,
                                            publicKey: String) -> Result<(messageData: Data, parsedMessage: SolanaWireMessage), SendTransactionError> {
-        guard let messageData = decodeMessage(message, asHex: false) else {
+        guard let messageData = decodeTransactionMessage(message) else {
             return .failure(.invalidMessage)
         }
 
@@ -1892,6 +1906,11 @@ final class Solana {
         return parsedMessage.accountKeys
             .prefix(parsedMessage.requiredSignaturesCount)
             .firstIndex(of: publicKeyData)
+    }
+
+    private static func isValidBase58EncodedWirePayload(_ payload: String) -> Bool {
+        // ceil(1_232 * log(256) / log(58))
+        return payload.utf8.count <= maxBase58EncodedWirePayloadLength
     }
 
 }
