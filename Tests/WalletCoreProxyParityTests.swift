@@ -7,6 +7,40 @@ import XCTest
 
 private typealias Vectors = WalletCoreProxyTestVectors
 
+@_silgen_name("bw_scrypt_romix_blocks")
+private func bwScryptROMixBlocks(_ inputWords: UnsafePointer<UInt32>?,
+                                 _ outputWords: UnsafeMutablePointer<UInt32>?,
+                                 _ n: Int,
+                                 _ r: Int,
+                                 _ p: Int) -> Int32
+
+private func littleEndianWords(_ data: Data) -> [UInt32] {
+    precondition(data.count.isMultiple(of: 4))
+
+    let bytes = Array(data)
+    var words = [UInt32](repeating: 0, count: bytes.count / 4)
+    for index in words.indices {
+        let offset = index * 4
+        words[index] = UInt32(bytes[offset])
+            | (UInt32(bytes[offset + 1]) << 8)
+            | (UInt32(bytes[offset + 2]) << 16)
+            | (UInt32(bytes[offset + 3]) << 24)
+    }
+    return words
+}
+
+private func dataFromLittleEndianWords(_ words: [UInt32]) -> Data {
+    var bytes = [UInt8]()
+    bytes.reserveCapacity(words.count * 4)
+    for word in words {
+        bytes.append(UInt8(word & 0xff))
+        bytes.append(UInt8((word >> 8) & 0xff))
+        bytes.append(UInt8((word >> 16) & 0xff))
+        bytes.append(UInt8((word >> 24) & 0xff))
+    }
+    return Data(bytes)
+}
+
 private func assertValidSolanaSignature(_ signature: Data,
                                         message: Data,
                                         publicKeyData: Data,
@@ -796,6 +830,88 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
         XCTAssertEqual(WalletCrypto.addressFromPublicKeyData(solanaPrefixedPublicKey, coin: .solana),
                        Vectors.solanaAllOnesPublicKeyAddress)
         XCTAssertEqual(WalletCrypto.addressFromPublicKeyData(invalidSolanaPrefixedPublicKey, coin: .solana), "")
+    }
+
+}
+
+final class ScryptROMixShimTests: XCTestCase {
+
+    private static let rfc7914ROMixInput = Vectors.data(hex:
+        "f7ce0b653d2d72a4108cf5abe912ffdd777616dbbb27a70e8204f3ae2d0f6fad" +
+        "89f68f4811d1e87bcc3bd7400a9ffd29094f0184639574f39ae5a1315217bcd7" +
+        "894991447213bb226c25b54da86370fbcd984380374666bb8ffcb5bf40c254b0" +
+        "67d27c51ce4ad5fed829c90b505a571b7f4d1cad6a523cda770e67bceaaf7e89")
+
+    private static let rfc7914ROMixOutput = Vectors.data(hex:
+        "79ccc193629debca047f0b70604bf6b62ce3dd4a9626e355fafc6198e6ea2b46" +
+        "d58413673b99b029d665c357601fb426a0b2f4bba200ee9f0a43d19b571a9c71" +
+        "ef1142e65d5a266fddca832ce59faa7cac0b9cf1be2bffca300d01ee387619c4" +
+        "ae12fd4438f203a0e4e1c47ec314861f4e9087cb33396a6873e8f9d2539a4b8e")
+
+    func testROMixMatchesRFC7914Vector() {
+        let inputWords = littleEndianWords(Self.rfc7914ROMixInput)
+        var outputWords = [UInt32](repeating: 0, count: inputWords.count)
+
+        let status = inputWords.withUnsafeBufferPointer { input in
+            outputWords.withUnsafeMutableBufferPointer { output in
+                bwScryptROMixBlocks(input.baseAddress, output.baseAddress, 16, 1, 1)
+            }
+        }
+
+        XCTAssertEqual(status, 1)
+        XCTAssertEqual(dataFromLittleEndianWords(outputWords), Self.rfc7914ROMixOutput)
+    }
+
+    func testROMixProcessesParallelBlocksIndependently() {
+        var inputData = Data()
+        inputData.append(Self.rfc7914ROMixInput)
+        inputData.append(Self.rfc7914ROMixInput)
+        var expectedOutput = Data()
+        expectedOutput.append(Self.rfc7914ROMixOutput)
+        expectedOutput.append(Self.rfc7914ROMixOutput)
+
+        let inputWords = littleEndianWords(inputData)
+        var outputWords = [UInt32](repeating: 0, count: inputWords.count)
+
+        let status = inputWords.withUnsafeBufferPointer { input in
+            outputWords.withUnsafeMutableBufferPointer { output in
+                bwScryptROMixBlocks(input.baseAddress, output.baseAddress, 16, 1, 2)
+            }
+        }
+
+        XCTAssertEqual(status, 1)
+        XCTAssertEqual(dataFromLittleEndianWords(outputWords), expectedOutput)
+    }
+
+    func testROMixRejectsInvalidInputs() {
+        let inputWords = littleEndianWords(Self.rfc7914ROMixInput)
+        var outputWords = [UInt32](repeating: 0, count: inputWords.count)
+
+        let nilInputStatus = outputWords.withUnsafeMutableBufferPointer { output in
+            bwScryptROMixBlocks(nil, output.baseAddress, 16, 1, 1)
+        }
+        XCTAssertEqual(nilInputStatus, 0)
+
+        let nilOutputStatus = inputWords.withUnsafeBufferPointer { input in
+            bwScryptROMixBlocks(input.baseAddress, nil, 16, 1, 1)
+        }
+        XCTAssertEqual(nilOutputStatus, 0)
+
+        let invalidParameterCases = [
+            (n: 1, r: 1, p: 1),
+            (n: 3, r: 1, p: 1),
+            (n: 16, r: 0, p: 1),
+            (n: 16, r: 1, p: 0),
+        ]
+
+        for invalidCase in invalidParameterCases {
+            let status = inputWords.withUnsafeBufferPointer { input in
+                outputWords.withUnsafeMutableBufferPointer { output in
+                    bwScryptROMixBlocks(input.baseAddress, output.baseAddress, invalidCase.n, invalidCase.r, invalidCase.p)
+                }
+            }
+            XCTAssertEqual(status, 0, "Expected rejection for n=\(invalidCase.n), r=\(invalidCase.r), p=\(invalidCase.p)")
+        }
     }
 
 }

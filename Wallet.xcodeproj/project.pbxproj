@@ -495,6 +495,13 @@
 		2F4D00772FAA000000000000 /* big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* big_wallet_secp256k1_shim.c */; };
 		2F4D00782FAA000000000000 /* big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* big_wallet_secp256k1_shim.c */; };
 		2F4D00792FAA000000000000 /* big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* big_wallet_secp256k1_shim.c */; };
+		2F4D00A12FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */; };
+		2F4D00A22FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */; };
+		2F4D00A32FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */; };
+		2F4D00A42FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */; };
+		2F4D00A52FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */; };
+		2F4D00A62FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */; };
+		2F4D00A72FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */; };
 		2F4D007C2FAA000000000000 /* precomputed_ecmult.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007A2FAA000000000000 /* precomputed_ecmult.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
 		2F4D007D2FAA000000000000 /* precomputed_ecmult.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007A2FAA000000000000 /* precomputed_ecmult.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
 		2F4D007E2FAA000000000000 /* precomputed_ecmult.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007A2FAA000000000000 /* precomputed_ecmult.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
@@ -1198,6 +1205,7 @@
 		2F4C00002FA8000000000000 /* WalletCoreProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxy.swift; sourceTree = "<group>"; };
 		2F4D00702FAA000000000000 /* secp256k1.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Secp256k1Backend/secp256k1/src/secp256k1.c; sourceTree = "<group>"; };
 		2F4D00712FAA000000000000 /* big_wallet_secp256k1_shim.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Secp256k1Backend/big_wallet_secp256k1_shim.c; sourceTree = "<group>"; };
+		2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ScryptBackend/big_wallet_scrypt_shim.c; sourceTree = "<group>"; };
 		2F4D007A2FAA000000000000 /* precomputed_ecmult.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Secp256k1Backend/secp256k1/src/precomputed_ecmult.c; sourceTree = "<group>"; };
 		2F4D007B2FAA000000000000 /* precomputed_ecmult_gen.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c; sourceTree = "<group>"; };
 		2F4C00102FA8000000000000 /* WalletCoreProxyParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyParityTests.swift; sourceTree = "<group>"; };
@@ -2636,6 +2644,7 @@
 				2F4D007A2FAA000000000000 /* precomputed_ecmult.c */,
 				2F4D007B2FAA000000000000 /* precomputed_ecmult_gen.c */,
 				2F4D00712FAA000000000000 /* big_wallet_secp256k1_shim.c */,
+				2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */,
 			);
 			path = WalletCoreProxy;
 			sourceTree = "<group>";
@@ -3325,6 +3334,7 @@
 				2F4D007E2FAA000000000000 /* precomputed_ecmult.c in Sources */,
 				2F4D00822FAA000000000000 /* precomputed_ecmult_gen.c in Sources */,
 				2F4D00782FAA000000000000 /* big_wallet_secp256k1_shim.c in Sources */,
+				2F4D00A32FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */,
 				2CF9B1112D526F9900B5CE82 /* String.swift in Sources */,
 				2C773FC92D53A5A300879A1F /* MultipleResponseToExtension.swift in Sources */,
 				2C77401B2D53CBEC00879A1F /* AccountTableViewCell.swift in Sources */,
@@ -3375,6 +3385,7 @@
 				2F4D007C2FAA000000000000 /* precomputed_ecmult.c in Sources */,
 				2F4D00802FAA000000000000 /* precomputed_ecmult_gen.c in Sources */,
 				2F4D00762FAA000000000000 /* big_wallet_secp256k1_shim.c in Sources */,
+				2F4D00A12FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */,
 				2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */,
 				2C9B2C6D2D38416800D56607 /* SharedDefaults.swift in Sources */,
 				2CC0CDBE2692027E0072922A /* PriceService.swift in Sources */,
@@ -3536,6 +3547,7 @@
 				2F4D007D2FAA000000000000 /* precomputed_ecmult.c in Sources */,
 				2F4D00812FAA000000000000 /* precomputed_ecmult_gen.c in Sources */,
 				2F4D00772FAA000000000000 /* big_wallet_secp256k1_shim.c in Sources */,
+				2F4D00A22FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */,
 				2C90E62327B2ED2D00C8991E /* SafariRequest+Helpers.swift in Sources */,
 				2CC79DF92AFD4BD6002B5A2D /* TransactionInspector.swift in Sources */,
 				2C2AA1D628AFB1AD00E35DBF /* MultipleResponseToExtension.swift in Sources */,
@@ -3598,6 +3610,7 @@
 				2F2A0000000000000000001E /* WalletsManagerPreviewTests.swift in Sources */,
 				2F4C00112FA8000000000000 /* WalletCoreProxyParityTests.swift in Sources */,
 				2F4C00152FA9000000000000 /* WalletCoreProxyTestVectors.swift in Sources */,
+				2F4D00A52FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */,
 				2C86125B2B76BDF300B22794 /* TransactionInspectorTests.swift in Sources */,
 				2C0000022FA7000000000001 /* BigUIntTests.swift in Sources */,
 				2C86125D2B76BE2800B22794 /* Tests_iOS.swift in Sources */,
@@ -3676,6 +3689,7 @@
 				2F4D007F2FAA000000000000 /* precomputed_ecmult.c in Sources */,
 				2F4D00832FAA000000000000 /* precomputed_ecmult_gen.c in Sources */,
 				2F4D00792FAA000000000000 /* big_wallet_secp256k1_shim.c in Sources */,
+				2F4D00A42FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */,
 				2CF2676F1861169B92F690A4 /* Transaction.swift in Sources */,
 				2C60964FCD7D7729CC2F5390 /* SafariRequest+Helpers.swift in Sources */,
 				2CD179BB4ADFB6932786B2B0 /* PlatformSpecificImage.swift in Sources */,
@@ -3734,6 +3748,7 @@
 				2F2A0000000000000000001F /* WalletsManagerPreviewTests.swift in Sources */,
 				2F4C00122FA8000000000000 /* WalletCoreProxyParityTests.swift in Sources */,
 				2F4C00162FA9000000000000 /* WalletCoreProxyTestVectors.swift in Sources */,
+				2F4D00A62FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */,
 				2CE02C832BAA0F9800381D70 /* TransactionInspectorTests.swift in Sources */,
 				2C0000032FA7000000000001 /* BigUIntTests.swift in Sources */,
 				2CE02C7D2BAA0F6700381D70 /* Tests_macOS.swift in Sources */,
@@ -3765,6 +3780,7 @@
 				2F2A00000000000000000020 /* WalletsManagerPreviewTests.swift in Sources */,
 				2F4C00132FA8000000000000 /* WalletCoreProxyParityTests.swift in Sources */,
 				2F4C00172FA9000000000000 /* WalletCoreProxyTestVectors.swift in Sources */,
+				2F4D00A72FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */,
 				2CF9B10F2D526F7C00B5CE82 /* TransactionInspectorTests.swift in Sources */,
 				2C0000042FA7000000000001 /* BigUIntTests.swift in Sources */,
 				2CADA62C2D5271BA002C34A8 /* Tests_visionOS.swift in Sources */,
