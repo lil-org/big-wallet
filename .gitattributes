@@ -1,0 +1,2 @@
+Shared/WalletCoreProxy/Secp256k1Backend/** linguist-vendored
+Shared/WalletCoreProxy/ScryptBackend/** linguist-vendored
