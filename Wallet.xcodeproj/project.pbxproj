@@ -308,7 +308,6 @@
 		2C9B2C6E2D38416800D56607 /* SharedDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B2C6A2D38415F00D56607 /* SharedDefaults.swift */; };
 		2C9B55D12AF2AE4B008BE899 /* BundledNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */; };
 		2C9B55D22AF2AE4B008BE899 /* BundledNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */; };
-		2C9B55D32AF2AE4B008BE899 /* BundledNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */; };
 		2C9C4393DBB7A727DB0990AD /* NSPasteboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0B3F426A0DAA900488D92 /* NSPasteboard.swift */; };
 		2C9F0B6826BDCB2E008FA3D6 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */; };
 		2CA151C7D2BD0E90CDFDC181 /* EthereumResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BDB27B5AC5400234393 /* EthereumResponseToExtension.swift */; };
@@ -383,9 +382,6 @@
 		2CE9A8B87F4479A4959634F2 /* ImportViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995412674C4B900A8E370 /* ImportViewController.swift */; };
 		2CEC9851C63AEBCF8E53ABFD /* InpageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BD427B5806200234393 /* InpageProvider.swift */; };
 		2CED15F879B735A3E1559E29 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C917428267D2A6E00049075 /* Keychain.swift */; };
-		2CED86A52AF00BC9006F9E26 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86A42AF00BC9006F9E26 /* main.swift */; };
-		2CED86B02AF0167F006F9E26 /* EIP155ChainData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86AF2AF0167F006F9E26 /* EIP155ChainData.swift */; };
-		2CED86B32AF01F99006F9E26 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
 		2CED86B62AF17D5A006F9E26 /* BundledNodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B52AF17D5A006F9E26 /* BundledNodes.swift */; };
 		2CED86B72AF17D5A006F9E26 /* BundledNodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B52AF17D5A006F9E26 /* BundledNodes.swift */; };
 		2CED86BA2AF1820E006F9E26 /* Nodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B92AF1820E006F9E26 /* Nodes.swift */; };
@@ -799,7 +795,6 @@
 		2CE377CB2D3A748D00288FFB /* WalletsMetadataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsMetadataService.swift; sourceTree = "<group>"; };
 		2CE3D011267F73C00032A62E /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
 		2CE9A7772BADC59C00579BF7 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
-		2CED86A22AF00BC9006F9E26 /* Tools */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = Tools; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CED86A42AF00BC9006F9E26 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		2CED86A92AF00F56006F9E26 /* bundled-networks.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "bundled-networks.json"; sourceTree = "<group>"; };
 		2CED86AF2AF0167F006F9E26 /* EIP155ChainData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EIP155ChainData.swift; sourceTree = "<group>"; };
@@ -1284,13 +1279,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		2CED869F2AF00BC9006F9E26 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		2CF9B1062D526F4D00B5CE82 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -1397,7 +1385,6 @@
 				2C5FF96F26C84F7B00B32ACC /* Big Wallet.app */,
 				2C09CB9F273979C1009AD39B /* Safari macOS.appex */,
 				2CCEB82D27594E2A00768473 /* Safari iOS.appex */,
-				2CED86A22AF00BC9006F9E26 /* Tools */,
 				2C8612512B76BDDC00B22794 /* Tests iOS.xctest */,
 				2CE02C7A2BAA0F6700381D70 /* Tests macOS.xctest */,
 				2C17BDCA2D3D007E0015C58B /* Big Wallet.app */,
@@ -2810,22 +2797,6 @@
 			productReference = 2CE02C7A2BAA0F6700381D70 /* Tests macOS.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		2CED86A12AF00BC9006F9E26 /* Tools */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 2CED86A82AF00BC9006F9E26 /* Build configuration list for PBXNativeTarget "Tools" */;
-			buildPhases = (
-				2CED869E2AF00BC9006F9E26 /* Sources */,
-				2CED869F2AF00BC9006F9E26 /* Frameworks */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = Tools;
-			productName = tools;
-			productReference = 2CED86A22AF00BC9006F9E26 /* Tools */;
-			productType = "com.apple.product-type.tool";
-		};
 		2CF9B1082D526F4D00B5CE82 /* Tests visionOS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2CF9B10C2D526F4D00B5CE82 /* Build configuration list for PBXNativeTarget "Tests visionOS" */;
@@ -2882,9 +2853,6 @@
 					2CE02C792BAA0F6700381D70 = {
 						CreatedOnToolsVersion = 15.3;
 						TestTargetID = 2C19953B2674C4B900A8E370;
-					};
-					2CED86A12AF00BC9006F9E26 = {
-						CreatedOnToolsVersion = 15.0.1;
 					};
 					2CF9B1082D526F4D00B5CE82 = {
 						CreatedOnToolsVersion = 16.2;
@@ -2948,7 +2916,6 @@
 				2CE02C792BAA0F6700381D70 /* Tests macOS */,
 				2C8612502B76BDDC00B22794 /* Tests iOS */,
 				2CF9B1082D526F4D00B5CE82 /* Tests visionOS */,
-				2CED86A12AF00BC9006F9E26 /* Tools */,
 			);
 		};
 /* End PBXProject section */
@@ -3724,17 +3691,6 @@
 				2CE02C832BAA0F9800381D70 /* TransactionInspectorTests.swift in Sources */,
 				2C0000032FA7000000000001 /* BigUIntTests.swift in Sources */,
 				2CE02C7D2BAA0F6700381D70 /* Tests_macOS.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		2CED869E2AF00BC9006F9E26 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				2C9B55D32AF2AE4B008BE899 /* BundledNetwork.swift in Sources */,
-				2CED86B02AF0167F006F9E26 /* EIP155ChainData.swift in Sources */,
-				2CED86A52AF00BC9006F9E26 /* main.swift in Sources */,
-				2CED86B32AF01F99006F9E26 /* String.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -4589,43 +4545,6 @@
 			};
 			name = Release;
 		};
-		2CED86A62AF00BC9006F9E26 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 137;
-				DEAD_CODE_STRIPPING = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_VERSION = 5.0;
-			};
-			name = Debug;
-		};
-		2CED86A72AF00BC9006F9E26 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 137;
-				DEAD_CODE_STRIPPING = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
 		2CF9B10D2D526F4D00B5CE82 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -4768,15 +4687,6 @@
 			buildConfigurations = (
 				2CE02C812BAA0F6700381D70 /* Debug */,
 				2CE02C822BAA0F6700381D70 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		2CED86A82AF00BC9006F9E26 /* Build configuration list for PBXNativeTarget "Tools" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				2CED86A62AF00BC9006F9E26 /* Debug */,
-				2CED86A72AF00BC9006F9E26 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
