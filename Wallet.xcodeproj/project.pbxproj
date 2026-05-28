@@ -126,7 +126,6 @@
 		2C603D0226B6E13F00956955 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
 		2C6054872D529A9A00779570 /* Safari visionOS.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2C60546F2D529A9A00779570 /* Safari visionOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2C60964FCD7D7729CC2F5390 /* SafariRequest+Helpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E62127B2ED2D00C8991E /* SafariRequest+Helpers.swift */; };
-		2C622BC42BF3C52F0003B932 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C622BC32BF3C52F0003B932 /* main.swift */; };
 		2C6518B87202BBF3CAEF571C /* ReviewRequester.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CAA412426C7CD93009F3535 /* ReviewRequester.swift */; };
 		2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6706A4267A6BFE006AAEF2 /* Bundle.swift */; };
 		2C6EE1B4A5956F30688F26A6 /* liquid_glass_icon_wip.icon in Resources */ = {isa = PBXBuildFile; fileRef = 2C9264282E11D32900FBF476 /* liquid_glass_icon_wip.icon */; };
@@ -332,9 +331,6 @@
 		2CB61F26437C2FF33819F09D /* GasService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C4C268A033100D0926A /* GasService.swift */; };
 		2CB7A3F12B29CD82004BEE3A /* macos_specific_content.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CB7A3F02B29CD7D004BEE3A /* macos_specific_content.js */; };
 		2CB7CB57CAADD72603F85560 /* NSAttributedString.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C420DF02BB5EA69004F1D56 /* NSAttributedString.swift */; };
-		2CB8BDA02C1F6ACE006010CC /* StringTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB8BD9F2C1F6ACE006010CC /* StringTask.swift */; };
-		2CB8BDA32C1F6B16006010CC /* TranslateStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB8BDA22C1F6B16006010CC /* TranslateStrings.swift */; };
-		2CB8BDA52C1F6B24006010CC /* TranslateMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB8BDA42C1F6B24006010CC /* TranslateMetadata.swift */; };
 		2CB9B56A2FA24B0000F094FB /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB9B5672FA24B0000F094FB /* AppDelegate.swift */; };
 		2CB9B56B2FA24B0000F094FB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2CB9B5682FA24B0000F094FB /* Assets.xcassets */; };
 		2CC0CDBE2692027E0072922A /* PriceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC0CDBD2692027E0072922A /* PriceService.swift */; };
@@ -428,11 +424,6 @@
 		2CF255BA275A749300AE54B9 /* ApproveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF255B9275A749300AE54B9 /* ApproveViewController.swift */; };
 		2CF2676F1861169B92F690A4 /* Transaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D011267F73C00032A62E /* Transaction.swift */; };
 		2CF3FDB5725A4C5558C4F4A4 /* ResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C773F61274523DC007B04E7 /* ResponseToExtension.swift */; };
-		2CF429512C1DBEEF00AD303A /* MetadataKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF429502C1DBEEF00AD303A /* MetadataKind.swift */; };
-		2CF429532C1DBEF800AD303A /* AI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF429522C1DBEF800AD303A /* AI.swift */; };
-		2CF429552C1DBF0300AD303A /* MetadataTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF429542C1DBF0300AD303A /* MetadataTask.swift */; };
-		2CF429572C1DBF1100AD303A /* Language.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF429562C1DBF1100AD303A /* Language.swift */; };
-		2CF429592C1DBFCF00AD303A /* Data.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF429582C1DBFCF00AD303A /* Data.swift */; };
 		2CF6AD6F993BC4281AA0DD8D /* ApproveTransactionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C462689E6D400D0926A /* ApproveTransactionViewController.swift */; };
 		2CF70F8CE636A5E7166FAED7 /* Window.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09D32675184700993638 /* Window.swift */; };
 		2CF8ED32DBA6901CB4F2D3C4 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 2CE9A7772BADC59C00579BF7 /* Localizable.xcstrings */; };
@@ -487,29 +478,12 @@
 		2F4C00032FA8000000000000 /* WalletCoreProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00002FA8000000000000 /* WalletCoreProxy.swift */; };
 		2F4C00042FA8000000000000 /* WalletCoreProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00002FA8000000000000 /* WalletCoreProxy.swift */; };
 		2F4C00052FA8000000000000 /* WalletCoreProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00002FA8000000000000 /* WalletCoreProxy.swift */; };
-		2F4D00722FAA000000000000 /* secp256k1.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00702FAA000000000000 /* secp256k1.c */; settings = {COMPILER_FLAGS = "-DENABLE_MODULE_RECOVERY=1 -Wno-unused-function"; }; };
-		2F4D00732FAA000000000000 /* secp256k1.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00702FAA000000000000 /* secp256k1.c */; settings = {COMPILER_FLAGS = "-DENABLE_MODULE_RECOVERY=1 -Wno-unused-function"; }; };
-		2F4D00742FAA000000000000 /* secp256k1.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00702FAA000000000000 /* secp256k1.c */; settings = {COMPILER_FLAGS = "-DENABLE_MODULE_RECOVERY=1 -Wno-unused-function"; }; };
-		2F4D00752FAA000000000000 /* secp256k1.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00702FAA000000000000 /* secp256k1.c */; settings = {COMPILER_FLAGS = "-DENABLE_MODULE_RECOVERY=1 -Wno-unused-function"; }; };
-		2F4D00762FAA000000000000 /* big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* big_wallet_secp256k1_shim.c */; };
-		2F4D00772FAA000000000000 /* big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* big_wallet_secp256k1_shim.c */; };
-		2F4D00782FAA000000000000 /* big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* big_wallet_secp256k1_shim.c */; };
-		2F4D00792FAA000000000000 /* big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* big_wallet_secp256k1_shim.c */; };
-		2F4D00A12FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */; };
-		2F4D00A22FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */; };
-		2F4D00A32FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */; };
-		2F4D00A42FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */; };
-		2F4D00A52FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */; };
-		2F4D00A62FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */; };
-		2F4D00A72FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */; };
-		2F4D007C2FAA000000000000 /* precomputed_ecmult.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007A2FAA000000000000 /* precomputed_ecmult.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
-		2F4D007D2FAA000000000000 /* precomputed_ecmult.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007A2FAA000000000000 /* precomputed_ecmult.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
-		2F4D007E2FAA000000000000 /* precomputed_ecmult.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007A2FAA000000000000 /* precomputed_ecmult.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
-		2F4D007F2FAA000000000000 /* precomputed_ecmult.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007A2FAA000000000000 /* precomputed_ecmult.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
-		2F4D00802FAA000000000000 /* precomputed_ecmult_gen.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007B2FAA000000000000 /* precomputed_ecmult_gen.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
-		2F4D00812FAA000000000000 /* precomputed_ecmult_gen.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007B2FAA000000000000 /* precomputed_ecmult_gen.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
-		2F4D00822FAA000000000000 /* precomputed_ecmult_gen.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007B2FAA000000000000 /* precomputed_ecmult_gen.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
-		2F4D00832FAA000000000000 /* precomputed_ecmult_gen.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007B2FAA000000000000 /* precomputed_ecmult_gen.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
+		2F4C00112FA8000000000000 /* WalletCoreProxyParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00102FA8000000000000 /* WalletCoreProxyParityTests.swift */; };
+		2F4C00122FA8000000000000 /* WalletCoreProxyParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00102FA8000000000000 /* WalletCoreProxyParityTests.swift */; };
+		2F4C00132FA8000000000000 /* WalletCoreProxyParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00102FA8000000000000 /* WalletCoreProxyParityTests.swift */; };
+		2F4C00152FA9000000000000 /* WalletCoreProxyTestVectors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00142FA9000000000000 /* WalletCoreProxyTestVectors.swift */; };
+		2F4C00162FA9000000000000 /* WalletCoreProxyTestVectors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00142FA9000000000000 /* WalletCoreProxyTestVectors.swift */; };
+		2F4C00172FA9000000000000 /* WalletCoreProxyTestVectors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00142FA9000000000000 /* WalletCoreProxyTestVectors.swift */; };
 		2F4D00012FAA000000000000 /* WalletCoreProxyStoredKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00002FAA000000000000 /* WalletCoreProxyStoredKey.swift */; };
 		2F4D00022FAA000000000000 /* WalletCoreProxyStoredKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00002FAA000000000000 /* WalletCoreProxyStoredKey.swift */; };
 		2F4D00032FAA000000000000 /* WalletCoreProxyStoredKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00002FAA000000000000 /* WalletCoreProxyStoredKey.swift */; };
@@ -538,12 +512,29 @@
 		2F4D00622FAA000000000000 /* WalletCoreProxyBIP39WordList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00602FAA000000000000 /* WalletCoreProxyBIP39WordList.swift */; };
 		2F4D00632FAA000000000000 /* WalletCoreProxyBIP39WordList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00602FAA000000000000 /* WalletCoreProxyBIP39WordList.swift */; };
 		2F4D00642FAA000000000000 /* WalletCoreProxyBIP39WordList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00602FAA000000000000 /* WalletCoreProxyBIP39WordList.swift */; };
-		2F4C00112FA8000000000000 /* WalletCoreProxyParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00102FA8000000000000 /* WalletCoreProxyParityTests.swift */; };
-		2F4C00122FA8000000000000 /* WalletCoreProxyParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00102FA8000000000000 /* WalletCoreProxyParityTests.swift */; };
-		2F4C00132FA8000000000000 /* WalletCoreProxyParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00102FA8000000000000 /* WalletCoreProxyParityTests.swift */; };
-		2F4C00152FA9000000000000 /* WalletCoreProxyTestVectors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00142FA9000000000000 /* WalletCoreProxyTestVectors.swift */; };
-		2F4C00162FA9000000000000 /* WalletCoreProxyTestVectors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00142FA9000000000000 /* WalletCoreProxyTestVectors.swift */; };
-		2F4C00172FA9000000000000 /* WalletCoreProxyTestVectors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00142FA9000000000000 /* WalletCoreProxyTestVectors.swift */; };
+		2F4D00722FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00702FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c */; settings = {COMPILER_FLAGS = "-DENABLE_MODULE_RECOVERY=1 -Wno-unused-function"; }; };
+		2F4D00732FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00702FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c */; settings = {COMPILER_FLAGS = "-DENABLE_MODULE_RECOVERY=1 -Wno-unused-function"; }; };
+		2F4D00742FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00702FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c */; settings = {COMPILER_FLAGS = "-DENABLE_MODULE_RECOVERY=1 -Wno-unused-function"; }; };
+		2F4D00752FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00702FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c */; settings = {COMPILER_FLAGS = "-DENABLE_MODULE_RECOVERY=1 -Wno-unused-function"; }; };
+		2F4D00762FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c */; };
+		2F4D00772FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c */; };
+		2F4D00782FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c */; };
+		2F4D00792FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c */; };
+		2F4D007C2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007A2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
+		2F4D007D2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007A2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
+		2F4D007E2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007A2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
+		2F4D007F2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007A2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
+		2F4D00802FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007B2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
+		2F4D00812FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007B2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
+		2F4D00822FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007B2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
+		2F4D00832FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007B2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
+		2F4D00A12FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; };
+		2F4D00A22FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; };
+		2F4D00A32FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; };
+		2F4D00A42FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; };
+		2F4D00A52FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; };
+		2F4D00A62FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; };
+		2F4D00A72FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; };
 		2F5E10012FA5000000F0000 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */; };
 		2F5E10022FA5000000F0000 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */; };
 		2F5E10032FA5000000F0000 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */; };
@@ -624,15 +615,6 @@
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
-		};
-		2C622BBF2BF3C52F0003B932 /* CopyFiles */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = /usr/share/man/man1/;
-			dstSubfolderSpec = 0;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 1;
 		};
 		2CB9B5652FA24A0A00F094FB /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -731,8 +713,6 @@
 		2C60546F2D529A9A00779570 /* Safari visionOS.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Safari visionOS.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C6054962D529B3200779570 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2C6054A32D529B7C00779570 /* Safari visionOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Safari visionOS.entitlements"; sourceTree = "<group>"; };
-		2C622BC12BF3C52F0003B932 /* Translate */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = Translate; sourceTree = BUILT_PRODUCTS_DIR; };
-		2C622BC32BF3C52F0003B932 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		2C6706A4267A6BFE006AAEF2 /* Bundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bundle.swift; sourceTree = "<group>"; };
 		2C6F6D5928273FE500D6E8FB /* EditAccountsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditAccountsViewController.swift; sourceTree = "<group>"; };
 		2C6F6D5B2827434800D6E8FB /* PreviewAccountTableViewCell.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = PreviewAccountTableViewCell.xib; sourceTree = "<group>"; };
@@ -789,9 +769,6 @@
 		2CB4031A281C99C800BAEBEE /* AccountsHeaderRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsHeaderRowView.swift; sourceTree = "<group>"; };
 		2CB4031C281D745D00BAEBEE /* NSTableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSTableView.swift; sourceTree = "<group>"; };
 		2CB7A3F02B29CD7D004BEE3A /* macos_specific_content.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = macos_specific_content.js; sourceTree = "<group>"; };
-		2CB8BD9F2C1F6ACE006010CC /* StringTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringTask.swift; sourceTree = "<group>"; };
-		2CB8BDA22C1F6B16006010CC /* TranslateStrings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslateStrings.swift; sourceTree = "<group>"; };
-		2CB8BDA42C1F6B24006010CC /* TranslateMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslateMetadata.swift; sourceTree = "<group>"; };
 		2CB9B54F2FA23F0600F094FB /* Big Wallet Helper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Big Wallet Helper.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CB9B5672FA24B0000F094FB /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		2CB9B5682FA24B0000F094FB /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -835,11 +812,6 @@
 		2CF255B5275A746000AE54B9 /* AccountsListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsListViewController.swift; sourceTree = "<group>"; };
 		2CF255B7275A748300AE54B9 /* ApproveTransactionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveTransactionViewController.swift; sourceTree = "<group>"; };
 		2CF255B9275A749300AE54B9 /* ApproveViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproveViewController.swift; sourceTree = "<group>"; };
-		2CF429502C1DBEEF00AD303A /* MetadataKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataKind.swift; sourceTree = "<group>"; };
-		2CF429522C1DBEF800AD303A /* AI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AI.swift; sourceTree = "<group>"; };
-		2CF429542C1DBF0300AD303A /* MetadataTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataTask.swift; sourceTree = "<group>"; };
-		2CF429562C1DBF1100AD303A /* Language.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Language.swift; sourceTree = "<group>"; };
-		2CF429582C1DBFCF00AD303A /* Data.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Data.swift; sourceTree = "<group>"; };
 		2CF4295A2C1DC00700AD303A /* keywords.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = keywords.txt; sourceTree = "<group>"; };
 		2CF4295B2C1DC00700AD303A /* release_notes_ru.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = release_notes_ru.txt; sourceTree = "<group>"; };
 		2CF4295C2C1DC00700AD303A /* description_ru.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = description_ru.txt; sourceTree = "<group>"; };
@@ -1231,20 +1203,20 @@
 		2F2A00000000000000000019 /* WalletsManagerPrivateKeyImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsManagerPrivateKeyImportTests.swift; sourceTree = "<group>"; };
 		2F2A0000000000000000001D /* WalletsManagerPreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsManagerPreviewTests.swift; sourceTree = "<group>"; };
 		2F4C00002FA8000000000000 /* WalletCoreProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxy.swift; sourceTree = "<group>"; };
+		2F4C00102FA8000000000000 /* WalletCoreProxyParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyParityTests.swift; sourceTree = "<group>"; };
+		2F4C00142FA9000000000000 /* WalletCoreProxyTestVectors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyTestVectors.swift; sourceTree = "<group>"; };
 		2F4D00002FAA000000000000 /* WalletCoreProxyStoredKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyStoredKey.swift; sourceTree = "<group>"; };
 		2F4D00102FAA000000000000 /* WalletCoreProxyEncoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyEncoding.swift; sourceTree = "<group>"; };
 		2F4D00202FAA000000000000 /* WalletCoreProxyEthereum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyEthereum.swift; sourceTree = "<group>"; };
 		2F4D00302FAA000000000000 /* WalletCoreProxyCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyCrypto.swift; sourceTree = "<group>"; };
 		2F4D00402FAA000000000000 /* WalletCoreProxySecp256k1.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxySecp256k1.swift; sourceTree = "<group>"; };
-		2F4D00702FAA000000000000 /* secp256k1.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Secp256k1Backend/secp256k1/src/secp256k1.c; sourceTree = "<group>"; };
-		2F4D00712FAA000000000000 /* big_wallet_secp256k1_shim.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Secp256k1Backend/big_wallet_secp256k1_shim.c; sourceTree = "<group>"; };
-		2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ScryptBackend/big_wallet_scrypt_shim.c; sourceTree = "<group>"; };
-		2F4D007A2FAA000000000000 /* precomputed_ecmult.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Secp256k1Backend/secp256k1/src/precomputed_ecmult.c; sourceTree = "<group>"; };
-		2F4D007B2FAA000000000000 /* precomputed_ecmult_gen.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c; sourceTree = "<group>"; };
 		2F4D00502FAA000000000000 /* WalletCoreProxyHD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyHD.swift; sourceTree = "<group>"; };
 		2F4D00602FAA000000000000 /* WalletCoreProxyBIP39WordList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyBIP39WordList.swift; sourceTree = "<group>"; };
-		2F4C00102FA8000000000000 /* WalletCoreProxyParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyParityTests.swift; sourceTree = "<group>"; };
-		2F4C00142FA9000000000000 /* WalletCoreProxyTestVectors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyTestVectors.swift; sourceTree = "<group>"; };
+		2F4D00702FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Secp256k1Backend/secp256k1/src/secp256k1.c; sourceTree = "<group>"; };
+		2F4D00712FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Secp256k1Backend/big_wallet_secp256k1_shim.c; sourceTree = "<group>"; };
+		2F4D007A2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Secp256k1Backend/secp256k1/src/precomputed_ecmult.c; sourceTree = "<group>"; };
+		2F4D007B2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c; sourceTree = "<group>"; };
+		2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ScryptBackend/big_wallet_scrypt_shim.c; sourceTree = "<group>"; };
 		2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImageLoader.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -1278,13 +1250,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		2C60546C2D529A9A00779570 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		2C622BBE2BF3C52F0003B932 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -1418,7 +1383,6 @@
 				2CADA62A2D527187002C34A8 /* Tests visionOS */,
 				2CE02C7B2BAA0F6700381D70 /* Tests macOS */,
 				2CF4294F2C1DBE7400AD303A /* app_store */,
-				2C622BC22BF3C52F0003B932 /* translate */,
 				2CF965C42BF4D778001E9D1B /* fastlane */,
 				2CB9B5502FA23F0600F094FB /* Big Wallet Ambient */,
 				2C19953D2674C4B900A8E370 /* Products */,
@@ -1436,7 +1400,6 @@
 				2CED86A22AF00BC9006F9E26 /* Tools */,
 				2C8612512B76BDDC00B22794 /* Tests iOS.xctest */,
 				2CE02C7A2BAA0F6700381D70 /* Tests macOS.xctest */,
-				2C622BC12BF3C52F0003B932 /* Translate */,
 				2C17BDCA2D3D007E0015C58B /* Big Wallet.app */,
 				2CF9B1092D526F4D00B5CE82 /* Tests visionOS.xctest */,
 				2C60546F2D529A9A00779570 /* Safari visionOS.appex */,
@@ -1557,17 +1520,6 @@
 				2C6054962D529B3200779570 /* Info.plist */,
 			);
 			path = "Safari visionOS";
-			sourceTree = "<group>";
-		};
-		2C622BC22BF3C52F0003B932 /* translate */ = {
-			isa = PBXGroup;
-			children = (
-				2C622BC32BF3C52F0003B932 /* main.swift */,
-				2CB8BD9F2C1F6ACE006010CC /* StringTask.swift */,
-				2CF429542C1DBF0300AD303A /* MetadataTask.swift */,
-				2CB8BDA12C1F6B04006010CC /* helpers */,
-			);
-			path = translate;
 			sourceTree = "<group>";
 		};
 		2C6706A7267A6C04006AAEF2 /* Extensions */ = {
@@ -1715,19 +1667,6 @@
 				2C09CBAC273979C1009AD39B /* content.js */,
 			);
 			path = Resources;
-			sourceTree = "<group>";
-		};
-		2CB8BDA12C1F6B04006010CC /* helpers */ = {
-			isa = PBXGroup;
-			children = (
-				2CB8BDA22C1F6B16006010CC /* TranslateStrings.swift */,
-				2CB8BDA42C1F6B24006010CC /* TranslateMetadata.swift */,
-				2CF429502C1DBEEF00AD303A /* MetadataKind.swift */,
-				2CF429522C1DBEF800AD303A /* AI.swift */,
-				2CF429582C1DBFCF00AD303A /* Data.swift */,
-				2CF429562C1DBF1100AD303A /* Language.swift */,
-			);
-			path = helpers;
 			sourceTree = "<group>";
 		};
 		2CB9B5502FA23F0600F094FB /* Big Wallet Ambient */ = {
@@ -2680,11 +2619,11 @@
 				2F4D00202FAA000000000000 /* WalletCoreProxyEthereum.swift */,
 				2F4D00302FAA000000000000 /* WalletCoreProxyCrypto.swift */,
 				2F4D00402FAA000000000000 /* WalletCoreProxySecp256k1.swift */,
-				2F4D00702FAA000000000000 /* secp256k1.c */,
-				2F4D007A2FAA000000000000 /* precomputed_ecmult.c */,
-				2F4D007B2FAA000000000000 /* precomputed_ecmult_gen.c */,
-				2F4D00712FAA000000000000 /* big_wallet_secp256k1_shim.c */,
-				2F4D00A02FAB100000000000 /* big_wallet_scrypt_shim.c */,
+				2F4D00702FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c */,
+				2F4D007A2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c */,
+				2F4D007B2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c */,
+				2F4D00712FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c */,
+				2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */,
 				2F4D00502FAA000000000000 /* WalletCoreProxyHD.swift */,
 				2F4D00602FAA000000000000 /* WalletCoreProxyBIP39WordList.swift */,
 			);
@@ -2798,23 +2737,6 @@
 			productName = "Safari visionOS";
 			productReference = 2C60546F2D529A9A00779570 /* Safari visionOS.appex */;
 			productType = "com.apple.product-type.app-extension";
-		};
-		2C622BC02BF3C52F0003B932 /* Translate */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 2C622BC72BF3C52F0003B932 /* Build configuration list for PBXNativeTarget "Translate" */;
-			buildPhases = (
-				2C622BBD2BF3C52F0003B932 /* Sources */,
-				2C622BBE2BF3C52F0003B932 /* Frameworks */,
-				2C622BBF2BF3C52F0003B932 /* CopyFiles */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = Translate;
-			productName = Translate;
-			productReference = 2C622BC12BF3C52F0003B932 /* Translate */;
-			productType = "com.apple.product-type.tool";
 		};
 		2C8612502B76BDDC00B22794 /* Tests iOS */ = {
 			isa = PBXNativeTarget;
@@ -2947,9 +2869,6 @@
 					2C60546E2D529A9A00779570 = {
 						CreatedOnToolsVersion = 16.2;
 					};
-					2C622BC02BF3C52F0003B932 = {
-						CreatedOnToolsVersion = 15.3;
-					};
 					2C8612502B76BDDC00B22794 = {
 						CreatedOnToolsVersion = 15.2;
 						TestTargetID = 2C5FF96E26C84F7B00B32ACC;
@@ -3030,7 +2949,6 @@
 				2C8612502B76BDDC00B22794 /* Tests iOS */,
 				2CF9B1082D526F4D00B5CE82 /* Tests visionOS */,
 				2CED86A12AF00BC9006F9E26 /* Tools */,
-				2C622BC02BF3C52F0003B932 /* Translate */,
 			);
 		};
 /* End PBXProject section */
@@ -3377,11 +3295,11 @@
 				2F4D00232FAA000000000000 /* WalletCoreProxyEthereum.swift in Sources */,
 				2F4D00332FAA000000000000 /* WalletCoreProxyCrypto.swift in Sources */,
 				2F4D00432FAA000000000000 /* WalletCoreProxySecp256k1.swift in Sources */,
-				2F4D00742FAA000000000000 /* secp256k1.c in Sources */,
-				2F4D007E2FAA000000000000 /* precomputed_ecmult.c in Sources */,
-				2F4D00822FAA000000000000 /* precomputed_ecmult_gen.c in Sources */,
-				2F4D00782FAA000000000000 /* big_wallet_secp256k1_shim.c in Sources */,
-				2F4D00A32FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */,
+				2F4D00742FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c in Sources */,
+				2F4D007E2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c in Sources */,
+				2F4D00822FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c in Sources */,
+				2F4D00782FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c in Sources */,
+				2F4D00A32FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */,
 				2F4D00532FAA000000000000 /* WalletCoreProxyHD.swift in Sources */,
 				2F4D00632FAA000000000000 /* WalletCoreProxyBIP39WordList.swift in Sources */,
 				2CF9B1112D526F9900B5CE82 /* String.swift in Sources */,
@@ -3435,11 +3353,11 @@
 				2F4D00212FAA000000000000 /* WalletCoreProxyEthereum.swift in Sources */,
 				2F4D00312FAA000000000000 /* WalletCoreProxyCrypto.swift in Sources */,
 				2F4D00412FAA000000000000 /* WalletCoreProxySecp256k1.swift in Sources */,
-				2F4D00722FAA000000000000 /* secp256k1.c in Sources */,
-				2F4D007C2FAA000000000000 /* precomputed_ecmult.c in Sources */,
-				2F4D00802FAA000000000000 /* precomputed_ecmult_gen.c in Sources */,
-				2F4D00762FAA000000000000 /* big_wallet_secp256k1_shim.c in Sources */,
-				2F4D00A12FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */,
+				2F4D00722FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c in Sources */,
+				2F4D007C2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c in Sources */,
+				2F4D00802FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c in Sources */,
+				2F4D00762FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c in Sources */,
+				2F4D00A12FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */,
 				2F4D00512FAA000000000000 /* WalletCoreProxyHD.swift in Sources */,
 				2F4D00612FAA000000000000 /* WalletCoreProxyBIP39WordList.swift in Sources */,
 				2C6706A5267A6BFE006AAEF2 /* Bundle.swift in Sources */,
@@ -3604,11 +3522,11 @@
 				2F4D00222FAA000000000000 /* WalletCoreProxyEthereum.swift in Sources */,
 				2F4D00322FAA000000000000 /* WalletCoreProxyCrypto.swift in Sources */,
 				2F4D00422FAA000000000000 /* WalletCoreProxySecp256k1.swift in Sources */,
-				2F4D00732FAA000000000000 /* secp256k1.c in Sources */,
-				2F4D007D2FAA000000000000 /* precomputed_ecmult.c in Sources */,
-				2F4D00812FAA000000000000 /* precomputed_ecmult_gen.c in Sources */,
-				2F4D00772FAA000000000000 /* big_wallet_secp256k1_shim.c in Sources */,
-				2F4D00A22FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */,
+				2F4D00732FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c in Sources */,
+				2F4D007D2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c in Sources */,
+				2F4D00812FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c in Sources */,
+				2F4D00772FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c in Sources */,
+				2F4D00A22FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */,
 				2F4D00522FAA000000000000 /* WalletCoreProxyHD.swift in Sources */,
 				2F4D00622FAA000000000000 /* WalletCoreProxyBIP39WordList.swift in Sources */,
 				2C90E62327B2ED2D00C8991E /* SafariRequest+Helpers.swift in Sources */,
@@ -3643,22 +3561,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		2C622BBD2BF3C52F0003B932 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				2CB8BDA02C1F6ACE006010CC /* StringTask.swift in Sources */,
-				2CB8BDA32C1F6B16006010CC /* TranslateStrings.swift in Sources */,
-				2CF429552C1DBF0300AD303A /* MetadataTask.swift in Sources */,
-				2CF429592C1DBFCF00AD303A /* Data.swift in Sources */,
-				2CF429572C1DBF1100AD303A /* Language.swift in Sources */,
-				2CF429512C1DBEEF00AD303A /* MetadataKind.swift in Sources */,
-				2CB8BDA52C1F6B24006010CC /* TranslateMetadata.swift in Sources */,
-				2C622BC42BF3C52F0003B932 /* main.swift in Sources */,
-				2CF429532C1DBEF800AD303A /* AI.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		2C86124D2B76BDDC00B22794 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -3673,7 +3575,7 @@
 				2F2A0000000000000000001E /* WalletsManagerPreviewTests.swift in Sources */,
 				2F4C00112FA8000000000000 /* WalletCoreProxyParityTests.swift in Sources */,
 				2F4C00152FA9000000000000 /* WalletCoreProxyTestVectors.swift in Sources */,
-				2F4D00A52FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */,
+				2F4D00A52FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */,
 				2C86125B2B76BDF300B22794 /* TransactionInspectorTests.swift in Sources */,
 				2C0000022FA7000000000001 /* BigUIntTests.swift in Sources */,
 				2C86125D2B76BE2800B22794 /* Tests_iOS.swift in Sources */,
@@ -3753,11 +3655,11 @@
 				2F4D00242FAA000000000000 /* WalletCoreProxyEthereum.swift in Sources */,
 				2F4D00342FAA000000000000 /* WalletCoreProxyCrypto.swift in Sources */,
 				2F4D00442FAA000000000000 /* WalletCoreProxySecp256k1.swift in Sources */,
-				2F4D00752FAA000000000000 /* secp256k1.c in Sources */,
-				2F4D007F2FAA000000000000 /* precomputed_ecmult.c in Sources */,
-				2F4D00832FAA000000000000 /* precomputed_ecmult_gen.c in Sources */,
-				2F4D00792FAA000000000000 /* big_wallet_secp256k1_shim.c in Sources */,
-				2F4D00A42FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */,
+				2F4D00752FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c in Sources */,
+				2F4D007F2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c in Sources */,
+				2F4D00832FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c in Sources */,
+				2F4D00792FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c in Sources */,
+				2F4D00A42FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */,
 				2F4D00542FAA000000000000 /* WalletCoreProxyHD.swift in Sources */,
 				2F4D00642FAA000000000000 /* WalletCoreProxyBIP39WordList.swift in Sources */,
 				2CF2676F1861169B92F690A4 /* Transaction.swift in Sources */,
@@ -3818,7 +3720,7 @@
 				2F2A0000000000000000001F /* WalletsManagerPreviewTests.swift in Sources */,
 				2F4C00122FA8000000000000 /* WalletCoreProxyParityTests.swift in Sources */,
 				2F4C00162FA9000000000000 /* WalletCoreProxyTestVectors.swift in Sources */,
-				2F4D00A62FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */,
+				2F4D00A62FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */,
 				2CE02C832BAA0F9800381D70 /* TransactionInspectorTests.swift in Sources */,
 				2C0000032FA7000000000001 /* BigUIntTests.swift in Sources */,
 				2CE02C7D2BAA0F6700381D70 /* Tests_macOS.swift in Sources */,
@@ -3850,7 +3752,7 @@
 				2F2A00000000000000000020 /* WalletsManagerPreviewTests.swift in Sources */,
 				2F4C00132FA8000000000000 /* WalletCoreProxyParityTests.swift in Sources */,
 				2F4C00172FA9000000000000 /* WalletCoreProxyTestVectors.swift in Sources */,
-				2F4D00A72FAB100000000000 /* big_wallet_scrypt_shim.c in Sources */,
+				2F4D00A72FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */,
 				2CF9B10F2D526F7C00B5CE82 /* TransactionInspectorTests.swift in Sources */,
 				2C0000042FA7000000000001 /* BigUIntTests.swift in Sources */,
 				2CADA62C2D5271BA002C34A8 /* Tests_visionOS.swift in Sources */,
@@ -4404,43 +4306,6 @@
 			};
 			name = Release;
 		};
-		2C622BC52BF3C52F0003B932 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 137;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				INFOPLIST_FILE = "";
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.4;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_VERSION = 5.0;
-			};
-			name = Debug;
-		};
-		2C622BC62BF3C52F0003B932 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 137;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				INFOPLIST_FILE = "";
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.4;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
 		2C8612582B76BDDC00B22794 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -4867,15 +4732,6 @@
 			buildConfigurations = (
 				2C6054892D529A9A00779570 /* Debug */,
 				2C60548A2D529A9A00779570 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		2C622BC72BF3C52F0003B932 /* Build configuration list for PBXNativeTarget "Translate" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				2C622BC52BF3C52F0003B932 /* Debug */,
-				2C622BC62BF3C52F0003B932 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
