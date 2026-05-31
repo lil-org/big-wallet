@@ -1,1 +1,1 @@
-web3,metamask,phantom,oncshain,ethereum,bovítmény,böngésző,dapp,csatlakozás,token,defi
+web3,metamask,phantom,onchain,ethereum,solana,base,polygon,dapp,defi,token,swap,evm,csere

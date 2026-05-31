@@ -1,1 +1,1 @@
-web3,metamask,phantom,dompet,kripto,onchain,ethereum,solana,dapp,token,defi,swap,trade
+web3,metamask,phantom,onchain,ethereum,solana,base,polygon,dapp,defi,token,swap,evm,dagang

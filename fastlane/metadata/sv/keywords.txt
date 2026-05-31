@@ -1,1 +1,1 @@
-web3,metamask,phantom,onchain,ethereum,plånbok,tillägg,webbläsare,dapp,token,defi,swap,solana
+web3,metamask,phantom,onchain,ethereum,solana,base,polygon,dapp,defi,token,swap,evm,handel

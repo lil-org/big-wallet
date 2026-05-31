@@ -1,1 +1,1 @@
-web3,веб3,метамаск,metamask,фантом,phantom,ончейн,гаманць,розширення,браузер,крипта,токен
+web3,metamask,phantom,ethereum,solana,base,polygon,dapp,defi,token,swap,evm,обмін

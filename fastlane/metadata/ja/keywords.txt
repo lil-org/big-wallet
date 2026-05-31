@@ -1,1 +1,1 @@
-web3,メタマスク,ファントム,オンチェーン,イーサリアム,ソラナ,ウォレット,dapp,接続,トークン,defi,スワップ,取引,暗号資産
+web3,metamask,phantom,ethereum,solana,base,polygon,dapp,defi,token,swap,evm,取引,接続

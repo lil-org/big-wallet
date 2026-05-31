@@ -1,1 +1,1 @@
-ويب3,ميتاماسك,فانتوم,اونتشين,ايثريوم,محفظة,اضافة,متصفح,داب,اتصال,رمز,ديفاي,مبادلة
+ويب3,metamask,phantom,ethereum,solana,base,polygon,dapp,defi,token,swap,تداول,اتصال

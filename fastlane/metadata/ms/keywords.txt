@@ -1,1 +1,1 @@
-web3,metamask,phantom,rantai,ethereum,sambung,token,defi,tukar,dagang,solana,wallet
+web3,metamask,phantom,onchain,ethereum,solana,base,polygon,dapp,defi,token,swap,evm,dagang

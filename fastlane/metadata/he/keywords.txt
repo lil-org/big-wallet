@@ -1,1 +1,1 @@
-web3,מטאמאסק,פאנטום,ארנק,אונצ'יין,אתריום,סולאנה,דאפו,דפיי,טוקן,החלפה,מסחר,דפדפן
+web3,metamask,phantom,ethereum,solana,base,polygon,dapp,defi,token,swap,evm,מסחר,חיבור

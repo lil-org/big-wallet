@@ -1,1 +1,1 @@
-वेब3,मेटामास्क,फैंटम,ऑनचेन,एथेरियम,एक्सटेंशन,ब्राउज़र,डीऐप,कनेक्ट,टोकन,डेफी,स्वैप,ट्रेड,सोलाना
+web3,metamask,phantom,ethereum,solana,base,polygon,dapp,defi,token,swap,evm,blockchain
