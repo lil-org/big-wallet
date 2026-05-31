@@ -3,24 +3,21 @@
 import UIKit
 
 class EditAccountsViewController: UIViewController {
-    
-    struct PreviewAccountCellModel {
+
+    private struct PreviewAccountCellModel {
         let account: WalletAccount
         var isEnabled: Bool
     }
-    
+
     var wallet: WalletContainer!
     var selectAccountAction: SelectAccountAction?
     private let walletsManager = WalletsManager.shared
     private var cellModels = [PreviewAccountCellModel]()
-    private let previewAccountsQueue = DispatchQueue(label: "org.lil.wallet.accounts", qos: .userInitiated)
-    private let previewAccountsPreloadThreshold = 10
-    private var page = 1
-    private var requestedPreviewFor: Int?
-    private var isPreviewingMoreAccounts = false
-    private var lastPreviewDate = Date()
+    private let previewAccountsPreloadThreshold = 4
     private var toggledIndexes = Set<Int>()
     private var enabledUndiscoveredAccountKeys = Set<WalletPreviewAccountKey>()
+    private var previewPager: WalletsManager.PreviewAccountsPager?
+    private var didAppear = false
     private var previewCoin: WalletCoin? { selectAccountAction?.coinType }
     
     @IBOutlet weak var okButton: UIButton!
@@ -42,10 +39,7 @@ class EditAccountsViewController: UIViewController {
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
         navigationItem.leftBarButtonItem = UIBarButtonItem(title: Strings.cancel, style: .plain, target: self, action: #selector(dismissAnimated))
-        enabledUndiscoveredAccountKeys = Set(wallet.accounts.map { $0.previewAccountKey })
-        guard let previewAccounts = try? walletsManager.previewAccounts(wallet: wallet, page: 0, coin: previewCoin) else { return }
-        appendPreviewAccounts(previewAccounts)
-        tableView.reloadData()
+        resetPreviewAccounts()
     }
     
     private func appendPreviewAccounts(_ previewAccounts: [WalletAccount]) {
@@ -61,6 +55,20 @@ class EditAccountsViewController: UIViewController {
         super.viewWillAppear(animated)
         DispatchQueue.main.async { [weak self] in
             self?.navigationController?.navigationBar.sizeToFit()
+        }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        didAppear = true
+        previewMoreAccountsIfNeededForCurrentViewport()
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+
+        if isBeingDismissed || navigationController?.isBeingDismissed == true {
+            invalidatePreviewAccounts()
         }
     }
     
@@ -94,41 +102,80 @@ class EditAccountsViewController: UIViewController {
             showMessageAlert(text: Strings.somethingWentWrong)
         }
     }
-    
-    private func previewMoreAccountsIfNeeded() {
-        guard !isPreviewingMoreAccounts, requestedPreviewFor != cellModels.count else { return }
-        requestedPreviewFor = cellModels.count
-        isPreviewingMoreAccounts = true
-        previewMoreAccounts()
+
+    private func resetPreviewAccounts() {
+        previewPager?.invalidate()
+        let previewPager = walletsManager.previewAccountsPager(wallet: wallet, coin: previewCoin)
+        self.previewPager = previewPager
+        toggledIndexes.removeAll()
+        cellModels.removeAll()
+        enabledUndiscoveredAccountKeys = Set(wallet.accounts.map { $0.previewAccountKey })
+        updateOkButtonState()
+        tableView.reloadData()
+        loadInitialPreviewAccounts(with: previewPager)
     }
-    
-    private func previewMoreAccounts() {
-        guard Date().timeIntervalSince(lastPreviewDate) > 0.23 else {
-            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(230)) { [weak self] in
-                self?.previewMoreAccounts()
+
+    private func invalidatePreviewAccounts() {
+        previewPager?.invalidate()
+        previewPager = nil
+    }
+
+    private func loadInitialPreviewAccounts(with previewPager: WalletsManager.PreviewAccountsPager) {
+        previewPager.reset { [weak self, weak previewPager] previewAccounts in
+            guard let self,
+                  let previewPager,
+                  self.previewPager === previewPager
+            else { return }
+
+            guard let previewAccounts else {
+                self.updateOkButtonState()
+                return
             }
-            return
+
+            self.appendPreviewAccounts(previewAccounts)
+            self.tableView.reloadData()
+            self.enablePreviewMoreAccountsAfterCurrentLayout(for: previewPager)
         }
-        lastPreviewDate = Date()
-        let requestedPage = page
-        previewAccountsQueue.async { [weak self] in
-            guard let self else { return }
-            let previewAccounts = try? self.walletsManager.previewAccounts(wallet: self.wallet,
-                                                                           page: requestedPage,
-                                                                           coin: self.previewCoin)
-            DispatchQueue.main.async {
-                self.isPreviewingMoreAccounts = false
-                guard let previewAccounts else {
-                    self.requestedPreviewFor = nil
-                    return
-                }
-                self.appendPreviewAccounts(previewAccounts)
-                self.page = requestedPage + 1
-                let currentCount = self.cellModels.count
-                if !previewAccounts.isEmpty {
-                    let range = (currentCount - previewAccounts.count)..<currentCount
-                    self.tableView.insertRows(at: range.map({ IndexPath(row: $0, section: 0) }), with: .fade)
-                }
+    }
+
+    private func enablePreviewMoreAccountsAfterCurrentLayout(for previewPager: WalletsManager.PreviewAccountsPager) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.previewPager === previewPager else { return }
+            previewPager.enablePaging()
+            guard self.didAppear else { return }
+            self.previewMoreAccountsIfNeededForCurrentViewport()
+        }
+    }
+
+    private func previewMoreAccountsIfNeededForCurrentViewport() {
+        guard shouldPreviewMoreAccountsForCurrentViewport() else { return }
+        previewMoreAccountsIfNeeded()
+    }
+
+    private func shouldPreviewMoreAccountsForCurrentViewport() -> Bool {
+        guard !cellModels.isEmpty else { return false }
+
+        tableView.layoutIfNeeded()
+        let triggerRow = max(cellModels.count - previewAccountsPreloadThreshold, 0)
+        if tableView.indexPathsForVisibleRows?.contains(where: { $0.row >= triggerRow }) == true {
+            return true
+        }
+
+        let visibleHeight = tableView.bounds.height - tableView.adjustedContentInset.top - tableView.adjustedContentInset.bottom
+        return tableView.contentSize.height <= max(visibleHeight, 0)
+    }
+
+    private func previewMoreAccountsIfNeeded() {
+        guard let previewPager else { return }
+        previewPager.previewMoreIfNeeded { [weak self, weak previewPager] previewAccounts, range in
+            guard let self,
+                  let previewPager,
+                  self.previewPager === previewPager
+            else { return }
+
+            self.appendPreviewAccounts(previewAccounts)
+            if !previewAccounts.isEmpty {
+                self.tableView.insertRows(at: range.map({ IndexPath(row: $0, section: 0) }), with: .none)
             }
         }
     }
@@ -160,7 +207,11 @@ extension EditAccountsViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCellOfType(PreviewAccountTableViewCell.self, for: indexPath)
         let model = cellModels[indexPath.row]
-        cell.setup(title: model.account.nameOrCroppedAddress(walletId: wallet.id), image: model.account.image, index: model.account.previewDerivationIndex, isEnabled: model.isEnabled, delegate: self)
+        cell.setup(title: model.account.nameOrCroppedAddress(walletId: wallet.id),
+                   image: model.account.image,
+                   index: model.account.previewDerivationIndex,
+                   isEnabled: model.isEnabled,
+                   delegate: self)
         return cell
     }
     

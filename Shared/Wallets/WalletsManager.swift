@@ -138,9 +138,157 @@ final class WalletsManager: NSObject {
         return suggestedAccounts(for: coins)
     }
 
+    final class PreviewAccountsPager {
+        private static let minimumPreviewInterval: TimeInterval = 0.23
+        private static var minimumPreviewDelay: DispatchTimeInterval {
+            .milliseconds(Int(minimumPreviewInterval * 1000))
+        }
+
+        private let wallet: WalletContainer
+        private let coin: WalletCoin?
+        private let walletsManager: WalletsManager
+        private let queue = DispatchQueue(label: "org.lil.wallet.accounts", qos: .userInitiated)
+        private var session: PreviewAccountsSession?
+        private var page = 0
+        private var isLoading = false
+        private var isPagingEnabled = false
+        private var hasLoadedAllPages = false
+        private var loadedCount = 0
+        private var generation = 0
+        private var lastPreviewDate = Date()
+
+        fileprivate init(wallet: WalletContainer, coin: WalletCoin?, walletsManager: WalletsManager) {
+            self.wallet = wallet
+            self.coin = coin
+            self.walletsManager = walletsManager
+        }
+
+        func reset(completion: @escaping ([WalletAccount]?) -> Void) {
+            generation += 1
+            page = 0
+            isLoading = true
+            isPagingEnabled = false
+            hasLoadedAllPages = false
+            session = nil
+            loadedCount = 0
+
+            let generation = generation
+            queue.async { [weak self] in
+                guard let self else { return }
+
+                let previewResult: (session: PreviewAccountsSession, accounts: [WalletAccount])?
+                do {
+                    let session = try self.walletsManager.previewAccountsSession(wallet: self.wallet, coin: self.coin)
+                    let accounts = try session.previewAccounts(page: 0)
+                    previewResult = (session, accounts)
+                } catch {
+                    previewResult = nil
+                }
+
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, self.generation == generation else { return }
+                    self.isLoading = false
+                    self.lastPreviewDate = Date()
+                    guard let previewResult else {
+                        completion(nil)
+                        return
+                    }
+
+                    self.session = previewResult.session
+                    self.loadedCount = previewResult.accounts.count
+                    self.page = 1
+                    completion(previewResult.accounts)
+                }
+            }
+        }
+
+        func invalidate() {
+            generation += 1
+            isLoading = false
+            isPagingEnabled = false
+            hasLoadedAllPages = false
+            session = nil
+            loadedCount = 0
+        }
+
+        func enablePaging() {
+            isPagingEnabled = true
+        }
+
+        func previewMoreIfNeeded(completion: @escaping (_ accounts: [WalletAccount], _ range: Range<Int>) -> Void) {
+            guard isPagingEnabled,
+                  session != nil,
+                  !isLoading,
+                  !hasLoadedAllPages else { return }
+            isLoading = true
+            previewMore(completion: completion)
+        }
+
+        private func previewMore(completion: @escaping (_ accounts: [WalletAccount], _ range: Range<Int>) -> Void) {
+            let generation = generation
+            guard Date().timeIntervalSince(lastPreviewDate) > Self.minimumPreviewInterval else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.minimumPreviewDelay) { [weak self] in
+                    guard self?.generation == generation else { return }
+                    self?.previewMore(completion: completion)
+                }
+                return
+            }
+
+            guard let session else {
+                isLoading = false
+                return
+            }
+
+            lastPreviewDate = Date()
+            let requestedPage = page
+            queue.async { [weak session] in
+                guard let session else { return }
+                let previewAccounts = try? session.previewAccounts(page: requestedPage)
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, self.generation == generation else { return }
+                    self.isLoading = false
+                    guard let previewAccounts else { return }
+
+                    let previousCount = self.loadedCount
+                    self.loadedCount += previewAccounts.count
+                    self.hasLoadedAllPages = previewAccounts.isEmpty
+                    self.page = requestedPage + 1
+                    completion(previewAccounts, previousCount..<self.loadedCount)
+                }
+            }
+        }
+    }
+
+    fileprivate final class PreviewAccountsSession {
+        // Keep derived wallet material private while allowing callers to reuse preview paging work.
+        private let hdWallet: WalletHDWallet
+        private let coin: WalletCoin?
+        private let walletsManager: WalletsManager
+
+        fileprivate init(hdWallet: WalletHDWallet, coin: WalletCoin?, walletsManager: WalletsManager) {
+            self.hdWallet = hdWallet
+            self.coin = coin
+            self.walletsManager = walletsManager
+        }
+
+        func previewAccounts(page: Int) throws -> [WalletAccount] {
+            return try walletsManager.previewAccounts(hdWallet: hdWallet, page: page, coin: coin)
+        }
+    }
+
+    func previewAccountsPager(wallet: WalletContainer, coin: WalletCoin? = nil) -> PreviewAccountsPager {
+        return PreviewAccountsPager(wallet: wallet, coin: coin, walletsManager: self)
+    }
+
+    fileprivate func previewAccountsSession(wallet: WalletContainer, coin: WalletCoin? = nil) throws -> PreviewAccountsSession {
+        guard let password = keychain.password,
+              let hdWallet = wallet.key.wallet(password: Data(password.utf8)) else { throw Error.keychainAccessFailure }
+        return PreviewAccountsSession(hdWallet: hdWallet, coin: coin, walletsManager: self)
+    }
+
     func previewAccounts(wallet: WalletContainer, page: Int, coin: WalletCoin? = nil) throws -> [WalletAccount] {
-        guard let password = keychain.password, let hdWallet = wallet.key.wallet(password: Data(password.utf8)) else { throw Error.keychainAccessFailure }
-        return try previewAccounts(hdWallet: hdWallet, page: page, coin: coin)
+        let session = try previewAccountsSession(wallet: wallet, coin: coin)
+        return try session.previewAccounts(page: page)
     }
 
     func previewAccounts(hdWallet: WalletHDWallet, page: Int, coin: WalletCoin?) throws -> [WalletAccount] {
