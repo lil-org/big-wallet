@@ -39,12 +39,11 @@ struct Ethereum {
     private func prefixedDataHash(data: Data) -> Data? {
         let prefixString = "\u{19}Ethereum Signed Message:\n" + String(data.count)
         guard let prefixData = prefixString.data(using: .utf8) else { return nil }
-        return WalletCrypto.keccak256(data: prefixData + data)
+        return WalletCrypto.keccak256(parts: [prefixData, data])
     }
     
     private func sign(digest: Data, privateKey: WalletPrivateKey) throws -> String {
-        guard WalletCrypto.isSupportedEthereumSigningDigest(digest),
-              var signed = privateKey.sign(digest: digest, coin: .ethereum),
+        guard var signed = privateKey.sign(digest: digest, coin: .ethereum),
               signed.count == 65,
               signed[64] <= 1 else { throw Error.failedToSign }
         signed[64] += 27

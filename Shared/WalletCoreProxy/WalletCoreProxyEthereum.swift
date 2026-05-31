@@ -38,15 +38,23 @@ private enum EthereumType {
     }
 
     static func twoPower(_ bitWidth: Int) -> BigUInt {
-        switch bitWidth {
-        case 255: return twoPower255
-        case 256: return twoPower256
-        default: return computedTwoPower(bitWidth)
-        }
+        return cachedTwoPowers[bitWidth] ?? computedTwoPower(bitWidth)
     }
 
-    private static let twoPower255 = computedTwoPower(255)
-    private static let twoPower256 = computedTwoPower(256)
+    private static let cachedTwoPowers: [Int: BigUInt] = {
+        var result = [Int: BigUInt]()
+        var previousPower = BigUInt(1)
+        for bitWidth in 1...256 {
+            let power = previousPower + previousPower
+            if bitWidth.isMultiple(of: 8) {
+                // Cache unsigned bounds and the signed bounds that use one fewer bit.
+                result[bitWidth] = power
+                result[bitWidth - 1] = previousPower
+            }
+            previousPower = power
+        }
+        return result
+    }()
 
     private static func computedTwoPower(_ bitWidth: Int) -> BigUInt {
         var result = BigUInt(1)
@@ -75,8 +83,10 @@ enum EIP712 {
               types.keys.contains("EIP712Domain"),
               let domainHash = hashStruct(type: "EIP712Domain", value: domain, types: types),
               let messageHash = hashStruct(type: primaryType, value: message, types: types) else { return Data() }
-        return WalletCrypto.keccak256(data: Data([0x19, 0x01]) + domainHash + messageHash)
+        return WalletCrypto.keccak256(parts: [typedDataDigestPrefix, domainHash, messageHash])
     }
+
+    private static let typedDataDigestPrefix = Data([0x19, 0x01])
 
     private static func parseTypes(_ object: [String: Any]) -> [String: [Field]]? {
         var result = [String: [Field]]()

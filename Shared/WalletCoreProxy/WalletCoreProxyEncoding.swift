@@ -5,10 +5,10 @@ import Foundation
 
 enum Base58 {
     private static let alphabet = Array("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".utf8)
-    private static let map: [UInt8: Int] = {
-        var result = [UInt8: Int]()
+    private static let decodeMap: [Int8] = {
+        var result = [Int8](repeating: -1, count: 128)
         for (index, byte) in alphabet.enumerated() {
-            result[byte] = index
+            result[Int(byte)] = Int8(index)
         }
         return result
     }()
@@ -19,6 +19,7 @@ enum Base58 {
         var zeroes = 0
         while zeroes < bytes.count, bytes[zeroes] == 0 { zeroes += 1 }
         var encoded = [UInt8]()
+        encoded.reserveCapacity(data.count)
         var start = zeroes
         while start < bytes.count {
             var remainder = 0
@@ -30,7 +31,9 @@ enum Base58 {
             encoded.append(alphabet[remainder])
             while start < bytes.count, bytes[start] == 0 { start += 1 }
         }
-        encoded.append(contentsOf: Array(repeating: alphabet[0], count: zeroes))
+        for _ in 0..<zeroes {
+            encoded.append(alphabet[0])
+        }
         return String(bytes: encoded.reversed(), encoding: .ascii) ?? ""
     }
 
@@ -40,9 +43,12 @@ enum Base58 {
         var zeroes = 0
         while zeroes < input.count, input[zeroes] == alphabet[0] { zeroes += 1 }
         var decoded = [UInt8]()
+        decoded.reserveCapacity(input.count)
         for byte in input {
-            guard let value = map[byte] else { return nil }
-            var carry = value
+            guard byte < UInt8(decodeMap.count) else { return nil }
+            let value = decodeMap[Int(byte)]
+            guard value >= 0 else { return nil }
+            var carry = Int(value)
             for index in decoded.indices {
                 let total = Int(decoded[index]) * 58 + carry
                 decoded[index] = UInt8(total & 0xff)
@@ -53,7 +59,9 @@ enum Base58 {
                 carry >>= 8
             }
         }
-        decoded.append(contentsOf: Array(repeating: 0, count: zeroes))
+        for _ in 0..<zeroes {
+            decoded.append(0)
+        }
         return Data(decoded.reversed())
     }
 

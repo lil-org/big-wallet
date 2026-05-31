@@ -98,8 +98,9 @@ final class SolanaPreparedTransactionTests: XCTestCase {
         switch Solana.shared.preparedSerializedTransactionForSignAndSend(serializedTransaction: Vectors.solanaPreparedSerializedTransaction,
                                                                          publicKey: Vectors.solanaPreparedSignerPublicKey) {
         case .success(let preparedTransaction):
+            let preparedMessage = preparedTransaction.preparedMessage
             XCTAssertEqual(preparedTransaction.approvalMessage, Vectors.solanaPreparedApprovalMessage)
-            XCTAssertEqual(WalletCrypto.base58Encode(data: preparedTransaction.messageData), Vectors.solanaPreparedApprovalMessage)
+            XCTAssertEqual(WalletCrypto.base58Encode(data: preparedMessage.messageData), Vectors.solanaPreparedApprovalMessage)
 
             switch Solana.shared.signedTransactionForSignAndSend(preparedSerializedTransaction: preparedTransaction,
                                                                  privateKey: privateKey) {
@@ -107,7 +108,7 @@ final class SolanaPreparedTransactionTests: XCTestCase {
                 let signedData = try XCTUnwrap(Data(base64Encoded: signedTransaction))
                 let signedParts = try signerSignature(in: signedData, signerPublicKey: Vectors.solanaPreparedSignerPublicKey)
 
-                XCTAssertEqual(signedParts.messageData, preparedTransaction.messageData)
+                XCTAssertEqual(signedParts.messageData, preparedMessage.messageData)
                 try assertValidSolanaSignature(signedParts.signature,
                                                message: signedParts.messageData,
                                                publicKeyData: signedParts.publicKeyData)
@@ -116,6 +117,28 @@ final class SolanaPreparedTransactionTests: XCTestCase {
             }
         case .failure(let error):
             XCTFail("Expected prepared transaction, got \(error)")
+        }
+    }
+
+    func testPreparedTransactionMessageForSigningFormatsSameApprovalAsReparsedMessage() throws {
+        let signerPublicKey = try XCTUnwrap(WalletCrypto.base58Decode(string: Vectors.solanaPreparedSignerPublicKey))
+        let messageData = SolanaMessageFixture.wireMessage(accountKeys: [signerPublicKey],
+                                                           bodyAfterBlockhash: Data.encodeLength(0))
+        let encodedMessage = WalletCrypto.base58Encode(data: messageData)
+
+        switch Solana.shared.preparedTransactionMessageForSigning(message: encodedMessage,
+                                                                  publicKey: Vectors.solanaPreparedSignerPublicKey) {
+        case .success(let preparedMessage):
+            XCTAssertEqual(preparedMessage.messageData, messageData)
+            XCTAssertEqual(preparedMessage.parsedMessage.requiredSignaturesCount, 1)
+            let reparsedApproval = SolanaTransactionSummaryFormatter.approvalMessage(messageData: messageData,
+                                                                                     encodedMessages: [encodedMessage])
+            let reusedApproval = SolanaTransactionSummaryFormatter.approvalMessage(encodedMessages: [encodedMessage],
+                                                                                   preparedMessages: [preparedMessage])
+
+            XCTAssertEqual(reusedApproval, reparsedApproval)
+        case .failure(let error):
+            XCTFail("Expected prepared transaction message, got \(error)")
         }
     }
 

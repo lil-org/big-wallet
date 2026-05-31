@@ -503,6 +503,22 @@ final class WalletCoreProxyCoinAndCryptoTests: XCTestCase {
         }
     }
 
+    func testKeccakMultipartMatchesSinglePartAcrossRateBoundaries() {
+        let lengths = [0, 1, 32, 135, 136, 137, 271, 272, 273]
+        for length in lengths {
+            let data = Data((0..<length).map { UInt8($0 & 0xff) })
+            let splitIndexes = [0, min(1, length), length / 2, min(136, length), length]
+
+            for splitIndex in splitIndexes {
+                let first = data.prefix(splitIndex)
+                let second = data.dropFirst(splitIndex)
+                XCTAssertEqual(WalletCrypto.keccak256(parts: [first, second]),
+                               WalletCrypto.keccak256(data: data),
+                               "length \(length), split \(splitIndex)")
+            }
+        }
+    }
+
 }
 
 final class WalletCoreProxyPrivateKeyTests: XCTestCase {
@@ -648,8 +664,11 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
     func testEthereumRawSigningPinsWalletCoreSecp256k1Vector() throws {
         let privateKey = try requirePrivateKey(Vectors.secpPrivateKey)
         let rawSignature = try XCTUnwrap(privateKey.sign(digest: Vectors.ethereumHelloRawSignDigest, coin: .ethereum))
+        let batchSignatures = try XCTUnwrap(privateKey.sign(digests: [Vectors.ethereumHelloRawSignDigest], coin: .ethereum))
 
         XCTAssertEqual(WalletCrypto.hexString(rawSignature), Vectors.ethereumHelloRawWalletCoreSignature)
+        XCTAssertEqual(batchSignatures, [rawSignature])
+        XCTAssertEqual(try XCTUnwrap(privateKey.sign(digests: [Data](), coin: .ethereum)), [])
         XCTAssertEqual(try Ethereum.shared.sign(data: Vectors.ethereumHelloRawSignDigest, privateKey: privateKey),
                        Vectors.ethereumHelloRawSignature)
         XCTAssertNil(privateKey.sign(digest: Data([1, 2, 3]), coin: .ethereum))
@@ -700,6 +719,41 @@ final class WalletCoreProxyPrivateKeyTests: XCTestCase {
                                        message: Vectors.solanaLongMessage,
                                        publicKeyHex: Vectors.solanaSigningPublicKey)
         XCTAssertNil(privateKey.sign(digest: Data([1, 2, 3]), coin: .ethereum))
+    }
+
+    func testSolanaBatchSigningMatchesSingleMessageSigning() throws {
+        let privateKey = try requirePrivateKey(Vectors.solanaSigningPrivateKey)
+        let messages = [
+            Data(),
+            Vectors.solanaMessage,
+            Vectors.solanaBinaryMessage,
+            Vectors.solanaLongMessage,
+        ]
+
+        let batchSignatures = try XCTUnwrap(privateKey.sign(digests: messages, coin: .solana))
+        let directBatchSignatures = try XCTUnwrap(Ed25519.sign(messages: messages, seed: Vectors.solanaSigningPrivateKey))
+        let encodedBatchSignatures = try XCTUnwrap(Solana.shared.sign(messageDataList: messages, privateKey: privateKey))
+        let singleSignatures = try messages.map { message in
+            try XCTUnwrap(privateKey.sign(digest: message, coin: .solana))
+        }
+
+        XCTAssertEqual(batchSignatures.count, messages.count)
+        XCTAssertEqual(directBatchSignatures.count, messages.count)
+        XCTAssertEqual(encodedBatchSignatures.count, messages.count)
+        XCTAssertEqual(singleSignatures.count, messages.count)
+        XCTAssertEqual(try XCTUnwrap(privateKey.sign(digests: [Data](), coin: .solana)), [])
+        XCTAssertEqual(try XCTUnwrap(Solana.shared.sign(messageDataList: [], privateKey: privateKey)), [])
+        XCTAssertNil(Ed25519.sign(messages: messages, seed: Data()))
+
+        for signatures in [batchSignatures, directBatchSignatures, singleSignatures] {
+            for (message, signature) in zip(messages, signatures) {
+                try assertValidSolanaSignature(signature, message: message, publicKeyHex: Vectors.solanaSigningPublicKey)
+            }
+        }
+
+        for (message, signature) in zip(messages, encodedBatchSignatures) {
+            try assertValidSolanaSignature(signature, message: message, publicKeyHex: Vectors.solanaSigningPublicKey)
+        }
     }
 
     func testUpstreamSolanaRawMessageSigningProducesValidSignature() throws {
@@ -1517,7 +1571,12 @@ final class WalletCoreProxyHDWalletTests: XCTestCase {
         XCTAssertEqual(invalidEthereumKey.publicKeyDescription(coin: .ethereum), "")
         XCTAssertEqual(invalidSolanaKey.publicKeyDescription(coin: .solana), "")
         XCTAssertNil(invalidEthereumKey.sign(digest: Vectors.ethereumRawSignDigest, coin: .ethereum))
+        XCTAssertNil(invalidEthereumKey.sign(digests: [Data](), coin: .ethereum))
+        XCTAssertNil(invalidEthereumKey.sign(digests: [Vectors.ethereumRawSignDigest], coin: .ethereum))
         XCTAssertNil(invalidSolanaKey.sign(digest: Vectors.solanaMessage, coin: .solana))
+        XCTAssertNil(invalidSolanaKey.sign(digests: [Vectors.solanaMessage], coin: .solana))
+        XCTAssertNil(Solana.shared.sign(messageDataList: [], privateKey: invalidSolanaKey))
+        XCTAssertNil(Solana.shared.sign(messageDataList: [Vectors.solanaMessage], privateKey: invalidSolanaKey))
         XCTAssertEqual(WalletCrypto.previewDerivationIndex(derivationPath: "m/44'/60'/0'/0/2147483648",
                                                            coin: .ethereum),
                        0)

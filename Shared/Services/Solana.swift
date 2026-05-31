@@ -69,6 +69,16 @@ struct SolanaWireMessage {
     }
 }
 
+struct SolanaPreparedTransactionMessage {
+    let messageData: Data
+    let parsedMessage: SolanaWireMessage
+
+    fileprivate init(messageData: Data, parsedMessage: SolanaWireMessage) {
+        self.messageData = messageData
+        self.parsedMessage = parsedMessage
+    }
+}
+
 enum SolanaWireMessageParser {
     private static let publicKeyLength = 32
     private static let blockhashLength = 32
@@ -400,25 +410,42 @@ enum SolanaTransactionSummaryFormatter {
         guard encodedMessages.count == messageDataList.count else {
             return rawApprovalMessage(messages: encodedMessages)
         }
-        guard !encodedMessages.isEmpty else {
+        return approvalMessage(rawMessages: encodedMessages) { index in
+            approvalMessage(messageData: messageDataList[index],
+                            encodedMessages: [encodedMessages[index]])
+        }
+    }
+
+    static func approvalMessage(encodedMessages: [String],
+                                preparedMessages: [SolanaPreparedTransactionMessage]) -> String {
+        guard encodedMessages.count == preparedMessages.count else {
             return rawApprovalMessage(messages: encodedMessages)
         }
-        guard encodedMessages.count != 1 else {
-            return approvalMessage(messageData: messageDataList[0],
-                                   encodedMessages: [encodedMessages[0]])
+        return approvalMessage(rawMessages: encodedMessages) { index in
+            let preparedMessage = preparedMessages[index]
+            return approvalMessage(parsedMessage: preparedMessage.parsedMessage,
+                                   messageData: preparedMessage.messageData,
+                                   encodedMessages: [encodedMessages[index]])
+        }
+    }
+
+    private static func approvalMessage(rawMessages: [String],
+                                        renderMessage: (Int) -> String) -> String {
+        guard !rawMessages.isEmpty else {
+            return rawApprovalMessage(messages: rawMessages)
+        }
+        guard rawMessages.count != 1 else {
+            return renderMessage(0)
         }
 
-        return zip(encodedMessages, messageDataList).enumerated().map { index, values in
-            let (encodedMessage, messageData) = values
-            return "Transaction \(index + 1)\n\n" +
-                approvalMessage(messageData: messageData,
-                                encodedMessages: [encodedMessage])
+        return rawMessages.indices.map { index in
+            return "Transaction \(index + 1)\n\n" + renderMessage(index)
         }.joined(separator: "\n\n")
     }
 
-    static func approvalMessage(parsedMessage: SolanaWireMessage,
-                                messageData: Data,
-                                encodedMessages: [String]) -> String {
+    private static func approvalMessage(parsedMessage: SolanaWireMessage,
+                                        messageData: Data,
+                                        encodedMessages: [String]) -> String {
         let summaries = parsedMessage.instructions.map { instruction in
             instructionSummary(instruction: instruction, message: parsedMessage)
         }
@@ -1218,16 +1245,16 @@ final class Solana {
 
     struct PreparedLegacySignAndSendTransaction {
         let approvalMessage: String
-        let messageData: Data
-        let parsedMessage: SolanaWireMessage
+        let preparedMessage: SolanaPreparedTransactionMessage
     }
 
     struct PreparedSerializedTransaction {
         let approvalMessage: String
         fileprivate let preparedTransaction: PreparedSignAndSendTransaction
 
-        var messageData: Data {
-            return preparedTransaction.parsedTransaction.messageData
+        var preparedMessage: SolanaPreparedTransactionMessage {
+            return SolanaPreparedTransactionMessage(messageData: preparedTransaction.parsedTransaction.messageData,
+                                                    parsedMessage: preparedTransaction.parsedTransaction.parsedMessage)
         }
     }
 
@@ -1433,12 +1460,22 @@ final class Solana {
         return sign(digest: messageData, privateKey: privateKey)
     }
 
+    func sign(messageDataList: [Data], privateKey: WalletPrivateKey) -> [String]? {
+        guard let signatureDataList = privateKey.sign(digests: messageDataList, coin: .solana) else { return nil }
+        return signatureDataList.map { WalletCrypto.base58Encode(data: $0) }
+    }
+
     func validationErrorForSigningTransaction(message: String, publicKey: String) -> SendTransactionError? {
         return validationError(for: preparedTransactionMessage(message: message, publicKey: publicKey))
     }
 
     func validationErrorForSigningTransaction(messageData: Data, publicKey: String) -> SendTransactionError? {
         return validationError(for: preparedTransactionMessage(messageData: messageData, publicKey: publicKey))
+    }
+
+    func preparedTransactionMessageForSigning(message: String,
+                                              publicKey: String) -> Result<SolanaPreparedTransactionMessage, SendTransactionError> {
+        return preparedTransactionMessage(message: message, publicKey: publicKey)
     }
 
     func decodeMessage(_ message: String, asHex: Bool) -> Data? {
@@ -1464,8 +1501,7 @@ final class Solana {
                                               publicKey: String) -> Result<PreparedLegacySignAndSendTransaction, SendTransactionError> {
         return preparedLegacySignAndSend(message: message, publicKey: publicKey).map { preparedTransaction in
             PreparedLegacySignAndSendTransaction(approvalMessage: message,
-                                                messageData: preparedTransaction.messageData,
-                                                parsedMessage: preparedTransaction.parsedMessage)
+                                                preparedMessage: preparedTransaction)
         }
     }
 
@@ -1488,9 +1524,10 @@ final class Solana {
                                 sendOptions: PreparedSendOptions,
                                 privateKey: WalletPrivateKey,
                                 completion: @escaping (Result<String, SendTransactionError>) -> Void) {
-        guard let signedData = signatureData(digest: preparedLegacyTransaction.messageData, privateKey: privateKey),
-              let raw = compileTransactionData(messageData: preparedLegacyTransaction.messageData,
-                                               parsedMessage: preparedLegacyTransaction.parsedMessage,
+        let preparedMessage = preparedLegacyTransaction.preparedMessage
+        guard let signedData = signatureData(digest: preparedMessage.messageData, privateKey: privateKey),
+              let raw = compileTransactionData(messageData: preparedMessage.messageData,
+                                               parsedMessage: preparedMessage.parsedMessage,
                                                signatureData: signedData) else {
             completion(.failure(.invalidMessage))
             return
@@ -1513,7 +1550,7 @@ final class Solana {
     }
 
     private func preparedLegacySignAndSend(message: String,
-                                           publicKey: String) -> Result<(messageData: Data, parsedMessage: SolanaWireMessage), SendTransactionError> {
+                                           publicKey: String) -> Result<SolanaPreparedTransactionMessage, SendTransactionError> {
         switch preparedTransactionMessage(message: message, publicKey: publicKey) {
         case .failure(let error):
             return .failure(error)
@@ -1752,14 +1789,18 @@ final class Solana {
         else { return nil }
 
         let placeholderSignature = Data(repeating: 0, count: signatureLength)
+        let signatureCountData = Data.encodeLength(parsedMessage.requiredSignaturesCount)
+        let placeholderCount = max(parsedMessage.requiredSignaturesCount - 1, 0)
 
-        var result = Data.encodeLength(parsedMessage.requiredSignaturesCount)
-        result += signatureData
-        for _ in 0..<max(parsedMessage.requiredSignaturesCount - 1, 0) {
-            result += placeholderSignature
+        var result = Data()
+        result.reserveCapacity(signatureCountData.count + signatureData.count + placeholderCount * signatureLength + messageData.count)
+        result.append(signatureCountData)
+        result.append(signatureData)
+        for _ in 0..<placeholderCount {
+            result.append(placeholderSignature)
         }
 
-        result += messageData
+        result.append(messageData)
         return result.base64EncodedString()
     }
 
@@ -1873,7 +1914,7 @@ final class Solana {
     }
 
     private func preparedTransactionMessage(message: String,
-                                           publicKey: String) -> Result<(messageData: Data, parsedMessage: SolanaWireMessage), SendTransactionError> {
+                                           publicKey: String) -> Result<SolanaPreparedTransactionMessage, SendTransactionError> {
         guard let messageData = decodeTransactionMessage(message) else {
             return .failure(.invalidMessage)
         }
@@ -1882,7 +1923,7 @@ final class Solana {
     }
 
     private func preparedTransactionMessage(messageData: Data,
-                                            publicKey: String) -> Result<(messageData: Data, parsedMessage: SolanaWireMessage), SendTransactionError> {
+                                            publicKey: String) -> Result<SolanaPreparedTransactionMessage, SendTransactionError> {
         guard let parsedMessage = SolanaWireMessageParser.parse(messageData) else {
             return .failure(.invalidMessage)
         }
@@ -1893,7 +1934,8 @@ final class Solana {
             return .failure(.invalidMessage)
         }
 
-        return .success((messageData, parsedMessage))
+        return .success(SolanaPreparedTransactionMessage(messageData: messageData,
+                                                         parsedMessage: parsedMessage))
     }
 
     private func signerIndex(in parsedMessage: SolanaWireMessage, for publicKey: String) -> Int? {

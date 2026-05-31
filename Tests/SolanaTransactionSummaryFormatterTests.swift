@@ -113,30 +113,52 @@ final class SolanaTransactionSummaryFormatterTests: XCTestCase {
     }
 
     func testSolanaSummaryFormatsMultipleDecodedMessages() {
+        let fixture = multipleTransferMessages()
+
+        let approval = SolanaTransactionSummaryFormatter.approvalMessage(encodedMessages: fixture.encodedMessages,
+                                                                         messageDataList: fixture.messageDataList)
+
+        XCTAssertTrue(approval.contains("Transaction 1"))
+        XCTAssertTrue(approval.contains("Transfer 0.000005 SOL"))
+        XCTAssertTrue(approval.contains("Data:\n\n\(fixture.encodedMessages[0])"))
+        XCTAssertTrue(approval.contains("Transaction 2"))
+        XCTAssertTrue(approval.contains("Transfer 0.00001 SOL"))
+        XCTAssertTrue(approval.contains("Data:\n\n\(fixture.encodedMessages[1])"))
+    }
+
+    func testSolanaSummaryFormatsMultiplePreparedMessagesWithoutChangingOutput() throws {
+        let fixture = multipleTransferMessages()
+        let preparedMessages = try fixture.encodedMessages.map { encodedMessage in
+            try Solana.shared.preparedTransactionMessageForSigning(message: encodedMessage,
+                                                                   publicKey: fixture.signerPublicKey).get()
+        }
+
+        let reparsedApproval = SolanaTransactionSummaryFormatter.approvalMessage(encodedMessages: fixture.encodedMessages,
+                                                                                 messageDataList: fixture.messageDataList)
+        let reusedApproval = SolanaTransactionSummaryFormatter.approvalMessage(encodedMessages: fixture.encodedMessages,
+                                                                               preparedMessages: preparedMessages)
+
+        XCTAssertEqual(reusedApproval, reparsedApproval)
+    }
+
+    private func multipleTransferMessages() -> (encodedMessages: [String], messageDataList: [Data], signerPublicKey: String) {
         let payer = Data(repeating: 7, count: 32)
         let firstRecipient = Data(repeating: 8, count: 32)
         let secondRecipient = Data(repeating: 9, count: 32)
         let systemProgram = WalletCrypto.base58Decode(string: "11111111111111111111111111111111")!
         let firstMessage = SolanaMessageFixture.wireMessage(readOnlyUnsignedAccounts: 1,
-                                             accountKeys: [payer, firstRecipient, systemProgram],
-                                             bodyAfterBlockhash: SolanaMessageFixture.instruction(programIdIndex: 2,
-                                                                             accountIndices: [0, 1],
-                                                                             data: SolanaMessageFixture.uint32LE(2) + SolanaMessageFixture.uint64LE(5_000)))
+                                                             accountKeys: [payer, firstRecipient, systemProgram],
+                                                             bodyAfterBlockhash: SolanaMessageFixture.instruction(programIdIndex: 2,
+                                                                                                                  accountIndices: [0, 1],
+                                                                                                                  data: SolanaMessageFixture.uint32LE(2) + SolanaMessageFixture.uint64LE(5_000)))
         let secondMessage = SolanaMessageFixture.wireMessage(readOnlyUnsignedAccounts: 1,
-                                              accountKeys: [payer, secondRecipient, systemProgram],
-                                              bodyAfterBlockhash: SolanaMessageFixture.instruction(programIdIndex: 2,
-                                                                              accountIndices: [0, 1],
-                                                                              data: SolanaMessageFixture.uint32LE(2) + SolanaMessageFixture.uint64LE(10_000)))
-
-        let approval = SolanaTransactionSummaryFormatter.approvalMessage(encodedMessages: ["encoded-one", "encoded-two"],
-                                                                         messageDataList: [firstMessage, secondMessage])
-
-        XCTAssertTrue(approval.contains("Transaction 1"))
-        XCTAssertTrue(approval.contains("Transfer 0.000005 SOL"))
-        XCTAssertTrue(approval.contains("Data:\n\nencoded-one"))
-        XCTAssertTrue(approval.contains("Transaction 2"))
-        XCTAssertTrue(approval.contains("Transfer 0.00001 SOL"))
-        XCTAssertTrue(approval.contains("Data:\n\nencoded-two"))
+                                                              accountKeys: [payer, secondRecipient, systemProgram],
+                                                              bodyAfterBlockhash: SolanaMessageFixture.instruction(programIdIndex: 2,
+                                                                                                                   accountIndices: [0, 1],
+                                                                                                                   data: SolanaMessageFixture.uint32LE(2) + SolanaMessageFixture.uint64LE(10_000)))
+        return ([WalletCrypto.base58Encode(data: firstMessage), WalletCrypto.base58Encode(data: secondMessage)],
+                [firstMessage, secondMessage],
+                WalletCrypto.base58Encode(data: payer))
     }
 
     func testSolanaSummaryFormatsEmptyMessageListAsRawWarning() {

@@ -86,6 +86,22 @@ struct WalletPrivateKey {
             return Ed25519.sign(message: digest, seed: keyData)
         }
     }
+
+    func sign<Digests: Sequence>(digests: Digests, coin: WalletCoin) -> [Data]? where Digests.Element == Data {
+        switch coin {
+        case .ethereum:
+            guard WalletCrypto.isValidPrivateKeyData(keyData, coin: coin) else { return nil }
+            var signatures = [Data]()
+            signatures.reserveCapacity(digests.underestimatedCount)
+            for digest in digests {
+                guard let signature = sign(digest: digest, coin: coin) else { return nil }
+                signatures.append(signature)
+            }
+            return signatures
+        case .solana:
+            return Ed25519.sign(messages: digests, seed: keyData)
+        }
+    }
 }
 
 struct WalletHDWallet {
@@ -417,12 +433,11 @@ enum WalletCrypto {
     }
 
     static func hexString(_ data: Data) -> String {
-        let alphabet = Array("0123456789abcdef".utf8)
         var bytes = [UInt8]()
         bytes.reserveCapacity(data.count * 2)
         for byte in data {
-            bytes.append(alphabet[Int(byte >> 4)])
-            bytes.append(alphabet[Int(byte & 0x0f)])
+            bytes.append(hexAlphabet[Int(byte >> 4)])
+            bytes.append(hexAlphabet[Int(byte & 0x0f)])
         }
         return String(bytes: bytes, encoding: .ascii) ?? ""
     }
@@ -433,6 +448,10 @@ enum WalletCrypto {
 
     static func keccak256(data: Data) -> Data {
         return Keccak256.hash(data)
+    }
+
+    static func keccak256(parts: [Data]) -> Data {
+        return Keccak256.hash(parts: parts)
     }
 
     static func isSupportedEthereumSigningDigest(_ digest: Data) -> Bool {
@@ -624,6 +643,8 @@ enum WalletCrypto {
         default: return nil
         }
     }
+
+    private static let hexAlphabet = Array("0123456789abcdef".utf8)
 }
 
 #if DEBUG

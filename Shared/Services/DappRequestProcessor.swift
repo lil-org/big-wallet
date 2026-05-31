@@ -174,27 +174,27 @@ struct DappRequestProcessor {
                                                              publicKey: solanaRequest.publicKey,
                                                              completion: completion) else { return .none }
 
-        var decodedMessages = [Data]()
-        decodedMessages.reserveCapacity(messages.count)
+        var preparedMessages = [SolanaPreparedTransactionMessage]()
+        preparedMessages.reserveCapacity(messages.count)
         for message in messages {
-            guard let decodedMessage = decodedSolanaTransactionMessage(message,
-                                                                       publicKey: solanaRequest.publicKey,
-                                                                       request: request,
-                                                                       completion: completion)
+            guard let preparedMessage = preparedSolanaTransactionMessage(message,
+                                                                        publicKey: solanaRequest.publicKey,
+                                                                        request: request,
+                                                                        completion: completion)
             else { return .none }
-            decodedMessages.append(decodedMessage)
+            preparedMessages.append(preparedMessage)
         }
 
-        let displayMessage = solanaTransactionApprovalMessage(messages: messages,
-                                                              decodedMessages: decodedMessages)
+        let displayMessage = SolanaTransactionSummaryFormatter.approvalMessage(encodedMessages: messages,
+                                                                               preparedMessages: preparedMessages)
+        let messageDataList = preparedMessages.map(\.messageData)
         return solanaApprovalAction(request: request,
                                     wallet: wallet,
                                     account: account,
                                     subject: .approveTransaction,
                                     meta: displayMessage,
                                     completion: completion) { privateKey in
-            let results = decodedMessages.compactMap { solana.sign(messageData: $0, privateKey: privateKey) }
-            guard results.count == decodedMessages.count else {
+            guard let results = solana.sign(messageDataList: messageDataList, privateKey: privateKey) else {
                 respond(to: request, solanaError: .failedToSign, completion: completion)
                 return
             }
@@ -245,7 +245,7 @@ struct DappRequestProcessor {
                                         account: account,
                                         subject: .approveTransaction,
                                         meta: solanaTransactionApprovalMessage(message: preparedLegacyTransaction.approvalMessage,
-                                                                               messageData: preparedLegacyTransaction.messageData),
+                                                                               preparedMessage: preparedLegacyTransaction.preparedMessage),
                                         clusterSelection: clusterSelection,
                                         completion: completion) { selectedCluster, privateKey in
                 signAndSendSolanaTransaction(request: request,
@@ -304,16 +304,16 @@ struct DappRequestProcessor {
                                                                                  canonicalMessage: canonicalMessage,
                                                                                  decodedMessageData: messageData))
         case .signTransaction:
-            guard let messageData = decodedSolanaTransactionMessage(canonicalMessage,
-                                                                    publicKey: solanaRequest.publicKey,
-                                                                    request: request,
-                                                                    completion: completion)
+            guard let preparedMessage = preparedSolanaTransactionMessage(canonicalMessage,
+                                                                        publicKey: solanaRequest.publicKey,
+                                                                        request: request,
+                                                                        completion: completion)
             else { return nil }
 
-            return PreparedSolanaSigningPayload(messageData: messageData,
+            return PreparedSolanaSigningPayload(messageData: preparedMessage.messageData,
                                                 approvalSubject: .approveTransaction,
                                                 approvalMessage: solanaTransactionApprovalMessage(message: canonicalMessage,
-                                                                                                  messageData: messageData))
+                                                                                                  preparedMessage: preparedMessage))
         case .connect, .signAllTransactions, .signAndSendTransaction:
             respond(to: request, solanaError: .internalError, completion: completion)
             return nil
@@ -339,7 +339,7 @@ struct DappRequestProcessor {
                                         account: account,
                                         subject: .approveTransaction,
                                         meta: solanaTransactionApprovalMessage(message: preparedSerializedTransaction.approvalMessage,
-                                                                               messageData: preparedSerializedTransaction.messageData),
+                                                                               preparedMessage: preparedSerializedTransaction.preparedMessage),
                                         clusterSelection: clusterSelection,
                                         completion: completion) { selectedCluster, privateKey in
                 signAndSendSolanaTransaction(request: request,
@@ -379,22 +379,17 @@ struct DappRequestProcessor {
         return message
     }
 
-    private static func decodedSolanaTransactionMessage(_ message: String,
-                                                        publicKey: String,
-                                                        request: SafariRequest,
-                                                        completion: @escaping (String?) -> Void) -> Data? {
-        guard let messageData = solana.decodeTransactionMessage(message) else {
-            respond(to: request, solanaError: .sendTransaction(.invalidMessage), completion: completion)
+    private static func preparedSolanaTransactionMessage(_ message: String,
+                                                         publicKey: String,
+                                                         request: SafariRequest,
+                                                         completion: @escaping (String?) -> Void) -> SolanaPreparedTransactionMessage? {
+        switch solana.preparedTransactionMessageForSigning(message: message, publicKey: publicKey) {
+        case .failure(let error):
+            respond(to: request, solanaError: .sendTransaction(error), completion: completion)
             return nil
+        case .success(let preparedMessage):
+            return preparedMessage
         }
-
-        if let validationError = solana.validationErrorForSigningTransaction(messageData: messageData,
-                                                                             publicKey: publicKey) {
-            respond(to: request, solanaError: .sendTransaction(validationError), completion: completion)
-            return nil
-        }
-
-        return messageData
     }
 
     static func decodedSolanaSignMessage(_ message: String,
@@ -428,14 +423,10 @@ struct DappRequestProcessor {
         }
     }
 
-    private static func solanaTransactionApprovalMessage(message: String, messageData: Data) -> String {
-        return SolanaTransactionSummaryFormatter.approvalMessage(messageData: messageData,
-                                                                 encodedMessages: [message])
-    }
-
-    private static func solanaTransactionApprovalMessage(messages: [String], decodedMessages: [Data]) -> String {
-        return SolanaTransactionSummaryFormatter.approvalMessage(encodedMessages: messages,
-                                                                 messageDataList: decodedMessages)
+    private static func solanaTransactionApprovalMessage(message: String,
+                                                        preparedMessage: SolanaPreparedTransactionMessage) -> String {
+        return SolanaTransactionSummaryFormatter.approvalMessage(encodedMessages: [message],
+                                                                 preparedMessages: [preparedMessage])
     }
 
     private static func solanaApprovalAction(request: SafariRequest,

@@ -119,20 +119,36 @@ enum AESCTR {
 
 enum Ed25519 {
     static func publicKey(seed: Data) -> Data? {
-        guard seed.count == 32,
-              let privateKey = try? Curve25519.Signing.PrivateKey(rawRepresentation: seed) else { return nil }
+        guard let privateKey = signingPrivateKey(seed: seed) else { return nil }
         return privateKey.publicKey.rawRepresentation
     }
 
     static func sign(message: Data, seed: Data) -> Data? {
-        guard seed.count == 32,
-              let privateKey = try? Curve25519.Signing.PrivateKey(rawRepresentation: seed),
+        guard let privateKey = signingPrivateKey(seed: seed),
               let signature = try? privateKey.signature(for: message) else { return nil }
         return signature
+    }
+
+    static func sign<Messages: Sequence>(messages: Messages, seed: Data) -> [Data]? where Messages.Element == Data {
+        guard let privateKey = signingPrivateKey(seed: seed) else { return nil }
+
+        var signatures = [Data]()
+        signatures.reserveCapacity(messages.underestimatedCount)
+        for message in messages {
+            guard let signature = try? privateKey.signature(for: message) else { return nil }
+            signatures.append(signature)
+        }
+        return signatures
+    }
+
+    private static func signingPrivateKey(seed: Data) -> Curve25519.Signing.PrivateKey? {
+        guard seed.count == 32 else { return nil }
+        return try? Curve25519.Signing.PrivateKey(rawRepresentation: seed)
     }
 }
 
 enum Keccak256 {
+    private static let rate = 136
     private static let roundConstants: [UInt64] = [
         0x0000000000000001, 0x0000000000008082, 0x800000000000808a, 0x8000000080008000,
         0x000000000000808b, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
@@ -150,31 +166,60 @@ enum Keccak256 {
     ]
 
     static func hash(_ data: Data) -> Data {
-        let rate = 136
         var state = [UInt64](repeating: 0, count: 25)
-        var bytes = Array(data)
-        bytes.append(0x01)
-        if bytes.count % rate == 0 {
-            bytes[bytes.count - 1] |= 0x80
+        var blockStart = data.startIndex
+        while let blockEnd = data.index(blockStart, offsetBy: rate, limitedBy: data.endIndex) {
+            absorbBlock(data[blockStart..<blockEnd], into: &state)
+            blockStart = blockEnd
+        }
+
+        var finalBlock = [UInt8]()
+        finalBlock.reserveCapacity(rate)
+        finalBlock.append(contentsOf: data[blockStart..<data.endIndex])
+        absorbFinalBlock(&finalBlock, into: &state)
+        return output(from: state)
+    }
+
+    static func hash(parts: [Data]) -> Data {
+        var state = [UInt64](repeating: 0, count: 25)
+        var block = [UInt8]()
+        block.reserveCapacity(rate)
+
+        func absorb(_ byte: UInt8) {
+            block.append(byte)
+            if block.count == rate {
+                absorbBlock(block, into: &state)
+                block.removeAll(keepingCapacity: true)
+            }
+        }
+
+        for part in parts {
+            for byte in part {
+                absorb(byte)
+            }
+        }
+
+        absorbFinalBlock(&block, into: &state)
+        return output(from: state)
+    }
+
+    private static func absorbFinalBlock(_ block: inout [UInt8], into state: inout [UInt64]) {
+        block.append(0x01)
+        if block.count == rate {
+            block[rate - 1] |= 0x80
+            absorbBlock(block, into: &state)
         } else {
-            while bytes.count % rate != rate - 1 {
-                bytes.append(0)
+            while block.count < rate - 1 {
+                block.append(0)
             }
-            bytes.append(0x80)
+            block.append(0x80)
+            absorbBlock(block, into: &state)
         }
+    }
 
-        for offset in stride(from: 0, to: bytes.count, by: rate) {
-            for lane in 0..<(rate / 8) {
-                var value: UInt64 = 0
-                for byteIndex in 0..<8 {
-                    value |= UInt64(bytes[offset + lane * 8 + byteIndex]) << UInt64(8 * byteIndex)
-                }
-                state[lane] ^= value
-            }
-            permute(&state)
-        }
-
+    private static func output(from state: [UInt64]) -> Data {
         var output = Data()
+        output.reserveCapacity(32)
         for lane in 0..<4 {
             var value = state[lane]
             for _ in 0..<8 {
@@ -183,6 +228,19 @@ enum Keccak256 {
             }
         }
         return output
+    }
+
+    private static func absorbBlock<Bytes: Collection>(_ bytes: Bytes, into state: inout [UInt64]) where Bytes.Element == UInt8 {
+        var index = bytes.startIndex
+        for lane in 0..<(rate / 8) {
+            var value: UInt64 = 0
+            for byteIndex in 0..<8 {
+                value |= UInt64(bytes[index]) << UInt64(8 * byteIndex)
+                index = bytes.index(after: index)
+            }
+            state[lane] ^= value
+        }
+        permute(&state)
     }
 
     private static func permute(_ state: inout [UInt64]) {
