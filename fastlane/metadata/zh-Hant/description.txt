@@ -1,0 +1,7 @@
+Big Wallet 是一款提供 Safari 擴充功能的開源加密錢包。
+
+可在任何支援 MetaMask 或 Phantom 的網站上，透過 Safari 連接你的錢包。
+
+支援 Ethereum、Solana、Base、Polygon、Binance Smart Chain、Optimism、Arbitrum、Avalanche 等更多網路。
+
+錢包金鑰會安全儲存在 Keychain 中。

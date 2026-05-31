@@ -1,0 +1,7 @@
+Big Wallet Safari ایکسٹینشن کے ساتھ ایک اوپن سورس کرپٹو والیٹ ہے۔
+
+MetaMask یا Phantom کو سپورٹ کرنے والی کسی بھی ویب سائٹ پر Safari میں اپنا والیٹ کنیکٹ کریں۔
+
+Ethereum، Solana، Base، Polygon، Binance Smart Chain، Optimism، Arbitrum، Avalanche اور مزید نیٹ ورکس کو سپورٹ کرتا ہے۔
+
+والیٹ کی کیز Keychain میں محفوظ طریقے سے اسٹور ہوتی ہیں۔

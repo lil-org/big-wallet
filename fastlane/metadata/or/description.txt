@@ -1,0 +1,7 @@
+Big Wallet ହେଉଛି Safari ଏକ୍ସଟେନ୍ସନ୍ ସହିତ ଏକ ଓପେନ-ସୋର୍ସ କ୍ରିପ୍ଟୋ ୱାଲେଟ।
+
+MetaMask କିମ୍ବା Phantom ସମର୍ଥନ କରୁଥିବା ଯେକୌଣସି ୱେବସାଇଟ୍‌ରେ Safari ମାଧ୍ୟମରେ ଆପଣଙ୍କ ୱାଲେଟ୍‌କୁ ଯୋଡନ୍ତୁ।
+
+Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche ଏବଂ ଅନ୍ୟ ନେଟୱର୍କ ସମର୍ଥନ କରେ।
+
+ୱାଲେଟ୍ କୀଗୁଡ଼ିକ Keychainରେ ସୁରକ୍ଷିତ ଭାବରେ ସଂରକ୍ଷିତ ହୁଏ।

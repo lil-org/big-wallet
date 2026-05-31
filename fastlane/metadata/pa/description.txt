@@ -1,0 +1,7 @@
+Big Wallet Safari ਐਕਸਟੈਂਸ਼ਨ ਵਾਲਾ ਇੱਕ ਓਪਨ-ਸੋਰਸ ਕ੍ਰਿਪਟੋ ਵਾਲਿਟ ਹੈ।
+
+MetaMask ਜਾਂ Phantom ਦਾ ਸਮਰਥਨ ਕਰਨ ਵਾਲੀ ਕਿਸੇ ਵੀ ਵੈੱਬਸਾਈਟ ਉੱਤੇ Safari ਵਿੱਚ ਆਪਣਾ ਵਾਲਿਟ ਕਨੈਕਟ ਕਰੋ।
+
+Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche ਅਤੇ ਹੋਰ ਨੈੱਟਵਰਕਾਂ ਨੂੰ ਸਮਰਥਨ ਕਰਦਾ ਹੈ।
+
+ਵਾਲਿਟ ਕੁੰਜੀਆਂ Keychain ਵਿੱਚ ਸੁਰੱਖਿਅਤ ਢੰਗ ਨਾਲ ਸਟੋਰ ਹੁੰਦੀਆਂ ਹਨ।

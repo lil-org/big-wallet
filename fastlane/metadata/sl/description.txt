@@ -1,0 +1,7 @@
+Big Wallet je odprtokodna kripto denarnica z razširitvijo za Safari.
+
+Povežite denarnico v Safariju na katerem koli spletnem mestu, ki podpira MetaMask ali Phantom.
+
+Podpira Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche in druga omrežja.
+
+Ključi denarnice so varno shranjeni v Keychainu.

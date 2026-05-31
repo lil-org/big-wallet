@@ -1,0 +1,7 @@
+Big Wallet என்பது Safari நீட்டிப்புடன் வரும் ஓப்பன்-சோர்ஸ் கிரிப்டோ வாலெட் ஆகும்.
+
+MetaMask அல்லது Phantom ஆதரிக்கும் எந்த இணையதளத்திலும் Safari மூலம் உங்கள் வாலெட்டை இணைக்கவும்.
+
+Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche மற்றும் மேலும் பல நெட்வொர்க்குகளை ஆதரிக்கிறது.
+
+வாலெட் விசைகள் Keychainல் பாதுகாப்பாக சேமிக்கப்படுகின்றன.

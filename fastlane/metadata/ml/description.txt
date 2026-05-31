@@ -1,0 +1,7 @@
+Big Wallet Safari വിപുലീകരണത്തോടുകൂടിയ ഒരു ഓപ്പൺ-സോഴ്‌സ് ക്രിപ്റ്റോ വാലറ്റാണ്.
+
+MetaMask അല്ലെങ്കിൽ Phantom പിന്തുണയ്ക്കുന്ന ഏത് വെബ്സൈറ്റിലും Safariയിൽ നിങ്ങളുടെ വാലറ്റ് ബന്ധിപ്പിക്കുക.
+
+Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche എന്നിവയും കൂടുതൽ നെറ്റ്‌വർക്കുകളും പിന്തുണയ്ക്കുന്നു.
+
+വാലറ്റ് കീകൾ Keychainൽ സുരക്ഷിതമായി സൂക്ഷിക്കുന്നു.
