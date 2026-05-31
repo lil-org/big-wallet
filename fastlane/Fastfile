@@ -56,6 +56,7 @@ lane :deliver_metadata_ios do
       platform: "ios",
       run_precheck_before_submit: false,
       force: true,
+      ignore_language_directory_validation: true,
     )
   end
   
@@ -73,6 +74,7 @@ lane :deliver_metadata_macos do
       platform: "osx",
       run_precheck_before_submit: false,
       force: true,
+      ignore_language_directory_validation: true,
     )
   end
   
@@ -111,6 +113,7 @@ lane :release_ios do
       submit_for_review: true,
       automatic_release: true,
       submission_information: { add_id_info_uses_idfa: false },
+      ignore_language_directory_validation: true,
     )
   end
 
@@ -133,6 +136,7 @@ lane :release_macos do
       submit_for_review: true,
       automatic_release: true,
       submission_information: { add_id_info_uses_idfa: false },
+      ignore_language_directory_validation: true,
     )
   end
 
@@ -156,6 +160,7 @@ lane :release do
       submit_for_review: true,
       automatic_release: true,
       submission_information: { add_id_info_uses_idfa: false },
+      ignore_language_directory_validation: true,
     )
   end
 
@@ -171,6 +176,7 @@ lane :release do
       submit_for_review: true,
       automatic_release: true,
       submission_information: { add_id_info_uses_idfa: false },
+      ignore_language_directory_validation: true,
     )
   end
 
