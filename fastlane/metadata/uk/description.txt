@@ -1,7 +1,7 @@
-big wallet — це опен-сорс криптогаманець із розширенням для safari
+Big Wallet — це криптогаманець із відкритим кодом і розширенням для Safari.
 
-підключайте гаманець на будь-якому сайті в safari, натиснувши кнопку metamask
+Підключайте гаманець у Safari на будь-якому сайті з підтримкою MetaMask або Phantom.
 
-підтримує ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche та інші мережі!
+Підтримує Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche та інші мережі.
 
-гаманці безпечно зберігаються в keychain
+Ключі гаманців безпечно зберігаються в Keychain.

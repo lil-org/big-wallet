@@ -1,7 +1,7 @@
-big wallet هو محفظة كريبتو مفتوحة المصدر مع إضافة لسفاري
+Big Wallet محفظة كريبتو مفتوحة المصدر مع إضافة Safari.
 
-قم بتوصيل المحفظة على أي موقع في سفاري بالضغط على زر metamask
+اربط محفظتك في Safari على أي موقع يدعم MetaMask أو Phantom.
 
-يدعم ethereum، zora، base، polygon، binance smart chain، optimism، arbitrum، avalanche، والمزيد!
+يدعم Ethereum وSolana وBase وPolygon وBinance Smart Chain وOptimism وArbitrum وAvalanche والمزيد.
 
-يتم تخزين المحافظ بأمان في keychain
+تُحفظ مفاتيح محافظك بأمان في Keychain.

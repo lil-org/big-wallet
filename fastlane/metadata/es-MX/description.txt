@@ -1,7 +1,7 @@
-big wallet es una wallet cripto de código abierto con una extensión para Safari
+Big Wallet es una billetera cripto de código abierto con extensión para Safari.
 
-conecta una wallet en cualquier sitio web en Safari tocando un botón de MetaMask
+Conecta tu billetera en Safari en cualquier sitio web compatible con MetaMask o Phantom.
 
-compatible con ethereum, zora, base, polygon, binance smart chain, optimism, arbitrum, avalanche, ¡y más!
+Compatible con Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche y más redes.
 
-las wallets se guardan de forma segura en el Keychain
+Las claves de la billetera se guardan de forma segura en Keychain.

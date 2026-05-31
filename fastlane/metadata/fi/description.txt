@@ -1,7 +1,7 @@
-big wallet on avoimen lähdekoodin kryptolompakko, jossa on safari-laajennus
+Big Wallet on avoimen lähdekoodin kryptolompakko, jossa on Safari-laajennus.
 
-yhdistä lompakko mihin tahansa sivustoon safarissa klikkaamalla metamask-painiketta
+Yhdistä lompakkosi Safarissa millä tahansa sivustolla, joka tukee MetaMask- tai Phantom-yhteyttä.
 
-tukee ethereumia, zoraa, basea, polygonia, binance smart chainia, optimismia, arbitrumia, avalanchea ja paljon muuta!
+Tukee verkkoja kuten Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche ja muut.
 
-lompakot tallennetaan turvallisesti keychainiin
+Lompakoiden avaimet tallennetaan turvallisesti Keychainiin.
