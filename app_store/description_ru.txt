@@ -1,7 +1,7 @@
-big wallet — это опен-сорс кошелек с расширением для сафари
+Big Wallet — это криптокошелек с открытым исходным кодом и расширением для Safari.
 
-подключайте кошелек на любом сайте, где можно подключить метамаск
+Подключайте кошелек на любом сайте, где доступно подключение через MetaMask или Phantom.
 
-работает на ethereum, solana, base, polygon, binance smart chain, optimism, arbitrum, avalanche, и на других сетях
+Поддерживает Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche и другие сети.
 
-зашифрованные ключи безопасно хранятся в keychain
+Зашифрованные ключи безопасно хранятся в Keychain.
