@@ -11,6 +11,13 @@ int32_t bw_scrypt_romix_blocks(const uint32_t *input_words,
                                size_t r,
                                size_t p);
 
+int32_t bw_scrypt_romix_blocks_range(const uint32_t *input_words,
+                                     uint32_t *output_words,
+                                     size_t n,
+                                     size_t r,
+                                     size_t block_start,
+                                     size_t block_count);
+
 static void bw_scrypt_zero_memory(void *ptr, size_t byte_count) {
     volatile uint8_t *bytes = (volatile uint8_t *)ptr;
     while (byte_count > 0) {
@@ -26,7 +33,7 @@ static void bw_scrypt_free_zero(void *ptr, size_t byte_count) {
     }
 }
 
-static uint32_t bw_scrypt_rotate_left(uint32_t value, uint32_t amount) {
+static inline uint32_t bw_scrypt_rotate_left(uint32_t value, uint32_t amount) {
     return (value << amount) | (value >> (32 - amount));
 }
 
@@ -107,7 +114,7 @@ static void bw_scrypt_block_mix(uint32_t *block, uint32_t *scratch, uint32_t *x,
     memcpy(block, scratch, chunk_count * 16 * sizeof(uint32_t));
 }
 
-static uint64_t bw_scrypt_integerify(const uint32_t *block, size_t r) {
+static inline uint64_t bw_scrypt_integerify(const uint32_t *block, size_t r) {
     const uint32_t *value = block + (2 * r - 1) * 16;
     return ((uint64_t)value[1] << 32) | value[0];
 }
@@ -145,15 +152,29 @@ int32_t bw_scrypt_romix_blocks(const uint32_t *input_words,
                                size_t n,
                                size_t r,
                                size_t p) {
-    if (input_words == NULL || output_words == NULL || n <= 1 || r == 0 || p == 0 || (n & (n - 1)) != 0) {
+    return bw_scrypt_romix_blocks_range(input_words, output_words, n, r, 0, p);
+}
+
+int32_t bw_scrypt_romix_blocks_range(const uint32_t *input_words,
+                                     uint32_t *output_words,
+                                     size_t n,
+                                     size_t r,
+                                     size_t block_start,
+                                     size_t block_count) {
+    if (input_words == NULL || output_words == NULL || n <= 1 || r == 0 || block_count == 0 || (n & (n - 1)) != 0) {
         return 0;
     }
 
     const size_t block_words = 32 * r;
     if (block_words / 32 != r ||
-        p > SIZE_MAX / block_words ||
+        block_count > SIZE_MAX - block_start ||
         n > SIZE_MAX / block_words ||
         block_words > SIZE_MAX / sizeof(uint32_t)) {
+        return 0;
+    }
+
+    const size_t block_end = block_start + block_count;
+    if (block_end > SIZE_MAX / block_words) {
         return 0;
     }
 
@@ -179,7 +200,7 @@ int32_t bw_scrypt_romix_blocks(const uint32_t *input_words,
         return 0;
     }
 
-    for (size_t block_index = 0; block_index < p; block_index++) {
+    for (size_t block_index = block_start; block_index < block_end; block_index++) {
         const size_t offset = block_index * block_words;
         bw_scrypt_romix_preallocated(input_words + offset,
                                      output_words + offset,

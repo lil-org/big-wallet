@@ -2,6 +2,7 @@
 
 import CommonCrypto
 import CryptoKit
+import Dispatch
 import Foundation
 
 enum PBKDF2 {
@@ -342,6 +343,7 @@ enum Scrypt {
     private static let maxDerivedKeyLength = 1024
     private static let maxInitialDerivedKeyLength = 8192
     private static let maxMemoryBytes = 256 * 1024 * 1024
+    private static let maxParallelROMixMemoryBytes = 64 * 1024 * 1024
 
 #if DEBUG
     private struct CacheKey: Hashable {
@@ -408,13 +410,7 @@ enum Scrypt {
                                        maximumKeyLength: maxInitialDerivedKeyLength)
         guard initialKey.count == initialKeyLength else { return Data() }
         let initialWords = littleEndianWords(initialKey)
-        var words = Array(repeating: UInt32(0), count: initialWords.count)
-        let status = initialWords.withUnsafeBufferPointer { input in
-            words.withUnsafeMutableBufferPointer { output in
-                bwScryptROMixBlocks(input.baseAddress!, output.baseAddress!, n, r, p)
-            }
-        }
-        guard status == 1 else { return Data() }
+        guard let words = deriveROMix(input: initialWords, n: n, r: r, p: p) else { return Data() }
         let derivedKey = PBKDF2.sha256(password: password, salt: data(fromLittleEndianWords: words), rounds: 1, keyLength: dkLen)
 #if DEBUG
         if let cacheKey {
@@ -441,30 +437,106 @@ enum Scrypt {
     }
 
     @_optimize(speed)
-    private static func littleEndianWords(_ data: Data) -> [UInt32] {
-        let bytes = Array(data)
-        var words = [UInt32](repeating: 0, count: bytes.count / 4)
-        for index in words.indices {
-            let offset = index * 4
-            words[index] = UInt32(bytes[offset])
-                | (UInt32(bytes[offset + 1]) << 8)
-                | (UInt32(bytes[offset + 2]) << 16)
-                | (UInt32(bytes[offset + 3]) << 24)
+    private static func deriveROMix(input: [UInt32], n: Int, r: Int, p: Int) -> [UInt32]? {
+        var output = Array(repeating: UInt32(0), count: input.count)
+        if p > 1,
+           ProcessInfo.processInfo.activeProcessorCount > 1,
+           deriveROMixParallel(input: input, output: &output, n: n, r: r, p: p) {
+            return output
         }
-        return words
+
+        guard deriveROMixSequential(input: input, output: &output, n: n, r: r, p: p) else { return nil }
+        return output
+    }
+
+    @_optimize(speed)
+    private static func deriveROMixParallel(input: [UInt32], output: inout [UInt32], n: Int, r: Int, p: Int) -> Bool {
+        let blockWords = 32 * r
+        guard input.count == blockWords * p, output.count == input.count else { return false }
+        guard let blockBytes = multiplied(blockWords, MemoryLayout<UInt32>.size),
+              let blockMemoryBytes = multiplied(n, blockBytes),
+              blockMemoryBytes > 0 else { return false }
+
+        let maxWorkerCount = maxParallelROMixMemoryBytes / blockMemoryBytes
+        let workerCount = min(p, ProcessInfo.processInfo.activeProcessorCount, maxWorkerCount)
+        guard workerCount > 1 else { return false }
+
+        let statuses = UnsafeMutablePointer<Int32>.allocate(capacity: workerCount)
+        statuses.initialize(repeating: 0, count: workerCount)
+        defer {
+            statuses.deinitialize(count: workerCount)
+            statuses.deallocate()
+        }
+
+        return input.withUnsafeBufferPointer { inputBuffer in
+            output.withUnsafeMutableBufferPointer { outputBuffer in
+                guard let inputBase = inputBuffer.baseAddress,
+                      let outputBase = outputBuffer.baseAddress else { return false }
+
+                let baseWorkerBlockCount = p / workerCount
+                let extraBlocks = p % workerCount
+                DispatchQueue.concurrentPerform(iterations: workerCount) { workerIndex in
+                    let blockCount = baseWorkerBlockCount + (workerIndex < extraBlocks ? 1 : 0)
+                    let blockStart = workerIndex * baseWorkerBlockCount + min(workerIndex, extraBlocks)
+                    statuses[workerIndex] = bwScryptROMixBlocksRange(inputBase,
+                                                                     outputBase,
+                                                                     n,
+                                                                     r,
+                                                                     blockStart,
+                                                                     blockCount)
+                }
+
+                for workerIndex in 0..<workerCount where statuses[workerIndex] != 1 {
+                    return false
+                }
+                return true
+            }
+        }
+    }
+
+    @_optimize(speed)
+    private static func deriveROMixSequential(input: [UInt32], output: inout [UInt32], n: Int, r: Int, p: Int) -> Bool {
+        return input.withUnsafeBufferPointer { inputBuffer in
+            output.withUnsafeMutableBufferPointer { outputBuffer in
+                guard let inputBase = inputBuffer.baseAddress,
+                      let outputBase = outputBuffer.baseAddress else { return false }
+                return bwScryptROMixBlocks(inputBase, outputBase, n, r, p) == 1
+            }
+        }
+    }
+
+    @_optimize(speed)
+    private static func littleEndianWords(_ data: Data) -> [UInt32] {
+        precondition(data.count.isMultiple(of: 4))
+        return data.withUnsafeBytes { rawBuffer in
+            let bytes = rawBuffer.bindMemory(to: UInt8.self)
+            var words = [UInt32](repeating: 0, count: bytes.count / 4)
+            for index in words.indices {
+                let offset = index * 4
+                words[index] = UInt32(bytes[offset])
+                    | (UInt32(bytes[offset + 1]) << 8)
+                    | (UInt32(bytes[offset + 2]) << 16)
+                    | (UInt32(bytes[offset + 3]) << 24)
+            }
+            return words
+        }
     }
 
     @_optimize(speed)
     private static func data(fromLittleEndianWords words: [UInt32]) -> Data {
-        var bytes = [UInt8]()
-        bytes.reserveCapacity(words.count * 4)
-        for word in words {
-            bytes.append(UInt8(word & 0xff))
-            bytes.append(UInt8((word >> 8) & 0xff))
-            bytes.append(UInt8((word >> 16) & 0xff))
-            bytes.append(UInt8((word >> 24) & 0xff))
+        var data = Data(count: words.count * 4)
+        data.withUnsafeMutableBytes { rawBuffer in
+            let bytes = rawBuffer.bindMemory(to: UInt8.self)
+            for index in words.indices {
+                let offset = index * 4
+                let word = words[index]
+                bytes[offset] = UInt8(word & 0xff)
+                bytes[offset + 1] = UInt8((word >> 8) & 0xff)
+                bytes[offset + 2] = UInt8((word >> 16) & 0xff)
+                bytes[offset + 3] = UInt8((word >> 24) & 0xff)
+            }
         }
-        return Data(bytes)
+        return data
     }
 }
 
@@ -474,3 +546,11 @@ private func bwScryptROMixBlocks(_ inputWords: UnsafePointer<UInt32>,
                                  _ n: Int,
                                  _ r: Int,
                                  _ p: Int) -> Int32
+
+@_silgen_name("bw_scrypt_romix_blocks_range")
+private func bwScryptROMixBlocksRange(_ inputWords: UnsafePointer<UInt32>,
+                                      _ outputWords: UnsafeMutablePointer<UInt32>,
+                                      _ n: Int,
+                                      _ r: Int,
+                                      _ blockStart: Int,
+                                      _ blockCount: Int) -> Int32

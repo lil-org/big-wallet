@@ -14,6 +14,14 @@ private func bwScryptROMixBlocks(_ inputWords: UnsafePointer<UInt32>?,
                                  _ r: Int,
                                  _ p: Int) -> Int32
 
+@_silgen_name("bw_scrypt_romix_blocks_range")
+private func bwScryptROMixBlocksRange(_ inputWords: UnsafePointer<UInt32>?,
+                                      _ outputWords: UnsafeMutablePointer<UInt32>?,
+                                      _ n: Int,
+                                      _ r: Int,
+                                      _ blockStart: Int,
+                                      _ blockCount: Int) -> Int32
+
 private func littleEndianWords(_ data: Data) -> [UInt32] {
     precondition(data.count.isMultiple(of: 4))
 
@@ -862,6 +870,20 @@ final class ScryptROMixShimTests: XCTestCase {
         XCTAssertEqual(dataFromLittleEndianWords(outputWords), Self.rfc7914ROMixOutput)
     }
 
+    func testSingleBlockRangeROMixMatchesRFC7914Vector() {
+        let inputWords = littleEndianWords(Self.rfc7914ROMixInput)
+        var outputWords = [UInt32](repeating: 0, count: inputWords.count)
+
+        let status = inputWords.withUnsafeBufferPointer { input in
+            outputWords.withUnsafeMutableBufferPointer { output in
+                bwScryptROMixBlocksRange(input.baseAddress, output.baseAddress, 16, 1, 0, 1)
+            }
+        }
+
+        XCTAssertEqual(status, 1)
+        XCTAssertEqual(dataFromLittleEndianWords(outputWords), Self.rfc7914ROMixOutput)
+    }
+
     func testROMixProcessesParallelBlocksIndependently() {
         var inputData = Data()
         inputData.append(Self.rfc7914ROMixInput)
@@ -883,6 +905,75 @@ final class ScryptROMixShimTests: XCTestCase {
         XCTAssertEqual(dataFromLittleEndianWords(outputWords), expectedOutput)
     }
 
+    func testSingleBlockRangesAndMultiBlockROMixMatchForEachBlock() {
+        var inputData = Data()
+        inputData.append(Self.rfc7914ROMixInput)
+        inputData.append(Self.rfc7914ROMixOutput)
+
+        let inputWords = littleEndianWords(inputData)
+        var multiBlockOutputWords = [UInt32](repeating: 0, count: inputWords.count)
+        var singleBlockRangeOutputWords = [UInt32](repeating: 0, count: inputWords.count)
+
+        let multiBlockStatus = inputWords.withUnsafeBufferPointer { input in
+            multiBlockOutputWords.withUnsafeMutableBufferPointer { output in
+                bwScryptROMixBlocks(input.baseAddress, output.baseAddress, 16, 1, 2)
+            }
+        }
+        let singleBlockStatus = inputWords.withUnsafeBufferPointer { input in
+            singleBlockRangeOutputWords.withUnsafeMutableBufferPointer { output in
+                let firstStatus = bwScryptROMixBlocksRange(input.baseAddress,
+                                                           output.baseAddress,
+                                                           16,
+                                                           1,
+                                                           0,
+                                                           1)
+                let secondStatus = bwScryptROMixBlocksRange(input.baseAddress,
+                                                            output.baseAddress,
+                                                            16,
+                                                            1,
+                                                            1,
+                                                            1)
+                return firstStatus == 1 && secondStatus == 1 ? 1 : 0
+            }
+        }
+
+        XCTAssertEqual(multiBlockStatus, 1)
+        XCTAssertEqual(singleBlockStatus, 1)
+        XCTAssertEqual(singleBlockRangeOutputWords, multiBlockOutputWords)
+    }
+
+    func testROMixRangeMatchesMultiBlockOutput() {
+        var inputData = Data()
+        inputData.append(Self.rfc7914ROMixInput)
+        inputData.append(Self.rfc7914ROMixOutput)
+        inputData.append(Self.rfc7914ROMixInput)
+
+        let inputWords = littleEndianWords(inputData)
+        var multiBlockOutputWords = [UInt32](repeating: 0, count: inputWords.count)
+        var rangedOutputWords = [UInt32](repeating: 0, count: inputWords.count)
+
+        let multiBlockStatus = inputWords.withUnsafeBufferPointer { input in
+            multiBlockOutputWords.withUnsafeMutableBufferPointer { output in
+                bwScryptROMixBlocks(input.baseAddress, output.baseAddress, 16, 1, 3)
+            }
+        }
+        let firstRangeStatus = inputWords.withUnsafeBufferPointer { input in
+            rangedOutputWords.withUnsafeMutableBufferPointer { output in
+                bwScryptROMixBlocksRange(input.baseAddress, output.baseAddress, 16, 1, 0, 1)
+            }
+        }
+        let secondRangeStatus = inputWords.withUnsafeBufferPointer { input in
+            rangedOutputWords.withUnsafeMutableBufferPointer { output in
+                bwScryptROMixBlocksRange(input.baseAddress, output.baseAddress, 16, 1, 1, 2)
+            }
+        }
+
+        XCTAssertEqual(multiBlockStatus, 1)
+        XCTAssertEqual(firstRangeStatus, 1)
+        XCTAssertEqual(secondRangeStatus, 1)
+        XCTAssertEqual(rangedOutputWords, multiBlockOutputWords)
+    }
+
     func testROMixRejectsInvalidInputs() {
         let inputWords = littleEndianWords(Self.rfc7914ROMixInput)
         var outputWords = [UInt32](repeating: 0, count: inputWords.count)
@@ -897,20 +988,52 @@ final class ScryptROMixShimTests: XCTestCase {
         }
         XCTAssertEqual(nilOutputStatus, 0)
 
-        let invalidParameterCases = [
+        let nilRangeInputStatus = outputWords.withUnsafeMutableBufferPointer { output in
+            bwScryptROMixBlocksRange(nil, output.baseAddress, 16, 1, 0, 1)
+        }
+        XCTAssertEqual(nilRangeInputStatus, 0)
+
+        let nilRangeOutputStatus = inputWords.withUnsafeBufferPointer { input in
+            bwScryptROMixBlocksRange(input.baseAddress, nil, 16, 1, 0, 1)
+        }
+        XCTAssertEqual(nilRangeOutputStatus, 0)
+
+        let emptyRangeStatus = inputWords.withUnsafeBufferPointer { input in
+            outputWords.withUnsafeMutableBufferPointer { output in
+                bwScryptROMixBlocksRange(input.baseAddress, output.baseAddress, 16, 1, 0, 0)
+            }
+        }
+        XCTAssertEqual(emptyRangeStatus, 0)
+
+        let invalidMultiBlockParameterCases = [
             (n: 1, r: 1, p: 1),
             (n: 3, r: 1, p: 1),
             (n: 16, r: 0, p: 1),
             (n: 16, r: 1, p: 0),
         ]
 
-        for invalidCase in invalidParameterCases {
+        for invalidCase in invalidMultiBlockParameterCases {
             let status = inputWords.withUnsafeBufferPointer { input in
                 outputWords.withUnsafeMutableBufferPointer { output in
                     bwScryptROMixBlocks(input.baseAddress, output.baseAddress, invalidCase.n, invalidCase.r, invalidCase.p)
                 }
             }
             XCTAssertEqual(status, 0, "Expected rejection for n=\(invalidCase.n), r=\(invalidCase.r), p=\(invalidCase.p)")
+        }
+
+        let invalidRangeParameterCases = [
+            (n: 1, r: 1),
+            (n: 3, r: 1),
+            (n: 16, r: 0),
+        ]
+
+        for invalidCase in invalidRangeParameterCases {
+            let status = inputWords.withUnsafeBufferPointer { input in
+                outputWords.withUnsafeMutableBufferPointer { output in
+                    bwScryptROMixBlocksRange(input.baseAddress, output.baseAddress, invalidCase.n, invalidCase.r, 0, 1)
+                }
+            }
+            XCTAssertEqual(status, 0, "Expected range rejection for n=\(invalidCase.n), r=\(invalidCase.r)")
         }
     }
 
@@ -924,6 +1047,14 @@ final class WalletCoreProxyPerformanceGateTests: XCTestCase {
         static let secp256k1PublicKey = 25.0
         static let secp256k1Sign = 15.0
         static let ed25519Sign = 15.0
+    }
+    private enum PerformanceGateEnvironment {
+        static let allowDebug = "WALLETCORE_PROXY_PERF_ALLOW_DEBUG"
+        static let scryptDefaultDerive = "WALLETCORE_PROXY_PERF_SCRYPT_DERIVE_MS"
+        static let scryptWalletCoreJSONImport = "WALLETCORE_PROXY_PERF_SCRYPT_WALLETCORE_JSON_IMPORT_MS"
+        static let secp256k1PublicKey = "WALLETCORE_PROXY_PERF_SECP256K1_PUBLIC_KEY_MS"
+        static let secp256k1Sign = "WALLETCORE_PROXY_PERF_SECP256K1_SIGN_MS"
+        static let ed25519Sign = "WALLETCORE_PROXY_PERF_ED25519_SIGN_MS"
     }
 
     private enum PerformanceThresholdResolution: Equatable {
@@ -978,9 +1109,9 @@ final class WalletCoreProxyPerformanceGateTests: XCTestCase {
     }
 
     func testScryptDefaultDerivationPerformanceGate() throws {
-        try Self.assertReleasePerformance("scrypt default KDF",
-                                          thresholdEnv: "WALLETCORE_PROXY_PERF_SCRYPT_DERIVE_MS",
-                                          baselineCeilingMilliseconds: WalletCoreBaselineCeilingMilliseconds.scryptDefaultDerive) {
+        try Self.assertPerformanceGate("scrypt default KDF",
+                                       thresholdEnv: PerformanceGateEnvironment.scryptDefaultDerive,
+                                       baselineCeilingMilliseconds: WalletCoreBaselineCeilingMilliseconds.scryptDefaultDerive) {
             let derivedKey = Scrypt.deriveKey(password: Vectors.password,
                                               salt: Data(repeating: 1, count: 32),
                                               n: 1 << 14,
@@ -1021,9 +1152,9 @@ final class WalletCoreProxyPerformanceGateTests: XCTestCase {
     }
 
     func testScryptWalletCoreJSONImportPerformanceGate() throws {
-        try Self.assertReleasePerformance("scrypt WalletCore JSON import KDF",
-                                          thresholdEnv: "WALLETCORE_PROXY_PERF_SCRYPT_WALLETCORE_JSON_IMPORT_MS",
-                                          baselineCeilingMilliseconds: WalletCoreBaselineCeilingMilliseconds.scryptWalletCoreJSONImport) {
+        try Self.assertPerformanceGate("scrypt WalletCore JSON import KDF",
+                                       thresholdEnv: PerformanceGateEnvironment.scryptWalletCoreJSONImport,
+                                       baselineCeilingMilliseconds: WalletCoreBaselineCeilingMilliseconds.scryptWalletCoreJSONImport) {
             let derivedKey = Scrypt.deriveKey(password: Vectors.walletCoreJSONPrivateKeyPassword,
                                               salt: Vectors.data(hex: "ab0c7876052600dd703518d6fc3fe8984592145b591fc8fb5c6d43190334ba19"),
                                               n: 1 << 18,
@@ -1035,48 +1166,51 @@ final class WalletCoreProxyPerformanceGateTests: XCTestCase {
     }
 
     func testSecp256k1PublicKeyPerformanceGate() throws {
-        try Self.assertReleasePerformance("secp256k1 public key derivation",
-                                          thresholdEnv: "WALLETCORE_PROXY_PERF_SECP256K1_PUBLIC_KEY_MS",
-                                          baselineCeilingMilliseconds: WalletCoreBaselineCeilingMilliseconds.secp256k1PublicKey,
-                                          iterations: 5) {
+        try Self.assertPerformanceGate("secp256k1 public key derivation",
+                                       thresholdEnv: PerformanceGateEnvironment.secp256k1PublicKey,
+                                       baselineCeilingMilliseconds: WalletCoreBaselineCeilingMilliseconds.secp256k1PublicKey,
+                                       iterations: 5) {
             Secp256k1.publicKey(privateKey: Vectors.secpPrivateKey, compressed: false)?.count ?? 0
         }
     }
 
     func testSecp256k1SigningPerformanceGate() throws {
-        try Self.assertReleasePerformance("secp256k1 signing",
-                                          thresholdEnv: "WALLETCORE_PROXY_PERF_SECP256K1_SIGN_MS",
-                                          baselineCeilingMilliseconds: WalletCoreBaselineCeilingMilliseconds.secp256k1Sign,
-                                          iterations: 5) {
+        try Self.assertPerformanceGate("secp256k1 signing",
+                                       thresholdEnv: PerformanceGateEnvironment.secp256k1Sign,
+                                       baselineCeilingMilliseconds: WalletCoreBaselineCeilingMilliseconds.secp256k1Sign,
+                                       iterations: 5) {
             Secp256k1.sign(digest: Vectors.ethereumRawSignDigest, privateKey: Vectors.secpPrivateKey)?.count ?? 0
         }
     }
 
     func testEd25519SigningPerformanceGate() throws {
-        try Self.assertReleasePerformance("Ed25519 signing",
-                                          thresholdEnv: "WALLETCORE_PROXY_PERF_ED25519_SIGN_MS",
-                                          baselineCeilingMilliseconds: WalletCoreBaselineCeilingMilliseconds.ed25519Sign,
-                                          iterations: 5) {
+        try Self.assertPerformanceGate("Ed25519 signing",
+                                       thresholdEnv: PerformanceGateEnvironment.ed25519Sign,
+                                       baselineCeilingMilliseconds: WalletCoreBaselineCeilingMilliseconds.ed25519Sign,
+                                       iterations: 5) {
             Ed25519.sign(message: Vectors.solanaMessage, seed: Vectors.solanaSigningPrivateKey)?.count ?? 0
         }
     }
 
-    private static func assertReleasePerformance(_ name: String,
-                                                 thresholdEnv: String,
-                                                 baselineCeilingMilliseconds: Double,
-                                                 iterations: Int = 1,
-                                                 file: StaticString = #filePath,
-                                                 line: UInt = #line,
-                                                 operation: () -> Int) throws {
+    private static func assertPerformanceGate(_ name: String,
+                                              thresholdEnv: String,
+                                              baselineCeilingMilliseconds: Double,
+                                              iterations: Int = 1,
+                                              file: StaticString = #filePath,
+                                              line: UInt = #line,
+                                              operation: () -> Int) throws {
+        let environment = ProcessInfo.processInfo.environment
 #if DEBUG
-        throw XCTSkip("Release-only crypto performance gate.")
-#else
+        guard environment[PerformanceGateEnvironment.allowDebug] == "1" else {
+            throw XCTSkip("\(PerformanceGateEnvironment.allowDebug)=1 is required to run crypto performance gates in Debug.")
+        }
+#endif
+
         guard iterations > 0 else {
             XCTFail("\(name) performance gate must run at least one iteration", file: file, line: line)
             return
         }
 
-        let environment = ProcessInfo.processInfo.environment
         let thresholdMilliseconds: Double
         switch Self.performanceThreshold(name,
                                          thresholdEnv: thresholdEnv,
@@ -1105,7 +1239,6 @@ final class WalletCoreProxyPerformanceGateTests: XCTestCase {
                                  "\(name) averaged \(averageMilliseconds)ms, above WalletCore baseline \(thresholdMilliseconds)ms",
                                  file: file,
                                  line: line)
-#endif
     }
 
     private static func performanceThreshold(_ name: String,

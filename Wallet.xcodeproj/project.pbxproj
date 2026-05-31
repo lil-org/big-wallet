@@ -508,14 +508,14 @@
 		2F4D00622FAA000000000000 /* WalletCoreProxyBIP39WordList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00602FAA000000000000 /* WalletCoreProxyBIP39WordList.swift */; };
 		2F4D00632FAA000000000000 /* WalletCoreProxyBIP39WordList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00602FAA000000000000 /* WalletCoreProxyBIP39WordList.swift */; };
 		2F4D00642FAA000000000000 /* WalletCoreProxyBIP39WordList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00602FAA000000000000 /* WalletCoreProxyBIP39WordList.swift */; };
-		2F4D00722FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00702FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c */; settings = {COMPILER_FLAGS = "-DENABLE_MODULE_RECOVERY=1 -Wno-unused-function"; }; };
-		2F4D00732FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00702FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c */; settings = {COMPILER_FLAGS = "-DENABLE_MODULE_RECOVERY=1 -Wno-unused-function"; }; };
-		2F4D00742FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00702FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c */; settings = {COMPILER_FLAGS = "-DENABLE_MODULE_RECOVERY=1 -Wno-unused-function"; }; };
-		2F4D00752FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00702FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c */; settings = {COMPILER_FLAGS = "-DENABLE_MODULE_RECOVERY=1 -Wno-unused-function"; }; };
-		2F4D00762FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c */; };
-		2F4D00772FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c */; };
-		2F4D00782FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c */; };
-		2F4D00792FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c */; };
+		2F4D00722FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00702FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION) -DENABLE_MODULE_RECOVERY=1 -Wno-unused-function"; }; };
+		2F4D00732FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00702FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION) -DENABLE_MODULE_RECOVERY=1 -Wno-unused-function"; }; };
+		2F4D00742FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00702FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION) -DENABLE_MODULE_RECOVERY=1 -Wno-unused-function"; }; };
+		2F4D00752FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00702FAA000000000000 /* Secp256k1Backend/secp256k1/src/secp256k1.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION) -DENABLE_MODULE_RECOVERY=1 -Wno-unused-function"; }; };
+		2F4D00762FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION)"; }; };
+		2F4D00772FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION)"; }; };
+		2F4D00782FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION)"; }; };
+		2F4D00792FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00712FAA000000000000 /* Secp256k1Backend/big_wallet_secp256k1_shim.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION)"; }; };
 		2F4D007C2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007A2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
 		2F4D007D2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007A2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
 		2F4D007E2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007A2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
@@ -524,13 +524,13 @@
 		2F4D00812FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007B2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
 		2F4D00822FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007B2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
 		2F4D00832FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D007B2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c */; settings = {COMPILER_FLAGS = "-Wno-unused-function"; }; };
-		2F4D00A12FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; };
-		2F4D00A22FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; };
-		2F4D00A32FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; };
-		2F4D00A42FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; };
-		2F4D00A52FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; };
-		2F4D00A62FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; };
-		2F4D00A72FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; };
+		2F4D00A12FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION)"; }; };
+		2F4D00A22FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION)"; }; };
+		2F4D00A32FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION)"; }; };
+		2F4D00A42FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION)"; }; };
+		2F4D00A52FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION)"; }; };
+		2F4D00A62FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION)"; }; };
+		2F4D00A72FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION)"; }; };
 		2F5E10012FA5000000F0000 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */; };
 		2F5E10022FA5000000F0000 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */; };
 		2F5E10032FA5000000F0000 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */; };
@@ -3932,6 +3932,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				BW_WALLETCORE_PROXY_C_OPTIMIZATION = "-O3";
 				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -3997,6 +3998,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				BW_WALLETCORE_PROXY_C_OPTIMIZATION = "-O3";
 				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
