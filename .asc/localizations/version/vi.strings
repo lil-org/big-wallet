@@ -1,0 +1,5 @@
+"description" = "Big Wallet là ví tiền mã hóa mã nguồn mở có tiện ích mở rộng cho Safari.\n\nKết nối ví trong Safari trên bất kỳ trang web nào hỗ trợ MetaMask hoặc Phantom.\n\nHỗ trợ Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche và nhiều mạng khác.\n\nKhóa ví được lưu trữ an toàn trong Keychain.";
+"keywords" = "web3,metamask,phantom,onchain,ethereum,solana,base,polygon,dapp,defi,token,swap,evm,kết nối";
+"whatsNew" = "các bản sửa lỗi nhỏ và cải tiến\n\ngửi phản hồi yo@lil.org";
+"supportUrl" = "https://help.lil.org";
+"marketingUrl" = "https://lil.org";

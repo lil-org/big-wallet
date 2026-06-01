@@ -1,7 +1,0 @@
-Big Wallet er en kryptolommebok med åpen kildekode og Safari-utvidelse.
-
-Koble til lommeboken i Safari på alle nettsteder som støtter MetaMask eller Phantom.
-
-Støtter Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche og flere nettverk.
-
-Lommeboknøkler lagres sikkert i Keychain.

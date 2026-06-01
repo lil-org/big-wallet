@@ -1,0 +1,5 @@
+"description" = "Big Wallet är en kryptoplånbok med öppen källkod och Safari-tillägg.\n\nAnslut plånboken i Safari på alla webbplatser som stöder MetaMask eller Phantom.\n\nStöder Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche och fler nätverk.\n\nPlånboksnycklar lagras säkert i Keychain.";
+"keywords" = "web3,metamask,phantom,onchain,ethereum,solana,base,polygon,dapp,defi,token,swap,evm,handel";
+"whatsNew" = "mindre korrigeringar och förbättringar\n\nfeedback yo@lil.org";
+"supportUrl" = "https://help.lil.org";
+"marketingUrl" = "https://lil.org";

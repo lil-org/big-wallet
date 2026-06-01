@@ -1,7 +1,0 @@
-Big Wallet हे Safari एक्स्टेंशनसह ओपन-सोर्स क्रिप्टो वॉलेट आहे.
-
-MetaMask किंवा Phantom सपोर्ट करणाऱ्या कोणत्याही वेबसाइटवर Safariमध्ये तुमचे वॉलेट कनेक्ट करा.
-
-Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche आणि इतर नेटवर्कला सपोर्ट करते.
-
-वॉलेट की Keychainमध्ये सुरक्षितपणे संग्रहित केल्या जातात.

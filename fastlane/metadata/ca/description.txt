@@ -1,7 +1,0 @@
-Big Wallet és un moneder cripto de codi obert amb extensió per a Safari.
-
-Connecta el moneder des de Safari en qualsevol web compatible amb MetaMask o Phantom.
-
-Compatible amb Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche i més xarxes.
-
-Les claus del moneder es desen de forma segura a Keychain.

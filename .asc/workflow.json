@@ -1,0 +1,163 @@
+{
+  "env": {
+    "APP_ID": "6478607925",
+    "PROJECT": "Wallet.xcodeproj",
+    "VERSION_TARGET": "Big Wallet",
+    "IOS_SCHEME": "Wallet iOS",
+    "MACOS_SCHEME": "Wallet",
+    "ASC_APP_INFO_DIR": ".asc/localizations/app-info",
+    "ASC_VERSION_DIR": ".asc/localizations/version",
+    "ASC_IOS_SCREENSHOTS": ".asc/screenshots/ios",
+    "ASC_MACOS_SCREENSHOTS": ".asc/screenshots/macos",
+    "ASC_VISIONOS_SCREENSHOTS": ".asc/screenshots/visionos",
+    "ASC_APP_METADATA": ".asc/app-metadata.json",
+    "ASC_REVIEW_DETAILS_LOCAL": ".asc/review-details.local.json",
+    "ASC_EXPORT_OPTIONS": ".asc/export-options-app-store.plist"
+  },
+  "workflows": {
+    "preflight": {
+      "private": true,
+      "description": "Check asc tooling and authentication.",
+      "steps": [
+        {
+          "name": "check",
+          "run": "Scripts/asc/check.sh"
+        }
+      ]
+    },
+    "bb": {
+      "description": "Bump build number, commit, and push.",
+      "steps": [
+        {
+          "workflow": "preflight"
+        },
+        {
+          "name": "bump_build_number",
+          "run": "Scripts/asc/bump.sh build"
+        }
+      ]
+    },
+    "bump": {
+      "description": "Patch-bump or set VERSION, bump build number, commit, and push.",
+      "steps": [
+        {
+          "workflow": "preflight"
+        },
+        {
+          "name": "bump_version",
+          "run": "Scripts/asc/bump.sh version"
+        }
+      ]
+    },
+    "clean": {
+      "description": "Remove local asc build artifacts.",
+      "steps": [
+        {
+          "name": "clean",
+          "run": "Scripts/asc/clean.sh"
+        }
+      ]
+    },
+    "deliver_metadata_ios": {
+      "description": "Upload iOS metadata, localizations, and screenshots.",
+      "steps": [
+        {
+          "workflow": "preflight"
+        },
+        {
+          "name": "deliver_metadata_ios",
+          "run": "Scripts/asc/deliver_metadata.sh IOS true"
+        }
+      ]
+    },
+    "deliver_metadata_macos": {
+      "description": "Upload macOS metadata, localizations, and screenshots.",
+      "steps": [
+        {
+          "workflow": "preflight"
+        },
+        {
+          "name": "deliver_metadata_macos",
+          "run": "Scripts/asc/deliver_metadata.sh MAC_OS true"
+        }
+      ]
+    },
+    "deliver_metadata_visionos": {
+      "description": "Upload visionOS metadata, localizations, and screenshots.",
+      "steps": [
+        {
+          "workflow": "preflight"
+        },
+        {
+          "name": "deliver_metadata_visionos",
+          "run": "Scripts/asc/deliver_metadata.sh VISION_OS true"
+        }
+      ]
+    },
+    "release_ios": {
+      "description": "Upload iOS metadata, build, upload, and submit for review.",
+      "steps": [
+        {
+          "workflow": "preflight"
+        },
+        {
+          "name": "publish_preflight_ios",
+          "run": "Scripts/asc/publish_check.sh"
+        },
+        {
+          "name": "upload_release_build_ios",
+          "run": "Scripts/asc/publish.sh IOS"
+        },
+        {
+          "name": "deliver_release_metadata_ios",
+          "run": "Scripts/asc/deliver_metadata.sh IOS true true"
+        },
+        {
+          "name": "submit_release_ios",
+          "run": "Scripts/asc/submit_review.sh IOS"
+        },
+        {
+          "workflow": "clean"
+        }
+      ]
+    },
+    "release_macos": {
+      "description": "Upload macOS metadata, build, upload, and submit for review.",
+      "steps": [
+        {
+          "workflow": "preflight"
+        },
+        {
+          "name": "publish_preflight_macos",
+          "run": "Scripts/asc/publish_check.sh"
+        },
+        {
+          "name": "upload_release_build_macos",
+          "run": "Scripts/asc/publish.sh MAC_OS"
+        },
+        {
+          "name": "deliver_release_metadata_macos",
+          "run": "Scripts/asc/deliver_metadata.sh MAC_OS true true"
+        },
+        {
+          "name": "submit_release_macos",
+          "run": "Scripts/asc/submit_review.sh MAC_OS"
+        },
+        {
+          "workflow": "clean"
+        }
+      ]
+    },
+    "release": {
+      "description": "Run iOS then macOS release workflows.",
+      "steps": [
+        {
+          "workflow": "release_ios"
+        },
+        {
+          "workflow": "release_macos"
+        }
+      ]
+    }
+  }
+}

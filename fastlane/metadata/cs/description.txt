@@ -1,7 +1,0 @@
-Big Wallet je open-source kryptopeněženka s rozšířením pro Safari.
-
-Připojte peněženku v Safari na libovolném webu, který podporuje MetaMask nebo Phantom.
-
-Podporuje Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche a další sítě.
-
-Klíče peněženek jsou bezpečně uložené ve službě Keychain.

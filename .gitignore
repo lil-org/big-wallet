@@ -23,13 +23,12 @@ xcuserdata
 *.xcuserstate
 .DS_Store
 
-# Fastlane artifacts
-fastlane/report.xml
-fastlane/Preview.html
-fastlane/test_output
-fastlane/README.md
-fastlane/build
-fastlane/metadata/review_information/phone_number.txt
+# asc runtime artifacts
+.asc/artifacts/
+.asc/runs/
+.asc/tmp/
+.asc/reports/
+.asc/review-details.local.json
 
 # Bundler
 .bundle

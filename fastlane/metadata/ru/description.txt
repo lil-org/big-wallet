@@ -1,7 +1,0 @@
-Big Wallet — это криптокошелек с открытым исходным кодом и расширением для Safari.
-
-Подключайте кошелек на любом сайте, где доступно подключение через MetaMask или Phantom.
-
-Поддерживает Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche и другие сети.
-
-Зашифрованные ключи безопасно хранятся в Keychain.

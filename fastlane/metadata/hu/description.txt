@@ -1,7 +1,0 @@
-A Big Wallet nyílt forráskódú kriptotárca Safari-bővítménnyel.
-
-Csatlakoztasd a tárcádat Safariban bármely webhelyen, amely támogatja a MetaMask vagy Phantom használatát.
-
-Támogatja az Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche és további hálózatokat.
-
-A tárcák kulcsai biztonságosan a Keychainben tárolódnak.

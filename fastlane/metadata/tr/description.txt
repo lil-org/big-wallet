@@ -1,7 +1,0 @@
-Big Wallet, Safari uzantısına sahip açık kaynaklı bir kripto cüzdanıdır.
-
-Cüzdanınızı Safari'de MetaMask veya Phantom desteği olan herhangi bir web sitesine bağlayın.
-
-Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche ve daha fazla ağı destekler.
-
-Cüzdan anahtarları Keychain'de güvenle saklanır.

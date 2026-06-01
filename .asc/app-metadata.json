@@ -1,0 +1,14 @@
+{
+  "copyright": "∅ 2026 lil org",
+  "usesIdfa": false,
+  "categories": {
+    "primary": "UTILITIES",
+    "secondary": "FINANCE"
+  },
+  "reviewDetails": {
+    "contactFirstName": "ivan",
+    "contactLastName": "grachev",
+    "contactEmail": "yo@lil.org",
+    "notes": "1. create password\n2. import account 1010010010101010010101001010101001010101001010100101010100101011\n3. enable safari extension\n4. open https://metamask.github.io/test-dapp/\n5. click \"connect\"\n6. select account\n7. try \"personal sign\" or \"eth sign\""
+  }
+}

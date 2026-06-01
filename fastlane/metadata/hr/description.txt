@@ -1,7 +1,0 @@
-Big Wallet je kripto novčanik otvorenog koda s proširenjem za Safari.
-
-Povežite novčanik u Safariju na bilo kojoj web-stranici koja podržava MetaMask ili Phantom.
-
-Podržava Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche i druge mreže.
-
-Ključevi novčanika sigurno se pohranjuju u Keychain.

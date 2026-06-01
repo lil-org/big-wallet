@@ -1,0 +1,5 @@
+"description" = "Big Wallet on avoimen lähdekoodin kryptolompakko, jossa on Safari-laajennus.\n\nYhdistä lompakkosi Safarissa millä tahansa sivustolla, joka tukee MetaMask- tai Phantom-yhteyttä.\n\nTukee verkkoja kuten Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche ja muut.\n\nLompakoiden avaimet tallennetaan turvallisesti Keychainiin.";
+"keywords" = "web3,metamask,phantom,onchain,ethereum,solana,base,polygon,dapp,defi,token,swap,evm,vaihto";
+"whatsNew" = "pieniä korjauksia ja parannuksia\n\npalaute yo@lil.org";
+"supportUrl" = "https://help.lil.org";
+"marketingUrl" = "https://lil.org";

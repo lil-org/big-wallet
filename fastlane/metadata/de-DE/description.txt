@@ -1,7 +1,0 @@
-Big Wallet ist eine Open-Source-Krypto-Wallet mit Safari-Erweiterung.
-
-Verbinde deine Wallet in Safari auf jeder Website, die MetaMask oder Phantom unterstützt.
-
-Unterstützt Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche und weitere Netzwerke.
-
-Wallet-Schlüssel werden sicher in Keychain gespeichert.

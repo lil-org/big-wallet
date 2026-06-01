@@ -1,7 +1,0 @@
-Το Big Wallet είναι ένα κρυπτοπορτοφόλι ανοιχτού κώδικα με επέκταση για το Safari.
-
-Σύνδεσε το πορτοφόλι σου στο Safari σε οποιονδήποτε ιστότοπο υποστηρίζει MetaMask ή Phantom.
-
-Υποστηρίζει Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche και άλλα δίκτυα.
-
-Τα κλειδιά των πορτοφολιών αποθηκεύονται με ασφάλεια στο Keychain.

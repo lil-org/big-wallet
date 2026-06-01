@@ -1,0 +1,5 @@
+"description" = "Big Wallet 是一款提供 Safari 擴充功能的開源加密錢包。\n\n可在任何支援 MetaMask 或 Phantom 的網站上，透過 Safari 連接你的錢包。\n\n支援 Ethereum、Solana、Base、Polygon、Binance Smart Chain、Optimism、Arbitrum、Avalanche 等更多網路。\n\n錢包金鑰會安全儲存在 Keychain 中。";
+"keywords" = "web3,metamask,phantom,ethereum,solana,base,polygon,dapp,defi,token,swap,evm,鏈上,連接,交易";
+"whatsNew" = "小幅修正與改進\n\n回饋 yo@lil.org";
+"supportUrl" = "https://help.lil.org";
+"marketingUrl" = "https://lil.org";

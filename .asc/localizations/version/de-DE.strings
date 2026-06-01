@@ -1,0 +1,5 @@
+"description" = "Big Wallet ist eine Open-Source-Krypto-Wallet mit Safari-Erweiterung.\n\nVerbinde deine Wallet in Safari auf jeder Website, die MetaMask oder Phantom unterstützt.\n\nUnterstützt Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche und weitere Netzwerke.\n\nWallet-Schlüssel werden sicher in Keychain gespeichert.";
+"keywords" = "web3,metamask,phantom,onchain,ethereum,solana,base,polygon,dapp,defi,token,swap,evm,handel";
+"whatsNew" = "kleine Fehlerbehebungen und Verbesserungen\n\nFeedback an yo@lil.org";
+"supportUrl" = "https://help.lil.org";
+"marketingUrl" = "https://lil.org";

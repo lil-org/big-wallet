@@ -1,7 +1,0 @@
-Big Wallet là ví tiền mã hóa mã nguồn mở có tiện ích mở rộng cho Safari.
-
-Kết nối ví trong Safari trên bất kỳ trang web nào hỗ trợ MetaMask hoặc Phantom.
-
-Hỗ trợ Ethereum, Solana, Base, Polygon, Binance Smart Chain, Optimism, Arbitrum, Avalanche và nhiều mạng khác.
-
-Khóa ví được lưu trữ an toàn trong Keychain.

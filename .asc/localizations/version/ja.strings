@@ -1,0 +1,5 @@
+"description" = "Big Walletは、Safari拡張機能を備えたオープンソースの暗号資産ウォレットです。\n\nMetaMaskまたはPhantomに対応した任意のWebサイトで、Safariからウォレットを接続できます。\n\nEthereum、Solana、Base、Polygon、Binance Smart Chain、Optimism、Arbitrum、Avalancheなどに対応しています。\n\nウォレットのキーはKeychainに安全に保存されます。";
+"keywords" = "web3,metamask,phantom,ethereum,solana,base,polygon,dapp,defi,token,swap,evm,取引,接続";
+"whatsNew" = "軽微な修正と改善\n\nフィードバック yo@lil.org";
+"supportUrl" = "https://help.lil.org";
+"marketingUrl" = "https://lil.org";

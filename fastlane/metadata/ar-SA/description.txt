@@ -1,7 +1,0 @@
-Big Wallet محفظة كريبتو مفتوحة المصدر مع إضافة Safari.
-
-اربط محفظتك في Safari على أي موقع يدعم MetaMask أو Phantom.
-
-يدعم Ethereum وSolana وBase وPolygon وBinance Smart Chain وOptimism وArbitrum وAvalanche والمزيد.
-
-تُحفظ مفاتيح محافظك بأمان في Keychain.
