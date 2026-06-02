@@ -682,7 +682,7 @@
 		2C420DF02BB5EA69004F1D56 /* NSAttributedString.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSAttributedString.swift; sourceTree = "<group>"; };
 		2C4297272ADEDCBD0044357A /* PeerMeta.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PeerMeta.swift; sourceTree = "<group>"; };
 		2C452ECF2B0EDB8F0017CE2C /* utils.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = utils.js; path = "Inpage Provider/utils.js"; sourceTree = "<group>"; };
-		2C452ED02B0EDB8F0017CE2C /* yarn.lock */ = {isa = PBXFileReference; lastKnownFileType = text; name = yarn.lock; path = "Inpage Provider/yarn.lock"; sourceTree = "<group>"; };
+		2C452ED02B0EDB8F0017CE2C /* package-lock.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "package-lock.json"; path = "Inpage Provider/package-lock.json"; sourceTree = "<group>"; };
 		2C452ED12B0EDB8F0017CE2C /* package.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = package.json; path = "Inpage Provider/package.json"; sourceTree = "<group>"; };
 		2C452ED22B0EDB8F0017CE2C /* index.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = index.js; path = "Inpage Provider/index.js"; sourceTree = "<group>"; };
 		2C452ED32B0EDB8F0017CE2C /* ethereum.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = ethereum.js; path = "Inpage Provider/ethereum.js"; sourceTree = "<group>"; };
@@ -1091,7 +1091,7 @@
 				2C452ED12B0EDB8F0017CE2C /* package.json */,
 				2C452ED62B0EDB8F0017CE2C /* rpc.js */,
 				2C452ECF2B0EDB8F0017CE2C /* utils.js */,
-				2C452ED02B0EDB8F0017CE2C /* yarn.lock */,
+				2C452ED02B0EDB8F0017CE2C /* package-lock.json */,
 			);
 			name = "Inpage Provider";
 			sourceTree = "<group>";
@@ -1951,7 +1951,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "YARN_PATH=$(command -v yarn)\n\nif [ -z \"$YARN_PATH\" ]; then\n    echo \"warning: install yarn to make changes to the inpage script\"\nelse\n    FILE=/usr/lib/bin/yarn\n    if [ -f \"$FILE\" ]; then\n        export PATH=/usr/lib/bin:$PATH\n    else\n        export PATH=/opt/homebrew/bin:$PATH\n    fi\n\n    cd \"$PROJECT_DIR\"/Safari\\ Shared/Inpage\\ Provider\n    yarn run prebuild\n    yarn run build\nfi\n";
+			shellScript = "/bin/sh \"$PROJECT_DIR/Scripts/build_inpage_provider.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		2C85D99C274E531100160AD5 /* Run Script */ = {
@@ -1972,7 +1972,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "YARN_PATH=$(command -v yarn)\n\nif [ -z \"$YARN_PATH\" ]; then\n    echo \"warning: install yarn to make changes to the inpage script\"\nelse\n    FILE=/usr/lib/bin/yarn\n    if [ -f \"$FILE\" ]; then\n        export PATH=/usr/lib/bin:$PATH\n    else\n        export PATH=/opt/homebrew/bin:$PATH\n    fi\n\n    cd \"$PROJECT_DIR\"/Safari\\ Shared/Inpage\\ Provider\n    yarn run prebuild\n    yarn run build\nfi\n";
+			shellScript = "/bin/sh \"$PROJECT_DIR/Scripts/build_inpage_provider.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		2CB3844927654C8D00A189B9 /* ShellScript */ = {
@@ -1992,7 +1992,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "YARN_PATH=$(command -v yarn)\n\nif [ -z \"$YARN_PATH\" ]; then\n    echo \"warning: install yarn to make changes to the inpage script\"\nelse\n    FILE=/usr/lib/bin/yarn\n    if [ -f \"$FILE\" ]; then\n        export PATH=/usr/lib/bin:$PATH\n    else\n        export PATH=/opt/homebrew/bin:$PATH\n    fi\n\n    cd \"$PROJECT_DIR\"/Safari\\ Shared/Inpage\\ Provider\n    yarn run prebuild\n    yarn run build\nfi\n";
+			shellScript = "/bin/sh \"$PROJECT_DIR/Scripts/build_inpage_provider.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		2CFAAA102FA2600000000000 /* Terminate Ambient Agents */ = {

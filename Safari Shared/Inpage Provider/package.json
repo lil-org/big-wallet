@@ -4,8 +4,7 @@
     "description": "inpage provider",
     "main": "index.js",
     "scripts": {
-        "prebuild": "if [ ! -d node_modules ]; then yarn install; fi",
-        "build": "browserify index.js -t [ babelify --presets [ @babel/preset-env ] ] | uglifyjs -o ../Resources/inpage.js"
+        "build": "esbuild index.js --bundle --minify --target=safari15 --format=iife --outfile=../Resources/inpage.js"
     },
     "repository": {
         "type": "git",
@@ -14,16 +13,16 @@
     "keywords": [],
     "author": "lil org <yo@lil.org>",
     "license": "CC0-1.0",
+    "engines": {
+        "node": ">=18",
+        "npm": ">=9"
+    },
     "dependencies": {
-        "buffer": "^5.6.0",
-        "events": "^3.2.0",
-        "isutf8": "^3.1.1"
+        "buffer": "^6.0.3",
+        "events": "^3.3.0",
+        "isutf8": "^4.0.1"
     },
     "devDependencies": {
-        "@babel/core": "^7.16.12",
-        "@babel/preset-env": "^7.16.11",
-        "babelify": "^10.0.0",
-        "browserify": "^17.0.0",
-        "uglify-js": "^3.15.0"
+        "esbuild": "^0.28.0"
     }
 }
