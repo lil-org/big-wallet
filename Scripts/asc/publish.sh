@@ -17,6 +17,7 @@ platform="${1:-${PLATFORM:-IOS}}"
 current_json="$(current_xcode_version_json)"
 version="${VERSION:-$(jq -r '.version' <<<"$current_json")}"
 build_number="$(jq -r '.buildNumber' <<<"$current_json")"
+artifact_path=""
 
 case "$platform" in
   IOS)
@@ -40,6 +41,101 @@ case "$platform" in
 esac
 
 mkdir -p "$artifact_dir"
+
+emit_publish_result() {
+  local build_id="$1"
+  local result_artifact_path="$2"
+
+  jq -n \
+    --arg buildId "$build_id" \
+    --arg version "$version" \
+    --arg buildNumber "$build_number" \
+    --arg platform "$platform" \
+    --arg artifactPath "$result_artifact_path" \
+    '{
+      buildId: $buildId,
+      version: $version,
+      buildNumber: $buildNumber,
+      platform: $platform,
+      artifactPath: $artifactPath
+    }'
+}
+
+lookup_build_json() {
+  asc builds info \
+    --app "$APP_ID" \
+    --version "$version" \
+    --build-number "$build_number" \
+    --platform "$platform" \
+    --output json
+}
+
+processing_state() {
+  jq -r '
+    [
+      .processingState?,
+      .data.attributes.processingState?
+    ]
+    | map(select(. != null))
+    | .[0] // empty
+  '
+}
+
+wait_for_build_json() {
+  local build_id="$1"
+
+  asc builds wait \
+    --build-id "$build_id" \
+    --fail-on-invalid \
+    --output json
+}
+
+resolve_uploaded_build_id() {
+  local attempts="${ASC_BUILD_LOOKUP_ATTEMPTS:-20}"
+  local delay="${ASC_BUILD_LOOKUP_DELAY:-15}"
+  local attempt
+  local build_json
+  local build_id
+
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    if build_json="$(lookup_build_json 2>/dev/null)"; then
+      build_id="$(extract_first_id <<<"$build_json")"
+      if [[ -n "$build_id" && "$build_id" != "null" ]]; then
+        wait_for_build_json "$build_id" >/dev/null
+        printf '%s\n' "$build_id"
+        return 0
+      fi
+    fi
+
+    if (( attempt < attempts )); then
+      log "uploaded build $version ($build_number) is not queryable yet; retrying in ${delay}s"
+      sleep "$delay"
+    fi
+  done
+
+  return 1
+}
+
+if existing_build_json="$(lookup_build_json 2>/dev/null)"; then
+  existing_build_id="$(extract_first_id <<<"$existing_build_json")"
+
+  if [[ -n "$existing_build_id" && "$existing_build_id" != "null" ]]; then
+    existing_state="$(processing_state <<<"$existing_build_json")"
+
+    if [[ "$existing_state" != "VALID" ]]; then
+      log "found existing $platform build $version ($build_number) in state ${existing_state:-unknown}; waiting for processing"
+      existing_build_json="$(wait_for_build_json "$existing_build_id")"
+      existing_state="$(processing_state <<<"$existing_build_json")"
+    fi
+
+    [[ "$existing_state" == "VALID" ]] \
+      || die "existing $platform build $version ($build_number) is not valid; processingState=${existing_state:-unknown}"
+
+    log "using existing $platform build $version ($build_number): $existing_build_id"
+    emit_publish_result "$existing_build_id" "$artifact_path"
+    exit 0
+  fi
+fi
 
 log "archiving $platform $version ($build_number) from scheme $scheme"
 archive_json="$(asc xcode archive \
@@ -104,19 +200,13 @@ upload_json="$(asc builds upload \
   --output json)"
 
 build_id="$(extract_first_id <<<"$upload_json")"
+if [[ -z "$build_id" || "$build_id" == "null" ]]; then
+  log "upload completed without a build id in the response; resolving $platform build $version ($build_number)"
+  build_id="$(resolve_uploaded_build_id)" \
+    || die "could not resolve uploaded build id for $platform $version ($build_number)"
+fi
+
 [[ -n "$build_id" && "$build_id" != "null" ]] \
   || die "could not resolve uploaded build id for $platform $version ($build_number)"
 
-jq -n \
-  --arg buildId "$build_id" \
-  --arg version "$version" \
-  --arg buildNumber "$build_number" \
-  --arg platform "$platform" \
-  --arg artifactPath "$artifact_path" \
-  '{
-    buildId: $buildId,
-    version: $version,
-    buildNumber: $buildNumber,
-    platform: $platform,
-    artifactPath: $artifactPath
-  }'
+emit_publish_result "$build_id" "$artifact_path"

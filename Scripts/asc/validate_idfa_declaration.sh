@@ -49,6 +49,16 @@ request_body="$(jq -n \
     }
   }')"
 
+read_uses_idfa() {
+  jq -r '
+    if ((.data.attributes? | type) == "object" and (.data.attributes | has("usesIdfa"))) then
+      (.data.attributes.usesIdfa | tostring)
+    else
+      empty
+    end
+  '
+}
+
 response="$(curl -fsS \
   -X PATCH \
   -H "Authorization: Bearer $token" \
@@ -56,6 +66,13 @@ response="$(curl -fsS \
   -d "$request_body" \
   "https://api.appstoreconnect.apple.com/v1/appStoreVersions/$version_id")"
 
-actual_uses_idfa="$(jq -r '.data.attributes.usesIdfa // empty' <<<"$response")"
+actual_uses_idfa="$(read_uses_idfa <<<"$response")"
+if [[ -z "$actual_uses_idfa" ]]; then
+  response="$(curl -fsS \
+    -H "Authorization: Bearer $token" \
+    "https://api.appstoreconnect.apple.com/v1/appStoreVersions/$version_id")"
+  actual_uses_idfa="$(read_uses_idfa <<<"$response")"
+fi
+
 [[ "$actual_uses_idfa" == "$desired_uses_idfa" ]] \
   || die "App Store Connect returned usesIdfa=$actual_uses_idfa after setting $desired_uses_idfa"

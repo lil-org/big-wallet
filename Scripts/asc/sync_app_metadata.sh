@@ -62,28 +62,70 @@ fi
 primary_category="$(app_metadata_string '.categories.primary')"
 if [[ -n "$primary_category" ]]; then
   app_info_id="$(resolve_app_info_id "$platform")"
-  category_args=(
-    categories set
-    --app "$APP_ID"
-    --app-info "$app_info_id"
-    --primary "$primary_category"
-    --output json
-  )
-
   primary_subcategory_one="$(app_metadata_string '.categories.primarySubcategoryOne')"
   primary_subcategory_two="$(app_metadata_string '.categories.primarySubcategoryTwo')"
   secondary_category="$(app_metadata_string '.categories.secondary')"
   secondary_subcategory_one="$(app_metadata_string '.categories.secondarySubcategoryOne')"
   secondary_subcategory_two="$(app_metadata_string '.categories.secondarySubcategoryTwo')"
 
-  [[ -n "$primary_subcategory_one" ]] && category_args+=(--primary-subcategory-one "$primary_subcategory_one")
-  [[ -n "$primary_subcategory_two" ]] && category_args+=(--primary-subcategory-two "$primary_subcategory_two")
-  [[ -n "$secondary_category" ]] && category_args+=(--secondary "$secondary_category")
-  [[ -n "$secondary_subcategory_one" ]] && category_args+=(--secondary-subcategory-one "$secondary_subcategory_one")
-  [[ -n "$secondary_subcategory_two" ]] && category_args+=(--secondary-subcategory-two "$secondary_subcategory_two")
+  read_category_relationship_id() {
+    local relationship="$1"
 
-  log "updating app categories"
-  asc "${category_args[@]}"
+    asc apps info relationships "$relationship" \
+      --info-id "$app_info_id" \
+      --output json \
+      | extract_first_id
+  }
+
+  category_relationships=(
+    primary-category
+    primary-subcategory-one
+    primary-subcategory-two
+    secondary-category
+    secondary-subcategory-one
+    secondary-subcategory-two
+  )
+  category_flags=(
+    --primary
+    --primary-subcategory-one
+    --primary-subcategory-two
+    --secondary
+    --secondary-subcategory-one
+    --secondary-subcategory-two
+  )
+  category_values=(
+    "$primary_category"
+    "$primary_subcategory_one"
+    "$primary_subcategory_two"
+    "$secondary_category"
+    "$secondary_subcategory_one"
+    "$secondary_subcategory_two"
+  )
+  category_args=(
+    categories set
+    --app "$APP_ID"
+    --app-info "$app_info_id"
+  )
+
+  categories_match=true
+  for category_index in "${!category_relationships[@]}"; do
+    desired_category="${category_values[$category_index]}"
+
+    if [[ -n "$desired_category" ]]; then
+      category_args+=("${category_flags[$category_index]}" "$desired_category")
+    fi
+
+    current_category="$(read_category_relationship_id "${category_relationships[$category_index]}")"
+    [[ "$current_category" == "$desired_category" ]] || categories_match=false
+  done
+
+  if [[ "$categories_match" == "true" ]]; then
+    log "app categories already match metadata; skipping update"
+  else
+    log "updating app categories"
+    category_args+=(--output json)
+    asc "${category_args[@]}"
+  fi
 fi
 
 if [[ "$sync_review_details" == "true" ]]; then

@@ -105,6 +105,71 @@ extract_version_id() {
   ' | head -n 1
 }
 
+extract_version_state_for() {
+  local version="$1"
+  local platform="$2"
+
+  jq -r --arg version "$version" --arg platform "$platform" '
+    def rows:
+      if type == "array" then .
+      elif (.data? | type) == "array" then .data
+      else []
+      end;
+
+    def version_state:
+      [
+        .state?,
+        .appStoreState?,
+        .appVersionState?,
+        .attributes.state?,
+        .attributes.appStoreState?,
+        .attributes.appVersionState?
+      ]
+      | map(select(. != null and . != ""))
+      | .[0] // empty;
+
+    rows[]
+    | select((.attributes.versionString // .versionString // "") == $version)
+    | select((.attributes.platform // .platform // "") == $platform)
+    | version_state
+  ' | head -n 1
+}
+
+extract_app_store_version_state() {
+  jq -r '
+    def version_state:
+      [
+        .state?,
+        .appStoreState?,
+        .appVersionState?,
+        .attributes.state?,
+        .attributes.appStoreState?,
+        .attributes.appVersionState?
+      ]
+      | map(select(. != null and . != ""))
+      | .[0] // empty;
+
+    if (.data? | type) == "object" then
+      .data | version_state
+    else
+      version_state
+    end
+  '
+}
+
+app_store_version_is_submitted_state() {
+  local state="$1"
+
+  case "$state" in
+    WAITING_FOR_REVIEW|IN_REVIEW|PENDING_APPLE_RELEASE|PENDING_DEVELOPER_RELEASE|READY_FOR_SALE)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 extract_first_id() {
   jq -r '
     if .buildId? then .buildId
@@ -114,6 +179,25 @@ extract_first_id() {
     else ""
     end
   '
+}
+
+app_store_locale() {
+  local locale="$1"
+
+  case "$locale" in
+    bn) printf 'bn-BD\n' ;;
+    gu) printf 'gu-IN\n' ;;
+    kn) printf 'kn-IN\n' ;;
+    ml) printf 'ml-IN\n' ;;
+    mr) printf 'mr-IN\n' ;;
+    or) printf 'or-IN\n' ;;
+    pa) printf 'pa-IN\n' ;;
+    sl) printf 'sl-SI\n' ;;
+    ta) printf 'ta-IN\n' ;;
+    te) printf 'te-IN\n' ;;
+    ur) printf 'ur-PK\n' ;;
+    *) printf '%s\n' "$locale" ;;
+  esac
 }
 
 extract_app_info_ids() {
@@ -134,6 +218,52 @@ extract_app_info_ids() {
         ((.attributes.platform // .platform // "") == $platform)
       )
     | .id // .appInfoId // empty
+  '
+}
+
+extract_preferred_app_info_ids() {
+  local platform="${1:-}"
+
+  jq -r --arg platform "$platform" '
+    def state:
+      .attributes.state // .state // .attributes.appStoreState // .appStoreState // "";
+
+    def state_rank:
+      if state == "PREPARE_FOR_SUBMISSION" then 0
+      elif state == "WAITING_FOR_REVIEW" then 1
+      elif state == "IN_REVIEW" then 1
+      elif state == "REJECTED" then 2
+      elif state == "UNRESOLVED_ISSUES" then 2
+      elif state == "READY_FOR_DISTRIBUTION" then 3
+      elif state == "READY_FOR_SALE" then 3
+      else 9
+      end;
+
+    def rows:
+      if type == "array" then .
+      elif (.data? | type) == "array" then .data
+      elif (.appInfos? | type) == "array" then .appInfos
+      elif (.items? | type) == "array" then .items
+      else []
+      end;
+
+    [
+      rows[]
+      | select(
+          $platform == "" or
+          ((.attributes.platform // .platform // "") == $platform)
+        )
+      | { id: (.id // .appInfoId // empty), rank: state_rank }
+      | select(.id != "")
+    ] as $candidates
+    | if ($candidates | length) == 0 then
+        empty
+      else
+        ($candidates | map(.rank) | min) as $best_rank
+        | $candidates[]
+        | select(.rank == $best_rank)
+        | .id
+      end
   '
 }
 
@@ -173,6 +303,24 @@ resolve_app_info_id() {
     while IFS= read -r id; do
       [[ -n "$id" ]] && ids+=("$id")
     done < <(extract_app_info_ids <<<"$app_info_json")
+  fi
+
+  if [[ "${#ids[@]}" -gt 1 ]]; then
+    local preferred_ids=()
+
+    while IFS= read -r id; do
+      [[ -n "$id" ]] && preferred_ids+=("$id")
+    done < <(extract_preferred_app_info_ids "$platform" <<<"$app_info_json")
+
+    if [[ "${#preferred_ids[@]}" -eq 0 && -n "$platform" ]]; then
+      while IFS= read -r id; do
+        [[ -n "$id" ]] && preferred_ids+=("$id")
+      done < <(extract_preferred_app_info_ids <<<"$app_info_json")
+    fi
+
+    if [[ "${#preferred_ids[@]}" -gt 0 ]]; then
+      ids=("${preferred_ids[@]}")
+    fi
   fi
 
   case "${#ids[@]}" in

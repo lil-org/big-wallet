@@ -5,11 +5,18 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 require_cmd asc
 require_cmd jq
+export ASC_TIMEOUT="${ASC_TIMEOUT:-120s}"
 
 platform="${1:-${PLATFORM:-IOS}}"
 build_id="${2:-${BUILD_ID:-}}"
 version="$(target_version)"
 version_id="$(Scripts/asc/ensure_version.sh "$platform" "$version")"
+version_state="$(asc versions view --version-id "$version_id" --output json | extract_app_store_version_state)"
+
+if app_store_version_is_submitted_state "$version_state"; then
+  log "$platform $version is already in App Store state $version_state; skipping review submission"
+  exit 0
+fi
 
 Scripts/asc/validate_idfa_declaration.sh "$version_id"
 
