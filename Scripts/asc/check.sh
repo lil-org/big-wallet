@@ -55,4 +55,8 @@ if [[ "${SKIP_ASC_AUTH_CHECK:-0}" != "1" ]]; then
     || die "asc auth is not configured; run asc auth login or provide ASC_KEY_ID, ASC_ISSUER_ID, and ASC_PRIVATE_KEY_B64/ASC_PRIVATE_KEY/ASC_PRIVATE_KEY_PATH"
 fi
 
+version="$(current_local_version)"
+build_number="$(current_local_build_number)"
+validate_local_version_sources "$version" "$build_number"
+
 log "preflight ok: asc $actual_version, app $APP_ID, project $PROJECT"

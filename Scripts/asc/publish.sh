@@ -14,10 +14,13 @@ require_inpage_provider_toolchain
 validate_export_options "$ASC_EXPORT_OPTIONS"
 
 platform="${1:-${PLATFORM:-IOS}}"
-current_json="$(current_xcode_version_json)"
-version="${VERSION:-$(jq -r '.version' <<<"$current_json")}"
-build_number="$(jq -r '.buildNumber' <<<"$current_json")"
+local_version="$(current_local_version)"
+local_build_number="$(current_local_build_number)"
+version="${VERSION:-$local_version}"
+build_number="$local_build_number"
 artifact_path=""
+
+validate_local_version_sources "$version" "$build_number"
 
 case "$platform" in
   IOS)

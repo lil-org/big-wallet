@@ -9,25 +9,19 @@ require_cmd jq
 
 mode="${1:-version}"
 xcode_version_files=(
-  "$PROJECT/project.pbxproj"
-  "App iOS/Info.plist"
-  "App macOS/Info.plist"
-  "Big Wallet Ambient/Info.plist"
-)
-manifest_files=(
-  "Safari iOS/Resources/manifest.json"
-  "Safari macOS/Resources/manifest.json"
+  "$(project_pbxproj_file)"
+  "${VERSIONED_INFO_PLISTS[@]}"
 )
 
-current_json="$(current_xcode_version_json)"
-old_version="$(jq -r '.version' <<<"$current_json")"
-old_build="$(jq -r '.buildNumber' <<<"$current_json")"
+old_version="$(current_local_version)"
+old_build="$(current_local_build_number)"
+validate_local_version_sources "$old_version" "$old_build"
 
 case "$mode" in
   version)
     new_version="${VERSION:-$(patch_bump_version "$old_version")}"
     commit_message_prefix="bump version to $new_version"
-    version_files=("${xcode_version_files[@]}" "${manifest_files[@]}")
+    version_files=("${xcode_version_files[@]}" "${WEB_EXTENSION_MANIFESTS[@]}")
     ;;
   build)
     new_version="$old_version"
@@ -87,18 +81,8 @@ asc xcode version edit \
   --build-number "$next_build" \
   --output json >/dev/null
 
-for plist in "App iOS/Info.plist" "App macOS/Info.plist" "Big Wallet Ambient/Info.plist"; do
-  plist_set_string "$plist" CFBundleShortVersionString "$new_version"
-  plist_set_string "$plist" CFBundleVersion "$next_build"
-done
-
-if [[ "$mode" == "version" ]]; then
-  for manifest in "${manifest_files[@]}"; do
-    tmp="$(mktemp "$manifest.XXXXXX")"
-    jq --arg version "$new_version" '.version = $version' "$manifest" >"$tmp"
-    mv "$tmp" "$manifest"
-  done
-fi
+sync_local_version_sources "$new_version" "$next_build" "$mode"
+validate_local_version_sources "$new_version" "$next_build"
 
 git add "${version_files[@]}"
 

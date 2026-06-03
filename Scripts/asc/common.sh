@@ -22,6 +22,15 @@ ASC_APP_METADATA="${ASC_APP_METADATA:-.asc/app-metadata.json}"
 ASC_REVIEW_DETAILS_LOCAL="${ASC_REVIEW_DETAILS_LOCAL:-.asc/review-details.local.json}"
 ASC_EXPORT_OPTIONS="${ASC_EXPORT_OPTIONS:-.asc/export-options-app-store.plist}"
 ASC_TEAM_ID="${ASC_TEAM_ID:-8DXC3N7E7P}"
+VERSIONED_INFO_PLISTS=(
+  "App iOS/Info.plist"
+  "App macOS/Info.plist"
+  "Big Wallet Ambient/Info.plist"
+)
+WEB_EXTENSION_MANIFESTS=(
+  "Safari iOS/Resources/manifest.json"
+  "Safari macOS/Resources/manifest.json"
+)
 
 log() {
   printf '[asc] %s\n' "$*" >&2
@@ -56,6 +65,148 @@ current_version() {
 
 current_build_number() {
   current_xcode_version_json | jq -r '.buildNumber'
+}
+
+project_pbxproj_file() {
+  printf '%s/project.pbxproj\n' "$PROJECT"
+}
+
+project_build_setting_values() {
+  local key="$1"
+  local file
+  file="$(project_pbxproj_file)"
+
+  [[ -f "$file" ]] || die "missing Xcode project file: $file"
+
+  awk -v key="$key" '
+    $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
+      line = $0
+      sub("^[[:space:]]*" key "[[:space:]]*=[[:space:]]*", "", line)
+      sub(";[[:space:]]*$", "", line)
+      sub(/^"/, "", line)
+      sub(/"$/, "", line)
+      print line
+    }
+  ' "$file" | sort -u
+}
+
+current_project_build_setting() {
+  local key="$1"
+  local values=()
+  local value
+
+  while IFS= read -r value; do
+    [[ -n "$value" ]] && values+=("$value")
+  done < <(project_build_setting_values "$key")
+
+  case "${#values[@]}" in
+    0)
+      die "project has no $key build setting"
+      ;;
+    1)
+      printf '%s\n' "${values[0]}"
+      ;;
+    *)
+      die "project has multiple $key build settings: ${values[*]}"
+      ;;
+  esac
+}
+
+current_local_version() {
+  current_project_build_setting MARKETING_VERSION
+}
+
+current_local_build_number() {
+  current_project_build_setting CURRENT_PROJECT_VERSION
+}
+
+set_project_build_setting() {
+  local key="$1"
+  local value="$2"
+  local file
+  file="$(project_pbxproj_file)"
+
+  [[ -f "$file" ]] || die "missing Xcode project file: $file"
+
+  KEY="$key" VALUE="$value" /usr/bin/perl -0pi -e '
+    my $key = $ENV{KEY};
+    my $value = $ENV{VALUE};
+    s/(\b\Q$key\E\s*=\s*)[^;\n]+;/${1}$value;/g;
+  ' "$file"
+}
+
+set_versioned_info_plist_placeholders() {
+  local plist
+
+  for plist in "${VERSIONED_INFO_PLISTS[@]}"; do
+    plist_set_string "$plist" CFBundleShortVersionString '$(MARKETING_VERSION)'
+    plist_set_string "$plist" CFBundleVersion '$(CURRENT_PROJECT_VERSION)'
+  done
+}
+
+set_web_extension_manifest_versions() {
+  local version="$1"
+  local manifest
+  local tmp
+
+  for manifest in "${WEB_EXTENSION_MANIFESTS[@]}"; do
+    tmp="$(mktemp "$manifest.XXXXXX")"
+    jq --arg version "$version" '.version = $version' "$manifest" >"$tmp"
+    mv "$tmp" "$manifest"
+  done
+}
+
+sync_local_version_sources() {
+  local version="$1"
+  local build_number="$2"
+  local mode="${3:-version}"
+
+  set_project_build_setting MARKETING_VERSION "$version"
+  set_project_build_setting CURRENT_PROJECT_VERSION "$build_number"
+  set_versioned_info_plist_placeholders
+
+  if [[ "$mode" == "version" ]]; then
+    set_web_extension_manifest_versions "$version"
+  fi
+}
+
+require_single_project_build_setting() {
+  local key="$1"
+  local expected="$2"
+  local values=()
+  local value
+
+  while IFS= read -r value; do
+    [[ -n "$value" ]] && values+=("$value")
+  done < <(project_build_setting_values "$key")
+
+  [[ "${#values[@]}" -gt 0 ]] || die "project has no $key build setting"
+
+  if [[ "${#values[@]}" -ne 1 || "${values[0]}" != "$expected" ]]; then
+    die "project must set $key=$expected for every target; found: ${values[*]}"
+  fi
+}
+
+validate_local_version_sources() {
+  local version="$1"
+  local build_number="$2"
+  local plist
+  local manifest
+  local manifest_version
+
+  require_single_project_build_setting MARKETING_VERSION "$version"
+  require_single_project_build_setting CURRENT_PROJECT_VERSION "$build_number"
+
+  for plist in "${VERSIONED_INFO_PLISTS[@]}"; do
+    require_plist_value "$plist" CFBundleShortVersionString '$(MARKETING_VERSION)'
+    require_plist_value "$plist" CFBundleVersion '$(CURRENT_PROJECT_VERSION)'
+  done
+
+  for manifest in "${WEB_EXTENSION_MANIFESTS[@]}"; do
+    manifest_version="$(jq -r '.version // empty' "$manifest")"
+    [[ "$manifest_version" == "$version" ]] \
+      || die "$manifest must set version=$version; found ${manifest_version:-missing}"
+  done
 }
 
 target_version() {
