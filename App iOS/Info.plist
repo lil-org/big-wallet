@@ -20,25 +20,12 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
-	<key>UIApplicationShortcutItems</key>
-	<array>
-		<dict>
-			<key>UIApplicationShortcutItemType</key>
-			<string>org.lil.wallet.feedback</string>
-			<key>UIApplicationShortcutItemTitle</key>
-			<string>Something wrong?</string>
-			<key>UIApplicationShortcutItemIconSymbolName</key>
-			<string>heart</string>
-			<key>UIApplicationShortcutItemSubtitle</key>
-			<string>Tap here to leave a quick feedback.</string>
-		</dict>
-	</array>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.89</string>
+	<string>1.0.90</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -53,7 +40,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>138</string>
+	<string>139</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
@@ -79,6 +66,19 @@
 			</array>
 		</dict>
 	</dict>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>heart</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>Tap here to leave a quick feedback.</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Something wrong?</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>org.lil.wallet.feedback</string>
+		</dict>
+	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
