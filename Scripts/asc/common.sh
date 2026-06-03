@@ -322,6 +322,74 @@ app_store_version_is_submitted_state() {
   esac
 }
 
+extract_recoverable_rejected_version_for() {
+  local platform="$1"
+
+  jq -r --arg platform "$platform" '
+    def rows:
+      if type == "array" then .
+      elif (.data? | type) == "array" then .data
+      else []
+      end;
+
+    def version_state:
+      [
+        .state?,
+        .appStoreState?,
+        .appVersionState?,
+        .attributes.state?,
+        .attributes.appStoreState?,
+        .attributes.appVersionState?
+      ]
+      | map(select(. != null and . != ""))
+      | .[0] // empty;
+
+    [
+      rows[]
+      | select((.attributes.platform // .platform // "") == $platform)
+      | {
+          id: (.id // ""),
+          version: (.attributes.versionString // .versionString // ""),
+          state: version_state,
+          createdDate: (.attributes.createdDate // .createdDate // "")
+        }
+      | select(.id != "")
+      | select(.state as $state | [
+          "REJECTED",
+          "METADATA_REJECTED",
+          "DEVELOPER_REJECTED",
+          "INVALID_BINARY",
+          "UNRESOLVED_ISSUES"
+        ] | index($state))
+    ]
+    | sort_by(.createdDate)
+    | reverse
+    | .[0] // empty
+    | [.id, .version, .state]
+    | @tsv
+  ' | head -n 1
+}
+
+extract_rejected_review_submission_item_ids_for_version() {
+  local version_id="$1"
+
+  jq -r --arg version_id "$version_id" '
+    def rows:
+      if type == "array" then .
+      elif (.data? | type) == "array" then .data
+      else []
+      end;
+
+    rows[]
+    | select((.state // .attributes.state // "") == "UNRESOLVED_ISSUES")
+    | (.items // [])[]?
+    | select((.type // .itemType // "") as $type | $type == "appStoreVersion" or $type == "appStoreVersions")
+    | select((.resourceId // .itemId // "") == $version_id)
+    | select((.state // .attributes.state // "") == "REJECTED")
+    | .id
+  '
+}
+
 extract_first_id() {
   jq -r '
     if .buildId? then .buildId
