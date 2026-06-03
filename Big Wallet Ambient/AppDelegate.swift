@@ -1,6 +1,7 @@
 // ∅ 2026 lil org
 
 import Cocoa
+import Darwin
 import Security
 
 @main
@@ -45,6 +46,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                                                             name: .ambientAgentMustTerminate,
                                                             object: nil,
                                                             suspensionBehavior: .deliverImmediately)
+        NSWorkspace.shared.notificationCenter.addObserver(self,
+                                                          selector: #selector(terminateIfDockAppTerminated(_:)),
+                                                          name: NSWorkspace.didTerminateApplicationNotification,
+                                                          object: nil)
         DistributedNotificationCenter.default().post(name: .ambientAgentMustTerminate,
                                                       object: currentInstanceId,
                                                       userInfo: AmbientAgentTerminationRequest.notificationUserInfo(from: versionInfo))
@@ -182,6 +187,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NSEvent.removeMonitor(commandQBlockerMonitor)
         }
         DistributedNotificationCenter.default().removeObserver(self, name: .ambientAgentMustTerminate, object: nil)
+        NSWorkspace.shared.notificationCenter.removeObserver(self, name: NSWorkspace.didTerminateApplicationNotification, object: nil)
     }
 
     @objc private func terminateInstance(_ notification: Notification) {
@@ -193,6 +199,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         allowsProgrammaticTermination = true
         NSApplication.shared.terminate(nil)
+    }
+
+    @objc private func terminateIfDockAppTerminated(_ notification: Notification) {
+        guard let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+              application.bundleIdentifier == Identifiers.macOSAppBundle else {
+            return
+        }
+
+        Darwin.exit(0)
     }
 
     private func shouldTerminate(forSenderVersionInfo senderVersionInfo: [String: String]) -> Bool {
