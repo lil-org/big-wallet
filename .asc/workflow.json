@@ -5,6 +5,7 @@
     "VERSION_TARGET": "Big Wallet",
     "IOS_SCHEME": "Wallet iOS",
     "MACOS_SCHEME": "Wallet",
+    "VISIONOS_SCHEME": "Wallet visionOS",
     "ASC_APP_INFO_DIR": ".asc/localizations/app-info",
     "ASC_VERSION_DIR": ".asc/localizations/version",
     "ASC_IOS_SCREENSHOTS": ".asc/screenshots/ios",
@@ -148,14 +149,44 @@
         }
       ]
     },
+    "release_visionos": {
+      "description": "Upload visionOS metadata, build, upload, and submit for review.",
+      "steps": [
+        {
+          "workflow": "preflight"
+        },
+        {
+          "name": "publish_preflight_visionos",
+          "run": "Scripts/asc/publish_check.sh"
+        },
+        {
+          "name": "upload_release_build_visionos",
+          "run": "Scripts/asc/publish.sh VISION_OS"
+        },
+        {
+          "name": "deliver_release_metadata_visionos",
+          "run": "Scripts/asc/deliver_metadata.sh VISION_OS true true"
+        },
+        {
+          "name": "submit_release_visionos",
+          "run": "Scripts/asc/submit_review.sh VISION_OS"
+        },
+        {
+          "workflow": "clean"
+        }
+      ]
+    },
     "release": {
-      "description": "Run iOS then macOS release workflows.",
+      "description": "Run iOS, macOS, then visionOS release workflows.",
       "steps": [
         {
           "workflow": "release_ios"
         },
         {
           "workflow": "release_macos"
+        },
+        {
+          "workflow": "release_visionos"
         }
       ]
     }

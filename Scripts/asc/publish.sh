@@ -21,6 +21,7 @@ artifact_path=""
 
 case "$platform" in
   IOS)
+    platform_name="iOS"
     scheme="$IOS_SCHEME"
     artifact_dir=".asc/artifacts/ios"
     archive_path="$artifact_dir/Big-Wallet-iOS.xcarchive"
@@ -29,14 +30,24 @@ case "$platform" in
     upload_flag=(--ipa "$ipa_path" --platform "$platform")
     ;;
   MAC_OS)
+    platform_name="macOS"
     scheme="$MACOS_SCHEME"
     artifact_dir=".asc/artifacts/macos"
     archive_path="$artifact_dir/Big-Wallet-macOS.xcarchive"
     export_dir="$artifact_dir/export"
     destination="generic/platform=macOS"
     ;;
+  VISION_OS)
+    platform_name="visionOS"
+    scheme="$VISIONOS_SCHEME"
+    artifact_dir=".asc/artifacts/visionos"
+    archive_path="$artifact_dir/Big-Wallet-visionOS.xcarchive"
+    ipa_path="$artifact_dir/Big-Wallet-visionOS.ipa"
+    destination="generic/platform=visionOS"
+    upload_flag=(--ipa "$ipa_path" --platform "$platform")
+    ;;
   *)
-    die "release publishing is only configured for IOS and MAC_OS, got $platform"
+    die "release publishing is only configured for IOS, MAC_OS, and VISION_OS, got $platform"
     ;;
 esac
 
@@ -156,8 +167,8 @@ archive_path="$(jq -r '.archive_path // .archivePath // empty' <<<"$archive_json
 [[ -n "$archive_path" ]] || die "archive did not return an archive path"
 
 case "$platform" in
-  IOS)
-    log "exporting iOS archive to $ipa_path"
+  IOS|VISION_OS)
+    log "exporting $platform_name archive to $ipa_path"
     export_json="$(asc xcode export \
       --archive-path "$archive_path" \
       --export-options "$ASC_EXPORT_OPTIONS" \
@@ -167,7 +178,7 @@ case "$platform" in
       --output json)"
 
     artifact_path="$(jq -r '.ipa_path // .ipaPath // empty' <<<"$export_json")"
-    [[ -n "$artifact_path" ]] || die "iOS export did not return an IPA path"
+    [[ -n "$artifact_path" ]] || die "$platform_name export did not return an IPA path"
     ;;
   MAC_OS)
     log "exporting macOS archive to $export_dir"
