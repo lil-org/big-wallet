@@ -53,11 +53,6 @@ class ApproveViewController: NSViewController {
         return new
     }
     
-    func setMeta(_ meta: String) {
-        self.meta = meta
-        updateDisplayedMeta()
-    }
-    
     override func viewDidLoad() {
         super.viewDidLoad()
         

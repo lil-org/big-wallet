@@ -22,10 +22,4 @@ extension UITableView {
         return dequeueReusableHeaderFooterView(withIdentifier: String(describing: type)) as! Header
     }
     
-    func scrollTableViewToTop(animated: Bool) {
-        if numberOfSections > 0, numberOfRows(inSection: 0) > 0 {
-            scrollToRow(at: IndexPath(row: 0, section: 0), at: .bottom, animated: animated)
-        }
-    }
-    
 }

@@ -1469,10 +1469,6 @@ final class Solana {
         return validationError(for: preparedTransactionMessage(message: message, publicKey: publicKey))
     }
 
-    func validationErrorForSigningTransaction(messageData: Data, publicKey: String) -> SendTransactionError? {
-        return validationError(for: preparedTransactionMessage(messageData: messageData, publicKey: publicKey))
-    }
-
     func preparedTransactionMessageForSigning(message: String,
                                               publicKey: String) -> Result<SolanaPreparedTransactionMessage, SendTransactionError> {
         return preparedTransactionMessage(message: message, publicKey: publicKey)

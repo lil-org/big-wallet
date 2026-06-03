@@ -13,14 +13,6 @@ struct Networks {
         return allBundledDict[chainId] ?? custom.first(where: { $0.chainId == chainId })
     }
     
-    static func explorerURL(chainId: Int, hash: String) -> URL? {
-        if let explorer = withChainId(chainId)?.explorer, let url = URL(string: explorer + "/tx/\(hash)") {
-            return url
-        } else {
-            return nil
-        }
-    }
-    
     static func add(networkFromDapp: EthereumNetworkFromDapp) {
         SharedDefaults.addNetwork(networkFromDapp)
     }

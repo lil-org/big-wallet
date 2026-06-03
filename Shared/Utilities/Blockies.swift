@@ -305,7 +305,4 @@ private extension Color {
         self.init(red: CGFloat(r), green: CGFloat(g), blue: CGFloat(b), alpha: 1)
     }
 
-    static func fromHSL(h: Double, s: Double, l: Double) -> Color? {
-        return Color(h: h, s: s, l: l)
-    }
 }

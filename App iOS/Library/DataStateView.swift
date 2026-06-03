@@ -143,10 +143,6 @@ extension DataStateContainer where Self: UIViewController {
         dataStateView.shouldMoveWithKeyboard = shouldMove
     }
     
-    func setDataStateViewTransparent(_ isTransparent: Bool) {
-        dataStateView.backgroundColor = isTransparent ? .clear : .systemGroupedBackground
-    }
-    
     func configureDataState(_ dataState: DataState, description: String? = nil, image: UIImage? = nil, buttonTitle: String? = nil, actionHandler: (() -> Void)? = nil) {
         dataStateView.configureDataState(dataState, description: description, image: image, buttonTitle: buttonTitle, actionHandler: actionHandler)
     }

@@ -100,10 +100,6 @@ final class WalletsManager: NSObject {
         return try createWallet(name: defaultWalletName, password: password)
     }
 
-    func getWallet(id: String) -> WalletContainer? {
-        return wallets.first(where: { $0.id == id })
-    }
-
     func addWallet(input: String, inputPassword: String?) throws -> WalletContainer {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         let name = defaultWalletName
@@ -286,11 +282,6 @@ final class WalletsManager: NSObject {
         return PreviewAccountsSession(hdWallet: hdWallet, coin: coin, walletsManager: self)
     }
 
-    func previewAccounts(wallet: WalletContainer, page: Int, coin: WalletCoin? = nil) throws -> [WalletAccount] {
-        let session = try previewAccountsSession(wallet: wallet, coin: coin)
-        return try session.previewAccounts(page: page)
-    }
-
     func previewAccounts(hdWallet: WalletHDWallet, page: Int, coin: WalletCoin?) throws -> [WalletAccount] {
         guard let coin else {
             return try Self.collectPreviewAccounts(coins: defaultMnemonicCoins) { previewCoin in
@@ -398,14 +389,6 @@ final class WalletsManager: NSObject {
         guard let account = account ?? wallet.accounts.first else { throw WalletKeyStoreError.accountNotFound }
         let privateKey = try wallet.privateKey(password: password, account: account)
         return Self.privateKeyExportString(privateKey: privateKey, coin: account.coin)
-    }
-
-    func exportPrivateKey(walletId: String, account: WalletAccount? = nil) throws -> String {
-        guard let wallet = currentWallet(id: walletId) else { throw WalletKeyStoreError.accountNotFound }
-        if let account {
-            guard wallet.hasAccountMatching(account) else { throw WalletKeyStoreError.accountNotFound }
-        }
-        return try exportPrivateKey(wallet: wallet, account: account)
     }
 
     static func privateKeyExportString(privateKey: WalletPrivateKey, coin: WalletCoin) -> String {
@@ -524,16 +507,6 @@ final class WalletsManager: NSObject {
         return mnemonic
     }
 
-    func exportMnemonic(walletId: String) throws -> String {
-        guard let wallet = currentWallet(id: walletId) else { throw WalletKeyStoreError.accountNotFound }
-        return try exportMnemonic(wallet: wallet)
-    }
-
-    func update(wallet: WalletContainer, newPassword: String) throws {
-        guard let password = keychain.password else { throw Error.keychainAccessFailure }
-        try update(wallet: wallet, password: password, newPassword: newPassword, newName: wallet.key.name)
-    }
-
     func delete(wallet: WalletContainer) throws {
         guard let password = keychain.password else { throw Error.keychainAccessFailure }
         guard let index = wallets.firstIndex(of: wallet) else { throw WalletKeyStoreError.accountNotFound }
@@ -542,13 +515,6 @@ final class WalletsManager: NSObject {
         wallets.remove(at: index)
         try keychain.removeWallet(id: wallet.id)
         WalletsMetadataService.removeMetadataForWallet(wallet, postChange: false)
-        postWalletsChangedNotification()
-    }
-
-    func destroy() throws {
-        wallets.removeAll(keepingCapacity: false)
-        try keychain.removeAllWallets()
-        WalletsMetadataService.removeAllMetadata(postChange: false)
         postWalletsChangedNotification()
     }
 
@@ -601,41 +567,6 @@ final class WalletsManager: NSObject {
                                             extendedPublicKey: account.extendedPublicKey)
         }
         try save(wallet: wallet, isUpdate: true)
-    }
-
-    private func update(wallet: WalletContainer, password: String, newPassword: String, newName: String) throws {
-        guard let index = wallets.firstIndex(of: wallet) else { throw WalletKeyStoreError.accountNotFound }
-        guard var privateKeyData = wallet.key.decryptPrivateKey(password: Data(password.utf8)) else { throw WalletKeyStoreError.invalidPassword }
-        defer { privateKeyData.resetBytes(in: 0..<privateKeyData.count) }
-        let previousKey = wallet.key
-        let enabledAccounts = wallet.accounts
-        let reimportedCoin: WalletCoin
-
-        if let mnemonic = checkMnemonic(privateKeyData),
-           let key = WalletStoredKey.importHDWallet(mnemonic: mnemonic, name: newName, password: Data(newPassword.utf8), coin: defaultCoin) {
-            reimportedCoin = defaultCoin
-            wallets[index].key = key
-        } else {
-            let privateKeyCoin = enabledAccounts.first?.coin ?? defaultCoin
-            guard let key = WalletStoredKey.importPrivateKey(privateKey: privateKeyData, name: newName, password: Data(newPassword.utf8), coin: privateKeyCoin) else {
-                throw WalletKeyStoreError.invalidKey
-            }
-            reimportedCoin = privateKeyCoin
-            wallets[index].key = key
-        }
-
-        wallets[index].key.removeAccountForCoin(coin: reimportedCoin)
-        for account in enabledAccounts {
-            wallets[index].key.addAccountDerivation(address: account.address,
-                                                    coin: account.coin,
-                                                    derivation: account.derivation,
-                                                    derivationPath: account.derivationPath,
-                                                    publicKey: account.publicKey,
-                                                    extendedPublicKey: account.extendedPublicKey)
-        }
-        wallets[index].key.copyUnsupportedAccounts(from: previousKey)
-
-        try save(wallet: wallets[index], isUpdate: true)
     }
 
     private func save(wallet: WalletContainer, isUpdate: Bool) throws {
@@ -755,21 +686,12 @@ final class WalletsManager: NSObject {
 
 extension WalletsManager {
 
-    func getPrivateKey(wallet: WalletContainer, account: WalletAccount) -> WalletPrivateKey? {
-        return getPrivateKey(walletId: wallet.id, account: account)
-    }
-
     func getPrivateKey(walletId: String, account: WalletAccount) -> WalletPrivateKey? {
         guard let password = Keychain.shared.password,
               let wallet = currentWallet(id: walletId)
         else { return nil }
         guard wallet.hasAccountMatching(account) else { return nil }
         return try? wallet.privateKey(password: password, account: account)
-    }
-
-    func getPrivateKey(coin: WalletCoin, address: String) -> WalletPrivateKey? {
-        guard let (wallet, account) = getWalletAndAccount(coin: coin, address: address) else { return nil }
-        return getPrivateKey(walletId: wallet.id, account: account)
     }
 
     func getWalletAndAccount(coin: WalletCoin, address: String) -> (WalletContainer, WalletAccount)? {

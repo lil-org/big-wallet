@@ -5,10 +5,7 @@ import Foundation
 struct Ethereum {
 
     enum Error: Swift.Error {
-        case invalidInputData
-        case failedToSendTransaction
         case failedToSign
-        case keyNotFound
     }
 
     private init() {}

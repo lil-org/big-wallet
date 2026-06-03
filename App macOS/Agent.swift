@@ -11,7 +11,6 @@ class Agent: NSObject {
     
     static let shared = Agent()
     
-    private let walletsManager = WalletsManager.shared
     private static let deferredExternalRequestMaxAge: TimeInterval = 5 * 60
     
     private override init() { super.init() }

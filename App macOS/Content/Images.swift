@@ -7,7 +7,6 @@ struct Images {
     static var multicoinWalletPreferences: NSImage { systemName("ellipsis.rectangle") }
     static var preferences: NSImage { systemName("gearshape") }
     static var network: NSImage { systemName("network") }
-    static var circleFill: NSImage { systemName("circle.fill") }
     static var solana: NSImage { named("solana") }
     
     private static func named(_ name: String) -> NSImage {

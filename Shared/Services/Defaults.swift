@@ -149,14 +149,4 @@ struct Defaults {
         }
     }
     
-    static var reviewRequestsGoodMomentsCount: Int {
-        get {
-            userDefaults.integer(forKey: Keys.reviewRequestsGoodMomentsCount)
-        }
-        set {
-            userDefaults.set(newValue, forKey: Keys.reviewRequestsGoodMomentsCount)
-            synchronize()
-        }
-    }
-    
 }

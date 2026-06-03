@@ -78,11 +78,6 @@ struct Window {
         }
     }
     
-    static func closeAllAndActivateBrowser(specific browser: Browser?) {
-        closeAll()
-        activateBrowser(specific: browser)
-    }
-    
     // MARK: - Private
     
     private static func closeAll() {

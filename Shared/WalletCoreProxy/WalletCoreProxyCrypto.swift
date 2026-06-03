@@ -72,11 +72,6 @@ enum PBKDF2 {
 }
 
 enum HMACSHA {
-    static func sha256(key: Data, data: Data) -> Data {
-        let code = HMAC<SHA256>.authenticationCode(for: data, using: SymmetricKey(data: key))
-        return Data(code)
-    }
-
     static func sha512(key: Data, data: Data) -> Data {
         let code = HMAC<SHA512>.authenticationCode(for: data, using: SymmetricKey(data: key))
         return Data(code)

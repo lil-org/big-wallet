@@ -84,12 +84,6 @@ struct Keychain {
         removeData(forKey: .wallet(id: id))
     }
     
-    func removeAllWallets() throws {
-        for id in getAllWalletsIds() {
-            removeData(forKey: .wallet(id: id))
-        }
-    }
-    
     // MARK: - Private
     
     private func update(data: Data, key: ItemKey) throws {

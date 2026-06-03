@@ -35,12 +35,6 @@ struct WalletsMetadataService {
         saveNames(postChange: postChange)
     }
 
-    static func removeAllMetadata(postChange: Bool = true) {
-        names = currentNames()
-        names.removeAll(keepingCapacity: false)
-        saveNames(postChange: postChange)
-    }
-
     private static func saveItemName(_ name: String?, wallet: WalletContainer, account: WalletAccount?) {
         names = currentNames()
         let key = itemKey(walletId: wallet.id, account: account)
