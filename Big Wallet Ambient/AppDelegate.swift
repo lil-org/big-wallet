@@ -5,7 +5,7 @@ import Darwin
 import Security
 
 @main
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     private let agent = Agent.shared
     private let walletsManager = WalletsManager.shared
@@ -66,6 +66,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard !allowsProgrammaticTermination else { return .terminateNow }
         return NSApp.currentEvent?.isCommandQShortcut == true ? .terminateCancel : .terminateNow
+    }
+
+    @IBAction func openWallet(_ sender: Any?) {
+        // Disabled for the ambient helper by validateMenuItem(_:).
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        guard menuItem.action == #selector(openWallet(_:)) else { return true }
+        return false
     }
 
     private func processInput(url: String?) -> Bool {

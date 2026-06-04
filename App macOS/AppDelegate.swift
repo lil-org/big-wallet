@@ -31,8 +31,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        agent.open()
+        openWallet()
         return true
+    }
+
+    @IBAction func openWallet(_ sender: Any?) {
+        openWallet()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -59,6 +63,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             _ = Darwin.kill($0.processIdentifier, SIGKILL)
             _ = $0.forceTerminate()
         }
+    }
+
+    private func openWallet() {
+        let windows = NSApplication.shared.windows.filter {
+            $0.contentViewController != nil && ($0.isVisible || $0.isMiniaturized)
+        }
+        guard !windows.isEmpty else {
+            agent.open()
+            return
+        }
+
+        NSApp.activate(ignoringOtherApps: true)
+        windows.forEach { $0.deminiaturize(nil) }
+        NSApp.arrangeInFront(nil)
     }
     
 }
