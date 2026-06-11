@@ -119,11 +119,7 @@ extension UIImageView: RemoteImageLoadable {
 }
 #elseif os(macOS)
 extension NSImageView: RemoteImageLoadable {
-    
-    func cancelRemoteImageLoad() {
-        cancelCurrentRemoteImageLoad()
-    }
-    
+
     func setRemoteImage(with url: URL, completion: ((Bool) -> Void)? = nil) {
         cancelCurrentRemoteImageLoad()
         remoteImageLoadURL = url

@@ -511,8 +511,7 @@ struct DappRequestProcessor {
                                              solanaClusterSelection: SolanaClusterSelection? = nil,
                                              completion: @escaping (String?) -> Void,
                                              onApprove: @escaping (WalletPrivateKey) -> Void) -> DappRequestAction {
-        let action = SignMessageAction(provider: request.provider,
-                                       subject: subject,
+        let action = SignMessageAction(subject: subject,
                                        walletId: wallet.id,
                                        account: account,
                                        meta: meta,
@@ -579,7 +578,7 @@ struct DappRequestProcessor {
                let raw = ethereumRequest.raw {
                 let walletId = walletAndAccount.0.id
                 let account = walletAndAccount.1
-                let action = SignMessageAction(provider: request.provider, subject: .signTypedData, walletId: walletId, account: account, meta: raw, peerMeta: peerMeta) { approved in
+                let action = SignMessageAction(subject: .signTypedData, walletId: walletId, account: account, meta: raw, peerMeta: peerMeta) { approved in
                     if approved {
                         guard let privateKey = ethereumPrivateKey(walletId: walletId, account: account, request: request, completion: completion) else { return }
                         signTypedData(privateKey: privateKey, raw: raw, request: request, completion: completion)
@@ -596,7 +595,7 @@ struct DappRequestProcessor {
                let walletAndAccount = walletAndAccount {
                 let walletId = walletAndAccount.0.id
                 let account = walletAndAccount.1
-                let action = SignMessageAction(provider: request.provider, subject: .signMessage, walletId: walletId, account: account, meta: WalletCrypto.hexString(data: data), peerMeta: peerMeta) { approved in
+                let action = SignMessageAction(subject: .signMessage, walletId: walletId, account: account, meta: WalletCrypto.hexString(data: data), peerMeta: peerMeta) { approved in
                     if approved {
                         guard let privateKey = ethereumPrivateKey(walletId: walletId, account: account, request: request, completion: completion) else { return }
                         signMessage(privateKey: privateKey, data: data, request: request, completion: completion)
@@ -614,7 +613,7 @@ struct DappRequestProcessor {
                 let walletId = walletAndAccount.0.id
                 let account = walletAndAccount.1
                 let text = String(data: data, encoding: .utf8) ?? WalletCrypto.hexString(data: data)
-                let action = SignMessageAction(provider: request.provider, subject: .signPersonalMessage, walletId: walletId, account: account, meta: text, peerMeta: peerMeta) { approved in
+                let action = SignMessageAction(subject: .signPersonalMessage, walletId: walletId, account: account, meta: text, peerMeta: peerMeta) { approved in
                     if approved {
                         guard let privateKey = ethereumPrivateKey(walletId: walletId, account: account, request: request, completion: completion) else { return }
                         signPersonalMessage(privateKey: privateKey, data: data, request: request, completion: completion)
@@ -633,8 +632,7 @@ struct DappRequestProcessor {
                let walletAndAccount = walletAndAccount {
                 let walletId = walletAndAccount.0.id
                 let account = walletAndAccount.1
-                let action = SendTransactionAction(provider: request.provider,
-                                                   transaction: transaction,
+                let action = SendTransactionAction(transaction: transaction,
                                                    chain: chain, walletId: walletId,
                                                    account: account,
                                                    peerMeta: peerMeta) { transaction in

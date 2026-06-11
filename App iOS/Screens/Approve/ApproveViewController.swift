@@ -40,7 +40,6 @@ class ApproveViewController: UIViewController {
     @IBOutlet weak var cancelButton: UIButton!
     
     static func with(subject: ApprovalSubject,
-                     provider: InpageProvider,
                      account: WalletAccount,
                      walletId: String,
                      meta: String,

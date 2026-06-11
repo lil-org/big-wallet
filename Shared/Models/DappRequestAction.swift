@@ -39,7 +39,6 @@ struct SelectAccountAction {
 }
 
 struct SignMessageAction {
-    let provider: InpageProvider
     let subject: ApprovalSubject
     let walletId: String
     let account: WalletAccount
@@ -77,7 +76,6 @@ final class SolanaClusterSelection {
 }
 
 struct SendTransactionAction {
-    let provider: InpageProvider
     let transaction: Transaction
     let chain: EthereumNetwork
     let walletId: String

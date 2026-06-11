@@ -9,7 +9,9 @@ struct NetworksListView: View {
     private let custom = Networks.custom
     private let pinned = Networks.pinned
     
-    @Environment(\.presentationMode) var presentationMode
+#if !os(macOS)
+    @Environment(\.presentationMode) private var presentationMode
+#endif
     @State private var selectedNetwork: EthereumNetwork?
     
     private let completion: ((EthereumNetwork?) -> Void)

@@ -203,7 +203,6 @@
 		2C7740002D53C20B00879A1F /* EditTransactionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD7FC8C2B1115AE00659439 /* EditTransactionView.swift */; };
 		2C7740012D53C21A00879A1F /* ApprovalSubject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D059AD126C2796200EE3023 /* ApprovalSubject.swift */; };
 		2C7740022D53C21A00879A1F /* PeerMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4297272ADEDCBD0044357A /* PeerMeta.swift */; };
-		2C7740032D53C21A00879A1F /* IpfsResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A8CF02B7CF25100683E15 /* IpfsResponse.swift */; };
 		2C7740042D53C21A00879A1F /* AuthenticationReason.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC850E626B73A5900809E82 /* AuthenticationReason.swift */; };
 		2C7740052D53C21A00879A1F /* SpecificWalletAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */; };
 		2C7740062D53C21A00879A1F /* PlatformSpecificImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C09FC652828331D00DE9C27 /* PlatformSpecificImage.swift */; };
@@ -246,7 +245,6 @@
 		2C78F8282683BDCC00C10670 /* Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C78F8272683BDCC00C10670 /* Alert.swift */; };
 		2C795DAE4BDF63A3670D6C7D /* Defaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C528A15267FA8EB00CA3ADD /* Defaults.swift */; };
 		2C797E7E267BB88800F2CE2D /* WelcomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */; };
-		2C7A8CF12B7CF25100683E15 /* IpfsResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A8CF02B7CF25100683E15 /* IpfsResponse.swift */; };
 		2C84758643E4EDCE86AA289F /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C603D0126B6E13F00956955 /* String.swift */; };
 		2C86125B2B76BDF300B22794 /* TransactionInspectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03EB892B069BFD00EF61F5 /* TransactionInspectorTests.swift */; };
 		2C86125D2B76BE2800B22794 /* Tests_iOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03EB752B069B5A00EF61F5 /* Tests_iOS.swift */; };
@@ -712,7 +710,6 @@
 		2C78F8272683BDCC00C10670 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alert.swift; sourceTree = "<group>"; };
 		2C797E7D267BB88800F2CE2D /* WelcomeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeViewController.swift; sourceTree = "<group>"; };
 		2C7A8CDE2B7CD98A00683E15 /* UniformTypeIdentifiers.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UniformTypeIdentifiers.framework; path = System/Library/Frameworks/UniformTypeIdentifiers.framework; sourceTree = SDKROOT; };
-		2C7A8CF02B7CF25100683E15 /* IpfsResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IpfsResponse.swift; sourceTree = "<group>"; };
 		2C8612512B76BDDC00B22794 /* Tests iOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Tests iOS.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C8944C42AEAFF97006A711F /* FixedWidthInteger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FixedWidthInteger.swift; sourceTree = "<group>"; };
 		2C8944CA2AEB0C10006A711F /* EthereumRPC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumRPC.swift; sourceTree = "<group>"; };
@@ -1404,7 +1401,6 @@
 				0D059AD126C2796200EE3023 /* ApprovalSubject.swift */,
 				2C09FC652828331D00DE9C27 /* PlatformSpecificImage.swift */,
 				2C4297272ADEDCBD0044357A /* PeerMeta.swift */,
-				2C7A8CF02B7CF25100683E15 /* IpfsResponse.swift */,
 				2C89D26727BADCA9006C0C8D /* DappRequestAction.swift */,
 				0DC850E626B73A5900809E82 /* AuthenticationReason.swift */,
 				2C2AA1D128AD1DC100E35DBF /* SpecificWalletAccount.swift */,
@@ -2167,7 +2163,6 @@
 				2C773FFF2D53C20B00879A1F /* NetworksListView.swift in Sources */,
 				2C7740012D53C21A00879A1F /* ApprovalSubject.swift in Sources */,
 				2C7740022D53C21A00879A1F /* PeerMeta.swift in Sources */,
-				2C7740032D53C21A00879A1F /* IpfsResponse.swift in Sources */,
 				2C7740042D53C21A00879A1F /* AuthenticationReason.swift in Sources */,
 				2C7740052D53C21A00879A1F /* SpecificWalletAccount.swift in Sources */,
 				2C7740062D53C21A00879A1F /* PlatformSpecificImage.swift in Sources */,
@@ -2354,7 +2349,6 @@
 				2C8E88A4275FB7B9003EB8DB /* UIApplication.swift in Sources */,
 				2C40709427667A8600AB3D55 /* ImageWithLabelTableViewCell.swift in Sources */,
 				2C728B5E2AFBE7EA00E4DD47 /* NetworksListView.swift in Sources */,
-				2C7A8CF12B7CF25100683E15 /* IpfsResponse.swift in Sources */,
 				2C5FF97226C84F7B00B32ACC /* AppDelegate.swift in Sources */,
 				2C89D26927BADCA9006C0C8D /* DappRequestAction.swift in Sources */,
 				2C8E88A2275FA596003EB8DB /* ImportViewController.swift in Sources */,

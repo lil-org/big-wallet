@@ -5,7 +5,9 @@ import Foundation
 
 struct WalletStoreSync {
 
+#if os(macOS)
     private static let senderProcessId = String(ProcessInfo.processInfo.processIdentifier)
+#endif
 
     static func postLocalChange() {
         NotificationCenter.default.post(name: .walletsChanged, object: nil)
@@ -37,8 +39,8 @@ struct WalletStoreSync {
         DistributedNotificationCenter.default().post(name: .walletStoreChanged, object: senderProcessId)
     }
 #else
-    static func startObserving(_ observer: Any, selector: Selector) {}
-    static func isExternalChange(_ notification: Notification) -> Bool { false }
+    static func startObserving(_: Any, selector _: Selector) {}
+    static func isExternalChange(_: Notification) -> Bool { false }
     private static func postExternalChange() {}
 #endif
 

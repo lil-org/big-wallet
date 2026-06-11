@@ -284,7 +284,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             presentForExternalRequest(selectAccountViewController.inNavigationController, id: id)
         case .approveMessage(let action):
             let approveViewController = ApproveViewController.with(subject: action.subject,
-                                                                   provider: action.provider,
                                                                    account: action.account,
                                                                    walletId: action.walletId,
                                                                    meta: action.meta,

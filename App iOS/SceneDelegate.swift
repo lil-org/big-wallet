@@ -21,23 +21,23 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         
         if let url = connectionOptions.userActivities.first?.webpageURL ?? connectionOptions.urlContexts.first?.url {
-            wasOpenedWithURL(url, onStart: true)
+            wasOpenedWithURL(url)
         }
     }
     
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
         if let url = userActivity.webpageURL {
-            wasOpenedWithURL(url, onStart: false)
+            wasOpenedWithURL(url)
         }
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         if let url = URLContexts.first?.url {
-            wasOpenedWithURL(url, onStart: false)
+            wasOpenedWithURL(url)
         }
     }
     
-    private func wasOpenedWithURL(_ url: URL, onStart: Bool) {
+    private func wasOpenedWithURL(_ url: URL) {
         launchURL = url
         NotificationCenter.default.post(name: .receievedWalletRequest, object: nil)
     }

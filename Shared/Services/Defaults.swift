@@ -4,7 +4,9 @@ import Foundation
 
 struct Defaults {
 
+#if os(macOS)
     private static let dockAppDefaultsDomain = "org.lil.wallet"
+#endif
 
     private enum Keys {
         static let walletsAndAccountsNames = "walletsAndAccountsNames"
