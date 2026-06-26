@@ -61,9 +61,7 @@ class ApproveViewController: UIViewController {
         super.viewDidLoad()
         okButton.setTitle(Strings.ok, for: .normal)
         cancelButton.setTitle(Strings.cancel, for: .normal)
-        navigationItem.title = approveTitle
-        navigationController?.navigationBar.prefersLargeTitles = true
-        navigationItem.largeTitleDisplayMode = .always
+        configureAdaptiveLargeTitle(approveTitle, tableView: tableView)
         isModalInPresentation = true
         tableView.allowsSelection = solanaClusterSelection != nil
         cellModels = [
@@ -79,6 +77,11 @@ class ApproveViewController: UIViewController {
     
     override var prefersHomeIndicatorAutoHidden: Bool {
         return screenshotMode ? true : super.prefersHomeIndicatorAutoHidden
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateAdaptiveLargeTitleLayout(approveTitle, tableView: tableView)
     }
     
     override func viewWillAppear(_ animated: Bool) {

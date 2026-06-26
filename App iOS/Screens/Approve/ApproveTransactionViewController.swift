@@ -70,9 +70,7 @@ class ApproveTransactionViewController: UIViewController {
         cancelButton.setTitle(Strings.cancel, for: .normal)
         
         priceService.update()
-        navigationItem.title = Strings.sendTransaction
-        navigationController?.navigationBar.prefersLargeTitles = true
-        navigationItem.largeTitleDisplayMode = .always
+        configureAdaptiveLargeTitle(Strings.sendTransaction, tableView: tableView)
         navigationItem.rightBarButtonItem = UIBarButtonItem(image: Images.preferences, style: .plain, target: self, action: #selector(editTransactionButtonTapped))
         navigationItem.rightBarButtonItem?.tintColor = .tertiaryLabel
         isModalInPresentation = true
@@ -90,6 +88,11 @@ class ApproveTransactionViewController: UIViewController {
     
     override var prefersHomeIndicatorAutoHidden: Bool {
         return screenshotMode ? true : super.prefersHomeIndicatorAutoHidden
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateAdaptiveLargeTitleLayout(Strings.sendTransaction, tableView: tableView)
     }
     
     @objc private func editTransactionButtonTapped() {

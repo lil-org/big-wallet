@@ -33,9 +33,7 @@ class ImportViewController: UIViewController {
         okButton.setTitle(Strings.ok, for: .normal)
         pasteButton.setTitle(Strings.paste, for: .normal)
         
-        navigationController?.navigationBar.prefersLargeTitles = true
-        navigationItem.largeTitleDisplayMode = .always
-        navigationItem.title = Strings.importWallet
+        configureAdaptiveLargeTitle(Strings.importWallet)
         navigationItem.leftBarButtonItem = UIBarButtonItem(title: Strings.cancel, style: .plain, target: self, action: #selector(dismissAnimated))
         
         okButton.configurationUpdateHandler = { [weak self] button in
@@ -43,6 +41,11 @@ class ImportViewController: UIViewController {
             button.configuration?.title = isWaiting ? "" : Strings.ok
             button.configuration?.showsActivityIndicator = isWaiting
         }
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateAdaptiveLargeTitleLayout(Strings.importWallet)
     }
     
     override func viewWillAppear(_ animated: Bool) {

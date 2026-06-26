@@ -28,10 +28,8 @@ struct NetworksListView: View {
         }
 #else
         NavigationView {
-            VStack {
-                list()
-            }
-            .navigationBarTitle(Strings.selectNetwork, displayMode: .large)
+            list(showsAdaptiveTitle: true)
+            .navigationBarTitleDisplayMode(.inline)
             .navigationBarItems(leading: Button(action: {
                 completion(selectedNetwork)
                 presentationMode.wrappedValue.dismiss() }) {
@@ -47,8 +45,21 @@ struct NetworksListView: View {
     }
     
     @ViewBuilder
-    private func list() -> some View {
+    private func list(showsAdaptiveTitle: Bool = false) -> some View {
         List {
+#if !os(macOS)
+            if showsAdaptiveTitle {
+                Text(Strings.selectNetwork)
+                    .font(.largeTitle.bold())
+                    .minimumScaleFactor(0.72)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 10, trailing: 20))
+                    .listRowBackground(Color(uiColor: .systemBackground))
+                    .listRowSeparator(.hidden)
+                    .accessibilityAddTraits(.isHeader)
+            }
+#endif
             networkSection(networks: pinned, title: Strings.pinned)
             networkSection(networks: mainnets, title: Strings.mainnets)
             if !custom.isEmpty {
@@ -56,6 +67,9 @@ struct NetworksListView: View {
             }
             networkSection(networks: testnets, title: Strings.testnets)
         }
+#if !os(macOS)
+        .contentMargins(.top, 0, for: .scrollContent)
+#endif
     }
     
     @ViewBuilder

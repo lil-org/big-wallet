@@ -38,6 +38,18 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         return selectAccountAction != nil
     }
 
+    private var adaptiveTitle: String {
+        if forWalletSelection {
+            if selectAccountAction?.initiallyConnectedProviders.isEmpty ?? true {
+                return Strings.selectAccount
+            } else {
+                return Strings.switchAccount
+            }
+        } else {
+            return Strings.wallets
+        }
+    }
+
     private var canSelectEthereumNetwork: Bool {
         return selectAccountAction?.canSelectEthereumNetwork == true
     }
@@ -80,18 +92,11 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             walletsManager.start()
         }
         
-        if forWalletSelection {
-            if selectAccountAction?.initiallyConnectedProviders.isEmpty ?? true {
-                navigationItem.title = Strings.selectAccount
-            } else {
-                navigationItem.title = Strings.switchAccount
-            }
-        } else {
-            navigationItem.title = Strings.wallets
-        }
-        
-        navigationController?.navigationBar.prefersLargeTitles = true
-        navigationItem.largeTitleDisplayMode = .always
+        prepareWebsitePanelForTableHeaderIfNeeded()
+        configureAdaptiveLargeTitle(adaptiveTitle,
+                                    tableView: tableView,
+                                    accessoryView: adaptiveTitleAccessoryView,
+                                    accessoryInsets: adaptiveTitleAccessoryInsets)
         
         isModalInPresentation = true
         let addItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addWallet))
@@ -118,7 +123,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         if let selectAccountAction = selectAccountAction {
             let bottomOverlayHeight: CGFloat = 70
             tableView.contentInset.bottom += bottomOverlayHeight
-            tableView.contentInset.top += 70
             tableView.verticalScrollIndicatorInsets.bottom += bottomOverlayHeight
             if !selectAccountAction.initiallyConnectedProviders.isEmpty {
                 primaryButton.setTitle(Strings.ok, for: .normal)
@@ -143,6 +147,14 @@ class AccountsListViewController: UIViewController, DataStateContainer {
             
             showAddAccountToConnectAlertIfNeeded()
         }
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateAdaptiveLargeTitleLayout(adaptiveTitle,
+                                       tableView: tableView,
+                                       accessoryView: adaptiveTitleAccessoryView,
+                                       accessoryInsets: adaptiveTitleAccessoryInsets)
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -179,7 +191,27 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         didShowAddAccountToConnectAlert = true
         showMessageAlert(text: String(format: Strings.addAccountToConnect, arguments: [name]))
     }
-    
+
+    private var adaptiveTitleAccessoryView: UIView? {
+        return forWalletSelection ? topOverlayView : nil
+    }
+
+    private var adaptiveTitleAccessoryInsets: UIEdgeInsets {
+        return forWalletSelection ? UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16) : .zero
+    }
+
+    private func prepareWebsitePanelForTableHeaderIfNeeded() {
+        guard forWalletSelection else { return }
+
+        let constraints = view.constraints.filter {
+            $0.firstItem === topOverlayView || $0.secondItem === topOverlayView
+        }
+        NSLayoutConstraint.deactivate(constraints)
+        topOverlayView.removeFromSuperview()
+        topOverlayView.translatesAutoresizingMaskIntoConstraints = true
+        topOverlayView.autoresizingMask = [.flexibleWidth]
+    }
+
     private func scrollToTheFirst(_ specificWalletAccounts: Set<SpecificWalletAccount>) {
         for (sectionIndex, section) in sections.enumerated() {
             for (row, cellModel) in section.items.enumerated() {
@@ -770,18 +802,7 @@ extension AccountsListViewController: UITableViewDelegate {
 }
 
 extension AccountsListViewController: UITableViewDataSource {
-    
-    func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        if !topOverlayView.isHidden, let initialContentOffset = initialContentOffset {
-            let delta = scrollView.contentOffset.y - initialContentOffset
-            if delta < 0 {
-                topOverlayTopConstraint.constant = -delta
-            } else {
-                topOverlayTopConstraint.constant = 0
-            }
-        }
-    }
-    
+
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return sections[section].items.count
     }

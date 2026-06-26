@@ -35,11 +35,14 @@ class EditAccountsViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         okButton.setTitle(Strings.ok, for: .normal)
-        navigationItem.title = Strings.editAccounts
-        navigationController?.navigationBar.prefersLargeTitles = true
-        navigationItem.largeTitleDisplayMode = .always
+        configureAdaptiveLargeTitle(Strings.editAccounts, tableView: tableView)
         navigationItem.leftBarButtonItem = UIBarButtonItem(title: Strings.cancel, style: .plain, target: self, action: #selector(dismissAnimated))
         resetPreviewAccounts()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateAdaptiveLargeTitleLayout(Strings.editAccounts, tableView: tableView)
     }
     
     private func appendPreviewAccounts(_ previewAccounts: [WalletAccount]) {

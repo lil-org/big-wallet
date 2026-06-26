@@ -26,12 +26,21 @@ class PasswordViewController: UIViewController {
     @IBOutlet weak var okButton: UIButton!
     
     private var viewDidAppear = false
+
+    private var adaptiveTitle: String {
+        switch mode {
+        case .create:
+            return Strings.createPassword
+        case .repeatAfterCreate:
+            return Strings.repeatPassword
+        case .enter:
+            return Strings.enterPassword
+        }
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
         okButton.setTitle(Strings.ok, for: .normal)
-        navigationController?.navigationBar.prefersLargeTitles = true
-        navigationItem.largeTitleDisplayMode = .always
         navigationItem.backButtonDisplayMode = .minimal
         
         if passwordToRepeat != nil {
@@ -49,6 +58,11 @@ class PasswordViewController: UIViewController {
         } else {
             initialOverlayView.isHidden = true
         }
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateAdaptiveTitleLayout()
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -72,13 +86,14 @@ class PasswordViewController: UIViewController {
     
     private func switchToMode(_ mode: Mode) {
         self.mode = mode
-        switch mode {
-        case .create:
-            navigationItem.title = Strings.createPassword
-        case .repeatAfterCreate:
-            navigationItem.title = Strings.repeatPassword
-        case .enter:
-            navigationItem.title = Strings.enterPassword
+        updateAdaptiveTitleLayout()
+    }
+
+    private func updateAdaptiveTitleLayout() {
+        if navigationController?.isNavigationBarHidden == true {
+            removeFixedAdaptiveLargeTitleLayout()
+        } else {
+            updateAdaptiveLargeTitleLayout(adaptiveTitle)
         }
     }
     
@@ -95,6 +110,7 @@ class PasswordViewController: UIViewController {
     private func didFailLocalAuthentication() {
         navigationController?.setNavigationBarHidden(false, animated: false)
         initialOverlayView.isHidden = true
+        updateAdaptiveTitleLayout()
         focusOnPasswordTextField()
     }
     
