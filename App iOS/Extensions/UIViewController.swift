@@ -16,7 +16,27 @@ fileprivate final class AdaptiveLargeTitleHeaderView: UIView {
         static let preferredMaximumNumberOfLines = 2
     }
 
+    private struct TitleLayout {
+        let font: UIFont
+        let lineBreakMode: NSLineBreakMode
+        let height: CGFloat
+    }
+
+    private struct LayoutCache {
+        let title: String
+        let containerWidth: CGFloat
+        let contentSizeCategory: UIContentSizeCategory
+        let layout: TitleLayout
+
+        func matches(title: String, containerWidth: CGFloat, contentSizeCategory: UIContentSizeCategory) -> Bool {
+            return self.title == title &&
+                abs(self.containerWidth - containerWidth) <= 0.5 &&
+                self.contentSizeCategory == contentSizeCategory
+        }
+    }
+
     private let titleLabel = UILabel()
+    private var layoutCache: LayoutCache?
     fileprivate static let fixedHeaderAccessibilityIdentifier = "AdaptiveLargeTitleHeaderView.fixed"
 
     override init(frame: CGRect) {
@@ -30,14 +50,14 @@ fileprivate final class AdaptiveLargeTitleHeaderView: UIView {
     }
 
     func update(title: String, width: CGFloat) -> CGFloat {
-        let layout = Self.fittingLayout(for: title, width: Self.contentWidth(for: width))
+        let contentSizeCategory = traitCollection.preferredContentSizeCategory
+        let layout = cachedLayout(for: title, containerWidth: width, contentSizeCategory: contentSizeCategory)
         titleLabel.text = title
         titleLabel.font = layout.font
         titleLabel.lineBreakMode = layout.lineBreakMode
 
-        let height = Self.height(for: title, width: width, font: layout.font, lineBreakMode: layout.lineBreakMode)
-        frame = CGRect(x: 0, y: 0, width: width, height: height)
-        return height
+        frame = CGRect(x: 0, y: 0, width: width, height: layout.height)
+        return layout.height
     }
 
     private func setup() {
@@ -62,39 +82,78 @@ fileprivate final class AdaptiveLargeTitleHeaderView: UIView {
         ])
     }
 
-    private static func contentWidth(for width: CGFloat) -> CGFloat {
-        return max(0, width - Constants.horizontalInset * 2)
+    private func cachedLayout(for title: String,
+                              containerWidth: CGFloat,
+                              contentSizeCategory: UIContentSizeCategory) -> TitleLayout {
+        if let layoutCache,
+           layoutCache.matches(title: title,
+                               containerWidth: containerWidth,
+                               contentSizeCategory: contentSizeCategory) {
+            return layoutCache.layout
+        }
+
+        let layout = Self.fittingLayout(for: title,
+                                        containerWidth: containerWidth,
+                                        compatibleWith: traitCollection)
+        layoutCache = LayoutCache(title: title,
+                                  containerWidth: containerWidth,
+                                  contentSizeCategory: contentSizeCategory,
+                                  layout: layout)
+        return layout
     }
 
-    private static func height(for title: String, width: CGFloat, font: UIFont, lineBreakMode: NSLineBreakMode) -> CGFloat {
-        let contentWidth = contentWidth(for: width)
-        let textHeight = textBounds(for: title, width: contentWidth, font: font, lineBreakMode: lineBreakMode).height
+    private static func contentWidth(for containerWidth: CGFloat) -> CGFloat {
+        return max(0, containerWidth - Constants.horizontalInset * 2)
+    }
+
+    private static func height(for title: String,
+                               containerWidth: CGFloat,
+                               font: UIFont,
+                               lineBreakMode: NSLineBreakMode) -> CGFloat {
+        let availableTitleWidth = contentWidth(for: containerWidth)
+        let textHeight = textBounds(for: title,
+                                    width: availableTitleWidth,
+                                    font: font,
+                                    lineBreakMode: lineBreakMode).height
         return ceil(Constants.topInset + max(textHeight, font.lineHeight) + Constants.bottomInset)
     }
 
-    private static func fittingLayout(for title: String, width: CGFloat) -> (font: UIFont, lineBreakMode: NSLineBreakMode) {
+    private static func fittingLayout(for title: String,
+                                      containerWidth: CGFloat,
+                                      compatibleWith traitCollection: UITraitCollection) -> TitleLayout {
+        let availableTitleWidth = contentWidth(for: containerWidth)
         let minimumBaseSize = Constants.baseFontSize * Constants.minimumFontScale
         var baseSize = Constants.baseFontSize
 
         while baseSize > minimumBaseSize {
-            let font = largeTitleFont(baseSize: baseSize)
+            let font = largeTitleFont(baseSize: baseSize, compatibleWith: traitCollection)
             if titleFits(title,
-                         width: width,
+                         width: availableTitleWidth,
                          font: font,
                          lineBreakMode: .byWordWrapping,
                          maximumNumberOfLines: Constants.preferredMaximumNumberOfLines) {
-                return (font, .byWordWrapping)
+                return TitleLayout(font: font,
+                                   lineBreakMode: .byWordWrapping,
+                                   height: height(for: title,
+                                                  containerWidth: containerWidth,
+                                                  font: font,
+                                                  lineBreakMode: .byWordWrapping))
             }
             baseSize -= 1
         }
 
-        let font = largeTitleFont(baseSize: minimumBaseSize)
+        let font = largeTitleFont(baseSize: minimumBaseSize, compatibleWith: traitCollection)
         let lineBreakMode: NSLineBreakMode = titleFits(title,
-                                                       width: width,
+                                                       width: availableTitleWidth,
                                                        font: font,
                                                        lineBreakMode: .byWordWrapping,
                                                        maximumNumberOfLines: nil) ? .byWordWrapping : .byCharWrapping
-        return (font, lineBreakMode)
+        return TitleLayout(font: font,
+                           lineBreakMode: lineBreakMode,
+                           height: height(for: title,
+                                          containerWidth: containerWidth,
+                                          font: font,
+                                          lineBreakMode: lineBreakMode))
     }
 
     private static func titleFits(_ title: String,
@@ -131,9 +190,9 @@ fileprivate final class AdaptiveLargeTitleHeaderView: UIView {
         )
     }
 
-    private static func largeTitleFont(baseSize: CGFloat) -> UIFont {
+    private static func largeTitleFont(baseSize: CGFloat, compatibleWith traitCollection: UITraitCollection) -> UIFont {
         let font = UIFont.systemFont(ofSize: baseSize, weight: .bold)
-        return UIFontMetrics(forTextStyle: .largeTitle).scaledFont(for: font)
+        return UIFontMetrics(forTextStyle: .largeTitle).scaledFont(for: font, compatibleWith: traitCollection)
     }
 
 }

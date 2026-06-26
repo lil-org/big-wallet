@@ -248,7 +248,6 @@
                         <outlet property="primaryButton" destination="Lx8-Ew-2BH" id="unH-YH-Jbc"/>
                         <outlet property="secondaryButton" destination="QNJ-MC-LUC" id="guy-l7-YWP"/>
                         <outlet property="tableView" destination="0xi-7N-lca" id="vc7-HM-CEH"/>
-                        <outlet property="topOverlayTopConstraint" destination="kwk-4V-ZYW" id="hct-hS-2ie"/>
                         <outlet property="topOverlayView" destination="kx5-oC-LAC" id="LcR-rh-c6n"/>
                         <outlet property="websiteLogoImageView" destination="BRA-De-eda" id="YPf-4f-R3t"/>
                         <outlet property="websiteNameLabel" destination="KAd-MC-C23" id="v51-gW-KEY"/>

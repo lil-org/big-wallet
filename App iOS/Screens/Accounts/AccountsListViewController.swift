@@ -58,14 +58,13 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private var toDismissAfterResponse = [Int: UIViewController]()
     private var preferencesItem: UIBarButtonItem?
     private var addWalletItem: UIBarButtonItem?
-    private var initialContentOffset: CGFloat?
+    private var didScrollToInitialSelection = false
     private var didShowAddAccountToConnectAlert = false
     
     @IBOutlet weak var bottomOverlayView: UIVisualEffectView!
     @IBOutlet weak var websiteLogoImageView: UIImageView!
     @IBOutlet weak var websiteNameLabel: UILabel!
     @IBOutlet weak var topOverlayView: UIView!
-    @IBOutlet weak var topOverlayTopConstraint: NSLayoutConstraint!
     @IBOutlet weak var networkButton: UIButton!
     @IBOutlet weak var secondaryButton: UIButton!
     @IBOutlet weak var primaryButton: UIButton!
@@ -162,15 +161,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         processInput()
         didAppear = true
         DispatchQueue.main.async { [weak self] in
-            let heightBefore = self?.navigationController?.navigationBar.frame.height ?? 0
             self?.navigationController?.navigationBar.sizeToFit()
-            let heightAfter = self?.navigationController?.navigationBar.frame.height ?? 0
-            if self?.initialContentOffset == nil && self?.sections.isEmpty == false {
-                self?.initialContentOffset = (self?.tableView.contentOffset.y ?? 0) + heightBefore - heightAfter
-                if let selectedAccounts = self?.selectAccountAction?.selectedAccounts {
-                    self?.scrollToTheFirst(selectedAccounts)
-                }
-            }
+            self?.scrollToInitialSelectionIfNeeded()
         }
     }
 
@@ -228,6 +220,15 @@ class AccountsListViewController: UIViewController, DataStateContainer {
                     return
                 }
             }
+        }
+    }
+
+    private func scrollToInitialSelectionIfNeeded() {
+        guard didAppear, !didScrollToInitialSelection, !sections.isEmpty else { return }
+
+        didScrollToInitialSelection = true
+        if let selectedAccounts = selectAccountAction?.selectedAccounts {
+            scrollToTheFirst(selectedAccounts)
         }
     }
     
@@ -453,16 +454,13 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         if tableView.isScrollEnabled != canScroll {
             tableView.isScrollEnabled = canScroll
         }
-        
-        if didAppear, !isEmpty, initialContentOffset == nil {
-            initialContentOffset = tableView.contentOffset.y
-        }
     }
     
     private func reloadData() {
         updateCellModels()
         updateDataState()
         tableView.reloadData()
+        scrollToInitialSelectionIfNeeded()
     }
     
     @objc private func preferencesButtonTapped() {
