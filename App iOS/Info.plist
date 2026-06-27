@@ -70,7 +70,7 @@
 	<array>
 		<dict>
 			<key>UIApplicationShortcutItemIconSymbolName</key>
-				<string>message</string>
+				<string>exclamationmark.message</string>
 			<key>UIApplicationShortcutItemSubtitle</key>
 			<string>Tap here to leave a quick feedback.</string>
 			<key>UIApplicationShortcutItemTitle</key>
