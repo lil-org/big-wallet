@@ -18,11 +18,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        clearAmbientPseudoLocalizationLaunchMode()
         terminateAmbientHelpers()
         return .terminateNow
     }
     
     func applicationDidFinishLaunching(_ aNotification: Notification) {
+#if DEBUG
+        AmbientPseudoLocalizationLaunchMode.recordFromEnvironment()
+#endif
         installQuitKeyboardShortcutMonitor()
         agent.start(openOnLaunch: true)
         gasService.start()
@@ -40,6 +44,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        clearAmbientPseudoLocalizationLaunchMode()
         terminateAmbientHelpers()
         if let quitKeyboardShortcutMonitor {
             NSEvent.removeMonitor(quitKeyboardShortcutMonitor)
@@ -63,6 +68,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             _ = Darwin.kill($0.processIdentifier, SIGKILL)
             _ = $0.forceTerminate()
         }
+    }
+
+    private func clearAmbientPseudoLocalizationLaunchMode() {
+#if DEBUG
+        AmbientPseudoLocalizationLaunchMode.clear()
+#endif
     }
 
     private func openWallet() {

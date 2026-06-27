@@ -26,7 +26,7 @@ case "$platform" in
   IOS)
     platform_name="iOS"
     scheme="$IOS_SCHEME"
-    artifact_dir=".asc/artifacts/ios"
+    artifact_dir="$ASC_ARTIFACTS_DIR/ios"
     archive_path="$artifact_dir/Big-Wallet-iOS.xcarchive"
     ipa_path="$artifact_dir/Big-Wallet-iOS.ipa"
     destination="generic/platform=iOS"
@@ -35,7 +35,7 @@ case "$platform" in
   MAC_OS)
     platform_name="macOS"
     scheme="$MACOS_SCHEME"
-    artifact_dir=".asc/artifacts/macos"
+    artifact_dir="$ASC_ARTIFACTS_DIR/macos"
     archive_path="$artifact_dir/Big-Wallet-macOS.xcarchive"
     export_dir="$artifact_dir/export"
     destination="generic/platform=macOS"
@@ -43,7 +43,7 @@ case "$platform" in
   VISION_OS)
     platform_name="visionOS"
     scheme="$VISIONOS_SCHEME"
-    artifact_dir=".asc/artifacts/visionos"
+    artifact_dir="$ASC_ARTIFACTS_DIR/visionos"
     archive_path="$artifact_dir/Big-Wallet-visionOS.xcarchive"
     ipa_path="$artifact_dir/Big-Wallet-visionOS.ipa"
     destination="generic/platform=visionOS"

@@ -31,7 +31,7 @@ esac
 prepare_device_screenshot_tree() {
   local source_path="$1"
   local device="$2"
-  local staging_root=".asc/tmp/screenshots/$platform/$device"
+  local staging_root="$ASC_TMP_DIR/screenshots/$platform/$device"
   local locale_count=0
   local file_count=0
 

@@ -12,15 +12,20 @@ VERSION_TARGET="${VERSION_TARGET:-Big Wallet}"
 IOS_SCHEME="${IOS_SCHEME:-Wallet iOS}"
 MACOS_SCHEME="${MACOS_SCHEME:-Wallet}"
 VISIONOS_SCHEME="${VISIONOS_SCHEME:-Wallet visionOS}"
-ASC_APP_INFO_DIR="${ASC_APP_INFO_DIR:-.asc/localizations/app-info}"
-ASC_VERSION_DIR="${ASC_VERSION_DIR:-.asc/localizations/version}"
-ASC_IOS_SCREENSHOTS="${ASC_IOS_SCREENSHOTS:-.asc/screenshots/ios}"
-ASC_MACOS_SCREENSHOTS="${ASC_MACOS_SCREENSHOTS:-.asc/screenshots/macos}"
-ASC_VISIONOS_SCREENSHOTS="${ASC_VISIONOS_SCREENSHOTS:-.asc/screenshots/visionos}"
+ASC_METADATA_ROOT="${ASC_METADATA_ROOT:-app-store-connect}"
+ASC_RUNTIME_ROOT="${ASC_RUNTIME_ROOT:-.asc}"
+ASC_APP_INFO_DIR="${ASC_APP_INFO_DIR:-$ASC_METADATA_ROOT/localizations/app-info}"
+ASC_VERSION_DIR="${ASC_VERSION_DIR:-$ASC_METADATA_ROOT/localizations/version}"
+ASC_IOS_SCREENSHOTS="${ASC_IOS_SCREENSHOTS:-$ASC_METADATA_ROOT/screenshots/ios}"
+ASC_MACOS_SCREENSHOTS="${ASC_MACOS_SCREENSHOTS:-$ASC_METADATA_ROOT/screenshots/macos}"
+ASC_VISIONOS_SCREENSHOTS="${ASC_VISIONOS_SCREENSHOTS:-$ASC_METADATA_ROOT/screenshots/visionos}"
 ASC_APP_INFO_ID="${ASC_APP_INFO_ID:-}"
-ASC_APP_METADATA="${ASC_APP_METADATA:-.asc/app-metadata.json}"
-ASC_REVIEW_DETAILS_LOCAL="${ASC_REVIEW_DETAILS_LOCAL:-.asc/review-details.local.json}"
-ASC_EXPORT_OPTIONS="${ASC_EXPORT_OPTIONS:-.asc/export-options-app-store.plist}"
+ASC_APP_METADATA="${ASC_APP_METADATA:-$ASC_METADATA_ROOT/app-metadata.json}"
+ASC_REVIEW_DETAILS_LOCAL="${ASC_REVIEW_DETAILS_LOCAL:-$ASC_RUNTIME_ROOT/review-details.local.json}"
+ASC_EXPORT_OPTIONS="${ASC_EXPORT_OPTIONS:-$ASC_METADATA_ROOT/export-options-app-store.plist}"
+ASC_ARTIFACTS_DIR="${ASC_ARTIFACTS_DIR:-$ASC_RUNTIME_ROOT/artifacts}"
+ASC_TMP_DIR="${ASC_TMP_DIR:-$ASC_RUNTIME_ROOT/tmp}"
+ASC_REPORTS_DIR="${ASC_REPORTS_DIR:-$ASC_RUNTIME_ROOT/reports}"
 ASC_TEAM_ID="${ASC_TEAM_ID:-8DXC3N7E7P}"
 VERSIONED_INFO_PLISTS=(
   "App iOS/Info.plist"
@@ -648,16 +653,16 @@ load_review_details() {
   review_demo_password="$(review_detail_string demoAccountPassword ASC_REVIEW_DEMO_ACCOUNT_PASSWORD)"
 
   review_missing_fields=()
-  [[ -n "$review_first_name" ]] || review_missing_fields+=("ASC_REVIEW_CONTACT_FIRST_NAME or .asc app metadata reviewDetails.contactFirstName")
-  [[ -n "$review_last_name" ]] || review_missing_fields+=("ASC_REVIEW_CONTACT_LAST_NAME or .asc app metadata reviewDetails.contactLastName")
-  [[ -n "$review_email" ]] || review_missing_fields+=("ASC_REVIEW_CONTACT_EMAIL or .asc app metadata reviewDetails.contactEmail")
+  [[ -n "$review_first_name" ]] || review_missing_fields+=("ASC_REVIEW_CONTACT_FIRST_NAME or $ASC_APP_METADATA reviewDetails.contactFirstName")
+  [[ -n "$review_last_name" ]] || review_missing_fields+=("ASC_REVIEW_CONTACT_LAST_NAME or $ASC_APP_METADATA reviewDetails.contactLastName")
+  [[ -n "$review_email" ]] || review_missing_fields+=("ASC_REVIEW_CONTACT_EMAIL or $ASC_APP_METADATA reviewDetails.contactEmail")
 
   if [[ -n "$review_demo_user" && -z "$review_demo_password" ]]; then
-    die "demo account name is set but demo password is missing; set ASC_REVIEW_DEMO_ACCOUNT_PASSWORD or .asc/review-details.local.json reviewDetails.demoAccountPassword"
+    die "demo account name is set but demo password is missing; set ASC_REVIEW_DEMO_ACCOUNT_PASSWORD or $ASC_REVIEW_DETAILS_LOCAL reviewDetails.demoAccountPassword"
   fi
 
   if [[ -z "$review_demo_user" && -n "$review_demo_password" ]]; then
-    die "demo account password is set but demo account name is missing; set ASC_REVIEW_DEMO_ACCOUNT_NAME or .asc/review-details.local.json reviewDetails.demoAccountName"
+    die "demo account password is set but demo account name is missing; set ASC_REVIEW_DEMO_ACCOUNT_NAME or $ASC_REVIEW_DETAILS_LOCAL reviewDetails.demoAccountName"
   fi
 }
 

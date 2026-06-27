@@ -6,14 +6,8 @@
     "IOS_SCHEME": "Wallet iOS",
     "MACOS_SCHEME": "Wallet",
     "VISIONOS_SCHEME": "Wallet visionOS",
-    "ASC_APP_INFO_DIR": ".asc/localizations/app-info",
-    "ASC_VERSION_DIR": ".asc/localizations/version",
-    "ASC_IOS_SCREENSHOTS": ".asc/screenshots/ios",
-    "ASC_MACOS_SCREENSHOTS": ".asc/screenshots/macos",
-    "ASC_VISIONOS_SCREENSHOTS": ".asc/screenshots/visionos",
-    "ASC_APP_METADATA": ".asc/app-metadata.json",
-    "ASC_REVIEW_DETAILS_LOCAL": ".asc/review-details.local.json",
-    "ASC_EXPORT_OPTIONS": ".asc/export-options-app-store.plist"
+    "ASC_METADATA_ROOT": "app-store-connect",
+    "ASC_RUNTIME_ROOT": ".asc"
   },
   "workflows": {
     "preflight": {

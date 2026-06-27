@@ -129,6 +129,12 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
+#if DEBUG
+        let arguments = AmbientPseudoLocalizationLaunchMode.ambientLaunchArguments()
+        if !arguments.isEmpty {
+            configuration.arguments = arguments
+        }
+#endif
         NSWorkspace.shared.open([requestURL], withApplicationAt: ambientAppURL, configuration: configuration) { _, error in
             if error != nil {
                 NSWorkspace.shared.open(requestURL)

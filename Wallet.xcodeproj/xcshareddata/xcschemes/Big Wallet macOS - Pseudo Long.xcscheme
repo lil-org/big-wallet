@@ -63,6 +63,13 @@
             ReferencedContainer = "container:Wallet.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <EnvironmentVariables>
+         <EnvironmentVariable
+            key = "BIG_WALLET_AMBIENT_PSEUDO_LOCALIZATION"
+            value = "long"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+      </EnvironmentVariables>
       <CommandLineArguments>
          <CommandLineArgument
             argument = "-NSDoubleLocalizedStrings YES"

@@ -23,7 +23,7 @@ xcuserdata
 *.xcuserstate
 .DS_Store
 
-# asc runtime artifacts
+# asc runtime artifacts; tracked App Store metadata lives in app-store-connect/
 .asc/artifacts/
 .asc/runs/
 .asc/tmp/
