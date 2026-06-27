@@ -11,15 +11,18 @@ version="${2:-$(target_version)}"
 case "$platform" in
   IOS)
     path="$ASC_IOS_SCREENSHOTS"
-    devices=(APP_IPHONE_67 APP_IPAD_PRO_3GEN_129)
+    screenshot_sets=(
+      "iphone:APP_IPHONE_67"
+      "ipad:APP_IPAD_PRO_3GEN_129"
+    )
     ;;
   MAC_OS)
     path="$ASC_MACOS_SCREENSHOTS"
-    devices=(APP_DESKTOP)
+    screenshot_sets=("desktop:APP_DESKTOP")
     ;;
   VISION_OS)
     path="$ASC_VISIONOS_SCREENSHOTS"
-    devices=(APP_APPLE_VISION_PRO)
+    screenshot_sets=("vision-pro:APP_APPLE_VISION_PRO")
     ;;
   *)
     die "unsupported screenshot platform: $platform"
@@ -30,10 +33,14 @@ esac
 
 prepare_device_screenshot_tree() {
   local source_path="$1"
-  local device="$2"
+  local source_dir="$2"
+  local device="$3"
+  local device_source_path="$source_path/$source_dir"
   local staging_root="$ASC_TMP_DIR/screenshots/$platform/$device"
   local locale_count=0
   local file_count=0
+
+  [[ -d "$device_source_path" ]] || return 1
 
   rm -rf "$staging_root"
   mkdir -p "$staging_root"
@@ -51,11 +58,11 @@ prepare_device_screenshot_tree() {
       mkdir -p "$target_dir/$(dirname "$relative_file")"
       cp "$file" "$target_dir/$relative_file"
       file_count=$((file_count + 1))
-    done < <(find "$locale_dir" -type f \( -name "*${device}*.png" -o -name "*${device}*.jpg" -o -name "*${device}*.jpeg" \) -print0 | sort -z)
-  done < <(find "$source_path" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
+    done < <(find "$locale_dir" \( -type d -name '.*' -prune \) -o \( -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) ! -name '.*' -print0 \) | sort -z)
+  done < <(find "$device_source_path" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
 
   [[ "$locale_count" -gt 0 ]] \
-    || die "$source_path must contain locale directories for screenshot upload"
+    || die "$device_source_path must contain locale directories for screenshot upload"
 
   if [[ "$file_count" -eq 0 ]]; then
     return 1
@@ -76,9 +83,12 @@ validate_device_screenshot_tree() {
   done < <(find "$staging_root" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
 }
 
-for device in "${devices[@]}"; do
-  if ! staging_path="$(prepare_device_screenshot_tree "$path" "$device")"; then
-    log "no $device screenshots under $path; skipping"
+for screenshot_set in "${screenshot_sets[@]}"; do
+  source_dir="${screenshot_set%%:*}"
+  device="${screenshot_set#*:}"
+
+  if ! staging_path="$(prepare_device_screenshot_tree "$path" "$source_dir" "$device")"; then
+    log "no $device screenshots under $path/$source_dir; skipping"
     continue
   fi
 
