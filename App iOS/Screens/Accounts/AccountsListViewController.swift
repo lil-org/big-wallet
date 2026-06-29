@@ -356,14 +356,26 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     
     private func presentForExternalRequest(_ viewController: UIViewController, id: Int) {
         var presentFrom: UIViewController = self
-        while let presented = presentFrom.presentedViewController, !(presented is UIAlertController) {
+        while let presented = presentFrom.presentedViewController, !isTransientPresentation(presented) {
             presentFrom = presented
         }
-        if let alert = presentFrom.presentedViewController as? UIAlertController {
-            alert.dismiss(animated: false)
+
+        let requestPresenter = presentFrom
+        let presentRequest = { [weak self] in
+            requestPresenter.present(viewController, animated: true)
+            self?.toDismissAfterResponse[id] = viewController
         }
-        presentFrom.present(viewController, animated: true)
-        toDismissAfterResponse[id] = viewController
+
+        if let transientPresentation = presentFrom.presentedViewController {
+            transientPresentation.dismiss(animated: false, completion: presentRequest)
+            return
+        }
+
+        presentRequest()
+    }
+
+    private func isTransientPresentation(_ viewController: UIViewController) -> Bool {
+        return viewController is UIAlertController
     }
     
     private func redirectBack(requestId: Int) {
@@ -561,7 +573,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let currentName = WalletsMetadataService.getWalletName(wallet: wallet)
         
         let actionSheet = UIAlertController(title: currentName ?? Strings.multicoinWallet, message: nil, preferredStyle: .actionSheet)
-        actionSheet.popoverPresentationController?.sourceView = headerView
+        actionSheet.popoverPresentationController?.sourceView = headerView.editSectionButton
+        actionSheet.popoverPresentationController?.sourceRect = headerView.editSectionButton.bounds
         
         let editAction = UIAlertAction(title: Strings.editAccounts, style: .default) { [weak self] _ in
             let editAccountsViewController = instantiate(EditAccountsViewController.self, from: .main)
@@ -614,13 +627,16 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
     }
     
-    private func showActionsForAccount(_ account: WalletAccount, wallet: WalletContainer, cell: UITableViewCell?) {
+    private func showActionsForAccount(_ account: WalletAccount, wallet: WalletContainer, cell: AccountTableViewCell?) {
         let actionSheet = UIAlertController(title: account.coin.name, message: account.address, preferredStyle: .actionSheet)
-        actionSheet.popoverPresentationController?.sourceView = cell
+        let sourceView = cell?.moreButton ?? cell
+        actionSheet.popoverPresentationController?.sourceView = sourceView
+        actionSheet.popoverPresentationController?.sourceRect = sourceView?.bounds ?? .zero
         
         let copyAddressAction = UIAlertAction(title: Strings.copyAddress, style: .default) { _ in
             UIPasteboard.general.string = account.address
         }
+        
         let showKeyTitle = wallet.isMnemonic ? Strings.showSecretWords : Strings.showPrivateKey
         let showKeyAction = UIAlertAction(title: showKeyTitle, style: .default) { [weak self] _ in
             self?.didTapExportWallet(wallet, specificAccount: nil)
@@ -785,7 +801,7 @@ extension AccountsListViewController: UITableViewDelegate {
                 didClickAccountInSelectionMode(specificWalletAccount: specificWalletAccount)
             }
         } else {
-            showActionsForAccount(account, wallet: wallet, cell: tableView.cellForRow(at: indexPath))
+            showActionsForAccount(account, wallet: wallet, cell: tableView.cellForRow(at: indexPath) as? AccountTableViewCell)
         }
     }
     

@@ -63,13 +63,6 @@
             ReferencedContainer = "container:Wallet.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-      <EnvironmentVariables>
-         <EnvironmentVariable
-            key = "BIG_WALLET_AMBIENT_PSEUDO_LOCALIZATION"
-            value = "rtl"
-            isEnabled = "YES">
-         </EnvironmentVariable>
-      </EnvironmentVariables>
       <CommandLineArguments>
          <CommandLineArgument
             argument = "-AppleTextDirection YES"
@@ -80,6 +73,13 @@
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>
+      <EnvironmentVariables>
+         <EnvironmentVariable
+            key = "BIG_WALLET_AMBIENT_PSEUDO_LOCALIZATION"
+            value = "rtl"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+      </EnvironmentVariables>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
