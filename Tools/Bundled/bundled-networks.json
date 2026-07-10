@@ -245,7 +245,7 @@
   "30" : {
     "b" : "https://explorer.rsk.co",
     "n" : "Rootstock Mainnet",
-    "s" : "RBTC",
+    "s" : "RBTC"
   },
   "314" : {
     "b" : "https://filfox.info/en",
@@ -314,6 +314,11 @@
     "s" : "ETH",
     "t" : true
   },
+  "4217" : {
+    "b" : "https://explore.tempo.xyz",
+    "n" : "Tempo Mainnet Presto",
+    "s" : "USD"
+  },
   "42170" : {
     "b" : "https://nova-explorer.arbitrum.io",
     "n" : "Arbitrum Nova",
@@ -348,6 +353,11 @@
     "o" : true,
     "s" : "AVAX"
   },
+  "4326" : {
+    "b" : "https://mega.etherscan.io",
+    "n" : "MegaETH Mainnet",
+    "s" : "ETH"
+  },
   "43288" : {
     "b" : "https://blockexplorer.avax.boba.network",
     "n" : "Boba Avax",
@@ -363,6 +373,11 @@
     "n" : "Celo Alfajores Testnet",
     "s" : "CELO",
     "t" : true
+  },
+  "4663" : {
+    "b" : "https://robinhoodchain.blockscout.com",
+    "n" : "Robinhood Chain",
+    "s" : "ETH"
   },
   "480" : {
     "b" : "https://worldscan.org",
