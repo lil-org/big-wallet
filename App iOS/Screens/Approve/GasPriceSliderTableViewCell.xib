@@ -34,6 +34,10 @@
                             <constraint firstAttribute="height" constant="33" id="p8e-ar-5IX"/>
                         </constraints>
                         <connections>
+                            <action selector="sliderInteractionStarted:" destination="KGk-i7-Jjw" eventType="touchDown" id="nKb-QP-nR8"/>
+                            <action selector="sliderInteractionEnded:" destination="KGk-i7-Jjw" eventType="touchUpInside" id="aXr-ND-Kc1"/>
+                            <action selector="sliderInteractionEnded:" destination="KGk-i7-Jjw" eventType="touchUpOutside" id="f7C-sB-3mP"/>
+                            <action selector="sliderInteractionEnded:" destination="KGk-i7-Jjw" eventType="touchCancel" id="v6K-Q2-gHs"/>
                             <action selector="sliderValueChanged:" destination="KGk-i7-Jjw" eventType="valueChanged" id="5l3-JW-HwC"/>
                         </connections>
                     </slider>

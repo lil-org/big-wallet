@@ -27,17 +27,19 @@ class ApproveTransactionViewController: NSViewController {
     private let gasService = GasService.shared
     private let ethereum = Ethereum.shared
     private let priceService = PriceService.shared
-    private var currentGasInfo: GasService.Info?
+    private var gasSpeedConfiguration = GasSpeedConfiguration()
     private var transaction: Transaction!
     private var chain: EthereumNetwork!
     private var completion: ((Transaction?) -> Void)!
     private var didCallCompletion = false
-    private var didEnableSpeedConfiguration = false
     private var peerMeta: PeerMeta?
     private var account: WalletAccount!
     private var walletId: String!
     private var balance: String?
     private var suggestedNonceAndGasPrice: (nonce: String?, gasPrice: String?)?
+    private var displayedGasSliderValue: Double?
+    private var gasSliderInteractionStartValue: Double?
+    private var gasSliderInteractionDidMove = false
     
     static func with(transaction: Transaction, chain: EthereumNetwork, account: WalletAccount, walletId: String, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self)
@@ -60,11 +62,13 @@ class ApproveTransactionViewController: NSViewController {
             self?.updateTextView()
         }
         if chain.isEthMainnet {
-            gasService.update { [weak self] in
-                self?.updateInterface()
+            gasService.fetchEstimate(rpcUrl: chain.nodeURLString) { [weak self] estimate in
+                self?.didFetchGasEstimate(estimate)
             }
         }
         titleLabel.stringValue = Strings.sendTransaction
+        speedSlider.isContinuous = true
+        _ = speedSlider.sendAction(on: [.leftMouseDown, .leftMouseDragged, .leftMouseUp])
         setSpeedConfigurationViews(enabled: false)
         updateInterface()
         prepareTransaction(forceGasCheck: false)
@@ -102,9 +106,9 @@ class ApproveTransactionViewController: NSViewController {
     
     private func prepareTransaction(forceGasCheck: Bool) {
         ethereum.prepareTransaction(transaction, forceGasCheck: forceGasCheck, network: chain) { [weak self] updated in
-            guard updated.id == self?.transaction.id else { return }
-            self?.transaction = updated
-            self?.updateInterface()
+            guard let self, updated.id == self.transaction.id else { return }
+            self.transaction = self.gasSpeedConfiguration.mergingPreparedTransaction(updated, with: self.transaction)
+            self.updateInterface()
         }
     }
     
@@ -115,12 +119,18 @@ class ApproveTransactionViewController: NSViewController {
             infoTextViewBottomConstraint.constant = 30
         }
         
-        okButton.isEnabled = transaction.hasFee
-        enableSpeedConfigurationIfNeeded()
+        okButton.isEnabled = canApproveTransaction
+        updateSpeedConfigurationState()
         updateTextView()
-        if didEnableSpeedConfiguration, let gwei = transaction.gasPriceGwei {
+        if let gwei = transaction.gasPriceGwei {
             gweiLabel.stringValue = "\(gwei) \(Strings.gwei)"
+        } else {
+            gweiLabel.stringValue = ""
         }
+    }
+
+    private var canApproveTransaction: Bool {
+        transaction.isReadyForApproval(on: chain)
     }
     
     private var displayedMetaAndBalance = ("", "")
@@ -146,19 +156,36 @@ class ApproveTransactionViewController: NSViewController {
         metaTextView.textStorage?.setAttributedString(fullString)
     }
     
-    private func enableSpeedConfigurationIfNeeded() {
-        guard !didEnableSpeedConfiguration else { return }
-        let newGasInfo = gasService.currentInfo
-        guard transaction.hasFee, let gasInfo = newGasInfo else { return }
-        didEnableSpeedConfiguration = true
-        currentGasInfo = gasInfo
-        updateGasSliderValueIfNeeded()
-        setSpeedConfigurationViews(enabled: true)
+    private var isSpeedConfigurationEnabled: Bool {
+        guard chain.isEthMainnet,
+              let gasPrice = transaction.gasPriceWei else { return false }
+        return gasPrice > 0 && gasSpeedConfiguration.info != nil
+    }
+
+    private func updateSpeedConfigurationState() {
+        guard chain.isEthMainnet else { return }
+        if let gasPrice = transaction.gasPriceWei, gasPrice > 0 {
+            gasSpeedConfiguration.installTransactionFallback(gasPrice: gasPrice)
+        }
+        let isEnabled = isSpeedConfigurationEnabled
+        setSpeedConfigurationViews(enabled: isEnabled)
+        if isEnabled {
+            updateGasSliderValueIfNeeded()
+        }
+    }
+
+    private func didFetchGasEstimate(_ estimate: GasService.Estimate) {
+        guard gasSpeedConfiguration.applyFetchedEstimate(estimate) else { return }
+        updateSpeedConfigurationState()
     }
     
     private func updateGasSliderValueIfNeeded() {
-        guard didEnableSpeedConfiguration, let gasInfo = currentGasInfo else { return }
-        speedSlider.doubleValue = transaction.currentGasInRelationTo(info: gasInfo)
+        guard gasSliderInteractionStartValue == nil,
+              isSpeedConfigurationEnabled,
+              let gasInfo = gasSpeedConfiguration.info else { return }
+        let sliderValue = transaction.currentGasInRelationTo(info: gasInfo)
+        speedSlider.doubleValue = sliderValue
+        displayedGasSliderValue = sliderValue
     }
 
     private func setSpeedConfigurationViews(enabled: Bool) {
@@ -168,26 +195,83 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     @IBAction func editTransactionButtonTapped(_ sender: Any) {
-        if suggestedNonceAndGasPrice == nil { suggestedNonceAndGasPrice = (transaction.decimalNonceString, transaction.gasPriceGwei) }
-        let editTransactionView = EditTransactionView(initialTransaction: transaction,
-                                                      suggestedNonce: suggestedNonceAndGasPrice?.nonce,
-                                                      suggestedGasPrice: suggestedNonceAndGasPrice?.gasPrice) { [weak self] editedTransaction in
-            self?.endAllSheets()
-            if let editedTransaction = editedTransaction {
-                self?.transaction = editedTransaction
-                self?.updateInterface()
-                self?.prepareTransaction(forceGasCheck: true)
-                self?.updateGasSliderValueIfNeeded()
-            }
+        if suggestedNonceAndGasPrice == nil {
+            suggestedNonceAndGasPrice = (transaction.decimalNonceString, transaction.editableGasPriceGwei)
         }
+        let editTransactionView = EditTransactionView(
+            initialTransaction: transaction,
+            chain: chain,
+            suggestedNonce: suggestedNonceAndGasPrice?.nonce,
+            suggestedGasPrice: suggestedNonceAndGasPrice?.gasPrice,
+            completion: { [weak self] edits in
+                guard let self else { return }
+                self.endAllSheets()
+                guard let edits else { return }
+
+                let gasPriceChanged = edits.gasPrice.map { $0 != self.transaction.gasPriceValue } ?? false
+                guard self.transaction.apply(edits) else { return }
+                if gasPriceChanged {
+                    self.gasSpeedConfiguration.commitManualGasPrice(self.transaction.gasPriceWei)
+                }
+                self.updateInterface()
+                self.prepareTransaction(forceGasCheck: true)
+            }
+        )
         let editWindow = makeHostingWindow(content: editTransactionView)
         view.window?.beginSheet(editWindow)
     }
     
     @IBAction func sliderValueChanged(_ sender: NSSlider) {
-        guard let gasInfo = currentGasInfo else { return }
-        transaction.setGasPrice(value: sender.doubleValue, inRelationTo: gasInfo)
+        guard let gasInfo = gasSpeedConfiguration.info else { return }
+        gasSpeedConfiguration.markGasSliderInteraction()
+
+        let eventType = NSApp.currentEvent?.type
+        if eventType == .leftMouseDown {
+            let startValue = displayedGasSliderValue ?? sender.doubleValue
+            gasSliderInteractionStartValue = startValue
+            gasSliderInteractionDidMove = sender.doubleValue != startValue
+            return
+        }
+
+        if eventType == .leftMouseDragged || eventType == .leftMouseUp {
+            let startValue = gasSliderInteractionStartValue ?? displayedGasSliderValue ?? sender.doubleValue
+            gasSliderInteractionStartValue = startValue
+            if sender.doubleValue != startValue {
+                gasSliderInteractionDidMove = true
+            }
+
+            guard gasSliderInteractionDidMove else {
+                if eventType == .leftMouseUp {
+                    resetGasSliderInteraction()
+                    updateGasSliderValueIfNeeded()
+                }
+                return
+            }
+
+            applyGasSliderValue(sender.doubleValue, inRelationTo: gasInfo)
+            if eventType == .leftMouseUp {
+                resetGasSliderInteraction()
+            }
+            updateInterface()
+            return
+        }
+
+        resetGasSliderInteraction()
+        applyGasSliderValue(sender.doubleValue, inRelationTo: gasInfo)
         updateInterface()
+    }
+
+    private func applyGasSliderValue(_ value: Double, inRelationTo info: GasService.Info) {
+        let previousGasPrice = transaction.gasPriceValue
+        transaction.setGasPrice(value: value, inRelationTo: info)
+        if transaction.gasPriceValue != previousGasPrice {
+            gasSpeedConfiguration.markGasSliderGasPriceChange()
+        }
+    }
+
+    private func resetGasSliderInteraction() {
+        gasSliderInteractionStartValue = nil
+        gasSliderInteractionDidMove = false
     }
     
     @IBAction func actionButtonTapped(_ sender: Any) {

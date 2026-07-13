@@ -3,6 +3,21 @@
 import Foundation
 
 struct Transaction {
+
+    struct Edits: Equatable {
+        let gasPrice: BigUInt?
+        let nonce: UInt?
+
+        init(gasPrice: BigUInt? = nil, nonce: UInt? = nil) {
+            self.gasPrice = gasPrice
+            self.nonce = nonce
+        }
+
+        var isEmpty: Bool {
+            gasPrice == nil && nonce == nil
+        }
+    }
+
     var id = UUID()
     let from: String
     let to: String
@@ -36,8 +51,40 @@ struct Transaction {
     }
     
     var gasPriceGwei: String? {
-        guard let gasPrice = gasPrice, let value = BigUInt(hexString: gasPrice) else { return nil }
-        return value.gwei
+        gasPriceValue?.gwei
+    }
+
+    var editableGasPriceGwei: String? {
+        guard let gasPriceValue else { return nil }
+        let division = gasPriceValue.quotientAndRemainder(dividingBy: 1_000_000_000)
+        guard division.remainder > 0 else { return division.quotient.description }
+
+        let paddedFraction = String(repeating: "0", count: 9 - String(division.remainder).count) + String(division.remainder)
+        let fraction = paddedFraction.reversed().drop(while: { $0 == "0" }).reversed()
+        return division.quotient.description + "." + String(fraction)
+    }
+
+    var gasPriceValue: BigUInt? {
+        gasPrice.flatMap(BigUInt.init(hexString:))
+    }
+
+    var gasPriceWei: UInt? {
+        gasPrice.flatMap(UInt.init(hexString:))
+    }
+
+    func isReadyForApproval(on chain: EthereumNetwork) -> Bool {
+        guard nonce.flatMap(UInt.init(hexString:)) != nil,
+              let gasLimit = gas.flatMap(BigUInt.init(hexString:)),
+              !gasLimit.isZero,
+              let gasPriceValue else { return false }
+        return Self.isValidGasPrice(gasPriceValue, on: chain)
+    }
+
+    static func isValidGasPrice(_ gasPrice: BigUInt, on chain: EthereumNetwork) -> Bool {
+        // Legacy Ethereum transaction quantities are uint256 values. BigUInt is
+        // intentionally unbounded, so enforce the protocol boundary separately.
+        guard gasPrice.toData().count <= 32 else { return false }
+        return !chain.isEthMainnet || !gasPrice.isZero
     }
     
     func description(chain: EthereumNetwork, price: Double?) -> String {
@@ -106,6 +153,22 @@ struct Transaction {
         }
         return true
     }
+
+    @discardableResult
+    mutating func apply(_ edits: Edits) -> Bool {
+        let gasPriceChanged = edits.gasPrice.map { $0 != gasPriceValue } ?? false
+        let nonceChanged = edits.nonce.map { $0 != nonce.flatMap(UInt.init(hexString:)) } ?? false
+        guard gasPriceChanged || nonceChanged else { return false }
+
+        if gasPriceChanged, let gasPrice = edits.gasPrice {
+            self.gasPrice = gasPrice.hexString
+        }
+        if nonceChanged, let nonce = edits.nonce {
+            self.nonce = String.hex(nonce)
+        }
+        id = UUID()
+        return true
+    }
     
     func valueWithSymbol(chain: EthereumNetwork, price: Double?, withLabel: Bool) -> String? {
         guard let value = value, let value = BigUInt(hexString: value) else { return nil }
@@ -137,7 +200,7 @@ struct Transaction {
     }
     
     mutating func setGasPrice(value: Double, inRelationTo info: GasService.Info) {
-        let tickValues = info.sortedValues
+        let tickValues = info.sliderValues
         let tickValuesCount = tickValues.count
         guard value >= 0, value <= 100, tickValuesCount > 1 else { return }
         
@@ -154,10 +217,32 @@ struct Transaction {
             let partialStep = value - step * Double(i - 1)
             let previousTickValue = tickValues[i - 1]
             let nextTickValue = tickValues[i]
-            let current = previousTickValue + UInt((partialStep / step) * Double(nextTickValue - previousTickValue))
+            guard let current = Self.interpolate(from: previousTickValue,
+                                                 to: nextTickValue,
+                                                 fraction: partialStep / step) else { return }
             setGasPrice(value: current)
             return
         }
+    }
+
+    private static func interpolate(from lower: UInt, to upper: UInt, fraction: Double) -> UInt? {
+        guard lower <= upper, fraction.isFinite else { return nil }
+        if fraction <= 0 { return lower }
+        if fraction >= 1 { return upper }
+
+        let distance = upper - lower
+        let scaledDistance = fraction * Double(distance)
+        guard scaledDistance.isFinite, scaledDistance > 0 else { return lower }
+
+        // Values near UInt.max can round up to 2^UInt.bitWidth as Double, which
+        // cannot be converted back to UInt. Handle that boundary first.
+        if scaledDistance >= Double(distance) { return upper }
+        let offset = UInt(scaledDistance)
+        if offset >= distance { return upper }
+
+        let (interpolated, overflow) = lower.addingReportingOverflow(offset)
+        guard !overflow else { return upper }
+        return min(interpolated, upper)
     }
     
     private mutating func setGasPrice(value: UInt) {
@@ -180,10 +265,43 @@ struct Transaction {
         guard roundedWei != NSDecimalNumber.notANumber else { return nil }
         return BigUInt(decimalString: roundedWei.stringValue)
     }
+
+    static func gasPriceWei(fromGwei text: String) -> BigUInt? {
+        let parts = text.split(separator: ".", omittingEmptySubsequences: false)
+        guard !text.isEmpty,
+              parts.count <= 2,
+              parts.allSatisfy({ part in
+                  part.unicodeScalars.allSatisfy { (48...57).contains($0.value) }
+              }),
+              parts.contains(where: { !$0.isEmpty }) else { return nil }
+
+        let wholeText = parts[0].isEmpty ? String.zero : String(parts[0])
+        guard let whole = BigUInt(decimalString: wholeText) else { return nil }
+        var wei = whole * BigUInt(1_000_000_000)
+
+        guard parts.count == 2, !parts[1].isEmpty else { return wei }
+        let fraction = parts[1]
+        let retained = fraction.prefix(9)
+        let padded = String(retained) + String(repeating: "0", count: 9 - retained.count)
+        guard let fractionalWei = BigUInt(decimalString: padded) else { return nil }
+        wei = wei + fractionalWei
+
+        let discarded = fraction.dropFirst(9)
+        if let firstDiscarded = discarded.first {
+            let followingHasValue = discarded.dropFirst().contains(where: { $0 != "0" })
+            let retainedIsOdd = retained.last.map { $0.wholeNumberValue?.isMultiple(of: 2) == false } ?? false
+            let shouldRoundUp = firstDiscarded > "5" ||
+                (firstDiscarded == "5" && (followingHasValue || retainedIsOdd))
+            if shouldRoundUp {
+                wei = wei + BigUInt(1)
+            }
+        }
+        return wei
+    }
     
     func currentGasInRelationTo(info: GasService.Info) -> Double {
-        guard let gasPrice = gasPrice, let current = UInt(hexString: gasPrice) else { return 0 }
-        let tickValues = info.sortedValues
+        guard let current = gasPriceWei else { return 0 }
+        let tickValues = info.sliderValues
         let tickValuesCount = tickValues.count
         guard tickValuesCount > 1 else { return 0 }
         

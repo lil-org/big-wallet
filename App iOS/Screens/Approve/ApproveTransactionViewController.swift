@@ -34,10 +34,9 @@ class ApproveTransactionViewController: UIViewController {
     private let gasService = GasService.shared
     private let ethereum = Ethereum.shared
     private let priceService = PriceService.shared
-    private var currentGasInfo: GasService.Info?
+    private var gasSpeedConfiguration = GasSpeedConfiguration()
     private var sectionModels = [[CellModel]]()
     private var cellLayout: CellLayout?
-    private var didEnableSpeedConfiguration = false
     
     private var walletId: String!
     private var account: WalletAccount!
@@ -48,6 +47,8 @@ class ApproveTransactionViewController: UIViewController {
     private var peerMeta: PeerMeta?
     private var balance: String?
     private var suggestedNonceAndGasPrice: (nonce: String?, gasPrice: String?)?
+    private var isGasSliderTracking = false
+    private var needsTableReloadAfterGasSliderInteraction = false
     
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var cancelButton: UIButton!
@@ -75,10 +76,16 @@ class ApproveTransactionViewController: UIViewController {
         navigationItem.rightBarButtonItem?.tintColor = .tertiaryLabel
         isModalInPresentation = true
         sectionModels = [[]]
+
+        if chain.isEthMainnet {
+            gasService.fetchEstimate(rpcUrl: chain.nodeURLString) { [weak self] estimate in
+                self?.didFetchGasEstimate(estimate)
+            }
+        }
         
         updateDisplayedTransactionInfo(initially: true)
         prepareTransaction(forceGasCheck: false)
-        enableSpeedConfigurationIfNeeded()
+        updateSpeedConfigurationState()
         
         ethereum.getBalance(network: chain, address: account.address) { [weak self] balance in
             self?.balance = balance.eth(shortest: true) + " " + (self?.chain.symbol ?? "")
@@ -96,18 +103,29 @@ class ApproveTransactionViewController: UIViewController {
     }
     
     @objc private func editTransactionButtonTapped() {
-        if suggestedNonceAndGasPrice == nil { suggestedNonceAndGasPrice = (transaction.decimalNonceString, transaction.gasPriceGwei) }
-        let editTransactionView = EditTransactionView(initialTransaction: transaction,
-                                                      suggestedNonce: suggestedNonceAndGasPrice?.nonce,
-                                                      suggestedGasPrice: suggestedNonceAndGasPrice?.gasPrice) { [weak self] editedTransaction in
-            self?.presentedViewController?.dismiss(animated: true)
-            if let editedTransaction = editedTransaction {
-                self?.transaction = editedTransaction
-                self?.updateDisplayedTransactionInfo(initially: false)
-                self?.prepareTransaction(forceGasCheck: true)
-                self?.updateGasSliderValueIfNeeded()
-            }
+        if suggestedNonceAndGasPrice == nil {
+            suggestedNonceAndGasPrice = (transaction.decimalNonceString, transaction.editableGasPriceGwei)
         }
+        let editTransactionView = EditTransactionView(
+            initialTransaction: transaction,
+            chain: chain,
+            suggestedNonce: suggestedNonceAndGasPrice?.nonce,
+            suggestedGasPrice: suggestedNonceAndGasPrice?.gasPrice,
+            completion: { [weak self] edits in
+                guard let self else { return }
+                self.presentedViewController?.dismiss(animated: true)
+                guard let edits else { return }
+
+                let gasPriceChanged = edits.gasPrice.map { $0 != self.transaction.gasPriceValue } ?? false
+                guard self.transaction.apply(edits) else { return }
+                if gasPriceChanged {
+                    self.gasSpeedConfiguration.commitManualGasPrice(self.transaction.gasPriceWei)
+                }
+                self.updateDisplayedTransactionInfo(initially: false)
+                self.updateSpeedConfigurationState()
+                self.prepareTransaction(forceGasCheck: true)
+            }
+        )
         let hostingController = UIHostingController(rootView: editTransactionView)
         hostingController.modalPresentationStyle = .popover
 #if os(visionOS)
@@ -125,10 +143,10 @@ class ApproveTransactionViewController: UIViewController {
     
     private func prepareTransaction(forceGasCheck: Bool) {
         ethereum.prepareTransaction(transaction, forceGasCheck: forceGasCheck, network: chain) { [weak self] updated in
-            guard updated.id == self?.transaction.id else { return }
-            self?.transaction = updated
-            self?.updateDisplayedTransactionInfo(initially: false)
-            self?.enableSpeedConfigurationIfNeeded()
+            guard let self, updated.id == self.transaction.id else { return }
+            self.transaction = self.gasSpeedConfiguration.mergingPreparedTransaction(updated, with: self.transaction)
+            self.updateDisplayedTransactionInfo(initially: false)
+            self.updateSpeedConfigurationState()
         }
     }
     
@@ -166,13 +184,23 @@ class ApproveTransactionViewController: UIViewController {
     }
     
     private func updateDisplayedTransactionInfo(initially: Bool) {
+        if !initially, isGasSliderTracking {
+            needsTableReloadAfterGasSliderInteraction = true
+            okButton.isEnabled = canApproveTransaction
+            return
+        }
+
         let newCellLayout = makeCellLayout()
         cellLayout = newCellLayout
         sectionModels[0] = newCellLayout.cellModels
         if !initially, tableView.numberOfSections > 0 {
             tableView.reloadData()
         }
-        okButton.isEnabled = transaction.hasFee
+        okButton.isEnabled = canApproveTransaction
+    }
+
+    private var canApproveTransaction: Bool {
+        transaction.isReadyForApproval(on: chain)
     }
     
     private func refreshGasPriceRows() {
@@ -193,7 +221,7 @@ class ApproveTransactionViewController: UIViewController {
                 tableView.endUpdates()
             }
         }
-        okButton.isEnabled = transaction.hasFee
+        okButton.isEnabled = canApproveTransaction
     }
     
     private func updateVisibleTextCell(at row: Int, with model: CellModel) {
@@ -202,21 +230,34 @@ class ApproveTransactionViewController: UIViewController {
         cell.setup(text: text, largeFont: true, oneLine: oneLine, pro: pro)
     }
     
-    private func enableSpeedConfigurationIfNeeded() {
-        guard !didEnableSpeedConfiguration else { return }
-        let newGasInfo = gasService.currentInfo
-        guard transaction.hasFee, let gasInfo = newGasInfo else { return }
-        didEnableSpeedConfiguration = true
-        currentGasInfo = gasInfo
+    private var isSpeedConfigurationEnabled: Bool {
+        guard chain.isEthMainnet,
+              let gasPrice = transaction.gasPriceWei else { return false }
+        return gasPrice > 0 && gasSpeedConfiguration.info != nil
+    }
+
+    private func updateSpeedConfigurationState() {
+        guard chain.isEthMainnet else { return }
+        if let gasPrice = transaction.gasPriceWei, gasPrice > 0 {
+            gasSpeedConfiguration.installTransactionFallback(gasPrice: gasPrice)
+        }
         updateGasSliderValueIfNeeded()
+    }
+
+    private func didFetchGasEstimate(_ estimate: GasService.Estimate) {
+        guard gasSpeedConfiguration.applyFetchedEstimate(estimate) else { return }
+        updateSpeedConfigurationState()
     }
     
     private func updateGasSliderValueIfNeeded() {
-        guard didEnableSpeedConfiguration,
-              let gasInfo = currentGasInfo,
+        guard !isGasSliderTracking,
               let sliderIndex = cellLayout?.sliderIndex else { return }
         if let cell = tableView.cellForRow(at: IndexPath(row: sliderIndex, section: 0)) as? GasPriceSliderTableViewCell {
-            cell.update(value: transaction.currentGasInRelationTo(info: gasInfo), isEnabled: true)
+            if isSpeedConfigurationEnabled, let gasInfo = gasSpeedConfiguration.info {
+                cell.update(value: transaction.currentGasInRelationTo(info: gasInfo), isEnabled: true)
+            } else {
+                cell.update(value: nil, isEnabled: false)
+            }
         }
     }
     
@@ -283,10 +324,11 @@ extension ApproveTransactionViewController: UITableViewDataSource {
         case .gasPriceSlider:
             let cell = tableView.dequeueReusableCellOfType(GasPriceSliderTableViewCell.self, for: indexPath)
             var value: Double?
-            if didEnableSpeedConfiguration, let gasInfo = currentGasInfo {
+            let isEnabled = isSpeedConfigurationEnabled
+            if isEnabled, let gasInfo = gasSpeedConfiguration.info {
                 value = transaction.currentGasInRelationTo(info: gasInfo)
             }
-            cell.setup(value: value, isEnabled: didEnableSpeedConfiguration, delegate: self)
+            cell.setup(value: value, isEnabled: isEnabled, delegate: self)
             return cell
         }
         
@@ -303,10 +345,29 @@ extension ApproveTransactionViewController: UITableViewDataSource {
 }
 
 extension ApproveTransactionViewController: GasPriceSliderDelegate {
+
+    func sliderInteractionStarted() {
+        isGasSliderTracking = true
+        gasSpeedConfiguration.markGasSliderInteraction()
+    }
+
+    func sliderInteractionEnded() {
+        isGasSliderTracking = false
+        if needsTableReloadAfterGasSliderInteraction {
+            needsTableReloadAfterGasSliderInteraction = false
+            updateDisplayedTransactionInfo(initially: false)
+        }
+        updateGasSliderValueIfNeeded()
+    }
     
     func sliderValueChanged(value: Double) {
-        guard let gasInfo = currentGasInfo else { return }
+        guard let gasInfo = gasSpeedConfiguration.info else { return }
+        gasSpeedConfiguration.markGasSliderInteraction()
+        let previousGasPrice = transaction.gasPriceValue
         transaction.setGasPrice(value: value, inRelationTo: gasInfo)
+        if transaction.gasPriceValue != previousGasPrice {
+            gasSpeedConfiguration.markGasSliderGasPriceChange()
+        }
         refreshGasPriceRows()
         updateGasSliderValueIfNeeded()
     }

@@ -7,7 +7,6 @@ import Darwin
 class AppDelegate: NSObject, NSApplicationDelegate {
     
     private let agent = Agent.shared
-    private let gasService = GasService.shared
     private let priceService = PriceService.shared
     private let walletsManager = WalletsManager.shared
     private let ambientTerminationRequestId = UUID().uuidString
@@ -29,7 +28,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 #endif
         installQuitKeyboardShortcutMonitor()
         agent.start(openOnLaunch: true)
-        gasService.start()
         priceService.start()
         walletsManager.start()
     }

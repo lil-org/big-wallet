@@ -4,6 +4,8 @@ import UIKit
 
 protocol GasPriceSliderDelegate: AnyObject {
     
+    func sliderInteractionStarted()
+    func sliderInteractionEnded()
     func sliderValueChanged(value: Double)
     
 }
@@ -14,6 +16,14 @@ class GasPriceSliderTableViewCell: UITableViewCell {
     @IBOutlet weak var fastSpeedLabel: UILabel!
     private weak var sliderDelegate: GasPriceSliderDelegate?
     @IBOutlet weak var slider: UISlider!
+
+    @IBAction func sliderInteractionStarted(_ sender: Any) {
+        sliderDelegate?.sliderInteractionStarted()
+    }
+
+    @IBAction func sliderInteractionEnded(_ sender: Any) {
+        sliderDelegate?.sliderInteractionEnded()
+    }
     
     @IBAction func sliderValueChanged(_ sender: Any) {
         sliderDelegate?.sliderValueChanged(value: Double(slider.value))
