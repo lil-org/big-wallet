@@ -140,8 +140,6 @@ final class WalletsManagerPreviewTests: XCTestCase {
                 return ethereumAccounts
             case .solana:
                 return solanaAccounts
-            default:
-                return []
             }
         }
 
