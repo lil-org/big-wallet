@@ -44,7 +44,7 @@ class DataStateView: UIView {
     
     fileprivate static let tag = Int.max
     fileprivate static var new: DataStateView {
-        let view = loadNib(DataStateView.self)
+        let view = DataStateView(frame: .zero)
         view.tag = tag
         view.isHidden = true
         view.observeKeyboard()
@@ -58,18 +58,107 @@ class DataStateView: UIView {
     
     private var configurations = [DataState: Configuration]()
     
-    @IBOutlet private weak var centerYConstraint: NSLayoutConstraint!
-    @IBOutlet private weak var activityIndicator: UIActivityIndicatorView!
-    @IBOutlet private weak var imageView: UIImageView!
-    @IBOutlet private weak var descriptionLabel: UILabel!
-    @IBOutlet private weak var button: UIButton!
-    @IBOutlet private weak var activityIndicatorDescriptionLabel: UILabel! {
-        didSet {
-            activityIndicatorDescriptionLabel.text = Strings.loading
-        }
+    private var centerYConstraint: NSLayoutConstraint!
+    private let activityIndicator = UIActivityIndicatorView(style: .medium)
+    private let imageView = UIImageView()
+    private let descriptionLabel = UILabel()
+    private let button = UIButton(type: .system)
+    private let activityIndicatorDescriptionLabel = UILabel()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        configureView()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        configureView()
+    }
+
+    private func configureView() {
+        backgroundColor = .systemGroupedBackground
+
+        activityIndicator.translatesAutoresizingMaskIntoConstraints = false
+        activityIndicator.isOpaque = false
+        activityIndicator.startAnimating()
+        activityIndicator.isHidden = true
+        addSubview(activityIndicator)
+
+        activityIndicatorDescriptionLabel.translatesAutoresizingMaskIntoConstraints = false
+        activityIndicatorDescriptionLabel.isOpaque = false
+        activityIndicatorDescriptionLabel.isHidden = true
+        activityIndicatorDescriptionLabel.font = .systemFont(ofSize: 12)
+        activityIndicatorDescriptionLabel.textColor = .secondaryLabel
+        activityIndicatorDescriptionLabel.text = Strings.loading
+        activityIndicatorDescriptionLabel.setContentHuggingPriority(UILayoutPriority(251), for: .horizontal)
+        activityIndicatorDescriptionLabel.setContentHuggingPriority(UILayoutPriority(251), for: .vertical)
+        addSubview(activityIndicatorDescriptionLabel)
+
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        imageView.clipsToBounds = true
+        imageView.contentMode = .scaleAspectFit
+        imageView.image = UIImage(systemName: "wind")
+        imageView.tintColor = .tertiaryLabel
+        imageView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(scale: .default)
+            .applying(UIImage.SymbolConfiguration(weight: .thin))
+        imageView.setContentHuggingPriority(UILayoutPriority(251), for: .horizontal)
+        imageView.setContentHuggingPriority(UILayoutPriority(251), for: .vertical)
+        addSubview(imageView)
+
+        descriptionLabel.translatesAutoresizingMaskIntoConstraints = false
+        descriptionLabel.isOpaque = false
+        descriptionLabel.font = .systemFont(ofSize: 17)
+        descriptionLabel.textColor = .secondaryLabel
+        descriptionLabel.text = "failed to load"
+        descriptionLabel.textAlignment = .center
+        descriptionLabel.lineBreakMode = .byTruncatingTail
+        descriptionLabel.numberOfLines = 2
+        descriptionLabel.setContentHuggingPriority(UILayoutPriority(251), for: .horizontal)
+        descriptionLabel.setContentHuggingPriority(UILayoutPriority(251), for: .vertical)
+        addSubview(descriptionLabel)
+
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+        button.titleLabel?.lineBreakMode = .byTruncatingMiddle
+        var buttonConfiguration = UIButton.Configuration.filled()
+        buttonConfiguration.title = "retry"
+        var attributedButtonTitle = AttributedString("retry")
+        attributedButtonTitle.font = .systemFont(ofSize: 15, weight: .semibold)
+        buttonConfiguration.attributedTitle = attributedButtonTitle
+        button.configuration = buttonConfiguration
+        button.addTarget(self, action: #selector(didTapButton(_:)), for: .touchUpInside)
+        addSubview(button)
+
+        centerYConstraint = activityIndicator.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -50)
+        let proportionalImageWidthConstraint = imageView.widthAnchor.constraint(equalTo: widthAnchor, multiplier: 3 / 7)
+        proportionalImageWidthConstraint.priority = .defaultHigh
+
+        NSLayoutConstraint.activate([
+            imageView.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: 150),
+            imageView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            imageView.widthAnchor.constraint(equalTo: imageView.heightAnchor),
+            imageView.widthAnchor.constraint(lessThanOrEqualToConstant: 200),
+            proportionalImageWidthConstraint,
+
+            descriptionLabel.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 8),
+            descriptionLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
+            descriptionLabel.widthAnchor.constraint(equalTo: widthAnchor, constant: -40),
+
+            button.topAnchor.constraint(equalTo: descriptionLabel.bottomAnchor, constant: 52),
+            button.centerXAnchor.constraint(equalTo: centerXAnchor),
+            button.heightAnchor.constraint(equalToConstant: 52),
+            button.widthAnchor.constraint(greaterThanOrEqualToConstant: 140),
+
+            activityIndicator.centerXAnchor.constraint(equalTo: centerXAnchor),
+            activityIndicator.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: -58.5),
+            centerYConstraint,
+
+            activityIndicatorDescriptionLabel.topAnchor.constraint(equalTo: activityIndicator.bottomAnchor, constant: 8),
+            activityIndicatorDescriptionLabel.centerXAnchor.constraint(equalTo: activityIndicator.centerXAnchor)
+        ])
     }
     
-    @IBAction private func didTapButton(_ sender: Any) {
+    @objc private func didTapButton(_ sender: Any) {
         configurations[currentState]?.actionHandler?()
     }
     
@@ -153,9 +242,12 @@ extension DataStateContainer where Self: UIViewController {
         let dataStateView = DataStateView.new
         view.addSubview(dataStateView)
         dataStateView.translatesAutoresizingMaskIntoConstraints = false
-        let firstConstraint = NSLayoutConstraint.constraints(withVisualFormat: "H:|-0-[subview]-0-|", options: .directionLeadingToTrailing, metrics: nil, views: ["subview": dataStateView])
-        let secondConstraint = NSLayoutConstraint.constraints(withVisualFormat: "V:|-0-[subview]-0-|", options: .directionLeadingToTrailing, metrics: nil, views: ["subview": dataStateView])
-        view.addConstraints(firstConstraint + secondConstraint)
+        NSLayoutConstraint.activate([
+            dataStateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            dataStateView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            dataStateView.topAnchor.constraint(equalTo: view.topAnchor),
+            dataStateView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
         view.bringSubviewToFront(dataStateView)
         return dataStateView
     }

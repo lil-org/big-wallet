@@ -6,12 +6,12 @@ extension UITableView {
     
     func registerReusableCell<Cell: UITableViewCell>(type: Cell.Type) {
         let cellName = String(describing: type)
-        register(UINib(nibName: cellName, bundle: nil), forCellReuseIdentifier: cellName)
+        register(type, forCellReuseIdentifier: cellName)
     }
     
     func registerReusableHeaderFooter<Header: UITableViewHeaderFooterView>(type: Header.Type) {
         let headerFooterName = String(describing: type)
-        register(UINib(nibName: headerFooterName, bundle: nil), forHeaderFooterViewReuseIdentifier: headerFooterName)
+        register(type, forHeaderFooterViewReuseIdentifier: headerFooterName)
     }
     
     func dequeueReusableCellOfType<Cell: UITableViewCell>(_ type: Cell.Type, for indexPath: IndexPath) -> Cell {

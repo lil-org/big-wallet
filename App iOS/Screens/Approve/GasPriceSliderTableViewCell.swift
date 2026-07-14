@@ -12,10 +12,51 @@ protocol GasPriceSliderDelegate: AnyObject {
 
 class GasPriceSliderTableViewCell: UITableViewCell {
 
-    @IBOutlet weak var slowSpeedLabel: UILabel!
-    @IBOutlet weak var fastSpeedLabel: UILabel!
+    let slowSpeedLabel: UILabel = {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.isOpaque = false
+        label.contentMode = .left
+        label.text = "🐢"
+        label.font = .systemFont(ofSize: 17)
+        label.setContentHuggingPriority(UILayoutPriority(251), for: .horizontal)
+        label.setContentHuggingPriority(UILayoutPriority(251), for: .vertical)
+        return label
+    }()
+
+    let fastSpeedLabel: UILabel = {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.isOpaque = false
+        label.contentMode = .left
+        label.text = "🐇"
+        label.font = .systemFont(ofSize: 17)
+        label.setContentHuggingPriority(UILayoutPriority(251), for: .horizontal)
+        label.setContentHuggingPriority(UILayoutPriority(251), for: .vertical)
+        return label
+    }()
+
     private weak var sliderDelegate: GasPriceSliderDelegate?
-    @IBOutlet weak var slider: UISlider!
+
+    let slider: UISlider = {
+        let slider = UISlider()
+        slider.translatesAutoresizingMaskIntoConstraints = false
+        slider.minimumValue = 0
+        slider.maximumValue = 100
+        slider.value = 33
+        slider.isContinuous = true
+        return slider
+    }()
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        setupViewHierarchy()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupViewHierarchy()
+    }
 
     @IBAction func sliderInteractionStarted(_ sender: Any) {
         sliderDelegate?.sliderInteractionStarted()
@@ -41,6 +82,35 @@ class GasPriceSliderTableViewCell: UITableViewCell {
         if let value = value {
             slider.value = Float(value)
         }
+    }
+
+    private func setupViewHierarchy() {
+        contentView.isOpaque = false
+        contentView.clipsToBounds = true
+        contentView.isMultipleTouchEnabled = true
+        contentView.contentMode = .center
+
+        contentView.addSubview(slowSpeedLabel)
+        contentView.addSubview(fastSpeedLabel)
+        contentView.addSubview(slider)
+
+        slider.addTarget(self, action: #selector(sliderInteractionStarted(_:)), for: .touchDown)
+        slider.addTarget(self, action: #selector(sliderInteractionEnded(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+        slider.addTarget(self, action: #selector(sliderValueChanged(_:)), for: .valueChanged)
+
+        NSLayoutConstraint.activate([
+            slowSpeedLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            slowSpeedLabel.centerYAnchor.constraint(equalTo: slider.centerYAnchor),
+
+            slider.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
+            slider.leadingAnchor.constraint(equalTo: slowSpeedLabel.trailingAnchor, constant: 8),
+            slider.heightAnchor.constraint(equalToConstant: 33),
+            contentView.bottomAnchor.constraint(equalTo: slider.bottomAnchor, constant: 16),
+
+            fastSpeedLabel.leadingAnchor.constraint(equalTo: slider.trailingAnchor, constant: 8),
+            fastSpeedLabel.centerYAnchor.constraint(equalTo: slider.centerYAnchor),
+            contentView.trailingAnchor.constraint(equalTo: fastSpeedLabel.trailingAnchor, constant: 20)
+        ])
     }
     
 }
