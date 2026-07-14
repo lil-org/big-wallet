@@ -453,9 +453,6 @@
 		2F4C00112FA8000000000000 /* WalletCoreProxyParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00102FA8000000000000 /* WalletCoreProxyParityTests.swift */; };
 		2F4C00122FA8000000000000 /* WalletCoreProxyParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00102FA8000000000000 /* WalletCoreProxyParityTests.swift */; };
 		2F4C00132FA8000000000000 /* WalletCoreProxyParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00102FA8000000000000 /* WalletCoreProxyParityTests.swift */; };
-		2F4E01012FAC000000000000 /* GasServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4E01002FAC000000000000 /* GasServiceTests.swift */; };
-		2F4E01022FAC000000000000 /* GasServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4E01002FAC000000000000 /* GasServiceTests.swift */; };
-		2F4E01032FAC000000000000 /* GasServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4E01002FAC000000000000 /* GasServiceTests.swift */; };
 		2F4C00152FA9000000000000 /* WalletCoreProxyTestVectors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00142FA9000000000000 /* WalletCoreProxyTestVectors.swift */; };
 		2F4C00162FA9000000000000 /* WalletCoreProxyTestVectors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00142FA9000000000000 /* WalletCoreProxyTestVectors.swift */; };
 		2F4C00172FA9000000000000 /* WalletCoreProxyTestVectors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4C00142FA9000000000000 /* WalletCoreProxyTestVectors.swift */; };
@@ -510,12 +507,13 @@
 		2F4D00A52FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION)"; }; };
 		2F4D00A62FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION)"; }; };
 		2F4D00A72FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */; settings = {COMPILER_FLAGS = "$(BW_WALLETCORE_PROXY_C_OPTIMIZATION)"; }; };
+		2F4E01012FAC000000000000 /* GasServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4E01002FAC000000000000 /* GasServiceTests.swift */; };
+		2F4E01022FAC000000000000 /* GasServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4E01002FAC000000000000 /* GasServiceTests.swift */; };
+		2F4E01032FAC000000000000 /* GasServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4E01002FAC000000000000 /* GasServiceTests.swift */; };
 		2F5E10012FA5000000F0000 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */; };
 		2F5E10022FA5000000F0000 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */; };
 		2F5E10032FA5000000F0000 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */; };
 		2F5E10042FA5000000F0000 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */; };
-		2FAE00022FB0000000000001 /* ProgrammaticUIKitViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FAE00012FB0000000000001 /* ProgrammaticUIKitViewTests.swift */; };
-		2FAE00032FB0000000000001 /* ProgrammaticUIKitViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FAE00012FB0000000000001 /* ProgrammaticUIKitViewTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -793,7 +791,6 @@
 		2F2A0000000000000000001D /* WalletsManagerPreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsManagerPreviewTests.swift; sourceTree = "<group>"; };
 		2F4C00002FA8000000000000 /* WalletCoreProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxy.swift; sourceTree = "<group>"; };
 		2F4C00102FA8000000000000 /* WalletCoreProxyParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyParityTests.swift; sourceTree = "<group>"; };
-		2F4E01002FAC000000000000 /* GasServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GasServiceTests.swift; sourceTree = "<group>"; };
 		2F4C00142FA9000000000000 /* WalletCoreProxyTestVectors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyTestVectors.swift; sourceTree = "<group>"; };
 		2F4D00002FAA000000000000 /* WalletCoreProxyStoredKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyStoredKey.swift; sourceTree = "<group>"; };
 		2F4D00102FAA000000000000 /* WalletCoreProxyEncoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletCoreProxyEncoding.swift; sourceTree = "<group>"; };
@@ -807,8 +804,8 @@
 		2F4D007A2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Secp256k1Backend/secp256k1/src/precomputed_ecmult.c; sourceTree = "<group>"; };
 		2F4D007B2FAA000000000000 /* Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Secp256k1Backend/secp256k1/src/precomputed_ecmult_gen.c; sourceTree = "<group>"; };
 		2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ScryptBackend/big_wallet_scrypt_shim.c; sourceTree = "<group>"; };
+		2F4E01002FAC000000000000 /* GasServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GasServiceTests.swift; sourceTree = "<group>"; };
 		2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImageLoader.swift; sourceTree = "<group>"; };
-		2FAE00012FB0000000000001 /* ProgrammaticUIKitViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgrammaticUIKitViewTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -904,7 +901,6 @@
 		2C03EB8E2B06A18700EF61F5 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
-				2FAE00012FB0000000000001 /* ProgrammaticUIKitViewTests.swift */,
 				2C0000012FA7000000000001 /* BigUIntTests.swift */,
 				2F2A00000000000000000015 /* DappRequestProcessorTests.swift */,
 				2F4E01002FAC000000000000 /* GasServiceTests.swift */,
@@ -2364,7 +2360,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2FAE00022FB0000000000001 /* ProgrammaticUIKitViewTests.swift in Sources */,
 				2F4E01012FAC000000000000 /* GasServiceTests.swift in Sources */,
 				2F2A00000000000000000002 /* SolanaTestFixtures.swift in Sources */,
 				2F2A00000000000000000006 /* SolanaWireMessageParserTests.swift in Sources */,
@@ -2532,7 +2527,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2FAE00032FB0000000000001 /* ProgrammaticUIKitViewTests.swift in Sources */,
 				2F4E01032FAC000000000000 /* GasServiceTests.swift in Sources */,
 				2F2A00000000000000000004 /* SolanaTestFixtures.swift in Sources */,
 				2F2A00000000000000000008 /* SolanaWireMessageParserTests.swift in Sources */,
