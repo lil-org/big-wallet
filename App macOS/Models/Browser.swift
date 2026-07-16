@@ -1,7 +1,5 @@
 // ∅ 2026 lil org
 
-import Foundation
-
 enum Browser: String, CaseIterable {
     case safari = "com.apple.Safari"
     case chrome = "com.google.Chrome"

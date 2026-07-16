@@ -1,7 +1,5 @@
 // ∅ 2026 lil org
 
-import Foundation
-
 struct BundledNetwork: Codable {
     
     let name: String

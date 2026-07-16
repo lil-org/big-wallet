@@ -235,7 +235,7 @@ extension EditAccountsViewController: NSTableViewDataSource {
     
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let model = cellModels[row]
-        let rowView = tableView.makeViewOfType(PreviewAccountCellView.self, owner: self)
+        let rowView = tableView.makeViewOfType(PreviewAccountCellView.self)
         rowView.setup(title: model.account.nameOrCroppedAddress(walletId: wallet.id),
                       index: model.account.previewDerivationIndex,
                       image: model.account.image,

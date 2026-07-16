@@ -17,7 +17,6 @@ class PasswordViewController: UIViewController {
     @IBOutlet weak var passwordTextField: UITextField! {
         didSet {
             passwordTextField.delegate = self
-            passwordTextField.addTarget(self, action: #selector(textFieldChanged), for: .editingChanged)
             passwordTextField.placeholder = Strings.password
         }
     }
@@ -122,8 +121,6 @@ class PasswordViewController: UIViewController {
         proceedIfPossible()
     }
     
-    @objc private func textFieldChanged() {}
-    
     private func proceedIfPossible() {
         switch mode {
         case .create:
@@ -163,14 +160,6 @@ class PasswordViewController: UIViewController {
 }
 
 extension PasswordViewController: UITextFieldDelegate {
-    
-    func textFieldDidBeginEditing(_ textField: UITextField) {
-        textFieldChanged()
-    }
-    
-    func textFieldDidEndEditing(_ textField: UITextField, reason: UITextField.DidEndEditingReason) {
-        textFieldChanged()
-    }
     
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
         proceedIfPossible()

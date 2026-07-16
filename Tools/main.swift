@@ -33,15 +33,12 @@ fetchChains { chains in
     let newChainsIds = Set([4326, 4217, 196, 1868, 130, 4663])
     
     let newChains = chains.filter { chain in
-        let isEIP3091 = chain.explorers?.contains(where: { $0.standard == "EIP3091" }) == true
-        let allowNoEIP3091 = true
         if newChainsIds.contains(chain.chainId) &&
             !currentIds.contains(chain.chainId) &&
             chain.rpc.contains(where: { $0.hasPrefix(https) }) &&
             chain.redFlags == nil &&
             chain.status != "deprecated" &&
-            chain.nativeCurrency.decimals == 18 &&
-            (isEIP3091 || allowNoEIP3091) {
+            chain.nativeCurrency.decimals == 18 {
             return true
         } else {
             return false
@@ -72,8 +69,6 @@ func updateNodesFiles(nodes: [String: String]) {
     
     let dictString = nodes.sorted(by: { Int($0.key)! < Int($1.key)! }).map { "\($0.key): \"\($0.value)\"" }.joined(separator: ",\n        ")
     let contents = """
-    import Foundation
-
     struct BundledNodes {
         
         static let dict: [Int: String] = [

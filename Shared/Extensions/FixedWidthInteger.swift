@@ -1,7 +1,5 @@
 // ∅ 2026 lil org
 
-import Foundation
-
 extension FixedWidthInteger {
     
     init?(hexString: String) {

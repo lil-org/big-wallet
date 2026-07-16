@@ -2653,93 +2653,6 @@ final class WalletCoreProxyStoredKeyTests: XCTestCase {
     }
 
     #if DEBUG
-    func testWalletCoreJSONFixtureUnsupportedAccountsStayHiddenButAreCopied() throws {
-        let expectedEthereumAccount = WalletAccount(address: Vectors.walletCoreJSONMixedAccountEthereumAddress,
-                                                    coin: .ethereum,
-                                                    derivation: .default,
-                                                    derivationPath: "m/44'/60'/0'/0/0",
-                                                    publicKey: "",
-                                                    extendedPublicKey: "")
-        let expectedBitcoinAccount = WalletRawAccountForTesting(address: "bc1q4zehq85jqx9zzgzvzn9t64yjy66nunn3vehuv6",
-                                                                coinRawValue: 0,
-                                                                derivationRawValue: 0,
-                                                                derivationPath: "m/84'/0'/0'/0/0",
-                                                                publicKey: "",
-                                                                extendedPublicKey: "zpub6qMRMrwcEYaqjf8wSpNqtBfUee6MqpQjrZNKfj5a48EUFUx2yUmfkDJMdHwWvkg8SjdS3ua6dy9ofMrzrytTfdyy2pXg344yFwm2Ta9cm6Q")
-        let expectedBinanceAccount = WalletRawAccountForTesting(address: "bnb1njuczq3hgvupu2vnczrjz7rc8x4uxlmhjyq95z",
-                                                                coinRawValue: 714,
-                                                                derivationRawValue: 0,
-                                                                derivationPath: "m/44'/714'/0'/0/0",
-                                                                publicKey: "",
-                                                                extendedPublicKey: "")
-        let source = try XCTUnwrap(WalletStoredKey.importJSON(json: Vectors.walletCoreJSONMixedAccountFixture))
-        let replacement = try XCTUnwrap(WalletStoredKey.importJSON(json: Vectors.walletCoreJSONMnemonicFixture))
-        replacement.removeAccountForCoin(coin: .ethereum)
-
-        XCTAssertEqual(source.accountCount, 3)
-        XCTAssertEqual(source.decryptMnemonic(password: Vectors.walletCoreJSONMixedAccountPassword),
-                       Vectors.walletCoreJSONMixedAccountMnemonic)
-        XCTAssertNil(source.account(index: 0))
-        XCTAssertEqual(source.account(index: 1), expectedEthereumAccount)
-        XCTAssertNil(source.account(index: 2))
-        XCTAssertEqual(source.rawAccountForTesting(index: 0), expectedBitcoinAccount)
-        XCTAssertEqual(source.rawAccountForTesting(index: 2), expectedBinanceAccount)
-        XCTAssertEqual(WalletContainer(id: "source", key: source).accounts, [expectedEthereumAccount])
-
-        XCTAssertEqual(replacement.accountCount, 0)
-        replacement.copyUnsupportedAccounts(from: source)
-
-        XCTAssertEqual(replacement.accountCount, 2)
-        XCTAssertNil(replacement.account(index: 0))
-        XCTAssertNil(replacement.account(index: 1))
-        XCTAssertEqual(replacement.rawAccountForTesting(index: 0), expectedBitcoinAccount)
-        XCTAssertEqual(replacement.rawAccountForTesting(index: 1), expectedBinanceAccount)
-        XCTAssertTrue(WalletContainer(id: "replacement", key: replacement).accounts.isEmpty)
-
-        let reimportedReplacement = try reimportExportedKey(replacement)
-        XCTAssertEqual(reimportedReplacement.accountCount, 2)
-        XCTAssertNil(reimportedReplacement.account(index: 0))
-        XCTAssertNil(reimportedReplacement.account(index: 1))
-        XCTAssertEqual(reimportedReplacement.rawAccountForTesting(index: 0), expectedBitcoinAccount)
-        XCTAssertEqual(reimportedReplacement.rawAccountForTesting(index: 1), expectedBinanceAccount)
-        XCTAssertEqual(reimportedReplacement.decryptMnemonic(password: Vectors.walletCoreJSONMnemonicPassword),
-                       Vectors.walletCoreJSONMnemonic)
-        XCTAssertTrue(WalletContainer(id: "reimported-replacement", key: reimportedReplacement).accounts.isEmpty)
-    }
-
-    func testUnsupportedAccountsStayHiddenButAreCopied() throws {
-        let source = try requireStoredMnemonicKey(coin: .ethereum)
-        let expectedUnsupportedAccount = WalletRawAccountForTesting(address: "LcHKpCqvAWDFNQBNSRShZchQyJY1mA6DUV",
-                                                                    coinRawValue: 2,
-                                                                    derivationRawValue: 5,
-                                                                    derivationPath: "m/44'/2'/0'/0/3",
-                                                                    publicKey: "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-                                                                    extendedPublicKey: "xpub-unsupported-litecoin")
-        source.addUnsupportedAccountForTesting(expectedUnsupportedAccount)
-        let sourceWallet = WalletContainer(id: "source", key: source)
-
-        XCTAssertEqual(source.accountCount, 2)
-        XCTAssertEqual(source.account(index: 1), nil)
-        XCTAssertEqual(source.rawAccountForTesting(index: 1), expectedUnsupportedAccount)
-        XCTAssertEqual(sourceWallet.accounts.count, 1)
-        XCTAssertEqual(sourceWallet.accounts.first?.coin, .ethereum)
-
-        let replacement = try requireStoredMnemonicKey(coin: .ethereum)
-        replacement.removeAccountForCoin(coin: .ethereum)
-        replacement.copyUnsupportedAccounts(from: source)
-
-        XCTAssertEqual(replacement.accountCount, 1)
-        XCTAssertNil(replacement.account(index: 0))
-        XCTAssertEqual(replacement.rawAccountForTesting(index: 0), expectedUnsupportedAccount)
-        XCTAssertTrue(WalletContainer(id: "replacement", key: replacement).accounts.isEmpty)
-
-        let reimportedReplacement = try reimportExportedKey(replacement)
-        XCTAssertEqual(reimportedReplacement.accountCount, 1)
-        XCTAssertNil(reimportedReplacement.account(index: 0))
-        XCTAssertEqual(reimportedReplacement.rawAccountForTesting(index: 0), expectedUnsupportedAccount)
-        XCTAssertTrue(WalletContainer(id: "reimported-replacement", key: reimportedReplacement).accounts.isEmpty)
-    }
-
     func testSupportedCoinUnknownDerivationMapsToCustom() throws {
         let key = try requireStoredMnemonicKey(coin: .ethereum)
         let rawAccount = WalletRawAccountForTesting(address: Vectors.secpEthereumAddress,
@@ -3372,12 +3285,3 @@ private func requireStoredMnemonicKey(coin: WalletCoin,
 
     return key
 }
-
-#if DEBUG
-private func reimportExportedKey(_ key: WalletStoredKey,
-                                 file: StaticString = #filePath,
-                                 line: UInt = #line) throws -> WalletStoredKey {
-    let exportedJSON = try XCTUnwrap(key.exportJSON(), file: file, line: line)
-    return try XCTUnwrap(WalletStoredKey.importJSON(json: exportedJSON), file: file, line: line)
-}
-#endif

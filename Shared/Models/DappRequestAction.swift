@@ -1,7 +1,5 @@
 // ∅ 2026 lil org
 
-import Foundation
-
 enum DappRequestAction {
     case none
     case justShowApp

@@ -1,14 +1,12 @@
 // ∅ 2026 lil org
 
-import Foundation
-
-struct InternalSafariRequest: Codable {
+struct InternalSafariRequest: Decodable {
     let id: Int
     let subject: Subject
     let body: String?
     let chainId: String?
     
-    enum Subject: String, Codable {
+    enum Subject: String, Decodable {
         case getResponse, cancelRequest, rpc
     }
 }

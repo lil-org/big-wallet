@@ -12,10 +12,6 @@ struct Transaction {
             self.gasPrice = gasPrice
             self.nonce = nonce
         }
-
-        var isEmpty: Bool {
-            gasPrice == nil && nonce == nil
-        }
     }
 
     var id = UUID()
@@ -39,10 +35,6 @@ struct Transaction {
         } else {
             return externalInterpretation
         }
-    }
-    
-    var hasFee: Bool {
-        return gas != nil && gasPrice != nil
     }
     
     var decimalNonceString: String? {
@@ -135,25 +127,6 @@ struct Transaction {
         return "\(Strings.fee): " + feeString
     }
     
-    mutating func setCustomNonce(value: UInt) {
-        let newValue = String.hex(value)
-        if newValue != nonce {
-            id = UUID()
-            nonce = newValue
-        }
-    }
-    
-    @discardableResult
-    mutating func setCustomGasPriceGwei(value: Double) -> Bool {
-        guard let wei = Self.roundedWei(fromGwei: value) else { return false }
-        let hex = wei.hexString
-        if gasPrice != hex {
-            id = UUID()
-            gasPrice = hex
-        }
-        return true
-    }
-
     @discardableResult
     mutating func apply(_ edits: Edits) -> Bool {
         let gasPriceChanged = edits.gasPrice.map { $0 != gasPriceValue } ?? false
@@ -247,23 +220,6 @@ struct Transaction {
     
     private mutating func setGasPrice(value: UInt) {
         gasPrice = String.hex(value)
-    }
-
-    private static func roundedWei(fromGwei value: Double) -> BigUInt? {
-        guard value.isFinite, value >= 0 else { return nil }
-
-        let rounding = NSDecimalNumberHandler(roundingMode: .bankers,
-                                              scale: 0,
-                                              raiseOnExactness: false,
-                                              raiseOnOverflow: false,
-                                              raiseOnUnderflow: false,
-                                              raiseOnDivideByZero: false)
-        let weiDecimal = NSDecimalNumber(value: value).multiplying(byPowerOf10: 9, withBehavior: rounding)
-        guard weiDecimal != NSDecimalNumber.notANumber else { return nil }
-
-        let roundedWei = weiDecimal.rounding(accordingToBehavior: rounding)
-        guard roundedWei != NSDecimalNumber.notANumber else { return nil }
-        return BigUInt(decimalString: roundedWei.stringValue)
     }
 
     static func gasPriceWei(fromGwei text: String) -> BigUInt? {

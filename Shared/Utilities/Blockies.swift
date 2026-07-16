@@ -19,22 +19,20 @@ final class Blockies {
 
     private var randSeed: [UInt32]
 
-    public var seed: String
-
-    public var size: Int
-    public var scale: Int
+    var size: Int
+    var scale: Int
 
     #if os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
-    public typealias Color = UIColor
-    public typealias Image = UIImage
+    typealias Color = UIColor
+    typealias Image = UIImage
     #elseif os(OSX)
-    public typealias Color = NSColor
-    public typealias Image = NSImage
+    typealias Color = NSColor
+    typealias Image = NSImage
     #endif
 
-    public var color: Color
-    public var bgColor: Color
-    public var spotColor: Color
+    var color: Color
+    var bgColor: Color
+    var spotColor: Color
 
     // MARK: - Initialization
 
@@ -48,7 +46,7 @@ final class Blockies {
      * - parameter bgColor: The background color. Defaults to random.
      * - parameter spotColor: A color which forms mouths and eyes. Defaults to random.
      */
-    public init(
+    init(
         seed: String? = nil,
         size: Int = 8,
         scale: Int = 4,
@@ -57,7 +55,6 @@ final class Blockies {
         spotColor: Color? = nil
     ) {
         let seed = seed ?? String(Int64(floor(Double.random * pow(10, 16))))
-        self.seed = seed
         self.randSeed = BlockiesHelper.createRandSeed(seed: seed)
         self.size = size
         self.scale = scale
@@ -93,7 +90,7 @@ final class Blockies {
      *
      * - returns: The generated image or `nil` if something went wrong.
      */
-    public func createImage(customScale: Int = 1) -> Image? {
+    func createImage(customScale: Int = 1) -> Image? {
         let imageData = createImageData()
 
         return image(data: imageData, customScale: customScale)
@@ -109,8 +106,6 @@ final class Blockies {
         let tmpT = Int32(bitPattern: t)
         randSeed[3] = UInt32(bitPattern: (tmp ^ (tmp >> 19) ^ tmpT ^ (tmpT >> 8)))
 
-        // UInt for zero fill right shift
-        // let divisor = (UInt32((1 << 31)) >> UInt32(0))
         let divisor = Int32.max
 
         return Double((UInt32(randSeed[3]) >> UInt32(0))) / Double(divisor)

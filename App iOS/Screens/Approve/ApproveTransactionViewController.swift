@@ -275,15 +275,10 @@ class ApproveTransactionViewController: UIViewController {
         }
     }
     
-    private func didApproveTransaction() {
-        
-    }
-    
     @IBAction func okButtonTapped(_ sender: Any) {
         view.isUserInteractionEnabled = false
         LocalAuthentication.attempt(reason: Strings.sendTransaction, presentPasswordAlertFrom: self, passwordReason: Strings.sendTransaction) { [weak self] success in
             if success, let transaction = self?.transaction {
-                self?.didApproveTransaction()
                 self?.callCompletion(result: transaction)
             } else {
                 self?.view.isUserInteractionEnabled = true

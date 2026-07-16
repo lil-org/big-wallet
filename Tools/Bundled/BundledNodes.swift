@@ -1,5 +1,3 @@
-import Foundation
-
 struct BundledNodes {
     
     static let dict: [Int: String] = [

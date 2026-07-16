@@ -798,31 +798,31 @@ extension AccountsListViewController: NSTableViewDataSource {
         switch model {
         case let .privateKeyAccount(walletIndex: walletIndex, account: account):
             let wallet = wallets[walletIndex]
-            let rowView = tableView.makeViewOfType(AccountCellView.self, owner: self)
+            let rowView = tableView.makeViewOfType(AccountCellView.self)
             let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
             let isSelected = selectAccountAction?.selectedAccounts.contains(specificWalletAccount) == true
             rowView.setup(account: account, walletId: wallet.id, isSelected: isSelected, isDisabled: !accountCanBeSelected(account))
             return rowView
         case let .mnemonicAccount(walletIndex: walletIndex, accountIndex: accountIndex):
             let wallet = wallets[walletIndex]
-            let rowView = tableView.makeViewOfType(AccountCellView.self, owner: self)
+            let rowView = tableView.makeViewOfType(AccountCellView.self)
             let account = wallet.accounts[accountIndex]
             let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
             let isSelected = selectAccountAction?.selectedAccounts.contains(specificWalletAccount) == true
             rowView.setup(account: account, walletId: wallet.id, isSelected: isSelected, isDisabled: !accountCanBeSelected(account))
             return rowView
         case let .mnemonicWalletHeader(walletIndex):
-            let rowView = tableView.makeViewOfType(AccountsHeaderRowView.self, owner: self)
+            let rowView = tableView.makeViewOfType(AccountsHeaderRowView.self)
             let wallet = wallets[walletIndex]
             let name = WalletsMetadataService.getWalletName(wallet: wallet)
             rowView.setup(walletName: name, multicoinWallet: true, delegate: self)
             return rowView
         case .privateKeyWalletsHeader:
-            let rowView = tableView.makeViewOfType(AccountsHeaderRowView.self, owner: self)
+            let rowView = tableView.makeViewOfType(AccountsHeaderRowView.self)
             rowView.setup(walletName: nil, multicoinWallet: false, delegate: nil)
             return rowView
         case let .addAccountOption(addAccountOption):
-            let rowView = tableView.makeViewOfType(AddAccountOptionCellView.self, owner: self)
+            let rowView = tableView.makeViewOfType(AddAccountOptionCellView.self)
             rowView.setup(title: addAccountOption.title)
             return rowView
         }

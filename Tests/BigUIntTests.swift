@@ -91,23 +91,4 @@ final class BigUIntTests: XCTestCase {
         XCTAssertEqual(largeBalance.eth(shortest: true), "430000000000000000000000000000000")
     }
 
-    func testCustomGasPriceGweiConversion() {
-        var transaction = Transaction(from: "0x0", to: "0x1", value: nil, data: "0x")
-
-        XCTAssertTrue(transaction.setCustomGasPriceGwei(value: 1.5))
-        XCTAssertEqual(transaction.gasPrice, "59682f00")
-
-        XCTAssertTrue(transaction.setCustomGasPriceGwei(value: 0.0000000015))
-        XCTAssertEqual(transaction.gasPrice, "2")
-
-        XCTAssertFalse(transaction.setCustomGasPriceGwei(value: -1))
-        XCTAssertEqual(transaction.gasPrice, "2")
-
-        XCTAssertFalse(transaction.setCustomGasPriceGwei(value: .nan))
-        XCTAssertEqual(transaction.gasPrice, "2")
-
-        XCTAssertFalse(transaction.setCustomGasPriceGwei(value: Double.greatestFiniteMagnitude))
-        XCTAssertEqual(transaction.gasPrice, "2")
-    }
-
 }

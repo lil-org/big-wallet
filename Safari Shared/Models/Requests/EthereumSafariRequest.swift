@@ -1,20 +1,16 @@
 // ∅ 2026 lil org
 
-import Foundation
-
 extension SafariRequest {
     
-    // Refactor: make codable
     struct Ethereum: SafariRequestBody {
         
-        enum Method: String, Decodable, CaseIterable {
+        enum Method: String {
             case signTransaction
             case signPersonalMessage
             case signMessage
             case signTypedMessage
             case ecRecover
             case requestAccounts
-            case watchAsset
             case addEthereumChain
             case switchEthereumChain
         }
@@ -52,7 +48,7 @@ extension SafariRequest {
             switch method {
             case .switchEthereumChain, .addEthereumChain, .requestAccounts:
                 return true
-            case .ecRecover, .signMessage, .signPersonalMessage, .signTransaction, .signTypedMessage, .watchAsset:
+            case .ecRecover, .signMessage, .signPersonalMessage, .signTransaction, .signTypedMessage:
                 return false
             }
         }

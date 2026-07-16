@@ -1,7 +1,5 @@
 // ∅ 2026 lil org
 
-import Foundation
-
-enum InpageProvider: String, Codable, CaseIterable {
+enum InpageProvider: String, CaseIterable {
     case ethereum, solana, unknown, multiple
 }

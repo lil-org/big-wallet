@@ -6,10 +6,6 @@ import XCTest
 
 final class Tests_macOS: XCTestCase {
 
-    func testGM() {
-        XCTAssert("gm" == "gm")
-    }
-
 #if os(macOS) && DEBUG
     func testAmbientPseudoLocalizationLaunchModeParsesEnvironmentValues() {
         XCTAssertEqual(AmbientPseudoLocalizationLaunchMode(environmentValue: "long"), .long)

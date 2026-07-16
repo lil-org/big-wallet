@@ -200,7 +200,7 @@ class DataStateView: UIView {
 
 extension DataStateView: KeyboardObserver {
     
-    func keyboardWill(show: Bool, height: CGFloat, animtaionOptions: UIView.AnimationOptions, duration: Double) {
+    func keyboardWill(show: Bool, animtaionOptions: UIView.AnimationOptions, duration: Double) {
         guard shouldMoveWithKeyboard else { return }
         let centerOffset: CGFloat = show ? -105 : -50
 

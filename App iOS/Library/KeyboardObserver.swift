@@ -3,7 +3,7 @@
 import UIKit
 
 protocol KeyboardObserver: UIResponder {
-    func keyboardWill(show: Bool, height: CGFloat, animtaionOptions: UIView.AnimationOptions, duration: Double)
+    func keyboardWill(show: Bool, animtaionOptions: UIView.AnimationOptions, duration: Double)
 }
 
 extension KeyboardObserver {
@@ -14,7 +14,6 @@ extension KeyboardObserver {
     }
     
     fileprivate func didReceiveKeyboardNotification(_ notification: Notification, willShow: Bool) {
-        let height = (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as AnyObject).cgRectValue.size.height
         let animtaionOptions: UIView.AnimationOptions
         let duration: Double
         
@@ -31,7 +30,7 @@ extension KeyboardObserver {
         }
         
         DispatchQueue.main.async { [weak self] in
-            self?.keyboardWill(show: willShow, height: height, animtaionOptions: animtaionOptions, duration: duration)
+            self?.keyboardWill(show: willShow, animtaionOptions: animtaionOptions, duration: duration)
         }
     }
     

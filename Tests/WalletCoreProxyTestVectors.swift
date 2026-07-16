@@ -288,45 +288,6 @@ enum WalletCoreProxyTestVectors {
     }
     """)
 
-    static let walletCoreJSONMixedAccountPassword = Data("e28ddf66cec05c1fc09939a00628b230459202b2493fccac288038ef37815723".utf8)
-    static let walletCoreJSONMixedAccountMnemonic = "often tobacco bread scare imitate song kind common bar forest yard wisdom"
-    static let walletCoreJSONMixedAccountEthereumAddress = "0x33F44330cc4253cCd4ce4224186DB9baCe2190ea"
-    static let walletCoreJSONMixedAccountFixture = data(utf8: """
-    {
-      "activeAccounts": [{
-        "address": "bc1q4zehq85jqx9zzgzvzn9t64yjy66nunn3vehuv6",
-        "derivationPath": "m/84'/0'/0'/0/0",
-        "extendedPublicKey": "zpub6qMRMrwcEYaqjf8wSpNqtBfUee6MqpQjrZNKfj5a48EUFUx2yUmfkDJMdHwWvkg8SjdS3ua6dy9ofMrzrytTfdyy2pXg344yFwm2Ta9cm6Q"
-      }, {
-        "address": "0x33F44330cc4253cCd4ce4224186DB9baCe2190ea",
-        "derivationPath": "m/44'/60'/0'/0/0"
-      }, {
-        "address": "bnb1njuczq3hgvupu2vnczrjz7rc8x4uxlmhjyq95z",
-        "derivationPath": "m/44'/714'/0'/0/0"
-      }],
-      "crypto": {
-        "cipher": "aes-128-ctr",
-        "cipherparams": {
-          "iv": "cfeacebdf0d0c57cbbe6260094cdf3a9"
-        },
-        "ciphertext": "60358be4204c0d9c723775159bcadd63a51f0c06fce4024294d8ed4c19acb85cba3ca769dc3521fb572a06f8986d8bbc5736d6900e3e215f9bc112acffa470b178a621922041300bd7",
-        "kdf": "scrypt",
-        "kdfparams": {
-          "dklen": 32,
-          "n": 4096,
-          "p": 6,
-          "r": 8,
-          "salt": "14198d7e5f2afbfde2b00539d0c9abaec99e708dd4a2242448c57248e3e07c77"
-        },
-        "mac": "90b65f299a9ac59f50d24c6f80f4cdcffe6500c86687df716a15d79461992085"
-      },
-      "id": "3c937d42-443d-4acf-9311-2d9dfa857e1c",
-      "name": "",
-      "type": "mnemonic",
-      "version": 3
-    }
-    """)
-
     static let typedDataDigest = "a85c2e2b118698e88db68a8105b794a8cc7cec074e89ef991cb4f5f533819cc2"
     static let permitTypedDataDigest = "8e234d3348fdfb087478de9d65c030e111fafc3abc824ee2ee1a2fe9e938b592"
     static let complexTypedDataDigest = "aea54d086891128eb6108615e38873a455602a1f39ac88292408c0a311485ec8"

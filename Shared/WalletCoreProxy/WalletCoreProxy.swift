@@ -335,12 +335,6 @@ struct WalletStoredKey {
                                          publicKey: publicKey,
                                          extendedPublicKey: extendedPublicKey))
     }
-
-    func copyUnsupportedAccounts(from source: WalletStoredKey) {
-        for account in source.storage.accounts where WalletCoin(rawValue: account.coinRawValue) == nil {
-            storage.accounts.append(account)
-        }
-    }
 }
 
 enum WalletCrypto {

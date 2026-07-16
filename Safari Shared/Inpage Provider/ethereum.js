@@ -313,16 +313,6 @@ class BigWalletEthereum extends EventEmitter {
         this.postMessage("requestAccounts", payload.id, {});
     }
     
-    wallet_watchAsset(payload) {
-        let options = payload.params.options;
-        this.postMessage("watchAsset", payload.id, {
-        type: payload.type,
-        contract: options.address,
-        symbol: options.symbol,
-        decimals: options.decimals || 0,
-        });
-    }
-    
     wallet_switchEthereumChain(payload) {
         if (this.chainId != payload.params[0].chainId) {
             this.postMessage("switchEthereumChain", payload.id, payload.params[0]);

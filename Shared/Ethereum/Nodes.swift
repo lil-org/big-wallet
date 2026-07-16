@@ -1,7 +1,5 @@
 // ∅ 2026 lil org
 
-import Foundation
-
 struct Nodes {
     
     static func knowsNode(chainId: Int) -> Bool {

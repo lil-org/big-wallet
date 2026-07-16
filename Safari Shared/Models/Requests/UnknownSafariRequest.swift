@@ -6,7 +6,7 @@ extension SafariRequest {
     
     struct Unknown: SafariRequestBody {
         
-        enum Method: String, Decodable, CaseIterable {
+        enum Method: String {
             case justShowApp
             case switchAccount
         }

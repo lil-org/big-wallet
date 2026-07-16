@@ -1,12 +1,10 @@
 // ∅ 2026 lil org
 
-import Foundation
-
 extension SafariRequest {
 
     struct Solana: SafariRequestBody {
 
-        enum Method: String, Decodable, CaseIterable {
+        enum Method: String {
             case connect
             case signMessage
             case signTransaction

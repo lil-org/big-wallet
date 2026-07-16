@@ -1,62 +1,28 @@
 // ∅ 2026 lil org
 
-import Foundation
-
 // https://github.com/ethereum-lists/chains/blob/master/tools/schema/chainSchema.json
 
-struct EIP155ChainData: Codable {
+struct EIP155ChainData: Decodable {
     
     let name: String // Name of the Network
-    let shortName: String
-    let chain: String
     let chainId: Int
-    let networkId: Int
     let rpc: [String]
-    let faucets: [String]
-    let infoURL: String
     let nativeCurrency: NativeCurrency
 
-    let title: String?
-    let icon: String? // Icon type
-    let features: [Feature]?
-    let slip44: Int?
-    let ens: ENS?
     let explorers: [Explorer]?
-    let parent: Parent?
     let status: String? // Chain status
     let redFlags: [RedFlag]?
 
-    struct NativeCurrency: Codable {
-        let name: String // Name of the Native Currency
+    struct NativeCurrency: Decodable {
         let symbol: String // Symbol of the Native Currency
         let decimals: Int // Decimal points supported
     }
 
-    struct Feature: Codable {
-        let name: String // Feature name - e.g. EIP155
-    }
-
-    struct ENS: Codable {
-        let registry: String
-    }
-
-    struct Explorer: Codable {
-        let name: String
+    struct Explorer: Decodable {
         let url: String
-        let standard: String? // EIP3091 or none
     }
 
-    struct Parent: Codable {
-        let type: String
-        let chain: String
-        let bridges: [Bridge]?
-
-        struct Bridge: Codable {
-            let url: String
-        }
-    }
-
-    enum RedFlag: String, Codable {
+    enum RedFlag: String, Decodable {
         case reusedChainId = "reusedChainId"
     }
     
