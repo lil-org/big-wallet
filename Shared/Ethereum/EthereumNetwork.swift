@@ -15,8 +15,15 @@ struct EthereumNetwork: Codable, Equatable, Hashable {
     var symbolIsETH: Bool { return symbol == "ETH" }
     var chainIdHexString: String { String.hex(chainId, withPrefix: true) }
     var isEthMainnet: Bool { return chainId == EthereumNetwork.ethMainnetChainId }
+    var supportsNativeBalance: Bool { return !Self.tempoChainIds.contains(chainId) }
     
     static let ethMainnetChainId = 1
+    private static let tempoChainIds: Set<Int> = [
+        4_217,
+        31_318,
+        42_429,
+        42_431,
+    ]
     
 }
 

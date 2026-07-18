@@ -272,6 +272,38 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertFalse(mainnet.isTestnet)
     }
 
+    func testTempoNetworksSuppressNativeBalance() throws {
+        let catalog = try loadedCatalog()
+        let rpcURL = try XCTUnwrap(URL(string: "https://rpc.example"))
+        let tempoNetworks = [
+            (chainId: 4_217, name: "Tempo Mainnet Presto"),
+            (chainId: 42_431, name: "Tempo Moderato"),
+        ]
+
+        for tempoNetwork in tempoNetworks {
+            let record = try XCTUnwrap(catalog.record(chainId: tempoNetwork.chainId))
+            XCTAssertEqual(record.name, tempoNetwork.name)
+            XCTAssertEqual(record.nativeCurrency.name, "No native currency")
+            XCTAssertEqual(record.nativeCurrency.symbol, "USD")
+            XCTAssertFalse(record.ethereumNetwork(rpcURL: rpcURL).supportsNativeBalance)
+        }
+
+        let ethereum = try XCTUnwrap(catalog.record(chainId: EthereumNetwork.ethMainnetChainId))
+            .ethereumNetwork(rpcURL: rpcURL)
+        XCTAssertTrue(ethereum.supportsNativeBalance)
+
+        let unrelatedUSDNetwork = EthereumNetwork(
+            chainId: 999_999,
+            name: "Unrelated USD Network",
+            symbol: "USD",
+            nodeURLString: rpcURL.absoluteString,
+            isTestnet: false,
+            mightShowPrice: false,
+            explorer: nil
+        )
+        XCTAssertTrue(unrelatedUSDNetwork.supportsNativeBalance)
+    }
+
     func testAlchemyKeyLoadingAndURLConstruction() throws {
         try withFixtureBundle(apiKeyContents: "fixture-key\r\n") { bundle in
             XCTAssertTrue(AlchemyRPC.apiKey(in: bundle) == "fixture-key")

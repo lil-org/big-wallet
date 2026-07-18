@@ -13,10 +13,17 @@ struct Ethereum {
     private let rpc = EthereumRPC()
     
     func getBalance(network: EthereumNetwork, address: String, completion: @escaping (BigUInt) -> Void) {
-        rpc.getBalance(rpcUrl: network.nodeURLString, for: address) { result in
-            guard case let .success(hex) = result, let balance = BigUInt(hexString: hex) else { return }
-            DispatchQueue.main.async { completion(balance) }
+        Self.performNativeBalanceRequest(for: network) {
+            rpc.getBalance(rpcUrl: network.nodeURLString, for: address) { result in
+                guard case let .success(hex) = result, let balance = BigUInt(hexString: hex) else { return }
+                DispatchQueue.main.async { completion(balance) }
+            }
         }
+    }
+
+    static func performNativeBalanceRequest(for network: EthereumNetwork, request: () -> Void) {
+        guard network.supportsNativeBalance else { return }
+        request()
     }
     
     func sign(data: Data, privateKey: WalletPrivateKey) throws -> String {

@@ -491,6 +491,31 @@ final class GasServiceTests: XCTestCase {
         XCTAssertFalse(transaction.isReadyForApproval(on: mainnet))
     }
 
+    func testNativeBalanceRequestPolicySkipsTempoNetworks() {
+        var requestedChainIDs = [Int]()
+
+        for chainID in [4_217, 31_318, 42_429, 42_431, EthereumNetwork.ethMainnetChainId, 999_999] {
+            let network = makeNetwork(chainID: chainID)
+            Ethereum.performNativeBalanceRequest(for: network) {
+                requestedChainIDs.append(chainID)
+            }
+        }
+
+        XCTAssertEqual(requestedChainIDs, [EthereumNetwork.ethMainnetChainId, 999_999])
+    }
+
+    func testPreparedTransactionsRemainReadyOnTempoNetworks() {
+        var transaction = Transaction(from: "0x0", to: "0x1", value: nil, data: "0x")
+        transaction.nonce = String.hex(0)
+        transaction.gas = String.hex(21_000)
+        transaction.gasPrice = BigUInt(1).hexString
+
+        for chainID in [4_217, 31_318, 42_429, 42_431] {
+            let tempo = makeNetwork(chainID: chainID)
+            XCTAssertTrue(transaction.isReadyForApproval(on: tempo))
+        }
+    }
+
     func testEthereumRPCEmitsFeeHistoryRequestAndDecodesObjectResult() throws {
         let session = makeRPCSession()
         let requestReceived = expectation(description: "request received")
