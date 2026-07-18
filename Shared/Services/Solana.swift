@@ -926,7 +926,7 @@ enum SolanaTransactionSummaryFormatter {
 
 final class Solana {
 
-    enum Cluster: String, CaseIterable {
+    enum Cluster: String, CaseIterable, Hashable {
         case mainnetBeta
         case devnet
         case testnet
@@ -942,26 +942,19 @@ final class Solana {
             }
         }
 
-        fileprivate var rpcConfigurationKey: String {
+        fileprivate var alchemyNetwork: String? {
             switch self {
             case .mainnetBeta:
-                return "SolanaMainnetRPCURL"
+                return "solana-mainnet"
             case .devnet:
-                return "SolanaDevnetRPCURL"
+                return "solana-devnet"
             case .testnet:
-                return "SolanaTestnetRPCURL"
+                return nil
             }
         }
 
-        fileprivate var publicRPCFallbackURLString: String {
-            switch self {
-            case .mainnetBeta:
-                return "https://api.mainnet.solana.com"
-            case .devnet:
-                return "https://api.devnet.solana.com"
-            case .testnet:
-                return "https://api.testnet.solana.com"
-            }
+        var rpcSource: RPCSource {
+            return alchemyNetwork == nil ? .publicFallback : .alchemy
         }
 
         init?(clusterHint: String) {
@@ -986,6 +979,7 @@ final class Solana {
         case confirmationFailed(signature: String, message: String, code: Int?)
         case confirmationTimedOut(signature: String)
         case rpcError(message: String, code: Int?)
+        case rpcUnavailable
         case unknown
     }
 
@@ -1264,19 +1258,14 @@ final class Solana {
         let confirmationCommitment: Commitment?
     }
 
-    struct RPCEndpoint {
-        let url: URL
-        let source: RPCSource
-    }
-
     enum RPCSource: Equatable {
-        case configured
+        case alchemy
         case publicFallback
 
         var displayName: String {
             switch self {
-            case .configured:
-                return Strings.configuredRPC
+            case .alchemy:
+                return Strings.alchemyRPC
             case .publicFallback:
                 return Strings.publicRPC
             }
@@ -1284,44 +1273,41 @@ final class Solana {
     }
 
     struct RPCConfiguration {
-        private let infoDictionary: [String: Any]
+        static let bundled = RPCConfiguration(alchemyAPIKey: AlchemyRPC.bundledAPIKey)
 
-        init(infoDictionary: [String: Any] = Bundle.main.infoDictionary ?? [:]) {
-            self.infoDictionary = infoDictionary
+        private let endpoints: [Cluster: URL]
+
+        init(alchemyAPIKey: String?,
+             urlBuilder: (String, String) -> URL? = {
+                 return AlchemyRPC.url(network: $0, apiKey: $1)
+             }) {
+            var endpoints: [Cluster: URL] = [
+                .testnet: URL(string: "https://api.testnet.solana.com")!,
+            ]
+            if let alchemyAPIKey {
+                for cluster in [Cluster.mainnetBeta, .devnet] {
+                    guard let network = cluster.alchemyNetwork,
+                          let url = urlBuilder(network, alchemyAPIKey) else {
+                        continue
+                    }
+                    endpoints[cluster] = url
+                }
+            }
+            self.endpoints = endpoints
         }
 
-        func endpoint(for cluster: Cluster) -> RPCEndpoint {
-            if let configuredURL = configuredURL(for: cluster) {
-                return RPCEndpoint(url: configuredURL, source: .configured)
-            }
-
-            return RPCEndpoint(url: URL(string: cluster.publicRPCFallbackURLString)!,
-                               source: .publicFallback)
-        }
-
-        private func configuredURL(for cluster: Cluster) -> URL? {
-            guard let rawValue = infoDictionary[cluster.rpcConfigurationKey] as? String else {
-                return nil
-            }
-
-            let urlString = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !urlString.isEmpty,
-                  let url = URL(string: urlString),
-                  let scheme = url.scheme?.lowercased(),
-                  ["http", "https"].contains(scheme)
-            else {
-                return nil
-            }
-
-            return url
+        func endpoint(for cluster: Cluster) -> URL? {
+            return endpoints[cluster]
         }
     }
 
-    static let shared = Solana()
+    static let shared = Solana(urlSession: URLSession(configuration: .default),
+                               rpcConfiguration: .bundled)
     static let maxWirePayloadLength = 1_232
     static let maxBase58EncodedWirePayloadLength = 1_683
 
-    private let urlSession = URLSession(configuration: .default)
+    private let urlSession: URLSession
+    private let rpcConfiguration: RPCConfiguration
     private let signatureLength = 64
     private let publicKeyLength = 32
     private let signatureStatusInitialPollInterval: TimeInterval = 0.5
@@ -1331,7 +1317,10 @@ final class Solana {
     private static let clusterHintOptionKeys = ["bigWalletCluster", "cluster"]
     private static let allowedPreflightCommitments = Set(["processed", "confirmed", "finalized"])
 
-    private init() {}
+    init(urlSession: URLSession, rpcConfiguration: RPCConfiguration) {
+        self.urlSession = urlSession
+        self.rpcConfiguration = rpcConfiguration
+    }
 
     static func preparedSendOptions(from rawOptions: [String: Any]?) -> Result<PreparedSendOptions, SendTransactionError> {
         let options = rawOptions ?? [:]
@@ -1506,12 +1495,19 @@ final class Solana {
                                 sendOptions: PreparedSendOptions,
                                 privateKey: WalletPrivateKey,
                                 completion: @escaping (Result<String, SendTransactionError>) -> Void) {
+        guard let endpointURL = rpcConfiguration.endpoint(for: cluster) else {
+            completion(.failure(.rpcUnavailable))
+            return
+        }
         switch signedTransactionForSignAndSend(preparedSerializedTransaction: preparedSerializedTransaction,
                                                privateKey: privateKey) {
         case .failure(let error):
             completion(.failure(error))
         case .success(let signedTransaction):
-            sendTransaction(signed: signedTransaction, cluster: cluster, sendOptions: sendOptions, completion: completion)
+            sendTransaction(signed: signedTransaction,
+                            endpointURL: endpointURL,
+                            sendOptions: sendOptions,
+                            completion: completion)
         }
     }
 
@@ -1520,6 +1516,10 @@ final class Solana {
                                 sendOptions: PreparedSendOptions,
                                 privateKey: WalletPrivateKey,
                                 completion: @escaping (Result<String, SendTransactionError>) -> Void) {
+        guard let endpointURL = rpcConfiguration.endpoint(for: cluster) else {
+            completion(.failure(.rpcUnavailable))
+            return
+        }
         let preparedMessage = preparedLegacyTransaction.preparedMessage
         guard let signedData = signatureData(digest: preparedMessage.messageData, privateKey: privateKey),
               let raw = compileTransactionData(messageData: preparedMessage.messageData,
@@ -1529,7 +1529,10 @@ final class Solana {
             return
         }
 
-        sendTransaction(signed: raw, cluster: cluster, sendOptions: sendOptions, completion: completion)
+        sendTransaction(signed: raw,
+                        endpointURL: endpointURL,
+                        sendOptions: sendOptions,
+                        completion: completion)
     }
 
     func signedTransactionForSignAndSend(preparedSerializedTransaction: PreparedSerializedTransaction,
@@ -1597,9 +1600,8 @@ final class Solana {
         }
     }
 
-    private func createRequest(method: Method, cluster: Cluster, parameters: [Any]? = nil) -> URLRequest {
-        let endpoint = RPCConfiguration().endpoint(for: cluster)
-        var request = URLRequest(url: endpoint.url)
+    private func createRequest(method: Method, endpointURL: URL, parameters: [Any]? = nil) -> URLRequest {
+        var request = URLRequest(url: endpointURL)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpMethod = "POST"
 
@@ -1618,13 +1620,15 @@ final class Solana {
     }
 
     private func sendTransaction(signed: String,
-                                 cluster: Cluster,
+                                 endpointURL: URL,
                                  sendOptions: PreparedSendOptions,
                                  completion: @escaping (Result<String, SendTransactionError>) -> Void) {
         var parameters: [Any] = [signed]
         parameters.append(sendOptions.rpcOptions)
 
-        performRequest(method: .sendTransaction, cluster: cluster, parameters: parameters) { (response: SendTransactionResponse?) in
+        performRequest(method: .sendTransaction,
+                       endpointURL: endpointURL,
+                       parameters: parameters) { (response: SendTransactionResponse?) in
             guard let response else {
                 completion(.failure(.unknown))
                 return
@@ -1634,7 +1638,7 @@ final class Solana {
                 if let confirmationCommitment = sendOptions.confirmationCommitment {
                     self.confirmTransaction(signature: result,
                                             commitment: confirmationCommitment,
-                                            cluster: cluster,
+                                            endpointURL: endpointURL,
                                             deadline: Date().addingTimeInterval(self.signatureStatusPollTimeout),
                                             nextPollInterval: self.signatureStatusInitialPollInterval,
                                             lastStatusFailure: nil,
@@ -1652,7 +1656,7 @@ final class Solana {
 
     private func confirmTransaction(signature: String,
                                     commitment: Commitment,
-                                    cluster: Cluster,
+                                    endpointURL: URL,
                                     deadline: Date,
                                     nextPollInterval: TimeInterval,
                                     lastStatusFailure: SendTransactionError?,
@@ -1667,12 +1671,12 @@ final class Solana {
             ["searchTransactionHistory": true],
         ]
         performRequest(method: .getSignatureStatuses,
-                       cluster: cluster,
+                       endpointURL: endpointURL,
                        parameters: parameters) { (response: SignatureStatusesResponse?) in
             guard let response else {
                 self.scheduleConfirmationRetry(signature: signature,
                                                commitment: commitment,
-                                               cluster: cluster,
+                                               endpointURL: endpointURL,
                                                deadline: deadline,
                                                nextPollInterval: nextPollInterval,
                                                lastStatusFailure: lastStatusFailure,
@@ -1683,7 +1687,7 @@ final class Solana {
             if let failure = response.failure {
                 self.scheduleConfirmationRetry(signature: signature,
                                                commitment: commitment,
-                                               cluster: cluster,
+                                               endpointURL: endpointURL,
                                                deadline: deadline,
                                                nextPollInterval: nextPollInterval,
                                                lastStatusFailure: self.confirmationFailure(signature: signature,
@@ -1695,7 +1699,7 @@ final class Solana {
             guard let status = response.status else {
                 self.scheduleConfirmationRetry(signature: signature,
                                                commitment: commitment,
-                                               cluster: cluster,
+                                               endpointURL: endpointURL,
                                                deadline: deadline,
                                                nextPollInterval: nextPollInterval,
                                                lastStatusFailure: nil,
@@ -1715,7 +1719,7 @@ final class Solana {
 
             self.scheduleConfirmationRetry(signature: signature,
                                            commitment: commitment,
-                                           cluster: cluster,
+                                           endpointURL: endpointURL,
                                            deadline: deadline,
                                            nextPollInterval: nextPollInterval,
                                            lastStatusFailure: nil,
@@ -1725,7 +1729,7 @@ final class Solana {
 
     private func scheduleConfirmationRetry(signature: String,
                                            commitment: Commitment,
-                                           cluster: Cluster,
+                                           endpointURL: URL,
                                            deadline: Date,
                                            nextPollInterval: TimeInterval,
                                            lastStatusFailure: SendTransactionError?,
@@ -1742,7 +1746,7 @@ final class Solana {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             self.confirmTransaction(signature: signature,
                                     commitment: commitment,
-                                    cluster: cluster,
+                                    endpointURL: endpointURL,
                                     deadline: deadline,
                                     nextPollInterval: followingPollInterval,
                                     lastStatusFailure: lastStatusFailure,
@@ -1762,7 +1766,7 @@ final class Solana {
             return .confirmationFailed(signature: signature,
                                        message: Strings.solanaBlockhashNotFound,
                                        code: -32003)
-        case .invalidMessage, .invalidSendOptions, .unsupportedMultiSignature, .unknown:
+        case .invalidMessage, .invalidSendOptions, .unsupportedMultiSignature, .rpcUnavailable, .unknown:
             return .confirmationFailed(signature: signature,
                                        message: Strings.failedToSend,
                                        code: nil)
@@ -1812,10 +1816,10 @@ final class Solana {
     }
 
     private func performRequest<Response: Decodable>(method: Method,
-                                                     cluster: Cluster,
+                                                     endpointURL: URL,
                                                      parameters: [Any]? = nil,
                                                      completion: @escaping (Response?) -> Void) {
-        let request = createRequest(method: method, cluster: cluster, parameters: parameters)
+        let request = createRequest(method: method, endpointURL: endpointURL, parameters: parameters)
         let dataTask = urlSession.dataTask(with: request) { data, _, _ in
             guard let data else {
                 DispatchQueue.main.async {

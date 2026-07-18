@@ -43,8 +43,42 @@ struct EthereumNetworkFromDapp: Codable {
         }
     }
     
+    var defaultRpcURL: URL? {
+        return CustomEthereumRPC.preferredURL(in: rpcUrls)
+    }
+
     var defaultRpcUrl: String {
-        return rpcUrls.first(where: { $0.starts(with: "https") }) ?? rpcUrls.first ?? ""
+        return defaultRpcURL?.absoluteString ?? ""
     }
     
+}
+
+enum CustomEthereumRPC {
+
+    static func url(from value: String) -> URL? {
+        guard let url = URL(string: value),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              url.host?.isEmpty == false else {
+            return nil
+        }
+        return url
+    }
+
+    static func preferredURL(in values: [String]) -> URL? {
+        var firstHTTPURL: URL?
+
+        for value in values {
+            guard let url = url(from: value) else { continue }
+            if url.scheme?.lowercased() == "https" {
+                return url
+            }
+            if firstHTTPURL == nil {
+                firstHTTPURL = url
+            }
+        }
+
+        return firstHTTPURL
+    }
+
 }

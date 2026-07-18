@@ -1,5 +1,6 @@
 // ∅ 2026 lil org
 
+import Dispatch
 import Foundation
 import XCTest
 @testable import Big_Wallet
@@ -164,6 +165,104 @@ final class DappRequestProcessorTests: XCTestCase {
         })
 
         XCTAssertEqual(preselectedAccounts, [ethereumAccount])
+    }
+
+    func testApprovedEthereumChainAdditionDoesNotOverwriteNetworkResolvedDuringApproval() {
+        var persistCallCount = 0
+
+        let didComplete = DappRequestProcessor.completeApprovedEthereumChainAddition(
+            resolution: { self.resolvedEthereumNetworkResolution() },
+            persist: {
+                persistCallCount += 1
+                return true
+            }
+        )
+
+        XCTAssertTrue(didComplete)
+        XCTAssertEqual(persistCallCount, 0)
+    }
+
+    func testApprovedEthereumChainAdditionFailsWhenUnavailableOrPersistenceDoesNotResolve() {
+        var unavailablePersistCallCount = 0
+        XCTAssertFalse(
+            DappRequestProcessor.completeApprovedEthereumChainAddition(
+                resolution: { .catalogOwnedButUnavailable },
+                persist: {
+                    unavailablePersistCallCount += 1
+                    return true
+                }
+            )
+        )
+        XCTAssertEqual(unavailablePersistCallCount, 0)
+
+        var failedPersistCallCount = 0
+        XCTAssertFalse(
+            DappRequestProcessor.completeApprovedEthereumChainAddition(
+                resolution: { .unknown },
+                persist: {
+                    failedPersistCallCount += 1
+                    return false
+                }
+            )
+        )
+        XCTAssertEqual(failedPersistCallCount, 1)
+
+        var unresolvedPersistCallCount = 0
+        XCTAssertFalse(
+            DappRequestProcessor.completeApprovedEthereumChainAddition(
+                resolution: { .unknown },
+                persist: {
+                    unresolvedPersistCallCount += 1
+                    return true
+                }
+            )
+        )
+        XCTAssertEqual(unresolvedPersistCallCount, 1)
+    }
+
+    func testConcurrentApprovedEthereumChainAdditionsPersistOnce() {
+        let resolvedResolution = resolvedEthereumNetworkResolution()
+        let resultsLock = NSLock()
+        var isResolved = false
+        var persistCallCount = 0
+        var results = [Bool]()
+
+        DispatchQueue.concurrentPerform(iterations: 32) { _ in
+            let result = DappRequestProcessor.completeApprovedEthereumChainAddition(
+                resolution: {
+                    return isResolved ? resolvedResolution : .unknown
+                },
+                persist: {
+                    persistCallCount += 1
+                    isResolved = true
+                    return true
+                }
+            )
+
+            resultsLock.lock()
+            results.append(result)
+            resultsLock.unlock()
+        }
+
+        XCTAssertEqual(results.count, 32)
+        XCTAssertTrue(results.allSatisfy { $0 })
+        XCTAssertEqual(persistCallCount, 1)
+    }
+
+    private func resolvedEthereumNetworkResolution() -> EthereumNetworkResolution {
+        let rpcURL = URL(string: "https://custom.example")!
+        let network = EthereumNetwork(
+            chainId: 64_240,
+            name: "Custom",
+            symbol: "CUSTOM",
+            nodeURLString: rpcURL.absoluteString,
+            isTestnet: false,
+            mightShowPrice: false,
+            explorer: nil
+        )
+        return .resolved(
+            ResolvedEthereumNetwork(network: network, rpcURL: rpcURL, source: .custom)
+        )
     }
 
 }

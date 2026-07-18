@@ -131,7 +131,8 @@ extension ApproveViewController: UITableViewDelegate {
 
         let alert = UIAlertController(title: Strings.selectNetwork, message: nil, preferredStyle: .actionSheet)
         for cluster in solanaClusterSelection.clusters {
-            alert.addAction(UIAlertAction(title: cluster.displayName, style: .default) { [weak self] _ in
+            let description = solanaClusterSelection.description(for: cluster)
+            alert.addAction(UIAlertAction(title: description, style: .default) { [weak self] _ in
                 solanaClusterSelection.selectedCluster = cluster
                 self?.updateOkButtonState()
                 self?.tableView.reloadRows(at: [indexPath], with: .automatic)

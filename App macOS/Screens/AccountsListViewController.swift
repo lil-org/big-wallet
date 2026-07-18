@@ -154,7 +154,13 @@ class AccountsListViewController: NSViewController {
     }
     
     private func updatePrimaryButton() {
-        primaryButton.isEnabled = selectAccountAction?.selectedAccounts.isEmpty == false
+        guard let action = selectAccountAction else {
+            primaryButton.isEnabled = false
+            return
+        }
+        primaryButton.isEnabled = action.canSubmitSelection(
+            network: action.network ?? Networks.ethereum
+        )
     }
     
     private func reloadHeader() {
@@ -287,6 +293,7 @@ class AccountsListViewController: NSViewController {
     private func selectNetwork(_ network: EthereumNetwork) {
         networkButton.image = networkButton.image?.with(pointSize: 14, weight: .semibold, color: .controlAccentColor.withSystemEffect(.pressed))
         selectAccountAction?.network = network
+        updatePrimaryButton()
     }
 
     private func updateNetworkButtonVisibility() {

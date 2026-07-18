@@ -12,6 +12,32 @@
 		2C0000022FA7000000000001 /* BigUIntTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0000012FA7000000000001 /* BigUIntTests.swift */; };
 		2C0000032FA7000000000001 /* BigUIntTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0000012FA7000000000001 /* BigUIntTests.swift */; };
 		2C0000042FA7000000000001 /* BigUIntTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0000012FA7000000000001 /* BigUIntTests.swift */; };
+		0C6CF9D674254089B74FE085 /* NetworkCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0A96C0EB9F43119A1BE09C /* NetworkCatalog.swift */; };
+		B1488E7B553646FAA93ADC17 /* NetworkCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0A96C0EB9F43119A1BE09C /* NetworkCatalog.swift */; };
+		25196D8FC60E4E8EB30AE908 /* NetworkCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0A96C0EB9F43119A1BE09C /* NetworkCatalog.swift */; };
+		CB63AC31BA2E4767A8C766C2 /* NetworkCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0A96C0EB9F43119A1BE09C /* NetworkCatalog.swift */; };
+		9F09453725834BFC8E55FE7F /* NetworkCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0A96C0EB9F43119A1BE09C /* NetworkCatalog.swift */; };
+		C4896803EF8F46A4933C9434 /* NetworkCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0A96C0EB9F43119A1BE09C /* NetworkCatalog.swift */; };
+		3BC843FEE76A4631BF5D0468 /* NetworkCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0A96C0EB9F43119A1BE09C /* NetworkCatalog.swift */; };
+		EB54D0F9473D4FE08E967FC6 /* NetworkCatalog.json in Resources */ = {isa = PBXBuildFile; fileRef = DB2B8110AC144397915962B1 /* NetworkCatalog.json */; };
+		B8D5828F503448E2A147283E /* NetworkCatalog.json in Resources */ = {isa = PBXBuildFile; fileRef = DB2B8110AC144397915962B1 /* NetworkCatalog.json */; };
+		0C748551C3DC41869E8F29F1 /* NetworkCatalog.json in Resources */ = {isa = PBXBuildFile; fileRef = DB2B8110AC144397915962B1 /* NetworkCatalog.json */; };
+		707BB15B5AD045118139C183 /* NetworkCatalog.json in Resources */ = {isa = PBXBuildFile; fileRef = DB2B8110AC144397915962B1 /* NetworkCatalog.json */; };
+		3E84305CA4F4418E8CF7C815 /* NetworkCatalog.json in Resources */ = {isa = PBXBuildFile; fileRef = DB2B8110AC144397915962B1 /* NetworkCatalog.json */; };
+		DDBC2955FD864B479664EA65 /* NetworkCatalog.json in Resources */ = {isa = PBXBuildFile; fileRef = DB2B8110AC144397915962B1 /* NetworkCatalog.json */; };
+		8347CF35D24745D7913450D7 /* NetworkCatalog.json in Resources */ = {isa = PBXBuildFile; fileRef = DB2B8110AC144397915962B1 /* NetworkCatalog.json */; };
+		31B7B994991C4E64B5DF44B5 /* NetworkCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 019DDEDE91F4418190B03EFB /* NetworkCatalogTests.swift */; };
+		80762825D41E4714A724F485 /* NetworkCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 019DDEDE91F4418190B03EFB /* NetworkCatalogTests.swift */; };
+		AAD675E18CDB4174B2B92C3D /* NetworkCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 019DDEDE91F4418190B03EFB /* NetworkCatalogTests.swift */; };
+		2FA100000000000000000002 /* SafariRPCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA100000000000000000001 /* SafariRPCClient.swift */; };
+		2FA100000000000000000006 /* SafariRPCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA100000000000000000001 /* SafariRPCClient.swift */; };
+		2FA100000000000000000008 /* SafariRPCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA100000000000000000001 /* SafariRPCClient.swift */; };
+		2FA100000000000000000009 /* SafariRPCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA100000000000000000001 /* SafariRPCClient.swift */; };
+		2FA10000000000000000000A /* SafariRPCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA100000000000000000001 /* SafariRPCClient.swift */; };
+		2FA10000000000000000000B /* SafariRPCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA100000000000000000001 /* SafariRPCClient.swift */; };
+		2FA200000000000000000002 /* CustomNetworkStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA200000000000000000001 /* CustomNetworkStorageTests.swift */; };
+		2FA200000000000000000003 /* CustomNetworkStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA200000000000000000001 /* CustomNetworkStorageTests.swift */; };
+		2FA200000000000000000004 /* CustomNetworkStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA200000000000000000001 /* CustomNetworkStorageTests.swift */; };
 		2C03D1D5269B428C00EF10EA /* Notification.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C03D1D4269B428C00EF10EA /* Notification.swift */; };
 		2C05C1FD2B69A8919F681408 /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */; };
 		2C07195E29214A6D36BB9B04 /* Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C78F8272683BDCC00C10670 /* Alert.swift */; };
@@ -45,7 +71,6 @@
 		2C22C29D3FE40A42F1E89D84 /* WalletsMetadataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE377CB2D3A748D00288FFB /* WalletsMetadataService.swift */; };
 		2C23487275512F3EBBA7408B /* NSTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB4031C281D745D00BAEBEE /* NSTableView.swift */; };
 		2C23FBAA06595C4F3F9B2BD3 /* WalletCoin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4768B32826ED83005E8D4D /* WalletCoin.swift */; };
-		2C25106CFAA54D46BC74F54E /* bundled-networks.json in Resources */ = {isa = PBXBuildFile; fileRef = 2CED86A92AF00F56006F9E26 /* bundled-networks.json */; };
 		2C2564264C1547884C529CEE /* AccountCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8A09E226757FC000993638 /* AccountCellView.swift */; };
 		2C264BBC27B2F25E00234393 /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BBB27B2F25E00234393 /* SafariRequest.swift */; };
 		2C264BBD27B2F25E00234393 /* SafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BBB27B2F25E00234393 /* SafariRequest.swift */; };
@@ -112,7 +137,6 @@
 		2C575B9F13B215CC3292E862 /* NSImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CFAE56928BE6292001D0799 /* NSImage.swift */; };
 		2C5AE5390F7CBB9DBEE59E10 /* PriceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC0CDBD2692027E0072922A /* PriceService.swift */; };
 		2C5C829F2822B9DF007D9488 /* Images.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C5C829E2822B9DF007D9488 /* Images.swift */; };
-		2C5D8851D7A0850274D24F92 /* BundledNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */; };
 		2C5FD1254A43F3A55775BF5F /* PeerMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4297272ADEDCBD0044357A /* PeerMeta.swift */; };
 		2C5FF97226C84F7B00B32ACC /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C5FF97126C84F7B00B32ACC /* AppDelegate.swift */; };
 		2C5FF97426C84F7B00B32ACC /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C5FF97326C84F7B00B32ACC /* SceneDelegate.swift */; };
@@ -126,7 +150,6 @@
 		2C6EE1B4A5956F30688F26A6 /* liquid_glass_icon_wip.icon in Resources */ = {isa = PBXBuildFile; fileRef = 2C9264282E11D32900FBF476 /* liquid_glass_icon_wip.icon */; };
 		2C6F6D5A28273FE500D6E8FB /* EditAccountsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5928273FE500D6E8FB /* EditAccountsViewController.swift */; };
 		2C6F6D5E2827434800D6E8FB /* PreviewAccountTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6F6D5C2827434800D6E8FB /* PreviewAccountTableViewCell.swift */; };
-		2C711BCC30F483DDBD2A514F /* BundledNodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B52AF17D5A006F9E26 /* BundledNodes.swift */; };
 		2C728B5E2AFBE7EA00E4DD47 /* NetworksListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9931DB2AEEC0E200577C8A /* NetworksListView.swift */; };
 		2C728B5F2AFBE7EA00E4DD47 /* NetworksListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9931DB2AEEC0E200577C8A /* NetworksListView.swift */; };
 		2C728B612AFBFAF100E4DD47 /* Image.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C728B602AFBFAF100E4DD47 /* Image.swift */; };
@@ -172,10 +195,6 @@
 		2C773FE02D53C12900879A1F /* Transaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CE3D011267F73C00032A62E /* Transaction.swift */; };
 		2C773FE12D53C12900879A1F /* Ethereum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995552674D0F300A8E370 /* Ethereum.swift */; };
 		2C773FE22D53C12900879A1F /* EthereumRPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8944CA2AEB0C10006A711F /* EthereumRPC.swift */; };
-		2C773FE32D53C14400879A1F /* BundledNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */; };
-		2C773FE42D53C14F00879A1F /* BundledNodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B52AF17D5A006F9E26 /* BundledNodes.swift */; };
-		2C773FE62D53C14F00879A1F /* BundledNodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B52AF17D5A006F9E26 /* BundledNodes.swift */; };
-		2C773FE82D53C15400879A1F /* bundled-networks.json in Resources */ = {isa = PBXBuildFile; fileRef = 2CED86A92AF00F56006F9E26 /* bundled-networks.json */; };
 		2C773FE92D53C17000879A1F /* Defaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C528A15267FA8EB00CA3ADD /* Defaults.swift */; };
 		2C773FEA2D53C17000879A1F /* PriceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC0CDBD2692027E0072922A /* PriceService.swift */; };
 		2C773FEB2D53C17000879A1F /* GasService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C4C268A033100D0926A /* GasService.swift */; };
@@ -283,8 +302,6 @@
 		2C9B2C6C2D38416800D56607 /* SharedDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B2C6A2D38415F00D56607 /* SharedDefaults.swift */; };
 		2C9B2C6D2D38416800D56607 /* SharedDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B2C6A2D38415F00D56607 /* SharedDefaults.swift */; };
 		2C9B2C6E2D38416800D56607 /* SharedDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B2C6A2D38415F00D56607 /* SharedDefaults.swift */; };
-		2C9B55D12AF2AE4B008BE899 /* BundledNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */; };
-		2C9B55D22AF2AE4B008BE899 /* BundledNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */; };
 		2C9C4393DBB7A727DB0990AD /* NSPasteboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CD0B3F426A0DAA900488D92 /* NSPasteboard.swift */; };
 		2C9F0B6826BDCB2E008FA3D6 /* EthereumNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */; };
 		2CA151C7D2BD0E90CDFDC181 /* EthereumResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BDB27B5AC5400234393 /* EthereumResponseToExtension.swift */; };
@@ -356,18 +373,12 @@
 		2CE9A8B87F4479A4959634F2 /* ImportViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1995412674C4B900A8E370 /* ImportViewController.swift */; };
 		2CEC9851C63AEBCF8E53ABFD /* InpageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BD427B5806200234393 /* InpageProvider.swift */; };
 		2CED15F879B735A3E1559E29 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C917428267D2A6E00049075 /* Keychain.swift */; };
-		2CED86B62AF17D5A006F9E26 /* BundledNodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B52AF17D5A006F9E26 /* BundledNodes.swift */; };
-		2CED86B72AF17D5A006F9E26 /* BundledNodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B52AF17D5A006F9E26 /* BundledNodes.swift */; };
 		2CED86BA2AF1820E006F9E26 /* Nodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B92AF1820E006F9E26 /* Nodes.swift */; };
 		2CED86BB2AF1820E006F9E26 /* Nodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B92AF1820E006F9E26 /* Nodes.swift */; };
 		2CED86BF2AF25C32006F9E26 /* Networks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86BE2AF25C32006F9E26 /* Networks.swift */; };
 		2CED86C02AF25C32006F9E26 /* Networks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86BE2AF25C32006F9E26 /* Networks.swift */; };
-		2CED86C12AF26114006F9E26 /* bundled-networks.json in Resources */ = {isa = PBXBuildFile; fileRef = 2CED86A92AF00F56006F9E26 /* bundled-networks.json */; };
-		2CED86C22AF2611D006F9E26 /* bundled-networks.json in Resources */ = {isa = PBXBuildFile; fileRef = 2CED86A92AF00F56006F9E26 /* bundled-networks.json */; };
 		2CED86C32AF262E6006F9E26 /* Nodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B92AF1820E006F9E26 /* Nodes.swift */; };
 		2CED86C42AF262E7006F9E26 /* Nodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B92AF1820E006F9E26 /* Nodes.swift */; };
-		2CED86C52AF26327006F9E26 /* BundledNodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B52AF17D5A006F9E26 /* BundledNodes.swift */; };
-		2CED86C62AF26328006F9E26 /* BundledNodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CED86B52AF17D5A006F9E26 /* BundledNodes.swift */; };
 		2CEFEB16274D5DCA00CE23BD /* inpage.js in Resources */ = {isa = PBXBuildFile; fileRef = 2CEFEB15274D5DC900CE23BD /* inpage.js */; };
 		2CF25597275A46D300AE54B9 /* Defaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C528A15267FA8EB00CA3ADD /* Defaults.swift */; };
 		2CF25598275A46D600AE54B9 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C492689F01700D0926A /* Strings.swift */; };
@@ -611,6 +622,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		019DDEDE91F4418190B03EFB /* NetworkCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkCatalogTests.swift; sourceTree = "<group>"; };
+		AB0A96C0EB9F43119A1BE09C /* NetworkCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkCatalog.swift; sourceTree = "<group>"; };
+		DB2B8110AC144397915962B1 /* NetworkCatalog.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = NetworkCatalog.json; sourceTree = "<group>"; };
+		2FA100000000000000000001 /* SafariRPCClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariRPCClient.swift; sourceTree = "<group>"; };
+		2FA200000000000000000001 /* CustomNetworkStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomNetworkStorageTests.swift; sourceTree = "<group>"; };
 		0D059AD126C2796200EE3023 /* ApprovalSubject.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalSubject.swift; sourceTree = "<group>"; };
 		0DC850E626B73A5900809E82 /* AuthenticationReason.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationReason.swift; sourceTree = "<group>"; };
 		2C0000012FA7000000000001 /* BigUIntTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BigUIntTests.swift; sourceTree = "<group>"; };
@@ -721,8 +737,6 @@
 		2C96D3A72763D13400687301 /* DataStateView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DataStateView.swift; sourceTree = "<group>"; };
 		2C9931DB2AEEC0E200577C8A /* NetworksListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworksListView.swift; sourceTree = "<group>"; };
 		2C9B2C6A2D38415F00D56607 /* SharedDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedDefaults.swift; sourceTree = "<group>"; };
-		2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundledNetwork.swift; sourceTree = "<group>"; };
-		2C9B55D42AF2B004008BE899 /* nodes-to-bundle.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "nodes-to-bundle.json"; sourceTree = "<group>"; };
 		2C9F0B6726BDCB2E008FA3D6 /* EthereumNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EthereumNetwork.swift; sourceTree = "<group>"; };
 		2CAA412426C7CD93009F3535 /* ReviewRequester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewRequester.swift; sourceTree = "<group>"; };
 		2CB3845827654E9700A189B9 /* _locales */ = {isa = PBXFileReference; lastKnownFileType = folder; path = _locales; sourceTree = "<group>"; };
@@ -758,10 +772,6 @@
 		2CE377CB2D3A748D00288FFB /* WalletsMetadataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletsMetadataService.swift; sourceTree = "<group>"; };
 		2CE3D011267F73C00032A62E /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
 		2CE9A7772BADC59C00579BF7 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
-		2CED86A42AF00BC9006F9E26 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
-		2CED86A92AF00F56006F9E26 /* bundled-networks.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "bundled-networks.json"; sourceTree = "<group>"; };
-		2CED86AF2AF0167F006F9E26 /* EIP155ChainData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EIP155ChainData.swift; sourceTree = "<group>"; };
-		2CED86B52AF17D5A006F9E26 /* BundledNodes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundledNodes.swift; sourceTree = "<group>"; };
 		2CED86B92AF1820E006F9E26 /* Nodes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Nodes.swift; sourceTree = "<group>"; };
 		2CED86BE2AF25C32006F9E26 /* Networks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Networks.swift; sourceTree = "<group>"; };
 		2CEFEB15274D5DC900CE23BD /* inpage.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = inpage.js; sourceTree = "<group>"; };
@@ -888,6 +898,8 @@
 		2C03EB8E2B06A18700EF61F5 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				019DDEDE91F4418190B03EFB /* NetworkCatalogTests.swift */,
+				2FA200000000000000000001 /* CustomNetworkStorageTests.swift */,
 				2C0000012FA7000000000001 /* BigUIntTests.swift */,
 				2F2A00000000000000000015 /* DappRequestProcessorTests.swift */,
 				2F4E01002FAC000000000000 /* GasServiceTests.swift */,
@@ -946,7 +958,6 @@
 				2C09CBA0273979C1009AD39B /* Safari macOS */,
 				2CCEB82E27594E2A00768473 /* Safari iOS */,
 				2C6054982D529B3200779570 /* Safari visionOS */,
-				2CED86A32AF00BC9006F9E26 /* Tools */,
 				2C03EB8E2B06A18700EF61F5 /* Tests */,
 				2CE02C7B2BAA0F6700381D70 /* Tests macOS */,
 				2CB9B5502FA23F0600F094FB /* Big Wallet Ambient */,
@@ -1117,6 +1128,8 @@
 		2C8A09C2267513A700993638 /* Ethereum */ = {
 			isa = PBXGroup;
 			children = (
+				AB0A96C0EB9F43119A1BE09C /* NetworkCatalog.swift */,
+				DB2B8110AC144397915962B1 /* NetworkCatalog.json */,
 				2C1995552674D0F300A8E370 /* Ethereum.swift */,
 				2CE3D011267F73C00032A62E /* Transaction.swift */,
 				2C8944CA2AEB0C10006A711F /* EthereumRPC.swift */,
@@ -1197,14 +1210,6 @@
 			path = Library;
 			sourceTree = "<group>";
 		};
-		2C9B55D52AF2B8D5008BE899 /* Helpers */ = {
-			isa = PBXGroup;
-			children = (
-				2C9B55D42AF2B004008BE899 /* nodes-to-bundle.json */,
-			);
-			path = Helpers;
-			sourceTree = "<group>";
-		};
 		2CB3844027654A0D00A189B9 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
@@ -1260,6 +1265,7 @@
 			children = (
 				2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */,
 				2C9B2C6A2D38415F00D56607 /* SharedDefaults.swift */,
+				2FA100000000000000000001 /* SafariRPCClient.swift */,
 				2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */,
 				2C264BDA27B5A94400234393 /* Models */,
 				2C452ECE2B0EDB7E0017CE2C /* Inpage Provider */,
@@ -1306,17 +1312,6 @@
 			path = "Tests macOS";
 			sourceTree = "<group>";
 		};
-		2CED86A32AF00BC9006F9E26 /* Tools */ = {
-			isa = PBXGroup;
-			children = (
-				2CED86A42AF00BC9006F9E26 /* main.swift */,
-				2CED86B42AF17BF0006F9E26 /* Bundled */,
-				2CED86BD2AF225A4006F9E26 /* Models */,
-				2C9B55D52AF2B8D5008BE899 /* Helpers */,
-			);
-			path = Tools;
-			sourceTree = "<group>";
-		};
 		2CED86B12AF01DFD006F9E26 /* Views */ = {
 			isa = PBXGroup;
 			children = (
@@ -1324,24 +1319,6 @@
 				2CD7FC8C2B1115AE00659439 /* EditTransactionView.swift */,
 			);
 			path = Views;
-			sourceTree = "<group>";
-		};
-		2CED86B42AF17BF0006F9E26 /* Bundled */ = {
-			isa = PBXGroup;
-			children = (
-				2CED86A92AF00F56006F9E26 /* bundled-networks.json */,
-				2CED86B52AF17D5A006F9E26 /* BundledNodes.swift */,
-			);
-			path = Bundled;
-			sourceTree = "<group>";
-		};
-		2CED86BD2AF225A4006F9E26 /* Models */ = {
-			isa = PBXGroup;
-			children = (
-				2CED86AF2AF0167F006F9E26 /* EIP155ChainData.swift */,
-				2C9B55D02AF2AE4B008BE899 /* BundledNetwork.swift */,
-			);
-			path = Models;
 			sourceTree = "<group>";
 		};
 		2CF25596275A468B00AE54B9 /* Models */ = {
@@ -1452,6 +1429,7 @@
 				2C09CB9B273979C1009AD39B /* Sources */,
 				2C09CB9C273979C1009AD39B /* Frameworks */,
 				2C09CB9D273979C1009AD39B /* Resources */,
+				516B2583C21E4F89B3F786DA /* Bundle Alchemy API Key */,
 			);
 			buildRules = (
 			);
@@ -1469,6 +1447,7 @@
 				2C17BDC62D3D007E0015C58B /* Sources */,
 				2C17BDC72D3D007E0015C58B /* Frameworks */,
 				2C17BDC82D3D007E0015C58B /* Resources */,
+				AB014F43D7D74AA2A57639E3 /* Bundle Alchemy API Key */,
 				2C6054882D529A9A00779570 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
@@ -1488,6 +1467,7 @@
 				2C1995382674C4B900A8E370 /* Sources */,
 				2C1995392674C4B900A8E370 /* Frameworks */,
 				2C19953A2674C4B900A8E370 /* Resources */,
+				E912C196422D43E2A14A6C26 /* Bundle Alchemy API Key */,
 				2C09CBB8273979C1009AD39B /* Embed Foundation Extensions */,
 				2CFAAA112FA2600000000000 /* Terminate Embedded Ambient Agents */,
 				2CB9B5652FA24A0A00F094FB /* CopyFiles */,
@@ -1511,6 +1491,7 @@
 				2C5FF96B26C84F7B00B32ACC /* Sources */,
 				2C5FF96C26C84F7B00B32ACC /* Frameworks */,
 				2C5FF96D26C84F7B00B32ACC /* Resources */,
+				4EC946B2766C4F89AE45F6A5 /* Bundle Alchemy API Key */,
 				2CCEB84627594E2A00768473 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
@@ -1531,6 +1512,7 @@
 				2C60546B2D529A9A00779570 /* Sources */,
 				2C60546C2D529A9A00779570 /* Frameworks */,
 				2C60546D2D529A9A00779570 /* Resources */,
+				A0FB2A7A814343849A35549C /* Bundle Alchemy API Key */,
 			);
 			buildRules = (
 			);
@@ -1567,6 +1549,7 @@
 				2CB9B54B2FA23F0600F094FB /* Sources */,
 				2CB9B54C2FA23F0600F094FB /* Frameworks */,
 				2CB9B54D2FA23F0600F094FB /* Resources */,
+				D8E7DDB615794095B0AE5890 /* Bundle Alchemy API Key */,
 			);
 			buildRules = (
 			);
@@ -1585,6 +1568,7 @@
 				2CCEB82927594E2A00768473 /* Sources */,
 				2CCEB82A27594E2A00768473 /* Frameworks */,
 				2CCEB82B27594E2A00768473 /* Resources */,
+				0F74DBBAAD154CE0816A24C8 /* Bundle Alchemy API Key */,
 			);
 			buildRules = (
 			);
@@ -1753,6 +1737,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EB54D0F9473D4FE08E967FC6 /* NetworkCatalog.json in Resources */,
 				2CB3845C27654EB300A189B9 /* _locales in Resources */,
 				2CB3845D27654EB300A189B9 /* images in Resources */,
 				2CB7A3F12B29CD82004BEE3A /* macos_specific_content.js in Resources */,
@@ -1768,7 +1753,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2C17BDE52D3D01F30015C58B /* Assets.xcassets in Resources */,
-				2C773FE82D53C15400879A1F /* bundled-networks.json in Resources */,
+				B8D5828F503448E2A147283E /* NetworkCatalog.json in Resources */,
 				2C0C7A752D53D62D009D71BD /* SharedAssets.xcassets in Resources */,
 				2C77400D2D53C23300879A1F /* Localizable.xcstrings in Resources */,
 				2C77402D2D53CC2400879A1F /* Main.storyboard in Resources */,
@@ -1779,7 +1764,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2CED86C12AF26114006F9E26 /* bundled-networks.json in Resources */,
+				0C748551C3DC41869E8F29F1 /* NetworkCatalog.json in Resources */,
 				2CE9A7782BADC59C00579BF7 /* Localizable.xcstrings in Resources */,
 				2C1995442674C4BA00A8E370 /* Assets.xcassets in Resources */,
 				2C9264292E11D32900FBF476 /* liquid_glass_icon_wip.icon in Resources */,
@@ -1792,7 +1777,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2CED86C22AF2611D006F9E26 /* bundled-networks.json in Resources */,
+				707BB15B5AD045118139C183 /* NetworkCatalog.json in Resources */,
 				2C5FF97E26C84F7C00B32ACC /* LaunchScreen.storyboard in Resources */,
 				2C92642B2E11D32900FBF476 /* liquid_glass_icon_wip.icon in Resources */,
 				2C4768AF2826ECE5005E8D4D /* SharedAssets.xcassets in Resources */,
@@ -1806,6 +1791,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3E84305CA4F4418E8CF7C815 /* NetworkCatalog.json in Resources */,
 				2C773FC22D53A57B00879A1F /* inpage.js in Resources */,
 				2C773FC62D53A58C00879A1F /* _locales in Resources */,
 				2C773FC12D53A55500879A1F /* ios_specific_content.js in Resources */,
@@ -1828,7 +1814,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2CB9B56B2FA24B0000F094FB /* Assets.xcassets in Resources */,
-				2C25106CFAA54D46BC74F54E /* bundled-networks.json in Resources */,
+				DDBC2955FD864B479664EA65 /* NetworkCatalog.json in Resources */,
 				2CF8ED32DBA6901CB4F2D3C4 /* Localizable.xcstrings in Resources */,
 				2C6EE1B4A5956F30688F26A6 /* liquid_glass_icon_wip.icon in Resources */,
 				2C48DDA222B7EDD41710E13C /* Main.storyboard in Resources */,
@@ -1840,6 +1826,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8347CF35D24745D7913450D7 /* NetworkCatalog.json in Resources */,
 				2CB3845A27654EA900A189B9 /* _locales in Resources */,
 				2CB3845B27654EA900A189B9 /* images in Resources */,
 				2CE0594027640E8E0042D844 /* service_worker.js in Resources */,
@@ -1867,6 +1854,153 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		516B2583C21E4F89B3F786DA /* Bundle Alchemy API Key */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle Alchemy API Key";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AlchemyAPIKey",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_api_key.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		AB014F43D7D74AA2A57639E3 /* Bundle Alchemy API Key */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle Alchemy API Key";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AlchemyAPIKey",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_api_key.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		E912C196422D43E2A14A6C26 /* Bundle Alchemy API Key */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle Alchemy API Key";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AlchemyAPIKey",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_api_key.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		4EC946B2766C4F89AE45F6A5 /* Bundle Alchemy API Key */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle Alchemy API Key";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AlchemyAPIKey",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_api_key.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		A0FB2A7A814343849A35549C /* Bundle Alchemy API Key */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle Alchemy API Key";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AlchemyAPIKey",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_api_key.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		D8E7DDB615794095B0AE5890 /* Bundle Alchemy API Key */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle Alchemy API Key";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AlchemyAPIKey",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_api_key.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		0F74DBBAAD154CE0816A24C8 /* Bundle Alchemy API Key */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle Alchemy API Key";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AlchemyAPIKey",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_api_key.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 		2C0C7A772D53D6F3009D71BD /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -1997,6 +2131,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2FA100000000000000000002 /* SafariRPCClient.swift in Sources */,
 				2CF255B2275A4A7200AE54B9 /* UserDefaults.swift in Sources */,
 				2C264BD227B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
 				2C264BD727B5806200234393 /* InpageProvider.swift in Sources */,
@@ -2016,7 +2151,7 @@
 				2C09CBA2273979C1009AD39B /* SafariWebExtensionHandler.swift in Sources */,
 				2C0F8B302FA2770000F094FB /* Notification.swift in Sources */,
 				2C773F63274523DC007B04E7 /* ResponseToExtension.swift in Sources */,
-				2CED86B62AF17D5A006F9E26 /* BundledNodes.swift in Sources */,
+				0C6CF9D674254089B74FE085 /* NetworkCatalog.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2025,7 +2160,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				2C773FC72D53A59800879A1F /* InpageProvider.swift in Sources */,
-				2C773FE32D53C14400879A1F /* BundledNetwork.swift in Sources */,
 				2C773FE92D53C17000879A1F /* Defaults.swift in Sources */,
 				2C773FEA2D53C17000879A1F /* PriceService.swift in Sources */,
 				2C773FF12D53C18C00879A1F /* UserDefaults.swift in Sources */,
@@ -2062,7 +2196,7 @@
 				2C773FE12D53C12900879A1F /* Ethereum.swift in Sources */,
 				2C773FF72D53C1AA00879A1F /* Notification.swift in Sources */,
 				2C773FE22D53C12900879A1F /* EthereumRPC.swift in Sources */,
-				2C773FE42D53C14F00879A1F /* BundledNodes.swift in Sources */,
+				B1488E7B553646FAA93ADC17 /* NetworkCatalog.swift in Sources */,
 				2C773FFC2D53C1C800879A1F /* WalletsMetadataService.swift in Sources */,
 				2C773FFD2D53C1C800879A1F /* Account.swift in Sources */,
 				2C773FFE2D53C1C800879A1F /* WalletsManager.swift in Sources */,
@@ -2173,7 +2307,7 @@
 				2C4768A9282598C5005E8D4D /* PreviewAccountCellView.swift in Sources */,
 				2CB4031D281D745D00BAEBEE /* NSTableView.swift in Sources */,
 				2CD0B3F726AC619900488D92 /* AddAccountOptionCellView.swift in Sources */,
-				2CED86C52AF26327006F9E26 /* BundledNodes.swift in Sources */,
+				25196D8FC60E4E8EB30AE908 /* NetworkCatalog.swift in Sources */,
 				2C8944C52AEAFF97006A711F /* FixedWidthInteger.swift in Sources */,
 				0D059AD226C2796200EE3023 /* ApprovalSubject.swift in Sources */,
 				2C1995422674C4B900A8E370 /* ImportViewController.swift in Sources */,
@@ -2207,7 +2341,6 @@
 				2C8944CE2AEC34EB006A711F /* Blockies.swift in Sources */,
 				2C8A09DF267579EA00993638 /* AccountsListViewController.swift in Sources */,
 				2C917429267D2A6E00049075 /* Keychain.swift in Sources */,
-				2C9B55D12AF2AE4B008BE899 /* BundledNetwork.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2228,7 +2361,7 @@
 				2C40709027667A6600AB3D55 /* MultilineLabelTableViewCell.swift in Sources */,
 				2CF255A6275A48BB00AE54B9 /* GasService.swift in Sources */,
 				2C96D392276232A300687301 /* UITableView.swift in Sources */,
-				2CED86C62AF26328006F9E26 /* BundledNodes.swift in Sources */,
+				CB63AC31BA2E4767A8C766C2 /* NetworkCatalog.swift in Sources */,
 				2CF255A5275A48BB00AE54B9 /* ReviewRequester.swift in Sources */,
 				2CF255B6275A746000AE54B9 /* AccountsListViewController.swift in Sources */,
 				2CF25597275A46D300AE54B9 /* Defaults.swift in Sources */,
@@ -2264,7 +2397,6 @@
 				2C8ED8DD2AEADDC400818D74 /* BigUInt.swift in Sources */,
 				2C96D3A62763CCA000687301 /* Images.swift in Sources */,
 				2C264BD127B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
-				2C9B55D22AF2AE4B008BE899 /* BundledNetwork.swift in Sources */,
 				2C96D39827623EC600687301 /* URL.swift in Sources */,
 				2CF255AD275A48CF00AE54B9 /* EthereumNetwork.swift in Sources */,
 				2CF2559C275A477F00AE54B9 /* ApprovalSubject.swift in Sources */,
@@ -2310,13 +2442,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2FA100000000000000000006 /* SafariRPCClient.swift in Sources */,
 				2C773FCC2D53A5A300879A1F /* MultipleResponseToExtension.swift in Sources */,
 				2C773FCD2D53A5A300879A1F /* ResponseToExtension.swift in Sources */,
 				2C773FFB2D53C1BD00879A1F /* FixedWidthInteger.swift in Sources */,
 				2C773FD82D53A5C100879A1F /* ExtensionBridge.swift in Sources */,
 				2C773FD92D53A5C100879A1F /* SharedDefaults.swift in Sources */,
 				2C773FF22D53C18C00879A1F /* UserDefaults.swift in Sources */,
-				2C773FE62D53C14F00879A1F /* BundledNodes.swift in Sources */,
+				9F09453725834BFC8E55FE7F /* NetworkCatalog.swift in Sources */,
 				2C773FDD2D53C12300879A1F /* Nodes.swift in Sources */,
 				2C773FDE2D53C12300879A1F /* EthereumNetwork.swift in Sources */,
 				2C773FCE2D53A5A300879A1F /* EthereumResponseToExtension.swift in Sources */,
@@ -2336,6 +2469,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				31B7B994991C4E64B5DF44B5 /* NetworkCatalogTests.swift in Sources */,
+				2FA100000000000000000009 /* SafariRPCClient.swift in Sources */,
+				2FA200000000000000000002 /* CustomNetworkStorageTests.swift in Sources */,
 				2F4E01012FAC000000000000 /* GasServiceTests.swift in Sources */,
 				2F2A00000000000000000002 /* SolanaTestFixtures.swift in Sources */,
 				2F2A00000000000000000006 /* SolanaWireMessageParserTests.swift in Sources */,
@@ -2400,7 +2536,7 @@
 				2C51906E5B2E20F2E17B0EFD /* PreviewAccountCellView.swift in Sources */,
 				2C23487275512F3EBBA7408B /* NSTableView.swift in Sources */,
 				2CE76E2814741757BB8E5F0C /* AddAccountOptionCellView.swift in Sources */,
-				2C711BCC30F483DDBD2A514F /* BundledNodes.swift in Sources */,
+				C4896803EF8F46A4933C9434 /* NetworkCatalog.swift in Sources */,
 				2CD6BA642C70A817FC66C6CA /* FixedWidthInteger.swift in Sources */,
 				2CAF4890FADE70719E11C6F7 /* ApprovalSubject.swift in Sources */,
 				2CE9A8B87F4479A4959634F2 /* ImportViewController.swift in Sources */,
@@ -2446,7 +2582,6 @@
 				2CC943C4B6F644852EBB135A /* Blockies.swift in Sources */,
 				2C8C98BE181CDE11EC532A0A /* AccountsListViewController.swift in Sources */,
 				2CED15F879B735A3E1559E29 /* Keychain.swift in Sources */,
-				2C5D8851D7A0850274D24F92 /* BundledNetwork.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2454,6 +2589,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2FA100000000000000000008 /* SafariRPCClient.swift in Sources */,
 				2CE0594627640F470042D844 /* UserDefaults.swift in Sources */,
 				2C264BD327B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
 				2C264BD827B5806200234393 /* InpageProvider.swift in Sources */,
@@ -2472,7 +2608,7 @@
 				2C264BBF27B2F25E00234393 /* SafariRequest.swift in Sources */,
 				2CE0593F27640E300042D844 /* SafariWebExtensionHandler.swift in Sources */,
 				2CE0594527640EF10042D844 /* ResponseToExtension.swift in Sources */,
-				2CED86B72AF17D5A006F9E26 /* BundledNodes.swift in Sources */,
+				3BC843FEE76A4631BF5D0468 /* NetworkCatalog.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2480,6 +2616,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				80762825D41E4714A724F485 /* NetworkCatalogTests.swift in Sources */,
+				2FA10000000000000000000A /* SafariRPCClient.swift in Sources */,
+				2FA200000000000000000003 /* CustomNetworkStorageTests.swift in Sources */,
 				2F4E01022FAC000000000000 /* GasServiceTests.swift in Sources */,
 				2F2A00000000000000000003 /* SolanaTestFixtures.swift in Sources */,
 				2F2A00000000000000000007 /* SolanaWireMessageParserTests.swift in Sources */,
@@ -2502,6 +2641,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AAD675E18CDB4174B2B92C3D /* NetworkCatalogTests.swift in Sources */,
+				2FA10000000000000000000B /* SafariRPCClient.swift in Sources */,
+				2FA200000000000000000004 /* CustomNetworkStorageTests.swift in Sources */,
 				2F4E01032FAC000000000000 /* GasServiceTests.swift in Sources */,
 				2F2A00000000000000000004 /* SolanaTestFixtures.swift in Sources */,
 				2F2A00000000000000000008 /* SolanaWireMessageParserTests.swift in Sources */,

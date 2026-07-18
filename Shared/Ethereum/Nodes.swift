@@ -1,20 +1,19 @@
 // ∅ 2026 lil org
 
+import Foundation
+
 struct Nodes {
-    
+
+    static func resolution(chainId: Int) -> EthereumNetworkResolution {
+        return NetworkResolver.main.resolve(chainId: chainId)
+    }
+
     static func knowsNode(chainId: Int) -> Bool {
-        return getNode(chainId: chainId) != nil
+        return url(chainId: chainId) != nil
     }
-    
-    static func getNode(chainId: Int) -> String? {
-        let https = "https://"
-        if let domain = BundledNodes.dict[chainId] {
-            return https + domain
-        } else if let custom = SharedDefaults.getCustomNetworkNode(chainId: chainId) {
-            return custom
-        } else {
-            return nil
-        }
+
+    static func url(chainId: Int) -> URL? {
+        return NetworkResolver.main.rpcURL(chainId: chainId)
     }
-    
+
 }

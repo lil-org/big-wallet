@@ -27,7 +27,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private var sections = [Section]()
     private let walletsManager = WalletsManager.shared
     
-    private var network = Networks.ethereum
+    private var network: EthereumNetwork? = Networks.ethereum
     var selectAccountAction: SelectAccountAction?
     
     private var wallets: [WalletContainer] {
@@ -264,7 +264,8 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     }
     
     private func updatePrimaryButton() {
-        primaryButton.isEnabled = selectAccountAction?.selectedAccounts.isEmpty == false
+        primaryButton.isEnabled =
+            selectAccountAction?.canSubmitSelection(network: network) == true
     }
     
     private func updateCellModels() {
@@ -418,6 +419,7 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         var tintedConfiguration = UIButton.Configuration.tinted()
         tintedConfiguration.image = networkButton.configuration?.image
         networkButton.configuration = tintedConfiguration
+        updatePrimaryButton()
     }
 
     private func updateNetworkButtonVisibility() {

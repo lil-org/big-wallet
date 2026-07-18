@@ -34,6 +34,12 @@ struct SelectAccountAction {
         return initiallyConnectedProviders.contains(.ethereum) ||
             selectedAccounts.contains { $0.account.coin == .ethereum }
     }
+
+    func canSubmitSelection(network: EthereumNetwork?) -> Bool {
+        guard !selectedAccounts.isEmpty else { return false }
+        let needsEthereumNetwork = selectedAccounts.contains { $0.account.coin == .ethereum }
+        return !needsEthereumNetwork || network != nil
+    }
 }
 
 struct SignMessageAction {
@@ -59,7 +65,7 @@ final class SolanaClusterSelection {
     func description(for cluster: Solana.Cluster) -> String {
         var components = [
             cluster.displayName,
-            Solana.RPCConfiguration().endpoint(for: cluster).source.displayName,
+            cluster.rpcSource.displayName,
         ]
         if cluster == suggestedCluster {
             components.append(Strings.suggestedByWebsite)

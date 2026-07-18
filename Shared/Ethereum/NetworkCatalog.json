@@ -1,0 +1,2389 @@
+[
+  {
+    "chainId": 1,
+    "name": "Ethereum",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://etherscan.io",
+    "isTestnet": false,
+    "displayPrice": true,
+    "alchemyNetwork": "eth-mainnet"
+  },
+  {
+    "chainId": 10,
+    "name": "Optimism",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://optimistic.etherscan.io",
+    "isTestnet": false,
+    "displayPrice": true,
+    "alchemyNetwork": "opt-mainnet"
+  },
+  {
+    "chainId": 25,
+    "name": "Cronos",
+    "nativeCurrency": {
+      "name": "Cronos",
+      "symbol": "CRO",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.cronos.org",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "cronos-mainnet"
+  },
+  {
+    "chainId": 30,
+    "name": "Rootstock Mainnet",
+    "nativeCurrency": {
+      "name": "Smart Bitcoin",
+      "symbol": "RBTC",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.rsk.co",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "rootstock-mainnet"
+  },
+  {
+    "chainId": 31,
+    "name": "Rootstock Testnet",
+    "nativeCurrency": {
+      "name": "Testnet Smart Bitcoin",
+      "symbol": "tRBTC",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.testnet.rsk.co",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "rootstock-testnet"
+  },
+  {
+    "chainId": 40,
+    "name": "Telos EVM Mainnet",
+    "nativeCurrency": {
+      "name": "Telos",
+      "symbol": "TLOS",
+      "decimals": 18
+    },
+    "explorerURL": "https://teloscan.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://mainnet.telos.net/evm"
+  },
+  {
+    "chainId": 56,
+    "name": "BNB Chain",
+    "nativeCurrency": {
+      "name": "BNB Chain Native Token",
+      "symbol": "BNB",
+      "decimals": 18
+    },
+    "explorerURL": "https://bscscan.com",
+    "isTestnet": false,
+    "displayPrice": true,
+    "alchemyNetwork": "bnb-mainnet"
+  },
+  {
+    "chainId": 66,
+    "name": "OKTC",
+    "nativeCurrency": {
+      "name": "OKXChain Global Utility Token",
+      "symbol": "OKT",
+      "decimals": 18
+    },
+    "explorerURL": "https://www.oklink.com/en/okc",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://exchainrpc.okex.org"
+  },
+  {
+    "chainId": 69,
+    "name": "Optimism Kovan",
+    "nativeCurrency": {
+      "name": "Kovan Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://kovan-optimistic.etherscan.io",
+    "isTestnet": true,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://kovan.optimism.io/"
+  },
+  {
+    "chainId": 77,
+    "name": "POA Network Sokol",
+    "nativeCurrency": {
+      "name": "POA Sokol Ether",
+      "symbol": "SPOA",
+      "decimals": 18
+    },
+    "explorerURL": "https://blockscout.com/poa/sokol",
+    "isTestnet": true,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://sokol.poa.network"
+  },
+  {
+    "chainId": 97,
+    "name": "BNB Chain Testnet",
+    "nativeCurrency": {
+      "name": "BNB Chain Native Token",
+      "symbol": "tBNB",
+      "decimals": 18
+    },
+    "explorerURL": "https://testnet.bscscan.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "bnb-testnet"
+  },
+  {
+    "chainId": 99,
+    "name": "POA Network",
+    "nativeCurrency": {
+      "name": "POA Network Core Ether",
+      "symbol": "POA",
+      "decimals": 18
+    },
+    "explorerURL": "https://blockscout.com/poa/core",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://core.poa.network"
+  },
+  {
+    "chainId": 100,
+    "name": "Gnosis",
+    "nativeCurrency": {
+      "name": "xDAI",
+      "symbol": "xDai",
+      "decimals": 18
+    },
+    "explorerURL": "https://gnosisscan.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "gnosis-mainnet"
+  },
+  {
+    "chainId": 122,
+    "name": "Fuse",
+    "nativeCurrency": {
+      "name": "Fuse",
+      "symbol": "FUSE",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.fuse.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://rpc.fuse.io"
+  },
+  {
+    "chainId": 128,
+    "name": "Huobi ECO Chain",
+    "nativeCurrency": {
+      "name": "Huobi ECO Chain Native Token",
+      "symbol": "HT",
+      "decimals": 18
+    },
+    "explorerURL": "https://hecoinfo.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://http-mainnet.hecochain.com"
+  },
+  {
+    "chainId": 130,
+    "name": "Unichain",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://uniscan.xyz",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "unichain-mainnet"
+  },
+  {
+    "chainId": 137,
+    "name": "Polygon",
+    "nativeCurrency": {
+      "name": "POL",
+      "symbol": "POL",
+      "decimals": 18
+    },
+    "explorerURL": "https://polygonscan.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "polygon-mainnet"
+  },
+  {
+    "chainId": 143,
+    "name": "Monad Mainnet",
+    "nativeCurrency": {
+      "name": "Monad",
+      "symbol": "MON",
+      "decimals": 18
+    },
+    "explorerURL": "https://monadvision.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "monad-mainnet"
+  },
+  {
+    "chainId": 146,
+    "name": "Sonic Mainnet",
+    "nativeCurrency": {
+      "name": "Sonic",
+      "symbol": "S",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.soniclabs.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "sonic-mainnet"
+  },
+  {
+    "chainId": 169,
+    "name": "Manta Pacific Mainnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://pacific-explorer.manta.network",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://pacific-rpc.manta.network/http"
+  },
+  {
+    "chainId": 185,
+    "name": "Mint Mainnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.mintchain.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://rpc.mintchain.io"
+  },
+  {
+    "chainId": 196,
+    "name": "X Layer Mainnet",
+    "nativeCurrency": {
+      "name": "X Layer Global Utility Token",
+      "symbol": "OKB",
+      "decimals": 18
+    },
+    "explorerURL": "https://www.oklink.com/xlayer",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "xlayer-mainnet"
+  },
+  {
+    "chainId": 200,
+    "name": "Arbitrum on xDai",
+    "nativeCurrency": {
+      "name": "xDAI",
+      "symbol": "xDai",
+      "decimals": 18
+    },
+    "explorerURL": "https://blockscout.com/xdai/arbitrum",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://arbitrum.xdaichain.com/"
+  },
+  {
+    "chainId": 204,
+    "name": "opBNB",
+    "nativeCurrency": {
+      "name": "BNB Chain Native Token",
+      "symbol": "BNB",
+      "decimals": 18
+    },
+    "explorerURL": "https://mainnet.opbnbscan.com",
+    "isTestnet": false,
+    "displayPrice": true,
+    "alchemyNetwork": "opbnb-mainnet"
+  },
+  {
+    "chainId": 232,
+    "name": "Lens Mainnet",
+    "nativeCurrency": {
+      "name": "GHO",
+      "symbol": "GHO",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.lens.xyz",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "lens-mainnet"
+  },
+  {
+    "chainId": 250,
+    "name": "Fantom Opera",
+    "nativeCurrency": {
+      "name": "Fantom",
+      "symbol": "FTM",
+      "decimals": 18
+    },
+    "explorerURL": "https://ftmscan.com",
+    "isTestnet": false,
+    "displayPrice": true,
+    "fallbackRPCURL": "https://rpc.ftm.tools"
+  },
+  {
+    "chainId": 252,
+    "name": "Frax Mainnet",
+    "nativeCurrency": {
+      "name": "Frax",
+      "symbol": "FRAX",
+      "decimals": 18
+    },
+    "explorerURL": "https://fraxscan.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "frax-mainnet"
+  },
+  {
+    "chainId": 255,
+    "name": "Kroma",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://blockscout.kroma.network",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://api.kroma.network"
+  },
+  {
+    "chainId": 280,
+    "name": "zkSync Era Testnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://goerli.explorer.zksync.io",
+    "isTestnet": true,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://testnet.era.zksync.dev"
+  },
+  {
+    "chainId": 288,
+    "name": "Boba",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://bobascan.com",
+    "isTestnet": false,
+    "displayPrice": true,
+    "alchemyNetwork": "boba-mainnet"
+  },
+  {
+    "chainId": 300,
+    "name": "ZKsync Sepolia",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://sepolia.explorer.zksync.io",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "zksync-sepolia"
+  },
+  {
+    "chainId": 314,
+    "name": "Filecoin",
+    "nativeCurrency": {
+      "name": "filecoin",
+      "symbol": "FIL",
+      "decimals": 18
+    },
+    "explorerURL": "https://filfox.info/en",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://api.node.glif.io/"
+  },
+  {
+    "chainId": 324,
+    "name": "zkSync",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.zksync.io",
+    "isTestnet": false,
+    "displayPrice": true,
+    "alchemyNetwork": "zksync-mainnet"
+  },
+  {
+    "chainId": 338,
+    "name": "Cronos Testnet",
+    "nativeCurrency": {
+      "name": "Cronos Test Coin",
+      "symbol": "TCRO",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.cronos.org/testnet",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "cronos-testnet"
+  },
+  {
+    "chainId": 360,
+    "name": "Shape",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://shapescan.xyz",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "shape-mainnet"
+  },
+  {
+    "chainId": 420,
+    "name": "Optimism Goerli",
+    "nativeCurrency": {
+      "name": "Goerli Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://optimism-goerli.blockscout.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://goerli.optimism.io"
+  },
+  {
+    "chainId": 424,
+    "name": "Public Goods Network",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.publicgoods.network",
+    "isTestnet": false,
+    "displayPrice": true,
+    "fallbackRPCURL": "https://rpc.publicgoods.network"
+  },
+  {
+    "chainId": 480,
+    "name": "World Chain",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://worldscan.org",
+    "isTestnet": false,
+    "displayPrice": true,
+    "alchemyNetwork": "worldchain-mainnet"
+  },
+  {
+    "chainId": 545,
+    "name": "Flow EVM Testnet",
+    "nativeCurrency": {
+      "name": "FLOW",
+      "symbol": "FLOW",
+      "decimals": 18
+    },
+    "explorerURL": "https://evm-testnet.flowscan.io",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "flow-testnet"
+  },
+  {
+    "chainId": 592,
+    "name": "Astar Mainnet",
+    "nativeCurrency": {
+      "name": "Astar",
+      "symbol": "ASTR",
+      "decimals": 18
+    },
+    "explorerURL": "https://astar.subscan.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "astar-mainnet"
+  },
+  {
+    "chainId": 690,
+    "name": "Redstone",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.redstone.xyz",
+    "isTestnet": false,
+    "displayPrice": true,
+    "fallbackRPCURL": "https://rpc.redstonechain.com"
+  },
+  {
+    "chainId": 747,
+    "name": "Flow EVM Mainnet",
+    "nativeCurrency": {
+      "name": "FLOW",
+      "symbol": "FLOW",
+      "decimals": 18
+    },
+    "explorerURL": "https://evm.flowscan.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "flow-mainnet"
+  },
+  {
+    "chainId": 869,
+    "name": "World Mobile Chain Mainnet",
+    "nativeCurrency": {
+      "name": "World Mobile Token",
+      "symbol": "WMTX",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.worldmobile.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "worldmobilechain-mainnet"
+  },
+  {
+    "chainId": 919,
+    "name": "Mode Sepolia",
+    "nativeCurrency": {
+      "name": "Sepolia Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://sepolia.explorer.mode.network",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "mode-sepolia"
+  },
+  {
+    "chainId": 988,
+    "name": "Stable Mainnet",
+    "nativeCurrency": {
+      "name": "USDT0",
+      "symbol": "USDT0",
+      "decimals": 18
+    },
+    "explorerURL": "https://stablescan.xyz",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "stable-mainnet"
+  },
+  {
+    "chainId": 998,
+    "name": "Hyperliquid Testnet",
+    "nativeCurrency": {
+      "name": "HYPE",
+      "symbol": "HYPE",
+      "decimals": 18
+    },
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "hyperliquid-testnet"
+  },
+  {
+    "chainId": 999,
+    "name": "Hyperliquid Mainnet",
+    "nativeCurrency": {
+      "name": "HYPE",
+      "symbol": "HYPE",
+      "decimals": 18
+    },
+    "explorerURL": "https://hyperevmscan.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "hyperliquid-mainnet"
+  },
+  {
+    "chainId": 1001,
+    "name": "Kaia Kairos",
+    "nativeCurrency": {
+      "name": "KAIA",
+      "symbol": "KAIA",
+      "decimals": 18
+    },
+    "explorerURL": "https://kairos.kaiascan.io",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "kaia-testnet"
+  },
+  {
+    "chainId": 1088,
+    "name": "Metis Andromeda",
+    "nativeCurrency": {
+      "name": "Metis",
+      "symbol": "METIS",
+      "decimals": 18
+    },
+    "explorerURL": "https://andromeda-explorer.metis.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "metis-mainnet"
+  },
+  {
+    "chainId": 1101,
+    "name": "Polygon zkEVM",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://zkevm.polygonscan.com",
+    "isTestnet": false,
+    "displayPrice": true,
+    "fallbackRPCURL": "https://zkevm-rpc.com"
+  },
+  {
+    "chainId": 1284,
+    "name": "Moonbeam",
+    "nativeCurrency": {
+      "name": "Glimmer",
+      "symbol": "GLMR",
+      "decimals": 18
+    },
+    "explorerURL": "https://moonbeam.moonscan.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "moonbeam-mainnet"
+  },
+  {
+    "chainId": 1285,
+    "name": "Moonriver",
+    "nativeCurrency": {
+      "name": "Moonriver",
+      "symbol": "MOVR",
+      "decimals": 18
+    },
+    "explorerURL": "https://moonriver.moonscan.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://rpc.api.moonriver.moonbeam.network"
+  },
+  {
+    "chainId": 1301,
+    "name": "Unichain Sepolia",
+    "nativeCurrency": {
+      "name": "Sepolia Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://unichain-sepolia.blockscout.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "unichain-sepolia"
+  },
+  {
+    "chainId": 1315,
+    "name": "Story Aeneid",
+    "nativeCurrency": {
+      "name": "IP Token",
+      "symbol": "IP",
+      "decimals": 18
+    },
+    "explorerURL": "https://aeneid.storyscan.xyz",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "story-aeneid"
+  },
+  {
+    "chainId": 1328,
+    "name": "Sei Testnet",
+    "nativeCurrency": {
+      "name": "Sei",
+      "symbol": "SEI",
+      "decimals": 18
+    },
+    "explorerURL": "https://testnet.seiscan.io",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "sei-testnet"
+  },
+  {
+    "chainId": 1329,
+    "name": "Sei Network",
+    "nativeCurrency": {
+      "name": "Sei",
+      "symbol": "SEI",
+      "decimals": 18
+    },
+    "explorerURL": "https://seitrace.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "sei-mainnet"
+  },
+  {
+    "chainId": 1439,
+    "name": "Injective Testnet",
+    "nativeCurrency": {
+      "name": "Injective",
+      "symbol": "INJ",
+      "decimals": 18
+    },
+    "explorerURL": "https://testnet.blockscout.injective.network",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "injective-testnet"
+  },
+  {
+    "chainId": 1442,
+    "name": "Polygon zkEVM Testnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.public.zkevm-test.net",
+    "isTestnet": true,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://rpc.public.zkevm-test.net"
+  },
+  {
+    "chainId": 1514,
+    "name": "Story Mainnet",
+    "nativeCurrency": {
+      "name": "IP Token",
+      "symbol": "IP",
+      "decimals": 18
+    },
+    "explorerURL": "https://mainnet.storyscan.xyz",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "story-mainnet"
+  },
+  {
+    "chainId": 1672,
+    "name": "Pharos Mainnet",
+    "nativeCurrency": {
+      "name": "Pharos",
+      "symbol": "PHRS",
+      "decimals": 18
+    },
+    "explorerURL": "https://pharosscan.xyz",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "pharos-mainnet"
+  },
+  {
+    "chainId": 1776,
+    "name": "Injective Mainnet",
+    "nativeCurrency": {
+      "name": "Injective",
+      "symbol": "INJ",
+      "decimals": 18
+    },
+    "explorerURL": "https://blockscout.injective.network",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "injective-mainnet"
+  },
+  {
+    "chainId": 1868,
+    "name": "Soneium",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://soneium.blockscout.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "soneium-mainnet"
+  },
+  {
+    "chainId": 1946,
+    "name": "Soneium Minato",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://soneium-minato.blockscout.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "soneium-minato"
+  },
+  {
+    "chainId": 1952,
+    "name": "X Layer Testnet",
+    "nativeCurrency": {
+      "name": "X Layer Global Utility Token in testnet",
+      "symbol": "OKB",
+      "decimals": 18
+    },
+    "explorerURL": "https://web3.okx.com/explorer/x-layer-testnet",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "xlayer-testnet"
+  },
+  {
+    "chainId": 2020,
+    "name": "Ronin",
+    "nativeCurrency": {
+      "name": "RON",
+      "symbol": "RON",
+      "decimals": 18
+    },
+    "explorerURL": "https://app.roninchain.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "ronin-mainnet"
+  },
+  {
+    "chainId": 2201,
+    "name": "Stable Testnet",
+    "nativeCurrency": {
+      "name": "USDT0",
+      "symbol": "USDT0",
+      "decimals": 18
+    },
+    "explorerURL": "https://testnet.stablescan.xyz",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "stable-testnet"
+  },
+  {
+    "chainId": 2221,
+    "name": "Kava Testnet",
+    "nativeCurrency": {
+      "name": "TKava",
+      "symbol": "TKAVA",
+      "decimals": 18
+    },
+    "explorerURL": "http://testnet.kavascan.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://evm.testnet.kava.io"
+  },
+  {
+    "chainId": 2222,
+    "name": "Kava",
+    "nativeCurrency": {
+      "name": "Kava",
+      "symbol": "KAVA",
+      "decimals": 18
+    },
+    "explorerURL": "https://kavascan.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://evm.kava.io"
+  },
+  {
+    "chainId": 2741,
+    "name": "Abstract",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://abscan.org",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "abstract-mainnet"
+  },
+  {
+    "chainId": 2818,
+    "name": "Morph",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.morphl2.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://rpc.morphl2.io"
+  },
+  {
+    "chainId": 3343,
+    "name": "Edge Mainnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://edge-mainnet.explorer.alchemy.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "edge-mainnet"
+  },
+  {
+    "chainId": 4002,
+    "name": "Fantom Testnet",
+    "nativeCurrency": {
+      "name": "Fantom",
+      "symbol": "FTM",
+      "decimals": 18
+    },
+    "explorerURL": "https://testnet.ftmscan.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://rpc.testnet.fantom.network"
+  },
+  {
+    "chainId": 4114,
+    "name": "Citrea Mainnet",
+    "nativeCurrency": {
+      "name": "Citrea BTC",
+      "symbol": "cBTC",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.mainnet.citrea.xyz",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "citrea-mainnet"
+  },
+  {
+    "chainId": 4153,
+    "name": "Rise Mainnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.risechain.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "rise-mainnet"
+  },
+  {
+    "chainId": 4157,
+    "name": "CrossFi Testnet",
+    "nativeCurrency": {
+      "name": "XFI",
+      "symbol": "XFI",
+      "decimals": 18
+    },
+    "explorerURL": "https://test.xfiscan.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "crossfi-testnet"
+  },
+  {
+    "chainId": 4158,
+    "name": "CrossFi Mainnet",
+    "nativeCurrency": {
+      "name": "CrossFi Token",
+      "symbol": "XFI",
+      "decimals": 18
+    },
+    "explorerURL": "https://xfiscan.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "crossfi-mainnet"
+  },
+  {
+    "chainId": 4217,
+    "name": "Tempo Mainnet Presto",
+    "nativeCurrency": {
+      "name": "No native currency",
+      "symbol": "USD",
+      "decimals": 18
+    },
+    "explorerURL": "https://explore.tempo.xyz",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "tempo-mainnet"
+  },
+  {
+    "chainId": 4326,
+    "name": "MegaETH Mainnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://mega.etherscan.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "megaeth-mainnet"
+  },
+  {
+    "chainId": 4337,
+    "name": "Beam",
+    "nativeCurrency": {
+      "name": "Beam",
+      "symbol": "BEAM",
+      "decimals": 18
+    },
+    "explorerURL": "https://subnets.avax.network/beam",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://subnets.avax.network/beam/mainnet/rpc"
+  },
+  {
+    "chainId": 4663,
+    "name": "Robinhood Chain",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://robinhoodchain.blockscout.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "robinhood-mainnet"
+  },
+  {
+    "chainId": 4801,
+    "name": "World Chain Sepolia",
+    "nativeCurrency": {
+      "name": "Sepolia Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://sepolia.worldscan.org",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "worldchain-sepolia"
+  },
+  {
+    "chainId": 5000,
+    "name": "Mantle",
+    "nativeCurrency": {
+      "name": "Mantle",
+      "symbol": "MNT",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.mantle.xyz",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "mantle-mainnet"
+  },
+  {
+    "chainId": 5001,
+    "name": "Mantle Testnet",
+    "nativeCurrency": {
+      "name": "Testnet Mantle",
+      "symbol": "MNT",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.testnet.mantle.xyz",
+    "isTestnet": true,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://rpc.testnet.mantle.xyz"
+  },
+  {
+    "chainId": 5003,
+    "name": "Mantle Sepolia",
+    "nativeCurrency": {
+      "name": "Sepolia Mantle",
+      "symbol": "MNT",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.sepolia.mantle.xyz",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "mantle-sepolia"
+  },
+  {
+    "chainId": 5115,
+    "name": "Citrea Testnet",
+    "nativeCurrency": {
+      "name": "Citrea BTC",
+      "symbol": "cBTC",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.testnet.citrea.xyz",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "citrea-testnet"
+  },
+  {
+    "chainId": 5330,
+    "name": "Superseed Mainnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.superseed.xyz",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "superseed-mainnet"
+  },
+  {
+    "chainId": 5371,
+    "name": "Settlus Mainnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://mainnet.settlus.network",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "settlus-mainnet"
+  },
+  {
+    "chainId": 5373,
+    "name": "Settlus Sepolia",
+    "nativeCurrency": {
+      "name": "Sepolia Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://sepolia.settlus.network",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "settlus-septestnet"
+  },
+  {
+    "chainId": 5545,
+    "name": "DuckChain Mainnet",
+    "nativeCurrency": {
+      "name": "TON",
+      "symbol": "TON",
+      "decimals": 18
+    },
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://rpc.duckchain.io"
+  },
+  {
+    "chainId": 5611,
+    "name": "opBNB Testnet",
+    "nativeCurrency": {
+      "name": "BNB Chain Native Token",
+      "symbol": "tBNB",
+      "decimals": 18
+    },
+    "explorerURL": "https://opbnb-testnet.bscscan.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "opbnb-testnet"
+  },
+  {
+    "chainId": 6342,
+    "name": "MegaETH Testnet",
+    "nativeCurrency": {
+      "name": "MegaETH Testnet Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "isTestnet": true,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://carrot.megaeth.com/rpc"
+  },
+  {
+    "chainId": 6343,
+    "name": "MegaETH Testnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://testnet-mega.etherscan.io",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "megaeth-testnet"
+  },
+  {
+    "chainId": 6900,
+    "name": "Anime Sepolia",
+    "nativeCurrency": {
+      "name": "Animecoin",
+      "symbol": "ANIME",
+      "decimals": 18
+    },
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "anime-sepolia"
+  },
+  {
+    "chainId": 7000,
+    "name": "ZetaChain Mainnet",
+    "nativeCurrency": {
+      "name": "Zeta",
+      "symbol": "ZETA",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.zetachain.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "zetachain-mainnet"
+  },
+  {
+    "chainId": 7001,
+    "name": "ZetaChain Testnet",
+    "nativeCurrency": {
+      "name": "Zeta",
+      "symbol": "ZETA",
+      "decimals": 18
+    },
+    "explorerURL": "https://testnet.zetascan.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "zetachain-testnet"
+  },
+  {
+    "chainId": 7700,
+    "name": "Canto",
+    "nativeCurrency": {
+      "name": "Canto",
+      "symbol": "CANTO",
+      "decimals": 18
+    },
+    "explorerURL": "https://evm.explorer.canto.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://canto.slingshot.finance"
+  },
+  {
+    "chainId": 8217,
+    "name": "Kaia Mainnet",
+    "nativeCurrency": {
+      "name": "KAIA",
+      "symbol": "KAIA",
+      "decimals": 18
+    },
+    "explorerURL": "https://kaiascan.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "kaia-mainnet"
+  },
+  {
+    "chainId": 8333,
+    "name": "B3",
+    "nativeCurrency": {
+      "name": "ETH",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.b3.fun",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://mainnet-rpc.b3.fun"
+  },
+  {
+    "chainId": 8453,
+    "name": "Base",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://basescan.org",
+    "isTestnet": false,
+    "displayPrice": true,
+    "alchemyNetwork": "base-mainnet"
+  },
+  {
+    "chainId": 9001,
+    "name": "Evmos",
+    "nativeCurrency": {
+      "name": "Evmos",
+      "symbol": "EVMOS",
+      "decimals": 18
+    },
+    "explorerURL": "https://escan.live",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://evmos.lava.build"
+  },
+  {
+    "chainId": 9745,
+    "name": "Plasma Mainnet",
+    "nativeCurrency": {
+      "name": "Plasma",
+      "symbol": "XPL",
+      "decimals": 18
+    },
+    "explorerURL": "https://plasmascan.to",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "plasma-mainnet"
+  },
+  {
+    "chainId": 9746,
+    "name": "Plasma Testnet",
+    "nativeCurrency": {
+      "name": "Testnet Plasma",
+      "symbol": "XPL",
+      "decimals": 18
+    },
+    "explorerURL": "https://testnet.plasmascan.to",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "plasma-testnet"
+  },
+  {
+    "chainId": 10143,
+    "name": "Monad Testnet",
+    "nativeCurrency": {
+      "name": "Testnet MON Token",
+      "symbol": "MON",
+      "decimals": 18
+    },
+    "explorerURL": "https://testnet.monadexplorer.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "monad-testnet"
+  },
+  {
+    "chainId": 10200,
+    "name": "Gnosis Chiado",
+    "nativeCurrency": {
+      "name": "Chiado xDAI",
+      "symbol": "xDai",
+      "decimals": 18
+    },
+    "explorerURL": "https://blockscout.chiadochain.net",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "gnosis-chiado"
+  },
+  {
+    "chainId": 11011,
+    "name": "Shape Sepolia",
+    "nativeCurrency": {
+      "name": "Sepolia Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer-sepolia.shape.network",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "shape-sepolia"
+  },
+  {
+    "chainId": 11124,
+    "name": "Abstract Testnet",
+    "nativeCurrency": {
+      "name": "ETH",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://sepolia.abscan.org",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "abstract-testnet"
+  },
+  {
+    "chainId": 11235,
+    "name": "Haqq Network",
+    "nativeCurrency": {
+      "name": "Islamic Coin",
+      "symbol": "ISLM",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.haqq.network",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://rpc.eth.haqq.network"
+  },
+  {
+    "chainId": 13371,
+    "name": "Immutable zkEVM",
+    "nativeCurrency": {
+      "name": "IMX",
+      "symbol": "IMX",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.immutable.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://rpc.immutable.com"
+  },
+  {
+    "chainId": 14601,
+    "name": "Sonic Testnet",
+    "nativeCurrency": {
+      "name": "Sonic",
+      "symbol": "S",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.testnet.soniclabs.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "sonic-testnet"
+  },
+  {
+    "chainId": 28882,
+    "name": "Boba Sepolia",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://testnet.bobascan.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "boba-sepolia"
+  },
+  {
+    "chainId": 33111,
+    "name": "ApeChain Curtis",
+    "nativeCurrency": {
+      "name": "ApeCoin",
+      "symbol": "APE",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.curtis.apechain.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "apechain-curtis"
+  },
+  {
+    "chainId": 33139,
+    "name": "ApeChain",
+    "nativeCurrency": {
+      "name": "ApeCoin",
+      "symbol": "APE",
+      "decimals": 18
+    },
+    "explorerURL": "https://apescan.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "apechain-mainnet"
+  },
+  {
+    "chainId": 33431,
+    "name": "Edge Testnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://edge-testnet.explorer.alchemy.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "edge-testnet"
+  },
+  {
+    "chainId": 34443,
+    "name": "Mode",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.mode.network",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "mode-mainnet"
+  },
+  {
+    "chainId": 36900,
+    "name": "ADI Mainnet",
+    "nativeCurrency": {
+      "name": "ADI",
+      "symbol": "ADI",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.adifoundation.ai",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "adi-mainnet"
+  },
+  {
+    "chainId": 37111,
+    "name": "Lens Sepolia",
+    "nativeCurrency": {
+      "name": "GRASS",
+      "symbol": "GRASS",
+      "decimals": 18
+    },
+    "explorerURL": "https://block-explorer.testnet.lens.dev",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "lens-sepolia"
+  },
+  {
+    "chainId": 42018,
+    "name": "Mythos Mainnet",
+    "nativeCurrency": {
+      "name": "Mythos",
+      "symbol": "MYTH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.mythos.foundation",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "mythos-mainnet"
+  },
+  {
+    "chainId": 42161,
+    "name": "Arbitrum",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://arbiscan.io",
+    "isTestnet": false,
+    "displayPrice": true,
+    "alchemyNetwork": "arb-mainnet"
+  },
+  {
+    "chainId": 42170,
+    "name": "Arbitrum Nova",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://nova-explorer.arbitrum.io",
+    "isTestnet": false,
+    "displayPrice": true,
+    "fallbackRPCURL": "https://nova.arbitrum.io/rpc"
+  },
+  {
+    "chainId": 42220,
+    "name": "Celo",
+    "nativeCurrency": {
+      "name": "CELO",
+      "symbol": "CELO",
+      "decimals": 18
+    },
+    "explorerURL": "https://celoscan.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "celo-mainnet"
+  },
+  {
+    "chainId": 42431,
+    "name": "Tempo Moderato",
+    "nativeCurrency": {
+      "name": "No native currency",
+      "symbol": "USD",
+      "decimals": 18
+    },
+    "explorerURL": "https://explore.testnet.tempo.xyz",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "tempo-moderato"
+  },
+  {
+    "chainId": 42766,
+    "name": "ZKFair Mainnet",
+    "nativeCurrency": {
+      "name": "USDC Token",
+      "symbol": "USDC",
+      "decimals": 18
+    },
+    "explorerURL": "https://scan.zkfair.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://rpc.zkfair.io"
+  },
+  {
+    "chainId": 43113,
+    "name": "Avalanche Fuji",
+    "nativeCurrency": {
+      "name": "Avalanche",
+      "symbol": "AVAX",
+      "decimals": 18
+    },
+    "explorerURL": "https://testnet.snowtrace.io",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "avax-fuji"
+  },
+  {
+    "chainId": 43114,
+    "name": "Avalanche",
+    "nativeCurrency": {
+      "name": "Avalanche",
+      "symbol": "AVAX",
+      "decimals": 18
+    },
+    "explorerURL": "https://snowtrace.io",
+    "isTestnet": false,
+    "displayPrice": true,
+    "alchemyNetwork": "avax-mainnet"
+  },
+  {
+    "chainId": 43288,
+    "name": "Boba Avax",
+    "nativeCurrency": {
+      "name": "Boba Token",
+      "symbol": "BOBA",
+      "decimals": 18
+    },
+    "explorerURL": "https://blockexplorer.avax.boba.network",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://avax.boba.network"
+  },
+  {
+    "chainId": 44787,
+    "name": "Celo Alfajores Testnet",
+    "nativeCurrency": {
+      "name": "CELO",
+      "symbol": "CELO",
+      "decimals": 18
+    },
+    "explorerURL": "https://alfajores.celoscan.io",
+    "isTestnet": true,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://alfajores-forno.celo-testnet.org"
+  },
+  {
+    "chainId": 46630,
+    "name": "Robinhood Chain Testnet",
+    "nativeCurrency": {
+      "name": "Sepolia Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.testnet.chain.robinhood.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "robinhood-testnet"
+  },
+  {
+    "chainId": 53302,
+    "name": "Superseed Sepolia",
+    "nativeCurrency": {
+      "name": "Sepolia Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://sepolia-explorer.superseed.xyz",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "superseed-sepolia"
+  },
+  {
+    "chainId": 56288,
+    "name": "Boba BNB Mainnet",
+    "nativeCurrency": {
+      "name": "Boba Token",
+      "symbol": "BOBA",
+      "decimals": 18
+    },
+    "explorerURL": "https://blockexplorer.bnb.boba.network",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://bnb.boba.network"
+  },
+  {
+    "chainId": 57073,
+    "name": "Ink",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.inkonchain.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "ink-mainnet"
+  },
+  {
+    "chainId": 58008,
+    "name": "Public Goods Network Sepolia",
+    "nativeCurrency": {
+      "name": "Sepolia Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.sepolia.publicgoods.network",
+    "isTestnet": true,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://sepolia.publicgoods.network"
+  },
+  {
+    "chainId": 59140,
+    "name": "Linea Testnet",
+    "nativeCurrency": {
+      "name": "Linea Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://goerli.lineascan.build",
+    "isTestnet": true,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://rpc.goerli.linea.build"
+  },
+  {
+    "chainId": 59141,
+    "name": "Linea Sepolia",
+    "nativeCurrency": {
+      "name": "Linea Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://sepolia.lineascan.build",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "linea-sepolia"
+  },
+  {
+    "chainId": 59144,
+    "name": "Linea",
+    "nativeCurrency": {
+      "name": "Linea Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://lineascan.build",
+    "isTestnet": false,
+    "displayPrice": true,
+    "alchemyNetwork": "linea-mainnet"
+  },
+  {
+    "chainId": 60808,
+    "name": "BOB Mainnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.gobob.xyz",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "bob-mainnet"
+  },
+  {
+    "chainId": 69000,
+    "name": "Anime Mainnet",
+    "nativeCurrency": {
+      "name": "Animecoin",
+      "symbol": "ANIME",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.anime.xyz",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "anime-mainnet"
+  },
+  {
+    "chainId": 80001,
+    "name": "Polygon Mumbai",
+    "nativeCurrency": {
+      "name": "MATIC",
+      "symbol": "MATIC",
+      "decimals": 18
+    },
+    "explorerURL": "https://mumbai.polygonscan.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://polygon-testnet.public.blastapi.io"
+  },
+  {
+    "chainId": 80002,
+    "name": "Amoy",
+    "nativeCurrency": {
+      "name": "POL",
+      "symbol": "POL",
+      "decimals": 18
+    },
+    "explorerURL": "https://www.oklink.com/amoy",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "polygon-amoy"
+  },
+  {
+    "chainId": 80069,
+    "name": "Berachain Bepolia",
+    "nativeCurrency": {
+      "name": "Testnet BERA Token",
+      "symbol": "BERA",
+      "decimals": 18
+    },
+    "explorerURL": "https://bepolia.beratrail.io",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "berachain-bepolia"
+  },
+  {
+    "chainId": 80094,
+    "name": "Berachain",
+    "nativeCurrency": {
+      "name": "BERA Token",
+      "symbol": "BERA",
+      "decimals": 18
+    },
+    "explorerURL": "https://berascan.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "berachain-mainnet"
+  },
+  {
+    "chainId": 81457,
+    "name": "Blast",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://blastscan.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "blast-mainnet"
+  },
+  {
+    "chainId": 84531,
+    "name": "Base Goerli",
+    "nativeCurrency": {
+      "name": "Goerli Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://goerli.basescan.org",
+    "isTestnet": true,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://goerli.base.org"
+  },
+  {
+    "chainId": 84532,
+    "name": "Base Sepolia",
+    "nativeCurrency": {
+      "name": "Sepolia Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://base-sepolia.blockscout.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "base-sepolia"
+  },
+  {
+    "chainId": 99999,
+    "name": "ADI Testnet AB",
+    "nativeCurrency": {
+      "name": "ADI",
+      "symbol": "ADI",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.ab.testnet.adifoundation.ai",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "adi-testnet"
+  },
+  {
+    "chainId": 167000,
+    "name": "Taiko Mainnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://taikoscan.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://rpc.mainnet.taiko.xyz",
+    "accountDisabledAlchemyNetwork": "taiko-mainnet"
+  },
+  {
+    "chainId": 202601,
+    "name": "Ronin Saigon",
+    "nativeCurrency": {
+      "name": "Ronin",
+      "symbol": "RON",
+      "decimals": 18
+    },
+    "explorerURL": "https://saigon-explorer.roninchain.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "ronin-saigon"
+  },
+  {
+    "chainId": 323432,
+    "name": "World Mobile Testnet",
+    "nativeCurrency": {
+      "name": "ATestingToken",
+      "symbol": "WOMOX",
+      "decimals": 18
+    },
+    "explorerURL": "https://testnet-explorer.worldmobile.net",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "worldmobile-testnet"
+  },
+  {
+    "chainId": 421613,
+    "name": "Arbitrum Goerli",
+    "nativeCurrency": {
+      "name": "Arbitrum Goerli Ether",
+      "symbol": "AGOR",
+      "decimals": 18
+    },
+    "explorerURL": "https://goerli.arbiscan.io",
+    "isTestnet": true,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://goerli-rollup.arbitrum.io/rpc"
+  },
+  {
+    "chainId": 421614,
+    "name": "Arbitrum Sepolia",
+    "nativeCurrency": {
+      "name": "Sepolia Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://sepolia-explorer.arbitrum.io",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "arb-sepolia"
+  },
+  {
+    "chainId": 534351,
+    "name": "Scroll Sepolia",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://sepolia.scrollscan.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "scroll-sepolia"
+  },
+  {
+    "chainId": 534352,
+    "name": "Scroll",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://scrollscan.com",
+    "isTestnet": false,
+    "displayPrice": true,
+    "alchemyNetwork": "scroll-mainnet"
+  },
+  {
+    "chainId": 560048,
+    "name": "Ethereum Hoodi",
+    "nativeCurrency": {
+      "name": "Hoodi Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://light-hoodi.beaconcha.in",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "eth-hoodi"
+  },
+  {
+    "chainId": 613419,
+    "name": "Galactica Mainnet",
+    "nativeCurrency": {
+      "name": "Galactica Network Token",
+      "symbol": "GNET",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.galactica.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "galactica-mainnet"
+  },
+  {
+    "chainId": 685685,
+    "name": "Gensyn Testnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://gensyn-testnet.explorer.alchemy.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "gensyn-testnet"
+  },
+  {
+    "chainId": 685689,
+    "name": "Gensyn Mainnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://gensyn-mainnet.explorer.alchemy.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "gensyn-mainnet"
+  },
+  {
+    "chainId": 688689,
+    "name": "Pharos Atlantic",
+    "nativeCurrency": {
+      "name": "Pharos",
+      "symbol": "PHRS",
+      "decimals": 18
+    },
+    "explorerURL": "https://atlantic.pharosscan.xyz",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "pharos-atlantic"
+  },
+  {
+    "chainId": 737373,
+    "name": "Katana Bokuto",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://bokuto.katanascan.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "katana-bokuto"
+  },
+  {
+    "chainId": 747474,
+    "name": "Katana Mainnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://katanascan.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "katana-mainnet"
+  },
+  {
+    "chainId": 763373,
+    "name": "Ink Sepolia",
+    "nativeCurrency": {
+      "name": "Sepolia Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer-sepolia.inkonchain.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "ink-sepolia"
+  },
+  {
+    "chainId": 808813,
+    "name": "BOB Sepolia",
+    "nativeCurrency": {
+      "name": "Sepolia Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://bob-sepolia.explorer.gobob.xyz",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "bob-sepolia"
+  },
+  {
+    "chainId": 810180,
+    "name": "zkLink Nova Mainnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.zklink.io",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://rpc.zklink.io"
+  },
+  {
+    "chainId": 843843,
+    "name": "Galactica Cassiopeia",
+    "nativeCurrency": {
+      "name": "Galactica Network Token",
+      "symbol": "GNET",
+      "decimals": 18
+    },
+    "explorerURL": "https://galactica-cassiopeia.explorer.alchemy.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "galactica-cassiopeia"
+  },
+  {
+    "chainId": 2019775,
+    "name": "Jovay Testnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://sepolia-explorer.jovay.io/l2",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "jovay-testnet"
+  },
+  {
+    "chainId": 5042002,
+    "name": "Arc Testnet",
+    "nativeCurrency": {
+      "name": "USDC",
+      "symbol": "USDC",
+      "decimals": 18
+    },
+    "explorerURL": "https://testnet.arcscan.app",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "arc-testnet"
+  },
+  {
+    "chainId": 5734951,
+    "name": "Jovay Mainnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.jovay.io/l2",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "jovay-mainnet"
+  },
+  {
+    "chainId": 6985385,
+    "name": "Humanity Mainnet",
+    "nativeCurrency": {
+      "name": "H",
+      "symbol": "H",
+      "decimals": 18
+    },
+    "explorerURL": "https://humanity-mainnet.explorer.alchemy.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "humanity-mainnet"
+  },
+  {
+    "chainId": 7080969,
+    "name": "Humanity Testnet",
+    "nativeCurrency": {
+      "name": "tHP",
+      "symbol": "tHP",
+      "decimals": 18
+    },
+    "explorerURL": "https://humanity-testnet.explorer.alchemy.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "humanity-testnet"
+  },
+  {
+    "chainId": 7777777,
+    "name": "Zora",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.zora.energy",
+    "isTestnet": false,
+    "displayPrice": true,
+    "alchemyNetwork": "zora-mainnet"
+  },
+  {
+    "chainId": 11142220,
+    "name": "Celo Sepolia",
+    "nativeCurrency": {
+      "name": "CELO",
+      "symbol": "CELO",
+      "decimals": 18
+    },
+    "explorerURL": "https://celo-sepolia.blockscout.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "celo-sepolia"
+  },
+  {
+    "chainId": 11155111,
+    "name": "Sepolia",
+    "nativeCurrency": {
+      "name": "Sepolia Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://sepolia.etherscan.io",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "eth-sepolia"
+  },
+  {
+    "chainId": 11155420,
+    "name": "OP Sepolia Testnet",
+    "nativeCurrency": {
+      "name": "Sepolia Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://optimism-sepolia.blockscout.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "opt-sepolia"
+  },
+  {
+    "chainId": 11155931,
+    "name": "Rise Testnet",
+    "nativeCurrency": {
+      "name": "RISE Testnet Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.testnet.riselabs.xyz",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "rise-testnet"
+  },
+  {
+    "chainId": 68840142,
+    "name": "Frame Testnet",
+    "nativeCurrency": {
+      "name": "Sepolia Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.testnet.frame.xyz",
+    "isTestnet": true,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://rpc.testnet.frame.xyz/http"
+  },
+  {
+    "chainId": 168587773,
+    "name": "Blast Sepolia",
+    "nativeCurrency": {
+      "name": "Sepolia Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://testnet.blastscan.io",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "blast-sepolia"
+  },
+  {
+    "chainId": 245022926,
+    "name": "Neon EVM DevNet",
+    "nativeCurrency": {
+      "name": "Neon",
+      "symbol": "NEON",
+      "decimals": 18
+    },
+    "explorerURL": "https://devnet.neonscan.org",
+    "isTestnet": true,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://devnet.neonevm.org"
+  },
+  {
+    "chainId": 245022934,
+    "name": "Neon EVM",
+    "nativeCurrency": {
+      "name": "Neon",
+      "symbol": "NEON",
+      "decimals": 18
+    },
+    "explorerURL": "https://neonscan.org",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://neon-proxy-mainnet.solana.p2p.org/"
+  },
+  {
+    "chainId": 351243127,
+    "name": "XMTP Ropsten",
+    "nativeCurrency": {
+      "name": "Ropsten Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "xmtp-ropsten"
+  },
+  {
+    "chainId": 666666666,
+    "name": "Degen Chain",
+    "nativeCurrency": {
+      "name": "DEGEN",
+      "symbol": "DEGEN",
+      "decimals": 18
+    },
+    "isTestnet": false,
+    "displayPrice": false,
+    "alchemyNetwork": "degen-mainnet"
+  },
+  {
+    "chainId": 999999999,
+    "name": "Zora Sepolia",
+    "nativeCurrency": {
+      "name": "Sepolia Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://sepolia.explorer.zora.energy",
+    "isTestnet": true,
+    "displayPrice": false,
+    "alchemyNetwork": "zora-sepolia"
+  },
+  {
+    "chainId": 1313161554,
+    "name": "Aurora",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://aurorascan.dev",
+    "isTestnet": false,
+    "displayPrice": true,
+    "fallbackRPCURL": "https://mainnet.aurora.dev"
+  },
+  {
+    "chainId": 1313161555,
+    "name": "Aurora Testnet",
+    "nativeCurrency": {
+      "name": "Ether",
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    "explorerURL": "https://testnet.aurorascan.dev",
+    "isTestnet": true,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://testnet.aurora.dev/"
+  },
+  {
+    "chainId": 1666600000,
+    "name": "Harmony",
+    "nativeCurrency": {
+      "name": "ONE",
+      "symbol": "ONE",
+      "decimals": 18
+    },
+    "explorerURL": "https://explorer.harmony.one",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://api.harmony.one"
+  },
+  {
+    "chainId": 11297108099,
+    "name": "Palm Testnet",
+    "nativeCurrency": {
+      "name": "PALM",
+      "symbol": "PALM",
+      "decimals": 18
+    },
+    "explorerURL": "https://testnet.palm.chainlens.com",
+    "isTestnet": true,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://palm-testnet.public.blastapi.io"
+  },
+  {
+    "chainId": 11297108109,
+    "name": "Palm",
+    "nativeCurrency": {
+      "name": "PALM",
+      "symbol": "PALM",
+      "decimals": 18
+    },
+    "explorerURL": "https://palm.chainlens.com",
+    "isTestnet": false,
+    "displayPrice": false,
+    "fallbackRPCURL": "https://palm-mainnet.public.blastapi.io"
+  }
+]

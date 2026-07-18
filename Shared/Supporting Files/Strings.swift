@@ -76,7 +76,7 @@ struct Strings {
     static let switchAccount = loc("Switch Account")
     static let rawSolanaTransactionWarning = loc("Raw Solana transaction. Big Wallet cannot display decoded instructions for this request. Only approve if you trust this website and expected this transaction.")
     static let suggestedByWebsite = loc("Suggested by website")
-    static let configuredRPC = loc("Configured RPC")
+    static let alchemyRPC = loc("Alchemy RPC")
     static let publicRPC = loc("Public RPC")
     static let solanaBlockhashNotFound = loc("Solana blockhash not found. Check the selected network and try again.")
     static let solanaConfirmationTimedOut = loc("Solana transaction was sent, but confirmation timed out.")

@@ -9,7 +9,9 @@ private enum HandlerError: Error {
 }
 
 class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
-    
+
+    private static let rpcClient = SafariRPCClient()
+
     func beginRequest(with context: NSExtensionContext) {
         guard let item = context.inputItems[0] as? NSExtensionItem,
               let message = item.userInfo?[SFExtensionMessageKey],
@@ -30,7 +32,12 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             case .getResponse:
                 if let response = ExtensionBridge.getResponse(id: id) {
                     ExtensionBridge.removeResponse(id: id)
-                    respond(with: response, context: context)
+                    if response["name"] as? String ==
+                        SafariRequest.Ethereum.Method.addEthereumChain.rawValue,
+                       response["error"] == nil {
+                        CustomNetworkCache.shared.invalidate()
+                    }
+                    Self.respond(with: response, context: context)
                 } else {
                     context.cancelRequest(withError: HandlerError.empty)
                 }
@@ -42,14 +49,15 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                   let request = SafariRequest(query: query),
                   let url = SafariRequest.appRequestURL(query: query) {
             if case let .ethereum(ethereumRequest) = request.body, ethereumRequest.method == .switchEthereumChain {
-                if let switchToChainId = ethereumRequest.switchToChainId, Nodes.knowsNode(chainId: switchToChainId) {
+                if let switchToChainId = ethereumRequest.switchToChainId,
+                   Nodes.url(chainId: switchToChainId) != nil {
                     let chainId = String.hex(switchToChainId, withPrefix: true)
                     let responseBody = ResponseToExtension.Ethereum(results: [ethereumRequest.address], chainId: chainId)
                     let response = ResponseToExtension(for: request, body: .ethereum(responseBody))
-                    respond(with: response.json, context: context)
+                    Self.respond(with: response.json, context: context)
                 } else {
                     let response = ResponseToExtension(for: request, error: "failed to switch chain")
-                    respond(with: response.json, context: context)
+                    Self.respond(with: response.json, context: context)
                 }
             } else {
                 ExtensionBridge.makeRequest(id: request.id)
@@ -86,38 +94,26 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     
     private func rpcRequest(id: Int, chainId: String, body: String, context: NSExtensionContext) {
         guard let chainIdNumber = Int(hexString: chainId),
-              let rpcURLString = Nodes.getNode(chainId: chainIdNumber),
-              let url = URL(string: rpcURLString),
+              let url = Nodes.url(chainId: chainIdNumber),
               let httpBody = body.data(using: .utf8) else {
-            respond(with: ["id": id, "error": "something went wrong"], context: context)
+            Self.respond(with: ["id": id, "error": "something went wrong"], context: context)
             return
         }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = httpBody
-        rpcRequestResponseContext = context
-        
-        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            if let data = data, var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+
+        Self.rpcClient.send(url: url, body: httpBody) { response in
+            if var json = response {
                 if json["id"] == nil { json["id"] = id }
-                self?.respond(with: json, context: nil)
+                Self.respond(with: json, context: context)
             } else {
-                self?.respond(with: ["id": id, "error": "something went wrong"], context: nil)
+                Self.respond(with: ["id": id, "error": "something went wrong"], context: context)
             }
         }
-        task.resume()
     }
     
-    private var rpcRequestResponseContext: NSExtensionContext?
-    
-    private func respond(with response: [String: Any], context: NSExtensionContext?) {
+    private static func respond(with response: [String: Any], context: NSExtensionContext) {
         let item = NSExtensionItem()
         item.userInfo = [SFExtensionMessageKey: response]
-        (context ?? rpcRequestResponseContext)?.completeRequest(returningItems: [item], completionHandler: nil)
-        rpcRequestResponseContext = nil
+        context.completeRequest(returningItems: [item], completionHandler: nil)
     }
 
 #if os(macOS)

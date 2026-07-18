@@ -7,6 +7,7 @@ struct DappRequestProcessor {
     private static let walletsManager = WalletsManager.shared
     private static let ethereum = Ethereum.shared
     private static let solana = Solana.shared
+    private static let approvedEthereumChainAdditionLock = NSLock()
 
     private struct PreparedSolanaSigningPayload {
         let messageData: Data
@@ -64,6 +65,8 @@ struct DappRequestProcessor {
                     return .init(message: Strings.failedToSend, code: 4200)
                 case .rpcError(let message, let code):
                     return .init(message: message, code: code ?? -32003)
+                case .rpcUnavailable:
+                    return .init(message: Strings.somethingWentWrong, code: -32603)
                 case .unknown:
                     return .init(message: Strings.failedToSend, code: -32003)
                 }
@@ -538,19 +541,39 @@ struct DappRequestProcessor {
 
         switch ethereumRequest.method {
         case .addEthereumChain:
-            if let chainToAdd = EthereumNetworkFromDapp.from(ethereumRequest.parameters) {
-                if let chainId = Int(hexString: chainToAdd.chainId), Nodes.knowsNode(chainId: chainId) {
+            if let chainToAdd = EthereumNetworkFromDapp.from(ethereumRequest.parameters),
+               let chainId = Int(hexString: chainToAdd.chainId),
+               chainId > 0 {
+                switch Nodes.resolution(chainId: chainId) {
+                case .resolved:
                     let responseBody = ResponseToExtension.Ethereum(results: [ethereumRequest.address], chainId: chainToAdd.chainId)
                     respond(to: request, body: .ethereum(responseBody), completion: completion)
-                } else {
+                case .catalogOwnedButUnavailable:
+                    respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+                case .unknown:
+                    guard chainToAdd.defaultRpcURL != nil else {
+                        respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+                        break
+                    }
                     let action = AddEthereumChainAction(chainToAdd: chainToAdd) { didApprove in
-                        if didApprove {
-                            Networks.add(networkFromDapp: chainToAdd)
-                            let responseBody = ResponseToExtension.Ethereum(results: [ethereumRequest.address], chainId: chainToAdd.chainId)
-                            respond(to: request, body: .ethereum(responseBody), completion: completion)
-                        } else {
+                        guard didApprove else {
                             respond(to: request, error: Strings.canceled, completion: completion)
+                            return
                         }
+                        let didCompleteAddition = completeApprovedEthereumChainAddition(
+                            resolution: { Nodes.resolution(chainId: chainId) },
+                            persist: { Networks.add(networkFromDapp: chainToAdd) }
+                        )
+                        guard didCompleteAddition else {
+                            respond(to: request, error: Strings.somethingWentWrong, completion: completion)
+                            return
+                        }
+
+                        let responseBody = ResponseToExtension.Ethereum(
+                            results: [ethereumRequest.address],
+                            chainId: chainToAdd.chainId
+                        )
+                        respond(to: request, body: .ethereum(responseBody), completion: completion)
                     }
                     return .addEthereumChain(action)
                 }
@@ -660,6 +683,27 @@ struct DappRequestProcessor {
         return .none
     }
 
+    static func completeApprovedEthereumChainAddition(
+        resolution: () -> EthereumNetworkResolution,
+        persist: () -> Bool
+    ) -> Bool {
+        approvedEthereumChainAdditionLock.lock()
+        defer { approvedEthereumChainAdditionLock.unlock() }
+
+        switch resolution() {
+        case .resolved:
+            return true
+        case .catalogOwnedButUnavailable:
+            return false
+        case .unknown:
+            guard persist(),
+                  case .resolved = resolution() else {
+                return false
+            }
+            return true
+        }
+    }
+
     private static func ethereumPrivateKey(walletId: String, account: WalletAccount, request: SafariRequest, completion: (String?) -> Void) -> WalletPrivateKey? {
         guard let privateKey = walletsManager.getPrivateKey(walletId: walletId, account: account) else {
             respond(to: request, error: Strings.failedToSign, completion: completion)
@@ -706,9 +750,11 @@ struct DappRequestProcessor {
         }
     }
 
-    private static func selectedAccountResponseBody(for account: WalletAccount, chain: EthereumNetwork) -> ResponseToExtension.Body? {
-        if let responseBody = ethereumResponseBody(for: account, chain: chain) {
-            return responseBody
+    private static func selectedAccountResponseBody(for account: WalletAccount,
+                                                    chain: EthereumNetwork?) -> ResponseToExtension.Body? {
+        if account.coin == .ethereum {
+            guard let chain else { return nil }
+            return ethereumResponseBody(for: account, chain: chain)
         }
         return solanaResponseBody(for: account)
     }
