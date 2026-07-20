@@ -167,11 +167,12 @@ must deny group and world access, and the JSON file mode must be exactly
 
 Keep the same canonical proof key in a separate user-owned mode-`0600`,
 non-symlink regular file inside an owner-only directory outside this
-repository. Supply that file to Xcode through
-`ALCHEMY_JWT_REQUEST_PROOF_KEY_FILE`; the file may contain the 43 characters
-alone or one trailing LF. The key is necessarily present in the shipped
-app, but the source file and Wrangler bundle must still remain out of version
-control and logs.
+repository. Local Xcode and ASC workflows currently default to
+`/Users/ivan/Developer/secrets/tools/ALCHEMY_JWT_REQUEST_PROOF_KEY`; an explicit
+`ALCHEMY_JWT_REQUEST_PROOF_KEY_FILE` may override that path for ASC. The file
+may contain the 43 characters alone or one trailing LF. The key is necessarily
+present in the shipped app, but the source file and Wrangler bundle must still
+remain out of version control and logs.
 
 The tracked
 `Scripts/alchemy_jwt_request_proof_key.sha256` file contains the lowercase
