@@ -21,7 +21,7 @@ inpage_provider_prepare_tool_path() {
     inpage_provider_append_tool_path /usr/local/bin
 
     if [ -n "$inpage_provider_tool_path" ]; then
-        PATH="$inpage_provider_tool_path:$PATH"
+        PATH="$PATH:$inpage_provider_tool_path"
     fi
     export PATH
 }

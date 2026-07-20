@@ -31,11 +31,19 @@ export const PRODUCTION_WRANGLER_CONFIG_PATH = fileURLToPath(
 export const PINNED_WRANGLER_PATH = fileURLToPath(
   new URL("../node_modules/wrangler/bin/wrangler.js", import.meta.url),
 );
+export const PINNED_WRANGLER_VERSION = "4.112.0";
 
 const WORKER_NAME_PATTERN =
   /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
+const CLOUDFLARE_ACCOUNT_ID_PATTERN = /^[0-9a-f]{32}$/u;
 const MAX_CONFIGURATION_BYTES = 1_024 * 1_024;
 const MAX_SNAPSHOT_FILE_BYTES = 8 * 1_024 * 1_024;
+const PRINTABLE_API_TOKEN = /^[\u0021-\u007e]{1,4096}$/u;
+const LEGACY_CLOUDFLARE_CREDENTIALS = new Set([
+  "CLOUDFLARE_API_KEY",
+  "CLOUDFLARE_API_USER_SERVICE_KEY",
+  "CLOUDFLARE_EMAIL",
+]);
 const EXCLUDED_SNAPSHOT_ROOTS = new Set([
   ".git",
   ".wrangler",
@@ -44,14 +52,7 @@ const EXCLUDED_SNAPSHOT_ROOTS = new Set([
   "node_modules",
 ]);
 const ENVIRONMENT_ALLOWLIST = new Set([
-  "CLOUDFLARE_API_KEY",
-  "CLOUDFLARE_API_TOKEN",
-  "CLOUDFLARE_API_USER_SERVICE_KEY",
-  "CLOUDFLARE_EMAIL",
   "COMSPEC",
-  "HOMEDRIVE",
-  "HOME",
-  "HOMEPATH",
   "LANG",
   "LC_ALL",
   "LC_CTYPE",
@@ -66,9 +67,7 @@ const ENVIRONMENT_ALLOWLIST = new Set([
   "TMP",
   "TMPDIR",
   "USER",
-  "USERPROFILE",
   "WINDIR",
-  "XDG_CONFIG_HOME",
 ]);
 const FORCED_ENVIRONMENT = {
   CI: "1",
@@ -97,6 +96,42 @@ function isPlainObject(value) {
     !Array.isArray(value) &&
     Object.getPrototypeOf(value) === Object.prototype
   );
+}
+
+function hasExactKeys(value, expectedKeys) {
+  if (!isPlainObject(value)) {
+    return false;
+  }
+  const actualKeys = Object.keys(value).sort();
+  const sortedExpectedKeys = [...expectedKeys].sort();
+  return (
+    actualKeys.length === sortedExpectedKeys.length &&
+    actualKeys.every(
+      (key, index) => key === sortedExpectedKeys[index],
+    )
+  );
+}
+
+export function assertProductionObservabilityPolicy(config) {
+  const observability = config?.observability;
+  const logs = observability?.logs;
+  const traces = observability?.traces;
+  if (
+    !hasExactKeys(observability, ["enabled", "logs", "traces"]) ||
+    observability.enabled !== true ||
+    !hasExactKeys(logs, [
+      "enabled",
+      "head_sampling_rate",
+      "invocation_logs",
+    ]) ||
+    logs.enabled !== true ||
+    logs.head_sampling_rate !== 1 ||
+    logs.invocation_logs !== false ||
+    !hasExactKeys(traces, ["enabled"]) ||
+    traces.enabled !== false
+  ) {
+    throw fail("production Wrangler observability policy is invalid");
+  }
 }
 
 function sameFileIdentity(first, second) {
@@ -386,9 +421,37 @@ export function isValidWorkerName(value) {
 }
 
 export function productionWranglerEnvironment(parentEnvironment) {
+  if (
+    typeof parentEnvironment !== "object" ||
+    parentEnvironment === null ||
+    Array.isArray(parentEnvironment) ||
+    typeof parentEnvironment.CLOUDFLARE_API_TOKEN !== "string" ||
+    !PRINTABLE_API_TOKEN.test(
+      parentEnvironment.CLOUDFLARE_API_TOKEN,
+    )
+  ) {
+    throw fail(
+      "CLOUDFLARE_API_TOKEN is required for production Wrangler commands",
+    );
+  }
   const childEnvironment = {};
   for (const [name, value] of Object.entries(parentEnvironment)) {
     const canonicalName = name.toUpperCase();
+    if (
+      (
+        LEGACY_CLOUDFLARE_CREDENTIALS.has(canonicalName) ||
+        (
+          canonicalName === "CLOUDFLARE_API_TOKEN" &&
+          name !== canonicalName
+        )
+      ) &&
+      typeof value === "string" &&
+      value !== ""
+    ) {
+      throw fail(
+        "legacy or ambiguous Cloudflare credentials are not supported",
+      );
+    }
     if (
       ENVIRONMENT_ALLOWLIST.has(canonicalName) &&
       typeof value === "string"
@@ -398,6 +461,7 @@ export function productionWranglerEnvironment(parentEnvironment) {
   }
   return {
     ...childEnvironment,
+    CLOUDFLARE_API_TOKEN: parentEnvironment.CLOUDFLARE_API_TOKEN,
     ...FORCED_ENVIRONMENT,
   };
 }
@@ -422,6 +486,7 @@ export async function loadProductionWranglerContract({
     const afterDigest = digest(after.bytes);
     const rawConfig = result?.rawConfig;
     const workerName = rawConfig?.name;
+    const accountId = rawConfig?.account_id;
     if (
       !sameFileIdentity(before.stats, after.stats) ||
       !stableFileMetadata(before.stats, after.stats) ||
@@ -434,14 +499,20 @@ export async function loadProductionWranglerContract({
       !isPlainObject(exactConfig) ||
       !isPlainObject(rawConfig) ||
       !isValidWorkerName(workerName) ||
-      exactConfig.name !== workerName
+      exactConfig.name !== workerName ||
+      typeof accountId !== "string" ||
+      !CLOUDFLARE_ACCOUNT_ID_PATTERN.test(accountId) ||
+      exactConfig.account_id !== accountId
     ) {
       throw fail("production Wrangler configuration is invalid");
     }
+    assertProductionObservabilityPolicy(exactConfig);
+    assertProductionObservabilityPolicy(rawConfig);
     return {
       configPath,
       configBytes: Buffer.from(before.bytes),
       workerName,
+      accountId,
       rawConfig,
     };
   } catch (error) {
@@ -466,12 +537,14 @@ function isExcludedSnapshotPath(
   sourceRoot,
   configPath,
   temporaryDirectory,
+  excludedPaths,
 ) {
   const exactPath = resolve(sourcePath);
   if (
     exactPath === resolve(configPath) ||
     exactPath === resolve(temporaryDirectory) ||
-    exactPath.startsWith(`${resolve(temporaryDirectory)}${sep}`)
+    exactPath.startsWith(`${resolve(temporaryDirectory)}${sep}`) ||
+    excludedPaths.has(exactPath)
   ) {
     return true;
   }
@@ -494,6 +567,8 @@ async function copyProtectedDirectory({
   sourceRoot,
   configPath,
   temporaryDirectory,
+  excludedPaths,
+  sourceManifest,
 }) {
   const before = await lstat(sourceDirectory);
   if (!before.isDirectory() || before.isSymbolicLink()) {
@@ -511,6 +586,7 @@ async function copyProtectedDirectory({
         sourceRoot,
         configPath,
         temporaryDirectory,
+        excludedPaths,
       )
     ) {
       continue;
@@ -524,6 +600,8 @@ async function copyProtectedDirectory({
         sourceRoot,
         configPath,
         temporaryDirectory,
+        excludedPaths,
+        sourceManifest,
       });
       continue;
     }
@@ -540,10 +618,232 @@ async function copyProtectedDirectory({
       source.bytes,
       (source.stats.mode & 0o111) === 0 ? 0o600 : 0o700,
     );
+    sourceManifest.set(relative(sourceRoot, sourcePath), {
+      kind: "file",
+      stats: source.stats,
+      digest: digest(source.bytes),
+    });
   }
   const after = await lstat(sourceDirectory);
   if (!stableFileMetadata(before, after)) {
     throw fail("Worker source changed while it was snapshotted");
+  }
+  sourceManifest.set(relative(sourceRoot, sourceDirectory), {
+    kind: "directory",
+    stats: after,
+  });
+}
+
+function matchingDigest(first, second) {
+  return (
+    first.byteLength === second.byteLength &&
+    timingSafeEqual(first, second)
+  );
+}
+
+async function verifySourceDirectory({
+  sourceDirectory,
+  sourceRoot,
+  configPath,
+  temporaryDirectory,
+  excludedPaths,
+  sourceManifest,
+  observedPaths,
+}) {
+  const before = await lstat(sourceDirectory);
+  const directoryPath = relative(sourceRoot, sourceDirectory);
+  const expectedDirectory = sourceManifest.get(directoryPath);
+  if (
+    !before.isDirectory() ||
+    before.isSymbolicLink() ||
+    expectedDirectory?.kind !== "directory" ||
+    !stableFileMetadata(expectedDirectory.stats, before)
+  ) {
+    throw fail("Worker source changed while it was snapshotted");
+  }
+  observedPaths.add(directoryPath);
+
+  const entries = await readdir(sourceDirectory, { withFileTypes: true });
+  entries.sort((first, second) => first.name.localeCompare(second.name));
+  for (const entry of entries) {
+    const sourcePath = join(sourceDirectory, entry.name);
+    if (
+      isExcludedSnapshotPath(
+        sourcePath,
+        sourceRoot,
+        configPath,
+        temporaryDirectory,
+        excludedPaths,
+      )
+    ) {
+      continue;
+    }
+    const relativePath = relative(sourceRoot, sourcePath);
+    const stats = await lstat(sourcePath);
+    if (stats.isDirectory() && !stats.isSymbolicLink()) {
+      await verifySourceDirectory({
+        sourceDirectory: sourcePath,
+        sourceRoot,
+        configPath,
+        temporaryDirectory,
+        excludedPaths,
+        sourceManifest,
+        observedPaths,
+      });
+      continue;
+    }
+    if (!stats.isFile() || stats.isSymbolicLink()) {
+      throw fail("Worker source changed while it was snapshotted");
+    }
+    const expectedFile = sourceManifest.get(relativePath);
+    const source = await readStableRegularFile(
+      sourcePath,
+      MAX_SNAPSHOT_FILE_BYTES,
+    );
+    if (
+      expectedFile?.kind !== "file" ||
+      !stableFileMetadata(expectedFile.stats, source.stats) ||
+      !matchingDigest(expectedFile.digest, digest(source.bytes))
+    ) {
+      throw fail("Worker source changed while it was snapshotted");
+    }
+    observedPaths.add(relativePath);
+  }
+
+  const after = await lstat(sourceDirectory);
+  if (!stableFileMetadata(before, after)) {
+    throw fail("Worker source changed while it was snapshotted");
+  }
+}
+
+async function verifySourceTree({
+  sourceRoot,
+  configPath,
+  temporaryDirectory,
+  excludedPaths,
+  sourceManifest,
+}) {
+  const observedPaths = new Set();
+  await verifySourceDirectory({
+    sourceDirectory: sourceRoot,
+    sourceRoot,
+    configPath,
+    temporaryDirectory,
+    excludedPaths,
+    sourceManifest,
+    observedPaths,
+  });
+  if (
+    observedPaths.size !== sourceManifest.size ||
+    [...sourceManifest.keys()].some((path) => !observedPaths.has(path))
+  ) {
+    throw fail("Worker source changed while it was snapshotted");
+  }
+}
+
+async function captureProtectedTreeManifest(root) {
+  const manifest = new Map();
+
+  async function capture(directory) {
+    const before = await lstat(directory);
+    if (!before.isDirectory() || before.isSymbolicLink()) {
+      throw fail("protected production snapshot contains an unsupported entry");
+    }
+    const directoryPath = relative(root, directory);
+    const entries = await readdir(directory, { withFileTypes: true });
+    entries.sort((first, second) => first.name.localeCompare(second.name));
+    for (const entry of entries) {
+      const path = join(directory, entry.name);
+      const relativePath = relative(root, path);
+      const stats = await lstat(path);
+      if (stats.isDirectory() && !stats.isSymbolicLink()) {
+        await capture(path);
+        continue;
+      }
+      if (!stats.isFile() || stats.isSymbolicLink()) {
+        throw fail(
+          "protected production snapshot contains an unsupported entry",
+        );
+      }
+      const source = await readStableRegularFile(
+        path,
+        MAX_SNAPSHOT_FILE_BYTES,
+      );
+      manifest.set(relativePath, {
+        kind: "file",
+        stats: source.stats,
+        digest: digest(source.bytes),
+      });
+    }
+    const after = await lstat(directory);
+    if (!stableFileMetadata(before, after)) {
+      throw fail("protected production snapshot changed");
+    }
+    manifest.set(directoryPath, {
+      kind: "directory",
+      stats: after,
+    });
+  }
+
+  await capture(root);
+  return manifest;
+}
+
+async function verifyProtectedTreeManifest(root, manifest) {
+  const observedPaths = new Set();
+
+  async function verify(directory) {
+    const before = await lstat(directory);
+    const directoryPath = relative(root, directory);
+    const expectedDirectory = manifest.get(directoryPath);
+    if (
+      !before.isDirectory() ||
+      before.isSymbolicLink() ||
+      expectedDirectory?.kind !== "directory" ||
+      !stableFileMetadata(expectedDirectory.stats, before)
+    ) {
+      throw fail("protected production snapshot changed");
+    }
+    observedPaths.add(directoryPath);
+    const entries = await readdir(directory, { withFileTypes: true });
+    entries.sort((first, second) => first.name.localeCompare(second.name));
+    for (const entry of entries) {
+      const path = join(directory, entry.name);
+      const relativePath = relative(root, path);
+      const stats = await lstat(path);
+      if (stats.isDirectory() && !stats.isSymbolicLink()) {
+        await verify(path);
+        continue;
+      }
+      if (!stats.isFile() || stats.isSymbolicLink()) {
+        throw fail("protected production snapshot changed");
+      }
+      const expectedFile = manifest.get(relativePath);
+      const source = await readStableRegularFile(
+        path,
+        MAX_SNAPSHOT_FILE_BYTES,
+      );
+      if (
+        expectedFile?.kind !== "file" ||
+        !stableFileMetadata(expectedFile.stats, source.stats) ||
+        !matchingDigest(expectedFile.digest, digest(source.bytes))
+      ) {
+        throw fail("protected production snapshot changed");
+      }
+      observedPaths.add(relativePath);
+    }
+    const after = await lstat(directory);
+    if (!stableFileMetadata(before, after)) {
+      throw fail("protected production snapshot changed");
+    }
+  }
+
+  await verify(root);
+  if (
+    observedPaths.size !== manifest.size ||
+    [...manifest.keys()].some((path) => !observedPaths.has(path))
+  ) {
+    throw fail("protected production snapshot changed");
   }
 }
 
@@ -616,6 +916,10 @@ async function copyRelativeSchemaReference({
 }
 
 async function verifyProductionSnapshot(snapshot, contract) {
+  await verifyProtectedTreeManifest(
+    snapshot.workerDirectory,
+    snapshot.workerManifest,
+  );
   const config = await readStableRegularFile(
     snapshot.configPath,
     MAX_CONFIGURATION_BYTES,
@@ -666,7 +970,11 @@ async function verifyProductionSnapshot(snapshot, contract) {
 
 export async function createProtectedProductionSnapshot(
   contract,
-  { temporaryRoot = tmpdir() } = {},
+  {
+    temporaryRoot = tmpdir(),
+    excludedPaths = [],
+    snapshotHooks = {},
+  } = {},
 ) {
   const sourceRoot = dirname(resolve(contract.configPath));
   const exactConfig = parseExactConfiguration(contract.configBytes);
@@ -678,6 +986,28 @@ export async function createProtectedProductionSnapshot(
   ) {
     throw fail("production Wrangler contract is invalid");
   }
+  if (
+    !Array.isArray(excludedPaths) ||
+    excludedPaths.some((path) =>
+      typeof path !== "string" ||
+      resolve(path) !== path
+    )
+  ) {
+    throw fail("production snapshot exclusions are invalid");
+  }
+  if (
+    !isPlainObject(snapshotHooks) ||
+    (
+      snapshotHooks.beforeSourceTreeVerification !== undefined &&
+      typeof snapshotHooks.beforeSourceTreeVerification !== "function"
+    ) ||
+    Object.keys(snapshotHooks).some(
+      (key) => key !== "beforeSourceTreeVerification",
+    )
+  ) {
+    throw fail("production snapshot hooks are invalid");
+  }
+  const exactExcludedPaths = new Set(excludedPaths);
 
   const canonicalTemporaryRoot = await realpath(resolve(temporaryRoot));
   const temporaryDirectory = await mkdtemp(
@@ -687,12 +1017,25 @@ export async function createProtectedProductionSnapshot(
   try {
     await chmod(temporaryDirectory, 0o700);
     const workerDirectory = join(temporaryDirectory, "worker");
+    const sourceManifest = new Map();
     await copyProtectedDirectory({
       sourceDirectory: sourceRoot,
       destinationDirectory: workerDirectory,
       sourceRoot,
       configPath: contract.configPath,
       temporaryDirectory,
+      excludedPaths: exactExcludedPaths,
+      sourceManifest,
+    });
+    await snapshotHooks.beforeSourceTreeVerification?.({
+      sourceRoot,
+    });
+    await verifySourceTree({
+      sourceRoot,
+      configPath: contract.configPath,
+      temporaryDirectory,
+      excludedPaths: exactExcludedPaths,
+      sourceManifest,
     });
     const configPath = await writeProtectedFile(
       workerDirectory,
@@ -709,10 +1052,13 @@ export async function createProtectedProductionSnapshot(
       "empty.env",
       Buffer.alloc(0),
     );
+    const workerManifest =
+      await captureProtectedTreeManifest(workerDirectory);
     snapshot = {
       configPath,
       emptyEnvironmentPath,
       workerDirectory,
+      workerManifest,
       verify: () => verifyProductionSnapshot(snapshot, contract),
       cleanup: () => rm(temporaryDirectory, {
         recursive: true,

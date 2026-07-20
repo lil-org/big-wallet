@@ -2,13 +2,22 @@ const JWT_PATH = "/v1/alchemy/jwt";
 const PRODUCTION_HOST = "api.lil.org";
 const PRODUCTION_ORIGIN = `https://${PRODUCTION_HOST}`;
 const PRODUCTION_ENDPOINT = `${PRODUCTION_ORIGIN}${JWT_PATH}`;
+const BROKER_METHOD = "POST";
 const MAX_REQUEST_BYTES = 1_024;
-const RETRY_AFTER_SECONDS = 60;
 const HSTS_POLICY = "max-age=31536000";
 const VERSION_HEADER = "X-Alchemy-JWT-Worker-Version";
-const REQUIRED_JWT_TTL_SECONDS = 86_400;
+const REQUEST_PROOF_HEADER = "X-Lil-Alchemy-Proof";
+const REQUEST_PROOF_PREFIX =
+  "LIL-ALCHEMY-JWT-PROOF-V1\n"
+  + `${BROKER_METHOD}\n`
+  + `${PRODUCTION_ENDPOINT}\n`;
+const REQUEST_PROOF_WINDOW_SECONDS = 300;
+const MINIMUM_JWT_TTL_SECONDS = 3_600;
+const MAXIMUM_JWT_TTL_SECONDS = 21_600;
 const CANONICAL_UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const CANONICAL_BASE64URL_128 = /^[A-Za-z0-9_-]{22}$/u;
+const CANONICAL_BASE64URL_256 = /^[A-Za-z0-9_-]{43}$/u;
 const PENDING_KEY_ID = "pending-alchemy-key-id";
 
 type Clock = () => number;
@@ -18,7 +27,8 @@ type BodyReadResult =
   | { status: "too-large" };
 
 type IssuanceRequest = {
-  installationId: string;
+  timestamp: number;
+  nonce: string;
 };
 
 type JwtResponse = {
@@ -32,15 +42,24 @@ type SigningKeyCacheEntry = {
   importPromise: Promise<CryptoKey>;
 };
 
+type RequestProofKeyCacheEntry = {
+  encodedKey: string;
+  importPromise: Promise<CryptoKey>;
+};
+
 let signingKeyCacheEntry: SigningKeyCacheEntry | undefined;
+let requestProofKeyCacheEntry: RequestProofKeyCacheEntry | undefined;
+const requestProofPrefixBytes = new TextEncoder().encode(
+  REQUEST_PROOF_PREFIX,
+);
 
 export type AlchemyJWTIssuerEnvironment = {
   [Binding in keyof Pick<
     Env,
-    | "JWT_ISSUANCE_RATE_LIMITER"
     | "ALCHEMY_KEY_ID"
     | "JWT_TTL_SECONDS"
     | "ALCHEMY_JWT_PRIVATE_KEY"
+    | "ALCHEMY_JWT_REQUEST_PROOF_KEY"
     | "CF_VERSION_METADATA"
   >]: Env[Binding] extends string ? string : Env[Binding];
 };
@@ -148,18 +167,27 @@ function parseIssuanceRequest(bytes: Uint8Array): IssuanceRequest | null {
   }
 
   const keys = Object.keys(parsed);
-  if (keys.length !== 1 || keys[0] !== "installationId") {
-    return null;
-  }
-
-  const installationId = Reflect.get(parsed, "installationId");
   if (
-    typeof installationId !== "string" ||
-    !CANONICAL_UUID.test(installationId)
+    keys.length !== 2 ||
+    !Object.hasOwn(parsed, "timestamp") ||
+    !Object.hasOwn(parsed, "nonce")
   ) {
     return null;
   }
-  return { installationId };
+
+  const timestamp = Reflect.get(parsed, "timestamp");
+  const nonce = Reflect.get(parsed, "nonce");
+  if (
+    typeof timestamp !== "number" ||
+    !Number.isSafeInteger(timestamp) ||
+    timestamp < 0 ||
+    typeof nonce !== "string" ||
+    !CANONICAL_BASE64URL_128.test(nonce) ||
+    decodeCanonicalBase64Url(nonce, 16) === null
+  ) {
+    return null;
+  }
+  return { timestamp, nonce };
 }
 
 function base64UrlEncode(bytes: Uint8Array): string {
@@ -177,6 +205,33 @@ function encodeJson(value: Readonly<Record<string, unknown>>): string {
   return base64UrlEncode(
     new TextEncoder().encode(JSON.stringify(value)),
   );
+}
+
+function decodeCanonicalBase64Url(
+  encoded: string,
+  expectedByteLength: number,
+): Uint8Array | null {
+  const paddingLength = (4 - (encoded.length % 4)) % 4;
+  const padded = encoded
+    .replaceAll("-", "+")
+    .replaceAll("_", "/")
+    .padEnd(encoded.length + paddingLength, "=");
+
+  let binary: string;
+  try {
+    binary = atob(padded);
+  } catch {
+    return null;
+  }
+  if (binary.length !== expectedByteLength) {
+    return null;
+  }
+
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return base64UrlEncode(bytes) === encoded ? bytes : null;
 }
 
 function decodePkcs8Pem(pem: string): Uint8Array {
@@ -234,11 +289,23 @@ function readIssuerConfiguration(env: AlchemyJWTIssuerEnvironment): {
   }
 
   const configuredTtl: unknown = env.JWT_TTL_SECONDS;
-  if (configuredTtl !== String(REQUIRED_JWT_TTL_SECONDS)) {
+  if (
+    typeof configuredTtl !== "string" ||
+    !/^[1-9][0-9]*$/u.test(configuredTtl)
+  ) {
     throw new Error("invalid issuer configuration");
   }
 
-  return { keyId, ttlSeconds: REQUIRED_JWT_TTL_SECONDS };
+  const ttlSeconds = Number(configuredTtl);
+  if (
+    !Number.isSafeInteger(ttlSeconds) ||
+    ttlSeconds < MINIMUM_JWT_TTL_SECONDS ||
+    ttlSeconds > MAXIMUM_JWT_TTL_SECONDS
+  ) {
+    throw new Error("invalid issuer configuration");
+  }
+
+  return { keyId, ttlSeconds };
 }
 
 function readWorkerVersion(
@@ -297,6 +364,68 @@ function signingKeyForPem(privateKeyPem: string): Promise<CryptoKey> {
   return importPromise;
 }
 
+async function importRequestProofKey(encodedKey: string): Promise<CryptoKey> {
+  if (!CANONICAL_BASE64URL_256.test(encodedKey)) {
+    throw new Error("invalid request proof key");
+  }
+  const keyBytes = decodeCanonicalBase64Url(encodedKey, 32);
+  if (keyBytes === null) {
+    throw new Error("invalid request proof key");
+  }
+  return crypto.subtle.importKey(
+    "raw",
+    keyBytes,
+    {
+      name: "HMAC",
+      hash: "SHA-256",
+    },
+    false,
+    ["verify"],
+  );
+}
+
+function requestProofKeyForEncodedKey(encodedKey: string): Promise<CryptoKey> {
+  if (requestProofKeyCacheEntry?.encodedKey === encodedKey) {
+    return requestProofKeyCacheEntry.importPromise;
+  }
+  const importPromise = importRequestProofKey(encodedKey);
+  requestProofKeyCacheEntry = { encodedKey, importPromise };
+  return importPromise;
+}
+
+function requestProofInput(body: Uint8Array): Uint8Array {
+  const input = new Uint8Array(
+    requestProofPrefixBytes.byteLength + body.byteLength,
+  );
+  input.set(requestProofPrefixBytes);
+  input.set(body, requestProofPrefixBytes.byteLength);
+  return input;
+}
+
+async function hasValidRequestProof(
+  body: Uint8Array,
+  encodedProof: string | null,
+  encodedKey: string,
+): Promise<boolean> {
+  if (
+    encodedProof === null ||
+    !CANONICAL_BASE64URL_256.test(encodedProof)
+  ) {
+    return false;
+  }
+  const proof = decodeCanonicalBase64Url(encodedProof, 32);
+  if (proof === null) {
+    return false;
+  }
+  const key = await requestProofKeyForEncodedKey(encodedKey);
+  return crypto.subtle.verify(
+    "HMAC",
+    key,
+    proof,
+    requestProofInput(body),
+  );
+}
+
 function isPublicExponent65537(value: unknown): boolean {
   let bytes: Uint8Array;
   if (value instanceof ArrayBuffer) {
@@ -319,12 +448,14 @@ function isPublicExponent65537(value: unknown): boolean {
 
 async function issueJwt(
   env: AlchemyJWTIssuerEnvironment,
-  now: Clock,
+  issuedAt: number,
 ): Promise<JwtResponse> {
   const { keyId, ttlSeconds } = readIssuerConfiguration(env);
   const signingKey = await signingKeyForPem(env.ALCHEMY_JWT_PRIVATE_KEY);
-  const issuedAt = Math.floor(now() / 1_000);
   const expiresAt = issuedAt + ttlSeconds;
+  if (!Number.isSafeInteger(expiresAt)) {
+    throw new Error("invalid issuer timestamp");
+  }
 
   const header = encodeJson({
     alg: "RS256",
@@ -350,7 +481,7 @@ async function issueJwt(
 }
 
 function logInternalFailure(
-  failure: "configuration" | "rate-limit" | "signing",
+  failure: "configuration" | "signing",
 ): void {
   console.error(
     JSON.stringify({
@@ -390,9 +521,9 @@ export async function handleRequest(
     return errorResponse(404, "Not found", workerVersion);
   }
 
-  if (request.method !== "POST") {
+  if (request.method !== BROKER_METHOD) {
     return errorResponse(405, "Method not allowed", workerVersion, {
-      Allow: "POST",
+      Allow: BROKER_METHOD,
     });
   }
 
@@ -425,34 +556,45 @@ export async function handleRequest(
     return errorResponse(413, "Request body too large", workerVersion);
   }
 
-  const issuanceRequest = parseIssuanceRequest(body.bytes);
-  if (issuanceRequest === null) {
-    return errorResponse(400, "Invalid request", workerVersion);
-  }
-
-  let rateLimitOutcome: RateLimitOutcome;
+  let issuedAt: number;
   try {
-    rateLimitOutcome = await env.JWT_ISSUANCE_RATE_LIMITER.limit({
-      key: issuanceRequest.installationId,
-    });
+    issuedAt = Math.floor(now() / 1_000);
   } catch {
-    logInternalFailure("rate-limit");
+    logInternalFailure("configuration");
+    return errorResponse(500, "Service unavailable", workerVersion);
+  }
+  if (!Number.isSafeInteger(issuedAt) || issuedAt < 0) {
+    logInternalFailure("configuration");
     return errorResponse(500, "Service unavailable", workerVersion);
   }
 
-  if (!rateLimitOutcome.success) {
-    return errorResponse(
-      429,
-      "Too many requests",
-      workerVersion,
-      {
-        "Retry-After": String(RETRY_AFTER_SECONDS),
-      },
+  const issuanceRequest = parseIssuanceRequest(body.bytes);
+  if (
+    issuanceRequest === null ||
+    Math.abs(issuedAt - issuanceRequest.timestamp)
+      > REQUEST_PROOF_WINDOW_SECONDS
+  ) {
+    return errorResponse(401, "Unauthorized", workerVersion);
+  }
+
+  let hasValidProof: boolean;
+  try {
+    hasValidProof = await hasValidRequestProof(
+      body.bytes,
+      request.headers.get(REQUEST_PROOF_HEADER),
+      env.ALCHEMY_JWT_REQUEST_PROOF_KEY,
     );
+  } catch {
+    logInternalFailure("configuration");
+    return errorResponse(500, "Service unavailable", workerVersion);
+  }
+
+  if (!hasValidProof) {
+    return errorResponse(401, "Unauthorized", workerVersion);
   }
 
   try {
-    const jwt = await issueJwt(env, now);
+    const jwt = await issueJwt(env, issuedAt);
     return jsonResponse(jwt, 200, workerVersion);
   } catch {
     logInternalFailure("signing");

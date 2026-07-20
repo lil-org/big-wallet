@@ -9,9 +9,15 @@
  */
 
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import {
+  createHmac,
+  randomBytes,
+} from "node:crypto";
+import {
+  dirname,
+  isAbsolute,
+  resolve,
+} from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
@@ -19,11 +25,22 @@ import {
   isValidWorkerName,
   loadProductionWranglerContract,
 } from "./production-contract.mjs";
+import {
+  readBoundedRegularFile,
+  readValidatedRequestProofKeyFile,
+  SafePreflightError,
+} from "./validate-keypair.mjs";
 
-const DEFAULT_BROKER_URL = "https://api.lil.org/v1/alchemy/jwt";
 const BROKER_ORIGIN = "https://api.lil.org";
 const BROKER_PATH = "/v1/alchemy/jwt";
-const REQUIRED_JWT_TTL_SECONDS = 86_400;
+const DEFAULT_BROKER_URL = `${BROKER_ORIGIN}${BROKER_PATH}`;
+const BROKER_METHOD = "POST";
+const REQUIRED_JWT_TTL_SECONDS = 21_600;
+const REQUEST_PROOF_HEADER = "X-Lil-Alchemy-Proof";
+const REQUEST_PROOF_PREFIX =
+  "LIL-ALCHEMY-JWT-PROOF-V1\n"
+  + `${BROKER_METHOD}\n`
+  + `${DEFAULT_BROKER_URL}\n`;
 const DEFAULT_EXPECTED_EVM_HOSTS = 131;
 const DEFAULT_CONCURRENCY = 8;
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -32,13 +49,19 @@ const MAX_RPC_ATTEMPTS = 5;
 const MAX_CONCURRENCY = 32;
 const MAX_BROKER_RESPONSE_BYTES = 32 * 1_024;
 const MAX_RPC_RESPONSE_BYTES = 128 * 1_024;
+const MAX_NETWORK_CATALOG_BYTES = 2 * 1_024 * 1_024;
 const CLOCK_SKEW_SECONDS = 300;
+const INVALID_PROOF_TIMESTAMP_OFFSET_SECONDS = 600;
 const VERSION_WAIT_TIMEOUT_MS = 30_000;
 const VERSION_WAIT_INTERVAL_MS = 1_000;
 const RPC_RETRY_BASE_MS = 500;
 const RPC_RETRY_CAP_MS = 4_000;
 const HSTS_POLICY = "max-age=31536000";
 const EXPECTED_JSON_CONTENT_TYPE = "application/json; charset=utf-8";
+const GENERIC_UNAUTHORIZED_BODY = Buffer.from(
+  '{"error":"Unauthorized"}',
+  "utf8",
+);
 const VERSION_HEADER = "x-alchemy-jwt-worker-version";
 const VERSION_OVERRIDE_HEADER = "Cloudflare-Workers-Version-Overrides";
 const CANONICAL_UUID =
@@ -46,6 +69,11 @@ const CANONICAL_UUID =
 const PRINTABLE_KEY_ID = /^[\u0021-\u007e]{1,256}$/u;
 const ALCHEMY_NETWORK_PATTERN =
   /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
+const ETH_MAINNET_TARGET = Object.freeze({
+  kind: "evm",
+  host: "eth-mainnet.g.alchemy.com",
+  url: "https://eth-mainnet.g.alchemy.com/v2",
+});
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const defaultCatalogPath = resolve(
@@ -68,11 +96,115 @@ function safeFailure(message, kind) {
   return new SafeValidationError(message, kind);
 }
 
+export async function readAppProofKey(
+  path,
+  {
+    expectedFingerprint,
+  } = {},
+) {
+  try {
+    return await readValidatedRequestProofKeyFile(path, {
+      expectedFingerprint,
+    });
+  } catch (error) {
+    if (
+      error instanceof SafeValidationError ||
+      error instanceof SafePreflightError
+    ) {
+      throw safeFailure("App proof key file could not be validated");
+    }
+    throw error;
+  }
+}
+
+export async function validateOptionalDryRunProofKey(
+  options,
+  {
+    expectedFingerprint,
+    readProofKey = readAppProofKey,
+  } = {},
+) {
+  if (options.appProofKeyFile === undefined) {
+    return false;
+  }
+
+  const requestProofKey = await readProofKey(
+    options.appProofKeyFile,
+    { expectedFingerprint },
+  );
+  try {
+    return true;
+  } finally {
+    requestProofKey.fill(0);
+  }
+}
+
+export function assertGenericUnauthorizedBody(bytes, context) {
+  if (
+    !(bytes instanceof Uint8Array) ||
+    bytes.byteLength !== GENERIC_UNAUTHORIZED_BODY.byteLength ||
+    !Buffer.from(
+      bytes.buffer,
+      bytes.byteOffset,
+      bytes.byteLength,
+    ).equals(GENERIC_UNAUTHORIZED_BODY)
+  ) {
+    throw safeFailure(
+      `${context}: response body is not the generic unauthorized error`,
+    );
+  }
+}
+
+export function createRequestProof(body, requestProofKey) {
+  if (
+    !(body instanceof Uint8Array) ||
+    !(requestProofKey instanceof Uint8Array) ||
+    requestProofKey.byteLength !== 32
+  ) {
+    throw safeFailure("Request proof input is invalid");
+  }
+  return createHmac("sha256", requestProofKey)
+    .update(REQUEST_PROOF_PREFIX, "ascii")
+    .update(body)
+    .digest("base64url");
+}
+
+export function createSignedBrokerRequest(
+  requestProofKey,
+  {
+    timestamp = Math.floor(Date.now() / 1_000),
+    nonce = randomBytes(16).toString("base64url"),
+  } = {},
+) {
+  const nonceBytes =
+    typeof nonce === "string"
+      ? Buffer.from(nonce, "base64url")
+      : Buffer.alloc(0);
+  if (
+    !Number.isSafeInteger(timestamp) ||
+    timestamp < 0 ||
+    typeof nonce !== "string" ||
+    !/^[A-Za-z0-9_-]{22}$/u.test(nonce) ||
+    nonceBytes.byteLength !== 16 ||
+    nonceBytes.toString("base64url") !== nonce
+  ) {
+    throw safeFailure("Request proof fields are invalid");
+  }
+  const body = Buffer.from(
+    JSON.stringify({ timestamp, nonce }),
+    "utf8",
+  );
+  return {
+    body,
+    proof: createRequestProof(body, requestProofKey),
+  };
+}
+
 function usage() {
   return [
     "Usage: node scripts/live-validate.mjs [options]",
     "",
-    "Live validation requires --expected-kid and --expected-version.",
+    "Live validation requires expected kid, version, and app proof key.",
     "",
     "Options:",
     `  --broker URL            Issuer endpoint (fixed origin default: ${DEFAULT_BROKER_URL})`,
@@ -80,6 +212,8 @@ function usage() {
     `  --expected-evm N        Required EVM host count (default: ${DEFAULT_EXPECTED_EVM_HOSTS})`,
     "  --expected-kid KID      Required JWT kid (never printed)",
     "  --expected-version UUID Required Worker version response header",
+    "  --app-proof-key-file PATH",
+    "                          Protected app request-proof key file",
     `  --worker-name NAME      Worker override name (default: ${DEFAULT_WORKER_NAME})`,
     "  --version-override      Send requests to the expected 0%-traffic version",
     `  --rpc-attempts N        Transient-only attempts, 1-${MAX_RPC_ATTEMPTS} (default: ${DEFAULT_RPC_ATTEMPTS})`,
@@ -113,6 +247,7 @@ export function parseArguments(arguments_) {
     expectedEvmHosts: DEFAULT_EXPECTED_EVM_HOSTS,
     expectedKid: undefined,
     expectedVersion: undefined,
+    appProofKeyFile: undefined,
     workerName: DEFAULT_WORKER_NAME,
     versionOverride: false,
     rpcAttempts: DEFAULT_RPC_ATTEMPTS,
@@ -128,6 +263,7 @@ export function parseArguments(arguments_) {
     ["--expected-evm", "expectedEvmHosts"],
     ["--expected-kid", "expectedKid"],
     ["--expected-version", "expectedVersion"],
+    ["--app-proof-key-file", "appProofKeyFile"],
     ["--worker-name", "workerName"],
     ["--rpc-attempts", "rpcAttempts"],
     ["--concurrency", "concurrency"],
@@ -173,6 +309,7 @@ export function parseArguments(arguments_) {
       key === "catalogPath" ||
       key === "expectedKid" ||
       key === "expectedVersion" ||
+      key === "appProofKeyFile" ||
       key === "workerName"
     ) {
       options[key] = value;
@@ -208,16 +345,23 @@ export function parseArguments(arguments_) {
   if (options.versionOverride && options.expectedVersion === undefined) {
     throw safeFailure("--version-override requires --expected-version");
   }
+  if (
+    options.appProofKeyFile !== undefined &&
+    !isAbsolute(options.appProofKeyFile)
+  ) {
+    throw safeFailure("--app-proof-key-file must use an absolute path");
+  }
   return options;
 }
 
 function requireLiveAttestation(options) {
   if (
     options.expectedKid === undefined ||
-    options.expectedVersion === undefined
+    options.expectedVersion === undefined ||
+    options.appProofKeyFile === undefined
   ) {
     throw safeFailure(
-      "Live validation requires --expected-kid and --expected-version",
+      "Live validation requires expected kid, version, and app proof key",
     );
   }
 }
@@ -270,13 +414,28 @@ function isValidAlchemyNetwork(value) {
   return typeof value === "string" && ALCHEMY_NETWORK_PATTERN.test(value);
 }
 
-async function loadEvmTargets(catalogPath, expectedCount) {
+export async function readBoundedNetworkCatalog(
+  catalogPath,
+  { afterFirstRead } = {},
+) {
+  try {
+    return await readBoundedRegularFile(
+      catalogPath,
+      MAX_NETWORK_CATALOG_BYTES,
+      { afterFirstRead },
+    );
+  } catch (error) {
+    if (error instanceof SafeValidationError) {
+      throw error;
+    }
+    throw safeFailure("Network catalog could not be read safely");
+  }
+}
+
+export async function loadEvmTargets(catalogPath, expectedCount) {
   let parsed;
   try {
-    const bytes = await readFile(catalogPath);
-    if (bytes.byteLength > 2 * 1_024 * 1_024) {
-      throw safeFailure("Network catalog is unexpectedly large");
-    }
+    const bytes = await readBoundedNetworkCatalog(catalogPath);
     parsed = JSON.parse(bytes.toString("utf8"));
   } catch (error) {
     if (error instanceof SafeValidationError) {
@@ -650,10 +809,42 @@ export function validateIssuancePayload(
   return value.token;
 }
 
-async function runBrokerContractProbes(brokerURL, options) {
+export async function runBrokerContractProbes(
+  brokerURL,
+  options,
+  requestProofKey,
+  {
+    fetchImplementation = fetch,
+    nowSeconds = Math.floor(Date.now() / 1_000),
+  } = {},
+) {
+  if (!Number.isSafeInteger(nowSeconds) || nowSeconds < 0) {
+    throw safeFailure("Broker probe timestamp is invalid");
+  }
   const routeURL = new URL(brokerURL);
   routeURL.pathname = `${BROKER_PATH}/not-found`;
   const attestationHeaders = overrideHeaders(options);
+  const signedRequest = createSignedBrokerRequest(requestProofKey, {
+    timestamp: nowSeconds,
+  });
+  const staleRequest = createSignedBrokerRequest(requestProofKey, {
+    timestamp: nowSeconds - INVALID_PROOF_TIMESTAMP_OFFSET_SECONDS,
+  });
+  const futureRequest = createSignedBrokerRequest(requestProofKey, {
+    timestamp: nowSeconds + INVALID_PROOF_TIMESTAMP_OFFSET_SECONDS,
+  });
+  const malformedNonceBody = Buffer.from(
+    JSON.stringify({ timestamp: nowSeconds, nonce: "invalid" }),
+    "utf8",
+  );
+  const malformedNonceRequest = {
+    body: malformedNonceBody,
+    proof: createRequestProof(malformedNonceBody, requestProofKey),
+  };
+  const malformedBody = Buffer.from("{}", "utf8");
+  const invalidProof =
+    `${signedRequest.proof[0] === "A" ? "B" : "A"}`
+    + signedRequest.proof.slice(1);
   const probes = [
     {
       name: "method",
@@ -661,7 +852,7 @@ async function runBrokerContractProbes(brokerURL, options) {
       init: { method: "GET", headers: attestationHeaders },
       expectedStatus: 405,
       verify(response) {
-        if (response.headers.get("allow") !== "POST") {
+        if (response.headers.get("allow") !== BROKER_METHOD) {
           throw safeFailure("method probe: Allow header is not POST");
         }
       },
@@ -670,41 +861,124 @@ async function runBrokerContractProbes(brokerURL, options) {
       name: "route",
       url: routeURL,
       init: {
-        method: "POST",
+        method: BROKER_METHOD,
         headers: {
           ...attestationHeaders,
           "Content-Type": "application/json",
+          [REQUEST_PROOF_HEADER]: signedRequest.proof,
         },
-        body: JSON.stringify({
-          installationId: randomUUID().toLowerCase(),
-        }),
+        body: signedRequest.body,
       },
       expectedStatus: 404,
     },
     {
-      name: "malformed",
+      name: "missing-proof",
       url: brokerURL,
       init: {
-        method: "POST",
+        method: BROKER_METHOD,
         headers: {
           ...attestationHeaders,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          installationId: "not-a-canonical-uuid",
-        }),
+        body: signedRequest.body,
       },
-      expectedStatus: 400,
+      expectedStatus: 401,
+    },
+    {
+      name: "invalid-proof",
+      url: brokerURL,
+      init: {
+        method: BROKER_METHOD,
+        headers: {
+          ...attestationHeaders,
+          "Content-Type": "application/json",
+          [REQUEST_PROOF_HEADER]: invalidProof,
+        },
+        body: signedRequest.body,
+      },
+      expectedStatus: 401,
+    },
+    {
+      name: "malformed-proof",
+      url: brokerURL,
+      init: {
+        method: BROKER_METHOD,
+        headers: {
+          ...attestationHeaders,
+          "Content-Type": "application/json",
+          [REQUEST_PROOF_HEADER]: `${signedRequest.proof}=`,
+        },
+        body: signedRequest.body,
+      },
+      expectedStatus: 401,
+    },
+    {
+      name: "malformed-body",
+      url: brokerURL,
+      init: {
+        method: BROKER_METHOD,
+        headers: {
+          ...attestationHeaders,
+          "Content-Type": "application/json",
+          [REQUEST_PROOF_HEADER]:
+            createRequestProof(malformedBody, requestProofKey),
+        },
+        body: malformedBody,
+      },
+      expectedStatus: 401,
+    },
+    {
+      name: "stale-timestamp",
+      url: brokerURL,
+      init: {
+        method: BROKER_METHOD,
+        headers: {
+          ...attestationHeaders,
+          "Content-Type": "application/json",
+          [REQUEST_PROOF_HEADER]: staleRequest.proof,
+        },
+        body: staleRequest.body,
+      },
+      expectedStatus: 401,
+    },
+    {
+      name: "future-timestamp",
+      url: brokerURL,
+      init: {
+        method: BROKER_METHOD,
+        headers: {
+          ...attestationHeaders,
+          "Content-Type": "application/json",
+          [REQUEST_PROOF_HEADER]: futureRequest.proof,
+        },
+        body: futureRequest.body,
+      },
+      expectedStatus: 401,
+    },
+    {
+      name: "malformed-nonce",
+      url: brokerURL,
+      init: {
+        method: BROKER_METHOD,
+        headers: {
+          ...attestationHeaders,
+          "Content-Type": "application/json",
+          [REQUEST_PROOF_HEADER]: malformedNonceRequest.proof,
+        },
+        body: malformedNonceRequest.body,
+      },
+      expectedStatus: 401,
     },
   ];
 
   for (const probe of probes) {
-    const { response } = await fetchBoundedWithTimeout(
+    const { response, bytes } = await fetchBoundedWithTimeout(
       probe.url,
       probe.init,
       options.timeoutMs,
       MAX_BROKER_RESPONSE_BYTES,
       `${probe.name} probe`,
+      { fetchImplementation },
     );
     assertBrokerHeaders(
       response,
@@ -716,28 +990,42 @@ async function runBrokerContractProbes(brokerURL, options) {
         `${probe.name} probe: received HTTP ${response.status}, expected ${probe.expectedStatus}`,
       );
     }
+    if (probe.expectedStatus === 401) {
+      assertGenericUnauthorizedBody(bytes, `${probe.name} probe`);
+    }
     probe.verify?.(response);
   }
   return probes.length;
 }
 
-async function acquireToken(brokerURL, options) {
+async function acquireToken(
+  brokerURL,
+  options,
+  requestProofKey,
+  {
+    fetchImplementation = fetch,
+    nowSeconds = Math.floor(Date.now() / 1_000),
+  } = {},
+) {
+  const signedRequest = createSignedBrokerRequest(requestProofKey, {
+    timestamp: nowSeconds,
+  });
   const { response, bytes } = await fetchBoundedWithTimeout(
     brokerURL,
     {
-      method: "POST",
+      method: BROKER_METHOD,
       headers: {
         ...overrideHeaders(options),
         Accept: "application/json",
         "Content-Type": "application/json",
+        [REQUEST_PROOF_HEADER]: signedRequest.proof,
       },
-      body: JSON.stringify({
-        installationId: randomUUID().toLowerCase(),
-      }),
+      body: signedRequest.body,
     },
     options.timeoutMs,
     MAX_BROKER_RESPONSE_BYTES,
     "issuance",
+    { fetchImplementation },
   );
   assertBrokerHeaders(response, "issuance", options.expectedVersion);
   if (response.status !== 200) {
@@ -752,7 +1040,7 @@ async function acquireToken(brokerURL, options) {
   }
   return validateIssuancePayload(
     parsed,
-    Math.floor(Date.now() / 1_000),
+    nowSeconds,
     options.expectedKid,
   );
 }
@@ -1088,6 +1376,99 @@ export async function validateRpcMatrix(
   };
 }
 
+export async function verifyReleaseLiveContract(
+  {
+    expectedKid,
+    expectedVersion,
+    appProofKeyFile,
+  },
+  {
+    fetchImplementation = fetch,
+    nowImplementation = Date.now,
+    readProofKey = readAppProofKey,
+    probeHttpRedirectImplementation = probeHttpRedirect,
+    waitForExpectedVersionImplementation = waitForExpectedVersion,
+    runBrokerContractProbesImplementation = runBrokerContractProbes,
+    acquireTokenImplementation = acquireToken,
+    validateRpcTargetImplementation = validateRpcTarget,
+  } = {},
+) {
+  const options = {
+    expectedKid,
+    expectedVersion,
+    appProofKeyFile,
+    workerName: DEFAULT_WORKER_NAME,
+    versionOverride: false,
+    timeoutMs: DEFAULT_TIMEOUT_MS,
+    rpcAttempts: DEFAULT_RPC_ATTEMPTS,
+  };
+  requireLiveAttestation(options);
+  if (!PRINTABLE_KEY_ID.test(expectedKid)) {
+    throw safeFailure("Expected release kid is invalid");
+  }
+  if (!CANONICAL_UUID.test(expectedVersion)) {
+    throw safeFailure("Expected release version is invalid");
+  }
+  if (!isAbsolute(appProofKeyFile)) {
+    throw safeFailure("Release app proof key path must be absolute");
+  }
+
+  const nowMilliseconds = nowImplementation();
+  if (!Number.isFinite(nowMilliseconds) || nowMilliseconds < 0) {
+    throw safeFailure("Release verification clock is invalid");
+  }
+  const nowSeconds = Math.floor(nowMilliseconds / 1_000);
+  const brokerURL = parseBrokerURL(DEFAULT_BROKER_URL);
+  await probeHttpRedirectImplementation(
+    brokerURL,
+    options.timeoutMs,
+    fetchImplementation,
+  );
+  const versionAttempts = await waitForExpectedVersionImplementation(
+    brokerURL,
+    options,
+    { fetchImplementation, nowImplementation },
+  );
+
+  const requestProofKey = await readProofKey(appProofKeyFile);
+  let token = "";
+  let probeCount;
+  try {
+    probeCount = await runBrokerContractProbesImplementation(
+      brokerURL,
+      options,
+      requestProofKey,
+      { fetchImplementation, nowSeconds },
+    );
+    token = await acquireTokenImplementation(
+      brokerURL,
+      options,
+      requestProofKey,
+      { fetchImplementation, nowSeconds },
+    );
+  } finally {
+    requestProofKey.fill(0);
+  }
+
+  try {
+    const canary = await validateRpcTargetImplementation(
+      ETH_MAINNET_TARGET,
+      token,
+      {
+        timeoutMs: options.timeoutMs,
+        rpcAttempts: options.rpcAttempts,
+        fetchImplementation,
+      },
+    );
+    if (!canary.ok) {
+      throw safeFailure("Release RPC canary failed");
+    }
+    return { versionAttempts, probeCount, canary };
+  } finally {
+    token = "";
+  }
+}
+
 function encodeJsonSegment(value) {
   return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
 }
@@ -1100,6 +1481,20 @@ function successfulRpcResponse() {
 }
 
 async function runSelfTest(catalogPath, expectedEvmHosts) {
+  const goldenBody = Buffer.from(
+    '{"timestamp":1784558400,"nonce":"AAECAwQFBgcICQoLDA0ODw"}',
+    "utf8",
+  );
+  const goldenKey = Buffer.from(
+    "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+    "base64url",
+  );
+  assert.equal(
+    createRequestProof(goldenBody, goldenKey),
+    "ctfhJTYThhT35Q05ptrHCn16ylcrBkNb5c5unj1u1Jk",
+  );
+  goldenKey.fill(0);
+
   const evmTargets = await loadEvmTargets(catalogPath, expectedEvmHosts);
   assert.equal(evmTargets.length, expectedEvmHosts);
   assert.equal(
@@ -1224,6 +1619,7 @@ async function main() {
   );
   const targets = [...evmTargets, ...solanaTargets()];
   if (options.dryRun) {
+    await validateOptionalDryRunProofKey(options);
     console.log(
       [
         "dry-run: pass",
@@ -1234,7 +1630,7 @@ async function main() {
         `concurrency=${options.concurrency}`,
         `rpc-attempts=${options.rpcAttempts}`,
         `expected-ttl=${REQUIRED_JWT_TTL_SECONDS}`,
-        `attestation=${options.expectedKid !== undefined && options.expectedVersion !== undefined ? "provided" : "not-provided"}`,
+        `attestation=${options.expectedKid !== undefined && options.expectedVersion !== undefined && options.appProofKeyFile !== undefined ? "provided" : "not-provided"}`,
         `version-override=${options.versionOverride}`,
       ].join(" "),
     );
@@ -1242,20 +1638,31 @@ async function main() {
   }
 
   requireLiveAttestation(options);
-  await probeHttpRedirect(brokerURL, options.timeoutMs);
-  console.log("http-redirect: pass status=308 exact-location=true");
-
-  const versionAttempts = await waitForExpectedVersion(brokerURL, options);
-  console.log(
-    `worker-version: pass attempts=${versionAttempts} override=${options.versionOverride}`,
-  );
-
-  const probeCount = await runBrokerContractProbes(brokerURL, options);
-  console.log(`broker-contract: pass probes=${probeCount}`);
-
   let token = "";
   try {
-    token = await acquireToken(brokerURL, options);
+    await probeHttpRedirect(brokerURL, options.timeoutMs);
+    console.log("http-redirect: pass status=308 exact-location=true");
+
+    const versionAttempts = await waitForExpectedVersion(brokerURL, options);
+    console.log(
+      `worker-version: pass attempts=${versionAttempts} override=${options.versionOverride}`,
+    );
+
+    const requestProofKey = await readAppProofKey(
+      options.appProofKeyFile,
+    );
+    try {
+      const probeCount = await runBrokerContractProbes(
+        brokerURL,
+        options,
+        requestProofKey,
+      );
+      console.log(`broker-contract: pass probes=${probeCount}`);
+
+      token = await acquireToken(brokerURL, options, requestProofKey);
+    } finally {
+      requestProofKey.fill(0);
+    }
     console.log(
       `issuance: pass ttl=${REQUIRED_JWT_TTL_SECONDS}s kid-match=true version-match=true no-store=true no-cors=true`,
     );

@@ -14,5 +14,6 @@ validate_export_options "$ASC_EXPORT_OPTIONS"
 version="$(current_local_version)"
 build_number="$(current_local_build_number)"
 validate_local_version_sources "$version" "$build_number"
+validate_alchemy_release_inputs
 
 log "publish preflight ok"

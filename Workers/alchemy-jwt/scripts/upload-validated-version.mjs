@@ -7,7 +7,6 @@ import {
 import { constants } from "node:fs";
 import {
   chmod,
-  cp,
   lstat,
   mkdtemp,
   open,
@@ -22,7 +21,6 @@ import {
   basename,
   dirname,
   join,
-  relative,
   resolve,
   sep,
 } from "node:path";
@@ -38,24 +36,25 @@ import {
   SafePreflightError,
 } from "./validate-keypair.mjs";
 import {
+  assertProductionObservabilityPolicy,
+  createProtectedProductionSnapshot,
   isValidWorkerName,
   PINNED_WRANGLER_PATH,
+  PINNED_WRANGLER_VERSION,
   productionWranglerEnvironment,
   PRODUCTION_WRANGLER_CONFIG_PATH,
 } from "./production-contract.mjs";
 
 const MAX_SECRETS_FILE_BYTES = 32 * 1_024;
 const MAX_WRANGLER_CONFIG_BYTES = 1_024 * 1_024;
+const MAX_WRANGLER_OUTPUT_FILE_BYTES = 64 * 1_024;
 const MAX_CAPTURED_OUTPUT_BYTES = 2 * 1_024 * 1_024;
 const CHILD_TERMINATION_GRACE_MILLISECONDS = 2_000;
 const PRINTABLE_KEY_ID = /^[\u0021-\u007e]{1,256}$/u;
 const PRINTABLE_TAG = /^[\u0021-\u007e]{1,128}$/u;
 const PRINTABLE_MESSAGE = /^[\u0020-\u007e]{1,512}$/u;
-const EXCLUDED_WORKER_SNAPSHOT_ROOTS = new Set([
-  ".git",
-  ".wrangler",
-  "node_modules",
-]);
+const CANONICAL_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 const HANDLED_SIGNALS = [
   "SIGHUP",
   "SIGINT",
@@ -88,6 +87,7 @@ function usage() {
     "Required options:",
     "  --secrets-file PATH",
     "  --public-key-file PATH",
+    "  --app-proof-key-file PATH",
     "  --expected-kid KID",
     "  --tag TAG",
     "  --message MESSAGE",
@@ -106,6 +106,7 @@ export function parseUploadArguments(arguments_) {
     help: false,
     secretsFile: undefined,
     publicKeyFile: undefined,
+    appProofKeyFile: undefined,
     expectedKid: undefined,
     tag: undefined,
     message: undefined,
@@ -113,6 +114,7 @@ export function parseUploadArguments(arguments_) {
   const fields = new Map([
     ["--secrets-file", "secretsFile"],
     ["--public-key-file", "publicKeyFile"],
+    ["--app-proof-key-file", "appProofKeyFile"],
     ["--expected-kid", "expectedKid"],
     ["--tag", "tag"],
     ["--message", "message"],
@@ -138,6 +140,7 @@ export function parseUploadArguments(arguments_) {
   if (
     parsed.secretsFile === undefined ||
     parsed.publicKeyFile === undefined ||
+    parsed.appProofKeyFile === undefined ||
     parsed.expectedKid === undefined ||
     parsed.tag === undefined ||
     parsed.message === undefined
@@ -397,6 +400,7 @@ async function requireMatchingWranglerKeyID(
         "Wrangler key ID configuration does not match expected metadata",
       );
     }
+    assertProductionObservabilityPolicy(rawConfig);
     return {
       configBytes: beforeBytes,
       workerName,
@@ -455,86 +459,6 @@ async function writeProtectedFile(directory, name, bytes) {
   return path;
 }
 
-function isImplicitWranglerEnvironmentFile(name) {
-  return (
-    name === ".env" ||
-    name.startsWith(".env.") ||
-    name === ".dev.vars" ||
-    name.startsWith(".dev.vars.")
-  );
-}
-
-async function stageValidatedWorker({
-  configPath,
-  configBytes,
-  temporaryDirectory,
-  excludedPaths,
-}) {
-  const sourceDirectory = dirname(resolve(configPath));
-  const workerDirectory = join(temporaryDirectory, "worker");
-  const exactConfigPath = resolve(configPath);
-  const exactTemporaryDirectory = resolve(temporaryDirectory);
-  const exactExcludedPaths = new Set(
-    excludedPaths.map((path) => resolve(path)),
-  );
-
-  try {
-    await cp(sourceDirectory, workerDirectory, {
-      recursive: true,
-      force: false,
-      errorOnExist: true,
-      preserveTimestamps: true,
-      filter: async (sourcePath) => {
-        const exactSourcePath = resolve(sourcePath);
-        if (exactSourcePath === sourceDirectory) {
-          return true;
-        }
-        if (
-          exactSourcePath === exactConfigPath ||
-          exactSourcePath === exactTemporaryDirectory ||
-          exactSourcePath.startsWith(`${exactTemporaryDirectory}${sep}`) ||
-          exactExcludedPaths.has(exactSourcePath)
-        ) {
-          return false;
-        }
-
-        const relativePath = relative(
-          sourceDirectory,
-          exactSourcePath,
-        );
-        const rootName = relativePath.split(sep, 1)[0];
-        if (
-          EXCLUDED_WORKER_SNAPSHOT_ROOTS.has(rootName) ||
-          isImplicitWranglerEnvironmentFile(rootName)
-        ) {
-          return false;
-        }
-
-        const stats = await lstat(sourcePath);
-        if (!stats.isDirectory() && !stats.isFile()) {
-          throw fail("Worker source snapshot contains an unsupported file");
-        }
-        return true;
-      },
-    });
-    await chmod(workerDirectory, 0o700);
-    const stagedConfigPath = await writeProtectedFile(
-      workerDirectory,
-      basename(configPath),
-      configBytes,
-    );
-    return {
-      workerDirectory,
-      wranglerConfigPath: stagedConfigPath,
-    };
-  } catch (error) {
-    if (error instanceof SafeUploadError) {
-      throw error;
-    }
-    throw fail("Worker source snapshot could not be created");
-  }
-}
-
 async function verifyProtectedSnapshot(path, expectedDigest) {
   const bytes = await readBoundedRegularFile(
     path,
@@ -556,6 +480,7 @@ function redactUploadOutput(
     snapshotPath,
     emptyEnvironmentPath,
     wranglerConfigPath,
+    outputFilePath,
     expectedKid,
   },
 ) {
@@ -563,13 +488,109 @@ function redactUploadOutput(
     .replaceAll(snapshotPath, "<protected-secrets-file>")
     .replaceAll(emptyEnvironmentPath, "<empty-environment-file>")
     .replaceAll(wranglerConfigPath, "<wrangler-config>")
+    .replaceAll(outputFilePath, "<wrangler-output-file>")
     .replaceAll(expectedKid, "<expected-kid>");
+}
+
+function isCanonicalTimestamp(value) {
+  const milliseconds = Date.parse(value);
+  return (
+    Number.isFinite(milliseconds) &&
+    new Date(milliseconds).toISOString() === value
+  );
+}
+
+export function parseVersionUploadOutput(bytes, expectedWorkerName) {
+  if (
+    !(bytes instanceof Uint8Array) ||
+    bytes.byteLength === 0 ||
+    bytes.byteLength > MAX_WRANGLER_OUTPUT_FILE_BYTES ||
+    !isValidWorkerName(expectedWorkerName)
+  ) {
+    throw fail("Wrangler version upload result is invalid");
+  }
+  let text;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw fail("Wrangler version upload result is invalid");
+  }
+  if (!text.endsWith("\n")) {
+    throw fail("Wrangler version upload result is invalid");
+  }
+  const lines = text.slice(0, -1).split("\n");
+  if (lines.length !== 2 || lines.some((line) => line === "")) {
+    throw fail("Wrangler version upload result is invalid");
+  }
+  let session;
+  let upload;
+  try {
+    session = JSON.parse(lines[0]);
+    upload = JSON.parse(lines[1]);
+  } catch {
+    throw fail("Wrangler version upload result is invalid");
+  }
+  if (
+    !isPlainObject(session) ||
+    session.type !== "wrangler-session" ||
+    session.version !== 1 ||
+    session.wrangler_version !== PINNED_WRANGLER_VERSION ||
+    !Array.isArray(session.command_line_args) ||
+    session.command_line_args.length === 0 ||
+    session.command_line_args.length > 64 ||
+    session.command_line_args[0] !== "versions" ||
+    session.command_line_args[1] !== "upload" ||
+    !session.command_line_args.includes("--strict") ||
+    session.command_line_args.some(
+      (argument) =>
+        typeof argument !== "string" ||
+        argument.length === 0 ||
+        argument.length > 4_096,
+    ) ||
+    typeof session.log_file_path !== "string" ||
+    session.log_file_path.length === 0 ||
+    session.log_file_path.length > 4_096 ||
+    resolve(session.log_file_path) !== session.log_file_path ||
+    typeof session.timestamp !== "string" ||
+    !isCanonicalTimestamp(session.timestamp) ||
+    !isPlainObject(upload) ||
+    upload.type !== "version-upload" ||
+    upload.version !== 1 ||
+    upload.worker_name !== expectedWorkerName ||
+    typeof upload.version_id !== "string" ||
+    !CANONICAL_UUID.test(upload.version_id) ||
+    typeof upload.timestamp !== "string" ||
+    !isCanonicalTimestamp(upload.timestamp)
+  ) {
+    throw fail("Wrangler version upload result is invalid");
+  }
+  return upload.version_id;
+}
+
+export async function readUploadedVersionID(
+  outputFilePath,
+  expectedWorkerName,
+) {
+  try {
+    const bytes = await readBoundedRegularFile(
+      outputFilePath,
+      MAX_WRANGLER_OUTPUT_FILE_BYTES,
+      { requirePrivatePermissions: true },
+    );
+    return parseVersionUploadOutput(bytes, expectedWorkerName);
+  } catch (error) {
+    if (error instanceof SafeUploadError) {
+      throw error;
+    }
+    throw fail("Wrangler version upload result could not be read safely");
+  }
 }
 
 export async function runPinnedWrangler({
   snapshotPath,
   emptyEnvironmentPath,
   wranglerConfigPath,
+  outputFilePath,
   workerName,
   expectedKid,
   tag,
@@ -585,6 +606,19 @@ export async function runPinnedWrangler({
   clearTimeoutFunction = clearTimeout,
 }) {
   throwIfInterrupted(abortSignal);
+  const temporaryDirectory = dirname(snapshotPath);
+  if (
+    resolve(outputFilePath) !== outputFilePath ||
+    dirname(outputFilePath) !== temporaryDirectory ||
+    basename(outputFilePath) !== "wrangler-output.ndjson" ||
+    dirname(emptyEnvironmentPath) !== temporaryDirectory
+  ) {
+    throw fail("protected Wrangler output path is invalid");
+  }
+  const childEnvironment = productionWranglerEnvironment(
+    parentEnvironment,
+  );
+  childEnvironment.WRANGLER_OUTPUT_FILE_PATH = outputFilePath;
   const child = spawnProcess(
     process.execPath,
     [
@@ -608,7 +642,7 @@ export async function runPinnedWrangler({
     ],
     {
       cwd: dirname(wranglerConfigPath),
-      env: productionWranglerEnvironment(parentEnvironment),
+      env: childEnvironment,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
     },
@@ -694,11 +728,17 @@ export async function runPinnedWrangler({
     }
   }
 
-  if (!captured.exceeded) {
+  const interruption = interruptionFromAbortSignal(abortSignal);
+  const failed =
+    captured.exceeded ||
+    childError !== undefined ||
+    exitCode !== 0;
+  if (!captured.exceeded && failed && interruption === undefined) {
     const redactions = {
       snapshotPath,
       emptyEnvironmentPath,
       wranglerConfigPath,
+      outputFilePath,
       expectedKid,
     };
     const safeStdout = redactUploadOutput(
@@ -716,15 +756,10 @@ export async function runPinnedWrangler({
       stderr(safeStderr);
     }
   }
-  const interruption = interruptionFromAbortSignal(abortSignal);
   if (interruption !== undefined) {
     throw interruption;
   }
-  if (
-    captured.exceeded ||
-    childError !== undefined ||
-    exitCode !== 0
-  ) {
+  if (failed) {
     throw fail("Wrangler version upload failed");
   }
 }
@@ -743,117 +778,175 @@ export async function safeUploadVersion(
     }),
     stdout = (message) => process.stdout.write(message),
     stderr = (message) => process.stderr.write(message),
+    uploadedVersionReader = readUploadedVersionID,
+    productionSnapshotFactory = createProtectedProductionSnapshot,
     abortSignal,
+    expectedRequestProofKeyFingerprint,
+    keypairPreparer = prepareValidatedKeypair,
   } = {},
 ) {
-  throwIfInterrupted(abortSignal);
-  await requireMatchingWranglerKeyID(
-    options.expectedKid,
-    wranglerConfigPath,
-    readWranglerConfiguration,
-  );
-  throwIfInterrupted(abortSignal);
-  const { secretsBytes } = await prepareValidatedKeypair(options);
-  throwIfInterrupted(abortSignal);
-  const expectedDigest = digest(secretsBytes);
-  const canonicalTemporaryRoot = await realpath(
-    resolve(temporaryRoot),
-  );
-  const temporaryDirectory = await mkdtemp(
-    join(canonicalTemporaryRoot, "alchemy-jwt-upload-"),
-  );
-
-  let operationError;
+  let secretsBytes;
   try {
     throwIfInterrupted(abortSignal);
-    await chmod(temporaryDirectory, 0o700);
-    const snapshotPath = await writeProtectedFile(
-      temporaryDirectory,
-      "wrangler-secrets.json",
-      secretsBytes,
-    );
-    await beforeSnapshotVerification?.(snapshotPath);
-    await verifyProtectedSnapshot(snapshotPath, expectedDigest);
-    throwIfInterrupted(abortSignal);
-    const {
-      configBytes,
-      workerName,
-    } = await requireMatchingWranglerKeyID(
+    await requireMatchingWranglerKeyID(
       options.expectedKid,
       wranglerConfigPath,
       readWranglerConfiguration,
     );
     throwIfInterrupted(abortSignal);
-    const stagedWorker = await stageValidatedWorker({
-      configPath: wranglerConfigPath,
-      configBytes,
-      temporaryDirectory,
-      excludedPaths: [
-        options.secretsFile,
-        options.publicKeyFile,
-      ],
-    });
-    const stagedConfiguration =
-      await requireMatchingWranglerKeyID(
+    ({ secretsBytes } = await keypairPreparer(options, {
+      expectedRequestProofKeyFingerprint,
+    }));
+    throwIfInterrupted(abortSignal);
+    const expectedDigest = digest(secretsBytes);
+    const canonicalTemporaryRoot = await realpath(
+      resolve(temporaryRoot),
+    );
+    const temporaryDirectory = await mkdtemp(
+      join(canonicalTemporaryRoot, "alchemy-jwt-upload-"),
+    );
+
+    let operationError;
+    let uploadedVersionID;
+    try {
+      throwIfInterrupted(abortSignal);
+      await chmod(temporaryDirectory, 0o700);
+      const {
+        configBytes,
+        workerName,
+      } = await requireMatchingWranglerKeyID(
         options.expectedKid,
-        stagedWorker.wranglerConfigPath,
+        wranglerConfigPath,
         readWranglerConfiguration,
       );
-    const originalConfigDigest = digest(configBytes);
-    const stagedConfigDigest = digest(
-      stagedConfiguration.configBytes,
-    );
-    if (
-      stagedConfiguration.workerName !== workerName ||
-      originalConfigDigest.byteLength !==
-        stagedConfigDigest.byteLength ||
-      !timingSafeEqual(
-        originalConfigDigest,
-        stagedConfigDigest,
-      )
-    ) {
-      throw fail("Worker source snapshot changed before upload");
+      throwIfInterrupted(abortSignal);
+      const productionSnapshot = await productionSnapshotFactory(
+        {
+          configPath: wranglerConfigPath,
+          configBytes,
+          workerName,
+        },
+        {
+          temporaryRoot: temporaryDirectory,
+          excludedPaths: [
+            options.secretsFile,
+            options.publicKeyFile,
+            options.appProofKeyFile,
+          ],
+        },
+      );
+      const protectedDirectory = dirname(
+        productionSnapshot.emptyEnvironmentPath,
+      );
+      if (
+        resolve(protectedDirectory) !== protectedDirectory ||
+        !protectedDirectory.startsWith(`${temporaryDirectory}${sep}`) ||
+        dirname(productionSnapshot.workerDirectory) !== protectedDirectory ||
+        dirname(productionSnapshot.configPath) !==
+          productionSnapshot.workerDirectory
+      ) {
+        throw fail("protected Worker snapshot paths are invalid");
+      }
+      const snapshotPath = await writeProtectedFile(
+        protectedDirectory,
+        "wrangler-secrets.json",
+        secretsBytes,
+      );
+      await beforeSnapshotVerification?.(snapshotPath);
+      await verifyProtectedSnapshot(snapshotPath, expectedDigest);
+      throwIfInterrupted(abortSignal);
+      const stagedConfiguration =
+        await requireMatchingWranglerKeyID(
+          options.expectedKid,
+          productionSnapshot.configPath,
+          readWranglerConfiguration,
+        );
+      const originalConfigDigest = digest(configBytes);
+      const stagedConfigDigest = digest(
+        stagedConfiguration.configBytes,
+      );
+      if (
+        stagedConfiguration.workerName !== workerName ||
+        originalConfigDigest.byteLength !==
+          stagedConfigDigest.byteLength ||
+        !timingSafeEqual(
+          originalConfigDigest,
+          stagedConfigDigest,
+        )
+      ) {
+        throw fail("Worker source snapshot changed before upload");
+      }
+      const currentConfiguration =
+        await requireMatchingWranglerKeyID(
+          options.expectedKid,
+          wranglerConfigPath,
+          readWranglerConfiguration,
+        );
+      const currentConfigDigest = digest(
+        currentConfiguration.configBytes,
+      );
+      if (
+        currentConfiguration.workerName !== workerName ||
+        currentConfigDigest.byteLength !== originalConfigDigest.byteLength ||
+        !timingSafeEqual(currentConfigDigest, originalConfigDigest)
+      ) {
+        throw fail("Worker source snapshot changed before upload");
+      }
+      const outputFilePath = await writeProtectedFile(
+        protectedDirectory,
+        "wrangler-output.ndjson",
+        Buffer.alloc(0),
+      );
+      throwIfInterrupted(abortSignal);
+      await productionSnapshot.verify();
+      await runner({
+        snapshotPath,
+        emptyEnvironmentPath: productionSnapshot.emptyEnvironmentPath,
+        wranglerConfigPath: productionSnapshot.configPath,
+        outputFilePath,
+        workerName,
+        expectedKid: options.expectedKid,
+        tag: options.tag,
+        message: options.message,
+        stdout,
+        stderr,
+        abortSignal,
+      });
+      throwIfInterrupted(abortSignal);
+      uploadedVersionID = await uploadedVersionReader(
+        outputFilePath,
+        workerName,
+      );
+    } catch (error) {
+      operationError =
+        error instanceof SafeUploadError ||
+        error instanceof SafePreflightError ||
+        error instanceof UploadInterruptedError
+          ? error
+          : fail("validated Worker version upload failed");
     }
-    const emptyEnvironmentPath = await writeProtectedFile(
-      temporaryDirectory,
-      "empty.env",
-      Buffer.alloc(0),
-    );
-    throwIfInterrupted(abortSignal);
-    await runner({
-      snapshotPath,
-      emptyEnvironmentPath,
-      wranglerConfigPath: stagedWorker.wranglerConfigPath,
-      workerName,
-      expectedKid: options.expectedKid,
-      tag: options.tag,
-      message: options.message,
-      stdout,
-      stderr,
-      abortSignal,
-    });
-  } catch (error) {
-    operationError =
-      error instanceof SafeUploadError ||
-      error instanceof SafePreflightError ||
-      error instanceof UploadInterruptedError
-        ? error
-        : fail("validated Worker version upload failed");
-  }
 
-  try {
-    await removeTemporaryDirectory(temporaryDirectory);
-  } catch {
-    const prefix = operationError?.message;
-    throw fail(
-      prefix === undefined
-        ? "protected upload snapshot cleanup failed"
-        : `${prefix}; protected upload snapshot cleanup also failed`,
-    );
-  }
+    try {
+      await removeTemporaryDirectory(temporaryDirectory);
+    } catch {
+      const prefix = operationError?.message;
+      throw fail(
+        prefix === undefined
+          ? "protected upload snapshot cleanup failed"
+          : `${prefix}; protected upload snapshot cleanup also failed`,
+      );
+    }
 
-  if (operationError !== undefined) {
-    throw operationError;
+    if (operationError !== undefined) {
+      throw operationError;
+    }
+    if (!CANONICAL_UUID.test(uploadedVersionID)) {
+      throw fail("Wrangler version upload result is invalid");
+    }
+    stdout(`validated-upload: pass version=${uploadedVersionID}\n`);
+    return uploadedVersionID;
+  } finally {
+    secretsBytes?.fill(0);
   }
 }
 

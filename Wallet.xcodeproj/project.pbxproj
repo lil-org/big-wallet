@@ -1468,6 +1468,7 @@
 				2C09CB9C273979C1009AD39B /* Frameworks */,
 				2C09CB9D273979C1009AD39B /* Resources */,
 				516B2583C21E4F89B3F786DA /* Remove Legacy Alchemy API Key */,
+				2FA6A0010000000000000001 /* Bundle Alchemy JWT Request Proof Key */,
 			);
 			buildRules = (
 			);
@@ -1486,6 +1487,7 @@
 				2C17BDC72D3D007E0015C58B /* Frameworks */,
 				2C17BDC82D3D007E0015C58B /* Resources */,
 				AB014F43D7D74AA2A57639E3 /* Remove Legacy Alchemy API Key */,
+				2FA6A0010000000000000002 /* Bundle Alchemy JWT Request Proof Key */,
 				2C6054882D529A9A00779570 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
@@ -1506,6 +1508,7 @@
 				2C1995392674C4B900A8E370 /* Frameworks */,
 				2C19953A2674C4B900A8E370 /* Resources */,
 				E912C196422D43E2A14A6C26 /* Remove Legacy Alchemy API Key */,
+				2FA6A0010000000000000003 /* Bundle Alchemy JWT Request Proof Key */,
 				2C09CBB8273979C1009AD39B /* Embed Foundation Extensions */,
 				2CFAAA112FA2600000000000 /* Terminate Embedded Ambient Agents */,
 				2CB9B5652FA24A0A00F094FB /* CopyFiles */,
@@ -1530,6 +1533,7 @@
 				2C5FF96C26C84F7B00B32ACC /* Frameworks */,
 				2C5FF96D26C84F7B00B32ACC /* Resources */,
 				4EC946B2766C4F89AE45F6A5 /* Remove Legacy Alchemy API Key */,
+				2FA6A0010000000000000004 /* Bundle Alchemy JWT Request Proof Key */,
 				2CCEB84627594E2A00768473 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
@@ -1551,6 +1555,7 @@
 				2C60546C2D529A9A00779570 /* Frameworks */,
 				2C60546D2D529A9A00779570 /* Resources */,
 				A0FB2A7A814343849A35549C /* Remove Legacy Alchemy API Key */,
+				2FA6A0010000000000000005 /* Bundle Alchemy JWT Request Proof Key */,
 			);
 			buildRules = (
 			);
@@ -1588,6 +1593,7 @@
 				2CB9B54C2FA23F0600F094FB /* Frameworks */,
 				2CB9B54D2FA23F0600F094FB /* Resources */,
 				D8E7DDB615794095B0AE5890 /* Remove Legacy Alchemy API Key */,
+				2FA6A0010000000000000006 /* Bundle Alchemy JWT Request Proof Key */,
 			);
 			buildRules = (
 			);
@@ -1607,6 +1613,7 @@
 				2CCEB82A27594E2A00768473 /* Frameworks */,
 				2CCEB82B27594E2A00768473 /* Resources */,
 				0F74DBBAAD154CE0816A24C8 /* Remove Legacy Alchemy API Key */,
+				2FA6A0010000000000000007 /* Bundle Alchemy JWT Request Proof Key */,
 			);
 			buildRules = (
 			);
@@ -2051,6 +2058,188 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "set -e\n/bin/sh \"$SRCROOT/Scripts/remove_legacy_alchemy_api_key.sh\"\n/bin/sh \"$SRCROOT/Scripts/assert_no_bundled_alchemy_key.sh\" \"$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME\"\n";
+			showEnvVarsInLog = 0;
+		};
+		2FA6A0010000000000000001 /* Bundle Alchemy JWT Request Proof Key */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(ALCHEMY_JWT_REQUEST_PROOF_KEY_FILE)",
+				"$(SRCROOT)/Scripts/alchemy_jwt_request_proof_key.sha256",
+				"$(SRCROOT)/Scripts/alchemy_jwt_request_proof_key_common.sh",
+				"$(SRCROOT)/Scripts/bundle_alchemy_jwt_request_proof_key.sh",
+				"$(SRCROOT)/Scripts/validate_alchemy_jwt_request_proof_key_file.sh",
+			);
+			name = "Bundle Alchemy JWT Request Proof Key";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AlchemyJWTRequestProofKey",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\n/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_jwt_request_proof_key.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		2FA6A0010000000000000002 /* Bundle Alchemy JWT Request Proof Key */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(ALCHEMY_JWT_REQUEST_PROOF_KEY_FILE)",
+				"$(SRCROOT)/Scripts/alchemy_jwt_request_proof_key.sha256",
+				"$(SRCROOT)/Scripts/alchemy_jwt_request_proof_key_common.sh",
+				"$(SRCROOT)/Scripts/bundle_alchemy_jwt_request_proof_key.sh",
+				"$(SRCROOT)/Scripts/validate_alchemy_jwt_request_proof_key_file.sh",
+			);
+			name = "Bundle Alchemy JWT Request Proof Key";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AlchemyJWTRequestProofKey",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\n/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_jwt_request_proof_key.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		2FA6A0010000000000000003 /* Bundle Alchemy JWT Request Proof Key */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(ALCHEMY_JWT_REQUEST_PROOF_KEY_FILE)",
+				"$(SRCROOT)/Scripts/alchemy_jwt_request_proof_key.sha256",
+				"$(SRCROOT)/Scripts/alchemy_jwt_request_proof_key_common.sh",
+				"$(SRCROOT)/Scripts/bundle_alchemy_jwt_request_proof_key.sh",
+				"$(SRCROOT)/Scripts/validate_alchemy_jwt_request_proof_key_file.sh",
+			);
+			name = "Bundle Alchemy JWT Request Proof Key";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AlchemyJWTRequestProofKey",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\n/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_jwt_request_proof_key.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		2FA6A0010000000000000004 /* Bundle Alchemy JWT Request Proof Key */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(ALCHEMY_JWT_REQUEST_PROOF_KEY_FILE)",
+				"$(SRCROOT)/Scripts/alchemy_jwt_request_proof_key.sha256",
+				"$(SRCROOT)/Scripts/alchemy_jwt_request_proof_key_common.sh",
+				"$(SRCROOT)/Scripts/bundle_alchemy_jwt_request_proof_key.sh",
+				"$(SRCROOT)/Scripts/validate_alchemy_jwt_request_proof_key_file.sh",
+			);
+			name = "Bundle Alchemy JWT Request Proof Key";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AlchemyJWTRequestProofKey",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\n/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_jwt_request_proof_key.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		2FA6A0010000000000000005 /* Bundle Alchemy JWT Request Proof Key */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(ALCHEMY_JWT_REQUEST_PROOF_KEY_FILE)",
+				"$(SRCROOT)/Scripts/alchemy_jwt_request_proof_key.sha256",
+				"$(SRCROOT)/Scripts/alchemy_jwt_request_proof_key_common.sh",
+				"$(SRCROOT)/Scripts/bundle_alchemy_jwt_request_proof_key.sh",
+				"$(SRCROOT)/Scripts/validate_alchemy_jwt_request_proof_key_file.sh",
+			);
+			name = "Bundle Alchemy JWT Request Proof Key";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AlchemyJWTRequestProofKey",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\n/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_jwt_request_proof_key.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		2FA6A0010000000000000006 /* Bundle Alchemy JWT Request Proof Key */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(ALCHEMY_JWT_REQUEST_PROOF_KEY_FILE)",
+				"$(SRCROOT)/Scripts/alchemy_jwt_request_proof_key.sha256",
+				"$(SRCROOT)/Scripts/alchemy_jwt_request_proof_key_common.sh",
+				"$(SRCROOT)/Scripts/bundle_alchemy_jwt_request_proof_key.sh",
+				"$(SRCROOT)/Scripts/validate_alchemy_jwt_request_proof_key_file.sh",
+			);
+			name = "Bundle Alchemy JWT Request Proof Key";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AlchemyJWTRequestProofKey",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\n/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_jwt_request_proof_key.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		2FA6A0010000000000000007 /* Bundle Alchemy JWT Request Proof Key */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(ALCHEMY_JWT_REQUEST_PROOF_KEY_FILE)",
+				"$(SRCROOT)/Scripts/alchemy_jwt_request_proof_key.sha256",
+				"$(SRCROOT)/Scripts/alchemy_jwt_request_proof_key_common.sh",
+				"$(SRCROOT)/Scripts/bundle_alchemy_jwt_request_proof_key.sh",
+				"$(SRCROOT)/Scripts/validate_alchemy_jwt_request_proof_key_file.sh",
+			);
+			name = "Bundle Alchemy JWT Request Proof Key";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AlchemyJWTRequestProofKey",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\n/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_jwt_request_proof_key.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		2C0C7A772D53D6F3009D71BD /* ShellScript */ = {

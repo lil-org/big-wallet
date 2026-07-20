@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import {
+  createHash,
   createPrivateKey,
   createPublicKey,
   sign,
@@ -14,6 +15,7 @@ import {
   realpath,
 } from "node:fs/promises";
 import {
+  dirname,
   isAbsolute,
   parse,
   resolve,
@@ -24,8 +26,18 @@ import { fileURLToPath } from "node:url";
 
 const MAX_SECRETS_FILE_BYTES = 32 * 1_024;
 const MAX_PUBLIC_KEY_FILE_BYTES = 16 * 1_024;
+const MAX_APP_PROOF_KEY_FILE_BYTES = 44;
+const MAX_PROOF_KEY_FINGERPRINT_FILE_BYTES = 65;
 const PRIVATE_KEY_FIELD = "ALCHEMY_JWT_PRIVATE_KEY";
+const REQUEST_PROOF_KEY_FIELD = "ALCHEMY_JWT_REQUEST_PROOF_KEY";
+const CANONICAL_PROOF_KEY = /^[A-Za-z0-9_-]{43}$/u;
+const CANONICAL_PROOF_KEY_FINGERPRINT = /^[0-9a-f]{64}$/u;
 const PRINTABLE_KEY_ID = /^[\u0021-\u007e]{1,256}$/u;
+const scriptDirectory = dirname(fileURLToPath(import.meta.url));
+export const REQUEST_PROOF_KEY_FINGERPRINT_PATH = resolve(
+  scriptDirectory,
+  "../../../Scripts/alchemy_jwt_request_proof_key.sha256",
+);
 
 export class SafePreflightError extends Error {
   constructor(message) {
@@ -38,6 +50,126 @@ function fail(message) {
   return new SafePreflightError(message);
 }
 
+function strictASCII(bytes, pattern, description) {
+  if (!(bytes instanceof Uint8Array)) {
+    throw fail(`${description} is invalid`);
+  }
+  for (const byte of bytes) {
+    if (byte > 0x7f) {
+      throw fail(`${description} is invalid`);
+    }
+  }
+  const value = Buffer.from(
+    bytes.buffer,
+    bytes.byteOffset,
+    bytes.byteLength,
+  ).toString("ascii");
+  if (!pattern.test(value)) {
+    throw fail(`${description} is invalid`);
+  }
+  return value;
+}
+
+function parseFingerprintBytes(bytes) {
+  if (
+    !(bytes instanceof Uint8Array) ||
+    (
+      bytes.byteLength !== 64 &&
+      !(
+        bytes.byteLength === 65 &&
+        bytes[64] === 0x0a
+      )
+    )
+  ) {
+    throw fail("request-proof key fingerprint file is invalid");
+  }
+  return strictASCII(
+    bytes.subarray(0, 64),
+    CANONICAL_PROOF_KEY_FINGERPRINT,
+    "request-proof key fingerprint file",
+  );
+}
+
+function requireExpectedFingerprint(value) {
+  if (
+    typeof value !== "string" ||
+    !CANONICAL_PROOF_KEY_FINGERPRINT.test(value)
+  ) {
+    throw fail("expected request-proof key fingerprint is invalid");
+  }
+  return value;
+}
+
+export async function readExpectedRequestProofKeyFingerprint(
+  path = REQUEST_PROOF_KEY_FINGERPRINT_PATH,
+) {
+  return parseFingerprintBytes(
+    await readBoundedRegularFile(
+      path,
+      MAX_PROOF_KEY_FINGERPRINT_FILE_BYTES,
+    ),
+  );
+}
+
+export function parseRequestProofKeyFile(
+  bytes,
+  expectedFingerprint,
+) {
+  if (
+    !(bytes instanceof Uint8Array) ||
+    (
+      bytes.byteLength !== 43 &&
+      !(
+        bytes.byteLength === 44 &&
+        bytes[43] === 0x0a
+      )
+    )
+  ) {
+    throw fail("app proof key file is invalid");
+  }
+  const encoded = strictASCII(
+    bytes.subarray(0, 43),
+    CANONICAL_PROOF_KEY,
+    "app proof key file",
+  );
+  const key = parseProofKey(encoded, "app proof key");
+  const expectedDigest = Buffer.from(
+    requireExpectedFingerprint(expectedFingerprint),
+    "hex",
+  );
+  const actualDigest = createHash("sha256")
+    .update(encoded, "ascii")
+    .digest();
+  if (
+    actualDigest.byteLength !== expectedDigest.byteLength ||
+    !timingSafeEqual(actualDigest, expectedDigest)
+  ) {
+    key.fill(0);
+    throw fail("app proof key does not match the pinned fingerprint");
+  }
+  return key;
+}
+
+export async function readValidatedRequestProofKeyFile(
+  path,
+  {
+    expectedFingerprint,
+  } = {},
+) {
+  const pinnedFingerprint =
+    expectedFingerprint === undefined
+      ? await readExpectedRequestProofKeyFingerprint()
+      : requireExpectedFingerprint(expectedFingerprint);
+  return parseRequestProofKeyFile(
+    await readBoundedRegularFile(
+      path,
+      MAX_APP_PROOF_KEY_FILE_BYTES,
+      { requirePrivatePermissions: true },
+    ),
+    pinnedFingerprint,
+  );
+}
+
 function usage() {
   return [
     "Usage: node scripts/validate-keypair.mjs [options]",
@@ -45,9 +177,11 @@ function usage() {
     "Required options:",
     "  --secrets-file PATH     Absolute path to mode-0600 Wrangler JSON secrets",
     "  --public-key-file PATH  Absolute path to Alchemy's SPKI public key PEM",
+    "  --app-proof-key-file PATH",
+    "                         Absolute path to the app's mode-0600 proof key",
     "  --expected-kid KID      Alchemy key ID to place in the test JWT header",
     "",
-    "The command never prints key material, the kid, the JWT, or its signature.",
+    "The command never prints key material, the kid, the JWT, or signatures.",
   ].join("\n");
 }
 
@@ -60,11 +194,13 @@ export function parseKeypairArguments(arguments_) {
     help: false,
     secretsFile: undefined,
     publicKeyFile: undefined,
+    appProofKeyFile: undefined,
     expectedKid: undefined,
   };
   const fields = new Map([
     ["--secrets-file", "secretsFile"],
     ["--public-key-file", "publicKeyFile"],
+    ["--app-proof-key-file", "appProofKeyFile"],
     ["--expected-kid", "expectedKid"],
   ]);
 
@@ -88,13 +224,15 @@ export function parseKeypairArguments(arguments_) {
   if (
     parsed.secretsFile === undefined ||
     parsed.publicKeyFile === undefined ||
+    parsed.appProofKeyFile === undefined ||
     parsed.expectedKid === undefined
   ) {
-    throw fail("all three keypair options are required");
+    throw fail("all four key and proof options are required");
   }
   if (
     !isAbsolute(parsed.secretsFile) ||
-    !isAbsolute(parsed.publicKeyFile)
+    !isAbsolute(parsed.publicKeyFile) ||
+    !isAbsolute(parsed.appProofKeyFile)
   ) {
     throw fail("key files must use absolute paths");
   }
@@ -139,10 +277,10 @@ export async function readBoundedRegularFile(
     }
     if (
       requirePrivatePermissions &&
-      (before.mode & 0o077) !== 0
+      (before.mode & 0o777) !== 0o600
     ) {
       throw fail(
-        "secrets file permissions must deny group and world access",
+        "private key input permissions must be exactly 0600",
       );
     }
 
@@ -222,12 +360,20 @@ async function canonicalKeyInputPath(
   path,
   { requirePrivatePermissions },
 ) {
+  if (!isAbsolute(path) || resolve(path) !== path) {
+    throw fail("key input path must be canonical and absolute");
+  }
   const originalStats = await lstat(path);
   if (originalStats.isSymbolicLink()) {
     throw fail("key input symlinks are not allowed");
   }
 
   const canonicalPath = await realpath(path);
+  if (canonicalPath !== path) {
+    throw fail(
+      "key input path must not contain symlinked components",
+    );
+  }
   await validateCanonicalPath(
     canonicalPath,
     requirePrivatePermissions,
@@ -319,13 +465,40 @@ function parseSecretsFile(bytes) {
     parsed === null ||
     Array.isArray(parsed) ||
     Object.getPrototypeOf(parsed) !== Object.prototype ||
-    Object.keys(parsed).length !== 1 ||
-    Object.keys(parsed)[0] !== PRIVATE_KEY_FIELD ||
-    typeof parsed[PRIVATE_KEY_FIELD] !== "string"
+    Object.keys(parsed).length !== 2 ||
+    !Object.hasOwn(parsed, PRIVATE_KEY_FIELD) ||
+    !Object.hasOwn(parsed, REQUEST_PROOF_KEY_FIELD) ||
+    typeof parsed[PRIVATE_KEY_FIELD] !== "string" ||
+    typeof parsed[REQUEST_PROOF_KEY_FIELD] !== "string"
   ) {
-    throw fail(`secrets file must contain only ${PRIVATE_KEY_FIELD}`);
+    throw fail(
+      "secrets file must contain exactly the signing and request-proof keys",
+    );
   }
-  return parsed[PRIVATE_KEY_FIELD];
+  return {
+    privateKeyPem: parsed[PRIVATE_KEY_FIELD],
+    requestProofKey: parseProofKey(
+      parsed[REQUEST_PROOF_KEY_FIELD],
+      "request-proof secret",
+    ),
+  };
+}
+
+function parseProofKey(encoded, description) {
+  if (
+    typeof encoded !== "string" ||
+    !CANONICAL_PROOF_KEY.test(encoded)
+  ) {
+    throw fail(`${description} must be a canonical 32-byte base64url key`);
+  }
+  const bytes = Buffer.from(encoded, "base64url");
+  if (
+    bytes.byteLength !== 32 ||
+    bytes.toString("base64url") !== encoded
+  ) {
+    throw fail(`${description} must be a canonical 32-byte base64url key`);
+  }
+  return bytes;
 }
 
 function requireSinglePemEnvelope(
@@ -417,64 +590,121 @@ function base64UrlJson(value) {
 export async function prepareValidatedKeypair({
   secretsFile,
   publicKeyFile,
+  appProofKeyFile,
   expectedKid,
-}) {
+}, {
+  expectedRequestProofKeyFingerprint,
+} = {}) {
   if (
+    typeof secretsFile !== "string" ||
     !isAbsolute(secretsFile) ||
+    typeof publicKeyFile !== "string" ||
     !isAbsolute(publicKeyFile) ||
+    typeof appProofKeyFile !== "string" ||
+    !isAbsolute(appProofKeyFile) ||
+    typeof expectedKid !== "string" ||
     !PRINTABLE_KEY_ID.test(expectedKid)
   ) {
     throw fail("keypair inputs are invalid");
   }
 
-  const [secretsBytes, publicKeyBytes] = await Promise.all([
-    readBoundedRegularFile(secretsFile, MAX_SECRETS_FILE_BYTES, {
-      requirePrivatePermissions: true,
-    }),
-    readBoundedRegularFile(publicKeyFile, MAX_PUBLIC_KEY_FILE_BYTES),
-  ]);
-  const privateKey = parsePrivateKey(parseSecretsFile(secretsBytes));
-  const publicKey = parsePublicKey(publicKeyBytes);
-  requireRsa2048(privateKey);
-  requireRsa2048(publicKey);
+  let secretsBytes;
+  let publicKeyBytes;
+  let appProofKey;
+  let requestProofKey;
+  let derivedPublicDer;
+  let suppliedPublicDer;
+  let signature;
+  let succeeded = false;
+  try {
+    secretsBytes = await readBoundedRegularFile(
+      secretsFile,
+      MAX_SECRETS_FILE_BYTES,
+      {
+        requirePrivatePermissions: true,
+      },
+    );
+    publicKeyBytes = await readBoundedRegularFile(
+      publicKeyFile,
+      MAX_PUBLIC_KEY_FILE_BYTES,
+    );
+    appProofKey = await readValidatedRequestProofKeyFile(
+      appProofKeyFile,
+      {
+        expectedFingerprint: expectedRequestProofKeyFingerprint,
+      },
+    );
+    const parsedSecrets = parseSecretsFile(secretsBytes);
+    const { privateKeyPem } = parsedSecrets;
+    requestProofKey = parsedSecrets.requestProofKey;
+    const privateKey = parsePrivateKey(privateKeyPem);
+    const publicKey = parsePublicKey(publicKeyBytes);
+    requireRsa2048(privateKey);
+    requireRsa2048(publicKey);
 
-  const derivedPublicDer = createPublicKey(privateKey).export({
-    format: "der",
-    type: "spki",
-  });
-  const suppliedPublicDer = publicKey.export({
-    format: "der",
-    type: "spki",
-  });
-  if (
-    derivedPublicDer.byteLength !== suppliedPublicDer.byteLength ||
-    !timingSafeEqual(derivedPublicDer, suppliedPublicDer)
-  ) {
-    throw fail("private and public keys do not match");
-  }
+    derivedPublicDer = createPublicKey(privateKey).export({
+      format: "der",
+      type: "spki",
+    });
+    suppliedPublicDer = publicKey.export({
+      format: "der",
+      type: "spki",
+    });
+    if (
+      derivedPublicDer.byteLength !== suppliedPublicDer.byteLength ||
+      !timingSafeEqual(derivedPublicDer, suppliedPublicDer)
+    ) {
+      throw fail("private and public keys do not match");
+    }
+    if (
+      requestProofKey.byteLength !== appProofKey.byteLength ||
+      !timingSafeEqual(requestProofKey, appProofKey)
+    ) {
+      throw fail("Worker and app request-proof keys do not match");
+    }
 
-  const signingInput = [
-    base64UrlJson({ alg: "RS256", typ: "JWT", kid: expectedKid }),
-    base64UrlJson({ iat: 1_800_000_000, exp: 1_800_086_400 }),
-  ].join(".");
-  const signature = sign("RSA-SHA256", Buffer.from(signingInput), privateKey);
-  if (
-    signature.byteLength !== 256 ||
-    !verify(
+    const signingInput = [
+      base64UrlJson({ alg: "RS256", typ: "JWT", kid: expectedKid }),
+      base64UrlJson({ iat: 1_800_000_000, exp: 1_800_021_600 }),
+    ].join(".");
+    signature = sign(
       "RSA-SHA256",
       Buffer.from(signingInput),
-      publicKey,
-      signature,
-    )
-  ) {
-    throw fail("keypair signing verification failed");
-  }
+      privateKey,
+    );
+    if (
+      signature.byteLength !== 256 ||
+      !verify(
+        "RSA-SHA256",
+        Buffer.from(signingInput),
+        publicKey,
+        signature,
+      )
+    ) {
+      throw fail("keypair signing verification failed");
+    }
 
-  return { secretsBytes };
+    succeeded = true;
+    return { secretsBytes };
+  } finally {
+    if (!succeeded) {
+      secretsBytes?.fill(0);
+    }
+    publicKeyBytes?.fill(0);
+    appProofKey?.fill(0);
+    requestProofKey?.fill(0);
+    derivedPublicDer?.fill(0);
+    suppliedPublicDer?.fill(0);
+    signature?.fill(0);
+  }
 }
 
-export async function validateKeypair(options) {
-  await prepareValidatedKeypair(options);
+export async function validateKeypair(options, dependencies) {
+  const { secretsBytes } = await prepareValidatedKeypair(
+    options,
+    dependencies,
+  );
+  secretsBytes.fill(0);
 }
 
 export async function keypairMain(
@@ -482,6 +712,7 @@ export async function keypairMain(
   {
     stdout = (message) => console.log(message),
     stderr = (message) => console.error(message),
+    expectedRequestProofKeyFingerprint,
   } = {},
 ) {
   try {
@@ -490,8 +721,12 @@ export async function keypairMain(
       stdout(usage());
       return 0;
     }
-    await validateKeypair(options);
-    stdout("keypair-preflight: pass rsa=2048 formats=pkcs8/spki");
+    await validateKeypair(options, {
+      expectedRequestProofKeyFingerprint,
+    });
+    stdout(
+      "keypair-preflight: pass rsa=2048 formats=pkcs8/spki proof-key=matched",
+    );
     return 0;
   } catch (error) {
     const message =

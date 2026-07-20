@@ -74,8 +74,8 @@ struct AlchemyJWTRecord: Codable, Equatable, Sendable {
 
     private static let maximumTokenLength = 8_192
     private static let maximumClockSkew: Int64 = 5 * 60
-    private static let maximumLifetime: Int64 = 48 * 60 * 60
-    private static let minimumLifetime: Int64 = 60
+    private static let maximumLifetime: Int64 = 6 * 60 * 60
+    private static let minimumLifetime: Int64 = 60 * 60
     private static let expirationSafetyMargin: Int64 = 30
 
     func isUsable(at now: Int64) -> Bool {
@@ -273,15 +273,9 @@ enum AlchemyJWTStorageError: Error, Equatable, Sendable {
     case transient
 }
 
-protocol AlchemyInstallationIDProviding: AnyObject, Sendable {
-
-    func installationID() throws -> UUID
-
-}
-
 protocol AlchemyJWTBrokerFetching: Sendable {
 
-    func fetchToken(installationID: UUID) async throws -> AlchemyJWTRecord
+    func fetchToken() async throws -> AlchemyJWTRecord
 
 }
 
@@ -420,7 +414,7 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
         300_000_000_000
     private static let maximumTombstones = 16
     private static let unknownTokenTombstoneLifetime: Int64 =
-        (48 * 60 * 60) + (5 * 60)
+        (6 * 60 * 60) + (5 * 60)
     private static let proactiveScheduleClockToleranceNanoseconds: UInt64 =
         999_999_999
 
@@ -440,7 +434,6 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
     private let persistenceMutationLock = NSLock()
     private var state: State
     private let tokenStore: AlchemyJWTStoring
-    private let installationIDProvider: AlchemyInstallationIDProviding
     private let broker: AlchemyJWTBrokerFetching
     private let refreshLock: AlchemyJWTRefreshLocking
     private let refreshCoordinator = AlchemyJWTRefreshCoordinator()
@@ -463,7 +456,6 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
 
     init(
         tokenStore: AlchemyJWTStoring,
-        installationIDProvider: AlchemyInstallationIDProviding,
         broker: AlchemyJWTBrokerFetching,
         refreshLock: AlchemyJWTRefreshLocking,
         now: @escaping @Sendable () -> Date = { Date() },
@@ -495,7 +487,6 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
         observesCrossProcessChanges: Bool = false
     ) {
         self.tokenStore = tokenStore
-        self.installationIDProvider = installationIDProvider
         self.broker = broker
         self.refreshLock = refreshLock
         self.now = now
@@ -752,9 +743,6 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
             forSecurityApplicationGroupIdentifier: appGroupIdentifier
         )
         let tokenStore = AlchemyJWTKeychainStore()
-        let installationIDProvider = AlchemyAppGroupInstallationIDProvider(
-            containerURL: containerURL
-        )
         let refreshLock = AlchemyJWTFileLock(
             fileURL: containerURL?.appendingPathComponent(
                 ".alchemy-jwt-refresh.lock",
@@ -767,7 +755,6 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
 
         return AlchemyJWTProvider(
             tokenStore: tokenStore,
-            installationIDProvider: installationIDProvider,
             broker: AlchemyJWTBrokerClient(
                 urlSession: URLSession(configuration: configuration)
             ),
@@ -1143,11 +1130,7 @@ final class AlchemyJWTProvider: @unchecked Sendable, AlchemyAuthorizationProvidi
         ) {
             [weak self] in
             guard let self else { throw CancellationError() }
-            let installationID = try self.installationIDProvider
-                .installationID()
-            let fetchedRecord = try await self.broker.fetchToken(
-                installationID: installationID
-            )
+            let fetchedRecord = try await self.broker.fetchToken()
             guard fetchedRecord.isUsable(at: self.nowSeconds()) else {
                 throw ProviderError.invalidBrokerResponse
             }
@@ -2458,85 +2441,6 @@ private final class AlchemyJWTKeychainStore:
 
 }
 
-final class AlchemyAppGroupInstallationIDProvider:
-    @unchecked Sendable,
-    AlchemyInstallationIDProviding {
-
-    private enum InstallationIDError: Error {
-        case missingAppGroupContainer
-    }
-
-    private static let lockTimeoutNanoseconds: UInt64 = 500_000_000
-    private static let lockPollNanoseconds: UInt64 = 10_000_000
-
-    private let containerURL: URL?
-    private let memoryLock = NSLock()
-    private var cachedInstallationID: UUID?
-
-    init(containerURL: URL?) {
-        self.containerURL = containerURL
-    }
-
-    func installationID() throws -> UUID {
-        memoryLock.lock()
-        defer { memoryLock.unlock() }
-
-        if let cachedInstallationID {
-            return cachedInstallationID
-        }
-
-        guard let containerURL else {
-            throw InstallationIDError.missingAppGroupContainer
-        }
-
-        let fileURL = containerURL.appendingPathComponent(
-            "alchemy-jwt-installation-id",
-            isDirectory: false
-        )
-        if let existingID = Self.readInstallationID(at: fileURL) {
-            cachedInstallationID = existingID
-            return existingID
-        }
-
-        let fileLock = AlchemyJWTFileLock(
-            fileURL: containerURL.appendingPathComponent(
-                ".alchemy-jwt-installation.lock",
-                isDirectory: false
-            )
-        )
-        try fileLock.acquire(
-            timeoutNanoseconds: Self.lockTimeoutNanoseconds,
-            pollNanoseconds: Self.lockPollNanoseconds
-        )
-        defer { fileLock.release() }
-
-        let installationID: UUID
-        if let existingID = Self.readInstallationID(at: fileURL) {
-            installationID = existingID
-        } else {
-            let newID = UUID()
-            let data = Data(newID.uuidString.lowercased().utf8)
-            try data.write(to: fileURL, options: .atomic)
-            installationID = newID
-        }
-
-        cachedInstallationID = installationID
-        return installationID
-    }
-
-    private static func readInstallationID(at fileURL: URL) -> UUID? {
-        guard let data = try? Data(contentsOf: fileURL),
-              let value = String(data: data, encoding: .utf8),
-              value == value.lowercased(),
-              let existingID = UUID(uuidString: value),
-              existingID.uuidString.lowercased() == value else {
-            return nil
-        }
-        return existingID
-    }
-
-}
-
 final class AlchemyJWTFileLock:
     @unchecked Sendable,
     AlchemyJWTRefreshLocking {
@@ -2650,31 +2554,251 @@ final class AlchemyJWTFileLock:
 
 }
 
+struct AlchemyJWTRequestProof: Equatable, Sendable {
+
+    let body: Data
+    let headerValue: String
+
+}
+
+protocol AlchemyJWTRequestProofSigning: Sendable {
+
+    func signedRequest() throws -> AlchemyJWTRequestProof
+
+}
+
+private enum AlchemyJWTBrokerContract {
+
+    static let method = "POST"
+    static let endpoint =
+        URL(string: "https://api.lil.org/v1/alchemy/jwt")!
+    static let signingPrefix = Data(
+        "LIL-ALCHEMY-JWT-PROOF-V1\n"
+            .appending("\(method)\n")
+            .appending("\(endpoint.absoluteString)\n")
+            .utf8
+    )
+
+}
+
+enum AlchemyJWTRequestProofError: Error, Equatable, Sendable {
+    case missingKeyResource
+    case invalidKeyResource
+    case invalidClock
+    case invalidNonce
+    case secureRandomFailure
+}
+
+final class AlchemyJWTRequestProofSigner:
+    @unchecked Sendable,
+    AlchemyJWTRequestProofSigning {
+
+    static let resourceName = "AlchemyJWTRequestProofKey"
+    static let signingPrefix = AlchemyJWTBrokerContract.signingPrefix
+
+    private enum KeySource {
+        case bundle(Bundle)
+        case loaded(SymmetricKey)
+    }
+
+    private static let keyByteCount = 32
+    private static let encodedKeyByteCount = 43
+    private static let nonceByteCount = 16
+
+    private let keySource: KeySource
+    private let now: @Sendable () -> Date
+    private let nonceSource: @Sendable () throws -> Data
+    private let keyLock = NSLock()
+    private var cachedKey: SymmetricKey?
+
+    init(
+        bundle: Bundle = .main,
+        now: @escaping @Sendable () -> Date = { Date() },
+        nonceSource: @escaping @Sendable () throws -> Data = {
+            try AlchemyJWTRequestProofSigner.secureNonce()
+        }
+    ) {
+        self.keySource = .bundle(bundle)
+        self.now = now
+        self.nonceSource = nonceSource
+    }
+
+    init(
+        keyData: Data,
+        now: @escaping @Sendable () -> Date = { Date() },
+        nonceSource: @escaping @Sendable () throws -> Data
+    ) throws {
+        guard keyData.count == Self.keyByteCount else {
+            throw AlchemyJWTRequestProofError.invalidKeyResource
+        }
+        let key = SymmetricKey(data: keyData)
+        self.keySource = .loaded(key)
+        self.now = now
+        self.nonceSource = nonceSource
+        self.cachedKey = key
+    }
+
+    func signedRequest() throws -> AlchemyJWTRequestProof {
+        let roundedTimestamp = now().timeIntervalSince1970.rounded(.down)
+        guard let timestamp = Int64(exactly: roundedTimestamp),
+              timestamp >= 0 else {
+            throw AlchemyJWTRequestProofError.invalidClock
+        }
+
+        let nonce = try nonceSource()
+        guard nonce.count == Self.nonceByteCount else {
+            throw AlchemyJWTRequestProofError.invalidNonce
+        }
+        let encodedNonce = Self.base64URLEncodedString(nonce)
+        let body = Data(
+            "{\"timestamp\":\(timestamp),\"nonce\":\"\(encodedNonce)\"}".utf8
+        )
+
+        var authenticatedData = Self.signingPrefix
+        authenticatedData.append(body)
+        let authenticationCode = HMAC<SHA256>.authenticationCode(
+            for: authenticatedData,
+            using: try signingKey()
+        )
+        return AlchemyJWTRequestProof(
+            body: body,
+            headerValue: Self.base64URLEncodedString(
+                Data(authenticationCode)
+            )
+        )
+    }
+
+    static func loadKeyData(in bundle: Bundle) throws -> Data {
+        guard let resourceURL = bundle.url(
+            forResource: resourceName,
+            withExtension: nil
+        ) else {
+            throw AlchemyJWTRequestProofError.missingKeyResource
+        }
+        let encodedData: Data
+        do {
+            encodedData = try readBoundedKey(at: resourceURL)
+        } catch {
+            throw AlchemyJWTRequestProofError.invalidKeyResource
+        }
+        guard encodedData.count == encodedKeyByteCount,
+              let encodedKey = String(data: encodedData, encoding: .ascii),
+              encodedKey.utf8.allSatisfy(Self.isBase64URLByte),
+              let keyData = base64URLData(encodedKey),
+              keyData.count == keyByteCount else {
+            throw AlchemyJWTRequestProofError.invalidKeyResource
+        }
+        return keyData
+    }
+
+    private static func readBoundedKey(at resourceURL: URL) throws -> Data {
+        let handle = try FileHandle(forReadingFrom: resourceURL)
+        defer { try? handle.close() }
+
+        var data = Data()
+        while data.count <= encodedKeyByteCount {
+            let remaining = (encodedKeyByteCount + 1) - data.count
+            guard let chunk = try handle.read(upToCount: remaining),
+                  !chunk.isEmpty else {
+                break
+            }
+            data.append(chunk)
+        }
+        return data
+    }
+
+    private func signingKey() throws -> SymmetricKey {
+        keyLock.lock()
+        defer { keyLock.unlock() }
+
+        if let cachedKey {
+            return cachedKey
+        }
+
+        let key: SymmetricKey
+        switch keySource {
+        case .bundle(let bundle):
+            key = SymmetricKey(data: try Self.loadKeyData(in: bundle))
+        case .loaded(let loadedKey):
+            key = loadedKey
+        }
+        cachedKey = key
+        return key
+    }
+
+    private static func secureNonce() throws -> Data {
+        var bytes = [UInt8](repeating: 0, count: nonceByteCount)
+        let status = bytes.withUnsafeMutableBytes { buffer in
+            SecRandomCopyBytes(
+                kSecRandomDefault,
+                buffer.count,
+                buffer.baseAddress!
+            )
+        }
+        guard status == errSecSuccess else {
+            throw AlchemyJWTRequestProofError.secureRandomFailure
+        }
+        return Data(bytes)
+    }
+
+    private static func base64URLData(_ value: String) -> Data? {
+        var base64 = value
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        base64.append(
+            String(repeating: "=", count: (4 - base64.count % 4) % 4)
+        )
+        guard let data = Data(base64Encoded: base64),
+              base64URLEncodedString(data) == value else {
+            return nil
+        }
+        return data
+    }
+
+    private static func base64URLEncodedString(_ data: Data) -> String {
+        return data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+
+    private static func isBase64URLByte(_ byte: UInt8) -> Bool {
+        return (48...57).contains(byte)
+            || (65...90).contains(byte)
+            || (97...122).contains(byte)
+            || byte == 45
+            || byte == 95
+    }
+
+}
+
 final class AlchemyJWTBrokerClient:
     @unchecked Sendable,
     AlchemyJWTBrokerFetching {
 
-    private struct RequestBody: Encodable {
-        let installationId: String
-    }
-
-    private let endpoint = URL(string: "https://api.lil.org/v1/alchemy/jwt")!
     private let urlSession: URLSession
+    private let proofSigner: AlchemyJWTRequestProofSigning
 
-    init(urlSession: URLSession) {
+    init(
+        urlSession: URLSession,
+        proofSigner: AlchemyJWTRequestProofSigning =
+            AlchemyJWTRequestProofSigner()
+    ) {
         self.urlSession = urlSession
+        self.proofSigner = proofSigner
     }
 
-    func fetchToken(installationID: UUID) async throws -> AlchemyJWTRecord {
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
+    func fetchToken() async throws -> AlchemyJWTRecord {
+        let signedRequest = try proofSigner.signedRequest()
+        var request = URLRequest(url: AlchemyJWTBrokerContract.endpoint)
+        request.httpMethod = AlchemyJWTBrokerContract.method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(
-            RequestBody(
-                installationId: installationID.uuidString.lowercased()
-            )
+        request.setValue(
+            signedRequest.headerValue,
+            forHTTPHeaderField: "X-Lil-Alchemy-Proof"
         )
+        request.httpBody = signedRequest.body
 
         let (bytes, response) = try await urlSession.bytes(for: request)
         guard let response = response as? HTTPURLResponse else {

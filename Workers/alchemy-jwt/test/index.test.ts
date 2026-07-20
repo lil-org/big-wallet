@@ -7,14 +7,24 @@ import {
 } from "../src/handler";
 
 const ENDPOINT = "https://api.lil.org/v1/alchemy/jwt";
-const INSTALLATION_ID = "8e3100fc-1879-4b35-ae97-419d3511a289";
-const SECOND_INSTALLATION_ID = "8e3100fc-1879-4b35-ae97-419d3511a288";
+const PROOF_HEADER = "X-Lil-Alchemy-Proof";
+const PROOF_PREFIX =
+  "LIL-ALCHEMY-JWT-PROOF-V1\n"
+  + "POST\n"
+  + "https://api.lil.org/v1/alchemy/jwt\n";
 const TEST_KEY_ID = "alchemy-test-key-id";
 const TEST_WORKER_VERSION = "6ac1816b-1a72-4715-9d96-08f8f85467bb";
 const CANONICAL_UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const FIXED_TIME_MILLISECONDS = 1_800_000_000_123;
-const FIXED_ISSUED_AT = 1_800_000_000;
+const FIXED_TIME_MILLISECONDS = 1_784_558_400_123;
+const FIXED_ISSUED_AT = 1_784_558_400;
+const GOLDEN_PROOF_KEY =
+  "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8";
+const GOLDEN_NONCE = "AAECAwQFBgcICQoLDA0ODw";
+const GOLDEN_BODY =
+  '{"timestamp":1784558400,"nonce":"AAECAwQFBgcICQoLDA0ODw"}';
+const GOLDEN_PROOF =
+  "ctfhJTYThhT35Q05ptrHCn16ylcrBkNb5c5unj1u1Jk";
 
 type SigningFixture = {
   privateKeyPem: string;
@@ -24,9 +34,8 @@ type SigningFixture = {
 type TestEnvironmentOptions = {
   privateKeyPem?: string;
   keyId?: string;
+  proofKey?: string;
   ttlSeconds?: string;
-  rateLimitSuccess?: boolean;
-  rateLimitError?: boolean;
   workerVersion?: string;
 };
 
@@ -40,6 +49,24 @@ function bytesToBase64(bytes: Uint8Array): string {
     binary += String.fromCharCode(byte);
   }
   return btoa(binary);
+}
+
+function base64UrlEncode(bytes: Uint8Array): string {
+  return bytesToBase64(bytes)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/u, "");
+}
+
+function decodeBase64Url(segment: string): Uint8Array {
+  const normalized = segment.replaceAll("-", "+").replaceAll("_", "/");
+  const paddingLength = (4 - (normalized.length % 4)) % 4;
+  const binary = atob(normalized + "=".repeat(paddingLength));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
 }
 
 function pemEncodePkcs8(bytes: Uint8Array): string {
@@ -85,34 +112,20 @@ async function createSigningFixture(
 
 function createTestEnvironment(
   options: TestEnvironmentOptions = {},
-): {
-  env: AlchemyJWTIssuerEnvironment;
-  limit: ReturnType<typeof vi.fn>;
-} {
-  const limit = vi.fn(
-    async (rateLimitOptions: RateLimitOptions): Promise<RateLimitOutcome> => {
-      void rateLimitOptions;
-      if (options.rateLimitError === true) {
-        throw new Error("test rate limiter failure");
-      }
-      return { success: options.rateLimitSuccess ?? true };
-    },
-  );
-
-  const env: AlchemyJWTIssuerEnvironment = {
-    JWT_ISSUANCE_RATE_LIMITER: { limit },
+): AlchemyJWTIssuerEnvironment {
+  return {
     ALCHEMY_KEY_ID: options.keyId ?? TEST_KEY_ID,
-    JWT_TTL_SECONDS: options.ttlSeconds ?? "86400",
+    JWT_TTL_SECONDS: options.ttlSeconds ?? "21600",
     ALCHEMY_JWT_PRIVATE_KEY:
       options.privateKeyPem ?? signingFixture.privateKeyPem,
+    ALCHEMY_JWT_REQUEST_PROOF_KEY:
+      options.proofKey ?? GOLDEN_PROOF_KEY,
     CF_VERSION_METADATA: {
       id: options.workerVersion ?? TEST_WORKER_VERSION,
       tag: "test",
       timestamp: "2027-01-15T08:00:00.000Z",
     },
   };
-
-  return { env, limit };
 }
 
 function post(
@@ -125,6 +138,57 @@ function post(
     headers,
     body,
   });
+}
+
+function proofBody(
+  timestamp = FIXED_ISSUED_AT,
+  nonce = GOLDEN_NONCE,
+): string {
+  return JSON.stringify({ timestamp, nonce });
+}
+
+async function proofFor(
+  body: Uint8Array,
+  encodedKey = GOLDEN_PROOF_KEY,
+): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    decodeBase64Url(encodedKey),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const prefix = new TextEncoder().encode(PROOF_PREFIX);
+  const input = new Uint8Array(prefix.byteLength + body.byteLength);
+  input.set(prefix);
+  input.set(body, prefix.byteLength);
+  const proof = await crypto.subtle.sign("HMAC", key, input);
+  return base64UrlEncode(new Uint8Array(proof));
+}
+
+async function signedPost(
+  bodyText = GOLDEN_BODY,
+  {
+    encodedKey = GOLDEN_PROOF_KEY,
+    proof,
+    contentType = "application/json",
+    url = ENDPOINT,
+  }: {
+    encodedKey?: string;
+    proof?: string;
+    contentType?: string;
+    url?: string;
+  } = {},
+): Promise<Request> {
+  const body = new TextEncoder().encode(bodyText);
+  return post(
+    body,
+    {
+      "Content-Type": contentType,
+      [PROOF_HEADER]: proof ?? await proofFor(body, encodedKey),
+    },
+    url,
+  );
 }
 
 async function responseObject(
@@ -178,17 +242,6 @@ function jwtSegments(token: string): [string, string, string] {
   return [header, payload, signature];
 }
 
-function decodeBase64Url(segment: string): Uint8Array {
-  const normalized = segment.replaceAll("-", "+").replaceAll("_", "/");
-  const paddingLength = (4 - (normalized.length % 4)) % 4;
-  const binary = atob(normalized + "=".repeat(paddingLength));
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return bytes;
-}
-
 function decodeJsonSegment(segment: string): unknown {
   return JSON.parse(new TextDecoder().decode(decodeBase64Url(segment)));
 }
@@ -222,17 +275,171 @@ describe("production entry point", () => {
   });
 });
 
+describe("state-free request proof", () => {
+  it("freezes the cross-language HMAC golden vector", async () => {
+    expect(
+      await proofFor(new TextEncoder().encode(GOLDEN_BODY)),
+    ).toBe(GOLDEN_PROOF);
+
+    const response = await handleRequest(
+      post(GOLDEN_BODY, {
+        "Content-Type": "application/json",
+        [PROOF_HEADER]: GOLDEN_PROOF,
+      }),
+      createTestEnvironment(),
+      () => FIXED_TIME_MILLISECONDS,
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it("signs the exact raw body bytes after the fixed prefix", async () => {
+    const body = `${GOLDEN_BODY}\n`;
+    const correctProof = await proofFor(new TextEncoder().encode(body));
+    const alteredProof = await proofFor(
+      new TextEncoder().encode(GOLDEN_BODY),
+    );
+    const env = createTestEnvironment();
+
+    const accepted = await handleRequest(
+      post(body, {
+        "Content-Type": "application/json",
+        [PROOF_HEADER]: correctProof,
+      }),
+      env,
+      () => FIXED_TIME_MILLISECONDS,
+    );
+    const rejected = await handleRequest(
+      post(body, {
+        "Content-Type": "application/json",
+        [PROOF_HEADER]: alteredProof,
+      }),
+      env,
+      () => FIXED_TIME_MILLISECONDS,
+    );
+
+    expect(accepted.status).toBe(200);
+    expect(rejected.status).toBe(401);
+  });
+
+  it.each([
+    ["missing proof", undefined],
+    ["empty proof", ""],
+    ["malformed proof", "not-base64url"],
+    ["padded proof", `${GOLDEN_PROOF}=`],
+    ["wrong proof", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"],
+  ])("returns the same generic 401 for %s", async (_name, proof) => {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (proof !== undefined) {
+      headers[PROOF_HEADER] = proof;
+    }
+    const response = await handleRequest(
+      post(GOLDEN_BODY, headers),
+      createTestEnvironment(),
+      () => FIXED_TIME_MILLISECONDS,
+    );
+
+    expect(response.status).toBe(401);
+    assertPrivateResponseHeaders(response);
+    expect(await responseObject(response)).toEqual({
+      error: "Unauthorized",
+    });
+  });
+
+  it.each([
+    ["lower boundary", FIXED_ISSUED_AT - 300, 200],
+    ["upper boundary", FIXED_ISSUED_AT + 300, 200],
+    ["too old", FIXED_ISSUED_AT - 301, 401],
+    ["too far in the future", FIXED_ISSUED_AT + 301, 401],
+  ])("enforces the ±300-second window at the %s", async (
+    _name,
+    timestamp,
+    expectedStatus,
+  ) => {
+    const body = proofBody(timestamp);
+    const response = await handleRequest(
+      await signedPost(body),
+      createTestEnvironment(),
+      () => FIXED_TIME_MILLISECONDS,
+    );
+    expect(response.status).toBe(expectedStatus);
+  });
+
+  it("accepts an exact replay while it remains inside the window", async () => {
+    const env = createTestEnvironment();
+    const first = await handleRequest(
+      await signedPost(),
+      env,
+      () => FIXED_TIME_MILLISECONDS,
+    );
+    const second = await handleRequest(
+      await signedPost(),
+      env,
+      () => FIXED_TIME_MILLISECONDS,
+    );
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+  });
+
+  it("coalesces request-proof key import for concurrent requests", async () => {
+    const proofKey = base64UrlEncode(new Uint8Array(32).fill(0xa5));
+    const importKey = vi.spyOn(crypto.subtle, "importKey");
+    const env = createTestEnvironment({ proofKey });
+    const [first, second] = await Promise.all([
+      handleRequest(
+        await signedPost(GOLDEN_BODY, { encodedKey: proofKey }),
+        env,
+        () => FIXED_TIME_MILLISECONDS,
+      ),
+      handleRequest(
+        await signedPost(GOLDEN_BODY, { encodedKey: proofKey }),
+        env,
+        () => FIXED_TIME_MILLISECONDS,
+      ),
+    ]);
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(
+      importKey.mock.calls.filter(([format]) => format === "raw"),
+    ).toHaveLength(3);
+  });
+
+  it("replaces the proof-key cache when the exact secret changes", async () => {
+    const firstKey = base64UrlEncode(new Uint8Array(32).fill(0xb1));
+    const secondKey = base64UrlEncode(new Uint8Array(32).fill(0xb2));
+    const importKey = vi.spyOn(crypto.subtle, "importKey");
+
+    const first = await handleRequest(
+      await signedPost(GOLDEN_BODY, { encodedKey: firstKey }),
+      createTestEnvironment({ proofKey: firstKey }),
+      () => FIXED_TIME_MILLISECONDS,
+    );
+    const second = await handleRequest(
+      await signedPost(GOLDEN_BODY, { encodedKey: secondKey }),
+      createTestEnvironment({ proofKey: secondKey }),
+      () => FIXED_TIME_MILLISECONDS,
+    );
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(
+      importKey.mock.calls.filter(([format]) => format === "raw"),
+    ).toHaveLength(4);
+  });
+});
+
 describe("JWT issuance", () => {
-  it("returns a verifiable RS256 JWT with only the required header and claims", async () => {
-    const { env, limit } = createTestEnvironment();
+  it("returns a verifiable six-hour RS256 JWT with minimal claims", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const errorLog = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
-
     const response = await handleRequest(
-      post(JSON.stringify({ installationId: INSTALLATION_ID })),
-      env,
+      await signedPost(),
+      createTestEnvironment(),
       () => FIXED_TIME_MILLISECONDS,
     );
 
@@ -245,7 +452,7 @@ describe("JWT issuance", () => {
       "token",
     ]);
     expect(body.issuedAt).toBe(FIXED_ISSUED_AT);
-    expect(body.expiresAt).toBe(FIXED_ISSUED_AT + 86_400);
+    expect(body.expiresAt).toBe(FIXED_ISSUED_AT + 21_600);
     expect(typeof body.token).toBe("string");
     if (typeof body.token !== "string") {
       throw new Error("expected a token");
@@ -264,57 +471,65 @@ describe("JWT issuance", () => {
     });
     expect(decodeJsonSegment(encodedPayload)).toEqual({
       iat: FIXED_ISSUED_AT,
-      exp: FIXED_ISSUED_AT + 86_400,
+      exp: FIXED_ISSUED_AT + 21_600,
     });
-
-    const verified = await crypto.subtle.verify(
-      "RSASSA-PKCS1-v1_5",
-      signingFixture.publicKey,
-      decodeBase64Url(encodedSignature),
-      new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`),
-    );
-    expect(verified).toBe(true);
-    expect(limit).toHaveBeenCalledOnce();
-    expect(limit).toHaveBeenCalledWith({ key: INSTALLATION_ID });
+    expect(
+      await crypto.subtle.verify(
+        "RSASSA-PKCS1-v1_5",
+        signingFixture.publicKey,
+        decodeBase64Url(encodedSignature),
+        new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`),
+      ),
+    ).toBe(true);
     expect(log).not.toHaveBeenCalled();
     expect(errorLog).not.toHaveBeenCalled();
   });
 
-  it.each(["21600", "43200", "86400 ", "086400"])(
-    "rejects non-exact 24-hour TTL configuration %s",
+  it.each(["3600", "7200", "21600"])(
+    "accepts bounded JWT TTL configuration %s",
+    async (ttl) => {
+      const response = await handleRequest(
+        await signedPost(),
+        createTestEnvironment({ ttlSeconds: ttl }),
+        () => FIXED_TIME_MILLISECONDS,
+      );
+      expect(response.status).toBe(200);
+      const body = await responseObject(response);
+      expect(body.expiresAt).toBe(FIXED_ISSUED_AT + Number(ttl));
+    },
+  );
+
+  it.each(["3599", "21601", "21600 ", "021600", "not-a-number"])(
+    "rejects out-of-bounds or noncanonical TTL configuration %s",
     async (ttl) => {
       vi.spyOn(console, "error").mockImplementation(() => undefined);
-      const { env, limit } = createTestEnvironment({ ttlSeconds: ttl });
       const response = await handleRequest(
-        post(JSON.stringify({ installationId: INSTALLATION_ID })),
-        env,
+        await signedPost(),
+        createTestEnvironment({ ttlSeconds: ttl }),
         () => FIXED_TIME_MILLISECONDS,
       );
 
       expect(response.status).toBe(500);
-      assertPrivateResponseHeaders(response);
       expect(await responseObject(response)).toEqual({
         error: "Service unavailable",
       });
-      expect(limit).toHaveBeenCalledOnce();
     },
   );
 
-  it("coalesces signing-key import while signing every JWT freshly", async () => {
+  it("coalesces signing-key import while signing each JWT freshly", async () => {
     const fixture = await createSigningFixture();
     const importKey = vi.spyOn(crypto.subtle, "importKey");
-    const { env } = createTestEnvironment({
+    const env = createTestEnvironment({
       privateKeyPem: fixture.privateKeyPem,
     });
-
     const [firstResponse, secondResponse] = await Promise.all([
       handleRequest(
-        post(JSON.stringify({ installationId: INSTALLATION_ID })),
+        await signedPost(),
         env,
         () => FIXED_TIME_MILLISECONDS,
       ),
       handleRequest(
-        post(JSON.stringify({ installationId: SECOND_INSTALLATION_ID })),
+        await signedPost(proofBody(FIXED_ISSUED_AT + 1)),
         env,
         () => FIXED_TIME_MILLISECONDS + 1_000,
       ),
@@ -326,102 +541,24 @@ describe("JWT issuance", () => {
     const secondBody = await responseObject(secondResponse);
     expect(firstBody.token).not.toBe(secondBody.token);
     expect(firstBody.issuedAt).not.toBe(secondBody.issuedAt);
-    expect(importKey).toHaveBeenCalledOnce();
-
-    const thirdResponse = await handleRequest(
-      post(JSON.stringify({ installationId: INSTALLATION_ID })),
-      env,
-      () => FIXED_TIME_MILLISECONDS + 2_000,
+    const pkcs8Calls = importKey.mock.calls.filter(
+      ([format]) => format === "pkcs8",
     );
-    expect(thirdResponse.status).toBe(200);
-    expect(importKey).toHaveBeenCalledOnce();
-  });
-
-  it("replaces the signing-key cache when the exact PEM changes", async () => {
-    const [firstFixture, secondFixture] = await Promise.all([
-      createSigningFixture(),
-      createSigningFixture(),
-    ]);
-    const importKey = vi.spyOn(crypto.subtle, "importKey");
-
-    const first = await handleRequest(
-      post(JSON.stringify({ installationId: INSTALLATION_ID })),
-      createTestEnvironment({
-        privateKeyPem: firstFixture.privateKeyPem,
-      }).env,
-    );
-    const second = await handleRequest(
-      post(JSON.stringify({ installationId: INSTALLATION_ID })),
-      createTestEnvironment({
-        privateKeyPem: secondFixture.privateKeyPem,
-      }).env,
-    );
-
-    expect(first.status).toBe(200);
-    expect(second.status).toBe(200);
-    expect(importKey).toHaveBeenCalledTimes(2);
-  });
-
-  it("caches deterministic rejection for the current invalid PEM", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const invalidFixture = await createSigningFixture(3_072);
-    const importKey = vi.spyOn(crypto.subtle, "importKey");
-    const { env } = createTestEnvironment({
-      privateKeyPem: invalidFixture.privateKeyPem,
-    });
-
-    const first = await handleRequest(
-      post(JSON.stringify({ installationId: INSTALLATION_ID })),
-      env,
-    );
-    const second = await handleRequest(
-      post(JSON.stringify({ installationId: SECOND_INSTALLATION_ID })),
-      env,
-    );
-
-    expect(first.status).toBe(500);
-    expect(second.status).toBe(500);
-    expect(importKey).toHaveBeenCalledOnce();
-  });
-
-  it("does not inspect the signing key until rate limiting succeeds", async () => {
-    const fixture = await createSigningFixture();
-    const importKey = vi.spyOn(crypto.subtle, "importKey");
-    const throttled = createTestEnvironment({
-      privateKeyPem: fixture.privateKeyPem,
-      rateLimitSuccess: false,
-    });
-
-    const throttledResponse = await handleRequest(
-      post(JSON.stringify({ installationId: INSTALLATION_ID })),
-      throttled.env,
-    );
-    expect(throttledResponse.status).toBe(429);
-    expect(importKey).not.toHaveBeenCalled();
-
-    const successfulResponse = await handleRequest(
-      post(JSON.stringify({ installationId: INSTALLATION_ID })),
-      createTestEnvironment({ privateKeyPem: fixture.privateKeyPem }).env,
-    );
-    expect(successfulResponse.status).toBe(200);
-    expect(importKey).toHaveBeenCalledOnce();
+    expect(pkcs8Calls).toHaveLength(1);
   });
 });
 
-describe("routing and response policy", () => {
+describe("routing and bounded input", () => {
   it.each(["GET", "PUT", "PATCH", "DELETE", "OPTIONS"])(
     "rejects %s on the issuance path",
     async (method) => {
-      const { env, limit } = createTestEnvironment();
       const response = await handleRequest(
         new Request(ENDPOINT, { method }),
-        env,
+        createTestEnvironment(),
       );
-
       expect(response.status).toBe(405);
       expect(response.headers.get("Allow")).toBe("POST");
       assertPrivateResponseHeaders(response);
-      expect(limit).not.toHaveBeenCalled();
     },
   );
 
@@ -435,66 +572,49 @@ describe("routing and response policy", () => {
     "https://api.lil.org:444/v1/alchemy/jwt",
     "https://user@api.lil.org/v1/alchemy/jwt",
   ])("returns 404 for non-exact route %s", async (url) => {
-    const { env, limit } = createTestEnvironment();
     const response = await handleRequest(
-      post(JSON.stringify({ installationId: INSTALLATION_ID }), undefined, url),
-      env,
+      post(GOLDEN_BODY, undefined, url),
+      createTestEnvironment(),
     );
-
     expect(response.status).toBe(404);
     assertPrivateResponseHeaders(response);
-    expect(limit).not.toHaveBeenCalled();
   });
 
-  it("rejects direct cleartext Worker requests before request processing", async () => {
-    const { env, limit } = createTestEnvironment();
+  it("rejects direct cleartext requests before authentication", async () => {
     const response = await handleRequest(
       post(
-        JSON.stringify({ installationId: INSTALLATION_ID }),
+        GOLDEN_BODY,
         undefined,
         "http://api.lil.org/v1/alchemy/jwt",
       ),
-      env,
+      createTestEnvironment(),
     );
-
     expect(response.status).toBe(400);
-    assertPrivateResponseHeaders(response);
     expect(await responseObject(response)).toEqual({
       error: "HTTPS required",
     });
-    expect(limit).not.toHaveBeenCalled();
   });
 
   it("accepts JSON with a UTF-8 media type parameter", async () => {
-    const { env } = createTestEnvironment();
     const response = await handleRequest(
-      post(
-        JSON.stringify({ installationId: INSTALLATION_ID }),
-        { "Content-Type": "application/json; charset=UTF-8" },
-      ),
-      env,
+      await signedPost(GOLDEN_BODY, {
+        contentType: "application/json; charset=UTF-8",
+      }),
+      createTestEnvironment(),
+      () => FIXED_TIME_MILLISECONDS,
     );
-
     expect(response.status).toBe(200);
-    assertPrivateResponseHeaders(response);
   });
-});
 
-describe("input validation", () => {
   it.each([
     ["missing content type", null, {}],
-    [
-      "wrong content type",
-      JSON.stringify({ installationId: INSTALLATION_ID }),
-      { "Content-Type": "text/plain" },
-    ],
+    ["wrong content type", GOLDEN_BODY, { "Content-Type": "text/plain" }],
   ])("returns 415 for %s", async (_name, body, headers) => {
-    const { env, limit } = createTestEnvironment();
-    const response = await handleRequest(post(body, headers), env);
-
+    const response = await handleRequest(
+      post(body, headers),
+      createTestEnvironment(),
+    );
     expect(response.status).toBe(415);
-    assertPrivateResponseHeaders(response);
-    expect(limit).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -502,154 +622,125 @@ describe("input validation", () => {
     ["malformed JSON", "{"],
     ["JSON null", "null"],
     ["JSON array", "[]"],
-    ["missing installation ID", "{}"],
+    ["missing fields", "{}"],
+    ["extra property", `${GOLDEN_BODY.slice(0, -1)},"unexpected":true}`],
+    ["non-integer timestamp", proofBody(FIXED_ISSUED_AT + 0.5)],
+    ["negative timestamp", proofBody(-1)],
+    ["non-string nonce", `{"timestamp":${FIXED_ISSUED_AT},"nonce":123}`],
+    ["short nonce", proofBody(FIXED_ISSUED_AT, "AAAA")],
     [
-      "extra property",
-      JSON.stringify({
-        installationId: INSTALLATION_ID,
-        unexpected: true,
+      "noncanonical nonce",
+      proofBody(FIXED_ISSUED_AT, "AAECAwQFBgcICQoLDA0ODx"),
+    ],
+  ])("returns a generic 401 for %s", async (_name, body) => {
+    const response = await handleRequest(
+      post(body, {
+        "Content-Type": "application/json",
+        [PROOF_HEADER]: GOLDEN_PROOF,
       }),
-    ],
-    [
-      "uppercase UUID",
-      JSON.stringify({ installationId: INSTALLATION_ID.toUpperCase() }),
-    ],
-    [
-      "UUID without hyphens",
-      JSON.stringify({ installationId: INSTALLATION_ID.replaceAll("-", "") }),
-    ],
-    [
-      "non-string UUID",
-      JSON.stringify({ installationId: 123 }),
-    ],
-  ])("returns 400 for %s", async (_name, body) => {
-    const { env, limit } = createTestEnvironment();
-    const response = await handleRequest(post(body), env);
-
-    expect(response.status).toBe(400);
-    assertPrivateResponseHeaders(response);
+      createTestEnvironment(),
+      () => FIXED_TIME_MILLISECONDS,
+    );
+    expect(response.status).toBe(401);
     expect(await responseObject(response)).toEqual({
-      error: "Invalid request",
+      error: "Unauthorized",
     });
-    expect(limit).not.toHaveBeenCalled();
   });
 
-  it("rejects invalid UTF-8", async () => {
-    const { env, limit } = createTestEnvironment();
+  it("accepts either JSON property order when the raw body proof matches", async () => {
+    const body =
+      `{"nonce":"${GOLDEN_NONCE}","timestamp":${FIXED_ISSUED_AT}}`;
     const response = await handleRequest(
-      post(new Uint8Array([0xff])),
-      env,
+      await signedPost(body),
+      createTestEnvironment(),
+      () => FIXED_TIME_MILLISECONDS,
     );
+    expect(response.status).toBe(200);
+  });
 
-    expect(response.status).toBe(400);
-    assertPrivateResponseHeaders(response);
-    expect(limit).not.toHaveBeenCalled();
+  it("rejects invalid UTF-8 with the generic 401", async () => {
+    const response = await handleRequest(
+      post(new Uint8Array([0xff]), {
+        "Content-Type": "application/json",
+        [PROOF_HEADER]: GOLDEN_PROOF,
+      }),
+      createTestEnvironment(),
+      () => FIXED_TIME_MILLISECONDS,
+    );
+    expect(response.status).toBe(401);
   });
 
   it("rejects an invalid Content-Length", async () => {
-    const { env, limit } = createTestEnvironment();
     const response = await handleRequest(
       post("{}", {
         "Content-Type": "application/json",
         "Content-Length": "invalid",
       }),
-      env,
+      createTestEnvironment(),
     );
-
     expect(response.status).toBe(400);
-    assertPrivateResponseHeaders(response);
-    expect(limit).not.toHaveBeenCalled();
   });
 
   it("rejects a declared body larger than 1 KiB without reading it", async () => {
-    const { env, limit } = createTestEnvironment();
     const response = await handleRequest(
       post("{}", {
         "Content-Type": "application/json",
         "Content-Length": "1025",
       }),
-      env,
+      createTestEnvironment(),
     );
-
     expect(response.status).toBe(413);
-    assertPrivateResponseHeaders(response);
-    expect(limit).not.toHaveBeenCalled();
   });
 
-  it("stops reading an undeclared body once it exceeds 1 KiB", async () => {
-    const { env, limit } = createTestEnvironment();
+  it("stops reading an undeclared body after 1 KiB", async () => {
     const response = await handleRequest(
-      post(
-        JSON.stringify({
-          installationId: INSTALLATION_ID,
-          padding: "x".repeat(1_024),
-        }),
-      ),
-      env,
+      post(`{"timestamp":${FIXED_ISSUED_AT},"nonce":"${"x".repeat(1_024)}"}`),
+      createTestEnvironment(),
     );
-
     expect(response.status).toBe(413);
-    assertPrivateResponseHeaders(response);
-    expect(limit).not.toHaveBeenCalled();
   });
 
-  it("returns a redacted 400 when the request body stream fails", async () => {
+  it("returns a redacted 400 when the body stream fails", async () => {
     const sentinel = "request-body-stream-secret";
     const errorLog = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
-    const { env, limit } = createTestEnvironment();
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(
-          new TextEncoder().encode('{"installationId":"'),
-        );
+        controller.enqueue(new TextEncoder().encode('{"timestamp":'));
         controller.error(new Error(sentinel));
       },
     });
 
-    const response = await handleRequest(post(stream), env);
-
+    const response = await handleRequest(
+      post(stream),
+      createTestEnvironment(),
+    );
     expect(response.status).toBe(400);
-    assertPrivateResponseHeaders(response);
-    const responseText = await response.text();
-    expect(responseText).toBe('{"error":"Invalid request"}');
-    expect(responseText).not.toContain(sentinel);
-    expect(limit).not.toHaveBeenCalled();
+    expect(await response.text()).toBe('{"error":"Invalid request"}');
     expect(errorLog).not.toHaveBeenCalled();
   });
 });
 
-describe("throttling and failures", () => {
+describe("configuration and signing failures", () => {
   it.each([
-    ["missing", undefined],
-    ["malformed", "not-a-version-id"],
-    ["uppercase", TEST_WORKER_VERSION.toUpperCase()],
-  ])("fails closed for %s version metadata", async (_name, version) => {
+    ["NaN", Number.NaN],
+    ["infinity", Number.POSITIVE_INFINITY],
+    ["negative time", -1],
+    ["unsafe time", Number.MAX_VALUE],
+  ])("fails closed for a %s clock", async (_name, clockValue) => {
     const errorLog = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
-    const { env, limit } = createTestEnvironment({
-      workerVersion: version ?? TEST_WORKER_VERSION,
-    });
-    if (version === undefined) {
-      expect(Reflect.deleteProperty(env, "CF_VERSION_METADATA")).toBe(true);
-    }
-
     const response = await handleRequest(
-      post(JSON.stringify({ installationId: INSTALLATION_ID })),
-      env,
+      await signedPost(),
+      createTestEnvironment(),
+      () => clockValue,
     );
-
     expect(response.status).toBe(500);
-    expect(response.headers.get("Strict-Transport-Security")).toBe(
-      "max-age=31536000",
-    );
-    expect(response.headers.has("X-Alchemy-JWT-Worker-Version")).toBe(false);
     expect(await responseObject(response)).toEqual({
       error: "Service unavailable",
     });
-    expect(limit).not.toHaveBeenCalled();
     expect(errorLog).toHaveBeenCalledWith(
       JSON.stringify({
         event: "alchemy_jwt_issuer_failure",
@@ -658,47 +749,118 @@ describe("throttling and failures", () => {
     );
   });
 
-  it("returns 429 with Retry-After when the installation is throttled", async () => {
-    const { env, limit } = createTestEnvironment({
-      privateKeyPem: "not a private key",
-      rateLimitSuccess: false,
-    });
-    const response = await handleRequest(
-      post(JSON.stringify({ installationId: INSTALLATION_ID })),
-      env,
-    );
-
-    expect(response.status).toBe(429);
-    expect(response.headers.get("Retry-After")).toBe("60");
-    assertPrivateResponseHeaders(response);
-    expect(await responseObject(response)).toEqual({
-      error: "Too many requests",
-    });
-    expect(limit).toHaveBeenCalledOnce();
-    expect(limit).toHaveBeenCalledWith({ key: INSTALLATION_ID });
-  });
-
-  it("fails closed if the rate-limit binding throws", async () => {
+  it("fails closed when reading the clock throws", async () => {
+    const sentinel = "clock-secret-sentinel";
     const errorLog = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
-    const { env } = createTestEnvironment({ rateLimitError: true });
     const response = await handleRequest(
-      post(JSON.stringify({ installationId: INSTALLATION_ID })),
-      env,
+      await signedPost(),
+      createTestEnvironment(),
+      () => {
+        throw new Error(sentinel);
+      },
     );
-
     expect(response.status).toBe(500);
-    assertPrivateResponseHeaders(response);
     expect(await responseObject(response)).toEqual({
       error: "Service unavailable",
     });
+    expect(errorLog.mock.calls.flat().join(" ")).not.toContain(sentinel);
+  });
+
+  it("reads the clock exactly once for freshness and JWT timestamps", async () => {
+    const now = vi.fn(() => FIXED_TIME_MILLISECONDS);
+    const response = await handleRequest(
+      await signedPost(),
+      createTestEnvironment(),
+      now,
+    );
+    expect(response.status).toBe(200);
+    expect(now).toHaveBeenCalledOnce();
+    expect((await responseObject(response)).issuedAt).toBe(FIXED_ISSUED_AT);
+  });
+
+  it("fails closed when adding the configured TTL would overflow", async () => {
+    const errorLog = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const timestamp = Number.MAX_SAFE_INTEGER;
+    const body = proofBody(timestamp);
+    const response = await handleRequest(
+      await signedPost(body),
+      createTestEnvironment(),
+      () => timestamp * 1_000,
+    );
+    expect(response.status).toBe(500);
     expect(errorLog).toHaveBeenCalledWith(
       JSON.stringify({
         event: "alchemy_jwt_issuer_failure",
-        failure: "rate-limit",
+        failure: "signing",
       }),
     );
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["malformed", "not-a-version-id"],
+    ["uppercase", TEST_WORKER_VERSION.toUpperCase()],
+  ])("fails closed for %s version metadata", async (_name, version) => {
+    const errorLog = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const env = createTestEnvironment({
+      workerVersion: version ?? TEST_WORKER_VERSION,
+    });
+    if (version === undefined) {
+      expect(Reflect.deleteProperty(env, "CF_VERSION_METADATA")).toBe(true);
+    }
+
+    const response = await handleRequest(
+      await signedPost(),
+      env,
+      () => FIXED_TIME_MILLISECONDS,
+    );
+    expect(response.status).toBe(500);
+    expect(response.headers.has("X-Alchemy-JWT-Worker-Version")).toBe(false);
+    expect(errorLog).toHaveBeenCalledWith(
+      JSON.stringify({
+        event: "alchemy_jwt_issuer_failure",
+        failure: "configuration",
+      }),
+    );
+  });
+
+  it.each([
+    ["missing proof key", undefined],
+    ["empty proof key", ""],
+    ["short proof key", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"],
+    ["padded proof key", `${GOLDEN_PROOF_KEY}=`],
+    [
+      "noncanonical proof key",
+      "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh_",
+    ],
+  ])("fails closed for %s", async (_name, proofKey) => {
+    const errorLog = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const env = createTestEnvironment({ proofKey: proofKey ?? GOLDEN_PROOF_KEY });
+    if (proofKey === undefined) {
+      expect(
+        Reflect.deleteProperty(env, "ALCHEMY_JWT_REQUEST_PROOF_KEY"),
+      ).toBe(true);
+    }
+    const response = await handleRequest(
+      await signedPost(),
+      env,
+      () => FIXED_TIME_MILLISECONDS,
+    );
+    expect(response.status).toBe(500);
+    expect(await responseObject(response)).toEqual({
+      error: "Service unavailable",
+    });
+    const logs = errorLog.mock.calls.flat().join(" ");
+    expect(logs).not.toContain(GOLDEN_PROOF_KEY);
+    expect(logs).not.toContain(GOLDEN_PROOF);
   });
 
   it.each([
@@ -712,171 +874,18 @@ describe("throttling and failures", () => {
     const errorLog = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
-    const { env } = createTestEnvironment({ privateKeyPem });
     const response = await handleRequest(
-      post(JSON.stringify({ installationId: INSTALLATION_ID }), {
-        "Content-Type": "application/json",
-        Authorization: "Bearer incoming-secret",
-      }),
-      env,
+      await signedPost(),
+      createTestEnvironment({ privateKeyPem }),
+      () => FIXED_TIME_MILLISECONDS,
     );
-
     expect(response.status).toBe(500);
-    assertPrivateResponseHeaders(response);
     const responseText = await response.text();
     expect(responseText).toBe('{"error":"Service unavailable"}');
     if (privateKeyPem !== "") {
       expect(responseText).not.toContain(privateKeyPem);
+      expect(errorLog.mock.calls.flat().join(" ")).not.toContain(privateKeyPem);
     }
-    expect(responseText).not.toContain(TEST_KEY_ID);
-    expect(responseText).not.toContain("incoming-secret");
-
-    const logs = errorLog.mock.calls.flat().join(" ");
-    if (privateKeyPem !== "") {
-      expect(logs).not.toContain(privateKeyPem);
-    }
-    expect(logs).not.toContain(TEST_KEY_ID);
-    expect(logs).not.toContain("incoming-secret");
-    expect(errorLog).toHaveBeenCalledWith(
-      JSON.stringify({
-        event: "alchemy_jwt_issuer_failure",
-        failure: "signing",
-      }),
-    );
-  });
-
-  it("returns a redacted 500 for an RSA-3072 private key", async () => {
-    const errorLog = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
-    const { env, limit } = createTestEnvironment({
-      privateKeyPem: rsa3072SigningFixture.privateKeyPem,
-    });
-    const response = await handleRequest(
-      post(JSON.stringify({ installationId: INSTALLATION_ID }), {
-        "Content-Type": "application/json",
-        Authorization: "Bearer incoming-secret",
-      }),
-      env,
-    );
-
-    expect(response.status).toBe(500);
-    assertPrivateResponseHeaders(response);
-    const responseText = await response.text();
-    expect(responseText).toBe('{"error":"Service unavailable"}');
-    expect(responseText).not.toContain(rsa3072SigningFixture.privateKeyPem);
-    expect(responseText).not.toContain(TEST_KEY_ID);
-    expect(responseText).not.toContain("incoming-secret");
-
-    const logs = errorLog.mock.calls.flat().join(" ");
-    expect(logs).not.toContain(rsa3072SigningFixture.privateKeyPem);
-    expect(logs).not.toContain(TEST_KEY_ID);
-    expect(logs).not.toContain("incoming-secret");
-    expect(errorLog).toHaveBeenCalledWith(
-      JSON.stringify({
-        event: "alchemy_jwt_issuer_failure",
-        failure: "signing",
-      }),
-    );
-    expect(limit).toHaveBeenCalledOnce();
-    expect(limit).toHaveBeenCalledWith({ key: INSTALLATION_ID });
-  });
-
-  it("returns a redacted 500 for an RSA-2048 exponent-3 private key", async () => {
-    const errorLog = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
-    const { env, limit } = createTestEnvironment({
-      privateKeyPem: rsa2048Exponent3SigningFixture.privateKeyPem,
-    });
-    const response = await handleRequest(
-      post(JSON.stringify({ installationId: INSTALLATION_ID }), {
-        "Content-Type": "application/json",
-        Authorization: "Bearer incoming-secret",
-      }),
-      env,
-    );
-
-    expect(response.status).toBe(500);
-    assertPrivateResponseHeaders(response);
-    const responseText = await response.text();
-    expect(responseText).toBe('{"error":"Service unavailable"}');
-    expect(responseText).not.toContain(
-      rsa2048Exponent3SigningFixture.privateKeyPem,
-    );
-    expect(responseText).not.toContain(TEST_KEY_ID);
-    expect(responseText).not.toContain("incoming-secret");
-
-    const logs = errorLog.mock.calls.flat().join(" ");
-    expect(logs).not.toContain(
-      rsa2048Exponent3SigningFixture.privateKeyPem,
-    );
-    expect(logs).not.toContain(TEST_KEY_ID);
-    expect(logs).not.toContain("incoming-secret");
-    expect(errorLog).toHaveBeenCalledWith(
-      JSON.stringify({
-        event: "alchemy_jwt_issuer_failure",
-        failure: "signing",
-      }),
-    );
-    expect(limit).toHaveBeenCalledOnce();
-    expect(limit).toHaveBeenCalledWith({ key: INSTALLATION_ID });
-  });
-
-  it("returns a redacted 500 when the private-key binding is absent", async () => {
-    const errorLog = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
-    const { env } = createTestEnvironment();
-    expect(Reflect.deleteProperty(env, "ALCHEMY_JWT_PRIVATE_KEY")).toBe(true);
-
-    const response = await handleRequest(
-      post(JSON.stringify({ installationId: INSTALLATION_ID })),
-      env,
-    );
-
-    expect(response.status).toBe(500);
-    assertPrivateResponseHeaders(response);
-    expect(await responseObject(response)).toEqual({
-      error: "Service unavailable",
-    });
-    expect(errorLog).toHaveBeenCalledWith(
-      JSON.stringify({
-        event: "alchemy_jwt_issuer_failure",
-        failure: "signing",
-      }),
-    );
-  });
-
-  it("returns a redacted 500 when the key-ID binding is absent", async () => {
-    const errorLog = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
-    const { env } = createTestEnvironment();
-    expect(Reflect.deleteProperty(env, "ALCHEMY_KEY_ID")).toBe(true);
-
-    const response = await handleRequest(
-      post(JSON.stringify({ installationId: INSTALLATION_ID }), {
-        "Content-Type": "application/json",
-        Authorization: "Bearer incoming-secret",
-      }),
-      env,
-    );
-
-    expect(response.status).toBe(500);
-    assertPrivateResponseHeaders(response);
-    const responseText = await response.text();
-    expect(responseText).toBe('{"error":"Service unavailable"}');
-    expect(responseText).not.toContain(signingFixture.privateKeyPem);
-    expect(responseText).not.toContain(TEST_KEY_ID);
-    expect(responseText).not.toContain("incoming-secret");
-    expect(responseText).not.toContain("undefined");
-
-    const logs = errorLog.mock.calls.flat().join(" ");
-    expect(logs).not.toContain(signingFixture.privateKeyPem);
-    expect(logs).not.toContain(TEST_KEY_ID);
-    expect(logs).not.toContain("incoming-secret");
-    expect(logs).not.toContain("undefined");
     expect(errorLog).toHaveBeenCalledWith(
       JSON.stringify({
         event: "alchemy_jwt_issuer_failure",
@@ -886,22 +895,28 @@ describe("throttling and failures", () => {
   });
 
   it.each([
+    ["RSA-3072", () => rsa3072SigningFixture.privateKeyPem],
+    ["RSA-2048 exponent 3", () => rsa2048Exponent3SigningFixture.privateKeyPem],
+  ])("rejects a %s private key", async (_name, privateKeyPem) => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const response = await handleRequest(
+      await signedPost(),
+      createTestEnvironment({ privateKeyPem: privateKeyPem() }),
+      () => FIXED_TIME_MILLISECONDS,
+    );
+    expect(response.status).toBe(500);
+  });
+
+  it.each([
     ["placeholder key ID", { keyId: "pending-alchemy-key-id" }],
     ["invalid key ID", { keyId: "contains whitespace" }],
-    ["unsupported TTL", { ttlSeconds: "90000" }],
-    ["non-numeric TTL", { ttlSeconds: "not-a-number" }],
   ])("fails safely for %s", async (_name, options) => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const { env } = createTestEnvironment(options);
     const response = await handleRequest(
-      post(JSON.stringify({ installationId: INSTALLATION_ID })),
-      env,
+      await signedPost(),
+      createTestEnvironment(options),
+      () => FIXED_TIME_MILLISECONDS,
     );
-
     expect(response.status).toBe(500);
-    assertPrivateResponseHeaders(response);
-    expect(await responseObject(response)).toEqual({
-      error: "Service unavailable",
-    });
   });
 });

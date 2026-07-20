@@ -20,7 +20,8 @@
     "upload:validated": "node scripts/upload-validated-version.mjs",
     "validate:keypair": "node scripts/validate-keypair.mjs",
     "validate:live": "node scripts/live-validate.mjs",
-    "validate:self": "node scripts/live-validate.mjs --self-test"
+    "validate:self": "node scripts/live-validate.mjs --self-test",
+    "verify:release": "node scripts/verify-release.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.18.6",

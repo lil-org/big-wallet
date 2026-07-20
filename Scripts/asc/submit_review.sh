@@ -10,7 +10,33 @@ export ASC_TIMEOUT="${ASC_TIMEOUT:-120s}"
 
 platform="${1:-${PLATFORM:-IOS}}"
 build_id="${2:-${BUILD_ID:-}}"
-version="$(target_version)"
+local_version="$(current_local_version)"
+build_number="$(current_local_build_number)"
+version="${VERSION:-$local_version}"
+validate_local_version_sources "$version" "$build_number"
+
+proof_key_file="${ALCHEMY_JWT_REQUEST_PROOF_KEY_FILE:-}"
+[[ -n "$proof_key_file" ]] \
+  || die "ALCHEMY_JWT_REQUEST_PROOF_KEY_FILE is required for review submission"
+"$REPO_ROOT/Scripts/validate_alchemy_jwt_request_proof_key_file.sh" \
+  "$proof_key_file"
+proof_fingerprint="$(alchemy_request_proof_fingerprint)"
+
+load_and_validate_alchemy_release_receipt \
+  "$platform" \
+  "$version" \
+  "$build_number" \
+  "$build_id" \
+  "$proof_fingerprint"
+build_id="$ALCHEMY_RELEASE_RECEIPT_BUILD_ID"
+artifact_path="$ALCHEMY_RELEASE_RECEIPT_ARTIFACT_PATH"
+
+"$REPO_ROOT/Scripts/assert_no_bundled_alchemy_key.sh" "$artifact_path"
+"$REPO_ROOT/Scripts/assert_bundled_alchemy_jwt_request_proof_key.sh" \
+  "$platform" \
+  "$artifact_path"
+run_alchemy_worker_release_verification "$proof_key_file"
+
 version_id="$(Scripts/asc/ensure_version.sh "$platform" "$version")"
 version_state="$(asc versions view --version-id "$version_id" --output json | extract_app_store_version_state)"
 
@@ -123,21 +149,6 @@ asc versions update \
   --version-id "$version_id" \
   --release-type AFTER_APPROVAL \
   --output json >/dev/null
-
-if [[ -z "$build_id" ]]; then
-  build_number="$(current_build_number)"
-  log "resolving uploaded $platform build $version ($build_number)"
-  build_json="$(asc builds info \
-    --app "$APP_ID" \
-    --version "$version" \
-    --build-number "$build_number" \
-    --platform "$platform" \
-    --output json)"
-  build_id="$(extract_first_id <<<"$build_json")"
-
-  [[ -n "$build_id" && "$build_id" != "null" ]] \
-    || die "could not resolve uploaded build $version ($build_number) for $platform"
-fi
 
 log "submitting $platform $version with build $build_id"
 resolve_rejected_review_items

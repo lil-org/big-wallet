@@ -7,7 +7,9 @@
     "MACOS_SCHEME": "Wallet",
     "VISIONOS_SCHEME": "Wallet visionOS",
     "ASC_METADATA_ROOT": "app-store-connect",
-    "ASC_RUNTIME_ROOT": ".asc"
+    "ASC_RUNTIME_ROOT": ".asc",
+    "ALCHEMY_JWT_EXPECTED_KID": "3548436c-9bdb-4f3a-b1e8-ff9d01450110",
+    "ALCHEMY_JWT_EXPECTED_WORKER_VERSION": "d17718b6-4148-4323-9bde-c10c62406795"
   },
   "workflows": {
     "preflight": {

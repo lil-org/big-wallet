@@ -10,9 +10,6 @@ final class AlchemyJWTProviderTests: XCTestCase {
     private let alchemyURL = URL(
         string: "https://eth-mainnet.g.alchemy.com/v2"
     )!
-    private let installationID = UUID(
-        uuidString: "123e4567-e89b-12d3-a456-426614174000"
-    )!
 
     func testStrictAlchemyEndpointPredicate() throws {
         let accepted = [
@@ -66,17 +63,111 @@ final class AlchemyJWTProviderTests: XCTestCase {
 
         let ordinary = makeRecord(
             issuedAt: 2_000_000_000,
-            expiresAt: 2_000_086_400
+            expiresAt: 2_000_021_600
         )
         XCTAssertFalse(ordinary.isTimeUsable(at: Int64.max))
         XCTAssertFalse(ordinary.shouldRefresh(at: Int64.min))
+    }
+
+    func testJWTLifetimeAcceptsOneThroughSixHoursOnly() {
+        let now: Int64 = 2_000_000_000
+
+        for lifetime in [3_600, 21_600] {
+            XCTAssertTrue(
+                makeRecord(
+                    issuedAt: now,
+                    expiresAt: now + Int64(lifetime)
+                ).isStructurallyValid(at: now)
+            )
+        }
+        for lifetime in [3_599, 21_601] {
+            XCTAssertFalse(
+                makeRecord(
+                    issuedAt: now,
+                    expiresAt: now + Int64(lifetime)
+                ).isStructurallyValid(at: now)
+            )
+        }
+    }
+
+    func testProofKeyLoaderRequiresCanonical32ByteBase64URL() throws {
+        let encodedKey =
+            "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
+        try withProofKeyBundle(contents: Data(encodedKey.utf8)) { bundle in
+            XCTAssertEqual(
+                try AlchemyJWTRequestProofSigner.loadKeyData(in: bundle),
+                Data((0...31).map(UInt8.init))
+            )
+        }
+
+        var noncanonicalKey = encodedKey
+        noncanonicalKey.removeLast()
+        noncanonicalKey.append("9")
+        let invalidResources = [
+            Data(),
+            Data(encodedKey.dropLast().utf8),
+            Data((encodedKey + "=").utf8),
+            Data((encodedKey + "\n").utf8),
+            Data(noncanonicalKey.utf8),
+            Data(("!" + encodedKey.dropFirst()).utf8),
+            Data(repeating: 0x41, count: 1_048_576),
+        ]
+        for invalidResource in invalidResources {
+            try withProofKeyBundle(contents: invalidResource) { bundle in
+                XCTAssertThrowsError(
+                    try AlchemyJWTRequestProofSigner.loadKeyData(in: bundle)
+                ) { error in
+                    XCTAssertEqual(
+                        error as? AlchemyJWTRequestProofError,
+                        .invalidKeyResource
+                    )
+                }
+            }
+        }
+
+        try withProofKeyBundle(contents: nil) { bundle in
+            XCTAssertThrowsError(
+                try AlchemyJWTRequestProofSigner.loadKeyData(in: bundle)
+            ) { error in
+                XCTAssertEqual(
+                    error as? AlchemyJWTRequestProofError,
+                    .missingKeyResource
+                )
+            }
+        }
+    }
+
+    func testProofSignerLazilyLoadsAndCachesBundledKey() throws {
+        let encodedKey =
+            "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
+        try withProofKeyBundle(contents: Data(encodedKey.utf8)) { bundle in
+            let signer = AlchemyJWTRequestProofSigner(
+                bundle: bundle,
+                now: {
+                    Date(timeIntervalSince1970: 1_784_558_400)
+                },
+                nonceSource: {
+                    Data((0...15).map(UInt8.init))
+                }
+            )
+            let first = try signer.signedRequest()
+            let resourceURL = try XCTUnwrap(
+                bundle.url(
+                    forResource: AlchemyJWTRequestProofSigner.resourceName,
+                    withExtension: nil
+                )
+            )
+            try FileManager.default.removeItem(at: resourceURL)
+
+            XCTAssertEqual(try signer.signedRequest(), first)
+        }
     }
 
     func testJWTCompactEncodingRequiresCanonicalRSA2048Signature() throws {
         let now: Int64 = 2_000_000_000
         let valid = makeRecord(
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let segments = valid.token.split(
             separator: ".",
@@ -159,7 +250,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
     func testInitializationDoesNotLoadAndPrewarmCreatesWarmMemoryCache()
         async throws {
         let now: Int64 = 2_000_000_000
-        let record = makeRecord(issuedAt: now - 60, expiresAt: now + 86_340)
+        let record = makeRecord(issuedAt: now - 60, expiresAt: now + 21_540)
         let store = TestAlchemyJWTStore(record: record)
         let broker = TestAlchemyJWTBroker(records: [])
         let provider = makeProvider(
@@ -190,7 +281,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let record = makeRecord(
             marker: "lifecycle",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: nil)
         let broker = TestAlchemyJWTBroker(records: [record])
@@ -242,7 +333,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let record = makeRecord(
             marker: "immediate-demand",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: nil)
         let broker = TestAlchemyJWTBroker(
@@ -281,7 +372,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let replacement = makeRecord(
             marker: "replacement",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: nil)
         let broker = TestAlchemyJWTBroker(
@@ -306,7 +397,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
     func testNonAlchemyURLNeverLoadsTokenOrCallsBroker() async throws {
         let store = TestAlchemyJWTStore(record: nil)
         let broker = TestAlchemyJWTBroker(
-            records: [makeRecord(issuedAt: 2_000_000_000, expiresAt: 2_000_086_400)]
+            records: [makeRecord(issuedAt: 2_000_000_000, expiresAt: 2_000_021_600)]
         )
         let provider = makeProvider(
             store: store,
@@ -327,7 +418,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
 
     func testConcurrentColdAuthorizationIsSingleFlight() async throws {
         let now: Int64 = 2_000_000_000
-        let record = makeRecord(issuedAt: now, expiresAt: now + 86_400)
+        let record = makeRecord(issuedAt: now, expiresAt: now + 21_600)
         let store = TestAlchemyJWTStore(record: nil)
         let broker = TestAlchemyJWTBroker(
             records: [record],
@@ -358,7 +449,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
     func testOverlappingImmediateUsePrewarmAndColdRPCShareBrokerFlight()
         async throws {
         let now: Int64 = 2_000_000_000
-        let record = makeRecord(issuedAt: now, expiresAt: now + 86_400)
+        let record = makeRecord(issuedAt: now, expiresAt: now + 21_600)
         let store = TestAlchemyJWTStore(record: nil)
         let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
         let broker = TestAlchemyJWTBroker(
@@ -395,7 +486,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
 
     func testTwoProvidersCoalesceRefreshThroughSharedAdvisoryLock() async throws {
         let now: Int64 = 2_000_000_000
-        let record = makeRecord(issuedAt: now, expiresAt: now + 86_400)
+        let record = makeRecord(issuedAt: now, expiresAt: now + 21_600)
         let store = TestAlchemyJWTStore(record: nil)
         let broker = TestAlchemyJWTBroker(
             records: [record],
@@ -430,7 +521,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
     func testColdDemandFallsBackWhenCrossProcessLockStaysContended()
         async throws {
         let now: Int64 = 2_000_000_000
-        let record = makeRecord(issuedAt: now, expiresAt: now + 86_400)
+        let record = makeRecord(issuedAt: now, expiresAt: now + 21_600)
         let store = TestAlchemyJWTStore(record: nil)
         let broker = TestAlchemyJWTBroker(records: [record])
         let contendedLock = TestAlchemyJWTRefreshLock(isAvailable: false)
@@ -459,12 +550,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "rejected",
             issuedAt: now - 1,
-            expiresAt: now + 86_399
+            expiresAt: now + 21_599
         )
         let replacement = makeRecord(
             marker: "replacement",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: rejected)
         let broker = TestAlchemyJWTBroker(records: [replacement])
@@ -501,13 +592,13 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let now: Int64 = 2_000_000_000
         let current = makeRecord(
             marker: "current",
-            issuedAt: now - 64_800,
-            expiresAt: now + 21_600
+            issuedAt: now - 16_200,
+            expiresAt: now + 5_400
         )
         let replacement = makeRecord(
             marker: "replacement",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: current)
         let broker = TestAlchemyJWTBroker(records: [replacement])
@@ -533,13 +624,13 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let now: Int64 = 2_000_000_000
         let current = makeRecord(
             marker: "current",
-            issuedAt: now - 64_800,
-            expiresAt: now + 21_600
+            issuedAt: now - 16_200,
+            expiresAt: now + 5_400
         )
         let replacement = makeRecord(
             marker: "replacement",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: current)
         let broker = TestAlchemyJWTBroker(
@@ -571,7 +662,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let current = makeRecord(
             marker: "scheduled-current",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let sleeper = TestAlchemyJWTProactiveSleeper()
         let broker = TestAlchemyJWTBroker(records: [])
@@ -596,7 +687,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
 
         let durations = await sleeper.requestedDurations()
         let fetchCount = await broker.fetchCount
-        XCTAssertEqual(durations, [64_800_000_000_000])
+        XCTAssertEqual(durations, [16_200_000_000_000])
         XCTAssertEqual(fetchCount, 0)
     }
 
@@ -606,12 +697,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let current = makeRecord(
             marker: "scheduled-old",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let replacement = makeRecord(
             marker: "scheduled-new",
-            issuedAt: now + 64_800,
-            expiresAt: now + 151_200
+            issuedAt: now + 16_200,
+            expiresAt: now + 37_800
         )
         let sleeper = TestAlchemyJWTProactiveSleeper()
         let broker = TestAlchemyJWTBroker(records: [replacement])
@@ -633,7 +724,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
             await sleeper.pendingCount() == 1
         }
 
-        clock.advance(by: 64_800)
+        clock.advance(by: 16_200)
         await sleeper.resumeNext()
         await waitUntil {
             let durations = await sleeper.requestedDurations()
@@ -646,8 +737,8 @@ final class AlchemyJWTProviderTests: XCTestCase {
         XCTAssertEqual(
             durations,
             [
-                64_800_000_000_000,
-                64_800_000_000_000,
+                16_200_000_000_000,
+                16_200_000_000_000,
             ]
         )
     }
@@ -657,13 +748,13 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let now: Int64 = 2_000_000_000
         let current = makeRecord(
             marker: "scheduled-in-flight-current",
-            issuedAt: now - 64_800,
-            expiresAt: now + 21_600
+            issuedAt: now - 16_200,
+            expiresAt: now + 5_400
         )
         let replacement = makeRecord(
             marker: "scheduled-in-flight-replacement",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let sleeper = TestAlchemyJWTProactiveSleeper()
         let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
@@ -737,13 +828,13 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let now: Int64 = 2_000_000_000
         let current = makeRecord(
             marker: "scheduled-still-due",
-            issuedAt: now - 64_800,
-            expiresAt: now + 21_600
+            issuedAt: now - 16_200,
+            expiresAt: now + 5_400
         )
         let unexpectedSecond = makeRecord(
             marker: "unexpected-second",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let sleeper = TestAlchemyJWTProactiveSleeper()
         let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
@@ -792,7 +883,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let current = makeRecord(
             marker: "clock-jump",
             issuedAt: now - 10_000,
-            expiresAt: now + 76_400
+            expiresAt: now + 11_600
         )
         let sleeper = TestAlchemyJWTProactiveSleeper()
         let clock = TestAlchemyJWTClock(
@@ -840,9 +931,9 @@ final class AlchemyJWTProviderTests: XCTestCase {
         XCTAssertEqual(
             durations,
             [
-                54_800_000_000_000,
-                51_200_000_000_000,
-                58_400_000_000_000,
+                6_200_000_000_000,
+                2_600_000_000_000,
+                9_800_000_000_000,
             ]
         )
         XCTAssertEqual(fetchCount, 0)
@@ -854,12 +945,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let first = makeRecord(
             marker: "reload-first",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let second = makeRecord(
             marker: "reload-second",
             issuedAt: now + 1,
-            expiresAt: now + 86_401
+            expiresAt: now + 21_601
         )
         let store = TestAlchemyJWTStore(record: first)
         let sleeper = TestAlchemyJWTProactiveSleeper()
@@ -892,8 +983,8 @@ final class AlchemyJWTProviderTests: XCTestCase {
         XCTAssertEqual(
             durations,
             [
-                64_800_000_000_000,
-                64_801_000_000_000,
+                16_200_000_000_000,
+                16_201_000_000_000,
             ]
         )
         XCTAssertEqual(fetchCount, 0)
@@ -904,13 +995,13 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let now: Int64 = 2_000_000_000
         let current = makeRecord(
             marker: "reload-backed-off-current",
-            issuedAt: now - 64_800,
-            expiresAt: now + 21_600
+            issuedAt: now - 16_200,
+            expiresAt: now + 5_400
         )
         let replacement = makeRecord(
             marker: "reload-backed-off-replacement",
             issuedAt: now + 2,
-            expiresAt: now + 86_402
+            expiresAt: now + 21_602
         )
         let store = TestAlchemyJWTStore(record: current)
         let sleeper = TestAlchemyJWTProactiveSleeper()
@@ -957,7 +1048,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
                 && durations.count == 4
         }
 
-        clock.advance(by: 64_800)
+        clock.advance(by: 16_200)
         await sleeper.resumeNext()
         await waitUntil {
             let durations = await sleeper.requestedDurations()
@@ -969,8 +1060,8 @@ final class AlchemyJWTProviderTests: XCTestCase {
         XCTAssertLessThanOrEqual(durations[1], 1_000_000_000)
         XCTAssertGreaterThan(durations[2], 1_750_000_000)
         XCTAssertLessThanOrEqual(durations[2], 2_000_000_000)
-        XCTAssertGreaterThan(durations[3], 64_799_750_000_000)
-        XCTAssertLessThanOrEqual(durations[3], 64_800_000_000_000)
+        XCTAssertGreaterThan(durations[3], 16_199_750_000_000)
+        XCTAssertLessThanOrEqual(durations[3], 16_200_000_000_000)
         XCTAssertGreaterThan(durations[4], 750_000_000)
         XCTAssertLessThanOrEqual(durations[4], 1_000_000_000)
     }
@@ -981,7 +1072,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let replacement = makeRecord(
             marker: "reload-demand-replacement",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: nil)
         let broker = TestAlchemyJWTBroker(
@@ -1009,7 +1100,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
 
         store.record = replacement
         provider.reloadFromPersistence()
-        clock.advance(by: 86_401)
+        clock.advance(by: 21_601)
 
         do {
             _ = try await provider.authorization(for: alchemyURL)
@@ -1035,7 +1126,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let current = makeRecord(
             marker: "cancel-current",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let rejectedSleeper = TestAlchemyJWTProactiveSleeper()
         let rejectedBroker = TestAlchemyJWTBroker(records: [])
@@ -1093,8 +1184,8 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let now: Int64 = 2_000_000_000
         let current = makeRecord(
             marker: "no-progress-current",
-            issuedAt: now - 64_800,
-            expiresAt: now + 21_600
+            issuedAt: now - 16_200,
+            expiresAt: now + 5_400
         )
         let expectedBackoffs: [UInt64] = [
             1, 2, 4, 8, 16, 32, 64, 128, 256, 300, 300,
@@ -1152,13 +1243,13 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let now: Int64 = 2_000_000_000
         let current = makeRecord(
             marker: "no-progress-current",
-            issuedAt: now - 64_800,
-            expiresAt: now + 21_600
+            issuedAt: now - 16_200,
+            expiresAt: now + 5_400
         )
         let replacement = makeRecord(
             marker: "no-progress-replacement",
             issuedAt: now + 10,
-            expiresAt: now + 86_410
+            expiresAt: now + 21_610
         )
         let sleeper = TestAlchemyJWTProactiveSleeper()
         let broker = TestAlchemyJWTBroker(
@@ -1205,10 +1296,10 @@ final class AlchemyJWTProviderTests: XCTestCase {
         XCTAssertLessThanOrEqual(durations[2], 2_000_000_000)
         XCTAssertGreaterThan(durations[3], 3_750_000_000)
         XCTAssertLessThanOrEqual(durations[3], 4_000_000_000)
-        XCTAssertGreaterThan(durations[4], 64_799_750_000_000)
-        XCTAssertLessThanOrEqual(durations[4], 64_800_000_000_000)
+        XCTAssertGreaterThan(durations[4], 16_199_750_000_000)
+        XCTAssertLessThanOrEqual(durations[4], 16_200_000_000_000)
 
-        clock.advance(by: 64_800)
+        clock.advance(by: 16_200)
         await sleeper.resumeNext()
         await waitUntil {
             let values = await sleeper.requestedDurations()
@@ -1225,13 +1316,13 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let now: Int64 = 2_000_000_000
         let current = makeRecord(
             marker: "scheduled-rate-limit-current",
-            issuedAt: now - 64_800,
-            expiresAt: now + 21_600
+            issuedAt: now - 16_200,
+            expiresAt: now + 5_400
         )
         let replacement = makeRecord(
             marker: "scheduled-rate-limit-replacement",
             issuedAt: now + 61,
-            expiresAt: now + 86_461
+            expiresAt: now + 21_661
         )
         let sleeper = TestAlchemyJWTProactiveSleeper()
         let broker = TestAlchemyJWTBroker(
@@ -1288,13 +1379,13 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let now: Int64 = 2_000_000_000
         let current = makeRecord(
             marker: "current",
-            issuedAt: now - 64_800,
-            expiresAt: now + 21_600
+            issuedAt: now - 16_200,
+            expiresAt: now + 5_400
         )
         let staleFetch = makeRecord(
             marker: "stale-fetch",
-            issuedAt: now - 64_801,
-            expiresAt: now + 21_599
+            issuedAt: now - 16_201,
+            expiresAt: now + 5_399
         )
         let store = TestAlchemyJWTStore(record: current)
         let broker = TestAlchemyJWTBroker(records: [staleFetch])
@@ -1315,12 +1406,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let first = makeRecord(
             marker: "first",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let second = makeRecord(
             marker: "second",
             issuedAt: now + 1,
-            expiresAt: now + 86_401
+            expiresAt: now + 21_601
         )
         let store = TestAlchemyJWTStore(record: first)
         let broker = TestAlchemyJWTBroker(records: [])
@@ -1340,12 +1431,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "rejected",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let newer = makeRecord(
             marker: "newer",
             issuedAt: now + 1,
-            expiresAt: now + 86_401
+            expiresAt: now + 21_601
         )
         let store = TestAlchemyJWTStore(record: rejected)
         let broker = TestAlchemyJWTBroker(records: [])
@@ -1371,12 +1462,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "rejected",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let newer = makeRecord(
             marker: "newer",
             issuedAt: now + 1,
-            expiresAt: now + 86_401
+            expiresAt: now + 21_601
         )
         let store = TestAlchemyJWTStore(record: newer)
         let broker = TestAlchemyJWTBroker(records: [])
@@ -1416,12 +1507,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "blocked-save-rejected",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let newer = makeRecord(
             marker: "blocked-save-newer",
             issuedAt: now + 1,
-            expiresAt: now + 86_401
+            expiresAt: now + 21_601
         )
         let store = BlockingSaveAlchemyJWTStore(record: newer)
         let broker = TestAlchemyJWTBroker(records: [])
@@ -1495,12 +1586,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "rejected",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let newer = makeRecord(
             marker: "newer",
             issuedAt: now + 1,
-            expiresAt: now + 86_401
+            expiresAt: now + 21_601
         )
         let store = TestAlchemyJWTStore(record: newer)
         let broker = TestAlchemyJWTBroker(records: [])
@@ -1530,12 +1621,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "rejected",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let replacement = makeRecord(
             marker: "replacement",
             issuedAt: now + 1,
-            expiresAt: now + 86_401
+            expiresAt: now + 21_601
         )
         let store = TestAlchemyJWTStore(record: rejected)
         let broker = TestAlchemyJWTBroker(records: [replacement])
@@ -1560,12 +1651,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "rejected",
             issuedAt: now - 10,
-            expiresAt: now + 86_390
+            expiresAt: now + 21_590
         )
         let replacement = makeRecord(
             marker: "replacement",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: rejected)
         let broker = TestAlchemyJWTBroker(
@@ -1607,12 +1698,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "rejected",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let replacement = makeRecord(
             marker: "replacement",
             issuedAt: now + 1,
-            expiresAt: now + 86_401
+            expiresAt: now + 21_601
         )
         let store = TestAlchemyJWTStore(record: rejected)
         let broker = TestAlchemyJWTBroker(records: [rejected, replacement])
@@ -1653,7 +1744,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "rejected",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: rejected)
         let broker = TestAlchemyJWTBroker(records: [rejected, rejected])
@@ -1692,12 +1783,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "rejected",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let replacement = makeRecord(
             marker: "replacement",
             issuedAt: now + 1,
-            expiresAt: now + 86_401
+            expiresAt: now + 21_601
         )
         let store = TestAlchemyJWTStore(record: nil)
         let broker = TestAlchemyJWTBroker(
@@ -1735,11 +1826,11 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let malformed = AlchemyJWTRecord(
             token: "not-a-jwt",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let expired = makeRecord(
             marker: "expired",
-            issuedAt: now - 86_400,
+            issuedAt: now - 21_600,
             expiresAt: now - 1
         )
 
@@ -1764,7 +1855,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let legacyLookingRecord = makeRecord(
             marker: "must-not-fall-back-to-legacy",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let unsupportedState = try JSONSerialization.data(
             withJSONObject: [
@@ -1810,15 +1901,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
             let replacement = makeRecord(
                 marker: "repaired-persistence-\(index)",
                 issuedAt: now,
-                expiresAt: now + 86_400
+                expiresAt: now + 21_600
             )
             let store = TestEncodedAlchemyJWTStore(data: invalidState)
             let broker = TestAlchemyJWTBroker(records: [replacement])
             let provider = AlchemyJWTProvider(
                 tokenStore: store,
-                installationIDProvider: TestInstallationIDProvider(
-                    installationID: installationID
-                ),
                 broker: broker,
                 refreshLock: TestAlchemyJWTRefreshLock(),
                 now: {
@@ -1838,9 +1926,6 @@ final class AlchemyJWTProviderTests: XCTestCase {
             let recreatedBroker = TestAlchemyJWTBroker(records: [])
             let recreatedProvider = AlchemyJWTProvider(
                 tokenStore: store,
-                installationIDProvider: TestInstallationIDProvider(
-                    installationID: installationID
-                ),
                 broker: recreatedBroker,
                 refreshLock: TestAlchemyJWTRefreshLock(),
                 now: {
@@ -1864,12 +1949,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let persisted = makeRecord(
             marker: "persisted",
             issuedAt: now - 1,
-            expiresAt: now + 86_399
+            expiresAt: now + 21_599
         )
         let memoryOnly = makeRecord(
             marker: "memory-only",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(
             record: persisted,
@@ -1893,8 +1978,8 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let now: Int64 = 2_000_000_000
         let current = makeRecord(
             marker: "current",
-            issuedAt: now - 64_800,
-            expiresAt: now + 21_600
+            issuedAt: now - 16_200,
+            expiresAt: now + 5_400
         )
         let store = TestAlchemyJWTStore(record: current)
         let broker = TestAlchemyJWTBroker(
@@ -1935,7 +2020,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let replacement = makeRecord(
             marker: "replacement",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: nil)
         let broker = TestAlchemyJWTBroker(
@@ -1957,7 +2042,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let crossProcessRecord = makeRecord(
             marker: "cross-process",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: nil)
         let broker = TestAlchemyJWTBroker(
@@ -1985,7 +2070,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let replacement = makeRecord(
             marker: "replacement",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: nil)
         let broker = TestAlchemyJWTBroker(records: [replacement])
@@ -2020,7 +2105,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let replacement = makeRecord(
             marker: "shared-prewarm",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: nil)
         let broker = TestAlchemyJWTBroker(
@@ -2053,12 +2138,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let demandRecord = makeRecord(
             marker: "independent-demand",
             issuedAt: now + 1,
-            expiresAt: now + 86_401
+            expiresAt: now + 21_601
         )
         let prewarmRecord = makeRecord(
             marker: "delayed-prewarm",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: nil)
         let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
@@ -2106,7 +2191,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let replacement = makeRecord(
             marker: "demand-retry",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: nil)
         let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
@@ -2152,7 +2237,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let sentinel = makeRecord(
             marker: "must-not-fetch",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: nil)
         let firstFetchGate = TestAlchemyJWTBrokerFirstFetchGate()
@@ -2208,12 +2293,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let older = makeRecord(
             marker: "older",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let fresh = makeRecord(
             marker: "fresh",
             issuedAt: now + 1,
-            expiresAt: now + 86_401
+            expiresAt: now + 21_601
         )
         let store = TestAlchemyJWTStore(record: nil)
         let broker = TestAlchemyJWTBroker(records: [fresh])
@@ -2251,12 +2336,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let current = makeRecord(
             marker: "current",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let candidate = makeRecord(
             marker: "candidate",
             issuedAt: now + 1,
-            expiresAt: now + 86_401
+            expiresAt: now + 21_601
         )
         let store = TestAlchemyJWTStore(record: nil)
         store.replaceState(
@@ -2309,12 +2394,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let stale = makeRecord(
             marker: "stale",
             issuedAt: now - 1,
-            expiresAt: now + 86_399
+            expiresAt: now + 21_599
         )
         let current = makeRecord(
             marker: "current",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: nil)
         store.replaceState(
@@ -2373,12 +2458,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "rejected",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let replacement = makeRecord(
             marker: "replacement",
             issuedAt: now + 1,
-            expiresAt: now + 86_401
+            expiresAt: now + 21_601
         )
         let store = TestAlchemyJWTStore(record: rejected)
         let broker = TestAlchemyJWTBroker(records: [replacement])
@@ -2410,12 +2495,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "repair-rejected",
             issuedAt: now - 1,
-            expiresAt: now + 86_399
+            expiresAt: now + 21_599
         )
         let replacement = makeRecord(
             marker: "repair-replacement",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: rejected)
         let broker = TestAlchemyJWTBroker(records: [replacement])
@@ -2489,12 +2574,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "retry-rejected",
             issuedAt: now - 1,
-            expiresAt: now + 86_399
+            expiresAt: now + 21_599
         )
         let replacement = makeRecord(
             marker: "retry-replacement",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: rejected)
         let broker = TestAlchemyJWTBroker(records: [replacement])
@@ -2566,12 +2651,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "cooldown-rejected",
             issuedAt: now - 1,
-            expiresAt: now + 86_399
+            expiresAt: now + 21_599
         )
         let replacement = makeRecord(
             marker: "cooldown-replacement",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: rejected)
         let broker = TestAlchemyJWTBroker(records: [replacement])
@@ -2697,12 +2782,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "rejected",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let replacement = makeRecord(
             marker: "replacement",
             issuedAt: now + 1,
-            expiresAt: now + 86_401
+            expiresAt: now + 21_601
         )
         let store = TestAlchemyJWTStore(record: rejected)
         let broker = TestAlchemyJWTBroker(records: [replacement])
@@ -2727,7 +2812,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
                     AlchemyJWTRejectionTombstone(
                         tokenDigest: tokenDigest("newer-rejection-\($0)"),
                         rejectedAt: now + 1,
-                        expiresAt: now + 86_400
+                        expiresAt: now + 21_600
                     )
                 }
             )
@@ -2749,12 +2834,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "rejected",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let replacement = makeRecord(
             marker: "replacement",
             issuedAt: now + 1,
-            expiresAt: now + 86_401
+            expiresAt: now + 21_601
         )
         let store = TestAlchemyJWTStore(record: rejected)
         let broker = TestAlchemyJWTBroker(records: [replacement])
@@ -2793,12 +2878,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "rejected",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let replacement = makeRecord(
             marker: "replacement",
             issuedAt: now + 1,
-            expiresAt: now + 86_401
+            expiresAt: now + 21_601
         )
         let store = TestAlchemyJWTStore(record: rejected)
         let firstProvider = makeProvider(
@@ -2846,7 +2931,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "rejected",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: rejected)
         let broker = TestAlchemyJWTBroker(records: [])
@@ -2892,7 +2977,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
             makeRecord(
                 marker: "capacity-\($0)",
                 issuedAt: now - 10,
-                expiresAt: now + 86_400
+                expiresAt: now + 21_590
             )
         }.sorted {
             tokenDigest($0.token).lexicographicallyPrecedes(
@@ -2947,7 +3032,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "backward-current",
             issuedAt: now - 10,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_590
         )
         let clock = TestAlchemyJWTClock(
             now: Date(timeIntervalSince1970: TimeInterval(now))
@@ -3006,7 +3091,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let replacement = makeRecord(
             marker: "replacement",
             issuedAt: now + 61,
-            expiresAt: now + 86_461
+            expiresAt: now + 21_661
         )
         let store = TestAlchemyJWTStore(record: nil)
         let broker = TestAlchemyJWTBroker(
@@ -3055,7 +3140,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let replacement = makeRecord(
             marker: "monotonic-cooldown",
             issuedAt: now - 3_600,
-            expiresAt: now + 82_800
+            expiresAt: now + 18_000
         )
         let broker = TestAlchemyJWTBroker(
             records: [replacement],
@@ -3113,7 +3198,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let replacement = makeRecord(
             marker: "replacement",
             issuedAt: now + 61,
-            expiresAt: now + 86_461
+            expiresAt: now + 21_661
         )
         let store = TestAlchemyJWTStore(record: nil)
         let broker = TestAlchemyJWTBroker(
@@ -3151,8 +3236,8 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let now: Int64 = 2_000_000_000
         let current = makeRecord(
             marker: "current",
-            issuedAt: now - 64_800,
-            expiresAt: now + 21_600
+            issuedAt: now - 16_200,
+            expiresAt: now + 5_400
         )
         let store = TestAlchemyJWTStore(record: current)
         let broker = TestAlchemyJWTBroker(
@@ -3195,12 +3280,12 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "rejected",
             issuedAt: now - 10,
-            expiresAt: now + 86_390
+            expiresAt: now + 21_590
         )
         let replacement = makeRecord(
             marker: "replacement",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: rejected)
         let broker = TestAlchemyJWTBroker(
@@ -3254,7 +3339,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let rejected = makeRecord(
             marker: "rejected",
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let store = TestAlchemyJWTStore(record: rejected)
         let broker = TestAlchemyJWTBroker(
@@ -3337,7 +3422,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         throws {
         let record = makeRecord(
             issuedAt: 2_000_000_000,
-            expiresAt: 2_000_086_400
+            expiresAt: 2_000_021_600
         )
         let data = try JSONEncoder().encode(record)
 
@@ -3374,7 +3459,7 @@ final class AlchemyJWTProviderTests: XCTestCase {
         let now: Int64 = 2_000_000_000
         let record = makeRecord(
             issuedAt: now,
-            expiresAt: now + 86_400
+            expiresAt: now + 21_600
         )
         let fileURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(
@@ -3420,53 +3505,6 @@ final class AlchemyJWTProviderTests: XCTestCase {
         XCTAssertEqual(store.saveCount, 1)
     }
 
-    func testRacingInstallationIDProvidersCreateOneCanonicalUUID()
-        async throws {
-        let directoryURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(
-                "alchemy-jwt-installation-\(UUID().uuidString)",
-                isDirectory: true
-            )
-        try FileManager.default.createDirectory(
-            at: directoryURL,
-            withIntermediateDirectories: false
-        )
-        defer { try? FileManager.default.removeItem(at: directoryURL) }
-        let first = AlchemyAppGroupInstallationIDProvider(
-            containerURL: directoryURL
-        )
-        let second = AlchemyAppGroupInstallationIDProvider(
-            containerURL: directoryURL
-        )
-
-        let identifiers = try await withThrowingTaskGroup(
-            of: UUID.self
-        ) { group in
-            for index in 0..<20 {
-                group.addTask {
-                    try (index.isMultiple(of: 2) ? first : second)
-                        .installationID()
-                }
-            }
-            var values = [UUID]()
-            for try await identifier in group {
-                values.append(identifier)
-            }
-            return values
-        }
-
-        XCTAssertEqual(Set(identifiers).count, 1)
-        let identifier = try XCTUnwrap(identifiers.first)
-        let storedValue = try String(
-            contentsOf: directoryURL.appendingPathComponent(
-                "alchemy-jwt-installation-id",
-                isDirectory: false
-            ),
-            encoding: .utf8
-        )
-        XCTAssertEqual(storedValue, identifier.uuidString.lowercased())
-    }
-
 #if os(macOS)
     func testRealFileLockContendsWithChildProcessLockf() throws {
         let fileURL = FileManager.default.temporaryDirectory
@@ -3499,6 +3537,43 @@ final class AlchemyJWTProviderTests: XCTestCase {
         XCTAssertEqual(try runLockf(), 0)
     }
 #endif
+
+    private func withProofKeyBundle(
+        contents: Data?,
+        body: (Bundle) throws -> Void
+    ) throws {
+        let bundleURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("bundle")
+        try FileManager.default.createDirectory(
+            at: bundleURL,
+            withIntermediateDirectories: false
+        )
+        defer { try? FileManager.default.removeItem(at: bundleURL) }
+
+        let infoData = try PropertyListSerialization.data(
+            fromPropertyList: [
+                "CFBundleIdentifier":
+                    "org.lil.wallet.proof-tests.\(UUID().uuidString)",
+                "CFBundleName": "Alchemy JWT Proof Fixture",
+                "CFBundlePackageType": "BNDL",
+            ],
+            format: .xml,
+            options: 0
+        )
+        try infoData.write(
+            to: bundleURL.appendingPathComponent("Info.plist")
+        )
+        if let contents {
+            try contents.write(
+                to: bundleURL.appendingPathComponent(
+                    AlchemyJWTRequestProofSigner.resourceName
+                )
+            )
+        }
+
+        try body(try XCTUnwrap(Bundle(url: bundleURL)))
+    }
 
     private func makeProvider(
         store: AlchemyJWTStoring,
@@ -3571,9 +3646,6 @@ final class AlchemyJWTProviderTests: XCTestCase {
     ) -> AlchemyJWTProvider {
         return AlchemyJWTProvider(
             tokenStore: store,
-            installationIDProvider: TestInstallationIDProvider(
-                installationID: installationID
-            ),
             broker: broker,
             refreshLock: refreshLock,
             now: { clock.date },
@@ -3913,22 +3985,6 @@ private final class TestEncodedAlchemyJWTStore:
 
 }
 
-private final class TestInstallationIDProvider:
-    @unchecked Sendable,
-    AlchemyInstallationIDProviding {
-
-    private let id: UUID
-
-    init(installationID: UUID) {
-        self.id = installationID
-    }
-
-    func installationID() throws -> UUID {
-        return id
-    }
-
-}
-
 private final class TestAlchemyJWTRefreshLock:
     @unchecked Sendable,
     AlchemyJWTRefreshLocking {
@@ -4127,7 +4183,7 @@ private actor TestAlchemyJWTBroker: AlchemyJWTBrokerFetching {
         self.firstFetchGate = firstFetchGate
     }
 
-    func fetchToken(installationID: UUID) async throws -> AlchemyJWTRecord {
+    func fetchToken() async throws -> AlchemyJWTRecord {
         fetchCount += 1
         if fetchCount == 1, let firstFetchGate {
             await firstFetchGate.pause()

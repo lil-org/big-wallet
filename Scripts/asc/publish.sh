@@ -11,6 +11,9 @@ require_cmd plutil
 inpage_provider_prepare_tool_path
 require_inpage_provider_toolchain
 
+proof_key_file="${ALCHEMY_JWT_REQUEST_PROOF_KEY_FILE:-}"
+validate_alchemy_release_inputs
+
 validate_export_options "$ASC_EXPORT_OPTIONS"
 
 platform="${1:-${PLATFORM:-IOS}}"
@@ -190,13 +193,19 @@ archive_json="$(asc xcode archive \
   --xcodebuild-flag=-allowProvisioningUpdates \
   --xcodebuild-flag="MARKETING_VERSION=$version" \
   --xcodebuild-flag="CURRENT_PROJECT_VERSION=$build_number" \
+  --xcodebuild-flag="ALCHEMY_JWT_REQUEST_PROOF_KEY_FILE=$proof_key_file" \
   --clean \
   --overwrite \
   --output json)"
 
-archive_path="$(jq -r '.archive_path // .archivePath // empty' <<<"$archive_json")"
-[[ -n "$archive_path" ]] || die "archive did not return an archive path"
+returned_archive_path="$(jq -r '.archive_path // .archivePath // empty' <<<"$archive_json")"
+[[ -n "$returned_archive_path" ]] || die "archive did not return an archive path"
+[[ "$returned_archive_path" == "$archive_path" ]] \
+  || die "archive returned a path other than the requested isolated archive"
 "$REPO_ROOT/Scripts/assert_no_bundled_alchemy_key.sh" "$archive_path"
+"$REPO_ROOT/Scripts/assert_bundled_alchemy_jwt_request_proof_key.sh" \
+  "$platform" \
+  "$archive_path"
 
 case "$platform" in
   IOS|VISION_OS)
@@ -209,8 +218,11 @@ case "$platform" in
       --xcodebuild-flag=-allowProvisioningUpdates \
       --output json)"
 
-    artifact_path="$(jq -r '.ipa_path // .ipaPath // empty' <<<"$export_json")"
-    [[ -n "$artifact_path" ]] || die "$platform_name export did not return an IPA path"
+    returned_ipa_path="$(jq -r '.ipa_path // .ipaPath // empty' <<<"$export_json")"
+    [[ -n "$returned_ipa_path" ]] || die "$platform_name export did not return an IPA path"
+    [[ "$returned_ipa_path" == "$ipa_path" ]] \
+      || die "$platform_name export returned a path other than the requested isolated IPA"
+    artifact_path="$ipa_path"
     upload_flag=(--ipa "$artifact_path" --platform "$platform")
     ;;
   MAC_OS)
@@ -225,16 +237,30 @@ case "$platform" in
       -exportOptionsPlist "$ASC_EXPORT_OPTIONS" \
       -allowProvisioningUpdates >&2
 
-    pkg_count="$(find "$export_dir" -maxdepth 1 -name '*.pkg' -type f | wc -l | tr -d ' ')"
+    pkg_list="$artifact_dir/exported-pkgs.list"
+    if ! LC_ALL=C /usr/bin/find -P "$export_dir" \
+      -maxdepth 1 \
+      -name '*.pkg' \
+      -type f \
+      -print >"$pkg_list"; then
+      die "could not inspect exported macOS packages in $export_dir"
+    fi
+    pkg_count="$(/usr/bin/wc -l <"$pkg_list" | /usr/bin/tr -d '[:space:]')"
     [[ "$pkg_count" == "1" ]] \
       || die "expected one exported macOS pkg in $export_dir, found $pkg_count"
 
-    artifact_path="$(find "$export_dir" -maxdepth 1 -name '*.pkg' -type f | head -n 1)"
+    IFS= read -r artifact_path <"$pkg_list" \
+      || die "could not read the exported macOS package path"
     upload_flag=(--pkg "$artifact_path")
     ;;
 esac
 
+run_alchemy_worker_release_verification "$proof_key_file"
 "$REPO_ROOT/Scripts/assert_no_bundled_alchemy_key.sh" "$artifact_path"
+"$REPO_ROOT/Scripts/assert_bundled_alchemy_jwt_request_proof_key.sh" \
+  "$platform" \
+  "$artifact_path"
+validated_artifact_sha256="$(release_artifact_sha256 "$artifact_path")"
 
 log "uploading $platform build $version ($build_number)"
 upload_attempted=true
@@ -255,5 +281,15 @@ fi
 
 [[ -n "$build_id" && "$build_id" != "null" ]] \
   || die "could not resolve uploaded build id for $platform $version ($build_number)"
+
+proof_fingerprint="$(alchemy_request_proof_fingerprint)"
+write_alchemy_release_receipt \
+  "$platform" \
+  "$version" \
+  "$build_number" \
+  "$build_id" \
+  "$artifact_path" \
+  "$proof_fingerprint" \
+  "$validated_artifact_sha256"
 
 emit_publish_result "$build_id" "$artifact_path"

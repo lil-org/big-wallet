@@ -27,6 +27,10 @@ ASC_ARTIFACTS_DIR="${ASC_ARTIFACTS_DIR:-$ASC_RUNTIME_ROOT/artifacts}"
 ASC_TMP_DIR="${ASC_TMP_DIR:-$ASC_RUNTIME_ROOT/tmp}"
 ASC_REPORTS_DIR="${ASC_REPORTS_DIR:-$ASC_RUNTIME_ROOT/reports}"
 ASC_TEAM_ID="${ASC_TEAM_ID:-8DXC3N7E7P}"
+ASC_WORKFLOW_FILE="$REPO_ROOT/.asc/workflow.json"
+ALCHEMY_JWT_WORKER_DIR="$REPO_ROOT/Workers/alchemy-jwt"
+ALCHEMY_JWT_RECEIPTS_DIR="$ASC_REPORTS_DIR/validated-builds"
+ALCHEMY_JWT_PRELAUNCH_ANCHOR_VERSION="c5c74433-eb49-4998-979b-e78d17da74f8"
 VERSIONED_INFO_PLISTS=(
   "App iOS/Info.plist"
   "App macOS/Info.plist"
@@ -48,6 +52,457 @@ die() {
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+require_alchemy_uuid() {
+  local description="$1"
+  local value="$2"
+
+  [[ "$value" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] \
+    || die "$description must be a canonical lowercase UUID"
+}
+
+tracked_asc_environment_value() {
+  local key="$1"
+  local value
+
+  [[ -f "$ASC_WORKFLOW_FILE" && ! -L "$ASC_WORKFLOW_FILE" ]] \
+    || die "missing tracked ASC workflow: $ASC_WORKFLOW_FILE"
+
+  value="$(jq -er --arg key "$key" '
+    .env[$key]
+    | select(type == "string" and length > 0)
+  ' "$ASC_WORKFLOW_FILE" 2>/dev/null)" \
+    || die "$ASC_WORKFLOW_FILE must define a non-empty env.$key string"
+
+  printf '%s\n' "$value"
+}
+
+load_alchemy_release_pins() {
+  local configured_kid="${ALCHEMY_JWT_EXPECTED_KID:-}"
+  local configured_version="${ALCHEMY_JWT_EXPECTED_WORKER_VERSION:-}"
+  local tracked_kid
+  local tracked_version
+
+  tracked_kid="$(tracked_asc_environment_value ALCHEMY_JWT_EXPECTED_KID)"
+  tracked_version="$(tracked_asc_environment_value ALCHEMY_JWT_EXPECTED_WORKER_VERSION)"
+
+  if [[ -n "$configured_kid" && "$configured_kid" != "$tracked_kid" ]]; then
+    die "ALCHEMY_JWT_EXPECTED_KID must match the tracked ASC workflow pin"
+  fi
+  if [[ -n "$configured_version" && "$configured_version" != "$tracked_version" ]]; then
+    die "ALCHEMY_JWT_EXPECTED_WORKER_VERSION must match the tracked ASC workflow pin"
+  fi
+
+  require_alchemy_uuid "the expected Alchemy JWT kid" "$tracked_kid"
+  require_alchemy_uuid "the expected Alchemy Worker version" "$tracked_version"
+
+  if [[ "$tracked_version" == "$ALCHEMY_JWT_PRELAUNCH_ANCHOR_VERSION" ]]; then
+    die "the tracked Alchemy Worker version is still the prelaunch anchor; replace it with the promoted HMAC Worker UUID"
+  fi
+
+  ALCHEMY_JWT_EXPECTED_KID="$tracked_kid"
+  ALCHEMY_JWT_EXPECTED_WORKER_VERSION="$tracked_version"
+}
+
+require_alchemy_release_toolchain() {
+  local expected_node_version
+  local expected_npm_version
+  local actual_node_version
+  local actual_npm_version
+
+  require_cmd jq
+  require_cmd node
+  require_cmd npm
+
+  [[ -f "$ALCHEMY_JWT_WORKER_DIR/.nvmrc" ]] \
+    || die "missing Alchemy Worker Node version pin"
+  [[ -f "$ALCHEMY_JWT_WORKER_DIR/package.json" ]] \
+    || die "missing Alchemy Worker package manifest"
+
+  expected_node_version="$(tr -d '[:space:]' <"$ALCHEMY_JWT_WORKER_DIR/.nvmrc")"
+  actual_node_version="$(node --version)"
+  actual_node_version="${actual_node_version#v}"
+  [[ -n "$expected_node_version" && "$actual_node_version" == "$expected_node_version" ]] \
+    || die "Alchemy release verification requires Node $expected_node_version; found $actual_node_version"
+
+  expected_npm_version="$(jq -er '
+    .packageManager
+    | select(type == "string" and startswith("npm@"))
+    | sub("^npm@"; "")
+  ' "$ALCHEMY_JWT_WORKER_DIR/package.json" 2>/dev/null)" \
+    || die "the Alchemy Worker package manifest must pin npm"
+  actual_npm_version="$(npm --version)"
+  [[ "$actual_npm_version" == "$expected_npm_version" ]] \
+    || die "Alchemy release verification requires npm $expected_npm_version; found $actual_npm_version"
+
+  jq -e '
+    .scripts["verify:release"]
+    | type == "string" and length > 0
+  ' "$ALCHEMY_JWT_WORKER_DIR/package.json" >/dev/null \
+    || die "the Alchemy Worker package manifest is missing verify:release"
+}
+
+load_cloudflare_api_token_file() {
+  local token_file="${CLOUDFLARE_API_TOKEN_FILE:-}"
+  local token_name
+  local token_parent
+  local canonical_parent
+  local canonical_file
+  local current_user
+  local parent_owner
+  local parent_mode
+  local parent_mode_value
+  local metadata_before
+  local metadata_after
+  local token_owner
+  local token_mode
+  local token_size
+  local snapshot_with_sentinel
+  local snapshot
+  local final_lf=$'\n'
+
+  set +x
+  unset CLOUDFLARE_API_TOKEN_VALUE
+
+  [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] \
+    || die "set CLOUDFLARE_API_TOKEN_FILE instead of exporting CLOUDFLARE_API_TOKEN"
+  [[ -n "$token_file" ]] \
+    || die "CLOUDFLARE_API_TOKEN_FILE is required for Alchemy release verification"
+  [[ "$token_file" == /* ]] \
+    || die "CLOUDFLARE_API_TOKEN_FILE must be an absolute path"
+
+  token_name="${token_file##*/}"
+  token_parent="${token_file%/*}"
+  [[ -n "$token_name" ]] || die "the Cloudflare API token file path is invalid"
+  [[ -n "$token_parent" ]] || token_parent="/"
+
+  canonical_parent="$(cd "$token_parent" 2>/dev/null && pwd -P)" \
+    || die "the Cloudflare API token directory could not be inspected"
+  canonical_file="${canonical_parent%/}/$token_name"
+  [[ "$token_file" == "$canonical_file" ]] \
+    || die "the Cloudflare API token file path must be canonical and must not traverse symbolic links"
+  [[ ! -L "$token_file" && -f "$token_file" ]] \
+    || die "the Cloudflare API token file must be a regular file, not a symbolic link"
+
+  current_user="$(/usr/bin/id -u)" \
+    || die "the current user could not be identified"
+  parent_owner="$(/usr/bin/stat -f '%u' -- "$canonical_parent")" \
+    || die "the Cloudflare API token directory owner could not be inspected"
+  [[ "$parent_owner" == "$current_user" ]] \
+    || die "the Cloudflare API token directory must be owned by the current user"
+  parent_mode="$(/usr/bin/stat -f '%Lp' -- "$canonical_parent")" \
+    || die "the Cloudflare API token directory mode could not be inspected"
+  [[ "$parent_mode" =~ ^[0-7]+$ ]] \
+    || die "the Cloudflare API token directory mode is invalid"
+  parent_mode_value=$((8#$parent_mode))
+  (( (parent_mode_value & 077) == 0 && (parent_mode_value & 0100) != 0 )) \
+    || die "the Cloudflare API token directory must be owner-only and searchable by its owner"
+
+  metadata_before="$(/usr/bin/stat -f '%d:%i:%u:%Lp:%z' -- "$token_file")" \
+    || die "the Cloudflare API token file could not be inspected"
+  IFS=: read -r _ _ token_owner token_mode token_size <<<"$metadata_before"
+  [[ "$token_owner" == "$current_user" ]] \
+    || die "the Cloudflare API token file must be owned by the current user"
+  [[ "$token_mode" == "600" ]] \
+    || die "the Cloudflare API token file mode must be 0600"
+  [[ "$token_size" =~ ^[0-9]+$ ]] \
+    || die "the Cloudflare API token file size is invalid"
+  (( token_size >= 20 && token_size <= 513 )) \
+    || die "the Cloudflare API token file must contain one token line"
+
+  snapshot_with_sentinel="$(
+    /bin/cat -- "$token_file" || exit 1
+    printf '.'
+  )" || die "the Cloudflare API token file could not be read"
+  snapshot="${snapshot_with_sentinel%?}"
+
+  metadata_after="$(/usr/bin/stat -f '%d:%i:%u:%Lp:%z' -- "$token_file")" \
+    || die "the Cloudflare API token file could not be re-inspected"
+  [[ "$metadata_before" == "$metadata_after" ]] \
+    || die "the Cloudflare API token file changed while it was being read"
+  [[ "${#snapshot}" -eq "$token_size" ]] \
+    || die "the Cloudflare API token file contains unsupported bytes"
+
+  if [[ "$snapshot" == *"$final_lf" ]]; then
+    snapshot="${snapshot%$final_lf}"
+  fi
+  [[ "${#snapshot}" -ge 20 && "${#snapshot}" -le 512 ]] \
+    || die "the Cloudflare API token must contain 20 to 512 characters"
+  [[ "$snapshot" != *[$' \t\r\n']* && "$snapshot" != *[![:graph:]]* ]] \
+    || die "the Cloudflare API token file must contain one printable token line"
+
+  CLOUDFLARE_API_TOKEN_VALUE="$snapshot"
+  unset snapshot snapshot_with_sentinel
+}
+
+validate_alchemy_release_inputs() {
+  local proof_key_file="${ALCHEMY_JWT_REQUEST_PROOF_KEY_FILE:-}"
+
+  [[ -n "$proof_key_file" ]] \
+    || die "ALCHEMY_JWT_REQUEST_PROOF_KEY_FILE is required for an ASC release"
+  "$REPO_ROOT/Scripts/validate_alchemy_jwt_request_proof_key_file.sh" \
+    "$proof_key_file"
+
+  load_alchemy_release_pins
+  require_alchemy_release_toolchain
+  load_cloudflare_api_token_file
+  unset CLOUDFLARE_API_TOKEN_VALUE
+}
+
+run_alchemy_worker_release_verification() {
+  local proof_key_file="$1"
+  local verification_status
+
+  "$REPO_ROOT/Scripts/validate_alchemy_jwt_request_proof_key_file.sh" \
+    "$proof_key_file"
+  load_alchemy_release_pins
+  require_alchemy_release_toolchain
+  load_cloudflare_api_token_file
+
+  log "verifying deployed Alchemy HMAC Worker $ALCHEMY_JWT_EXPECTED_WORKER_VERSION"
+  set +e
+  (
+    cd "$ALCHEMY_JWT_WORKER_DIR"
+    unset CLOUDFLARE_API_KEY \
+      CLOUDFLARE_EMAIL \
+      CLOUDFLARE_API_USER_SERVICE_KEY
+    CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN_VALUE" \
+      npm run verify:release -- \
+        --expected-kid "$ALCHEMY_JWT_EXPECTED_KID" \
+        --expected-version "$ALCHEMY_JWT_EXPECTED_WORKER_VERSION" \
+        --app-proof-key-file "$proof_key_file"
+  ) >&2
+  verification_status=$?
+  set -e
+
+  unset CLOUDFLARE_API_TOKEN_VALUE
+  (( verification_status == 0 )) \
+    || die "the deployed Alchemy HMAC Worker failed release verification"
+}
+
+alchemy_request_proof_fingerprint() {
+  local fingerprint_file="$REPO_ROOT/Scripts/alchemy_jwt_request_proof_key.sha256"
+  local fingerprint
+
+  [[ -f "$fingerprint_file" && ! -L "$fingerprint_file" ]] \
+    || die "the tracked request-proof key fingerprint is missing or invalid"
+  fingerprint="$(tr -d '\n' <"$fingerprint_file")"
+  [[ "$fingerprint" =~ ^[0-9a-f]{64}$ ]] \
+    || die "the tracked request-proof key fingerprint must contain one SHA-256 digest"
+  [[ "$(/usr/bin/wc -c <"$fingerprint_file" | tr -d '[:space:]')" == "65" ]] \
+    || die "the tracked request-proof key fingerprint must contain one newline-terminated SHA-256 digest"
+
+  printf '%s\n' "$fingerprint"
+}
+
+validate_alchemy_release_platform() {
+  case "$1" in
+    IOS|MAC_OS|VISION_OS) ;;
+    *) die "Alchemy release receipts support only IOS, MAC_OS, and VISION_OS" ;;
+  esac
+}
+
+alchemy_release_receipt_path() {
+  local platform="$1"
+
+  validate_alchemy_release_platform "$platform"
+  printf '%s/%s.json\n' "$ALCHEMY_JWT_RECEIPTS_DIR" "$platform"
+}
+
+canonical_release_artifact_path() {
+  local artifact="$1"
+  local artifact_name
+  local artifact_parent
+  local canonical_parent
+
+  [[ "$artifact" == /* ]] \
+    || die "the release artifact path must be absolute"
+  [[ ! -L "$artifact" && -f "$artifact" ]] \
+    || die "the release artifact must be a regular file, not a symbolic link"
+
+  artifact_name="${artifact##*/}"
+  artifact_parent="${artifact%/*}"
+  [[ -n "$artifact_parent" ]] || artifact_parent="/"
+  canonical_parent="$(cd "$artifact_parent" 2>/dev/null && pwd -P)" \
+    || die "the release artifact parent directory could not be inspected"
+  [[ "$artifact" == "${canonical_parent%/}/$artifact_name" ]] \
+    || die "the release artifact path must be canonical and must not traverse symbolic links"
+
+  printf '%s\n' "$artifact"
+}
+
+release_artifact_sha256() {
+  local artifact="$1"
+  local metadata_before
+  local metadata_after
+  local digest_output
+  local digest
+
+  canonical_release_artifact_path "$artifact" >/dev/null
+  metadata_before="$(/usr/bin/stat -f '%d:%i:%u:%Lp:%z' -- "$artifact")" \
+    || die "the release artifact could not be inspected"
+  digest_output="$(/usr/bin/shasum -a 256 -- "$artifact")" \
+    || die "the release artifact SHA-256 could not be computed"
+  digest="${digest_output%% *}"
+  metadata_after="$(/usr/bin/stat -f '%d:%i:%u:%Lp:%z' -- "$artifact")" \
+    || die "the release artifact could not be re-inspected"
+
+  [[ "$metadata_before" == "$metadata_after" ]] \
+    || die "the release artifact changed while its SHA-256 was being computed"
+  [[ "$digest" =~ ^[0-9a-f]{64}$ ]] \
+    || die "the release artifact SHA-256 is malformed"
+
+  printf '%s\n' "$digest"
+}
+
+write_alchemy_release_receipt() {
+  local platform="$1"
+  local version="$2"
+  local build_number="$3"
+  local build_id="$4"
+  local artifact="$5"
+  local proof_fingerprint="$6"
+  local validated_artifact_sha256="$7"
+  local canonical_artifact
+  local artifact_sha256
+  local receipt
+  local temporary_receipt
+
+  validate_alchemy_release_platform "$platform"
+  [[ -n "$version" && "$version" != *[$'\r\n']* ]] \
+    || die "the receipt version is invalid"
+  [[ "$build_number" =~ ^[0-9]+$ ]] \
+    || die "the receipt build number is invalid"
+  [[ -n "$build_id" && "$build_id" != *[$'\r\n']* ]] \
+    || die "the receipt build id is invalid"
+  [[ "$proof_fingerprint" =~ ^[0-9a-f]{64}$ ]] \
+    || die "the receipt proof-key fingerprint is invalid"
+  [[ "$validated_artifact_sha256" =~ ^[0-9a-f]{64}$ ]] \
+    || die "the validated release artifact SHA-256 is invalid"
+
+  canonical_artifact="$(canonical_release_artifact_path "$artifact")"
+  artifact_sha256="$(release_artifact_sha256 "$canonical_artifact")"
+  [[ "$artifact_sha256" == "$validated_artifact_sha256" ]] \
+    || die "the release artifact changed during its validated upload"
+  receipt="$(alchemy_release_receipt_path "$platform")"
+
+  mkdir -p "$ALCHEMY_JWT_RECEIPTS_DIR"
+  chmod 700 "$ALCHEMY_JWT_RECEIPTS_DIR"
+  temporary_receipt="$(mktemp "$ALCHEMY_JWT_RECEIPTS_DIR/.${platform}.XXXXXX")"
+  chmod 600 "$temporary_receipt"
+
+  if ! jq -n \
+    --arg platform "$platform" \
+    --arg version "$version" \
+    --arg buildNumber "$build_number" \
+    --arg buildId "$build_id" \
+    --arg artifactPath "$canonical_artifact" \
+    --arg artifactSHA256 "$artifact_sha256" \
+    --arg proofKeyFingerprint "$proof_fingerprint" \
+    '{
+      schemaVersion: 1,
+      platform: $platform,
+      version: $version,
+      buildNumber: $buildNumber,
+      buildId: $buildId,
+      artifactPath: $artifactPath,
+      artifactSHA256: $artifactSHA256,
+      proofKeyFingerprint: $proofKeyFingerprint
+    }' >"$temporary_receipt"; then
+    rm -f -- "$temporary_receipt"
+    die "the Alchemy release receipt could not be written"
+  fi
+
+  mv -f -- "$temporary_receipt" "$receipt"
+}
+
+load_and_validate_alchemy_release_receipt() {
+  local platform="$1"
+  local version="$2"
+  local build_number="$3"
+  local requested_build_id="$4"
+  local proof_fingerprint="$5"
+  local receipt
+  local receipt_mode
+  local receipt_platform
+  local receipt_version
+  local receipt_build_number
+  local receipt_build_id
+  local receipt_artifact
+  local receipt_artifact_sha256
+  local receipt_proof_fingerprint
+  local actual_artifact_sha256
+
+  receipt="$(alchemy_release_receipt_path "$platform")"
+  [[ ! -L "$receipt" && -f "$receipt" ]] \
+    || die "missing validated Alchemy release receipt for $platform; upload this build through Scripts/asc/publish.sh first"
+  receipt_mode="$(/usr/bin/stat -f '%Lp' -- "$receipt")" \
+    || die "the Alchemy release receipt could not be inspected"
+  [[ "$receipt_mode" == "600" ]] \
+    || die "the Alchemy release receipt must have mode 0600"
+
+  jq -e '
+    type == "object" and
+    .schemaVersion == 1 and
+    ([keys[]] | sort) == ([
+      "artifactPath",
+      "artifactSHA256",
+      "buildId",
+      "buildNumber",
+      "platform",
+      "proofKeyFingerprint",
+      "schemaVersion",
+      "version"
+    ] | sort) and
+    (.platform | type == "string" and length > 0) and
+    (.version | type == "string" and length > 0) and
+    (.buildNumber | type == "string" and length > 0) and
+    (.buildId | type == "string" and length > 0) and
+    (.artifactPath | type == "string" and startswith("/")) and
+    (.artifactSHA256 | type == "string" and test("^[0-9a-f]{64}$")) and
+    (.proofKeyFingerprint | type == "string" and test("^[0-9a-f]{64}$"))
+  ' "$receipt" >/dev/null \
+    || die "the Alchemy release receipt is malformed"
+
+  IFS=$'\t' read -r \
+    receipt_platform \
+    receipt_version \
+    receipt_build_number \
+    receipt_build_id \
+    receipt_artifact \
+    receipt_artifact_sha256 \
+    receipt_proof_fingerprint < <(
+      jq -r '[
+        .platform,
+        .version,
+        .buildNumber,
+        .buildId,
+        .artifactPath,
+        .artifactSHA256,
+        .proofKeyFingerprint
+      ] | @tsv' "$receipt"
+    )
+
+  [[ "$receipt_platform" == "$platform" ]] \
+    || die "the Alchemy release receipt platform does not match $platform"
+  [[ "$receipt_version" == "$version" ]] \
+    || die "the Alchemy release receipt version does not match $version"
+  [[ "$receipt_build_number" == "$build_number" ]] \
+    || die "the Alchemy release receipt build number does not match $build_number"
+  if [[ -n "$requested_build_id" && "$receipt_build_id" != "$requested_build_id" ]]; then
+    die "the requested build id does not match the validated Alchemy release receipt"
+  fi
+  [[ "$receipt_proof_fingerprint" == "$proof_fingerprint" ]] \
+    || die "the Alchemy release receipt proof-key fingerprint does not match"
+
+  canonical_release_artifact_path "$receipt_artifact" >/dev/null
+  actual_artifact_sha256="$(release_artifact_sha256 "$receipt_artifact")"
+  [[ "$actual_artifact_sha256" == "$receipt_artifact_sha256" ]] \
+    || die "the release artifact changed after its validated upload"
+
+  ALCHEMY_RELEASE_RECEIPT_BUILD_ID="$receipt_build_id"
+  ALCHEMY_RELEASE_RECEIPT_ARTIFACT_PATH="$receipt_artifact"
 }
 
 plist_value() {

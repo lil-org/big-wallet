@@ -1,30 +1,80 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { createHash } from "node:crypto";
+import {
+  mkdtemp,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  afterEach,
+  test,
+} from "node:test";
 
 import {
   SafeValidationError,
   assertBrokerHeaders,
+  assertGenericUnauthorizedBody,
+  createRequestProof,
+  createSignedBrokerRequest,
+  loadEvmTargets,
   parseArguments,
   parseBrokerURL,
   probeHttpRedirect,
+  readAppProofKey,
+  readBoundedNetworkCatalog,
+  runBrokerContractProbes,
+  validateOptionalDryRunProofKey,
   validateIssuancePayload,
   validateRpcMatrix,
   validateRpcTarget,
+  verifyReleaseLiveContract,
 } from "./live-validate.mjs";
 
 const VERSION = "db7cd8d3-4425-4fe7-8c81-01bf963b6067";
 const KID = "expected-test-kid";
+const REQUEST_PROOF_KEY =
+  "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8";
+const REQUEST_PROOF_KEY_FINGERPRINT = createHash("sha256")
+  .update(REQUEST_PROOF_KEY, "ascii")
+  .digest("hex");
+const temporaryDirectories = [];
 const TARGET = {
   kind: "evm",
   host: "eth-mainnet.g.alchemy.com",
   url: "https://eth-mainnet.g.alchemy.com/v2",
 };
 
+afterEach(async () => {
+  await Promise.all(
+    temporaryDirectories.splice(0).map((path) =>
+      rm(path, { recursive: true, force: true }),
+    ),
+  );
+});
+
 function rpcResponse(result = "0x1") {
   return new Response(
     JSON.stringify({ jsonrpc: "2.0", id: 1, result }),
     { status: 200, headers: { "Content-Type": "application/json" } },
   );
+}
+
+function brokerResponse(status, body = "{}", extraHeaders = {}) {
+  return new Response(body, {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Type": "application/json; charset=utf-8",
+      "Strict-Transport-Security": "max-age=31536000",
+      "X-Alchemy-JWT-Worker-Version": VERSION,
+      "X-Content-Type-Options": "nosniff",
+      ...extraHeaders,
+    },
+  });
 }
 
 function nonSuccessResponseWithUnreadableBody(status, onCancel) {
@@ -46,7 +96,7 @@ function nonSuccessResponseWithUnreadableBody(status, onCancel) {
   return new Response(body, { status });
 }
 
-function jwtPayload(kid = KID, ttlSeconds = 86_400) {
+function jwtPayload(kid = KID, ttlSeconds = 21_600) {
   const issuedAt = 1_800_000_000;
   const expiresAt = issuedAt + ttlSeconds;
   const token = [
@@ -69,12 +119,15 @@ test("live CLI parses exact version attestation and bounded retry options", () =
     KID,
     "--expected-version",
     VERSION,
+    "--app-proof-key-file",
+    "/protected/app-proof.key",
     "--version-override",
     "--rpc-attempts",
     "5",
   ]);
   assert.equal(options.expectedKid, KID);
   assert.equal(options.expectedVersion, VERSION);
+  assert.equal(options.appProofKeyFile, "/protected/app-proof.key");
   assert.equal(options.versionOverride, true);
   assert.equal(options.rpcAttempts, 5);
   assert.throws(
@@ -83,6 +136,10 @@ test("live CLI parses exact version attestation and bounded retry options", () =
   );
   assert.throws(
     () => parseArguments(["--expected-ttl", "43200"]),
+    SafeValidationError,
+  );
+  assert.throws(
+    () => parseArguments(["--app-proof-key-file", "relative.key"]),
     SafeValidationError,
   );
   assert.equal(
@@ -101,6 +158,333 @@ test("live CLI parses exact version attestation and bounded retry options", () =
       SafeValidationError,
     );
   }
+});
+
+test("request proof matches the cross-language golden vector", () => {
+  const key = Buffer.from(
+    "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+    "base64url",
+  );
+  const body = Buffer.from(
+    '{"timestamp":1784558400,"nonce":"AAECAwQFBgcICQoLDA0ODw"}',
+    "utf8",
+  );
+  assert.equal(
+    createRequestProof(body, key),
+    "ctfhJTYThhT35Q05ptrHCn16ylcrBkNb5c5unj1u1Jk",
+  );
+  assert.deepEqual(
+    createSignedBrokerRequest(key, {
+      timestamp: 1_784_558_400,
+      nonce: "AAECAwQFBgcICQoLDA0ODw",
+    }),
+    {
+      body,
+      proof: "ctfhJTYThhT35Q05ptrHCn16ylcrBkNb5c5unj1u1Jk",
+    },
+  );
+});
+
+test("network catalog reads are bounded and require a stable regular file", async () => {
+  const directory = await realpath(
+    await mkdtemp(
+      join(tmpdir(), "alchemy-jwt-live-catalog-"),
+    ),
+  );
+  temporaryDirectories.push(directory);
+
+  const maximumBytes = 2 * 1_024 * 1_024;
+  const validPath = join(directory, "valid-catalog.json");
+  const validJSON = Buffer.from(
+    JSON.stringify([{ alchemyNetwork: "eth-mainnet" }]),
+    "utf8",
+  );
+  await writeFile(
+    validPath,
+    Buffer.concat([
+      validJSON,
+      Buffer.alloc(maximumBytes - validJSON.byteLength, 0x20),
+    ]),
+  );
+  assert.deepEqual(
+    await loadEvmTargets(validPath, 1),
+    [{
+      kind: "evm",
+      host: "eth-mainnet.g.alchemy.com",
+      url: "https://eth-mainnet.g.alchemy.com/v2",
+    }],
+  );
+
+  const oversizedPath = join(directory, "oversized-catalog.json");
+  await writeFile(oversizedPath, Buffer.alloc(maximumBytes + 1, 0x20));
+  await assert.rejects(
+    loadEvmTargets(oversizedPath, 1),
+    /Network catalog could not be read safely/u,
+  );
+  await assert.rejects(
+    loadEvmTargets(directory, 1),
+    /Network catalog could not be read safely/u,
+  );
+
+  const rewrittenPath = join(directory, "rewritten-catalog.json");
+  await writeFile(rewrittenPath, validJSON);
+  await assert.rejects(
+    readBoundedNetworkCatalog(rewrittenPath, {
+      afterFirstRead: async () => {
+        await writeFile(
+          rewrittenPath,
+          JSON.stringify([{ alchemyNetwork: "eth-sepolia" }]),
+        );
+      },
+    }),
+    /Network catalog could not be read safely/u,
+  );
+
+  const swappedPath = join(directory, "swapped-catalog.json");
+  const replacementPath = join(directory, "replacement-catalog.json");
+  await writeFile(swappedPath, validJSON);
+  await writeFile(replacementPath, validJSON);
+  await assert.rejects(
+    readBoundedNetworkCatalog(swappedPath, {
+      afterFirstRead: async () => {
+        await rename(replacementPath, swappedPath);
+      },
+    }),
+    /Network catalog could not be read safely/u,
+  );
+});
+
+test("live proof-key loading uses strict raw bytes and pinned fingerprint", async () => {
+  const directory = await realpath(
+    await mkdtemp(
+      join(tmpdir(), "alchemy-jwt-live-proof-key-"),
+    ),
+  );
+  temporaryDirectories.push(directory);
+  const path = join(directory, "app-proof.key");
+  await writeFile(path, `${REQUEST_PROOF_KEY}\n`, { mode: 0o600 });
+  const key = await readAppProofKey(path, {
+    expectedFingerprint: REQUEST_PROOF_KEY_FINGERPRINT,
+  });
+  assert.deepEqual(key, Buffer.from(REQUEST_PROOF_KEY, "base64url"));
+  key.fill(0);
+
+  await writeFile(
+    path,
+    Buffer.concat([
+      Buffer.from([0xef, 0xbb, 0xbf]),
+      Buffer.from(REQUEST_PROOF_KEY, "ascii"),
+    ]),
+    { mode: 0o600 },
+  );
+  await assert.rejects(
+    readAppProofKey(path, {
+      expectedFingerprint: REQUEST_PROOF_KEY_FINGERPRINT,
+    }),
+    /could not be validated/u,
+  );
+});
+
+test("dry-run validates and clears a supplied proof key", async () => {
+  const directory = await realpath(
+    await mkdtemp(
+      join(tmpdir(), "alchemy-jwt-dry-run-proof-key-"),
+    ),
+  );
+  temporaryDirectories.push(directory);
+  const path = join(directory, "app-proof.key");
+  await writeFile(path, REQUEST_PROOF_KEY, { mode: 0o600 });
+
+  assert.equal(
+    await validateOptionalDryRunProofKey(
+      { appProofKeyFile: path },
+      { expectedFingerprint: REQUEST_PROOF_KEY_FINGERPRINT },
+    ),
+    true,
+  );
+  assert.equal(
+    await validateOptionalDryRunProofKey({}),
+    false,
+  );
+
+  await assert.rejects(
+    validateOptionalDryRunProofKey(
+      { appProofKeyFile: join(directory, "missing.key") },
+      { expectedFingerprint: REQUEST_PROOF_KEY_FINGERPRINT },
+    ),
+    /could not be validated/u,
+  );
+  await assert.rejects(
+    validateOptionalDryRunProofKey(
+      { appProofKeyFile: path },
+      { expectedFingerprint: "0".repeat(64) },
+    ),
+    /could not be validated/u,
+  );
+
+  await writeFile(path, `${REQUEST_PROOF_KEY}=`, { mode: 0o600 });
+  await assert.rejects(
+    validateOptionalDryRunProofKey(
+      { appProofKeyFile: path },
+      { expectedFingerprint: REQUEST_PROOF_KEY_FINGERPRINT },
+    ),
+    /could not be validated/u,
+  );
+
+  const injectedKey = Buffer.alloc(32, 0xa5);
+  assert.equal(
+    await validateOptionalDryRunProofKey(
+      { appProofKeyFile: "/protected/app-proof.key" },
+      {
+        readProofKey: async () => injectedKey,
+      },
+    ),
+    true,
+  );
+  assert.deepEqual(injectedKey, Buffer.alloc(32));
+});
+
+test("unauthorized proof probes require the exact generic body", () => {
+  assert.doesNotThrow(() =>
+    assertGenericUnauthorizedBody(
+      Buffer.from('{"error":"Unauthorized"}', "utf8"),
+      "test probe",
+    ),
+  );
+  for (const body of [
+    '{"error":"Missing proof"}',
+    '{"error":"Unauthorized"}\n',
+    '{ "error": "Unauthorized" }',
+    "",
+  ]) {
+    assert.throws(
+      () => assertGenericUnauthorizedBody(
+        Buffer.from(body, "utf8"),
+        "test probe",
+      ),
+      SafeValidationError,
+    );
+  }
+});
+
+test("live contract sends signed stale, future, and malformed nonce probes", async () => {
+  const key = Buffer.from(REQUEST_PROOF_KEY, "base64url");
+  const nowSeconds = 1_800_000_000;
+  const observed = [];
+  const statuses = [405, 404, 401, 401, 401, 401, 401, 401, 401];
+  const probeCount = await runBrokerContractProbes(
+    new URL("https://api.lil.org/v1/alchemy/jwt"),
+    {
+      expectedVersion: VERSION,
+      timeoutMs: 1_000,
+      versionOverride: false,
+      workerName: "big-wallet-alchemy-jwt",
+    },
+    key,
+    {
+      nowSeconds,
+      fetchImplementation: async (url, init) => {
+        const index = observed.length;
+        const body = init.body === undefined
+          ? Buffer.alloc(0)
+          : Buffer.from(init.body);
+        observed.push({ url: new URL(url), init, body });
+        const status = statuses[index];
+        const responseBody = status === 401
+          ? '{"error":"Unauthorized"}'
+          : "{}";
+        return brokerResponse(
+          status,
+          responseBody,
+          status === 405 ? { Allow: "POST" } : {},
+        );
+      },
+    },
+  );
+
+  assert.equal(probeCount, 9);
+  assert.equal(observed.length, 9);
+  const [stale, future, malformedNonce] = observed.slice(6);
+  for (const probe of [stale, future, malformedNonce]) {
+    assert.equal(
+      probe.init.headers["X-Lil-Alchemy-Proof"],
+      createRequestProof(probe.body, key),
+    );
+  }
+  const staleBody = JSON.parse(stale.body.toString("utf8"));
+  assert.equal(staleBody.timestamp, nowSeconds - 600);
+  assert.match(staleBody.nonce, /^[A-Za-z0-9_-]{22}$/u);
+  assert.equal(Buffer.from(staleBody.nonce, "base64url").byteLength, 16);
+  assert.equal(
+    JSON.parse(future.body.toString("utf8")).timestamp,
+    nowSeconds + 600,
+  );
+  assert.deepEqual(JSON.parse(malformedNonce.body.toString("utf8")), {
+    timestamp: nowSeconds,
+    nonce: "invalid",
+  });
+  key.fill(0);
+});
+
+test("release live verification delays and clears the proof key before RPC", async () => {
+  const key = Buffer.alloc(32, 0xa5);
+  const events = [];
+  const result = await verifyReleaseLiveContract(
+    {
+      expectedKid: KID,
+      expectedVersion: VERSION,
+      appProofKeyFile: "/protected/app-proof.key",
+    },
+    {
+      nowImplementation: () => 1_800_000_000_000,
+      probeHttpRedirectImplementation: async () => {
+        events.push("redirect");
+      },
+      waitForExpectedVersionImplementation: async () => {
+        events.push("version");
+        return 1;
+      },
+      readProofKey: async () => {
+        events.push("read-key");
+        return key;
+      },
+      runBrokerContractProbesImplementation: async () => {
+        events.push("probes");
+        assert.deepEqual(key, Buffer.alloc(32, 0xa5));
+        return 9;
+      },
+      acquireTokenImplementation: async () => {
+        events.push("issuance");
+        assert.deepEqual(key, Buffer.alloc(32, 0xa5));
+        return "secret-token";
+      },
+      validateRpcTargetImplementation: async (target, token) => {
+        events.push("canary");
+        assert.deepEqual(key, Buffer.alloc(32));
+        assert.deepEqual(target, TARGET);
+        assert.equal(token, "secret-token");
+        return {
+          host: target.host,
+          status: 200,
+          result: "ok",
+          ok: true,
+          retryable: false,
+          attempts: 1,
+          classification: "ok",
+        };
+      },
+    },
+  );
+  assert.deepEqual(events, [
+    "redirect",
+    "version",
+    "read-key",
+    "probes",
+    "issuance",
+    "canary",
+  ]);
+  assert.equal(result.probeCount, 9);
+  assert.deepEqual(key, Buffer.alloc(32));
 });
 
 test("broker URL is pinned to the exact production HTTPS origin and path", () => {
