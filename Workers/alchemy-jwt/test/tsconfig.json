@@ -1,0 +1,15 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "skipLibCheck": true,
+    "types": [
+      "@cloudflare/vitest-pool-workers/types",
+      "vitest/globals"
+    ]
+  },
+  "include": [
+    "../worker-configuration.d.ts",
+    "../src/**/*.ts",
+    "./**/*.ts"
+  ]
+}

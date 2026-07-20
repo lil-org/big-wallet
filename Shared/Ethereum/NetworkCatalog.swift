@@ -2,51 +2,6 @@
 
 import Foundation
 
-enum AlchemyRPC {
-
-    static let apiKeyResourceName = "AlchemyAPIKey"
-    static let bundledAPIKey = apiKey(in: .main)
-
-    static func apiKey(in bundle: Bundle = .main) -> String? {
-        guard let url = bundle.url(forResource: apiKeyResourceName, withExtension: nil),
-              let contents = try? String(contentsOf: url, encoding: .utf8) else {
-            return nil
-        }
-
-        let key = contents.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard isValidAPIKey(key) else { return nil }
-        return key
-    }
-
-    static func url(network: String, apiKey: String) -> URL? {
-        guard isValidNetworkName(network) else { return nil }
-
-        let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard isValidAPIKey(key) else { return nil }
-
-        var pathSegmentAllowed = CharacterSet.urlPathAllowed
-        pathSegmentAllowed.remove(charactersIn: "/?#")
-        guard let encodedKey = key.addingPercentEncoding(withAllowedCharacters: pathSegmentAllowed) else {
-            return nil
-        }
-        return URL(string: "https://\(network).g.alchemy.com/v2/\(encodedKey)")
-    }
-
-    static func isValidNetworkName(_ network: String) -> Bool {
-        guard !network.isEmpty else { return false }
-        return network.utf8.allSatisfy { character in
-            return character == 45
-                || (48...57).contains(character)
-                || (97...122).contains(character)
-        }
-    }
-
-    private static func isValidAPIKey(_ key: String) -> Bool {
-        return !key.isEmpty && key.rangeOfCharacter(from: .whitespacesAndNewlines) == nil
-    }
-
-}
-
 struct NetworkCatalogNativeCurrency: Codable, Equatable {
 
     let name: String
@@ -75,10 +30,9 @@ struct NetworkCatalogRecord: Codable, Equatable {
         return alchemyNetwork == nil ? .fallback : .alchemy
     }
 
-    func rpcURL(alchemyAPIKey: String?) -> URL? {
+    func rpcURL() -> URL? {
         if let alchemyNetwork {
-            guard let alchemyAPIKey else { return nil }
-            return AlchemyRPC.url(network: alchemyNetwork, apiKey: alchemyAPIKey)
+            return AlchemyRPC.url(network: alchemyNetwork)
         }
         guard let fallbackRPCURL else { return nil }
         return URL(string: fallbackRPCURL)
@@ -88,7 +42,10 @@ struct NetworkCatalogRecord: Codable, Equatable {
         return EthereumNetwork(chainId: chainId,
                                name: name,
                                symbol: nativeCurrency.symbol,
-                               nodeURLString: rpcURL.absoluteString,
+                               rpcEndpoint: .catalog(
+                                   rpcURL,
+                                   alchemyNetwork: alchemyNetwork
+                               ),
                                isTestnet: isTestnet,
                                mightShowPrice: displayPrice,
                                explorer: explorerURL)
@@ -300,8 +257,19 @@ enum RPCSource: Equatable {
 struct ResolvedEthereumNetwork: Equatable {
 
     let network: EthereumNetwork
-    let rpcURL: URL
     let source: RPCSource
+
+    var rpcEndpoint: EthereumRPCEndpoint {
+        return network.rpcEndpoint
+    }
+
+    var rpcURL: URL {
+        return rpcEndpoint.url
+    }
+
+    var allowsAlchemyAuthorization: Bool {
+        return rpcEndpoint.allowsAlchemyAuthorization
+    }
 
 }
 
@@ -340,7 +308,6 @@ struct NetworkResolver {
         return NetworkResolver(catalog: catalog,
                                catalogOwnedChainIds: BundledNetworkOwnership.chainIds,
                                decodedChainIds: decodedChainIds,
-                               alchemyAPIKey: AlchemyRPC.bundledAPIKey,
                                customSnapshot: { CustomNetworkCache.shared.snapshot() })
     }()
 
@@ -353,10 +320,9 @@ struct NetworkResolver {
     init(catalog: NetworkCatalog?,
          catalogOwnedChainIds: Set<Int>,
          decodedChainIds: Set<Int> = [],
-         alchemyAPIKey: String?,
-         catalogURLBuilder: (NetworkCatalogRecord, String?) -> URL? = {
-             record, apiKey in
-             return record.rpcURL(alchemyAPIKey: apiKey)
+         catalogURLBuilder: (NetworkCatalogRecord) -> URL? = {
+             record in
+             return record.rpcURL()
          },
          customSnapshot: @escaping () -> CustomNetworkSnapshot) {
         let catalogMatchesOwnership = catalog?.records.count == catalogOwnedChainIds.count
@@ -379,11 +345,10 @@ struct NetworkResolver {
 
         var resolvedCatalogByChainId: [Int: ResolvedEthereumNetwork] = [:]
         for record in catalog.records {
-            guard let rpcURL = catalogURLBuilder(record, alchemyAPIKey) else { continue }
+            guard let rpcURL = catalogURLBuilder(record) else { continue }
             let network = record.ethereumNetwork(rpcURL: rpcURL)
             resolvedCatalogByChainId[record.chainId] = ResolvedEthereumNetwork(
                 network: network,
-                rpcURL: rpcURL,
                 source: record.rpcSource
             )
         }

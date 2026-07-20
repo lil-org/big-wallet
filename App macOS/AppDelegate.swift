@@ -26,10 +26,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 #if DEBUG
         AmbientPseudoLocalizationLaunchMode.recordFromEnvironment()
 #endif
+        AlchemyJWTProvider.prewarmForApplicationLifecycle()
         installQuitKeyboardShortcutMonitor()
         agent.start(openOnLaunch: true)
         priceService.start()
         walletsManager.start()
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        AlchemyJWTProvider.prewarmForApplicationLifecycle()
     }
     
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

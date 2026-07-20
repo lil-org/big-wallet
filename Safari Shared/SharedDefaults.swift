@@ -209,12 +209,11 @@ struct CustomNetworkSnapshot {
             let network = EthereumNetwork(chainId: chainId,
                                           name: record.chainName,
                                           symbol: record.nativeCurrency.symbol,
-                                          nodeURLString: rpcURL.absoluteString,
+                                          rpcEndpoint: .unauthenticated(rpcURL),
                                           isTestnet: false,
                                           mightShowPrice: false,
                                           explorer: nil)
             let resolvedNetwork = ResolvedEthereumNetwork(network: network,
-                                                          rpcURL: rpcURL,
                                                           source: .custom)
             let entry = Entry(resolvedNetwork: resolvedNetwork)
             orderedEntries.append(entry)

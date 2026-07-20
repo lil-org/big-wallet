@@ -40,6 +40,17 @@ class ApproveTransactionViewController: NSViewController {
     private var displayedGasSliderValue: Double?
     private var gasSliderInteractionStartValue: Double?
     private var gasSliderInteractionDidMove = false
+    private var gasSliderPreparationRestart =
+        TransactionPreparationRestartGate()
+    private var preparationState = TransactionPreparationState()
+    private var preparationCancellation: EthereumRequestCancellation?
+    private var preparationFailureAlert: NSAlert?
+    private var pendingPreparationFailure: (
+        attemptID: Int,
+        forceGasCheck: Bool
+    )?
+    private var isEndingTransactionEditorSheet = false
+    private var transactionEditorDismissalCompletion: (() -> Void)?
     
     static func with(transaction: Transaction, chain: EthereumNetwork, account: WalletAccount, walletId: String, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self)
@@ -50,6 +61,10 @@ class ApproveTransactionViewController: NSViewController {
         new.completion = completion
         new.peerMeta = peerMeta
         return new
+    }
+
+    deinit {
+        preparationCancellation?.cancel()
     }
     
     override func viewDidLoad() {
@@ -62,7 +77,9 @@ class ApproveTransactionViewController: NSViewController {
             self?.updateTextView()
         }
         if chain.isEthMainnet {
-            gasService.fetchEstimate(rpcUrl: chain.nodeURLString) { [weak self] estimate in
+            gasService.fetchEstimate(
+                endpoint: chain.rpcEndpoint
+            ) { [weak self] estimate in
                 self?.didFetchGasEstimate(estimate)
             }
         }
@@ -95,21 +112,172 @@ class ApproveTransactionViewController: NSViewController {
         super.viewDidAppear()
         view.window?.delegate = self
         view.window?.makeFirstResponder(view)
+        presentPendingPreparationFailureIfNeeded()
     }
     
     private func callCompletion(result: Transaction?) {
-        if !didCallCompletion {
-            didCallCompletion = true
-            completion(result)
-        }
+        guard !didCallCompletion else { return }
+        didCallCompletion = true
+        preparationCancellation?.cancel()
+        preparationCancellation = nil
+        preparationState.finish()
+        pendingPreparationFailure = nil
+        transactionEditorDismissalCompletion = nil
+        isEndingTransactionEditorSheet = false
+        preparationFailureAlert = nil
+        completion(result)
     }
     
     private func prepareTransaction(forceGasCheck: Bool) {
-        ethereum.prepareTransaction(transaction, forceGasCheck: forceGasCheck, network: chain) { [weak self] updated in
-            guard let self, updated.id == self.transaction.id else { return }
-            self.transaction = self.gasSpeedConfiguration.mergingPreparedTransaction(updated, with: self.transaction)
-            self.updateInterface()
+        guard !didCallCompletion else { return }
+        preparationCancellation?.cancel()
+        let attemptID = preparationState.beginPreparation(
+            for: transaction.id
+        )
+        pendingPreparationFailure = nil
+        okButton.isEnabled = false
+
+        preparationCancellation = ethereum.prepareTransaction(
+            transaction,
+            forceGasCheck: forceGasCheck,
+            network: chain,
+            onUpdate: { [weak self] updated in
+                guard let self,
+                      self.preparationState.isCurrent(
+                        attemptID: attemptID,
+                        transactionID: updated.id
+                      ),
+                      updated.id == self.transaction.id else {
+                    return
+                }
+                self.installPreparedUpdate(updated)
+            },
+            completion: { [weak self] result in
+                guard let self else { return }
+                switch result {
+                case .success(let prepared):
+                    guard prepared.id == self.transaction.id,
+                          self.preparationState.markReady(
+                            attemptID: attemptID,
+                            transactionID: prepared.id
+                          ) else {
+                        return
+                    }
+                    // RPC changes were installed by onUpdate. A zero-RPC
+                    // success is the transaction already on screen.
+                    self.okButton.isEnabled = self.canApproveTransaction
+                case .failure:
+                    guard self.preparationState.markFailed(
+                        attemptID: attemptID,
+                        transactionID: self.transaction.id
+                    ) else {
+                        return
+                    }
+                    self.okButton.isEnabled = false
+                    self.showPreparationFailure(
+                        attemptID: attemptID,
+                        forceGasCheck: forceGasCheck
+                    )
+                }
+            }
+        )
+    }
+
+    private func isCurrentPreparationAttempt(_ attemptID: Int) -> Bool {
+        !didCallCompletion &&
+            preparationState.isCurrent(
+                attemptID: attemptID,
+                transactionID: transaction.id
+            )
+    }
+
+    private func installPreparedUpdate(_ prepared: Transaction) {
+        transaction = gasSpeedConfiguration.mergingPreparedTransaction(
+            prepared,
+            with: transaction
+        )
+        updateInterface()
+    }
+
+    private func invalidatePreparationForEditing() {
+        preparationCancellation?.cancel()
+        preparationCancellation = nil
+        preparationState.beginEditing(transaction.id)
+        pendingPreparationFailure = nil
+        okButton.isEnabled = false
+    }
+
+    private func showPreparationFailure(
+        attemptID: Int,
+        forceGasCheck: Bool
+    ) {
+        guard isCurrentPreparationAttempt(attemptID),
+              preparationState.phase == .failed else {
+            return
         }
+        guard preparationFailureAlert == nil else { return }
+        guard !isEndingTransactionEditorSheet,
+              var window = view.window else {
+            pendingPreparationFailure = (
+                attemptID: attemptID,
+                forceGasCheck: forceGasCheck
+            )
+            return
+        }
+
+        let alert = NSAlert()
+        alert.messageText = Strings.somethingWentWrong
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: Strings.tryAgain)
+        alert.addButton(withTitle: Strings.cancel)
+        preparationFailureAlert = alert
+
+        let handleResponse: (NSApplication.ModalResponse) -> Void = {
+            [weak self, weak alert] response in
+            guard let self else { return }
+            if self.preparationFailureAlert === alert {
+                self.preparationFailureAlert = nil
+            }
+            guard response == .alertFirstButtonReturn,
+                  self.isCurrentPreparationAttempt(attemptID) else { return }
+            self.prepareTransaction(forceGasCheck: forceGasCheck)
+        }
+
+        while let attachedSheet = window.attachedSheet {
+            window = attachedSheet
+        }
+        alert.beginSheetModal(
+            for: window,
+            completionHandler: handleResponse
+        )
+    }
+
+    private func presentPendingPreparationFailureIfNeeded() {
+        guard !didCallCompletion,
+              !isEndingTransactionEditorSheet,
+              let pendingPreparationFailure else {
+            return
+        }
+        self.pendingPreparationFailure = nil
+        showPreparationFailure(
+            attemptID: pendingPreparationFailure.attemptID,
+            forceGasCheck: pendingPreparationFailure.forceGasCheck
+        )
+    }
+
+    private func endTransactionEditorSheet(
+        completion: @escaping () -> Void = {}
+    ) {
+        guard let window = view.window,
+              let sheet = window.attachedSheet else {
+            completion()
+            presentPendingPreparationFailureIfNeeded()
+            return
+        }
+
+        isEndingTransactionEditorSheet = true
+        transactionEditorDismissalCompletion = completion
+        window.endSheet(sheet)
     }
     
     private func updateInterface() {
@@ -130,7 +298,10 @@ class ApproveTransactionViewController: NSViewController {
     }
 
     private var canApproveTransaction: Bool {
-        transaction.isReadyForApproval(on: chain)
+        preparationState.canApprove(
+            transactionID: transaction.id,
+            transactionIsReady: transaction.isReadyForApproval(on: chain)
+        )
     }
     
     private var displayedMetaAndBalance = ("", "")
@@ -195,6 +366,7 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     @IBAction func editTransactionButtonTapped(_ sender: Any) {
+        guard !didCallCompletion else { return }
         if suggestedNonceAndGasPrice == nil {
             suggestedNonceAndGasPrice = (transaction.decimalNonceString, transaction.editableGasPriceGwei)
         }
@@ -204,17 +376,29 @@ class ApproveTransactionViewController: NSViewController {
             suggestedNonce: suggestedNonceAndGasPrice?.nonce,
             suggestedGasPrice: suggestedNonceAndGasPrice?.gasPrice,
             completion: { [weak self] edits in
-                guard let self else { return }
-                self.endAllSheets()
-                guard let edits else { return }
-
-                let gasPriceChanged = edits.gasPrice.map { $0 != self.transaction.gasPriceValue } ?? false
-                guard self.transaction.apply(edits) else { return }
-                if gasPriceChanged {
-                    self.gasSpeedConfiguration.commitManualGasPrice(self.transaction.gasPriceWei)
+                guard let self, !self.didCallCompletion else { return }
+                guard let edits else {
+                    self.endTransactionEditorSheet()
+                    return
                 }
-                self.updateInterface()
-                self.prepareTransaction(forceGasCheck: true)
+                let gasPriceChanged = edits.gasPrice.map {
+                    $0 != self.transaction.gasPriceValue
+                } ?? false
+                guard self.transaction.apply(edits) else {
+                    self.endTransactionEditorSheet()
+                    return
+                }
+                if gasPriceChanged {
+                    self.gasSpeedConfiguration.commitManualGasPrice(
+                        self.transaction.gasPriceWei
+                    )
+                }
+                self.invalidatePreparationForEditing()
+                self.endTransactionEditorSheet { [weak self] in
+                    guard let self, !self.didCallCompletion else { return }
+                    self.updateInterface()
+                    self.prepareTransaction(forceGasCheck: true)
+                }
             }
         )
         let editWindow = makeHostingWindow(content: editTransactionView)
@@ -230,6 +414,13 @@ class ApproveTransactionViewController: NSViewController {
             let startValue = displayedGasSliderValue ?? sender.doubleValue
             gasSliderInteractionStartValue = startValue
             gasSliderInteractionDidMove = sender.doubleValue != startValue
+            if gasSliderInteractionDidMove {
+                applyGasSliderValue(
+                    sender.doubleValue,
+                    inRelationTo: gasInfo
+                )
+                updateInterface()
+            }
             return
         }
 
@@ -244,6 +435,7 @@ class ApproveTransactionViewController: NSViewController {
                 if eventType == .leftMouseUp {
                     resetGasSliderInteraction()
                     updateGasSliderValueIfNeeded()
+                    startPendingGasSliderPreparationIfNeeded()
                 }
                 return
             }
@@ -253,19 +445,29 @@ class ApproveTransactionViewController: NSViewController {
                 resetGasSliderInteraction()
             }
             updateInterface()
+            if eventType == .leftMouseUp {
+                startPendingGasSliderPreparationIfNeeded()
+            }
             return
         }
 
         resetGasSliderInteraction()
         applyGasSliderValue(sender.doubleValue, inRelationTo: gasInfo)
         updateInterface()
+        startPendingGasSliderPreparationIfNeeded()
     }
 
-    private func applyGasSliderValue(_ value: Double, inRelationTo info: GasService.Info) {
+    private func applyGasSliderValue(
+        _ value: Double,
+        inRelationTo info: GasService.Info
+    ) {
         let previousGasPrice = transaction.gasPriceValue
         transaction.setGasPrice(value: value, inRelationTo: info)
         if transaction.gasPriceValue != previousGasPrice {
             gasSpeedConfiguration.markGasSliderGasPriceChange()
+            if gasSliderPreparationRestart.recordMutation() {
+                invalidatePreparationForEditing()
+            }
         }
     }
 
@@ -273,8 +475,17 @@ class ApproveTransactionViewController: NSViewController {
         gasSliderInteractionStartValue = nil
         gasSliderInteractionDidMove = false
     }
+
+    private func startPendingGasSliderPreparationIfNeeded() {
+        guard gasSliderPreparationRestart.consume() else { return }
+        prepareTransaction(forceGasCheck: false)
+    }
     
     @IBAction func actionButtonTapped(_ sender: Any) {
+        guard canApproveTransaction else {
+            okButton.isEnabled = false
+            return
+        }
         callCompletion(result: transaction)
     }
     
@@ -285,6 +496,26 @@ class ApproveTransactionViewController: NSViewController {
 }
 
 extension ApproveTransactionViewController: NSWindowDelegate {
+
+    func windowDidResignKey(_ notification: Notification) {
+        guard gasSliderInteractionStartValue != nil else { return }
+        resetGasSliderInteraction()
+        updateInterface()
+        startPendingGasSliderPreparationIfNeeded()
+    }
+
+    func windowDidEndSheet(_ notification: Notification) {
+        guard isEndingTransactionEditorSheet else {
+            presentPendingPreparationFailureIfNeeded()
+            return
+        }
+
+        isEndingTransactionEditorSheet = false
+        let completion = transactionEditorDismissalCompletion
+        transactionEditorDismissalCompletion = nil
+        completion?()
+        presentPendingPreparationFailureIfNeeded()
+    }
     
     func windowWillClose(_ notification: Notification) {
         callCompletion(result: nil)

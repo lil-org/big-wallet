@@ -323,7 +323,6 @@ final class CustomNetworkStorageTests: XCTestCase {
                 catalogRecord(chainId: 1, alchemyNetwork: "eth-mainnet"),
             ]),
             catalogOwnedChainIds: [1],
-            alchemyAPIKey: "unit-test-key",
             customSnapshot: { snapshot }
         )
 

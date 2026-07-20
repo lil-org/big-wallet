@@ -8,7 +8,12 @@ var launchURL: URL?
 @main
 struct Big_Wallet_visionOSApp: App {
     
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showAccountsView = false
+
+    init() {
+        AlchemyJWTProvider.prewarmForApplicationLifecycle()
+    }
     
     var body: some Scene {
         WindowGroup {
@@ -30,6 +35,11 @@ struct Big_Wallet_visionOSApp: App {
             }
         }
         .defaultSize(CGSize(width: 420, height: 555))
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                AlchemyJWTProvider.prewarmForApplicationLifecycle()
+            }
+        }
     }
 }
 

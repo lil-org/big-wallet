@@ -11,6 +11,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     private let priceService = PriceService.shared
     
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        AlchemyJWTProvider.prewarmForApplicationLifecycle()
         priceService.start()
         walletsManager.start()
         return true

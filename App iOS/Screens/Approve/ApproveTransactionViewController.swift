@@ -49,6 +49,19 @@ class ApproveTransactionViewController: UIViewController {
     private var suggestedNonceAndGasPrice: (nonce: String?, gasPrice: String?)?
     private var isGasSliderTracking = false
     private var needsTableReloadAfterGasSliderInteraction = false
+    private var gasSliderPreparationRestart =
+        TransactionPreparationRestartGate()
+    private var preparationState = TransactionPreparationState()
+    private var preparationCancellation: EthereumRequestCancellation?
+    private var preparationFailureAlert: UIAlertController?
+    private var pendingPreparationFailure: (
+        attemptID: Int,
+        forceGasCheck: Bool
+    )?
+    private var isPresentingTransactionEditor = false
+    private var isDismissingTransactionEditor = false
+    private weak var transactionEditorController: UIViewController?
+    private var isViewVisible = false
     
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var cancelButton: UIButton!
@@ -62,6 +75,10 @@ class ApproveTransactionViewController: UIViewController {
         new.account = account
         new.peerMeta = peerMeta
         return new
+    }
+
+    deinit {
+        preparationCancellation?.cancel()
     }
     
     override func viewDidLoad() {
@@ -78,7 +95,9 @@ class ApproveTransactionViewController: UIViewController {
         sectionModels = [[]]
 
         if chain.isEthMainnet {
-            gasService.fetchEstimate(rpcUrl: chain.nodeURLString) { [weak self] estimate in
+            gasService.fetchEstimate(
+                endpoint: chain.rpcEndpoint
+            ) { [weak self] estimate in
                 self?.didFetchGasEstimate(estimate)
             }
         }
@@ -101,8 +120,20 @@ class ApproveTransactionViewController: UIViewController {
         super.viewDidLayoutSubviews()
         updateAdaptiveLargeTitleLayout(Strings.sendTransaction, tableView: tableView)
     }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        isViewVisible = true
+        presentPendingPreparationFailureIfNeeded()
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        isViewVisible = false
+    }
     
     @objc private func editTransactionButtonTapped() {
+        guard !didCallCompletion else { return }
         if suggestedNonceAndGasPrice == nil {
             suggestedNonceAndGasPrice = (transaction.decimalNonceString, transaction.editableGasPriceGwei)
         }
@@ -112,18 +143,31 @@ class ApproveTransactionViewController: UIViewController {
             suggestedNonce: suggestedNonceAndGasPrice?.nonce,
             suggestedGasPrice: suggestedNonceAndGasPrice?.gasPrice,
             completion: { [weak self] edits in
-                guard let self else { return }
-                self.presentedViewController?.dismiss(animated: true)
-                guard let edits else { return }
-
-                let gasPriceChanged = edits.gasPrice.map { $0 != self.transaction.gasPriceValue } ?? false
-                guard self.transaction.apply(edits) else { return }
-                if gasPriceChanged {
-                    self.gasSpeedConfiguration.commitManualGasPrice(self.transaction.gasPriceWei)
+                guard let self, !self.didCallCompletion else { return }
+                guard let edits else {
+                    self.dismissTransactionEditor()
+                    return
                 }
-                self.updateDisplayedTransactionInfo(initially: false)
-                self.updateSpeedConfigurationState()
-                self.prepareTransaction(forceGasCheck: true)
+                let gasPriceChanged = edits.gasPrice.map {
+                    $0 != self.transaction.gasPriceValue
+                } ?? false
+                guard self.transaction.apply(edits) else {
+                    self.dismissTransactionEditor()
+                    return
+                }
+                if gasPriceChanged {
+                    self.gasSpeedConfiguration.commitManualGasPrice(
+                        self.transaction.gasPriceWei
+                    )
+                }
+                self.invalidatePreparationForEditing()
+                let finishEditing = { [weak self] in
+                    guard let self, !self.didCallCompletion else { return }
+                    self.updateDisplayedTransactionInfo(initially: false)
+                    self.updateSpeedConfigurationState()
+                    self.prepareTransaction(forceGasCheck: true)
+                }
+                self.dismissTransactionEditor(completion: finishEditing)
             }
         )
         let hostingController = UIHostingController(rootView: editTransactionView)
@@ -138,16 +182,184 @@ class ApproveTransactionViewController: UIViewController {
             hostingController.barButtonItem = navigationItem.rightBarButtonItem
             hostingController.delegate = self
         }
-        present(hostingController, animated: true)
+        transactionEditorController = hostingController
+        isPresentingTransactionEditor = true
+        present(hostingController, animated: true) { [weak self] in
+            guard let self else { return }
+            self.isPresentingTransactionEditor = false
+            self.presentPendingPreparationFailureIfNeeded()
+        }
+    }
+
+    private func dismissTransactionEditor(
+        completion: @escaping () -> Void = {}
+    ) {
+        guard let transactionEditorController else {
+            completion()
+            presentPendingPreparationFailureIfNeeded()
+            return
+        }
+
+        isDismissingTransactionEditor = true
+        transactionEditorController.dismiss(animated: true) { [weak self] in
+            guard let self else { return }
+            self.transactionEditorController = nil
+            self.isDismissingTransactionEditor = false
+            completion()
+            self.presentPendingPreparationFailureIfNeeded()
+        }
     }
     
     private func prepareTransaction(forceGasCheck: Bool) {
-        ethereum.prepareTransaction(transaction, forceGasCheck: forceGasCheck, network: chain) { [weak self] updated in
-            guard let self, updated.id == self.transaction.id else { return }
-            self.transaction = self.gasSpeedConfiguration.mergingPreparedTransaction(updated, with: self.transaction)
-            self.updateDisplayedTransactionInfo(initially: false)
-            self.updateSpeedConfigurationState()
+        guard !didCallCompletion else { return }
+        preparationCancellation?.cancel()
+        let attemptID = preparationState.beginPreparation(
+            for: transaction.id
+        )
+        pendingPreparationFailure = nil
+        okButton.isEnabled = false
+
+        preparationCancellation = ethereum.prepareTransaction(
+            transaction,
+            forceGasCheck: forceGasCheck,
+            network: chain,
+            onUpdate: { [weak self] updated in
+                guard let self,
+                      self.preparationState.isCurrent(
+                        attemptID: attemptID,
+                        transactionID: updated.id
+                      ),
+                      updated.id == self.transaction.id else {
+                    return
+                }
+                self.installPreparedUpdate(updated)
+            },
+            completion: { [weak self] result in
+                guard let self else { return }
+                switch result {
+                case .success(let prepared):
+                    guard prepared.id == self.transaction.id,
+                          self.preparationState.markReady(
+                        attemptID: attemptID,
+                        transactionID: prepared.id
+                    ) else {
+                        return
+                    }
+                    // RPC changes were installed by onUpdate. A zero-RPC
+                    // success is the transaction already on screen.
+                    self.okButton.isEnabled = self.canApproveTransaction
+                case .failure:
+                    guard self.preparationState.markFailed(
+                        attemptID: attemptID,
+                        transactionID: self.transaction.id
+                    ) else {
+                        return
+                    }
+                    self.okButton.isEnabled = false
+                    self.showPreparationFailure(
+                        attemptID: attemptID,
+                        forceGasCheck: forceGasCheck
+                    )
+                }
+            }
+        )
+    }
+
+    private func isCurrentPreparationAttempt(_ attemptID: Int) -> Bool {
+        !didCallCompletion &&
+            preparationState.isCurrent(
+                attemptID: attemptID,
+                transactionID: transaction.id
+            )
+    }
+
+    private func installPreparedUpdate(_ prepared: Transaction) {
+        transaction = gasSpeedConfiguration.mergingPreparedTransaction(
+            prepared,
+            with: transaction
+        )
+        updateDisplayedTransactionInfo(initially: false)
+        updateSpeedConfigurationState()
+    }
+
+    private func invalidatePreparationForEditing() {
+        preparationCancellation?.cancel()
+        preparationCancellation = nil
+        preparationState.beginEditing(transaction.id)
+        pendingPreparationFailure = nil
+        okButton.isEnabled = false
+    }
+
+    private func showPreparationFailure(
+        attemptID: Int,
+        forceGasCheck: Bool
+    ) {
+        guard isCurrentPreparationAttempt(attemptID),
+              preparationState.phase == .failed else {
+            return
         }
+        guard preparationFailureAlert == nil else { return }
+        if !isViewVisible ||
+            viewIfLoaded?.window == nil ||
+            isPresentingTransactionEditor ||
+            isDismissingTransactionEditor {
+            pendingPreparationFailure = (
+                attemptID: attemptID,
+                forceGasCheck: forceGasCheck
+            )
+            return
+        }
+
+        let alert = UIAlertController(
+            title: Strings.somethingWentWrong,
+            message: nil,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: Strings.tryAgain, style: .default) {
+            [weak self, weak alert] _ in
+            guard let self,
+                  let alert,
+                  self.preparationFailureAlert === alert else { return }
+            alert.dismiss(animated: true) { [weak self, weak alert] in
+                guard let self else { return }
+                if self.preparationFailureAlert === alert {
+                    self.preparationFailureAlert = nil
+                }
+                guard self.isCurrentPreparationAttempt(attemptID) else { return }
+                self.prepareTransaction(forceGasCheck: forceGasCheck)
+            }
+        })
+        alert.addAction(UIAlertAction(title: Strings.cancel, style: .cancel) {
+            [weak self, weak alert] _ in
+            guard let self,
+                  let alert,
+                  self.preparationFailureAlert === alert else { return }
+            alert.dismiss(animated: true) { [weak self, weak alert] in
+                if self?.preparationFailureAlert === alert {
+                    self?.preparationFailureAlert = nil
+                }
+            }
+        })
+        preparationFailureAlert = alert
+        var presenter: UIViewController = self
+        while let presented = presenter.presentedViewController {
+            presenter = presented
+        }
+        presenter.present(alert, animated: true)
+    }
+
+    private func presentPendingPreparationFailureIfNeeded() {
+        guard !didCallCompletion,
+              !isPresentingTransactionEditor,
+              !isDismissingTransactionEditor,
+              let pendingPreparationFailure else {
+            return
+        }
+        self.pendingPreparationFailure = nil
+        showPreparationFailure(
+            attemptID: pendingPreparationFailure.attemptID,
+            forceGasCheck: pendingPreparationFailure.forceGasCheck
+        )
     }
     
     private func makeCellLayout() -> CellLayout {
@@ -200,7 +412,10 @@ class ApproveTransactionViewController: UIViewController {
     }
 
     private var canApproveTransaction: Bool {
-        transaction.isReadyForApproval(on: chain)
+        preparationState.canApprove(
+            transactionID: transaction.id,
+            transactionIsReady: transaction.isReadyForApproval(on: chain)
+        )
     }
     
     private func refreshGasPriceRows() {
@@ -269,19 +484,28 @@ class ApproveTransactionViewController: UIViewController {
     }
     
     private func callCompletion(result: Transaction?) {
-        if !didCallCompletion {
-            didCallCompletion = true
-            completion(result)
-        }
+        guard !didCallCompletion else { return }
+        didCallCompletion = true
+        preparationCancellation?.cancel()
+        preparationCancellation = nil
+        preparationState.finish()
+        pendingPreparationFailure = nil
+        preparationFailureAlert = nil
+        completion(result)
     }
     
     @IBAction func okButtonTapped(_ sender: Any) {
+        guard canApproveTransaction else {
+            okButton.isEnabled = false
+            return
+        }
         view.isUserInteractionEnabled = false
         LocalAuthentication.attempt(reason: Strings.sendTransaction, presentPasswordAlertFrom: self, passwordReason: Strings.sendTransaction) { [weak self] success in
-            if success, let transaction = self?.transaction {
-                self?.callCompletion(result: transaction)
+            guard let self, !self.didCallCompletion else { return }
+            if success, self.canApproveTransaction {
+                self.callCompletion(result: self.transaction)
             } else {
-                self?.view.isUserInteractionEnabled = true
+                self.view.isUserInteractionEnabled = true
             }
         }
     }
@@ -348,11 +572,15 @@ extension ApproveTransactionViewController: GasPriceSliderDelegate {
 
     func sliderInteractionEnded() {
         isGasSliderTracking = false
+        let shouldPrepare = gasSliderPreparationRestart.consume()
         if needsTableReloadAfterGasSliderInteraction {
             needsTableReloadAfterGasSliderInteraction = false
             updateDisplayedTransactionInfo(initially: false)
         }
         updateGasSliderValueIfNeeded()
+        if shouldPrepare {
+            prepareTransaction(forceGasCheck: false)
+        }
     }
     
     func sliderValueChanged(value: Double) {
@@ -360,11 +588,21 @@ extension ApproveTransactionViewController: GasPriceSliderDelegate {
         gasSpeedConfiguration.markGasSliderInteraction()
         let previousGasPrice = transaction.gasPriceValue
         transaction.setGasPrice(value: value, inRelationTo: gasInfo)
-        if transaction.gasPriceValue != previousGasPrice {
+        let didChangeGasPrice =
+            transaction.gasPriceValue != previousGasPrice
+        if didChangeGasPrice {
             gasSpeedConfiguration.markGasSliderGasPriceChange()
+            if gasSliderPreparationRestart.recordMutation() {
+                invalidatePreparationForEditing()
+            }
         }
         refreshGasPriceRows()
         updateGasSliderValueIfNeeded()
+        if didChangeGasPrice,
+           !isGasSliderTracking,
+           gasSliderPreparationRestart.consume() {
+            prepareTransaction(forceGasCheck: false)
+        }
     }
     
 }
@@ -373,6 +611,25 @@ extension ApproveTransactionViewController: UIPopoverPresentationControllerDeleg
     
     func adaptivePresentationStyle(for controller: UIPresentationController, traitCollection: UITraitCollection) -> UIModalPresentationStyle {
         return .none
+    }
+
+    func presentationControllerWillDismiss(
+        _ presentationController: UIPresentationController
+    ) {
+        guard presentationController.presentedViewController ===
+                transactionEditorController else {
+            return
+        }
+        isDismissingTransactionEditor = true
+    }
+
+    func presentationControllerDidDismiss(
+        _ presentationController: UIPresentationController
+    ) {
+        guard isDismissingTransactionEditor else { return }
+        transactionEditorController = nil
+        isDismissingTransactionEditor = false
+        presentPendingPreparationFailureIfNeeded()
     }
     
 }

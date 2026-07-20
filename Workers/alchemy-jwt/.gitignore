@@ -1,0 +1,12 @@
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+*.key
+*.pem
+alchemy-jwt-secrets.json
+.wrangler/
+coverage/
+dist/
+node_modules/
+worker-startup.cpuprofile

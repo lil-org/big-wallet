@@ -30,6 +30,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
+        prewarmAlchemy()
         installCommandQBlocker()
         agent.start(openOnLaunch: false)
         walletsManager.start()
@@ -53,6 +54,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         DistributedNotificationCenter.default().post(name: .ambientAgentMustTerminate,
                                                       object: currentInstanceId,
                                                       userInfo: AmbientAgentTerminationRequest.notificationUserInfo(from: versionInfo))
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        prewarmAlchemy()
     }
 
     func application(_ application: NSApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([NSUserActivityRestoring]) -> Void) -> Bool {
@@ -185,10 +190,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     private func processExternalRequest(_ externalRequest: Agent.ExternalRequest) {
         if didFinishLaunching {
+            prewarmAlchemy()
             agent.showInitialScreen(externalRequest: externalRequest)
         } else {
             initialExternalRequest = externalRequest
         }
+    }
+
+    private func prewarmAlchemy() {
+        _ = AlchemyJWTProvider.prewarmForApplicationLifecycle()
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {

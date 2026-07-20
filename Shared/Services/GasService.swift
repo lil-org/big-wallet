@@ -2,6 +2,123 @@
 
 import Foundation
 
+final class OneShotGate: @unchecked Sendable {
+
+    private let lock = NSLock()
+    private var isAvailable = true
+
+    func claim() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard isAvailable else { return false }
+        isAvailable = false
+        return true
+    }
+
+}
+
+struct TransactionPreparationState: Equatable {
+
+    enum Phase: Equatable {
+        case idle
+        case preparing
+        case ready
+        case failed
+        case editing
+        case finished
+    }
+
+    private(set) var phase: Phase = .idle
+    private(set) var attemptID = 0
+    private(set) var transactionID: UUID?
+
+    mutating func beginPreparation(for transactionID: UUID) -> Int {
+        attemptID &+= 1
+        self.transactionID = transactionID
+        phase = .preparing
+        return attemptID
+    }
+
+    mutating func beginEditing(_ transactionID: UUID) {
+        attemptID &+= 1
+        self.transactionID = transactionID
+        phase = .editing
+    }
+
+    func isCurrent(attemptID: Int, transactionID: UUID) -> Bool {
+        phase != .finished &&
+            attemptID == self.attemptID &&
+            transactionID == self.transactionID
+    }
+
+    @discardableResult
+    mutating func markReady(
+        attemptID: Int,
+        transactionID: UUID
+    ) -> Bool {
+        guard phase == .preparing,
+              isCurrent(
+                attemptID: attemptID,
+                transactionID: transactionID
+              ) else {
+            return false
+        }
+        phase = .ready
+        return true
+    }
+
+    @discardableResult
+    mutating func markFailed(
+        attemptID: Int,
+        transactionID: UUID
+    ) -> Bool {
+        guard phase == .preparing,
+              isCurrent(
+                attemptID: attemptID,
+                transactionID: transactionID
+              ) else {
+            return false
+        }
+        phase = .failed
+        return true
+    }
+
+    func canApprove(
+        transactionID: UUID,
+        transactionIsReady: Bool
+    ) -> Bool {
+        phase == .ready &&
+            transactionID == self.transactionID &&
+            transactionIsReady
+    }
+
+    mutating func finish() {
+        attemptID &+= 1
+        transactionID = nil
+        phase = .finished
+    }
+
+}
+
+struct TransactionPreparationRestartGate: Equatable {
+
+    private(set) var isPending = false
+
+    @discardableResult
+    mutating func recordMutation() -> Bool {
+        guard !isPending else { return false }
+        isPending = true
+        return true
+    }
+
+    mutating func consume() -> Bool {
+        guard isPending else { return false }
+        isPending = false
+        return true
+    }
+
+}
+
 final class GasService {
 
     struct Info: Equatable {
@@ -71,28 +188,16 @@ final class GasService {
     static let shared = GasService()
     private static let rewardPercentiles: [Double] = [10, 25, 50, 75]
 
-    private final class CompletionGate {
-        private let lock = NSLock()
-        private var didComplete = false
-
-        func claim() -> Bool {
-            lock.lock()
-            defer { lock.unlock() }
-            guard !didComplete else { return false }
-            didComplete = true
-            return true
-        }
-    }
-
     private let rpc: EthereumFeeHistoryRPCClient
 
     init(rpc: EthereumFeeHistoryRPCClient = EthereumRPC()) {
         self.rpc = rpc
     }
 
-    func fetchEstimate(rpcUrl: String, completion: @escaping (Estimate) -> Void) {
-        let completionGate = CompletionGate()
-        rpc.fetchFeeHistory(rpcUrl: rpcUrl,
+    func fetchEstimate(endpoint: EthereumRPCEndpoint,
+                       completion: @escaping (Estimate) -> Void) {
+        let completionGate = OneShotGate()
+        rpc.fetchFeeHistory(endpoint: endpoint,
                             blockCount: 10,
                             rewardPercentiles: Self.rewardPercentiles) { result in
             guard completionGate.claim() else { return }

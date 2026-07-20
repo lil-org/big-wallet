@@ -24,6 +24,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             wasOpenedWithURL(url)
         }
     }
+
+    func sceneWillEnterForeground(_ scene: UIScene) {
+        AlchemyJWTProvider.prewarmForApplicationLifecycle()
+    }
     
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
         if let url = userActivity.webpageURL {

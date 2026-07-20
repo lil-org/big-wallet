@@ -35,6 +35,34 @@
 		2FA100000000000000000009 /* SafariRPCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA100000000000000000001 /* SafariRPCClient.swift */; };
 		2FA10000000000000000000A /* SafariRPCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA100000000000000000001 /* SafariRPCClient.swift */; };
 		2FA10000000000000000000B /* SafariRPCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA100000000000000000001 /* SafariRPCClient.swift */; };
+		2FA300000000000000000002 /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		2FA300000000000000000003 /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		2FA300000000000000000004 /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		2FA300000000000000000005 /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		2FA300000000000000000006 /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		2FA300000000000000000007 /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		2FA300000000000000000008 /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		2FA300000000000000000009 /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		2FA30000000000000000000A /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		2FA30000000000000000000B /* AlchemyJWTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA300000000000000000001 /* AlchemyJWTProvider.swift */; };
+		2FA400000000000000000002 /* AlchemyJWTProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA400000000000000000001 /* AlchemyJWTProviderTests.swift */; };
+		2FA400000000000000000003 /* AlchemyJWTProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA400000000000000000001 /* AlchemyJWTProviderTests.swift */; };
+		2FA400000000000000000004 /* AlchemyJWTProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA400000000000000000001 /* AlchemyJWTProviderTests.swift */; };
+		2FB000000000000000000002 /* SafariAlchemyPrewarmPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB000000000000000000001 /* SafariAlchemyPrewarmPolicy.swift */; };
+		2FB000000000000000000003 /* SafariAlchemyPrewarmPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB000000000000000000001 /* SafariAlchemyPrewarmPolicy.swift */; };
+		2FB000000000000000000004 /* SafariAlchemyPrewarmPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB000000000000000000001 /* SafariAlchemyPrewarmPolicy.swift */; };
+		2FB000000000000000000005 /* SafariAlchemyPrewarmPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB000000000000000000001 /* SafariAlchemyPrewarmPolicy.swift */; };
+		2FB000000000000000000006 /* SafariAlchemyPrewarmPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB000000000000000000001 /* SafariAlchemyPrewarmPolicy.swift */; };
+		2FB000000000000000000007 /* SafariAlchemyPrewarmPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB000000000000000000001 /* SafariAlchemyPrewarmPolicy.swift */; };
+		2FB100000000000000000002 /* SafariPrewarmBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB100000000000000000001 /* SafariPrewarmBridgeTests.swift */; };
+		2FB100000000000000000003 /* SafariPrewarmBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB100000000000000000001 /* SafariPrewarmBridgeTests.swift */; };
+		2FB100000000000000000004 /* SafariPrewarmBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB100000000000000000001 /* SafariPrewarmBridgeTests.swift */; };
+		2FB200000000000000000002 /* AlchemyJWTProductionContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB200000000000000000001 /* AlchemyJWTProductionContractTests.swift */; };
+		2FB200000000000000000003 /* AlchemyJWTProductionContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB200000000000000000001 /* AlchemyJWTProductionContractTests.swift */; };
+		2FB200000000000000000004 /* AlchemyJWTProductionContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB200000000000000000001 /* AlchemyJWTProductionContractTests.swift */; };
+		2FB300000000000000000002 /* InternalSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */; };
+		2FB300000000000000000003 /* InternalSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */; };
+		2FB300000000000000000004 /* InternalSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */; };
 		2FA200000000000000000002 /* CustomNetworkStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA200000000000000000001 /* CustomNetworkStorageTests.swift */; };
 		2FA200000000000000000003 /* CustomNetworkStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA200000000000000000001 /* CustomNetworkStorageTests.swift */; };
 		2FA200000000000000000004 /* CustomNetworkStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA200000000000000000001 /* CustomNetworkStorageTests.swift */; };
@@ -627,6 +655,10 @@
 		DB2B8110AC144397915962B1 /* NetworkCatalog.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = NetworkCatalog.json; sourceTree = "<group>"; };
 		2FA100000000000000000001 /* SafariRPCClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariRPCClient.swift; sourceTree = "<group>"; };
 		2FA200000000000000000001 /* CustomNetworkStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomNetworkStorageTests.swift; sourceTree = "<group>"; };
+		2FA400000000000000000001 /* AlchemyJWTProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlchemyJWTProviderTests.swift; sourceTree = "<group>"; };
+		2FB000000000000000000001 /* SafariAlchemyPrewarmPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariAlchemyPrewarmPolicy.swift; sourceTree = "<group>"; };
+		2FB100000000000000000001 /* SafariPrewarmBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariPrewarmBridgeTests.swift; sourceTree = "<group>"; };
+		2FB200000000000000000001 /* AlchemyJWTProductionContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlchemyJWTProductionContractTests.swift; sourceTree = "<group>"; };
 		0D059AD126C2796200EE3023 /* ApprovalSubject.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalSubject.swift; sourceTree = "<group>"; };
 		0DC850E626B73A5900809E82 /* AuthenticationReason.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationReason.swift; sourceTree = "<group>"; };
 		2C0000012FA7000000000001 /* BigUIntTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BigUIntTests.swift; sourceTree = "<group>"; };
@@ -786,6 +818,7 @@
 		2F1A00012E20000100A1A001 /* SolanaSafariRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolanaSafariRequest.swift; sourceTree = "<group>"; };
 		2F1A00022E20000100A1A001 /* SolanaResponseToExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolanaResponseToExtension.swift; sourceTree = "<group>"; };
 		2F1A00032E20000100A1A001 /* Solana.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Solana.swift; sourceTree = "<group>"; };
+		2FA300000000000000000001 /* AlchemyJWTProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlchemyJWTProvider.swift; sourceTree = "<group>"; };
 		2F2A00000000000000000001 /* SolanaTestFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolanaTestFixtures.swift; sourceTree = "<group>"; };
 		2F2A00000000000000000005 /* SolanaWireMessageParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolanaWireMessageParserTests.swift; sourceTree = "<group>"; };
 		2F2A00000000000000000009 /* SolanaTransactionSummaryFormatterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolanaTransactionSummaryFormatterTests.swift; sourceTree = "<group>"; };
@@ -898,7 +931,10 @@
 		2C03EB8E2B06A18700EF61F5 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				2FB200000000000000000001 /* AlchemyJWTProductionContractTests.swift */,
+				2FA400000000000000000001 /* AlchemyJWTProviderTests.swift */,
 				019DDEDE91F4418190B03EFB /* NetworkCatalogTests.swift */,
+				2FB100000000000000000001 /* SafariPrewarmBridgeTests.swift */,
 				2FA200000000000000000001 /* CustomNetworkStorageTests.swift */,
 				2C0000012FA7000000000001 /* BigUIntTests.swift */,
 				2F2A00000000000000000015 /* DappRequestProcessorTests.swift */,
@@ -1265,6 +1301,7 @@
 			children = (
 				2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */,
 				2C9B2C6A2D38415F00D56607 /* SharedDefaults.swift */,
+				2FB000000000000000000001 /* SafariAlchemyPrewarmPolicy.swift */,
 				2FA100000000000000000001 /* SafariRPCClient.swift */,
 				2C09CBA1273979C1009AD39B /* SafariWebExtensionHandler.swift */,
 				2C264BDA27B5A94400234393 /* Models */,
@@ -1353,6 +1390,7 @@
 		2CF255A4275A483600AE54B9 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				2FA300000000000000000001 /* AlchemyJWTProvider.swift */,
 				2C528A15267FA8EB00CA3ADD /* Defaults.swift */,
 				2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */,
 				2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */,
@@ -1429,7 +1467,7 @@
 				2C09CB9B273979C1009AD39B /* Sources */,
 				2C09CB9C273979C1009AD39B /* Frameworks */,
 				2C09CB9D273979C1009AD39B /* Resources */,
-				516B2583C21E4F89B3F786DA /* Bundle Alchemy API Key */,
+				516B2583C21E4F89B3F786DA /* Remove Legacy Alchemy API Key */,
 			);
 			buildRules = (
 			);
@@ -1447,7 +1485,7 @@
 				2C17BDC62D3D007E0015C58B /* Sources */,
 				2C17BDC72D3D007E0015C58B /* Frameworks */,
 				2C17BDC82D3D007E0015C58B /* Resources */,
-				AB014F43D7D74AA2A57639E3 /* Bundle Alchemy API Key */,
+				AB014F43D7D74AA2A57639E3 /* Remove Legacy Alchemy API Key */,
 				2C6054882D529A9A00779570 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
@@ -1467,7 +1505,7 @@
 				2C1995382674C4B900A8E370 /* Sources */,
 				2C1995392674C4B900A8E370 /* Frameworks */,
 				2C19953A2674C4B900A8E370 /* Resources */,
-				E912C196422D43E2A14A6C26 /* Bundle Alchemy API Key */,
+				E912C196422D43E2A14A6C26 /* Remove Legacy Alchemy API Key */,
 				2C09CBB8273979C1009AD39B /* Embed Foundation Extensions */,
 				2CFAAA112FA2600000000000 /* Terminate Embedded Ambient Agents */,
 				2CB9B5652FA24A0A00F094FB /* CopyFiles */,
@@ -1491,7 +1529,7 @@
 				2C5FF96B26C84F7B00B32ACC /* Sources */,
 				2C5FF96C26C84F7B00B32ACC /* Frameworks */,
 				2C5FF96D26C84F7B00B32ACC /* Resources */,
-				4EC946B2766C4F89AE45F6A5 /* Bundle Alchemy API Key */,
+				4EC946B2766C4F89AE45F6A5 /* Remove Legacy Alchemy API Key */,
 				2CCEB84627594E2A00768473 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
@@ -1512,7 +1550,7 @@
 				2C60546B2D529A9A00779570 /* Sources */,
 				2C60546C2D529A9A00779570 /* Frameworks */,
 				2C60546D2D529A9A00779570 /* Resources */,
-				A0FB2A7A814343849A35549C /* Bundle Alchemy API Key */,
+				A0FB2A7A814343849A35549C /* Remove Legacy Alchemy API Key */,
 			);
 			buildRules = (
 			);
@@ -1549,7 +1587,7 @@
 				2CB9B54B2FA23F0600F094FB /* Sources */,
 				2CB9B54C2FA23F0600F094FB /* Frameworks */,
 				2CB9B54D2FA23F0600F094FB /* Resources */,
-				D8E7DDB615794095B0AE5890 /* Bundle Alchemy API Key */,
+				D8E7DDB615794095B0AE5890 /* Remove Legacy Alchemy API Key */,
 			);
 			buildRules = (
 			);
@@ -1568,7 +1606,7 @@
 				2CCEB82927594E2A00768473 /* Sources */,
 				2CCEB82A27594E2A00768473 /* Frameworks */,
 				2CCEB82B27594E2A00768473 /* Resources */,
-				0F74DBBAAD154CE0816A24C8 /* Bundle Alchemy API Key */,
+				0F74DBBAAD154CE0816A24C8 /* Remove Legacy Alchemy API Key */,
 			);
 			buildRules = (
 			);
@@ -1854,7 +1892,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		516B2583C21E4F89B3F786DA /* Bundle Alchemy API Key */ = {
+		516B2583C21E4F89B3F786DA /* Remove Legacy Alchemy API Key */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -1863,8 +1901,10 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
+				"$(SRCROOT)/Scripts/assert_no_bundled_alchemy_key.sh",
+				"$(SRCROOT)/Scripts/remove_legacy_alchemy_api_key.sh",
 			);
-			name = "Bundle Alchemy API Key";
+			name = "Remove Legacy Alchemy API Key";
 			outputFileListPaths = (
 			);
 			outputPaths = (
@@ -1872,10 +1912,10 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_api_key.sh\"\n";
+			shellScript = "set -e\n/bin/sh \"$SRCROOT/Scripts/remove_legacy_alchemy_api_key.sh\"\n/bin/sh \"$SRCROOT/Scripts/assert_no_bundled_alchemy_key.sh\" \"$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME\"\n";
 			showEnvVarsInLog = 0;
 		};
-		AB014F43D7D74AA2A57639E3 /* Bundle Alchemy API Key */ = {
+		AB014F43D7D74AA2A57639E3 /* Remove Legacy Alchemy API Key */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -1884,8 +1924,10 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
+				"$(SRCROOT)/Scripts/assert_no_bundled_alchemy_key.sh",
+				"$(SRCROOT)/Scripts/remove_legacy_alchemy_api_key.sh",
 			);
-			name = "Bundle Alchemy API Key";
+			name = "Remove Legacy Alchemy API Key";
 			outputFileListPaths = (
 			);
 			outputPaths = (
@@ -1893,10 +1935,10 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_api_key.sh\"\n";
+			shellScript = "set -e\n/bin/sh \"$SRCROOT/Scripts/remove_legacy_alchemy_api_key.sh\"\n/bin/sh \"$SRCROOT/Scripts/assert_no_bundled_alchemy_key.sh\" \"$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME\"\n";
 			showEnvVarsInLog = 0;
 		};
-		E912C196422D43E2A14A6C26 /* Bundle Alchemy API Key */ = {
+		E912C196422D43E2A14A6C26 /* Remove Legacy Alchemy API Key */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -1905,8 +1947,10 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
+				"$(SRCROOT)/Scripts/assert_no_bundled_alchemy_key.sh",
+				"$(SRCROOT)/Scripts/remove_legacy_alchemy_api_key.sh",
 			);
-			name = "Bundle Alchemy API Key";
+			name = "Remove Legacy Alchemy API Key";
 			outputFileListPaths = (
 			);
 			outputPaths = (
@@ -1914,10 +1958,10 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_api_key.sh\"\n";
+			shellScript = "set -e\n/bin/sh \"$SRCROOT/Scripts/remove_legacy_alchemy_api_key.sh\"\n/bin/sh \"$SRCROOT/Scripts/assert_no_bundled_alchemy_key.sh\" \"$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME\"\n";
 			showEnvVarsInLog = 0;
 		};
-		4EC946B2766C4F89AE45F6A5 /* Bundle Alchemy API Key */ = {
+		4EC946B2766C4F89AE45F6A5 /* Remove Legacy Alchemy API Key */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -1926,8 +1970,10 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
+				"$(SRCROOT)/Scripts/assert_no_bundled_alchemy_key.sh",
+				"$(SRCROOT)/Scripts/remove_legacy_alchemy_api_key.sh",
 			);
-			name = "Bundle Alchemy API Key";
+			name = "Remove Legacy Alchemy API Key";
 			outputFileListPaths = (
 			);
 			outputPaths = (
@@ -1935,10 +1981,10 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_api_key.sh\"\n";
+			shellScript = "set -e\n/bin/sh \"$SRCROOT/Scripts/remove_legacy_alchemy_api_key.sh\"\n/bin/sh \"$SRCROOT/Scripts/assert_no_bundled_alchemy_key.sh\" \"$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME\"\n";
 			showEnvVarsInLog = 0;
 		};
-		A0FB2A7A814343849A35549C /* Bundle Alchemy API Key */ = {
+		A0FB2A7A814343849A35549C /* Remove Legacy Alchemy API Key */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -1947,8 +1993,10 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
+				"$(SRCROOT)/Scripts/assert_no_bundled_alchemy_key.sh",
+				"$(SRCROOT)/Scripts/remove_legacy_alchemy_api_key.sh",
 			);
-			name = "Bundle Alchemy API Key";
+			name = "Remove Legacy Alchemy API Key";
 			outputFileListPaths = (
 			);
 			outputPaths = (
@@ -1956,10 +2004,10 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_api_key.sh\"\n";
+			shellScript = "set -e\n/bin/sh \"$SRCROOT/Scripts/remove_legacy_alchemy_api_key.sh\"\n/bin/sh \"$SRCROOT/Scripts/assert_no_bundled_alchemy_key.sh\" \"$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME\"\n";
 			showEnvVarsInLog = 0;
 		};
-		D8E7DDB615794095B0AE5890 /* Bundle Alchemy API Key */ = {
+		D8E7DDB615794095B0AE5890 /* Remove Legacy Alchemy API Key */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -1968,8 +2016,10 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
+				"$(SRCROOT)/Scripts/assert_no_bundled_alchemy_key.sh",
+				"$(SRCROOT)/Scripts/remove_legacy_alchemy_api_key.sh",
 			);
-			name = "Bundle Alchemy API Key";
+			name = "Remove Legacy Alchemy API Key";
 			outputFileListPaths = (
 			);
 			outputPaths = (
@@ -1977,10 +2027,10 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_api_key.sh\"\n";
+			shellScript = "set -e\n/bin/sh \"$SRCROOT/Scripts/remove_legacy_alchemy_api_key.sh\"\n/bin/sh \"$SRCROOT/Scripts/assert_no_bundled_alchemy_key.sh\" \"$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME\"\n";
 			showEnvVarsInLog = 0;
 		};
-		0F74DBBAAD154CE0816A24C8 /* Bundle Alchemy API Key */ = {
+		0F74DBBAAD154CE0816A24C8 /* Remove Legacy Alchemy API Key */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -1989,8 +2039,10 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
+				"$(SRCROOT)/Scripts/assert_no_bundled_alchemy_key.sh",
+				"$(SRCROOT)/Scripts/remove_legacy_alchemy_api_key.sh",
 			);
-			name = "Bundle Alchemy API Key";
+			name = "Remove Legacy Alchemy API Key";
 			outputFileListPaths = (
 			);
 			outputPaths = (
@@ -1998,7 +2050,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_api_key.sh\"\n";
+			shellScript = "set -e\n/bin/sh \"$SRCROOT/Scripts/remove_legacy_alchemy_api_key.sh\"\n/bin/sh \"$SRCROOT/Scripts/assert_no_bundled_alchemy_key.sh\" \"$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME\"\n";
 			showEnvVarsInLog = 0;
 		};
 		2C0C7A772D53D6F3009D71BD /* ShellScript */ = {
@@ -2131,6 +2183,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2FA300000000000000000002 /* AlchemyJWTProvider.swift in Sources */,
+				2FB000000000000000000002 /* SafariAlchemyPrewarmPolicy.swift in Sources */,
 				2FA100000000000000000002 /* SafariRPCClient.swift in Sources */,
 				2CF255B2275A4A7200AE54B9 /* UserDefaults.swift in Sources */,
 				2C264BD227B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
@@ -2159,6 +2213,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2FA300000000000000000003 /* AlchemyJWTProvider.swift in Sources */,
+				2FB000000000000000000003 /* SafariAlchemyPrewarmPolicy.swift in Sources */,
+				2FB300000000000000000002 /* InternalSafariRequest.swift in Sources */,
 				2C773FC72D53A59800879A1F /* InpageProvider.swift in Sources */,
 				2C773FE92D53C17000879A1F /* Defaults.swift in Sources */,
 				2C773FEA2D53C17000879A1F /* PriceService.swift in Sources */,
@@ -2252,6 +2309,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2FA300000000000000000004 /* AlchemyJWTProvider.swift in Sources */,
+				2FB000000000000000000004 /* SafariAlchemyPrewarmPolicy.swift in Sources */,
+				2FB300000000000000000003 /* InternalSafariRequest.swift in Sources */,
 				2CB4031B281C99C800BAEBEE /* AccountsHeaderRowView.swift in Sources */,
 				2C728B612AFBFAF100E4DD47 /* Image.swift in Sources */,
 				2C3024FC28C1193100C304ED /* Account.swift in Sources */,
@@ -2348,6 +2408,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2FA300000000000000000005 /* AlchemyJWTProvider.swift in Sources */,
+				2FB000000000000000000005 /* SafariAlchemyPrewarmPolicy.swift in Sources */,
+				2FB300000000000000000004 /* InternalSafariRequest.swift in Sources */,
 				2C6F6D5A28273FE500D6E8FB /* EditAccountsViewController.swift in Sources */,
 				2CF255BA275A749300AE54B9 /* ApproveViewController.swift in Sources */,
 				2C9B2C6E2D38416800D56607 /* SharedDefaults.swift in Sources */,
@@ -2442,6 +2505,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2FA300000000000000000006 /* AlchemyJWTProvider.swift in Sources */,
+				2FB000000000000000000006 /* SafariAlchemyPrewarmPolicy.swift in Sources */,
 				2FA100000000000000000006 /* SafariRPCClient.swift in Sources */,
 				2C773FCC2D53A5A300879A1F /* MultipleResponseToExtension.swift in Sources */,
 				2C773FCD2D53A5A300879A1F /* ResponseToExtension.swift in Sources */,
@@ -2469,6 +2534,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2FB200000000000000000002 /* AlchemyJWTProductionContractTests.swift in Sources */,
+				2FA400000000000000000002 /* AlchemyJWTProviderTests.swift in Sources */,
+				2FB100000000000000000002 /* SafariPrewarmBridgeTests.swift in Sources */,
+				2FA300000000000000000007 /* AlchemyJWTProvider.swift in Sources */,
 				31B7B994991C4E64B5DF44B5 /* NetworkCatalogTests.swift in Sources */,
 				2FA100000000000000000009 /* SafariRPCClient.swift in Sources */,
 				2FA200000000000000000002 /* CustomNetworkStorageTests.swift in Sources */,
@@ -2493,6 +2562,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2FA300000000000000000008 /* AlchemyJWTProvider.swift in Sources */,
 				2CB9B56A2FA24B0000F094FB /* AppDelegate.swift in Sources */,
 				2C3A166A0B2BCBA65F202DE5 /* AccountsHeaderRowView.swift in Sources */,
 				2C76ED63AF9361519E9FDA5D /* Image.swift in Sources */,
@@ -2589,6 +2659,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2FA300000000000000000009 /* AlchemyJWTProvider.swift in Sources */,
+				2FB000000000000000000007 /* SafariAlchemyPrewarmPolicy.swift in Sources */,
 				2FA100000000000000000008 /* SafariRPCClient.swift in Sources */,
 				2CE0594627640F470042D844 /* UserDefaults.swift in Sources */,
 				2C264BD327B2F30C00234393 /* UnknownSafariRequest.swift in Sources */,
@@ -2616,6 +2688,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2FB200000000000000000003 /* AlchemyJWTProductionContractTests.swift in Sources */,
+				2FA400000000000000000003 /* AlchemyJWTProviderTests.swift in Sources */,
+				2FB100000000000000000003 /* SafariPrewarmBridgeTests.swift in Sources */,
+				2FA30000000000000000000A /* AlchemyJWTProvider.swift in Sources */,
 				80762825D41E4714A724F485 /* NetworkCatalogTests.swift in Sources */,
 				2FA10000000000000000000A /* SafariRPCClient.swift in Sources */,
 				2FA200000000000000000003 /* CustomNetworkStorageTests.swift in Sources */,
@@ -2641,6 +2717,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2FB200000000000000000004 /* AlchemyJWTProductionContractTests.swift in Sources */,
+				2FA400000000000000000004 /* AlchemyJWTProviderTests.swift in Sources */,
+				2FB100000000000000000004 /* SafariPrewarmBridgeTests.swift in Sources */,
+				2FA30000000000000000000B /* AlchemyJWTProvider.swift in Sources */,
 				AAD675E18CDB4174B2B92C3D /* NetworkCatalogTests.swift in Sources */,
 				2FA10000000000000000000B /* SafariRPCClient.swift in Sources */,
 				2FA200000000000000000004 /* CustomNetworkStorageTests.swift in Sources */,

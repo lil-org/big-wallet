@@ -21,6 +21,7 @@
 	<key>keychain-access-groups</key>
 	<array>
 		<string>$(AppIdentifierPrefix)org.lil.keychain</string>
+		<string>$(AppIdentifierPrefix)org.lil.wallet.rpc-auth</string>
 	</array>
 </dict>
 </plist>

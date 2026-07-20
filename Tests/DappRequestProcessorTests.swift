@@ -255,13 +255,13 @@ final class DappRequestProcessorTests: XCTestCase {
             chainId: 64_240,
             name: "Custom",
             symbol: "CUSTOM",
-            nodeURLString: rpcURL.absoluteString,
+            rpcEndpoint: .unauthenticated(rpcURL),
             isTestnet: false,
             mightShowPrice: false,
             explorer: nil
         )
         return .resolved(
-            ResolvedEthereumNetwork(network: network, rpcURL: rpcURL, source: .custom)
+            ResolvedEthereumNetwork(network: network, source: .custom)
         )
     }
 

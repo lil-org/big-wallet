@@ -2,19 +2,52 @@
 
 import Foundation
 
+enum TransactionPreparationFailure: Swift.Error, Equatable {
+    case nonceUnavailable
+    case gasPriceUnavailable
+    case gasEstimationFailed
+    case invalidTransaction
+}
+
 struct Ethereum {
+
+    typealias TransactionInterpreter = (
+        _ data: String,
+        _ cancellation: EthereumRequestCancellation,
+        _ completion: @escaping (String) -> Void
+    ) -> Void
 
     enum Error: Swift.Error {
         case failedToSign
     }
 
-    private init() {}
     static let shared = Ethereum()
-    private let rpc = EthereumRPC()
+    private let rpc: EthereumRPCClient
+    private let interpretTransaction: TransactionInterpreter
+
+    init(
+        rpc: EthereumRPCClient = EthereumRPC(),
+        interpretTransaction: @escaping TransactionInterpreter = {
+            data,
+            cancellation,
+            completion in
+            TransactionInspector.shared.interpret(
+                data: data,
+                cancellation: cancellation,
+                completion: completion
+            )
+        }
+    ) {
+        self.rpc = rpc
+        self.interpretTransaction = interpretTransaction
+    }
     
     func getBalance(network: EthereumNetwork, address: String, completion: @escaping (BigUInt) -> Void) {
         Self.performNativeBalanceRequest(for: network) {
-            rpc.getBalance(rpcUrl: network.nodeURLString, for: address) { result in
+            rpc.getBalance(
+                endpoint: network.rpcEndpoint,
+                for: address
+            ) { result in
                 guard case let .success(hex) = result, let balance = BigUInt(hexString: hex) else { return }
                 DispatchQueue.main.async { completion(balance) }
             }
@@ -59,42 +92,161 @@ struct Ethereum {
         return try sign(digest: digest, privateKey: privateKey)
     }
     
-    func prepareTransaction(_ transaction: Transaction, forceGasCheck: Bool, network: EthereumNetwork, completion: @escaping (Transaction) -> Void) {
-        var transaction = transaction
-        
-        if transaction.nonce == nil {
-            getNonce(network: network, from: transaction.from) { nonce in
-                transaction.nonce = nonce
-                completion(transaction)
+    @discardableResult
+    func prepareTransaction(
+        _ transaction: Transaction,
+        forceGasCheck: Bool,
+        network: EthereumNetwork,
+        onUpdate: @escaping (Transaction) -> Void,
+        completion: @escaping (
+            Result<Transaction, TransactionPreparationFailure>
+        ) -> Void
+    ) -> EthereumRequestCancellation {
+        let cancellation = EthereumRequestCancellation()
+        DispatchQueue.main.async {
+            guard !cancellation.isCancelled else { return }
+            var transaction = transaction
+            var didFinish = false
+            var nonceIsReady = transaction.nonce != nil
+            var gasLaneIsReady = false
+            var didResolveGasPrice = transaction.gasPrice != nil
+            var didStartGasRequest = false
+            let requiresGasEstimate =
+                transaction.gas == nil || forceGasCheck
+
+            func fail(_ failure: TransactionPreparationFailure) {
+                guard !didFinish else { return }
+                cancellation.cancel(performing: {
+                    didFinish = true
+                    completion(.failure(failure))
+                })
             }
-        }
-        
-        func getGasIfNeeded(gasPrice: String) {
-            guard transaction.gas == nil || forceGasCheck else { return }
-            getGas(network: network, transaction: transaction) { gas in
-                transaction.gas = gas
-                completion(transaction)
-            }
-        }
-        
-        if let gasPrice = transaction.gasPrice {
-            getGasIfNeeded(gasPrice: gasPrice)
-        } else {
-            getGasPrice(network: network) { gasPrice in
-                transaction.gasPrice = gasPrice
-                completion(transaction)
-                if let gasPrice = gasPrice {
-                    getGasIfNeeded(gasPrice: gasPrice)
+
+            func finishIfReady() {
+                guard !cancellation.isCancelled,
+                      !didFinish,
+                      nonceIsReady,
+                      gasLaneIsReady else {
+                    return
+                }
+                guard transaction.isReadyForApproval(on: network) else {
+                    fail(.invalidTransaction)
+                    return
+                }
+                cancellation.performIfActive {
+                    guard !didFinish else { return }
+                    didFinish = true
+                    completion(.success(transaction))
                 }
             }
-        }
-        
-        if Self.shouldInspect(transaction) {
-            TransactionInspector.shared.interpret(data: transaction.data) { interpretation in
-                transaction.interpretation = interpretation
-                completion(transaction)
+
+            func requestGas() {
+                guard !cancellation.isCancelled,
+                      !didFinish,
+                      !didStartGasRequest else {
+                    return
+                }
+                didStartGasRequest = true
+                getGas(
+                    network: network,
+                    transaction: transaction,
+                    cancellation: cancellation
+                ) { gas in
+                    guard !cancellation.isCancelled,
+                          !didFinish,
+                          !gasLaneIsReady else {
+                        return
+                    }
+                    guard let gas else {
+                        fail(.gasEstimationFailed)
+                        return
+                    }
+                    transaction.gas = gas
+                    gasLaneIsReady = true
+                    cancellation.performIfActive {
+                        onUpdate(transaction)
+                    }
+                    finishIfReady()
+                }
             }
+
+            func finishGasPriceResolution() {
+                if requiresGasEstimate {
+                    requestGas()
+                } else {
+                    gasLaneIsReady = true
+                    finishIfReady()
+                }
+            }
+
+            if Self.shouldInspect(transaction) {
+                interpretTransaction(
+                    transaction.data,
+                    cancellation
+                ) { interpretation in
+                    DispatchQueue.main.async {
+                        cancellation.performIfActive {
+                            transaction.interpretation = interpretation
+                            onUpdate(transaction)
+                        }
+                    }
+                }
+            }
+
+            if nonceIsReady {
+                finishIfReady()
+            } else {
+                getNonce(
+                    network: network,
+                    from: transaction.from,
+                    cancellation: cancellation
+                ) { nonce in
+                    guard !cancellation.isCancelled,
+                          !didFinish,
+                          !nonceIsReady else {
+                        return
+                    }
+                    guard let nonce else {
+                        fail(.nonceUnavailable)
+                        return
+                    }
+                    transaction.nonce = nonce
+                    nonceIsReady = true
+                    cancellation.performIfActive {
+                        onUpdate(transaction)
+                    }
+                    finishIfReady()
+                }
+            }
+
+            if didResolveGasPrice {
+                finishGasPriceResolution()
+            } else {
+                getGasPrice(
+                    network: network,
+                    cancellation: cancellation
+                ) { gasPrice in
+                    guard !cancellation.isCancelled,
+                          !didFinish,
+                          !didResolveGasPrice else {
+                        return
+                    }
+                    guard let gasPrice else {
+                        fail(.gasPriceUnavailable)
+                        return
+                    }
+                    transaction.gasPrice = gasPrice
+                    didResolveGasPrice = true
+                    cancellation.performIfActive {
+                        onUpdate(transaction)
+                    }
+                    finishGasPriceResolution()
+                }
+            }
+
+            finishIfReady()
         }
+        return cancellation
     }
     
     func send(transaction: Transaction, privateKey: WalletPrivateKey, network: EthereumNetwork, completion: @escaping (String?) -> Void) {
@@ -123,7 +275,10 @@ struct Ethereum {
             completion(nil)
             return
         }
-        rpc.sendRawTransaction(rpcUrl: network.nodeURLString, signedTxData: WalletCrypto.hexString(data: signedTransaction).withHexPrefix) { result in
+        rpc.sendRawTransaction(
+            endpoint: network.rpcEndpoint,
+            signedTxData: WalletCrypto.hexString(data: signedTransaction).withHexPrefix
+        ) { result in
             DispatchQueue.main.async {
                 if case let .success(txHash) = result {
                      completion(txHash)
@@ -138,32 +293,77 @@ struct Ethereum {
         return transaction.interpretation == nil && !transaction.to.isEmpty
     }
     
-    private func getGas(network: EthereumNetwork, transaction: Transaction, completion: @escaping (String?) -> Void) {
-        rpc.estimateGas(rpcUrl: network.nodeURLString, transaction: transaction) { result in
-            if case let .success(estimatedGas) = result {
+    private func getGas(
+        network: EthereumNetwork,
+        transaction: Transaction,
+        cancellation: EthereumRequestCancellation,
+        completion: @escaping (String?) -> Void
+    ) {
+        rpc.estimateGas(
+            endpoint: network.rpcEndpoint,
+            transaction: transaction,
+            cancellation: cancellation
+        ) { result in
+            guard !cancellation.isCancelled else { return }
+            switch result {
+            case .success(let estimatedGas):
                 var updatedTransaction = transaction
                 updatedTransaction.gas = estimatedGas
-                rpc.estimateGas(rpcUrl: network.nodeURLString, transaction: updatedTransaction) { result in
-                    if case let .success(gas) = result {
+                rpc.estimateGas(
+                    endpoint: network.rpcEndpoint,
+                    transaction: updatedTransaction,
+                    cancellation: cancellation
+                ) { result in
+                    guard !cancellation.isCancelled else { return }
+                    switch result {
+                    case .success(let gas):
                         DispatchQueue.main.async { completion(gas) }
+                    case .failure:
+                        DispatchQueue.main.async { completion(nil) }
                     }
                 }
+            case .failure:
+                DispatchQueue.main.async { completion(nil) }
             }
         }
     }
     
-    private func getGasPrice(network: EthereumNetwork, completion: @escaping (String?) -> Void) {
-        rpc.fetchGasPrice(rpcUrl: network.nodeURLString) { result in
-            if case let .success(gasPrice) = result {
+    private func getGasPrice(
+        network: EthereumNetwork,
+        cancellation: EthereumRequestCancellation,
+        completion: @escaping (String?) -> Void
+    ) {
+        rpc.fetchGasPrice(
+            endpoint: network.rpcEndpoint,
+            cancellation: cancellation
+        ) { result in
+            guard !cancellation.isCancelled else { return }
+            switch result {
+            case .success(let gasPrice):
                 DispatchQueue.main.async { completion(gasPrice) }
+            case .failure:
+                DispatchQueue.main.async { completion(nil) }
             }
         }
     }
     
-    private func getNonce(network: EthereumNetwork, from: String, completion: @escaping (String?) -> Void) {
-        rpc.fetchNonce(rpcUrl: network.nodeURLString, for: from) { result in
-            if case let .success(nonce) = result {
+    private func getNonce(
+        network: EthereumNetwork,
+        from: String,
+        cancellation: EthereumRequestCancellation,
+        completion: @escaping (String?) -> Void
+    ) {
+        rpc.fetchNonce(
+            endpoint: network.rpcEndpoint,
+            for: from,
+            cancellation: cancellation
+        ) { result in
+            guard !cancellation.isCancelled else { return }
+            switch result {
+            case .success(let nonce):
                 DispatchQueue.main.async { completion(nonce) }
+            case .failure:
+                DispatchQueue.main.async { completion(nil) }
             }
         }
     }

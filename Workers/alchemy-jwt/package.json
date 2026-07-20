@@ -1,0 +1,33 @@
+{
+  "name": "@lil-org/alchemy-jwt-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.16.0",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "check": "npm run types:check && tsc --noEmit && tsc --noEmit -p test/tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "deploy:dry-run": "wrangler deploy --dry-run --outdir dist",
+    "rollout": "node scripts/production-rollout.mjs",
+    "startup": "wrangler check startup",
+    "test": "npm run test:worker && npm run test:tools",
+    "test:tools": "node --test scripts/*.test.mjs",
+    "test:worker": "vitest run test/index.test.ts",
+    "types": "wrangler types",
+    "types:check": "wrangler types --check",
+    "upload:validated": "node scripts/upload-validated-version.mjs",
+    "validate:keypair": "node scripts/validate-keypair.mjs",
+    "validate:live": "node scripts/live-validate.mjs",
+    "validate:self": "node scripts/live-validate.mjs --self-test"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.18.6",
+    "@cloudflare/workers-types": "5.20260719.1",
+    "@types/node": "24.13.3",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10",
+    "wrangler": "4.112.0"
+  }
+}

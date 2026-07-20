@@ -1,2 +1,3 @@
 Shared/WalletCoreProxy/Secp256k1Backend/** linguist-vendored
 Shared/WalletCoreProxy/ScryptBackend/** linguist-vendored
+Workers/alchemy-jwt/worker-configuration.d.ts -whitespace

@@ -3,42 +3,70 @@
 import Foundation
 
 struct TransactionInspector {
+
     private enum ParsedArgument {
         case type(String)
         case tuple([ParsedArgument], suffix: String)
     }
     
     static let shared = TransactionInspector()
-    private init() {}
-    
-    private let urlSession = URLSession.shared
-    
+    private let methodSignatures: MethodSignatureStore
+    private let decoder:
+        ((_ data: String, _ nameHex: String, _ signature: String) -> String?)?
+
+    init(
+        urlSession: URLSession = .shared,
+        decoder:
+            ((_ data: String, _ nameHex: String, _ signature: String) -> String?)?
+            = nil
+    ) {
+        methodSignatures = MethodSignatureStore(urlSession: urlSession)
+        self.decoder = decoder
+    }
+
     func interpret(data: String, completion: @escaping (String) -> Void) {
-        let length = 8
-        let nameHex = String(data.cleanHex.prefix(length))
-        guard nameHex.count == length else { return }
-        
-        getMethodSignature(nameHex: nameHex) { signature in
-            let decoded = decode(data: data, nameHex: nameHex, signature: signature)
-            let result = decoded ?? (signature + "\n\n" + data)
-            DispatchQueue.main.async { completion(result) }
+        let cancellation = EthereumRequestCancellation()
+        interpret(
+            data: data,
+            cancellation: cancellation
+        ) { result in
+            completion(result)
         }
     }
-    
-    // https://github.com/ethereum-lists/4bytes
-    private func getMethodSignature(nameHex: String, completion: @escaping (String) -> Void) {
-        guard let url = URL(string: "https://raw.githubusercontent.com/ethereum-lists/4bytes/master/signatures/\(nameHex)") else { return }
-        let dataTask = urlSession.dataTask(with: url) { (data, response, error) in
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-            if error == nil,
-               (200...299).contains(statusCode),
-               let data = data,
-               let sig = String(data: data, encoding: .utf8),
-               !sig.isEmpty {
-                completion(sig)
+
+    func interpret(
+        data: String,
+        cancellation: EthereumRequestCancellation,
+        completion: @escaping (String) -> Void
+    ) {
+        let length = 8
+        let nameHex = String(data.cleanHex.prefix(length)).lowercased()
+        guard nameHex.count == length,
+              nameHex.allSatisfy(\.isHexDigit) else {
+            return
+        }
+        
+        methodSignatures.resolve(
+            nameHex: nameHex,
+            cancellation: cancellation
+        ) { signature in
+            let decoded: String?
+            if let decoder {
+                decoded = decoder(data, nameHex, signature)
+            } else {
+                decoded = decode(
+                    data: data,
+                    nameHex: nameHex,
+                    signature: signature
+                )
+            }
+            let result = decoded ?? (signature + "\n\n" + data)
+            DispatchQueue.main.async {
+                cancellation.performIfActive {
+                    completion(result)
+                }
             }
         }
-        dataTask.resume()
     }
     
     func decode(data: String, nameHex: String, signature: String) -> String? {
@@ -200,4 +228,170 @@ struct TransactionInspector {
         return String(json.dropFirst().dropLast())
     }
     
+}
+
+private final class MethodSignatureStore: @unchecked Sendable {
+
+    private final class PendingRequest {
+
+        let identifier = UUID()
+        var subscribers =
+            [UUID: (EthereumRequestCancellation, (String) -> Void)]()
+        var task: URLSessionDataTask?
+
+    }
+
+    private let lock = NSRecursiveLock()
+    private let urlSession: URLSession
+    private let cache = NSCache<NSString, NSString>()
+    private let callbackQueue = DispatchQueue(
+        label: "TransactionInspector.MethodSignatures",
+        qos: .utility
+    )
+    private var pendingRequests = [String: PendingRequest]()
+
+    init(urlSession: URLSession) {
+        self.urlSession = urlSession
+        cache.countLimit = 256
+    }
+
+    // https://github.com/ethereum-lists/4bytes
+    func resolve(
+        nameHex: String,
+        cancellation: EthereumRequestCancellation,
+        completion: @escaping (String) -> Void
+    ) {
+        guard let url = URL(
+            string: "https://raw.githubusercontent.com/ethereum-lists/4bytes/master/signatures/\(nameHex)"
+        ) else {
+            return
+        }
+
+        let subscriberIdentifier = UUID()
+        var cachedSignature: String?
+        var taskToResume: URLSessionDataTask?
+
+        lock.lock()
+        let didRegister = cancellation.register(
+            identifier: subscriberIdentifier
+        ) { [weak self] in
+            self?.cancel(
+                nameHex: nameHex,
+                subscriberIdentifier: subscriberIdentifier
+            )
+        }
+        guard didRegister else {
+            lock.unlock()
+            return
+        }
+
+        if let signature = cache.object(forKey: nameHex as NSString) {
+            cachedSignature = signature as String
+            cancellation.finish(identifier: subscriberIdentifier)
+        } else if let request = pendingRequests[nameHex] {
+            request.subscribers[subscriberIdentifier] = (
+                cancellation,
+                completion
+            )
+        } else {
+            let request = PendingRequest()
+            request.subscribers[subscriberIdentifier] = (
+                cancellation,
+                completion
+            )
+            let requestIdentifier = request.identifier
+            let task = urlSession.dataTask(with: url) {
+                [weak self] data,
+                response,
+                error in
+                self?.complete(
+                    nameHex: nameHex,
+                    requestIdentifier: requestIdentifier,
+                    data: data,
+                    response: response,
+                    error: error
+                )
+            }
+            request.task = task
+            pendingRequests[nameHex] = request
+            taskToResume = task
+        }
+        lock.unlock()
+
+        if let cachedSignature {
+            callbackQueue.async {
+                guard !cancellation.isCancelled else { return }
+                completion(cachedSignature)
+            }
+        }
+        taskToResume?.resume()
+    }
+
+    private func cancel(
+        nameHex: String,
+        subscriberIdentifier: UUID
+    ) {
+        var taskToCancel: URLSessionDataTask?
+
+        lock.lock()
+        if let request = pendingRequests[nameHex] {
+            request.subscribers.removeValue(forKey: subscriberIdentifier)
+            if request.subscribers.isEmpty {
+                pendingRequests.removeValue(forKey: nameHex)
+                taskToCancel = request.task
+            }
+        }
+        lock.unlock()
+
+        taskToCancel?.cancel()
+    }
+
+    private func complete(
+        nameHex: String,
+        requestIdentifier: UUID,
+        data: Data?,
+        response: URLResponse?,
+        error: Error?
+    ) {
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let signature: String?
+        if error == nil,
+           (200...299).contains(statusCode),
+           let data,
+           let value = String(data: data, encoding: .utf8),
+           !value.isEmpty {
+            signature = value
+        } else {
+            signature = nil
+        }
+
+        var subscribers =
+            [UUID: (EthereumRequestCancellation, (String) -> Void)]()
+
+        lock.lock()
+        guard let request = pendingRequests[nameHex],
+              request.identifier == requestIdentifier else {
+            lock.unlock()
+            return
+        }
+        pendingRequests.removeValue(forKey: nameHex)
+        if let signature {
+            cache.setObject(signature as NSString, forKey: nameHex as NSString)
+        }
+        subscribers = request.subscribers
+        lock.unlock()
+
+        for (
+            subscriberIdentifier,
+            (cancellation, completion)
+        ) in subscribers {
+            cancellation.finish(identifier: subscriberIdentifier)
+            guard let signature,
+                  !cancellation.isCancelled else {
+                continue
+            }
+            completion(signature)
+        }
+    }
+
 }

@@ -6,7 +6,19 @@ import XCTest
 final class GasServiceTests: XCTestCase {
 
     private let rpcURL = "https://rpc.example"
+    private let alchemyRPCURL = "https://eth-mainnet.g.alchemy.com/v2"
     private let fetchedInfo = GasService.Info(standard: 200, slow: 150, fast: 250, rapid: 300)
+
+    private var alchemyEndpoint: EthereumRPCEndpoint {
+        return .catalog(
+            URL(string: alchemyRPCURL)!,
+            alchemyNetwork: "eth-mainnet"
+        )
+    }
+
+    private func endpoint(_ value: String) -> EthereumRPCEndpoint {
+        return .unauthenticated(URL(string: value)!)
+    }
 
     func testFetchEstimateRequestsExpectedHistoryAndUsesUpperMedianWithNextBaseFee() {
         let history = EthereumFeeHistory(
@@ -26,9 +38,25 @@ final class GasServiceTests: XCTestCase {
         XCTAssertEqual(rpc.feeHistoryCalls.first?.rpcURL, rpcURL)
         XCTAssertEqual(rpc.feeHistoryCalls.first?.blockCount, 10)
         XCTAssertEqual(rpc.feeHistoryCalls.first?.rewardPercentiles, [10, 25, 50, 75])
+        XCTAssertEqual(rpc.feeHistoryCalls.first?.allowsAlchemyAuthorization, false)
         XCTAssertEqual(estimate.nextBaseFee, 100)
         XCTAssertEqual(estimate.info, GasService.Info(standard: 112, slow: 103, fast: 122, rapid: 132))
         XCTAssertEqual(estimate.info?.sliderValues, [103, 112, 122, 132])
+    }
+
+    func testFetchEstimatePropagatesTrustedAlchemyAuthorization() {
+        let history = EthereumFeeHistory(
+            baseFeePerGas: ["0x1", "0x64"],
+            reward: [["0x1", "0x2", "0x3", "0x4"]]
+        )
+        let rpc = FakeEthereumRPCClient(feeHistoryResult: .success(history))
+
+        _ = fetchEstimate(
+            using: GasService(rpc: rpc),
+            endpoint: alchemyEndpoint
+        )
+
+        XCTAssertEqual(rpc.feeHistoryCalls.first?.allowsAlchemyAuthorization, true)
     }
 
     func testFeeHistoryRejectsAnyInvalidRowAndRetainsNextBaseFee() {
@@ -119,7 +147,7 @@ final class GasServiceTests: XCTestCase {
         overCompleted.isInverted = true
         var completionCount = 0
 
-        GasService(rpc: rpc).fetchEstimate(rpcUrl: rpcURL) { estimate in
+        GasService(rpc: rpc).fetchEstimate(endpoint: endpoint(rpcURL)) { estimate in
             completionCount += 1
             XCTAssertTrue(Thread.isMainThread)
             XCTAssertEqual(estimate, GasService.Estimate(info: nil, nextBaseFee: nil))
@@ -516,6 +544,679 @@ final class GasServiceTests: XCTestCase {
         }
     }
 
+    func testTransactionPreparationStateRequiresCurrentTerminalSuccess() {
+        let firstTransactionID = UUID()
+        let secondTransactionID = UUID()
+        var state = TransactionPreparationState()
+
+        XCTAssertEqual(state.phase, .idle)
+        XCTAssertFalse(
+            state.canApprove(
+                transactionID: firstTransactionID,
+                transactionIsReady: true
+            )
+        )
+
+        let firstAttempt = state.beginPreparation(
+            for: firstTransactionID
+        )
+        XCTAssertEqual(state.phase, .preparing)
+        XCTAssertFalse(
+            state.canApprove(
+                transactionID: firstTransactionID,
+                transactionIsReady: true
+            )
+        )
+
+        state.beginEditing(secondTransactionID)
+        XCTAssertEqual(state.phase, .editing)
+        XCTAssertFalse(
+            state.markReady(
+                attemptID: firstAttempt,
+                transactionID: firstTransactionID
+            )
+        )
+
+        let secondAttempt = state.beginPreparation(
+            for: secondTransactionID
+        )
+        XCTAssertTrue(
+            state.markReady(
+                attemptID: secondAttempt,
+                transactionID: secondTransactionID
+            )
+        )
+        XCTAssertTrue(
+            state.canApprove(
+                transactionID: secondTransactionID,
+                transactionIsReady: true
+            )
+        )
+        XCTAssertFalse(
+            state.canApprove(
+                transactionID: secondTransactionID,
+                transactionIsReady: false
+            )
+        )
+
+        state.finish()
+        XCTAssertEqual(state.phase, .finished)
+        XCTAssertFalse(
+            state.canApprove(
+                transactionID: secondTransactionID,
+                transactionIsReady: true
+            )
+        )
+    }
+
+    func testTransactionPreparationRestartGateCoalescesAndPreservesPendingCheck() {
+        var gate = TransactionPreparationRestartGate()
+
+        XCTAssertFalse(gate.isPending)
+        XCTAssertTrue(gate.recordMutation())
+        XCTAssertTrue(gate.isPending)
+        for _ in 0..<20 {
+            XCTAssertFalse(gate.recordMutation())
+        }
+        XCTAssertTrue(gate.isPending)
+        XCTAssertTrue(gate.consume())
+        XCTAssertFalse(gate.isPending)
+        XCTAssertFalse(gate.consume())
+
+        XCTAssertTrue(gate.recordMutation())
+        XCTAssertTrue(gate.consume())
+    }
+
+    func testEthereumPreparationReportsNonceFailure() {
+        let rpc = EthereumPreparationRPCStub(
+            nonceResult: .failure(StubError.expected)
+        )
+
+        assertSinglePreparationFailure(
+            using: rpc,
+            transaction: Transaction(
+                from: "0x0",
+                to: "",
+                value: nil,
+                data: "0x"
+            ),
+            expectedFailure: .nonceUnavailable
+        )
+
+        XCTAssertEqual(rpc.nonceCallCount, 1)
+        XCTAssertEqual(rpc.gasPriceCallCount, 1)
+        XCTAssertEqual(rpc.estimateGasCallCount, 0)
+    }
+
+    func testEthereumPreparationReportsGasPriceFailure() {
+        let rpc = EthereumPreparationRPCStub(
+            gasPriceResult: .failure(StubError.expected)
+        )
+
+        assertSinglePreparationFailure(
+            using: rpc,
+            transaction: Transaction(
+                from: "0x0",
+                to: "",
+                value: nil,
+                data: "0x"
+            ),
+            expectedFailure: .gasPriceUnavailable
+        )
+
+        XCTAssertEqual(rpc.nonceCallCount, 1)
+        XCTAssertEqual(rpc.gasPriceCallCount, 1)
+        XCTAssertEqual(rpc.estimateGasCallCount, 0)
+    }
+
+    func testEthereumPreparationReportsFirstGasEstimateFailure() {
+        let rpc = EthereumPreparationRPCStub(
+            estimateGasResults: [.failure(StubError.expected)]
+        )
+        var transaction = Transaction(
+            from: "0x0",
+            to: "",
+            value: nil,
+            data: "0x"
+        )
+        transaction.nonce = "0x1"
+        transaction.gasPrice = "0x64"
+
+        assertSinglePreparationFailure(
+            using: rpc,
+            transaction: transaction,
+            expectedFailure: .gasEstimationFailed
+        )
+
+        XCTAssertEqual(rpc.nonceCallCount, 0)
+        XCTAssertEqual(rpc.gasPriceCallCount, 0)
+        XCTAssertEqual(rpc.estimateGasCallCount, 1)
+    }
+
+    func testEthereumPreparationReportsSecondGasEstimateFailure() {
+        let rpc = EthereumPreparationRPCStub(
+            estimateGasResults: [
+                .success("0x5208"),
+                .failure(StubError.expected)
+            ]
+        )
+        var transaction = Transaction(
+            from: "0x0",
+            to: "",
+            value: nil,
+            data: "0x"
+        )
+        transaction.nonce = "0x1"
+        transaction.gasPrice = "0x64"
+
+        assertSinglePreparationFailure(
+            using: rpc,
+            transaction: transaction,
+            expectedFailure: .gasEstimationFailed
+        )
+
+        XCTAssertEqual(rpc.nonceCallCount, 0)
+        XCTAssertEqual(rpc.gasPriceCallCount, 0)
+        XCTAssertEqual(rpc.estimateGasCallCount, 2)
+    }
+
+    func testEthereumPreparationReportsConcurrentFailuresOnlyOnce() {
+        let rpc = EthereumPreparationRPCStub(
+            nonceResult: .failure(StubError.expected),
+            gasPriceResult: .failure(StubError.expected)
+        )
+
+        assertSinglePreparationFailure(
+            using: rpc,
+            transaction: Transaction(
+                from: "0x0",
+                to: "",
+                value: nil,
+                data: "0x"
+            ),
+            expectedFailure: .nonceUnavailable
+        )
+
+        XCTAssertEqual(rpc.nonceCallCount, 1)
+        XCTAssertEqual(rpc.gasPriceCallCount, 1)
+        XCTAssertEqual(rpc.estimateGasCallCount, 0)
+    }
+
+    func testEthereumPreparationKeepsPublishingSuccessfulUpdates() {
+        let rpc = EthereumPreparationRPCStub()
+        let publishedUpdate = expectation(description: "published preparation update")
+        publishedUpdate.expectedFulfillmentCount = 3
+        let terminalSuccess = expectation(
+            description: "preparation reached terminal success"
+        )
+        let additionalTerminalResult = expectation(
+            description: "preparation did not terminate more than once"
+        )
+        additionalTerminalResult.isInverted = true
+        var latestTransaction: Transaction?
+        var terminalResultCount = 0
+
+        Ethereum(rpc: rpc).prepareTransaction(
+            Transaction(
+                from: "0x0",
+                to: "",
+                value: nil,
+                data: "0x"
+            ),
+            forceGasCheck: false,
+            network: makeNetwork(chainID: EthereumNetwork.ethMainnetChainId),
+            onUpdate: { transaction in
+                XCTAssertTrue(Thread.isMainThread)
+                latestTransaction = transaction
+                publishedUpdate.fulfill()
+            },
+            completion: { result in
+                XCTAssertTrue(Thread.isMainThread)
+                terminalResultCount += 1
+                if terminalResultCount > 1 {
+                    additionalTerminalResult.fulfill()
+                }
+                guard case .success(let transaction) = result else {
+                    XCTFail("Expected terminal preparation success")
+                    return
+                }
+                latestTransaction = transaction
+                terminalSuccess.fulfill()
+            }
+        )
+
+        wait(
+            for: [
+                publishedUpdate,
+                terminalSuccess,
+                additionalTerminalResult,
+            ],
+            timeout: 0.2
+        )
+        XCTAssertEqual(terminalResultCount, 1)
+        XCTAssertEqual(latestTransaction?.nonce, "0x1")
+        XCTAssertEqual(latestTransaction?.gasPrice, "0x64")
+        XCTAssertEqual(latestTransaction?.gas, "0x5208")
+        XCTAssertEqual(rpc.nonceCallCount, 1)
+        XCTAssertEqual(rpc.gasPriceCallCount, 1)
+        XCTAssertEqual(rpc.estimateGasCallCount, 2)
+    }
+
+    func testEthereumPreparationWaitsForNonceWhenGasFinishesFirst() {
+        let rpc = EthereumPreparationRPCStub(nonceDelay: 0.03)
+        let terminalSuccess = expectation(
+            description: "preparation waited for both branches"
+        )
+        var updates = [Transaction]()
+
+        Ethereum(rpc: rpc).prepareTransaction(
+            Transaction(
+                from: "0x0",
+                to: "",
+                value: nil,
+                data: "0x"
+            ),
+            forceGasCheck: false,
+            network: makeNetwork(
+                chainID: EthereumNetwork.ethMainnetChainId
+            ),
+            onUpdate: { transaction in
+                updates.append(transaction)
+            },
+            completion: { result in
+                guard case .success(let prepared) = result else {
+                    XCTFail("Expected terminal preparation success")
+                    return
+                }
+                XCTAssertEqual(prepared.nonce, "0x1")
+                XCTAssertEqual(prepared.gasPrice, "0x64")
+                XCTAssertEqual(prepared.gas, "0x5208")
+                terminalSuccess.fulfill()
+            }
+        )
+
+        wait(for: [terminalSuccess], timeout: 0.2)
+        XCTAssertEqual(updates.count, 3)
+        XCTAssertNil(updates.first?.nonce)
+        XCTAssertEqual(updates.first?.gasPrice, "0x64")
+        XCTAssertEqual(updates.dropFirst().first?.gas, "0x5208")
+        XCTAssertEqual(updates.last?.nonce, "0x1")
+    }
+
+    func testEthereumPreparationIgnoresDuplicateRPCCallbacks() {
+        let rpc = EthereumPreparationRPCStub(
+            nonceCompletionCount: 2,
+            gasPriceCompletionCount: 2
+        )
+        let firstTerminalResult = expectation(
+            description: "preparation terminated"
+        )
+        let additionalTerminalResult = expectation(
+            description: "preparation terminated exactly once"
+        )
+        additionalTerminalResult.isInverted = true
+        var terminalResultCount = 0
+
+        Ethereum(rpc: rpc).prepareTransaction(
+            Transaction(
+                from: "0x0",
+                to: "",
+                value: nil,
+                data: "0x"
+            ),
+            forceGasCheck: false,
+            network: makeNetwork(
+                chainID: EthereumNetwork.ethMainnetChainId
+            ),
+            onUpdate: { _ in },
+            completion: { result in
+                terminalResultCount += 1
+                guard terminalResultCount == 1 else {
+                    additionalTerminalResult.fulfill()
+                    return
+                }
+                guard case .success = result else {
+                    XCTFail("Expected terminal preparation success")
+                    return
+                }
+                firstTerminalResult.fulfill()
+            }
+        )
+
+        wait(
+            for: [firstTerminalResult, additionalTerminalResult],
+            timeout: 0.2
+        )
+        XCTAssertEqual(terminalResultCount, 1)
+        XCTAssertEqual(rpc.nonceCallCount, 1)
+        XCTAssertEqual(rpc.gasPriceCallCount, 1)
+        XCTAssertEqual(rpc.estimateGasCallCount, 2)
+    }
+
+    func testCancellingEthereumPreparationPreventsSecondGasEstimate() {
+        let firstEstimateStarted = expectation(
+            description: "first gas estimate started"
+        )
+        let unexpectedUpdate = expectation(
+            description: "cancelled preparation emitted no update"
+        )
+        unexpectedUpdate.isInverted = true
+        let unexpectedCompletion = expectation(
+            description: "cancelled preparation did not complete"
+        )
+        unexpectedCompletion.isInverted = true
+        let rpc = EthereumPreparationRPCStub(
+            defersEstimateGasCompletions: true
+        )
+        rpc.onEstimateGasCall = {
+            firstEstimateStarted.fulfill()
+        }
+        var transaction = Transaction(
+            from: "0x0",
+            to: "",
+            value: nil,
+            data: "0x"
+        )
+        transaction.nonce = "0x1"
+        transaction.gasPrice = "0x64"
+
+        let cancellation = Ethereum(rpc: rpc).prepareTransaction(
+            transaction,
+            forceGasCheck: true,
+            network: makeNetwork(
+                chainID: EthereumNetwork.ethMainnetChainId
+            ),
+            onUpdate: { _ in
+                unexpectedUpdate.fulfill()
+            },
+            completion: { _ in
+                unexpectedCompletion.fulfill()
+            }
+        )
+
+        wait(for: [firstEstimateStarted], timeout: 2)
+        cancellation.cancel()
+        rpc.completeNextEstimateGas()
+
+        wait(
+            for: [unexpectedUpdate, unexpectedCompletion],
+            timeout: 0.5
+        )
+        XCTAssertTrue(cancellation.isCancelled)
+        XCTAssertEqual(rpc.estimateGasCallCount, 1)
+    }
+
+    func testEthereumRPCCancellationStopsActiveTaskWithoutRetry() {
+        let requestStarted = expectation(description: "RPC request started")
+        let requestStopped = expectation(description: "RPC request stopped")
+        let unexpectedCompletion = expectation(
+            description: "cancelled RPC did not complete"
+        )
+        unexpectedCompletion.isInverted = true
+        let session = makeHangingRPCSession(
+            onStart: {
+                requestStarted.fulfill()
+            },
+            onStop: {
+                requestStopped.fulfill()
+            }
+        )
+        let cancellation = EthereumRequestCancellation()
+        defer {
+            session.invalidateAndCancel()
+            HangingGasServiceURLProtocol.reset()
+        }
+
+        EthereumRPC(urlSession: session).fetchGasPrice(
+            endpoint: endpoint(rpcURL),
+            cancellation: cancellation
+        ) { _ in
+            unexpectedCompletion.fulfill()
+        }
+
+        wait(for: [requestStarted], timeout: 2)
+        cancellation.cancel()
+
+        wait(
+            for: [requestStopped, unexpectedCompletion],
+            timeout: 0.7
+        )
+        XCTAssertEqual(HangingGasServiceURLProtocol.requestCount, 1)
+    }
+
+    func testEthereumRPCCancellationWaitsForActiveCompletion() {
+        let callbackStarted = expectation(
+            description: "RPC completion started"
+        )
+        let callbackFinished = expectation(
+            description: "RPC completion finished"
+        )
+        let allowCompletion = DispatchSemaphore(value: 0)
+        let cancellationReturned = DispatchSemaphore(value: 0)
+        let session = makeRPCSession()
+        let cancellation = EthereumRequestCancellation()
+        defer {
+            GasServiceURLProtocol.removeRequestHandler(for: rpcURL)
+            session.invalidateAndCancel()
+        }
+
+        GasServiceURLProtocol.setRequestHandler(for: rpcURL) { request in
+            (
+                try Self.httpResponse(for: request, statusCode: 200),
+                Data(
+                    #"{"jsonrpc":"2.0","id":1,"result":"0x64"}"#.utf8
+                )
+            )
+        }
+
+        EthereumRPC(urlSession: session).fetchGasPrice(
+            endpoint: endpoint(rpcURL),
+            cancellation: cancellation
+        ) { result in
+            guard case .success("0x64") = result else {
+                XCTFail("Expected gas-price success")
+                return
+            }
+            callbackStarted.fulfill()
+            XCTAssertEqual(
+                allowCompletion.wait(timeout: .now() + 2),
+                .success
+            )
+            callbackFinished.fulfill()
+        }
+
+        wait(for: [callbackStarted], timeout: 2)
+        DispatchQueue.global(qos: .userInitiated).async {
+            cancellation.cancel()
+            cancellationReturned.signal()
+        }
+
+        XCTAssertEqual(
+            cancellationReturned.wait(timeout: .now() + 0.1),
+            .timedOut
+        )
+        allowCompletion.signal()
+        wait(for: [callbackFinished], timeout: 2)
+        XCTAssertEqual(
+            cancellationReturned.wait(timeout: .now() + 2),
+            .success
+        )
+    }
+
+    func testEthereumPreparationCompletesReadyTransactionAsynchronouslyWithoutRPC() {
+        let rpc = EthereumPreparationRPCStub()
+        let terminalSuccess = expectation(
+            description: "ready transaction completed"
+        )
+        let unexpectedUpdate = expectation(
+            description: "ready transaction emitted no partial update"
+        )
+        unexpectedUpdate.isInverted = true
+        var transaction = Transaction(
+            from: "0x0",
+            to: "",
+            value: nil,
+            data: "0x"
+        )
+        transaction.nonce = "0x1"
+        transaction.gasPrice = "0x64"
+        transaction.gas = "0x5208"
+        var didReturnFromPrepare = false
+
+        Ethereum(rpc: rpc).prepareTransaction(
+            transaction,
+            forceGasCheck: false,
+            network: makeNetwork(
+                chainID: EthereumNetwork.ethMainnetChainId
+            ),
+            onUpdate: { _ in
+                unexpectedUpdate.fulfill()
+            },
+            completion: { result in
+                XCTAssertTrue(Thread.isMainThread)
+                XCTAssertTrue(didReturnFromPrepare)
+                guard case .success(let prepared) = result else {
+                    XCTFail("Expected terminal preparation success")
+                    return
+                }
+                XCTAssertEqual(prepared.id, transaction.id)
+                terminalSuccess.fulfill()
+            }
+        )
+        didReturnFromPrepare = true
+
+        wait(
+            for: [terminalSuccess, unexpectedUpdate],
+            timeout: 0.2
+        )
+        XCTAssertEqual(rpc.nonceCallCount, 0)
+        XCTAssertEqual(rpc.gasPriceCallCount, 0)
+        XCTAssertEqual(rpc.estimateGasCallCount, 0)
+    }
+
+    func testEthereumPreparationDoesNotWaitForInspectionAndPublishesLateResult() {
+        let rpc = EthereumPreparationRPCStub()
+        let terminalSuccess = expectation(
+            description: "preparation completed without inspection"
+        )
+        let additionalTerminalResult = expectation(
+            description: "inspection did not redeliver terminal result"
+        )
+        additionalTerminalResult.isInverted = true
+        let lateInspectionUpdate = expectation(
+            description: "late inspection remained a partial update"
+        )
+        var inspectionCompletion: ((String) -> Void)?
+        var terminalResultCount = 0
+        var transaction = Transaction(
+            from: "0x0",
+            to: "0x1",
+            value: nil,
+            data: "0x12345678"
+        )
+        transaction.nonce = "0x1"
+        transaction.gasPrice = "0x64"
+        transaction.gas = "0x5208"
+        let ethereum = Ethereum(
+            rpc: rpc,
+            interpretTransaction: { _, _, completion in
+                inspectionCompletion = completion
+            }
+        )
+
+        ethereum.prepareTransaction(
+            transaction,
+            forceGasCheck: false,
+            network: makeNetwork(
+                chainID: EthereumNetwork.ethMainnetChainId
+            ),
+            onUpdate: { updated in
+                if updated.interpretation == "late interpretation" {
+                    lateInspectionUpdate.fulfill()
+                }
+            },
+            completion: { result in
+                terminalResultCount += 1
+                guard terminalResultCount == 1 else {
+                    additionalTerminalResult.fulfill()
+                    return
+                }
+                guard case .success = result else {
+                    XCTFail("Expected terminal preparation success")
+                    return
+                }
+                terminalSuccess.fulfill()
+            }
+        )
+
+        wait(for: [terminalSuccess], timeout: 0.2)
+        XCTAssertNotNil(inspectionCompletion)
+        inspectionCompletion?("late interpretation")
+        wait(
+            for: [lateInspectionUpdate, additionalTerminalResult],
+            timeout: 0.2
+        )
+        XCTAssertEqual(terminalResultCount, 1)
+        XCTAssertEqual(rpc.nonceCallCount, 0)
+        XCTAssertEqual(rpc.gasPriceCallCount, 0)
+        XCTAssertEqual(rpc.estimateGasCallCount, 0)
+    }
+
+    func testEthereumForcedPreparationRechecksPrefilledGasBeforeSuccess() {
+        let rpc = EthereumPreparationRPCStub()
+        let terminalSuccess = expectation(
+            description: "forced preparation completed"
+        )
+        var transaction = Transaction(
+            from: "0x0",
+            to: "",
+            value: nil,
+            data: "0x"
+        )
+        transaction.nonce = "0x1"
+        transaction.gasPrice = "0x64"
+        transaction.gas = "0x1"
+
+        Ethereum(rpc: rpc).prepareTransaction(
+            transaction,
+            forceGasCheck: true,
+            network: makeNetwork(
+                chainID: EthereumNetwork.ethMainnetChainId
+            ),
+            onUpdate: { _ in },
+            completion: { result in
+                guard case .success(let prepared) = result else {
+                    XCTFail("Expected terminal preparation success")
+                    return
+                }
+                XCTAssertEqual(prepared.gas, "0x5208")
+                terminalSuccess.fulfill()
+            }
+        )
+
+        wait(for: [terminalSuccess], timeout: 0.2)
+        XCTAssertEqual(rpc.nonceCallCount, 0)
+        XCTAssertEqual(rpc.gasPriceCallCount, 0)
+        XCTAssertEqual(rpc.estimateGasCallCount, 2)
+    }
+
+    func testEthereumPreparationRejectsInvalidFinalTransaction() {
+        let rpc = EthereumPreparationRPCStub(
+            nonceResult: .success("not-hex")
+        )
+
+        assertSinglePreparationFailure(
+            using: rpc,
+            transaction: Transaction(
+                from: "0x0",
+                to: "",
+                value: nil,
+                data: "0x"
+            ),
+            expectedFailure: .invalidTransaction
+        )
+    }
+
     func testEthereumRPCEmitsFeeHistoryRequestAndDecodesObjectResult() throws {
         let session = makeRPCSession()
         let requestReceived = expectation(description: "request received")
@@ -552,7 +1253,7 @@ final class GasServiceTests: XCTestCase {
         }
 
         EthereumRPC(urlSession: session).fetchFeeHistory(
-            rpcUrl: rpcURL,
+            endpoint: endpoint(rpcURL),
             blockCount: 10,
             rewardPercentiles: [10, 25, 50, 75]
         ) { result in
@@ -634,7 +1335,9 @@ final class GasServiceTests: XCTestCase {
             return (response, data)
         }
 
-        EthereumRPC(urlSession: session).fetchGasPrice(rpcUrl: permanentFailureRPCURL) { result in
+        EthereumRPC(urlSession: session).fetchGasPrice(
+            endpoint: endpoint(permanentFailureRPCURL)
+        ) { result in
             if case .success(let gasPrice) = result {
                 XCTFail("Unexpected gas price: \(gasPrice)")
             }
@@ -664,6 +1367,634 @@ final class GasServiceTests: XCTestCase {
         }
     }
 
+    func testEthereumRPCRetriesTransientAuthorizationAcquisitionFailure()
+        throws {
+        let requestCount = LockedCounter()
+        let session = makeRPCSession()
+        let completionReceived = expectation(
+            description: "gas price fetched after authorization recovery"
+        )
+        let authorizationProvider =
+            SequencedEthereumAuthorizationProviderStub(
+                authorizations: [
+                    .failure(StubError.expected),
+                    .success("fresh-token"),
+                ]
+            )
+        defer {
+            GasServiceURLProtocol.removeRequestHandler(for: alchemyRPCURL)
+            session.invalidateAndCancel()
+        }
+
+        GasServiceURLProtocol.setRequestHandler(for: alchemyRPCURL) { request in
+            _ = requestCount.increment()
+            XCTAssertEqual(
+                request.value(forHTTPHeaderField: "Authorization"),
+                "Bearer fresh-token"
+            )
+            return (
+                try Self.httpResponse(for: request, statusCode: 200),
+                Data(#"{"jsonrpc":"2.0","id":1,"result":"0x64"}"#.utf8)
+            )
+        }
+
+        EthereumRPC(
+            urlSession: session,
+            authorizationProvider: authorizationProvider
+        ).fetchGasPrice(
+            endpoint: alchemyEndpoint
+        ) { result in
+            switch result {
+            case .success(let gasPrice):
+                XCTAssertEqual(gasPrice, "0x64")
+            case .failure(let error):
+                XCTFail("Unexpected failure: \(error)")
+            }
+            completionReceived.fulfill()
+        }
+
+        wait(for: [completionReceived], timeout: 2)
+        XCTAssertEqual(requestCount.value, 1)
+        XCTAssertEqual(authorizationProvider.authorizationCallCount, 2)
+        XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
+    }
+
+    func testEthereumRPCBoundsRepeatedAuthorizationAcquisitionFailures()
+        throws {
+        let requestCount = LockedCounter()
+        let session = makeRPCSession()
+        let completionReceived = expectation(
+            description: "bounded authorization failure returned"
+        )
+        let authorizationProvider =
+            SequencedEthereumAuthorizationProviderStub(
+                authorizations: Array(
+                    repeating: Result<String?, Error>.failure(
+                        StubError.expected
+                    ),
+                    count: 5
+                )
+            )
+        defer {
+            GasServiceURLProtocol.removeRequestHandler(for: alchemyRPCURL)
+            session.invalidateAndCancel()
+        }
+
+        GasServiceURLProtocol.setRequestHandler(for: alchemyRPCURL) { request in
+            _ = requestCount.increment()
+            return (
+                try Self.httpResponse(for: request, statusCode: 200),
+                Data(#"{"jsonrpc":"2.0","id":1,"result":"0x64"}"#.utf8)
+            )
+        }
+
+        EthereumRPC(
+            urlSession: session,
+            authorizationProvider: authorizationProvider
+        ).fetchGasPrice(
+            endpoint: alchemyEndpoint
+        ) { result in
+            if case .success(let gasPrice) = result {
+                XCTFail("Unexpected gas price: \(gasPrice)")
+            }
+            completionReceived.fulfill()
+        }
+
+        wait(for: [completionReceived], timeout: 3)
+        XCTAssertEqual(requestCount.value, 0)
+        XCTAssertEqual(authorizationProvider.authorizationCallCount, 5)
+        XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
+    }
+
+    func testEthereumRPCRetriesReadAfterReplacementAuthorizationFailure()
+        throws {
+        let requestCount = LockedCounter()
+        let session = makeRPCSession()
+        let completionReceived = expectation(
+            description: "gas price fetched after replacement recovery"
+        )
+        let authorizationProvider =
+            SequencedEthereumAuthorizationProviderStub(
+                authorizations: [
+                    .success("rejected-token"),
+                    .success("fresh-token"),
+                ],
+                replacements: [.failure(StubError.expected)]
+            )
+        defer {
+            GasServiceURLProtocol.removeRequestHandler(for: alchemyRPCURL)
+            session.invalidateAndCancel()
+        }
+
+        GasServiceURLProtocol.setRequestHandler(for: alchemyRPCURL) { request in
+            let attempt = requestCount.increment()
+            XCTAssertEqual(
+                request.value(forHTTPHeaderField: "Authorization"),
+                attempt == 1
+                    ? "Bearer rejected-token"
+                    : "Bearer fresh-token"
+            )
+            if attempt == 1 {
+                return (
+                    try Self.httpResponse(for: request, statusCode: 401),
+                    Data(#"{"error":"unauthorized"}"#.utf8)
+                )
+            }
+            return (
+                try Self.httpResponse(for: request, statusCode: 200),
+                Data(#"{"jsonrpc":"2.0","id":1,"result":"0x64"}"#.utf8)
+            )
+        }
+
+        EthereumRPC(
+            urlSession: session,
+            authorizationProvider: authorizationProvider
+        ).fetchGasPrice(
+            endpoint: alchemyEndpoint
+        ) { result in
+            switch result {
+            case .success(let gasPrice):
+                XCTAssertEqual(gasPrice, "0x64")
+            case .failure(let error):
+                XCTFail("Unexpected failure: \(error)")
+            }
+            completionReceived.fulfill()
+        }
+
+        wait(for: [completionReceived], timeout: 2)
+        XCTAssertEqual(requestCount.value, 2)
+        XCTAssertEqual(authorizationProvider.authorizationCallCount, 2)
+        XCTAssertEqual(authorizationProvider.replacementCallCount, 1)
+    }
+
+    func testEthereumRPCSecond401IsTerminalAfterThrownReplacementFailure()
+        throws {
+        try assertSecond401IsTerminalAfterReplacementRecoveryFailure(
+            .failure(StubError.expected)
+        )
+    }
+
+    func testEthereumRPCSecond401IsTerminalAfterMissingReplacement()
+        throws {
+        try assertSecond401IsTerminalAfterReplacementRecoveryFailure(
+            .success(nil)
+        )
+    }
+
+    func testEthereumRPCInitialAuthorizationFailureDoesNotConsume401Recovery()
+        throws {
+        let requestCount = LockedCounter()
+        let session = makeRPCSession()
+        let completionReceived = expectation(
+            description: "gas price fetched after both recovery stages"
+        )
+        let authorizationProvider =
+            SequencedEthereumAuthorizationProviderStub(
+                authorizations: [
+                    .failure(StubError.expected),
+                    .success("rejected-token"),
+                ],
+                replacements: [.success("replacement-token")]
+            )
+        defer {
+            GasServiceURLProtocol.removeRequestHandler(for: alchemyRPCURL)
+            session.invalidateAndCancel()
+        }
+
+        GasServiceURLProtocol.setRequestHandler(for: alchemyRPCURL) { request in
+            let attempt = requestCount.increment()
+            XCTAssertEqual(
+                request.value(forHTTPHeaderField: "Authorization"),
+                attempt == 1
+                    ? "Bearer rejected-token"
+                    : "Bearer replacement-token"
+            )
+            if attempt == 1 {
+                return (
+                    try Self.httpResponse(for: request, statusCode: 401),
+                    Data(#"{"error":"unauthorized"}"#.utf8)
+                )
+            }
+            return (
+                try Self.httpResponse(for: request, statusCode: 200),
+                Data(#"{"jsonrpc":"2.0","id":1,"result":"0x64"}"#.utf8)
+            )
+        }
+
+        EthereumRPC(
+            urlSession: session,
+            authorizationProvider: authorizationProvider
+        ).fetchGasPrice(
+            endpoint: alchemyEndpoint
+        ) { result in
+            switch result {
+            case .success(let gasPrice):
+                XCTAssertEqual(gasPrice, "0x64")
+            case .failure(let error):
+                XCTFail("Unexpected failure: \(error)")
+            }
+            completionReceived.fulfill()
+        }
+
+        wait(for: [completionReceived], timeout: 3)
+        XCTAssertEqual(requestCount.value, 2)
+        XCTAssertEqual(authorizationProvider.authorizationCallCount, 2)
+        XCTAssertEqual(authorizationProvider.replacementCallCount, 1)
+        XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
+    }
+
+    func testEthereumRPCDoesNotSubmitWhenRawSendAuthorizationFails() {
+        let session = makeRPCSession()
+        let completionReceived = expectation(
+            description: "authorization failure returned"
+        )
+        let unexpectedRequest = expectation(
+            description: "raw transaction was not submitted"
+        )
+        unexpectedRequest.isInverted = true
+        let authorizationProvider =
+            SequencedEthereumAuthorizationProviderStub(
+                authorizations: [.failure(StubError.expected)]
+            )
+        defer {
+            GasServiceURLProtocol.removeRequestHandler(for: alchemyRPCURL)
+            session.invalidateAndCancel()
+        }
+
+        GasServiceURLProtocol.setRequestHandler(for: alchemyRPCURL) { request in
+            unexpectedRequest.fulfill()
+            return (
+                try Self.httpResponse(for: request, statusCode: 200),
+                Data(#"{"jsonrpc":"2.0","id":1,"result":"0xtransaction"}"#.utf8)
+            )
+        }
+
+        EthereumRPC(
+            urlSession: session,
+            authorizationProvider: authorizationProvider
+        ).sendRawTransaction(
+            endpoint: alchemyEndpoint,
+            signedTxData: "0x01"
+        ) { result in
+            if case .success(let hash) = result {
+                XCTFail("Unexpected transaction hash: \(hash)")
+            }
+            completionReceived.fulfill()
+        }
+
+        wait(for: [completionReceived, unexpectedRequest], timeout: 1)
+        XCTAssertEqual(authorizationProvider.authorizationCallCount, 1)
+        XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
+    }
+
+    func testEthereumRPCReplaysRawSendOnceWithReplacementAuthorizationAfter401()
+        throws {
+        let requestCount = LockedCounter()
+        let requestBodies = LockedDataRecorder()
+        let session = makeRPCSession()
+        let completionReceived = expectation(
+            description: "raw transaction submitted after authorization recovery"
+        )
+        let authorizationProvider =
+            SequencedEthereumAuthorizationProviderStub(
+                authorizations: [.success("rejected-token")],
+                replacements: [.success("replacement-token")]
+            )
+        defer {
+            GasServiceURLProtocol.removeRequestHandler(for: alchemyRPCURL)
+            session.invalidateAndCancel()
+        }
+
+        GasServiceURLProtocol.setRequestHandler(for: alchemyRPCURL) { request in
+            let attempt = requestCount.increment()
+            requestBodies.append(try Self.bodyData(from: request))
+            XCTAssertEqual(
+                request.value(forHTTPHeaderField: "Authorization"),
+                attempt == 1
+                    ? "Bearer rejected-token"
+                    : "Bearer replacement-token"
+            )
+            if attempt == 1 {
+                return (
+                    try Self.httpResponse(for: request, statusCode: 401),
+                    Data(#"{"error":"unauthorized"}"#.utf8)
+                )
+            }
+            return (
+                try Self.httpResponse(for: request, statusCode: 200),
+                Data(
+                    #"{"jsonrpc":"2.0","id":1,"result":"0xtransaction"}"#.utf8
+                )
+            )
+        }
+
+        EthereumRPC(
+            urlSession: session,
+            authorizationProvider: authorizationProvider
+        ).sendRawTransaction(
+            endpoint: alchemyEndpoint,
+            signedTxData: "0x01"
+        ) { result in
+            switch result {
+            case .success(let hash):
+                XCTAssertEqual(hash, "0xtransaction")
+            case .failure(let error):
+                XCTFail("Unexpected failure: \(error)")
+            }
+            completionReceived.fulfill()
+        }
+
+        wait(for: [completionReceived], timeout: 2)
+        XCTAssertEqual(requestCount.value, 2)
+        XCTAssertEqual(requestBodies.values.count, 2)
+        XCTAssertEqual(requestBodies.values[0], requestBodies.values[1])
+        XCTAssertEqual(authorizationProvider.authorizationCallCount, 1)
+        XCTAssertEqual(authorizationProvider.replacementCallCount, 1)
+        XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
+    }
+
+    func testEthereumRPCReplaysRawSendWhen401AlsoHasTransferError()
+        throws {
+        let requestCount = LockedCounter()
+        let requestBodies = LockedDataRecorder()
+        let session = makeRPCSession()
+        let completionReceived = expectation(
+            description: "HTTP 401 took precedence over transfer error"
+        )
+        let authorizationProvider =
+            SequencedEthereumAuthorizationProviderStub(
+                authorizations: [.success("rejected-token")],
+                replacements: [.success("replacement-token")]
+            )
+        defer {
+            GasServiceURLProtocol.removeRequestHandler(for: alchemyRPCURL)
+            session.invalidateAndCancel()
+        }
+
+        GasServiceURLProtocol.setResponseErrorHandler(
+            for: alchemyRPCURL
+        ) { response in
+            response.statusCode == 401
+                ? URLError(.networkConnectionLost)
+                : nil
+        }
+        GasServiceURLProtocol.setRequestHandler(for: alchemyRPCURL) { request in
+            let attempt = requestCount.increment()
+            requestBodies.append(try Self.bodyData(from: request))
+            XCTAssertEqual(
+                request.value(forHTTPHeaderField: "Authorization"),
+                attempt == 1
+                    ? "Bearer rejected-token"
+                    : "Bearer replacement-token"
+            )
+            if attempt == 1 {
+                return (
+                    try Self.httpResponse(for: request, statusCode: 401),
+                    Data(#"{"error":"unauthorized"}"#.utf8)
+                )
+            }
+            return (
+                try Self.httpResponse(for: request, statusCode: 200),
+                Data(
+                    #"{"jsonrpc":"2.0","id":1,"result":"0xtransaction"}"#.utf8
+                )
+            )
+        }
+
+        EthereumRPC(
+            urlSession: session,
+            authorizationProvider: authorizationProvider
+        ).sendRawTransaction(
+            endpoint: alchemyEndpoint,
+            signedTxData: "0x01"
+        ) { result in
+            switch result {
+            case .success(let hash):
+                XCTAssertEqual(hash, "0xtransaction")
+            case .failure(let error):
+                XCTFail("Unexpected failure: \(error)")
+            }
+            completionReceived.fulfill()
+        }
+
+        wait(for: [completionReceived], timeout: 2)
+        XCTAssertEqual(requestCount.value, 2)
+        XCTAssertEqual(requestBodies.values.count, 2)
+        XCTAssertEqual(requestBodies.values[0], requestBodies.values[1])
+        XCTAssertEqual(authorizationProvider.replacementCallCount, 1)
+        XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
+    }
+
+    func testEthereumRPCInvalidatesSecondRejectedRawSendAuthorizationAfterPersistent401()
+        throws {
+        let requestCount = LockedCounter()
+        let requestBodies = LockedDataRecorder()
+        let session = makeRPCSession()
+        let completionReceived = expectation(
+            description: "persistent authorization failure returned"
+        )
+        completionReceived.assertForOverFulfill = true
+        let authorizationProvider = EthereumAuthorizationProviderStub(
+            token: "rejected-token",
+            replacementToken: "replacement-token"
+        )
+        defer {
+            GasServiceURLProtocol.removeRequestHandler(for: alchemyRPCURL)
+            session.invalidateAndCancel()
+        }
+
+        GasServiceURLProtocol.setRequestHandler(for: alchemyRPCURL) { request in
+            let attempt = requestCount.increment()
+            requestBodies.append(try Self.bodyData(from: request))
+            XCTAssertLessThanOrEqual(attempt, 2)
+            XCTAssertEqual(
+                request.value(forHTTPHeaderField: "Authorization"),
+                attempt == 1
+                    ? "Bearer rejected-token"
+                    : "Bearer replacement-token"
+            )
+            return (
+                try Self.httpResponse(for: request, statusCode: 401),
+                Data(#"{"error":"unauthorized"}"#.utf8)
+            )
+        }
+
+        EthereumRPC(
+            urlSession: session,
+            authorizationProvider: authorizationProvider
+        ).sendRawTransaction(
+            endpoint: alchemyEndpoint,
+            signedTxData: "0x01"
+        ) { result in
+            switch result {
+            case .success(let hash):
+                XCTFail("Unexpected transaction hash: \(hash)")
+            case .failure(let error):
+                guard case .unknown = error as? EthereumRPCError else {
+                    XCTFail("Unexpected failure: \(error)")
+                    completionReceived.fulfill()
+                    return
+                }
+            }
+            completionReceived.fulfill()
+        }
+
+        wait(for: [completionReceived], timeout: 2)
+        XCTAssertEqual(requestCount.value, 2)
+        XCTAssertEqual(requestBodies.values.count, 2)
+        XCTAssertEqual(requestBodies.values[0], requestBodies.values[1])
+        XCTAssertEqual(authorizationProvider.authorizationCallCount, 1)
+        XCTAssertEqual(authorizationProvider.replacementCallCount, 1)
+        XCTAssertEqual(authorizationProvider.invalidationCallCount, 1)
+        XCTAssertEqual(
+            authorizationProvider.invalidatedTokens,
+            ["replacement-token"]
+        )
+        XCTAssertEqual(
+            authorizationProvider.invalidationURLs.map(\.absoluteString),
+            [alchemyRPCURL]
+        )
+    }
+
+    func testEthereumRPCDoesNotReplayRawSendWhenReplacementAuthorizationFails()
+        throws {
+        let requestCount = LockedCounter()
+        let session = makeRPCSession()
+        let completionReceived = expectation(
+            description: "replacement authorization failure returned"
+        )
+        let authorizationProvider =
+            SequencedEthereumAuthorizationProviderStub(
+                authorizations: [.success("rejected-token")],
+                replacements: [.failure(StubError.expected)]
+            )
+        defer {
+            GasServiceURLProtocol.removeRequestHandler(for: alchemyRPCURL)
+            session.invalidateAndCancel()
+        }
+
+        GasServiceURLProtocol.setRequestHandler(for: alchemyRPCURL) { request in
+            _ = requestCount.increment()
+            XCTAssertEqual(
+                request.value(forHTTPHeaderField: "Authorization"),
+                "Bearer rejected-token"
+            )
+            _ = try Self.bodyData(from: request)
+            return (
+                try Self.httpResponse(for: request, statusCode: 401),
+                Data(#"{"error":"unauthorized"}"#.utf8)
+            )
+        }
+
+        EthereumRPC(
+            urlSession: session,
+            authorizationProvider: authorizationProvider
+        ).sendRawTransaction(
+            endpoint: alchemyEndpoint,
+            signedTxData: "0x01"
+        ) { result in
+            if case .success(let hash) = result {
+                XCTFail("Unexpected transaction hash: \(hash)")
+            }
+            completionReceived.fulfill()
+        }
+
+        wait(for: [completionReceived], timeout: 2)
+        XCTAssertEqual(requestCount.value, 1)
+        XCTAssertEqual(authorizationProvider.authorizationCallCount, 1)
+        XCTAssertEqual(authorizationProvider.replacementCallCount, 1)
+        XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
+    }
+
+    func testEthereumRPCDoesNotRefreshAuthorizationAfter403() throws {
+        let requestCount = LockedCounter()
+        let session = makeRPCSession()
+        let completionReceived = expectation(description: "forbidden response returned")
+        completionReceived.assertForOverFulfill = true
+        let authorizationProvider = EthereumAuthorizationProviderStub(
+            token: "current-token",
+            replacementToken: "unused-token"
+        )
+        defer {
+            GasServiceURLProtocol.removeRequestHandler(for: alchemyRPCURL)
+            session.invalidateAndCancel()
+        }
+
+        GasServiceURLProtocol.setRequestHandler(for: alchemyRPCURL) { request in
+            _ = requestCount.increment()
+            XCTAssertEqual(
+                request.value(forHTTPHeaderField: "Authorization"),
+                "Bearer current-token"
+            )
+            return (
+                try Self.httpResponse(for: request, statusCode: 403),
+                Data(
+                    #"{"jsonrpc":"2.0","id":1,"error":{"code":403,"message":"forbidden"}}"#.utf8
+                )
+            )
+        }
+
+        EthereumRPC(
+            urlSession: session,
+            authorizationProvider: authorizationProvider
+        ).sendRawTransaction(
+            endpoint: alchemyEndpoint,
+            signedTxData: "0x01"
+        ) { result in
+            if case .success(let hash) = result {
+                XCTFail("Unexpected transaction hash: \(hash)")
+            }
+            completionReceived.fulfill()
+        }
+
+        wait(for: [completionReceived], timeout: 2)
+        XCTAssertEqual(requestCount.value, 1)
+        XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
+        XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
+    }
+
+    func testEthereumRPCNeverAttachesAuthorizationToCustomOrKeyedURLs() throws {
+        let urls = [
+            "https://rpc.example/custom",
+            alchemyRPCURL,
+            "https://eth-mainnet.g.alchemy.com/v2/embedded-key",
+        ]
+        let session = makeRPCSession()
+        let authorizationProvider = EthereumAuthorizationProviderStub(token: "alchemy-only-token")
+        defer {
+            for url in urls {
+                GasServiceURLProtocol.removeRequestHandler(for: url)
+            }
+            session.invalidateAndCancel()
+        }
+
+        for url in urls {
+            let completionReceived = expectation(description: "request completed for \(url)")
+            GasServiceURLProtocol.setRequestHandler(for: url) { request in
+                XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
+                return (
+                    try Self.httpResponse(for: request, statusCode: 200),
+                    Data(#"{"jsonrpc":"2.0","id":1,"result":"0x64"}"#.utf8)
+                )
+            }
+
+            EthereumRPC(
+                urlSession: session,
+                authorizationProvider: authorizationProvider
+            ).fetchGasPrice(endpoint: endpoint(url)) { result in
+                if case .failure(let error) = result {
+                    XCTFail("Unexpected failure: \(error)")
+                }
+                completionReceived.fulfill()
+            }
+            wait(for: [completionReceived], timeout: 2)
+        }
+
+        XCTAssertEqual(authorizationProvider.authorizationCallCount, 0)
+        XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
+        XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
+    }
+
     func testEthereumRPCPreservesRPCErrorFromNonSuccessHTTPResponse() throws {
         let errorRPCURL = rpcURL + "/rpc-error"
         let requestCount = LockedCounter()
@@ -689,7 +2020,9 @@ final class GasServiceTests: XCTestCase {
             return (response, data)
         }
 
-        EthereumRPC(urlSession: session).fetchGasPrice(rpcUrl: errorRPCURL) { result in
+        EthereumRPC(urlSession: session).fetchGasPrice(
+            endpoint: endpoint(errorRPCURL)
+        ) { result in
             switch result {
             case .success(let gasPrice):
                 XCTFail("Unexpected gas price: \(gasPrice)")
@@ -716,6 +2049,7 @@ final class GasServiceTests: XCTestCase {
 
     private func fetchEstimate(
         using service: GasService,
+        endpoint: EthereumRPCEndpoint? = nil,
         description: String = "gas estimate",
         file: StaticString = #filePath,
         line: UInt = #line
@@ -724,7 +2058,9 @@ final class GasServiceTests: XCTestCase {
         completed.assertForOverFulfill = true
         var receivedEstimate = GasService.Estimate(info: nil, nextBaseFee: nil)
 
-        service.fetchEstimate(rpcUrl: rpcURL) { estimate in
+        service.fetchEstimate(
+            endpoint: endpoint ?? self.endpoint(rpcURL)
+        ) { estimate in
             XCTAssertTrue(Thread.isMainThread, file: file, line: line)
             receivedEstimate = estimate
             completed.fulfill()
@@ -768,7 +2104,9 @@ final class GasServiceTests: XCTestCase {
             return (response, data)
         }
 
-        EthereumRPC(urlSession: session).fetchGasPrice(rpcUrl: transientRPCURL) { result in
+        EthereumRPC(urlSession: session).fetchGasPrice(
+            endpoint: endpoint(transientRPCURL)
+        ) { result in
             switch result {
             case .success(let gasPrice):
                 XCTAssertEqual(gasPrice, "0x64", file: file, line: line)
@@ -806,7 +2144,7 @@ final class GasServiceTests: XCTestCase {
         }
 
         EthereumRPC(urlSession: session).sendRawTransaction(
-            rpcUrl: rpcURL,
+            endpoint: endpoint(rpcURL),
             signedTxData: "0x01"
         ) { result in
             if case .success(let transactionHash) = result {
@@ -819,9 +2157,141 @@ final class GasServiceTests: XCTestCase {
         XCTAssertEqual(requestCount.value, 1, file: file, line: line)
     }
 
+    private func assertSecond401IsTerminalAfterReplacementRecoveryFailure(
+        _ firstReplacement: Result<String?, Error>,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let requestCount = LockedCounter()
+        let session = makeRPCSession()
+        let completionReceived = expectation(
+            description: "second unauthorized response returned"
+        )
+        completionReceived.assertForOverFulfill = true
+        let authorizationProvider =
+            SequencedEthereumAuthorizationProviderStub(
+                authorizations: [
+                    .success("rejected-token"),
+                    .success("newer-token"),
+                ],
+                replacements: [
+                    firstReplacement,
+                    .success("unexpected-third-token"),
+                ]
+            )
+        defer {
+            GasServiceURLProtocol.removeRequestHandler(for: alchemyRPCURL)
+            session.invalidateAndCancel()
+        }
+
+        GasServiceURLProtocol.setRequestHandler(for: alchemyRPCURL) { request in
+            let attempt = requestCount.increment()
+            let expectedAuthorization: String
+            switch attempt {
+            case 1:
+                expectedAuthorization = "Bearer rejected-token"
+            case 2:
+                expectedAuthorization = "Bearer newer-token"
+            default:
+                expectedAuthorization = "Bearer unexpected-third-token"
+            }
+            XCTAssertEqual(
+                request.value(forHTTPHeaderField: "Authorization"),
+                expectedAuthorization,
+                file: file,
+                line: line
+            )
+            guard attempt <= 2 else {
+                return (
+                    try Self.httpResponse(for: request, statusCode: 200),
+                    Data(
+                        #"{"jsonrpc":"2.0","id":1,"result":"0x64"}"#.utf8
+                    )
+                )
+            }
+            return (
+                try Self.httpResponse(for: request, statusCode: 401),
+                Data(#"{"error":"unauthorized"}"#.utf8)
+            )
+        }
+
+        EthereumRPC(
+            urlSession: session,
+            authorizationProvider: authorizationProvider
+        ).fetchGasPrice(
+            endpoint: alchemyEndpoint
+        ) { result in
+            switch result {
+            case .success(let gasPrice):
+                XCTFail(
+                    "Unexpected gas price: \(gasPrice)",
+                    file: file,
+                    line: line
+                )
+            case .failure(let error):
+                guard case .unknown = error as? EthereumRPCError else {
+                    XCTFail(
+                        "Unexpected failure: \(error)",
+                        file: file,
+                        line: line
+                    )
+                    completionReceived.fulfill()
+                    return
+                }
+            }
+            completionReceived.fulfill()
+        }
+
+        wait(for: [completionReceived], timeout: 3)
+        XCTAssertEqual(requestCount.value, 2, file: file, line: line)
+        XCTAssertEqual(
+            authorizationProvider.authorizationCallCount,
+            2,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            authorizationProvider.replacementCallCount,
+            1,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            authorizationProvider.invalidationCallCount,
+            1,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            authorizationProvider.invalidatedTokens,
+            ["newer-token"],
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            authorizationProvider.invalidationURLs.map(\.absoluteString),
+            [alchemyRPCURL],
+            file: file,
+            line: line
+        )
+    }
+
     private func makeRPCSession() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [GasServiceURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+
+    private func makeHangingRPCSession(
+        onStart: @escaping () -> Void,
+        onStop: @escaping () -> Void
+    ) -> URLSession {
+        HangingGasServiceURLProtocol.configure(
+            onStart: onStart,
+            onStop: onStop
+        )
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [HangingGasServiceURLProtocol.self]
         return URLSession(configuration: configuration)
     }
 
@@ -830,11 +2300,63 @@ final class GasServiceTests: XCTestCase {
             chainId: chainID,
             name: "Test",
             symbol: "ETH",
-            nodeURLString: rpcURL,
+            rpcEndpoint: endpoint(rpcURL),
             isTestnet: false,
             mightShowPrice: false,
             explorer: nil
         )
+    }
+
+    private func assertSinglePreparationFailure(
+        using rpc: EthereumPreparationRPCStub,
+        transaction: Transaction,
+        expectedFailure: TransactionPreparationFailure,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let firstFailure = expectation(description: "preparation failed")
+        let additionalFailure = expectation(
+            description: "preparation did not fail more than once"
+        )
+        additionalFailure.isInverted = true
+        var failureCount = 0
+
+        Ethereum(rpc: rpc).prepareTransaction(
+            transaction,
+            forceGasCheck: false,
+            network: makeNetwork(chainID: EthereumNetwork.ethMainnetChainId),
+            onUpdate: { _ in },
+            completion: { result in
+                guard case .failure(let failure) = result else {
+                    XCTFail(
+                        "Unexpected preparation success",
+                        file: file,
+                        line: line
+                    )
+                    return
+                }
+                XCTAssertTrue(
+                    Thread.isMainThread,
+                    file: file,
+                    line: line
+                )
+                XCTAssertEqual(
+                    failure,
+                    expectedFailure,
+                    file: file,
+                    line: line
+                )
+                failureCount += 1
+                if failureCount == 1 {
+                    firstFailure.fulfill()
+                } else {
+                    additionalFailure.fulfill()
+                }
+            }
+        )
+
+        wait(for: [firstFailure, additionalFailure], timeout: 0.2)
+        XCTAssertEqual(failureCount, 1, file: file, line: line)
     }
 
     private static func httpResponse(
@@ -886,9 +2408,14 @@ private enum StubError: Error {
 private final class FakeEthereumRPCClient: EthereumFeeHistoryRPCClient {
 
     struct FeeHistoryCall {
-        let rpcURL: String
+        let endpoint: EthereumRPCEndpoint
         let blockCount: UInt
         let rewardPercentiles: [Double]
+
+        var rpcURL: String { return endpoint.url.absoluteString }
+        var allowsAlchemyAuthorization: Bool {
+            return endpoint.allowsAlchemyAuthorization
+        }
     }
 
     private let feeHistoryResult: Result<EthereumFeeHistory, Error>
@@ -905,13 +2432,13 @@ private final class FakeEthereumRPCClient: EthereumFeeHistoryRPCClient {
     }
 
     func fetchFeeHistory(
-        rpcUrl: String,
+        endpoint: EthereumRPCEndpoint,
         blockCount: UInt,
         rewardPercentiles: [Double],
         completion: @escaping (Result<EthereumFeeHistory, Error>) -> Void
     ) {
         feeHistoryCalls.append(FeeHistoryCall(
-            rpcURL: rpcUrl,
+            endpoint: endpoint,
             blockCount: blockCount,
             rewardPercentiles: rewardPercentiles
         ))
@@ -922,12 +2449,347 @@ private final class FakeEthereumRPCClient: EthereumFeeHistoryRPCClient {
 
 }
 
+private final class EthereumPreparationRPCStub: EthereumRPCClient {
+
+    private let nonceResult: Result<String, Swift.Error>
+    private let gasPriceResult: Result<String, Swift.Error>
+    private var estimateGasResults: [Result<String, Swift.Error>]
+    private let nonceDelay: TimeInterval
+    private let gasPriceDelay: TimeInterval
+    private let nonceCompletionCount: Int
+    private let gasPriceCompletionCount: Int
+    private let defersEstimateGasCompletions: Bool
+    private var pendingEstimateGasCompletions = [() -> Void]()
+
+    private(set) var nonceCallCount = 0
+    private(set) var gasPriceCallCount = 0
+    private(set) var estimateGasCallCount = 0
+    var onEstimateGasCall: (() -> Void)?
+
+    init(
+        nonceResult: Result<String, Swift.Error> = .success("0x1"),
+        gasPriceResult: Result<String, Swift.Error> = .success("0x64"),
+        estimateGasResults: [Result<String, Swift.Error>] = [
+            .success("0x5208"),
+            .success("0x5208")
+        ],
+        nonceDelay: TimeInterval = 0,
+        gasPriceDelay: TimeInterval = 0,
+        nonceCompletionCount: Int = 1,
+        gasPriceCompletionCount: Int = 1,
+        defersEstimateGasCompletions: Bool = false
+    ) {
+        self.nonceResult = nonceResult
+        self.gasPriceResult = gasPriceResult
+        self.estimateGasResults = estimateGasResults
+        self.nonceDelay = nonceDelay
+        self.gasPriceDelay = gasPriceDelay
+        self.nonceCompletionCount = nonceCompletionCount
+        self.gasPriceCompletionCount = gasPriceCompletionCount
+        self.defersEstimateGasCompletions =
+            defersEstimateGasCompletions
+    }
+
+    func fetchGasPrice(
+        endpoint: EthereumRPCEndpoint,
+        cancellation: EthereumRequestCancellation?,
+        completion: @escaping (Result<String, Swift.Error>) -> Void
+    ) {
+        gasPriceCallCount += 1
+        deliver(
+            gasPriceResult,
+            count: gasPriceCompletionCount,
+            after: gasPriceDelay,
+            completion: completion
+        )
+    }
+
+    func getBalance(
+        endpoint: EthereumRPCEndpoint,
+        for address: String,
+        completion: @escaping (Result<String, Swift.Error>) -> Void
+    ) {
+        completion(.failure(StubError.expected))
+    }
+
+    func fetchNonce(
+        endpoint: EthereumRPCEndpoint,
+        for address: String,
+        cancellation: EthereumRequestCancellation?,
+        completion: @escaping (Result<String, Swift.Error>) -> Void
+    ) {
+        nonceCallCount += 1
+        deliver(
+            nonceResult,
+            count: nonceCompletionCount,
+            after: nonceDelay,
+            completion: completion
+        )
+    }
+
+    func estimateGas(
+        endpoint: EthereumRPCEndpoint,
+        transaction: Transaction,
+        cancellation: EthereumRequestCancellation?,
+        completion: @escaping (Result<String, Swift.Error>) -> Void
+    ) {
+        estimateGasCallCount += 1
+        onEstimateGasCall?()
+        guard !estimateGasResults.isEmpty else {
+            completion(.failure(StubError.expected))
+            return
+        }
+        let result = estimateGasResults.removeFirst()
+        if defersEstimateGasCompletions {
+            pendingEstimateGasCompletions.append {
+                completion(result)
+            }
+        } else {
+            completion(result)
+        }
+    }
+
+    func sendRawTransaction(
+        endpoint: EthereumRPCEndpoint,
+        signedTxData: String,
+        completion: @escaping (Result<String, Swift.Error>) -> Void
+    ) {
+        completion(.failure(StubError.expected))
+    }
+
+    func completeNextEstimateGas() {
+        guard !pendingEstimateGasCompletions.isEmpty else { return }
+        pendingEstimateGasCompletions.removeFirst()()
+    }
+
+    private func deliver(
+        _ result: Result<String, Swift.Error>,
+        count: Int,
+        after delay: TimeInterval,
+        completion: @escaping (Result<String, Swift.Error>) -> Void
+    ) {
+        let deliverResult = {
+            for _ in 0..<count {
+                completion(result)
+            }
+        }
+        if delay > 0 {
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + delay,
+                execute: deliverResult
+            )
+        } else {
+            deliverResult()
+        }
+    }
+}
+
+private final class EthereumAuthorizationProviderStub:
+    Big_Wallet.AlchemyAuthorizationProviding,
+    @unchecked Sendable {
+
+    private let lock = NSLock()
+    private let token: String?
+    private let replacementToken: String?
+    private var storedAuthorizationCallCount = 0
+    private var storedReplacementCallCount = 0
+    private var storedInvalidatedTokens = [String]()
+    private var storedInvalidationURLs = [URL]()
+
+    init(token: String? = nil, replacementToken: String? = nil) {
+        self.token = token
+        self.replacementToken = replacementToken
+    }
+
+    var authorizationCallCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedAuthorizationCallCount
+    }
+
+    var replacementCallCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedReplacementCallCount
+    }
+
+    var invalidationCallCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedInvalidatedTokens.count
+    }
+
+    var invalidatedTokens: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedInvalidatedTokens
+    }
+
+    var invalidationURLs: [URL] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedInvalidationURLs
+    }
+
+    func authorization(for url: URL) async throws -> Big_Wallet.AlchemyAuthorization? {
+        let token = recordAuthorizationCall(for: url)
+        return token.map { Big_Wallet.AlchemyAuthorization(token: $0) }
+    }
+
+    func replacementAuthorization(
+        afterUnauthorized rejected: Big_Wallet.AlchemyAuthorization,
+        for url: URL
+    ) async throws -> Big_Wallet.AlchemyAuthorization? {
+        let token = recordReplacementCall(for: url)
+        return token.map { Big_Wallet.AlchemyAuthorization(token: $0) }
+    }
+
+    func invalidateAuthorization(
+        afterUnauthorized rejected: Big_Wallet.AlchemyAuthorization,
+        for url: URL
+    ) async {
+        recordInvalidation(token: rejected.token, url: url)
+    }
+
+    private func recordAuthorizationCall(for url: URL) -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        storedAuthorizationCallCount += 1
+        return Big_Wallet.AlchemyJWTProvider.isAlchemyRPCURL(url)
+            ? token
+            : nil
+    }
+
+    private func recordReplacementCall(for url: URL) -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        storedReplacementCallCount += 1
+        return Big_Wallet.AlchemyJWTProvider.isAlchemyRPCURL(url)
+            ? replacementToken
+            : nil
+    }
+
+    private func recordInvalidation(token: String, url: URL) {
+        lock.lock()
+        defer { lock.unlock() }
+        storedInvalidatedTokens.append(token)
+        storedInvalidationURLs.append(url)
+    }
+
+}
+
+private final class SequencedEthereumAuthorizationProviderStub:
+    Big_Wallet.AlchemyAuthorizationProviding,
+    @unchecked Sendable {
+
+    private let lock = NSLock()
+    private var authorizationResults: [Result<String?, Error>]
+    private var replacementResults: [Result<String?, Error>]
+    private var storedAuthorizationCallCount = 0
+    private var storedReplacementCallCount = 0
+    private var storedInvalidatedTokens = [String]()
+    private var storedInvalidationURLs = [URL]()
+
+    init(
+        authorizations: [Result<String?, Error>],
+        replacements: [Result<String?, Error>] = []
+    ) {
+        self.authorizationResults = authorizations
+        self.replacementResults = replacements
+    }
+
+    var authorizationCallCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedAuthorizationCallCount
+    }
+
+    var replacementCallCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedReplacementCallCount
+    }
+
+    var invalidationCallCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedInvalidatedTokens.count
+    }
+
+    var invalidatedTokens: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedInvalidatedTokens
+    }
+
+    var invalidationURLs: [URL] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedInvalidationURLs
+    }
+
+    func authorization(
+        for url: URL
+    ) async throws -> Big_Wallet.AlchemyAuthorization? {
+        let result = nextAuthorizationResult()
+        return try result.get().map {
+            Big_Wallet.AlchemyAuthorization(token: $0)
+        }
+    }
+
+    func replacementAuthorization(
+        afterUnauthorized rejected: Big_Wallet.AlchemyAuthorization,
+        for url: URL
+    ) async throws -> Big_Wallet.AlchemyAuthorization? {
+        let result = nextReplacementResult()
+        return try result.get().map {
+            Big_Wallet.AlchemyAuthorization(token: $0)
+        }
+    }
+
+    func invalidateAuthorization(
+        afterUnauthorized rejected: Big_Wallet.AlchemyAuthorization,
+        for url: URL
+    ) async {
+        recordInvalidation(token: rejected.token, url: url)
+    }
+
+    private func recordInvalidation(token: String, url: URL) {
+        lock.lock()
+        defer { lock.unlock() }
+        storedInvalidatedTokens.append(token)
+        storedInvalidationURLs.append(url)
+    }
+
+    private func nextAuthorizationResult() -> Result<String?, Error> {
+        lock.lock()
+        defer { lock.unlock() }
+        storedAuthorizationCallCount += 1
+        return authorizationResults.isEmpty
+            ? .success(nil)
+            : authorizationResults.removeFirst()
+    }
+
+    private func nextReplacementResult() -> Result<String?, Error> {
+        lock.lock()
+        defer { lock.unlock() }
+        storedReplacementCallCount += 1
+        return replacementResults.isEmpty
+            ? .success(nil)
+            : replacementResults.removeFirst()
+    }
+
+}
+
 private final class GasServiceURLProtocol: URLProtocol {
 
     typealias RequestHandler = (URLRequest) throws -> (HTTPURLResponse, Data)
+    typealias ResponseErrorHandler = (HTTPURLResponse) -> Error?
 
     private static let requestHandlersLock = NSLock()
     private static var requestHandlers = [String: RequestHandler]()
+    private static var responseErrorHandlers =
+        [String: ResponseErrorHandler]()
 
     static func setRequestHandler(for url: String, handler: @escaping RequestHandler) {
         requestHandlersLock.lock()
@@ -938,6 +2800,16 @@ private final class GasServiceURLProtocol: URLProtocol {
     static func removeRequestHandler(for url: String) {
         requestHandlersLock.lock()
         requestHandlers.removeValue(forKey: url)
+        responseErrorHandlers.removeValue(forKey: url)
+        requestHandlersLock.unlock()
+    }
+
+    static func setResponseErrorHandler(
+        for url: String,
+        handler: @escaping ResponseErrorHandler
+    ) {
+        requestHandlersLock.lock()
+        responseErrorHandlers[url] = handler
         requestHandlersLock.unlock()
     }
 
@@ -946,6 +2818,16 @@ private final class GasServiceURLProtocol: URLProtocol {
         requestHandlersLock.lock()
         defer { requestHandlersLock.unlock() }
         return requestHandlers[url]
+    }
+
+    private static func responseError(
+        for request: URLRequest,
+        response: HTTPURLResponse
+    ) -> Error? {
+        guard let url = request.url?.absoluteString else { return nil }
+        requestHandlersLock.lock()
+        defer { requestHandlersLock.unlock() }
+        return responseErrorHandlers[url]?(response)
     }
 
     override class func canInit(with request: URLRequest) -> Bool {
@@ -966,13 +2848,77 @@ private final class GasServiceURLProtocol: URLProtocol {
             let (response, data) = try requestHandler(request)
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: data)
-            client?.urlProtocolDidFinishLoading(self)
+            if let error = Self.responseError(
+                for: request,
+                response: response
+            ) {
+                client?.urlProtocol(self, didFailWithError: error)
+            } else {
+                client?.urlProtocolDidFinishLoading(self)
+            }
         } catch {
             client?.urlProtocol(self, didFailWithError: error)
         }
     }
 
     override func stopLoading() {}
+}
+
+private final class HangingGasServiceURLProtocol: URLProtocol {
+
+    private static let lock = NSLock()
+    private static var onStart: (() -> Void)?
+    private static var onStop: (() -> Void)?
+    private static var storedRequestCount = 0
+
+    static var requestCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedRequestCount
+    }
+
+    static func configure(
+        onStart: @escaping () -> Void,
+        onStop: @escaping () -> Void
+    ) {
+        lock.lock()
+        self.onStart = onStart
+        self.onStop = onStop
+        storedRequestCount = 0
+        lock.unlock()
+    }
+
+    static func reset() {
+        lock.lock()
+        onStart = nil
+        onStop = nil
+        storedRequestCount = 0
+        lock.unlock()
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        Self.lock.lock()
+        Self.storedRequestCount += 1
+        let onStart = Self.onStart
+        Self.lock.unlock()
+        onStart?()
+    }
+
+    override func stopLoading() {
+        Self.lock.lock()
+        let onStop = Self.onStop
+        Self.lock.unlock()
+        onStop?()
+    }
+
 }
 
 private final class LockedCounter {
@@ -992,5 +2938,23 @@ private final class LockedCounter {
         defer { lock.unlock() }
         storedValue += 1
         return storedValue
+    }
+}
+
+private final class LockedDataRecorder {
+
+    private let lock = NSLock()
+    private var storedValues = [Data]()
+
+    var values: [Data] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedValues
+    }
+
+    func append(_ value: Data) {
+        lock.lock()
+        defer { lock.unlock() }
+        storedValues.append(value)
     }
 }

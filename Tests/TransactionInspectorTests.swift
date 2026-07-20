@@ -8,6 +8,189 @@ private typealias Vectors = WalletCoreProxyTestVectors
 
 final class TransactionInspectorTests: XCTestCase {
 
+    func testInterpretationSharesRequestAndRemovesCancelledSubscriber() {
+        let requestStarted = expectation(
+            description: "method-signature request started"
+        )
+        let firstCompletion = expectation(
+            description: "cancelled subscriber did not complete"
+        )
+        firstCompletion.isInverted = true
+        let secondCompletion = expectation(
+            description: "active subscriber completed"
+        )
+        let cachedCompletion = expectation(
+            description: "cached signature completed"
+        )
+        MethodSignatureURLProtocol.configure(
+            onStart: {
+                requestStarted.fulfill()
+            },
+            onStop: {}
+        )
+        let session = makeMethodSignatureSession()
+        let inspector = TransactionInspector(urlSession: session)
+        let firstCancellation = EthereumRequestCancellation()
+        let secondCancellation = EthereumRequestCancellation()
+        let data = "0x12345678" + abiWord("1")
+        defer {
+            session.invalidateAndCancel()
+            MethodSignatureURLProtocol.reset()
+        }
+
+        inspector.interpret(
+            data: data,
+            cancellation: firstCancellation
+        ) { _ in
+            firstCompletion.fulfill()
+        }
+        inspector.interpret(
+            data: data,
+            cancellation: secondCancellation
+        ) { result in
+            XCTAssertEqual(result, "set(uint256)\n\n1")
+            secondCompletion.fulfill()
+        }
+
+        wait(for: [requestStarted], timeout: 2)
+        firstCancellation.cancel()
+        XCTAssertEqual(MethodSignatureURLProtocol.stopLoadingCount, 0)
+        MethodSignatureURLProtocol.complete(
+            data: Data("set(uint256)".utf8)
+        )
+
+        wait(
+            for: [secondCompletion, firstCompletion],
+            timeout: 0.5
+        )
+
+        let cachedCancellation = EthereumRequestCancellation()
+        inspector.interpret(
+            data: data,
+            cancellation: cachedCancellation
+        ) { result in
+            XCTAssertEqual(result, "set(uint256)\n\n1")
+            cachedCompletion.fulfill()
+        }
+        wait(for: [cachedCompletion], timeout: 0.5)
+        XCTAssertEqual(MethodSignatureURLProtocol.requestCount, 1)
+    }
+
+    func testInterpretationCancellationStopsLastSubscriberRequest() {
+        let requestStarted = expectation(
+            description: "method-signature request started"
+        )
+        let requestStopped = expectation(
+            description: "method-signature request stopped"
+        )
+        let unexpectedCompletion = expectation(
+            description: "cancelled interpretation did not complete"
+        )
+        unexpectedCompletion.isInverted = true
+        MethodSignatureURLProtocol.configure(
+            onStart: {
+                requestStarted.fulfill()
+            },
+            onStop: {
+                requestStopped.fulfill()
+            }
+        )
+        let session = makeMethodSignatureSession()
+        let inspector = TransactionInspector(urlSession: session)
+        let cancellation = EthereumRequestCancellation()
+        defer {
+            session.invalidateAndCancel()
+            MethodSignatureURLProtocol.reset()
+        }
+
+        inspector.interpret(
+            data: "0x87654321" + abiWord("1"),
+            cancellation: cancellation
+        ) { _ in
+            unexpectedCompletion.fulfill()
+        }
+
+        wait(for: [requestStarted], timeout: 2)
+        cancellation.cancel()
+        wait(
+            for: [requestStopped, unexpectedCompletion],
+            timeout: 0.5
+        )
+        XCTAssertEqual(MethodSignatureURLProtocol.requestCount, 1)
+        XCTAssertEqual(MethodSignatureURLProtocol.stopLoadingCount, 1)
+    }
+
+    func testCancellationDoesNotWaitForDecodingAndSuppressesCompletion() {
+        let requestStarted = expectation(
+            description: "method-signature request started"
+        )
+        let decoderStarted = expectation(
+            description: "decoder started"
+        )
+        let decoderFinished = expectation(
+            description: "decoder finished"
+        )
+        let cancellationStarted = expectation(
+            description: "cancellation started"
+        )
+        let cancellationFinished = expectation(
+            description: "cancellation finished before decoder"
+        )
+        let unexpectedCompletion = expectation(
+            description: "cancelled interpretation did not complete"
+        )
+        unexpectedCompletion.isInverted = true
+        let releaseDecoder = DispatchSemaphore(value: 0)
+        MethodSignatureURLProtocol.configure(
+            onStart: {
+                requestStarted.fulfill()
+            },
+            onStop: {}
+        )
+        let session = makeMethodSignatureSession()
+        let inspector = TransactionInspector(
+            urlSession: session
+        ) { _, _, _ in
+            decoderStarted.fulfill()
+            releaseDecoder.wait()
+            decoderFinished.fulfill()
+            return "decoded"
+        }
+        let cancellation = EthereumRequestCancellation()
+        defer {
+            releaseDecoder.signal()
+            session.invalidateAndCancel()
+            MethodSignatureURLProtocol.reset()
+        }
+
+        inspector.interpret(
+            data: "0x12345678" + abiWord("1"),
+            cancellation: cancellation
+        ) { _ in
+            unexpectedCompletion.fulfill()
+        }
+
+        wait(for: [requestStarted], timeout: 2)
+        MethodSignatureURLProtocol.complete(
+            data: Data("set(uint256)".utf8)
+        )
+        wait(for: [decoderStarted], timeout: 2)
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            cancellationStarted.fulfill()
+            cancellation.cancel()
+            cancellationFinished.fulfill()
+        }
+        wait(for: [cancellationStarted], timeout: 2)
+        wait(for: [cancellationFinished], timeout: 2)
+
+        releaseDecoder.signal()
+        wait(
+            for: [decoderFinished, unexpectedCompletion],
+            timeout: 0.5
+        )
+    }
+
     func testEthereumPreparationDoesNotInspectContractCreationInitcode() {
         let contractCreation = Transaction(from: "0x0000000000000000000000000000000000000001",
                                            to: "",
@@ -112,6 +295,12 @@ final class TransactionInspectorTests: XCTestCase {
 
 }
 
+private func makeMethodSignatureSession() -> URLSession {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [MethodSignatureURLProtocol.self]
+    return URLSession(configuration: configuration)
+}
+
 private func abiWord(_ hex: String) -> String {
     precondition(hex.count <= 64)
     return String(repeating: "0", count: 64 - hex.count) + hex
@@ -121,4 +310,110 @@ private func abiBytes(_ hex: String) -> String {
     precondition(hex.count.isMultiple(of: 2))
     let padding = (64 - hex.count % 64) % 64
     return hex + String(repeating: "0", count: padding)
+}
+
+private final class MethodSignatureURLProtocol: URLProtocol {
+
+    private static let lock = NSLock()
+    private static var activeRequests =
+        [ObjectIdentifier: MethodSignatureURLProtocol]()
+    private static var onStart: (() -> Void)?
+    private static var onStop: (() -> Void)?
+    private static var storedRequestCount = 0
+    private static var storedStopLoadingCount = 0
+
+    static var requestCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedRequestCount
+    }
+
+    static var stopLoadingCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedStopLoadingCount
+    }
+
+    static func configure(
+        onStart: @escaping () -> Void,
+        onStop: @escaping () -> Void
+    ) {
+        lock.lock()
+        activeRequests.removeAll()
+        self.onStart = onStart
+        self.onStop = onStop
+        storedRequestCount = 0
+        storedStopLoadingCount = 0
+        lock.unlock()
+    }
+
+    static func complete(data: Data) {
+        lock.lock()
+        let requests = Array(activeRequests.values)
+        activeRequests.removeAll()
+        lock.unlock()
+
+        for request in requests {
+            guard let url = request.request.url,
+                  let response = HTTPURLResponse(
+                    url: url,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: nil
+                  ) else {
+                continue
+            }
+            request.client?.urlProtocol(
+                request,
+                didReceive: response,
+                cacheStoragePolicy: .notAllowed
+            )
+            request.client?.urlProtocol(request, didLoad: data)
+            request.client?.urlProtocolDidFinishLoading(request)
+        }
+    }
+
+    static func reset() {
+        lock.lock()
+        activeRequests.removeAll()
+        onStart = nil
+        onStop = nil
+        storedRequestCount = 0
+        storedStopLoadingCount = 0
+        lock.unlock()
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(
+        for request: URLRequest
+    ) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        Self.lock.lock()
+        Self.activeRequests[ObjectIdentifier(self)] = self
+        Self.storedRequestCount += 1
+        let onStart = Self.onStart
+        Self.lock.unlock()
+        onStart?()
+    }
+
+    override func stopLoading() {
+        Self.lock.lock()
+        let didRemove =
+            Self.activeRequests.removeValue(
+                forKey: ObjectIdentifier(self)
+            ) != nil
+        if didRemove {
+            Self.storedStopLoadingCount += 1
+        }
+        let onStop = didRemove ? Self.onStop : nil
+        Self.lock.unlock()
+        onStop?()
+    }
+
 }

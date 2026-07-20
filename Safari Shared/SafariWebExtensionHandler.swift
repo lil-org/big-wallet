@@ -29,6 +29,13 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 } else {
                     context.cancelRequest(withError: HandlerError.empty)
                 }
+            case .prewarmAlchemy:
+                prewarmAlchemy(
+                    id: id,
+                    provider: internalSafariRequest.provider,
+                    chainId: internalSafariRequest.chainId,
+                    context: context
+                )
             case .getResponse:
                 if let response = ExtensionBridge.getResponse(id: id) {
                     ExtensionBridge.removeResponse(id: id)
@@ -71,6 +78,26 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         }
     }
 
+    private func prewarmAlchemy(
+        id: Int,
+        provider: InpageProvider?,
+        chainId: String?,
+        context: NSExtensionContext
+    ) {
+        guard SafariAlchemyPrewarmPolicy.allowsPrewarm(
+            provider: provider,
+            chainId: chainId
+        ) else {
+            Self.respond(with: ["id": id], context: context)
+            return
+        }
+
+        Task(priority: .utility) {
+            await AlchemyJWTProvider.shared.prewarmForImmediateUse()
+            Self.respond(with: ["id": id], context: context)
+        }
+    }
+
     private func appRequestQuery(from message: Any) -> String? {
         let message = messageWithAmbientAgentInfo(message)
         guard let data = try? JSONSerialization.data(withJSONObject: message, options: []) else { return nil }
@@ -94,13 +121,18 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     
     private func rpcRequest(id: Int, chainId: String, body: String, context: NSExtensionContext) {
         guard let chainIdNumber = Int(hexString: chainId),
-              let url = Nodes.url(chainId: chainIdNumber),
+              let resolvedNetwork = Nodes.resolution(
+                  chainId: chainIdNumber
+              ).resolvedNetwork,
               let httpBody = body.data(using: .utf8) else {
             Self.respond(with: ["id": id, "error": "something went wrong"], context: context)
             return
         }
 
-        Self.rpcClient.send(url: url, body: httpBody) { response in
+        Self.rpcClient.send(
+            endpoint: resolvedNetwork.rpcEndpoint,
+            body: httpBody
+        ) { response in
             if var json = response {
                 if json["id"] == nil { json["id"] = id }
                 Self.respond(with: json, context: context)

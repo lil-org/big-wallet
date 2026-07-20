@@ -4,7 +4,8 @@
     "description": "inpage provider",
     "main": "index.js",
     "scripts": {
-        "build": "esbuild index.js --bundle --minify --target=safari15 --format=iife --outfile=../Resources/inpage.js"
+        "build": "esbuild index.js --bundle --minify --target=safari15 --format=iife --outfile=../Resources/inpage.js",
+        "test": "node --test ../Tests/*.test.mjs"
     },
     "repository": {
         "type": "git",
