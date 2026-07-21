@@ -8,9 +8,15 @@ private var adaptiveLargeTitleAdditionalSafeAreaTopKey: UInt8 = 0
 fileprivate final class AdaptiveLargeTitleHeaderView: UIView {
 
     private enum Constants {
+#if os(visionOS)
+        // Keep visionOS titles below the navigation material, with enough space
+        // to avoid feeling pinned to its lower edge.
+        static let topInset: CGFloat = 8
+#else
+        static let topInset: CGFloat = 0
+#endif
+        static let bottomInset: CGFloat = 11
         static let horizontalInset: CGFloat = 20
-        static let topInset: CGFloat = 18
-        static let bottomInset: CGFloat = 10
         static let baseFontSize: CGFloat = 34
         static let minimumFontScale: CGFloat = 0.72
         static let preferredMaximumNumberOfLines = 2
@@ -24,13 +30,13 @@ fileprivate final class AdaptiveLargeTitleHeaderView: UIView {
 
     private struct LayoutCache {
         let title: String
-        let containerWidth: CGFloat
+        let availableWidth: CGFloat
         let contentSizeCategory: UIContentSizeCategory
         let layout: TitleLayout
 
-        func matches(title: String, containerWidth: CGFloat, contentSizeCategory: UIContentSizeCategory) -> Bool {
+        func matches(title: String, availableWidth: CGFloat, contentSizeCategory: UIContentSizeCategory) -> Bool {
             return self.title == title &&
-                abs(self.containerWidth - containerWidth) <= 0.5 &&
+                abs(self.availableWidth - availableWidth) <= 0.5 &&
                 self.contentSizeCategory == contentSizeCategory
         }
     }
@@ -50,8 +56,11 @@ fileprivate final class AdaptiveLargeTitleHeaderView: UIView {
     }
 
     func update(title: String, width: CGFloat) -> CGFloat {
+        let availableWidth = max(0, width - Constants.horizontalInset * 2)
         let contentSizeCategory = traitCollection.preferredContentSizeCategory
-        let layout = cachedLayout(for: title, containerWidth: width, contentSizeCategory: contentSizeCategory)
+        let layout = cachedLayout(for: title,
+                                  availableWidth: availableWidth,
+                                  contentSizeCategory: contentSizeCategory)
         titleLabel.text = title
         titleLabel.font = layout.font
         titleLabel.lineBreakMode = layout.lineBreakMode
@@ -83,59 +92,53 @@ fileprivate final class AdaptiveLargeTitleHeaderView: UIView {
     }
 
     private func cachedLayout(for title: String,
-                              containerWidth: CGFloat,
+                              availableWidth: CGFloat,
                               contentSizeCategory: UIContentSizeCategory) -> TitleLayout {
         if let layoutCache,
            layoutCache.matches(title: title,
-                               containerWidth: containerWidth,
+                               availableWidth: availableWidth,
                                contentSizeCategory: contentSizeCategory) {
             return layoutCache.layout
         }
 
         let layout = Self.fittingLayout(for: title,
-                                        containerWidth: containerWidth,
+                                        availableWidth: availableWidth,
                                         compatibleWith: traitCollection)
         layoutCache = LayoutCache(title: title,
-                                  containerWidth: containerWidth,
+                                  availableWidth: availableWidth,
                                   contentSizeCategory: contentSizeCategory,
                                   layout: layout)
         return layout
     }
 
-    private static func contentWidth(for containerWidth: CGFloat) -> CGFloat {
-        return max(0, containerWidth - Constants.horizontalInset * 2)
-    }
-
     private static func height(for title: String,
-                               containerWidth: CGFloat,
+                               availableWidth: CGFloat,
                                font: UIFont,
                                lineBreakMode: NSLineBreakMode) -> CGFloat {
-        let availableTitleWidth = contentWidth(for: containerWidth)
         let textHeight = textBounds(for: title,
-                                    width: availableTitleWidth,
+                                    width: availableWidth,
                                     font: font,
                                     lineBreakMode: lineBreakMode).height
         return ceil(Constants.topInset + max(textHeight, font.lineHeight) + Constants.bottomInset)
     }
 
     private static func fittingLayout(for title: String,
-                                      containerWidth: CGFloat,
+                                      availableWidth: CGFloat,
                                       compatibleWith traitCollection: UITraitCollection) -> TitleLayout {
-        let availableTitleWidth = contentWidth(for: containerWidth)
         let minimumBaseSize = Constants.baseFontSize * Constants.minimumFontScale
         var baseSize = Constants.baseFontSize
 
         while baseSize > minimumBaseSize {
             let font = largeTitleFont(baseSize: baseSize, compatibleWith: traitCollection)
             if titleFits(title,
-                         width: availableTitleWidth,
+                         width: availableWidth,
                          font: font,
                          lineBreakMode: .byWordWrapping,
                          maximumNumberOfLines: Constants.preferredMaximumNumberOfLines) {
                 return TitleLayout(font: font,
                                    lineBreakMode: .byWordWrapping,
                                    height: height(for: title,
-                                                  containerWidth: containerWidth,
+                                                  availableWidth: availableWidth,
                                                   font: font,
                                                   lineBreakMode: .byWordWrapping))
             }
@@ -144,14 +147,14 @@ fileprivate final class AdaptiveLargeTitleHeaderView: UIView {
 
         let font = largeTitleFont(baseSize: minimumBaseSize, compatibleWith: traitCollection)
         let lineBreakMode: NSLineBreakMode = titleFits(title,
-                                                       width: availableTitleWidth,
+                                                       width: availableWidth,
                                                        font: font,
                                                        lineBreakMode: .byWordWrapping,
                                                        maximumNumberOfLines: nil) ? .byWordWrapping : .byCharWrapping
         return TitleLayout(font: font,
                            lineBreakMode: lineBreakMode,
                            height: height(for: title,
-                                          containerWidth: containerWidth,
+                                          availableWidth: availableWidth,
                                           font: font,
                                           lineBreakMode: lineBreakMode))
     }
@@ -201,6 +204,7 @@ fileprivate final class AdaptiveLargeTitleTableHeaderView: UIView {
 
     private let titleHeaderView = AdaptiveLargeTitleHeaderView()
     private var accessoryView: UIView?
+    fileprivate var compensatedAutomaticTopInset: CGFloat = 0
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -214,10 +218,12 @@ fileprivate final class AdaptiveLargeTitleTableHeaderView: UIView {
 
     func update(title: String,
                 width: CGFloat,
+                titleTopInset: CGFloat,
                 accessoryView: UIView?,
                 accessoryInsets: UIEdgeInsets) -> CGFloat {
         let titleHeight = titleHeaderView.update(title: title, width: width)
-        titleHeaderView.frame = CGRect(x: 0, y: 0, width: width, height: titleHeight)
+        let titleAreaHeight = titleTopInset + titleHeight
+        titleHeaderView.frame = CGRect(x: 0, y: titleTopInset, width: width, height: titleHeight)
 
         updateAccessoryView(accessoryView)
 
@@ -226,7 +232,7 @@ fileprivate final class AdaptiveLargeTitleTableHeaderView: UIView {
             let availableWidth = max(0, width - accessoryInsets.left - accessoryInsets.right)
             let fittingHeight = Self.fittingHeight(for: accessoryView, width: availableWidth)
             accessoryView.frame = CGRect(x: accessoryInsets.left,
-                                         y: titleHeight + accessoryInsets.top,
+                                         y: titleAreaHeight + accessoryInsets.top,
                                          width: availableWidth,
                                          height: fittingHeight)
             accessoryHeight = accessoryInsets.top + fittingHeight + accessoryInsets.bottom
@@ -234,7 +240,7 @@ fileprivate final class AdaptiveLargeTitleTableHeaderView: UIView {
             accessoryHeight = 0
         }
 
-        let height = titleHeight + accessoryHeight
+        let height = titleAreaHeight + accessoryHeight
         frame = CGRect(x: 0, y: 0, width: width, height: height)
         return height
     }
@@ -336,8 +342,19 @@ extension UIViewController {
 
         let currentFrame = currentHeaderView?.frame ?? .zero
         let headerView = (currentHeaderView as? AdaptiveLargeTitleTableHeaderView) ?? AdaptiveLargeTitleTableHeaderView()
+        let topSafeAreaHeight = max(0, view.safeAreaInsets.top)
+        // Move UIKit's automatic top adjustment into the scrolling header. This
+        // keeps the title below navigation material without stacking both insets.
+        let automaticTopInset = tableView.adjustedContentInset.top - tableView.contentInset.top
+        let externalTopInset = tableView.contentInset.top + headerView.compensatedAutomaticTopInset
+        let desiredTopInset = externalTopInset - automaticTopInset
+        if abs(tableView.contentInset.top - desiredTopInset) > 0.5 {
+            tableView.contentInset.top = desiredTopInset
+        }
+        headerView.compensatedAutomaticTopInset = automaticTopInset
         let height = headerView.update(title: title,
                                        width: width,
+                                       titleTopInset: topSafeAreaHeight,
                                        accessoryView: accessoryView,
                                        accessoryInsets: accessoryInsets)
         let needsUpdate = currentHeaderView !== headerView ||
