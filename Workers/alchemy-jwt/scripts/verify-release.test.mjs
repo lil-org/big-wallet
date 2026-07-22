@@ -204,7 +204,7 @@ test("remote settings use only the fixed read-only Cloudflare API request", asyn
   let observedInit;
   const result = await readRemoteScriptSettings({
     accountId: ACCOUNT_ID,
-    workerName: "big-wallet-alchemy-jwt",
+    workerName: "alchemy-jwt-proxy",
     apiToken: "scoped-token",
     fetchImplementation: async (url, init) => {
       observedURL = new URL(url);
@@ -217,7 +217,7 @@ test("remote settings use only the fixed read-only Cloudflare API request", asyn
   });
   assert.equal(
     observedURL.href,
-    `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/workers/scripts/big-wallet-alchemy-jwt/script-settings`,
+    `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/workers/scripts/alchemy-jwt-proxy/script-settings`,
   );
   assert.equal(observedInit.method, "GET");
   assert.equal(observedInit.redirect, "error");
@@ -227,7 +227,7 @@ test("remote settings use only the fixed read-only Cloudflare API request", asyn
   await assert.rejects(
     readRemoteScriptSettings({
       accountId: ACCOUNT_ID,
-      workerName: "big-wallet-alchemy-jwt",
+      workerName: "alchemy-jwt-proxy",
       apiToken: "scoped-token",
       fetchImplementation: async () => new Response(null, { status: 403 }),
     }),
@@ -242,7 +242,7 @@ test("release verification checks status and settings before live probes", async
   const result = await executeReleaseVerification(OPTIONS, {
     parentEnvironment: { CLOUDFLARE_API_TOKEN: "scoped-token" },
     contractLoader: async () => ({
-      workerName: "big-wallet-alchemy-jwt",
+      workerName: "alchemy-jwt-proxy",
       accountId: ACCOUNT_ID,
     }),
     snapshotFactory: async () => snapshot(() => events.push("cleanup")),
@@ -260,7 +260,7 @@ test("release verification checks status and settings before live probes", async
         `--config=${WORKER_DIRECTORY}/wrangler.jsonc`,
         "--env-file=/protected/release/empty.env",
         "--env=",
-        "--name=big-wallet-alchemy-jwt",
+        "--name=alchemy-jwt-proxy",
       ]);
       assert.equal(workingDirectory, WORKER_DIRECTORY);
       assert.equal(parentEnvironment.CLOUDFLARE_API_TOKEN, "scoped-token");
@@ -269,7 +269,7 @@ test("release verification checks status and settings before live probes", async
     scriptSettingsReader: async ({ accountId, workerName, apiToken }) => {
       events.push("settings");
       assert.equal(accountId, ACCOUNT_ID);
-      assert.equal(workerName, "big-wallet-alchemy-jwt");
+      assert.equal(workerName, "alchemy-jwt-proxy");
       assert.equal(apiToken, "scoped-token");
       return settingsEnvelope();
     },
@@ -289,7 +289,7 @@ test("deployment mismatch blocks public probes", async () => {
     executeReleaseVerification(OPTIONS, {
       parentEnvironment: { CLOUDFLARE_API_TOKEN: "scoped-token" },
       contractLoader: async () => ({
-        workerName: "big-wallet-alchemy-jwt",
+        workerName: "alchemy-jwt-proxy",
         accountId: ACCOUNT_ID,
       }),
       snapshotFactory: async () => snapshot(),
@@ -315,7 +315,7 @@ test("remote settings API failure blocks public probes", async () => {
     executeReleaseVerification(OPTIONS, {
       parentEnvironment: { CLOUDFLARE_API_TOKEN: "scoped-token" },
       contractLoader: async () => ({
-        workerName: "big-wallet-alchemy-jwt",
+        workerName: "alchemy-jwt-proxy",
         accountId: ACCOUNT_ID,
       }),
       snapshotFactory: async () => snapshot(),

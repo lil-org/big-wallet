@@ -112,7 +112,7 @@ test("Worker names follow the production 1-63 character contract", () => {
 
 test("production configuration derives the checked-in Worker name", async () => {
   const contract = await loadProductionWranglerContract();
-  assert.equal(contract.workerName, "big-wallet-alchemy-jwt");
+  assert.equal(contract.workerName, "alchemy-jwt-proxy");
   assert.equal(contract.accountId, "e25f90fc073ea309b54b8b5144bf28e0");
   assert.match(contract.configPath, /\/wrangler\.jsonc$/u);
   assert.deepEqual(
@@ -273,7 +273,7 @@ test("the production invocation rejects configuration overrides", () => {
     () => productionWranglerArguments({
       commandArguments: ["versions", "list"],
       configPath: "/tmp/attacker.jsonc",
-      workerName: "big-wallet-alchemy-jwt",
+      workerName: "alchemy-jwt-proxy",
       emptyEnvironmentPath: "/protected/empty.env",
     }),
     SafeProductionWranglerError,
@@ -282,7 +282,7 @@ test("the production invocation rejects configuration overrides", () => {
     () => productionWranglerArguments({
       commandArguments: ["versions", "list", "--profile=attacker"],
       configPath: SNAPSHOT_CONFIG_PATH,
-      workerName: "big-wallet-alchemy-jwt",
+      workerName: "alchemy-jwt-proxy",
       emptyEnvironmentPath: SNAPSHOT_ENVIRONMENT_PATH,
     }),
     SafeProductionWranglerError,
@@ -487,7 +487,7 @@ test("deployment drift and malformed status block the mutation runner", async ()
       executeRollout(options, {
         contractLoader: async () => ({
           configPath: PRODUCTION_WRANGLER_CONFIG_PATH,
-          workerName: "big-wallet-alchemy-jwt",
+          workerName: "alchemy-jwt-proxy",
         }),
         snapshotFactory: async () => fixedSnapshot(async () => {
           cleanupCalls += 1;
@@ -508,7 +508,7 @@ test("deployment drift and malformed status block the mutation runner", async ()
     executeRollout(options, {
       contractLoader: async () => ({
         configPath: PRODUCTION_WRANGLER_CONFIG_PATH,
-        workerName: "big-wallet-alchemy-jwt",
+        workerName: "alchemy-jwt-proxy",
       }),
       snapshotFactory: async () => fixedSnapshot(async () => {
         cleanupCalls += 1;
@@ -549,7 +549,7 @@ test("deploy checks exact status immediately before mutation", async () => {
     {
       contractLoader: async () => ({
         configPath: PRODUCTION_WRANGLER_CONFIG_PATH,
-        workerName: "big-wallet-alchemy-jwt",
+        workerName: "alchemy-jwt-proxy",
       }),
       snapshotFactory: async () => snapshot,
       deploymentStatusRunner: async (invocation) => {
@@ -585,7 +585,7 @@ test("deploy checks exact status immediately before mutation", async () => {
       `--config=${SNAPSHOT_CONFIG_PATH}`,
       `--env-file=${SNAPSHOT_ENVIRONMENT_PATH}`,
       "--env=",
-      "--name=big-wallet-alchemy-jwt",
+      "--name=alchemy-jwt-proxy",
     ],
     workingDirectory: SNAPSHOT_WORKER_DIRECTORY,
   }]);
@@ -599,7 +599,7 @@ test("deploy checks exact status immediately before mutation", async () => {
       `--config=${SNAPSHOT_CONFIG_PATH}`,
       `--env-file=${SNAPSHOT_ENVIRONMENT_PATH}`,
       "--env=",
-      "--name=big-wallet-alchemy-jwt",
+      "--name=alchemy-jwt-proxy",
       "--yes",
     ],
     workingDirectory: SNAPSHOT_WORKER_DIRECTORY,
@@ -621,7 +621,7 @@ test("rollout injects the protected snapshot and cleans it", async () => {
     {
       contractLoader: async () => ({
         configPath: PRODUCTION_WRANGLER_CONFIG_PATH,
-        workerName: "big-wallet-alchemy-jwt",
+        workerName: "alchemy-jwt-proxy",
       }),
       snapshotFactory: async () => fixedSnapshot(
         async () => {
@@ -649,7 +649,7 @@ test("rollout injects the protected snapshot and cleans it", async () => {
       `--config=${SNAPSHOT_CONFIG_PATH}`,
       `--env-file=${SNAPSHOT_ENVIRONMENT_PATH}`,
       "--env=",
-      "--name=big-wallet-alchemy-jwt",
+      "--name=alchemy-jwt-proxy",
       "--yes",
     ],
     workingDirectory: SNAPSHOT_WORKER_DIRECTORY,
@@ -662,7 +662,7 @@ test("rollout list commands emit only their fixed Wrangler vectors", async () =>
   const dependencies = {
     contractLoader: async () => ({
       configPath: PRODUCTION_WRANGLER_CONFIG_PATH,
-      workerName: "big-wallet-alchemy-jwt",
+      workerName: "alchemy-jwt-proxy",
     }),
     snapshotFactory: async () => fixedSnapshot(),
     runner: async (invocation) => invocations.push(invocation.arguments_),
@@ -685,7 +685,7 @@ test("rollout list commands emit only their fixed Wrangler vectors", async () =>
     `--config=${SNAPSHOT_CONFIG_PATH}`,
     `--env-file=${SNAPSHOT_ENVIRONMENT_PATH}`,
     "--env=",
-    "--name=big-wallet-alchemy-jwt",
+    "--name=alchemy-jwt-proxy",
   ];
   assert.deepEqual(invocations, [
     [PINNED_WRANGLER_PATH, "deployments", "list", ...fixedTail],
@@ -701,7 +701,7 @@ test("settings check uses only the fixed Worker and account", async () => {
     {
       contractLoader: async () => ({
         accountId: "e25f90fc073ea309b54b8b5144bf28e0",
-        workerName: "big-wallet-alchemy-jwt",
+        workerName: "alchemy-jwt-proxy",
       }),
       snapshotFactory: async () => {
         throw new Error("settings check must not create a rollout snapshot");
@@ -721,7 +721,7 @@ test("settings check uses only the fixed Worker and account", async () => {
 
   assert.deepEqual(calls, [{
     accountId: "e25f90fc073ea309b54b8b5144bf28e0",
-    workerName: "big-wallet-alchemy-jwt",
+    workerName: "alchemy-jwt-proxy",
     apiToken: "scoped-token",
   }]);
   assert.deepEqual(result, { settingsChecked: true });
@@ -901,7 +901,7 @@ test("the pinned runner strips redirecting environment inputs", async () => {
     arguments_: productionWranglerArguments({
       commandArguments: ["versions", "list"],
       configPath: SNAPSHOT_CONFIG_PATH,
-      workerName: "big-wallet-alchemy-jwt",
+      workerName: "alchemy-jwt-proxy",
       emptyEnvironmentPath: SNAPSHOT_ENVIRONMENT_PATH,
     }),
     workingDirectory: SNAPSHOT_WORKER_DIRECTORY,

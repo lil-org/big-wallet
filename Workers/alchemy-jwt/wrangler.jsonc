@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "big-wallet-alchemy-jwt",
+  "name": "alchemy-jwt-proxy",
   "account_id": "e25f90fc073ea309b54b8b5144bf28e0",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-18",

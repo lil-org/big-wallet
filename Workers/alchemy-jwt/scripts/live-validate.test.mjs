@@ -113,7 +113,7 @@ function jwtPayload(kid = KID, ttlSeconds = 21_600) {
 
 test("live CLI parses exact version attestation and bounded retry options", () => {
   const defaults = parseArguments([]);
-  assert.equal(defaults.workerName, "big-wallet-alchemy-jwt");
+  assert.equal(defaults.workerName, "alchemy-jwt-proxy");
   const options = parseArguments([
     "--expected-kid",
     KID,
@@ -378,7 +378,7 @@ test("live contract sends signed stale, future, and malformed nonce probes", asy
       expectedVersion: VERSION,
       timeoutMs: 1_000,
       versionOverride: false,
-      workerName: "big-wallet-alchemy-jwt",
+      workerName: "alchemy-jwt-proxy",
     },
     key,
     {
