@@ -27,6 +27,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func sceneWillEnterForeground(_ scene: UIScene) {
         AlchemyJWTProvider.prewarmForApplicationLifecycle()
+        WalletsManager.shared.handleExternalWalletStoreChange()
     }
     
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {

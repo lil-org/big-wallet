@@ -66,7 +66,9 @@ final class WalletsManager: NSObject {
     private static let previewAccountsPageSize = 11
     private static let solanaBase58SecretKeyLengthRange = 32...88
     private static let maxSolanaSecretKeyByteArrayStringLength = 1024
-    private let keychain = Keychain.shared
+    private let keychain: Keychain
+    private let reloadMetadata: () -> Void
+    private let publishLocalChange: () -> Void
     private let defaultCoin = WalletCoin.ethereum
     private let defaultMnemonicCoinDerivations: [(coin: WalletCoin, derivation: WalletDerivation)] = [
         (.ethereum, .default),
@@ -77,12 +79,36 @@ final class WalletsManager: NSObject {
     private var isObservingExternalChanges = false
 
     private override init() {
+        keychain = .shared
+        reloadMetadata = WalletsMetadataService.reload
+        publishLocalChange = WalletStoreSync.postLocalChange
         super.init()
     }
 
-    func start() {
-        reloadWalletsFromKeychain()
+    init(
+        keychain: Keychain,
+        reloadMetadata: @escaping () -> Void = {},
+        publishLocalChange: (() -> Void)? = nil
+    ) {
+        self.keychain = keychain
+        self.reloadMetadata = reloadMetadata
+        self.publishLocalChange = publishLocalChange ?? WalletStoreSync.postLocalChange
+        super.init()
+    }
+
+    @discardableResult
+    func start() -> Bool {
         startObservingExternalChanges()
+        return reloadFromStore()
+    }
+
+    // For hosts that get no external-change notification — the Safari extension outside macOS —
+    // and so have to ask rather than be told.
+    @discardableResult
+    func reloadFromStore() -> Bool {
+        guard reloadWalletsFromKeychain() else { return false }
+        reloadMetadata()
+        return true
     }
 
     func validateWalletInput(_ input: String) -> InputValidationResult {
@@ -518,13 +544,40 @@ final class WalletsManager: NSObject {
         postWalletsChangedNotification()
     }
 
-    private func reloadWalletsFromKeychain() {
-        wallets = keychain.getAllWalletsIds().compactMap { currentWallet(id: $0) }
+    private func reloadWalletsFromKeychain() -> Bool {
+        do {
+            let walletIDs = try keychain.readAllWalletIDs()
+            var loaded = [WalletContainer]()
+            loaded.reserveCapacity(walletIDs.count)
+            for id in walletIDs {
+                guard let data = try keychain.readWalletData(id: id),
+                      let wallet = walletContainer(id: id, data: data) else { continue }
+                loaded.append(wallet)
+            }
+            wallets = loaded
+            return true
+        } catch {
+            return false
+        }
     }
 
     func currentWallet(id: String) -> WalletContainer? {
-        guard let data = keychain.getWalletData(id: id), let key = WalletStoredKey.importJSON(json: data) else { return nil }
+        guard let data = keychain.getWalletData(id: id) else { return nil }
+        return walletContainer(id: id, data: data)
+    }
+
+    private func walletContainer(id: String, data: Data) -> WalletContainer? {
+        guard let key = WalletStoredKey.importJSON(json: data) else { return nil }
         return WalletContainer(id: id, key: key)
+    }
+
+    private static func accountMatches(
+        _ account: WalletAccount,
+        coin: WalletCoin,
+        normalizedAddress: String
+    ) -> Bool {
+        return account.coin == coin &&
+            coin.normalizedAddress(account.address) == normalizedAddress
     }
 
     func update(wallet: WalletContainer, enabledAccounts: [WalletAccount]) throws {
@@ -595,10 +648,13 @@ final class WalletsManager: NSObject {
     @objc private func externalWalletStoreChanged(_ notification: Notification) {
         guard WalletStoreSync.isExternalChange(notification) else { return }
         DispatchQueue.main.async { [weak self] in
-            self?.reloadWalletsFromKeychain()
-            WalletsMetadataService.reload()
-            WalletStoreSync.postLocalChange()
+            self?.handleExternalWalletStoreChange()
         }
+    }
+
+    func handleExternalWalletStoreChange() {
+        guard reloadFromStore() else { return }
+        publishLocalChange()
     }
 
     private let defaultWalletName = ""
@@ -687,7 +743,7 @@ final class WalletsManager: NSObject {
 extension WalletsManager {
 
     func getPrivateKey(walletId: String, account: WalletAccount) -> WalletPrivateKey? {
-        guard let password = Keychain.shared.password,
+        guard let password = keychain.password,
               let wallet = currentWallet(id: walletId)
         else { return nil }
         guard wallet.hasAccountMatching(account) else { return nil }
@@ -697,9 +753,12 @@ extension WalletsManager {
     func getWalletAndAccount(coin: WalletCoin, address: String) -> (WalletContainer, WalletAccount)? {
         let normalizedAddress = coin.normalizedAddress(address)
         for wallet in wallets {
-            for account in wallet.accounts where account.coin == coin {
-                let match = coin.normalizedAddress(account.address) == normalizedAddress
-                if match {
+            for account in wallet.accounts {
+                if Self.accountMatches(
+                    account,
+                    coin: coin,
+                    normalizedAddress: normalizedAddress
+                ) {
                     return (wallet, account)
                 }
             }
