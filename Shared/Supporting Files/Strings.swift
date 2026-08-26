@@ -33,7 +33,6 @@ struct Strings {
     static let copyAddress = loc("Copy Address")
     static let viewOn = loc("View on")
     static let viewOnSolanaExplorer = loc("View on Solana explorer")
-    static let testnets = loc("Testnets")
     static let backUpNewWallet = loc("Back up new wallet")
     static let youWillSeeSecretWords = loc("You will see 12 secret words")
     static let removedWalletsCantBeRecovered = loc("Removed wallets can't be recovered")
@@ -45,8 +44,6 @@ struct Strings {
     static let canceled = loc("Canceled")
     static let failedToVerify = loc("Failed to verify")
     static let wallets = loc("Wallets")
-    static let selectAccount = loc("Select Account")
-    static let selectNetwork = loc("Select Network")
     static let importWallet = loc("Import Wallet")
     static let addWallet = loc("Add Wallet")
     static let createNew = loc("Create New")
@@ -64,7 +61,6 @@ struct Strings {
     static let refresh = loc("Refresh")
     static let nothingHere = loc("Nothing here")
     static let typeAtLeast = loc("Type at least 4 characters")
-    static let unknownWebsite = loc("Unknown Website")
     static let calculating = loc("Calculating")
     static let approveTransaction = loc("Approve Transaction")
     static let multicoinWallet = loc("Multicoin Wallet")
@@ -72,8 +68,6 @@ struct Strings {
     static let editAccounts = loc("Edit Accounts")
     static let removingTheLastAccount = loc("Removing the last account removes the wallet as well")
     static let data = loc("Data")
-    static let sendingTransaction = loc("Sending transaction")
-    static let disconnect = loc("Disconnect")
     static let switchAccount = loc("Switch Account")
     static let rawSolanaTransactionWarning = loc("Raw Solana transaction. Big Wallet cannot display decoded instructions for this request. Only approve if you trust this website and expected this transaction.")
     static let suggestedByWebsite = loc("Suggested by website")
@@ -81,26 +75,16 @@ struct Strings {
     static let publicRPC = loc("Public RPC")
     static let solanaBlockhashNotFound = loc("Solana blockhash not found. Check the selected network and try again.")
     static let solanaConfirmationTimedOut = loc("Solana transaction was sent, but confirmation timed out.")
+    static let transactionSubmissionStatusUnknown = loc("Transaction submission status is unknown. Check the transaction ID before trying again.")
     static let unsupportedSolanaSendOptions = loc("Unsupported Solana send options")
+    static let privateBrowsingUnsupported = loc("Big Wallet requests are unavailable in Private Browsing.")
     static let unrecognizedChainId = loc("Unrecognized chain ID")
     static let providerNotReady = loc("provider is not ready")
-    static let addAccountToConnect = loc("Add %@ account to connect")
-    static let done = loc("Done")
-    static let pinned = loc("Pinned")
-    static let mainnets = loc("Mainnets")
     static let nonce = loc("Nonce")
     static let gasPrice = loc("Gas price")
-    static let networkFees = loc("Network fees")
     static let maxPriorityFee = loc("Max priority fee")
-    static let priorityFee = loc("Priority fee")
     static let maxFee = loc("Max fee")
-    static let customNonce = loc("Custom nonce")
-    static let customGasPrice = loc("Custom gas price")
-    static let customMaxPriorityFee = loc("Custom max priority fee")
-    static let customMaxFee = loc("Custom max fee")
     static let reset = loc("Reset")
-    static let resetTo = loc("Reset to")
-    static let transactionSpeedHint = loc("Adjust how quickly the transaction is likely to be included.")
     static let feesUpdated = loc("Network fees updated")
     static let feesUpdatedReview = loc("Network conditions changed. Review the updated fees, then approve again.")
     static let unsafeFees = loc("Fee settings need attention")
@@ -114,17 +98,61 @@ struct Strings {
     static let getStarted = loc("Get Started")
     static let rateOnTheAppStore = loc("Rate on the App Store")
     static let addNetwork = loc("Add Network")
-    static let customNetworks = loc("Custom Networks")
     static let setName = loc("Set Name")
     static let editName = loc("Edit Name")
     
     static let bigWallet = "Big Wallet"
+    static let network = loc("Network")
+    static let balance = loc("Balance")
+    static let advanced = loc("Advanced")
+    static let invalidValues = loc("Invalid values")
+    static let noActivePage = loc("No active page")
+    static let openBigWallet = loc("Open Big Wallet")
+    static let notConnected = loc("Not connected")
+    static let connectWallet = loc("Connect Wallet")
+    static let addAccountToConnect = loc("Add %@ account to connect")
+    static let queuePosition = loc("%1$@ of %2$@")
+
     static let viewOnGithub = "GitHub"
     static let viewOnX = "𝕏"
     static let gwei = "gwei"
-    
+    static let rpc = "RPC"
+
+    // The Safari popup is HTML, so its chrome cannot read the string catalog itself.
+    // These ride along with the first native response and are applied to the static labels.
+    static var popup: [String: String] {
+        return [
+            "switchAccount": switchAccount,
+            "network": network,
+            "balance": balance,
+            "fee": fee,
+            "data": data,
+            "advanced": advanced,
+            "gasPrice": gasPrice + " (" + gwei + ")",
+            "maxPriorityFee": maxPriorityFee + " (" + gwei + ")",
+            "maxFee": maxFee + " (" + gwei + ")",
+            "nonce": nonce,
+            "invalidValues": invalidValues,
+            "reset": reset,
+            "apply": apply,
+            "rpc": rpc,
+            "password": password,
+            "cancel": cancel,
+            "ok": ok,
+            "noActivePage": noActivePage,
+            "openBigWallet": openBigWallet,
+            "notConnected": notConnected,
+            "privateBrowsingUnsupported": privateBrowsingUnsupported,
+            "somethingWentWrong": somethingWentWrong,
+            "failedToLoad": failedToLoad,
+            "refresh": refresh,
+            "calculating": calculating.withEllipsis,
+            "queuePosition": queuePosition,
+        ]
+    }
+
     private static func loc(_ string: String.LocalizationValue) -> String {
         return String(localized: string)
     }
-    
+
 }

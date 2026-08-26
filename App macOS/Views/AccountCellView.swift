@@ -18,23 +18,11 @@ class AccountCellView: NSTableRowView {
         wantsLayer = true
     }
     
-    func setup(account: WalletAccount, walletId: String, isSelected: Bool, isDisabled: Bool) {
+    func setup(account: WalletAccount, walletId: String) {
         addressImageView.image = account.image
         addressTextField.stringValue = account.nameOrCroppedAddress(walletId: walletId)
-        setSelected(isSelected)
-        setDisabled(isDisabled)
     }
-    
-    private func setDisabled(_ disabled: Bool) {
-        addressImageView.alphaValue = disabled ? 0.4 : 1
-        addressTextField.alphaValue = disabled ? 0.4 : 1
-    }
-    
-    private func setSelected(_ selected: Bool) {
-        layer?.backgroundColor = (selected ? NSColor.selectedContentBackgroundColor : NSColor.clear).cgColor
-        addressTextField.textColor = selected ? NSColor.selectedMenuItemTextColor : NSColor.labelColor
-    }
-    
+
     func blink() {
         let initialBackgroundColor = backgroundColor
         backgroundColor = .systemBlue.withAlphaComponent(0.4)

@@ -168,7 +168,6 @@ final class WalletsManager: NSObject {
         }
 
         private let wallet: WalletContainer
-        private let coin: WalletCoin?
         private let walletsManager: WalletsManager
         private let queue = DispatchQueue(label: "org.lil.wallet.accounts", qos: .userInitiated)
         private var session: PreviewAccountsSession?
@@ -180,9 +179,8 @@ final class WalletsManager: NSObject {
         private var generation = 0
         private var lastPreviewDate = Date()
 
-        fileprivate init(wallet: WalletContainer, coin: WalletCoin?, walletsManager: WalletsManager) {
+        fileprivate init(wallet: WalletContainer, walletsManager: WalletsManager) {
             self.wallet = wallet
-            self.coin = coin
             self.walletsManager = walletsManager
         }
 
@@ -201,7 +199,7 @@ final class WalletsManager: NSObject {
 
                 let previewResult: (session: PreviewAccountsSession, accounts: [WalletAccount])?
                 do {
-                    let session = try self.walletsManager.previewAccountsSession(wallet: self.wallet, coin: self.coin)
+                    let session = try self.walletsManager.previewAccountsSession(wallet: self.wallet)
                     let accounts = try session.previewAccounts(page: 0)
                     previewResult = (session, accounts)
                 } catch {
@@ -284,28 +282,26 @@ final class WalletsManager: NSObject {
 
     fileprivate final class PreviewAccountsSession {
         private let hdWallet: WalletHDWallet
-        private let coin: WalletCoin?
         private let walletsManager: WalletsManager
 
-        fileprivate init(hdWallet: WalletHDWallet, coin: WalletCoin?, walletsManager: WalletsManager) {
+        fileprivate init(hdWallet: WalletHDWallet, walletsManager: WalletsManager) {
             self.hdWallet = hdWallet
-            self.coin = coin
             self.walletsManager = walletsManager
         }
 
         func previewAccounts(page: Int) throws -> [WalletAccount] {
-            return try walletsManager.previewAccounts(hdWallet: hdWallet, page: page, coin: coin)
+            return try walletsManager.previewAccounts(hdWallet: hdWallet, page: page, coin: nil)
         }
     }
 
-    func previewAccountsPager(wallet: WalletContainer, coin: WalletCoin? = nil) -> PreviewAccountsPager {
-        return PreviewAccountsPager(wallet: wallet, coin: coin, walletsManager: self)
+    func previewAccountsPager(wallet: WalletContainer) -> PreviewAccountsPager {
+        return PreviewAccountsPager(wallet: wallet, walletsManager: self)
     }
 
-    fileprivate func previewAccountsSession(wallet: WalletContainer, coin: WalletCoin? = nil) throws -> PreviewAccountsSession {
+    fileprivate func previewAccountsSession(wallet: WalletContainer) throws -> PreviewAccountsSession {
         guard let password = keychain.password,
               let hdWallet = wallet.key.wallet(password: Data(password.utf8)) else { throw Error.keychainAccessFailure }
-        return PreviewAccountsSession(hdWallet: hdWallet, coin: coin, walletsManager: self)
+        return PreviewAccountsSession(hdWallet: hdWallet, walletsManager: self)
     }
 
     func previewAccounts(hdWallet: WalletHDWallet, page: Int, coin: WalletCoin?) throws -> [WalletAccount] {

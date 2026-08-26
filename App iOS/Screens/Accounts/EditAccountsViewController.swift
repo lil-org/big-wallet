@@ -10,7 +10,6 @@ class EditAccountsViewController: UIViewController {
     }
 
     var wallet: WalletContainer!
-    var selectAccountAction: SelectAccountAction?
     private let walletsManager = WalletsManager.shared
     private var cellModels = [PreviewAccountCellModel]()
     private let previewAccountsPreloadThreshold = 4
@@ -18,8 +17,7 @@ class EditAccountsViewController: UIViewController {
     private var enabledUndiscoveredAccountKeys = Set<WalletPreviewAccountKey>()
     private var previewPager: WalletsManager.PreviewAccountsPager?
     private var didAppear = false
-    private var previewCoin: WalletCoin? { selectAccountAction?.coinType }
-    
+
     @IBOutlet weak var okButton: UIButton!
     @IBOutlet weak var tableView: UITableView! {
         didSet {
@@ -108,7 +106,7 @@ class EditAccountsViewController: UIViewController {
 
     private func resetPreviewAccounts() {
         previewPager?.invalidate()
-        let previewPager = walletsManager.previewAccountsPager(wallet: wallet, coin: previewCoin)
+        let previewPager = walletsManager.previewAccountsPager(wallet: wallet)
         self.previewPager = previewPager
         toggledIndexes.removeAll()
         cellModels.removeAll()

@@ -28,7 +28,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 #endif
         AlchemyJWTProvider.prewarmForApplicationLifecycle()
         installQuitKeyboardShortcutMonitor()
-        agent.start(openOnLaunch: true)
+        agent.open()
         priceService.start()
         walletsManager.start()
     }

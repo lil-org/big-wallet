@@ -3,7 +3,6 @@
 import SwiftUI
 
 let screenshotMode = false
-var launchURL: URL?
 
 @main
 struct Big_Wallet_visionOSApp: App {
@@ -26,11 +25,6 @@ struct Big_Wallet_visionOSApp: App {
                             showAccountsView = true
                         }
                     })
-                }
-            }.onOpenURL { url in
-                DispatchQueue.main.async {
-                    launchURL = url
-                    NotificationCenter.default.post(name: .receievedWalletRequest, object: nil)
                 }
             }
         }

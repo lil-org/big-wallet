@@ -201,7 +201,6 @@ fileprivate final class AdaptiveLargeTitleHeaderView: UIView {
 fileprivate final class AdaptiveLargeTitleTableHeaderView: UIView {
 
     private let titleHeaderView = AdaptiveLargeTitleHeaderView()
-    private var accessoryView: UIView?
     fileprivate var compensatedAutomaticTopInset: CGFloat = 0
 
     override init(frame: CGRect) {
@@ -214,57 +213,16 @@ fileprivate final class AdaptiveLargeTitleTableHeaderView: UIView {
         setup()
     }
 
-    func update(title: String,
-                width: CGFloat,
-                titleTopInset: CGFloat,
-                accessoryView: UIView?,
-                accessoryInsets: UIEdgeInsets) -> CGFloat {
+    func update(title: String, width: CGFloat, titleTopInset: CGFloat) -> CGFloat {
         let titleHeight = titleHeaderView.update(title: title, width: width)
-        let titleAreaHeight = titleTopInset + titleHeight
+        let height = titleTopInset + titleHeight
         titleHeaderView.frame = CGRect(x: 0, y: titleTopInset, width: width, height: titleHeight)
-
-        updateAccessoryView(accessoryView)
-
-        let accessoryHeight: CGFloat
-        if let accessoryView {
-            let availableWidth = max(0, width - accessoryInsets.left - accessoryInsets.right)
-            let fittingHeight = Self.fittingHeight(for: accessoryView, width: availableWidth)
-            accessoryView.frame = CGRect(x: accessoryInsets.left,
-                                         y: titleAreaHeight + accessoryInsets.top,
-                                         width: availableWidth,
-                                         height: fittingHeight)
-            accessoryHeight = accessoryInsets.top + fittingHeight + accessoryInsets.bottom
-        } else {
-            accessoryHeight = 0
-        }
-
-        let height = titleAreaHeight + accessoryHeight
         frame = CGRect(x: 0, y: 0, width: width, height: height)
         return height
     }
 
     private func setup() {
         addSubview(titleHeaderView)
-    }
-
-    private func updateAccessoryView(_ newAccessoryView: UIView?) {
-        guard accessoryView !== newAccessoryView else { return }
-
-        accessoryView?.removeFromSuperview()
-        accessoryView = newAccessoryView
-
-        if let newAccessoryView {
-            addSubview(newAccessoryView)
-        }
-    }
-
-    private static func fittingHeight(for view: UIView, width: CGFloat) -> CGFloat {
-        let fittingSize = view.systemLayoutSizeFitting(
-            CGSize(width: width, height: UIView.layoutFittingCompressedSize.height),
-            withHorizontalFittingPriority: .required,
-            verticalFittingPriority: .fittingSizeLevel
-        )
-        return max(view.bounds.height, fittingSize.height)
     }
 
 }
@@ -286,15 +244,9 @@ extension UIViewController {
         updateAdaptiveLargeTitleLayout(title)
     }
 
-    func configureAdaptiveLargeTitle(_ title: String,
-                                     tableView: UITableView,
-                                     accessoryView: UIView? = nil,
-                                     accessoryInsets: UIEdgeInsets = .zero) {
+    func configureAdaptiveLargeTitle(_ title: String, tableView: UITableView) {
         hideSystemTitleForAdaptiveLargeTitle()
-        updateAdaptiveLargeTitleLayout(title,
-                                       tableView: tableView,
-                                       accessoryView: accessoryView,
-                                       accessoryInsets: accessoryInsets)
+        updateAdaptiveLargeTitleLayout(title, tableView: tableView)
     }
 
     @discardableResult
@@ -323,10 +275,7 @@ extension UIViewController {
     }
 
     @discardableResult
-    func updateAdaptiveLargeTitleLayout(_ title: String,
-                                        tableView: UITableView,
-                                        accessoryView: UIView? = nil,
-                                        accessoryInsets: UIEdgeInsets = .zero) -> CGFloat? {
+    func updateAdaptiveLargeTitleLayout(_ title: String, tableView: UITableView) -> CGFloat? {
         let width = tableView.bounds.width
         guard width > 0 else { return nil }
 
@@ -348,11 +297,7 @@ extension UIViewController {
             tableView.contentInset.top = desiredTopInset
         }
         headerView.compensatedAutomaticTopInset = automaticTopInset
-        let height = headerView.update(title: title,
-                                       width: width,
-                                       titleTopInset: topSafeAreaHeight,
-                                       accessoryView: accessoryView,
-                                       accessoryInsets: accessoryInsets)
+        let height = headerView.update(title: title, width: width, titleTopInset: topSafeAreaHeight)
         let needsUpdate = currentHeaderView !== headerView ||
             abs(currentFrame.width - width) > 0.5 ||
             abs(currentFrame.height - height) > 0.5
