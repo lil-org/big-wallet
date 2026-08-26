@@ -1,31 +1,23 @@
 // ∅ 2026 lil org
 
 import Cocoa
-import Darwin
 
 @NSApplicationMain
 class AppDelegate: NSObject, NSApplicationDelegate {
-    
+
+    private let legacyAmbientHelperCleanup = LegacyAmbientHelperCleanup.live
     private let agent = Agent.shared
     private let priceService = PriceService.shared
     private let walletsManager = WalletsManager.shared
-    private let ambientTerminationRequestId = UUID().uuidString
     private var quitKeyboardShortcutMonitor: Any?
-    
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
     }
 
-    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        clearAmbientPseudoLocalizationLaunchMode()
-        terminateAmbientHelpers()
-        return .terminateNow
-    }
-    
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-#if DEBUG
-        AmbientPseudoLocalizationLaunchMode.recordFromEnvironment()
-#endif
+        // TODO: Remove this migration cleanup after one compatibility release.
+        legacyAmbientHelperCleanup.run()
         AlchemyJWTProvider.prewarmForApplicationLifecycle()
         installQuitKeyboardShortcutMonitor()
         agent.open()
@@ -37,7 +29,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         AlchemyJWTProvider.prewarmForApplicationLifecycle()
         walletsManager.handleExternalWalletStoreChange()
     }
-    
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         openWallet()
         return true
@@ -48,8 +40,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        clearAmbientPseudoLocalizationLaunchMode()
-        terminateAmbientHelpers()
         if let quitKeyboardShortcutMonitor {
             NSEvent.removeMonitor(quitKeyboardShortcutMonitor)
         }
@@ -57,27 +47,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func installQuitKeyboardShortcutMonitor() {
         quitKeyboardShortcutMonitor = NSEvent.addCommandQShortcutMonitor { _ in
-            self.terminateAmbientHelpers()
             NSApplication.shared.terminate(nil)
             return nil
         }
-    }
-
-    private func terminateAmbientHelpers() {
-        DistributedNotificationCenter.default().postNotificationName(.ambientAgentMustTerminate,
-                                                                     object: ambientTerminationRequestId,
-                                                                     userInfo: AmbientAgentTerminationRequest.notificationUserInfo(from: AmbientAgentTerminationRequest.userInfo(for: .main)),
-                                                                     deliverImmediately: true)
-        NSRunningApplication.runningApplications(withBundleIdentifier: Identifiers.macOSAmbientBundle).forEach {
-            _ = Darwin.kill($0.processIdentifier, SIGKILL)
-            _ = $0.forceTerminate()
-        }
-    }
-
-    private func clearAmbientPseudoLocalizationLaunchMode() {
-#if DEBUG
-        AmbientPseudoLocalizationLaunchMode.clear()
-#endif
     }
 
     private func openWallet() {
@@ -93,5 +65,5 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         windows.forEach { $0.deminiaturize(nil) }
         NSApp.arrangeInFront(nil)
     }
-    
+
 }

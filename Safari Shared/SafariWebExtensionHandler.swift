@@ -27,9 +27,18 @@ private enum HandlerError: LocalizedError {
 final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 
     private static let rpcClient = SafariRPCClient()
+    private static let bridge = ExtensionBridge.shared
+    private static let genericRPCFailureMessage = "something went wrong"
+#if os(macOS)
+    private static let legacyAmbientHelperCleanupGate =
+        LegacyAmbientHelperCleanupGate.live
+#endif
 
     func beginRequest(with context: NSExtensionContext) {
-        guard let item = context.inputItems[0] as? NSExtensionItem,
+#if os(macOS)
+        Self.legacyAmbientHelperCleanupGate.runBestEffort()
+#endif
+        guard let item = context.inputItems.first as? NSExtensionItem,
               let message = item.userInfo?[SFExtensionMessageKey],
               var json = message as? [String: Any] else {
             context.cancelRequest(withError: HandlerError.invalidMessage)
@@ -351,17 +360,29 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         ]
     }
 
-    private var ambientAppURL: URL? {
-        var containingAppURL = Bundle.main.bundleURL
+#if os(macOS)
+    private func openContainingApp(id: Int, context: NSExtensionContext) {
+        var appURL = Bundle.main.bundleURL
         for _ in 0..<3 {
-            containingAppURL.deleteLastPathComponent()
+            appURL.deleteLastPathComponent()
         }
-
-        guard containingAppURL.pathExtension == "app" else { return nil }
-        let url = containingAppURL.appendingPathComponent("Contents/Helpers/Big Wallet.app")
-        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-        return url
+        guard appURL.pathExtension == "app" else {
+            context.cancelRequest(withError: HandlerError.bridgeUnavailable)
+            return
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(
+            at: appURL,
+            configuration: configuration
+        ) { _, error in
+            if error == nil {
+                Self.respond(with: ["id": id, "opened": true], context: context)
+            } else {
+                context.cancelRequest(withError: HandlerError.bridgeUnavailable)
+            }
+        }
     }
 #endif
-    
+
 }

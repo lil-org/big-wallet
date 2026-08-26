@@ -382,12 +382,12 @@ assert_target_phase_order() {
     ' "$project_file" || fail "$description cleanup phase is misplaced"
 }
 
-assert_count 7 "/* Remove Legacy Alchemy API Key */ = {" "$project_file"
-assert_count 7 'name = "Remove Legacy Alchemy API Key";' "$project_file"
-assert_count 7 '"$(SRCROOT)/Scripts/assert_no_bundled_alchemy_key.sh",' "$project_file"
-assert_count 7 '"$(SRCROOT)/Scripts/remove_legacy_alchemy_api_key.sh",' "$project_file"
-assert_count 7 '"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AlchemyAPIKey",' "$project_file"
-assert_count 7 'shellScript = "set -e\n/bin/sh \"$SRCROOT/Scripts/remove_legacy_alchemy_api_key.sh\"\n/bin/sh \"$SRCROOT/Scripts/assert_no_bundled_alchemy_key.sh\" \"$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME\"\n";' "$project_file"
+assert_count 6 "/* Remove Legacy Alchemy API Key */ = {" "$project_file"
+assert_count 6 'name = "Remove Legacy Alchemy API Key";' "$project_file"
+assert_count 6 '"$(SRCROOT)/Scripts/assert_no_bundled_alchemy_key.sh",' "$project_file"
+assert_count 6 '"$(SRCROOT)/Scripts/remove_legacy_alchemy_api_key.sh",' "$project_file"
+assert_count 6 '"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AlchemyAPIKey",' "$project_file"
+assert_count 6 'shellScript = "set -e\n/bin/sh \"$SRCROOT/Scripts/remove_legacy_alchemy_api_key.sh\"\n/bin/sh \"$SRCROOT/Scripts/assert_no_bundled_alchemy_key.sh\" \"$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME\"\n";' "$project_file"
 
 if grep -F "Bundle Alchemy API Key" "$project_file" >/dev/null ||
     grep -F "bundle_alchemy_api_key.sh" "$project_file" >/dev/null
@@ -420,11 +420,6 @@ assert_target_phase_order \
     2C60546D2D529A9A00779570 \
     A0FB2A7A814343849A35549C \
     "Safari visionOS"
-assert_target_phase_order \
-    2CB9B54E2FA23F0600F094FB \
-    2CB9B54D2FA23F0600F094FB \
-    D8E7DDB615794095B0AE5890 \
-    "Big Wallet Ambient"
 assert_target_phase_order \
     2CCEB82C27594E2A00768473 \
     2CCEB82B27594E2A00768473 \
@@ -495,9 +490,7 @@ mkdir -p \
     "$publish_fixture_root/Wallet.xcodeproj" \
     "$publish_fixture_root/App iOS" \
     "$publish_fixture_root/App macOS" \
-    "$publish_fixture_root/Big Wallet Ambient" \
-    "$publish_fixture_root/Safari iOS/Resources" \
-    "$publish_fixture_root/Safari macOS/Resources" \
+    "$publish_fixture_root/Safari Shared/Resources" \
     "$publish_fixture_root/app-store-connect"
 for fixture_script in \
     Scripts/asc/publish.sh \
@@ -523,14 +516,8 @@ cp \
     "$repository_directory/App macOS/Info.plist" \
     "$publish_fixture_root/App macOS/Info.plist"
 cp \
-    "$repository_directory/Big Wallet Ambient/Info.plist" \
-    "$publish_fixture_root/Big Wallet Ambient/Info.plist"
-cp \
-    "$repository_directory/Safari iOS/Resources/manifest.json" \
-    "$publish_fixture_root/Safari iOS/Resources/manifest.json"
-cp \
-    "$repository_directory/Safari macOS/Resources/manifest.json" \
-    "$publish_fixture_root/Safari macOS/Resources/manifest.json"
+    "$repository_directory/Safari Shared/Resources/manifest.json" \
+    "$publish_fixture_root/Safari Shared/Resources/manifest.json"
 cp \
     "$repository_directory/app-store-connect/export-options-app-store.plist" \
     "$publish_fixture_root/app-store-connect/export-options-app-store.plist"
