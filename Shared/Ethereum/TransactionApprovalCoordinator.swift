@@ -4,7 +4,7 @@ import Foundation
 
 struct TransactionPreparationState: Equatable {
 
-    enum Phase: Equatable {
+    enum Phase: String, Equatable {
         case idle
         case preparing
         case ready
@@ -261,7 +261,7 @@ struct TransactionApprovalAlertIntent: Equatable {
 
 }
 
-enum TransactionApprovalAlertAction {
+enum TransactionApprovalAlertAction: String, Decodable {
     case acknowledge
     case retry
     case edit
@@ -1053,8 +1053,9 @@ final class TransactionApprovalCoordinator {
         send(.startPreparation(forceGasCheck: forceGasCheck))
     }
 
-    func approve() {
-        send(.approve)
+    @discardableResult
+    func approve() -> Bool {
+        return send(.approve)
     }
 
     func authenticationCompleted(
@@ -1112,8 +1113,18 @@ final class TransactionApprovalCoordinator {
         send(.finish(nil))
     }
 
-    private func send(_ event: TransactionApprovalReducer.Event) {
-        run(reducer.reduce(event))
+    func invalidate() {
+        run(reducer.reduce(.finish(nil)).filter { effect in
+            if case .completion = effect { return false }
+            return true
+        })
+    }
+
+    @discardableResult
+    private func send(_ event: TransactionApprovalReducer.Event) -> Bool {
+        let effects = reducer.reduce(event)
+        run(effects)
+        return !effects.isEmpty
     }
 
     private func run(_ effects: [TransactionApprovalReducer.Effect]) {

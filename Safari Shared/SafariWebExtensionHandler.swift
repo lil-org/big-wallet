@@ -103,11 +103,18 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                         request: request
                     )
                 } else {
-                    context.cancelRequest(withError: HandlerError.empty)
+                    response = await PopupRequestSessions.dispatch(
+                        request: request,
+                        profileIdentifier: profileIdentifier
+                    )
                 }
-            case .cancelRequest:
-                ExtensionBridge.removeRequest(id: id)
-                context.cancelRequest(withError: HandlerError.empty)
+                Self.respond(
+                    with: PopupApprovalStatePresenter.boundedResponse(
+                        response,
+                        for: request
+                    ),
+                    context: context
+                )
             }
         }
     }
@@ -168,18 +175,33 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                         ),
                         context: context
                     )
-                    Self.respond(with: response.json, context: context)
-                } else {
-                    let response = ResponseToExtension(
-                        for: request,
-                        payload: .error(
-                            ProviderResponseError(
-                                message: "Unrecognized chain ID",
-                                code: 4902
-                            )
-                        )
+                    return
+                }
+                switch await PopupRequestSessions.materializeAfterAdmission(
+                    handle: handle
+                ) {
+                case .approvalRequired:
+                    Self.respond(
+                        with: Self.admissionResponse(
+                            request: request,
+                            handle: handle,
+                            approvalRequired: true,
+                            revisions: revisions
+                        ),
+                        context: context
                     )
-                    Self.respond(with: response.json, context: context)
+                case .responseReady:
+                    Self.respond(
+                        with: Self.admissionResponse(
+                            request: request,
+                            handle: handle,
+                            approvalRequired: false,
+                            revisions: revisions
+                        ),
+                        context: context
+                    )
+                case .unavailable:
+                    context.cancelRequest(withError: HandlerError.bridgeUnavailable)
                 }
             case .expired:
                 Self.respond(
