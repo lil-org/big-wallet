@@ -6954,6 +6954,46 @@ final class GasServiceTests: XCTestCase {
         )
     }
 
+    func testEthereumRPCBlocksReadRedirectOnInjectedSession() {
+        let sourceURL = rpcURL + "/read-redirect"
+        let targetURL = rpcURL + "/read-redirect-target"
+        RedirectingGasServiceURLProtocol.configure(
+            sourceURL: sourceURL,
+            targetURL: targetURL
+        )
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [
+            RedirectingGasServiceURLProtocol.self
+        ]
+        let session = URLSession(configuration: configuration)
+        let completionReceived = expectation(
+            description: "blocked read redirect completed"
+        )
+        defer {
+            session.invalidateAndCancel()
+            RedirectingGasServiceURLProtocol.reset()
+        }
+
+        EthereumRPC(urlSession: session).fetchGasPrice(
+            endpoint: endpoint(sourceURL)
+        ) { result in
+            if case .success(let gasPrice) = result {
+                XCTFail("Unexpected redirected gas price: \(gasPrice)")
+            }
+            completionReceived.fulfill()
+        }
+
+        wait(for: [completionReceived], timeout: 2)
+        XCTAssertEqual(
+            RedirectingGasServiceURLProtocol.sourceRequestCount,
+            1
+        )
+        XCTAssertEqual(
+            RedirectingGasServiceURLProtocol.targetRequestCount,
+            0
+        )
+    }
+
     func testEthereumRPCRawSendPreservesInjectedSessionDelegateCallbacks()
         throws {
         let sendRPCURL = rpcURL + "/raw-send-session-delegate"

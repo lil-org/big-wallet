@@ -339,12 +339,19 @@ enum EthereumRPCError: Error, Equatable, Sendable {
     }
 }
 
-private final class EthereumNoRedirectSessionDelegate:
+final class NoRedirectSessionDelegate:
     NSObject,
     URLSessionTaskDelegate,
     @unchecked Sendable {
 
-    static let shared = EthereumNoRedirectSessionDelegate()
+    private let lock = NSLock()
+    private var rejectedRedirect = false
+
+    var didRejectRedirect: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return rejectedRedirect
+    }
 
     func urlSession(
         _ session: URLSession,
@@ -353,6 +360,9 @@ private final class EthereumNoRedirectSessionDelegate:
         newRequest request: URLRequest,
         completionHandler: @escaping (URLRequest?) -> Void
     ) {
+        lock.lock()
+        rejectedRedirect = true
+        lock.unlock()
         completionHandler(nil)
     }
 }
@@ -687,11 +697,21 @@ class EthereumRPC: EthereumRPCClient {
 
         let taskIdentifier = UUID()
         let taskBox = WeakURLSessionTaskBox()
+        let redirectDelegate = NoRedirectSessionDelegate()
         let task = urlSession.dataTask(with: request) { data, response, error in
             defer {
                 cancellation?.finish(identifier: taskIdentifier)
             }
             guard cancellation?.isCancelled != true else { return }
+
+            if redirectDelegate.didRejectRedirect {
+                self.complete(
+                    .failure(EthereumRPCError.unknown),
+                    cancellation: cancellation,
+                    completion: completion
+                )
+                return
+            }
 
             func retryRequest(
                 failure: Error = EthereumRPCError.unknown,
@@ -871,9 +891,7 @@ class EthereumRPC: EthereumRPCClient {
             retryRequest()
         }
 
-        if case .never = retryPolicy {
-            task.delegate = EthereumNoRedirectSessionDelegate.shared
-        }
+        task.delegate = redirectDelegate
         taskBox.task = task
         guard cancellation?.register(
             identifier: taskIdentifier,
