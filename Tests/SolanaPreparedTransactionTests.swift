@@ -32,6 +32,39 @@ final class SolanaPreparedTransactionTests: XCTestCase {
 
     private let serializedTransactionSignerPublicKey = "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi"
 
+    func testTransactionSignatureUsesFirstWireSignature() {
+        let firstSignature = Data((1...64).map(UInt8.init))
+        let secondSignature = Data((65...128).map(UInt8.init))
+        var transaction = Data.encodeLength(2)
+        transaction.append(firstSignature)
+        transaction.append(secondSignature)
+        transaction.append(0)
+
+        XCTAssertEqual(
+            Solana.transactionSignature(
+                signedTransaction: transaction.base64EncodedString()
+            ),
+            WalletCrypto.base58Encode(data: firstSignature)
+        )
+        XCTAssertNil(Solana.transactionSignature(signedTransaction: "not-base64"))
+        XCTAssertNil(Solana.transactionSignature(
+            signedTransaction: Data([0, 1]).base64EncodedString()
+        ))
+        XCTAssertNil(Solana.transactionSignature(
+            signedTransaction: (Data([1]) + Data(repeating: 1, count: 63) + Data([0]))
+                .base64EncodedString()
+        ))
+        XCTAssertNil(Solana.transactionSignature(
+            signedTransaction: (Data([1]) + Data(repeating: 0, count: 64) + Data([0]))
+                .base64EncodedString()
+        ))
+        XCTAssertNil(Solana.transactionSignature(
+            signedTransaction: (
+                Data([0x81, 0]) + firstSignature + Data([0])
+            ).base64EncodedString()
+        ))
+    }
+
     func testSolanaMessageSigningWrappersProduceValidSignatures() throws {
         let privateKey = try XCTUnwrap(WalletPrivateKey(data: Vectors.solanaSigningPrivateKey))
 
@@ -92,6 +125,35 @@ final class SolanaPreparedTransactionTests: XCTestCase {
         }
     }
 
+    func testSerializedSolanaSignAndSendRejectsNoncanonicalSignatureCount()
+        throws {
+        var transactionData = try XCTUnwrap(
+            WalletCrypto.base58Decode(
+                string: Vectors.solanaPreparedSerializedTransaction
+            )
+        )
+        XCTAssertEqual(transactionData.removeFirst(), 1)
+        transactionData.insert(
+            contentsOf: [0x81, 0x00],
+            at: transactionData.startIndex
+        )
+        let serializedTransaction = WalletCrypto.base58Encode(
+            data: transactionData
+        )
+
+        switch Solana.shared.preparedSerializedTransactionForSignAndSend(
+            serializedTransaction: serializedTransaction,
+            publicKey: Vectors.solanaPreparedSignerPublicKey
+        ) {
+        case .failure(.invalidMessage):
+            break
+        case .failure(let error):
+            XCTFail("Expected invalidMessage, got \(error)")
+        case .success:
+            XCTFail("Expected noncanonical signature count to be rejected")
+        }
+    }
+
     func testSerializedSolanaSignAndSendProducesValidSignedTransaction() throws {
         let privateKey = try XCTUnwrap(WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey))
 
@@ -139,6 +201,39 @@ final class SolanaPreparedTransactionTests: XCTestCase {
             XCTAssertEqual(reusedApproval, reparsedApproval)
         case .failure(let error):
             XCTFail("Expected prepared transaction message, got \(error)")
+        }
+    }
+
+    func testPreparedTransactionMessageRejectsNoncanonicalAccountCount() throws {
+        let signerPublicKey = try XCTUnwrap(
+            WalletCrypto.base58Decode(
+                string: Vectors.solanaPreparedSignerPublicKey
+            )
+        )
+        var messageData = SolanaMessageFixture.wireMessage(
+            accountKeys: [signerPublicKey],
+            bodyAfterBlockhash: Data.encodeLength(0)
+        )
+        let accountCountIndex = messageData.index(
+            messageData.startIndex,
+            offsetBy: 3
+        )
+        XCTAssertEqual(messageData.remove(at: accountCountIndex), 1)
+        messageData.insert(
+            contentsOf: [0x81, 0x00],
+            at: accountCountIndex
+        )
+
+        switch Solana.shared.preparedTransactionMessageForSigning(
+            message: WalletCrypto.base58Encode(data: messageData),
+            publicKey: Vectors.solanaPreparedSignerPublicKey
+        ) {
+        case .failure(.invalidMessage):
+            break
+        case .failure(let error):
+            XCTFail("Expected invalidMessage, got \(error)")
+        case .success:
+            XCTFail("Expected noncanonical account count to be rejected")
         }
     }
 

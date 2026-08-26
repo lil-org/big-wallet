@@ -1,9 +1,6 @@
 // ∅ 2026 lil org
 
 enum DappRequestAction {
-    case none
-    case justShowApp
-    case showMessage(message: String, subtitle: String, completion: (() -> Void)?)
     case switchAccount(SelectAccountAction)
     case selectAccount(SelectAccountAction)
     case approveMessage(SignMessageAction)
@@ -11,22 +8,29 @@ enum DappRequestAction {
     case addEthereumChain(AddEthereumChainAction)
 }
 
+enum DappRequestPreparation {
+    case response(ResponseToExtension)
+    case approval(DappRequestAction)
+}
+
+struct PreparedBroadcast {
+    let recoveryResponse: ResponseToExtension
+    let send: () async -> ResponseToExtension
+}
+
+enum DappExecutionResult {
+    case response(ResponseToExtension)
+    case broadcast(PreparedBroadcast)
+}
+
 struct SelectAccountAction {
-    let peer: PeerMeta?
     let coinType: WalletCoin?
     var selectedAccounts: Set<SpecificWalletAccount>
     let initiallyConnectedProviders: Set<InpageProvider>
-    var network: EthereumNetwork?
-    let source: Source
-    let completion: (EthereumNetwork?, [SpecificWalletAccount]?) -> Void
-    
-    enum Source {
-        case walletConnect, safariExtension
-    }
+    let network: EthereumNetwork?
+    let resolve: (EthereumNetwork?, [SpecificWalletAccount]?) async -> ResponseToExtension
 
     var canSelectEthereumNetwork: Bool {
-        guard source != .walletConnect else { return false }
-
         if let coinType {
             return coinType == .ethereum
         }
@@ -47,20 +51,50 @@ struct SignMessageAction {
     let walletId: String
     let account: WalletAccount
     let meta: String
-    let peerMeta: PeerMeta
     private(set) var solanaClusterSelection: SolanaClusterSelection? = nil
-    let completion: (Bool) -> Void
+    let resolve: (Bool) async -> DappExecutionResult
+
+    init(
+        subject: ApprovalSubject,
+        walletId: String,
+        account: WalletAccount,
+        meta: String,
+        solanaClusterSelection: SolanaClusterSelection? = nil,
+        resolve: @escaping (Bool) async -> ResponseToExtension
+    ) {
+        self.init(
+            subject: subject,
+            walletId: walletId,
+            account: account,
+            meta: meta,
+            solanaClusterSelection: solanaClusterSelection,
+            resolve: { approved -> DappExecutionResult in
+                return .response(await resolve(approved))
+            }
+        )
+    }
+
+    init(
+        subject: ApprovalSubject,
+        walletId: String,
+        account: WalletAccount,
+        meta: String,
+        solanaClusterSelection: SolanaClusterSelection? = nil,
+        resolve: @escaping (Bool) async -> DappExecutionResult
+    ) {
+        self.subject = subject
+        self.walletId = walletId
+        self.account = account
+        self.meta = meta
+        self.solanaClusterSelection = solanaClusterSelection
+        self.resolve = resolve
+    }
 }
 
 final class SolanaClusterSelection {
     var selectedCluster: Solana.Cluster?
     let suggestedCluster: Solana.Cluster?
     let clusters = Solana.Cluster.allCases
-
-    var selectedClusterDescription: String? {
-        guard let selectedCluster else { return nil }
-        return description(for: selectedCluster)
-    }
 
     func description(for cluster: Solana.Cluster) -> String {
         var components = [
@@ -81,14 +115,53 @@ final class SolanaClusterSelection {
 
 struct SendTransactionAction {
     let transaction: Transaction
-    let chain: EthereumNetwork
+    let resolvedNetwork: ResolvedEthereumNetwork
     let walletId: String
     let account: WalletAccount
-    let peerMeta: PeerMeta
-    let completion: (Transaction?) -> Void
+    let resolve: (Transaction?) async -> DappExecutionResult
+
+    init(
+        transaction: Transaction,
+        resolvedNetwork: ResolvedEthereumNetwork,
+        walletId: String,
+        account: WalletAccount,
+        resolve: @escaping (Transaction?) async -> ResponseToExtension
+    ) {
+        self.init(
+            transaction: transaction,
+            resolvedNetwork: resolvedNetwork,
+            walletId: walletId,
+            account: account,
+            resolve: { transaction -> DappExecutionResult in
+                return .response(await resolve(transaction))
+            }
+        )
+    }
+
+    init(
+        transaction: Transaction,
+        resolvedNetwork: ResolvedEthereumNetwork,
+        walletId: String,
+        account: WalletAccount,
+        resolve: @escaping (Transaction?) async -> DappExecutionResult
+    ) {
+        self.transaction = transaction
+        self.resolvedNetwork = resolvedNetwork
+        self.walletId = walletId
+        self.account = account
+        self.resolve = resolve
+    }
+
+    var chain: EthereumNetwork {
+        return resolvedNetwork.network
+    }
+
+    var rpcSource: RPCSource {
+        return resolvedNetwork.source
+    }
 }
 
 struct AddEthereumChainAction {
     let chainToAdd: EthereumNetworkFromDapp
-    let completion: (Bool) -> Void
+    let resolve: (Bool) async -> ResponseToExtension
 }

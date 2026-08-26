@@ -7268,8 +7268,11 @@ final class GasServiceTests: XCTestCase {
             endpoint: alchemyEndpoint,
             signedTxData: "0x01"
         ) { result in
-            if case .success(let hash) = result {
+            switch result {
+            case .success(let hash):
                 XCTFail("Unexpected transaction hash: \(hash)")
+            case .failure(let error):
+                XCTAssertEqual(error as? EthereumRPCError, .notSubmitted)
             }
             completionReceived.fulfill()
         }
@@ -7277,6 +7280,29 @@ final class GasServiceTests: XCTestCase {
         wait(for: [completionReceived, unexpectedRequest], timeout: 1)
         XCTAssertEqual(authorizationProvider.authorizationCallCount, 1)
         XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
+    }
+
+    func testEthereumRPCClassifiesInvalidEndpointAsNotSubmitted() {
+        let completionReceived = expectation(
+            description: "Invalid endpoint rejected before submission"
+        )
+        let invalidEndpoint = endpoint("rpc.example")
+        XCTAssertNil(invalidEndpoint.url.scheme)
+
+        EthereumRPC().sendRawTransaction(
+            endpoint: invalidEndpoint,
+            signedTxData: "0x01"
+        ) { result in
+            switch result {
+            case .success(let hash):
+                XCTFail("Unexpected transaction hash: \(hash)")
+            case .failure(let error):
+                XCTAssertEqual(error as? EthereumRPCError, .notSubmitted)
+            }
+            completionReceived.fulfill()
+        }
+
+        wait(for: [completionReceived], timeout: 1)
     }
 
     func testEthereumRPCReturnsParsedRawSendResultFrom401WithoutReplay()

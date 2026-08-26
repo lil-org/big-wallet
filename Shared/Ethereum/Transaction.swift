@@ -189,6 +189,11 @@ enum PreparedTransactionFee: Equatable, Sendable {
         return Self.checkedUInt256Product(gasLimit, feeCapPerGas)
     }
 
+    func maximumNetworkFeeFitsUInt256(gasLimit: BigUInt?) -> Bool {
+        guard let gasLimit = gasLimit else { return true }
+        return maximumNetworkFee(gasLimit: gasLimit) != nil
+    }
+
     private static func checkedUInt256Product(_ lhs: BigUInt, _ rhs: BigUInt) -> BigUInt? {
         let product = lhs * rhs
         return Transaction.isValidUInt256(product) ? product : nil
@@ -291,11 +296,11 @@ struct TransactionFeeProvenance: Equatable, Sendable {
     }
 }
 
-struct Transaction {
+struct Transaction: Sendable {
 
-    private struct FeeState: Equatable {
+    private struct FeeState: Equatable, Sendable {
 
-        private enum Backing: Equatable {
+        private enum Backing: Equatable, Sendable {
             case unprepared(rawLegacyGasPrice: String?)
             case legacy(value: BigUInt, encoded: String)
             case eip1559(priority: BigUInt, cap: BigUInt)
@@ -707,6 +712,26 @@ struct Transaction {
 
     var editableGasPriceGwei: String? {
         Self.editableGwei(fromWei: gasPriceValue)
+    }
+
+    struct EditableFields: Equatable {
+        let nonce: String
+        let gasPriceGwei: String
+        let maxPriorityFeePerGasGwei: String
+        let maxFeePerGasGwei: String
+    }
+
+    var editableFields: EditableFields {
+        return EditableFields(
+            nonce: decimalNonceString ?? "",
+            gasPriceGwei: editableGasPriceGwei ?? "",
+            maxPriorityFeePerGasGwei: Self.editableGwei(
+                fromWei: maxPriorityFeePerGasValue
+            ) ?? "",
+            maxFeePerGasGwei: Self.editableGwei(
+                fromWei: maxFeePerGasValue
+            ) ?? ""
+        )
     }
 
     var maxPriorityFeePerGasValue: BigUInt? {
@@ -1212,7 +1237,18 @@ struct Transaction {
               isValidUInt256(value) else { return nil }
         return value
     }
-    
+
+    private static let maximumExactGweiTextLength =
+        editableGwei(fromWei: maximumUInt256)?.utf8.count ?? 0
+
+    static func exactFeeWei(fromGwei rawText: String) -> BigUInt? {
+        let text = rawText.replacingOccurrences(of: ",", with: ".")
+        guard text.utf8.count <= maximumExactGweiTextLength else { return nil }
+        let parts = text.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count <= 2, parts.count < 2 || parts[1].count <= 9 else { return nil }
+        return feeWei(fromGwei: text)
+    }
+
     private static func sliderPosition(
         for current: BigUInt,
         inRelationTo info: GasService.Info

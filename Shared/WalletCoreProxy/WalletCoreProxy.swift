@@ -45,7 +45,7 @@ struct WalletAccount: Hashable {
     }
 }
 
-struct WalletPrivateKey {
+struct WalletPrivateKey: Sendable {
     private let keyData: Data
     fileprivate static let invalid = WalletPrivateKey(unchecked: Data())
 

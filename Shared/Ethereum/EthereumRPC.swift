@@ -325,6 +325,7 @@ private struct RPCResponse<ResultValue: Decodable>: Decodable {
 
 enum EthereumRPCError: Error, Equatable, Sendable {
     case serverError(Int, String, dataJSON: String? = nil)
+    case notSubmitted
     case unknown
 
     var dataJSON: String? {
@@ -377,6 +378,15 @@ class EthereumRPC: EthereumRPCClient {
                 return statusCode == 408 || statusCode == 429 || (500...599).contains(statusCode)
             case .never:
                 return false
+            }
+        }
+
+        func failureBeforeDispatch(_ failure: Error) -> Error {
+            switch self {
+            case .transientFailures:
+                return failure
+            case .never:
+                return EthereumRPCError.notSubmitted
             }
         }
     }
@@ -575,7 +585,9 @@ class EthereumRPC: EthereumRPCClient {
         let url = endpoint.url
         guard url.scheme != nil else {
             complete(
-                .failure(EthereumRPCError.unknown),
+                .failure(retryPolicy.failureBeforeDispatch(
+                    EthereumRPCError.unknown
+                )),
                 cancellation: cancellation,
                 completion: completion
             )
@@ -589,7 +601,7 @@ class EthereumRPC: EthereumRPCClient {
             body = try JSONSerialization.data(withJSONObject: dict)
         } catch {
             complete(
-                .failure(error),
+                .failure(retryPolicy.failureBeforeDispatch(error)),
                 cancellation: cancellation,
                 completion: completion
             )
@@ -616,7 +628,9 @@ class EthereumRPC: EthereumRPCClient {
                         retryPolicy: retryPolicy,
                         didAttemptAuthorizationRecovery:
                             didAttemptAuthorizationRecovery,
-                        failure: EthereumRPCError.unknown,
+                        failure: retryPolicy.failureBeforeDispatch(
+                            EthereumRPCError.unknown
+                        ),
                         completion: completion
                     )
                     return
@@ -644,7 +658,7 @@ class EthereumRPC: EthereumRPCClient {
                     retryPolicy: retryPolicy,
                     didAttemptAuthorizationRecovery:
                         didAttemptAuthorizationRecovery,
-                    failure: error,
+                    failure: retryPolicy.failureBeforeDispatch(error),
                     completion: completion
                 )
             }
