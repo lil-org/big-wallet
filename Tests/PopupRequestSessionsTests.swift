@@ -1186,6 +1186,108 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(events, ["claim", "begin", "resolve", "complete"])
     }
 
+    func testTransactionRematerializesAfterRetryableExecutionStartFailure() async throws {
+        let store = CompactPopupStore()
+        let snapshot = try popupSnapshot(id: 36, provider: .ethereum)
+        await store.insert(snapshot)
+        await store.failNextBegin()
+        let transaction = popupReadyTransaction()
+        let network = popupTransactionNetwork()
+        var resolveCount = 0
+        let operations = TransactionApprovalOperations(
+            prepare: { transaction, _, _, _, _, completion in
+                completion(.success(transaction))
+                return EthereumRequestCancellation()
+            },
+            preflight: { transaction, _, completion in
+                completion(.safe(transaction, popupTransactionEstimate()))
+                return EthereumRequestCancellation()
+            }
+        )
+        let processor = CompactPopupProcessor { request in
+            .approval(.approveTransaction(SendTransactionAction(
+                transaction: transaction,
+                resolvedNetwork: ResolvedEthereumNetwork(
+                    network: network,
+                    source: .custom
+                ),
+                walletId: "wallet",
+                account: popupTestAccount(),
+                resolve: { transaction in
+                    XCTAssertNotNil(transaction)
+                    resolveCount += 1
+                    await store.record("resolve")
+                    return request.response(error: .userRejected)
+                }
+            )))
+        }
+        let controller = PopupRequestSessions(
+            store: store,
+            requestProcessor: processor,
+            authenticationOverride: { _, _, _, completion in completion(true) },
+            transactionApprovalOperations: operations,
+            managesWallets: false
+        )
+        let firstToken = try await materializeToken(
+            controller: controller,
+            snapshot: snapshot
+        )
+        let firstApproval = try popupCommand(
+            subject: "approveRequest",
+            id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken,
+            reviewToken: firstToken,
+            payload: ["revisions": snapshot.revisions.json]
+        )
+
+        let firstResponse = await controller.dispatch(
+            try popupCommandValue(firstApproval),
+            request: firstApproval,
+            profileIdentifier: nil
+        )
+        XCTAssertEqual(firstResponse["status"] as? String, "ok")
+        let firstEvents = await store.events()
+        XCTAssertEqual(firstEvents, ["claim", "begin", "release"])
+        XCTAssertEqual(resolveCount, 0)
+
+        let stateRequest = try popupCommand(
+            subject: "getApprovalState",
+            id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken,
+            payload: ["mode": "full"]
+        )
+        let state = await controller.dispatch(
+            try popupCommandValue(stateRequest),
+            request: stateRequest,
+            profileIdentifier: nil
+        )
+        let secondToken = try XCTUnwrap(state["reviewToken"] as? String)
+        XCTAssertEqual(state["state"] as? String, "review")
+        XCTAssertEqual(state["canApprove"] as? Bool, true)
+        XCTAssertNotEqual(secondToken, firstToken)
+
+        let secondApproval = try popupCommand(
+            subject: "approveRequest",
+            id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken,
+            reviewToken: secondToken,
+            payload: ["revisions": snapshot.revisions.json]
+        )
+        let secondResponse = await controller.dispatch(
+            try popupCommandValue(secondApproval),
+            request: secondApproval,
+            profileIdentifier: nil
+        )
+
+        XCTAssertEqual(secondResponse["status"] as? String, "ok")
+        XCTAssertEqual(resolveCount, 1)
+        let secondEvents = await store.events()
+        XCTAssertEqual(
+            secondEvents,
+            ["claim", "begin", "release", "claim", "begin", "resolve", "complete"]
+        )
+    }
+
     func testTransactionPresentationChangeWhileClaimingReturnsToReview() async throws {
         let store = CompactPopupStore()
         let snapshot = try popupSnapshot(id: 35, provider: .ethereum)
@@ -1708,6 +1810,7 @@ private actor CompactPopupStore: PopupRequestStore {
     private var committedCompletions = Set<ExtensionBridge.Handle>()
     private var committedCheckpoints = Set<ExtensionBridge.Handle>()
     private var nextRejectResult: ExtensionBridge.StoreMutationResult?
+    private var shouldFailNextBegin = false
     private var suspendClaim = false
     private var claimContinuation: CheckedContinuation<Void, Never>?
     private var suspendCompletion = false
@@ -1734,6 +1837,7 @@ private actor CompactPopupStore: PopupRequestStore {
     func forceNextRejectResult(_ result: ExtensionBridge.StoreMutationResult) {
         nextRejectResult = result
     }
+    func failNextBegin() { shouldFailNextBegin = true }
     func suspendNextClaim() { suspendClaim = true }
     func resumeClaim() {
         let continuation = claimContinuation
@@ -1801,6 +1905,10 @@ private actor CompactPopupStore: PopupRequestStore {
             return .ownershipLost
         }
         eventValues.append("begin")
+        if shouldFailNextBegin {
+            shouldFailNextBegin = false
+            return .retryablePersistenceFailure
+        }
         let permit = ExtensionBridge.ExecutionPermit(handle: claim.handle, value: UUID())
         claims[claim.handle] = nil
         permits[claim.handle] = permit

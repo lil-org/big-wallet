@@ -3153,6 +3153,34 @@ test("stable facade connect snapshots survive reentrant retargeting", async () =
     );
 });
 
+test("stable facade preserves queued connect replay without listeners", () => {
+    const harness = facadeHarness();
+    const record = harness.exports.createStableFacadeRecord({
+        uuid: "00000000-0000-4000-8000-000000000009",
+    });
+    const ethereum = ethereumFacadeTarget("current");
+    const callbacks = [];
+    ethereum.requestConnectReplay = callback => {
+        callbacks.push(callback);
+        return true;
+    };
+    record.prepareTargets({
+        ethereumProvider: ethereum,
+        solanaProvider: solanaFacadeTarget("current"),
+    }).commit();
+    const connects = [];
+    const removed = value => connects.push(["removed", normalized(value)]);
+    record.ethereum.on("connect", removed);
+    record.ethereum.removeListener("connect", removed);
+
+    assert.equal(callbacks.shift()({chainId: "0x2"}), false);
+    record.ethereum.once("connect", value => {
+        connects.push(["late", normalized(value)]);
+    });
+    assert.equal(callbacks.shift()({chainId: "0x2"}), true);
+    assert.deepEqual(connects, [["late", {chainId: "0x2"}]]);
+});
+
 test("stable facade rollback keeps old targets and registration is issued once", async () => {
     const harness = facadeHarness();
     const record = harness.exports.createStableFacadeRecord({

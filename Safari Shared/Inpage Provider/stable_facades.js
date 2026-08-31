@@ -216,7 +216,8 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
             return false;
         }
         return current.requestConnectReplay(payload => {
-            if (deliveredConnect || ethereumTarget !== current) {
+            if (deliveredConnect || ethereumTarget !== current ||
+                ethereum.listenerCount("connect") === 0) {
                 return false;
             }
             deliveredConnect = true;

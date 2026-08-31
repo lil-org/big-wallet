@@ -1320,7 +1320,12 @@ final class PopupRequestSessions {
             }
             return
         case .retryablePersistenceFailure:
-            await releaseApproval(claim, for: session, token: token)
+            await releaseApproval(
+                claim,
+                for: session,
+                token: token,
+                rematerializeOnSuccess: true
+            )
             return
         }
         switch await operation() {
@@ -1405,12 +1410,18 @@ final class PopupRequestSessions {
     private func releaseApproval(
         _ claim: ExtensionBridge.ApprovalClaim,
         for session: PopupRequestSession,
-        token: UUID
+        token: UUID,
+        rematerializeOnSuccess: Bool = false
     ) async {
         switch await store.release(claim: claim) {
         case .persisted:
             if isCurrent(session, token: token) {
-                _ = session.returnToReview(token: token)
+                if rematerializeOnSuccess {
+                    session.transaction?.invalidate()
+                    sessions[session.handle] = nil
+                } else {
+                    _ = session.returnToReview(token: token)
+                }
             }
         case .ownershipLost:
             if sessions[session.handle] === session {
