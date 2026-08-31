@@ -6,19 +6,6 @@ enum ApprovalSubject {
     case signTypedData
     case approveTransaction
     
-    var asAuthenticationReason: AuthenticationReason {
-        switch self {
-        case .signMessage:
-            return .signMessage
-        case .signPersonalMessage:
-            return .signPersonalMessage
-        case .signTypedData:
-            return .signTypedData
-        case .approveTransaction:
-            return .approveTransaction
-        }
-    }
-    
     var title: String {
         switch self {
         case .signMessage:

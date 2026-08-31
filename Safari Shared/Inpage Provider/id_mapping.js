@@ -12,8 +12,11 @@ class IdMapping {
     
     nextAvailableId() {
         let id = Utils.genId();
+        if (!Number.isSafeInteger(id)) {
+            id = 0;
+        }
         while (this.intIds.has(id)) {
-            id += 1;
+            id = id === Number.MAX_SAFE_INTEGER ? 0 : id + 1;
         }
         return id;
     }
@@ -21,10 +24,15 @@ class IdMapping {
     tryFixId(payload) {
         const hasNonFiniteNumberId =
             typeof payload.id === "number" && !Number.isFinite(payload.id);
+        const hasFiniteUnsafeNumberId =
+            typeof payload.id === "number" &&
+            Number.isFinite(payload.id) &&
+            !Number.isSafeInteger(payload.id);
         if (typeof payload.id === "undefined" || hasNonFiniteNumberId) {
             payload.id = this.nextAvailableId();
             this.intIds.set(payload.id, payload.id);
-        } else if (typeof payload.id !== "number" || this.intIds.has(payload.id) ) {
+        } else if (typeof payload.id !== "number" || hasFiniteUnsafeNumberId ||
+            this.intIds.has(payload.id)) {
             const newId = this.nextAvailableId();
             this.intIds.set(newId, payload.id);
             payload.id = newId;

@@ -234,7 +234,6 @@ case "$platform" in
         printf '%s\n' \
             "$main_bundle/Contents/Resources/AlchemyJWTRequestProofKey" \
             "$main_bundle/Contents/PlugIns/Safari macOS.appex/Contents/Resources/AlchemyJWTRequestProofKey" \
-            "$main_bundle/Contents/Helpers/Big Wallet.app/Contents/Resources/AlchemyJWTRequestProofKey" \
             > "$expected_path_list"
         ;;
 esac
@@ -324,8 +323,5 @@ case "$platform" in
         verify_resource \
             "$main_bundle/Contents/PlugIns/Safari macOS.appex/Contents/Resources/AlchemyJWTRequestProofKey" \
             "the macOS Safari extension"
-        verify_resource \
-            "$main_bundle/Contents/Helpers/Big Wallet.app/Contents/Resources/AlchemyJWTRequestProofKey" \
-            "the Ambient helper"
         ;;
 esac

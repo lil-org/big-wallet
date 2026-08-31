@@ -11,7 +11,6 @@ class EditAccountsViewController: NSViewController {
     
     var wallet: WalletContainer!
     var getBackToRect: CGRect?
-    var selectAccountAction: SelectAccountAction?
 
     private let walletsManager = WalletsManager.shared
     private var cellModels = [PreviewAccountCellModel]()
@@ -20,7 +19,6 @@ class EditAccountsViewController: NSViewController {
     private var enabledUndiscoveredAccountKeys = Set<WalletPreviewAccountKey>()
     private var previewPager: WalletsManager.PreviewAccountsPager?
     private var didAppear = false
-    private var previewCoin: WalletCoin? { selectAccountAction?.coinType }
     
     @IBOutlet weak var tableView: RightClickTableView! {
         didSet {
@@ -86,7 +84,6 @@ class EditAccountsViewController: NSViewController {
         invalidatePreviewAccounts()
         NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
         let accountsListViewController = instantiate(AccountsListViewController.self)
-        accountsListViewController.selectAccountAction = selectAccountAction
         accountsListViewController.getBackToRect = getBackToRect
         view.window?.contentViewController = accountsListViewController
     }
@@ -109,7 +106,7 @@ class EditAccountsViewController: NSViewController {
 
     private func resetPreviewAccounts() {
         previewPager?.invalidate()
-        let previewPager = walletsManager.previewAccountsPager(wallet: wallet, coin: previewCoin)
+        let previewPager = walletsManager.previewAccountsPager(wallet: wallet)
         self.previewPager = previewPager
         toggledIndexes.removeAll()
         cellModels.removeAll()

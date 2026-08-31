@@ -2,20 +2,20 @@
 
 import Foundation
 
-struct SolanaCompiledInstruction: Equatable {
+struct SolanaCompiledInstruction: Equatable, Sendable {
     let programIdIndex: Int
     let accountIndices: [Int]
     let data: Data
 }
 
-struct SolanaAddressTableLookup: Equatable {
+struct SolanaAddressTableLookup: Equatable, Sendable {
     let accountKey: Data
     let writableIndexes: [Int]
     let readOnlyIndexes: [Int]
 }
 
-struct SolanaWireMessage {
-    enum Version: Equatable {
+struct SolanaWireMessage: Sendable {
+    enum Version: Equatable, Sendable {
         case legacy
         case version0
     }
@@ -69,7 +69,7 @@ struct SolanaWireMessage {
     }
 }
 
-struct SolanaPreparedTransactionMessage {
+struct SolanaPreparedTransactionMessage: Sendable {
     let messageData: Data
     let parsedMessage: SolanaWireMessage
 
@@ -926,7 +926,7 @@ enum SolanaTransactionSummaryFormatter {
 
 final class Solana {
 
-    enum Cluster: String, CaseIterable, Hashable {
+    enum Cluster: String, CaseIterable, Hashable, Codable {
         case mainnetBeta
         case devnet
         case testnet
@@ -971,7 +971,7 @@ final class Solana {
         }
     }
 
-    enum SendTransactionError: Error, Equatable {
+    enum SendTransactionError: Error, Equatable, Sendable {
         case invalidMessage
         case unsupportedMultiSignature
         case blockhashNotFound
@@ -980,10 +980,11 @@ final class Solana {
         case confirmationTimedOut(signature: String)
         case rpcError(message: String, code: Int?)
         case rpcUnavailable
+        case notSubmitted
         case unknown
     }
 
-    enum Commitment: String, Decodable {
+    enum Commitment: String, Decodable, Sendable {
         case processed
         case confirmed
         case finalized
@@ -1243,7 +1244,7 @@ final class Solana {
         }
     }
 
-    fileprivate struct ParsedTransaction {
+    fileprivate struct ParsedTransaction: Sendable {
         let transactionData: Data
         let messageData: Data
         let messageRange: Range<Data.Index>
@@ -1251,17 +1252,17 @@ final class Solana {
         let signaturesStartIndex: Data.Index
     }
 
-    fileprivate struct PreparedSignAndSendTransaction {
+    fileprivate struct PreparedSignAndSendTransaction: Sendable {
         let parsedTransaction: ParsedTransaction
         let signerSignatureRange: Range<Data.Index>
     }
 
-    struct PreparedLegacySignAndSendTransaction {
+    struct PreparedLegacySignAndSendTransaction: Sendable {
         let approvalMessage: String
         let preparedMessage: SolanaPreparedTransactionMessage
     }
 
-    struct PreparedSerializedTransaction {
+    struct PreparedSerializedTransaction: Sendable {
         let approvalMessage: String
         fileprivate let preparedTransaction: PreparedSignAndSendTransaction
 
@@ -1342,7 +1343,7 @@ final class Solana {
     private let urlSession: URLSession
     private let rpcConfiguration: RPCConfiguration
     private let authorizationProvider: AlchemyAuthorizationProviding
-    private let signatureLength = 64
+    private static let signatureLength = 64
     private let publicKeyLength = 32
     private let signatureStatusInitialPollInterval: TimeInterval = 0.5
     private let signatureStatusMaxPollInterval: TimeInterval = 2
@@ -1483,10 +1484,28 @@ final class Solana {
     }
 
     func sign(messageData: Data, privateKey: WalletPrivateKey) -> String? {
-        return sign(digest: messageData, privateKey: privateKey)
+        return Self.sign(messageData: messageData, privateKey: privateKey)
+    }
+
+    static func sign(messageData: Data, privateKey: WalletPrivateKey) -> String? {
+        guard let signedData = signatureData(
+            digest: messageData,
+            privateKey: privateKey
+        ) else { return nil }
+        return WalletCrypto.base58Encode(data: signedData)
     }
 
     func sign(messageDataList: [Data], privateKey: WalletPrivateKey) -> [String]? {
+        return Self.sign(
+            messageDataList: messageDataList,
+            privateKey: privateKey
+        )
+    }
+
+    static func sign(
+        messageDataList: [Data],
+        privateKey: WalletPrivateKey
+    ) -> [String]? {
         guard let signatureDataList = privateKey.sign(digests: messageDataList, coin: .solana) else { return nil }
         return signatureDataList.map { WalletCrypto.base58Encode(data: $0) }
     }
@@ -1536,15 +1555,19 @@ final class Solana {
             completion(.failure(.rpcUnavailable))
             return
         }
-        switch signedTransactionForSignAndSend(preparedSerializedTransaction: preparedSerializedTransaction,
-                                               privateKey: privateKey) {
+        switch Self.signedTransactionForSignAndSend(
+            preparedSerializedTransaction: preparedSerializedTransaction,
+            privateKey: privateKey
+        ) {
         case .failure(let error):
             completion(.failure(error))
         case .success(let signedTransaction):
-            sendTransaction(signed: signedTransaction,
-                            endpoint: endpoint,
-                            sendOptions: sendOptions,
-                            completion: completion)
+            sendSignedTransaction(
+                signedTransaction,
+                endpoint: endpoint,
+                sendOptions: sendOptions,
+                completion: completion
+            )
         }
     }
 
@@ -1557,23 +1580,34 @@ final class Solana {
             completion(.failure(.rpcUnavailable))
             return
         }
-        let preparedMessage = preparedLegacyTransaction.preparedMessage
-        guard let signedData = signatureData(digest: preparedMessage.messageData, privateKey: privateKey),
-              let raw = compileTransactionData(messageData: preparedMessage.messageData,
-                                               parsedMessage: preparedMessage.parsedMessage,
-                                               signatureData: signedData) else {
-            completion(.failure(.invalidMessage))
-            return
+        switch Self.signedTransactionForSignAndSend(
+            preparedLegacyTransaction: preparedLegacyTransaction,
+            privateKey: privateKey
+        ) {
+        case .failure(let error):
+            completion(.failure(error))
+        case .success(let signedTransaction):
+            sendSignedTransaction(
+                signedTransaction,
+                endpoint: endpoint,
+                sendOptions: sendOptions,
+                completion: completion
+            )
         }
-
-        sendTransaction(signed: raw,
-                        endpoint: endpoint,
-                        sendOptions: sendOptions,
-                        completion: completion)
     }
 
     func signedTransactionForSignAndSend(preparedSerializedTransaction: PreparedSerializedTransaction,
                                          privateKey: WalletPrivateKey) -> Result<String, SendTransactionError> {
+        return Self.signedTransactionForSignAndSend(
+            preparedSerializedTransaction: preparedSerializedTransaction,
+            privateKey: privateKey
+        )
+    }
+
+    static func signedTransactionForSignAndSend(
+        preparedSerializedTransaction: PreparedSerializedTransaction,
+        privateKey: WalletPrivateKey
+    ) -> Result<String, SendTransactionError> {
         let prepared = preparedSerializedTransaction.preparedTransaction
         guard let signedData = signatureData(digest: prepared.parsedTransaction.messageData, privateKey: privateKey),
               let signedTransaction = compileTransactionData(transactionData: prepared.parsedTransaction.transactionData,
@@ -1583,6 +1617,81 @@ final class Solana {
         }
 
         return .success(signedTransaction)
+    }
+
+    static func signedTransactionForSignAndSend(
+        preparedLegacyTransaction: PreparedLegacySignAndSendTransaction,
+        privateKey: WalletPrivateKey
+    ) -> Result<String, SendTransactionError> {
+        let preparedMessage = preparedLegacyTransaction.preparedMessage
+        guard let signedData = signatureData(
+                  digest: preparedMessage.messageData,
+                  privateKey: privateKey
+              ),
+              let signedTransaction = compileTransactionData(
+                  messageData: preparedMessage.messageData,
+                  parsedMessage: preparedMessage.parsedMessage,
+                  signatureData: signedData
+              ) else {
+            return .failure(.invalidMessage)
+        }
+        return .success(signedTransaction)
+    }
+
+    static func transactionSignature(signedTransaction: String) -> String? {
+        guard let transactionData = Data(base64Encoded: signedTransaction),
+              let signaturesCount = transactionData.decodeLength(
+                  startingAt: transactionData.startIndex
+              ),
+              signaturesCount.length > 0 else { return nil }
+        let (signaturesByteCount, didOverflow) = signaturesCount.length
+            .multipliedReportingOverflow(by: signatureLength)
+        guard !didOverflow,
+              transactionData.distance(
+                  from: signaturesCount.nextIndex,
+                  to: transactionData.endIndex
+              ) > signaturesByteCount else { return nil }
+        let signatureEnd = transactionData.index(
+            signaturesCount.nextIndex,
+            offsetBy: signatureLength
+        )
+        let signature = transactionData.subdata(
+            in: signaturesCount.nextIndex..<signatureEnd
+        )
+        guard signature.contains(where: { $0 != 0 }) else { return nil }
+        return WalletCrypto.base58Encode(data: signature)
+    }
+
+    func sendSignedTransaction(
+        _ signedTransaction: String,
+        cluster: Cluster,
+        sendOptions: PreparedSendOptions,
+        completion: @escaping (Result<String, SendTransactionError>) -> Void
+    ) {
+        guard let endpoint = rpcConfiguration.endpoint(for: cluster) else {
+            completion(.failure(.rpcUnavailable))
+            return
+        }
+        sendSignedTransaction(
+            signedTransaction,
+            endpoint: endpoint,
+            sendOptions: sendOptions,
+            completion: completion
+        )
+    }
+
+    private func sendSignedTransaction(
+        _ signedTransaction: String,
+        endpoint: RPCConfiguration.Endpoint,
+        sendOptions: PreparedSendOptions,
+        completion: @escaping (Result<String, SendTransactionError>) -> Void
+    ) {
+        sendTransaction(
+            signed: signedTransaction,
+            endpoint: endpoint,
+            sendOptions: sendOptions,
+            completion: completion
+        )
     }
 
     private func preparedLegacySignAndSend(message: String,
@@ -1662,13 +1771,14 @@ final class Solana {
 
         performRequest(method: .sendTransaction,
                        endpoint: endpoint,
-                       parameters: parameters) {
+                       parameters: parameters,
+                       acceptsUnauthorizedResponse: { $0.result != nil }) {
             (outcome: RPCRequestOutcome<SendTransactionResponse>) in
             switch outcome {
             case .retryableFailure:
                 completion(.failure(.unknown))
             case .authorizationAcquisitionFailed:
-                completion(.failure(.unknown))
+                completion(.failure(.notSubmitted))
             case .authorizationRecoveryFailed(
                 let statusCode,
                 let response
@@ -1918,34 +2028,30 @@ final class Solana {
             return .confirmationFailed(signature: signature,
                                        message: Strings.solanaBlockhashNotFound,
                                        code: -32003)
-        case .invalidMessage, .invalidSendOptions, .unsupportedMultiSignature, .rpcUnavailable, .unknown:
+        case .invalidMessage, .invalidSendOptions, .unsupportedMultiSignature,
+             .rpcUnavailable, .notSubmitted, .unknown:
             return .confirmationFailed(signature: signature,
                                        message: Strings.failedToSend,
                                        code: nil)
         }
     }
 
-    private func sign(digest: Data, privateKey: WalletPrivateKey) -> String? {
-        guard let signedData = signatureData(digest: digest, privateKey: privateKey) else { return nil }
-        return WalletCrypto.base58Encode(data: signedData)
-    }
-
-    private func signatureData(digest: Data, privateKey: WalletPrivateKey) -> Data? {
+    private static func signatureData(digest: Data, privateKey: WalletPrivateKey) -> Data? {
         return privateKey.sign(digest: digest, coin: .solana)
     }
 
-    private func compileTransactionData(messageData: Data,
-                                        parsedMessage: SolanaWireMessage,
-                                        signatureData: Data) -> String? {
-        guard signatureData.count == signatureLength
+    private static func compileTransactionData(messageData: Data,
+                                               parsedMessage: SolanaWireMessage,
+                                               signatureData: Data) -> String? {
+        guard signatureData.count == Self.signatureLength
         else { return nil }
 
-        let placeholderSignature = Data(repeating: 0, count: signatureLength)
+        let placeholderSignature = Data(repeating: 0, count: Self.signatureLength)
         let signatureCountData = Data.encodeLength(parsedMessage.requiredSignaturesCount)
         let placeholderCount = max(parsedMessage.requiredSignaturesCount - 1, 0)
 
         var result = Data()
-        result.reserveCapacity(signatureCountData.count + signatureData.count + placeholderCount * signatureLength + messageData.count)
+        result.reserveCapacity(signatureCountData.count + signatureData.count + placeholderCount * Self.signatureLength + messageData.count)
         result.append(signatureCountData)
         result.append(signatureData)
         for _ in 0..<placeholderCount {
@@ -1956,10 +2062,10 @@ final class Solana {
         return result.base64EncodedString()
     }
 
-    private func compileTransactionData(transactionData: Data,
-                                        signerSignatureRange: Range<Data.Index>,
-                                        signatureData: Data) -> String? {
-        guard signatureData.count == signatureLength
+    private static func compileTransactionData(transactionData: Data,
+                                               signerSignatureRange: Range<Data.Index>,
+                                               signatureData: Data) -> String? {
+        guard signatureData.count == Self.signatureLength
         else { return nil }
 
         var updatedTransaction = transactionData
@@ -1972,6 +2078,8 @@ final class Solana {
                                                      parameters: [Any]? = nil,
                                                      authorizationRecoveryBudget:
                                                         OneShotGate? = nil,
+                                                     acceptsUnauthorizedResponse:
+                                                        @escaping (Response) -> Bool = { _ in false },
                                                      completion: @escaping (RPCRequestOutcome<Response>) -> Void) {
         let authorizationRecoveryBudget =
             authorizationRecoveryBudget ?? OneShotGate()
@@ -1996,6 +2104,8 @@ final class Solana {
                     authorization: authorization,
                     authorizationRecoveryBudget:
                         authorizationRecoveryBudget,
+                    acceptsUnauthorizedResponse:
+                        acceptsUnauthorizedResponse,
                     completion: completion
                 )
             } catch {
@@ -2011,6 +2121,7 @@ final class Solana {
         endpoint: RPCConfiguration.Endpoint,
         authorization: AlchemyAuthorization?,
         authorizationRecoveryBudget: OneShotGate,
+        acceptsUnauthorizedResponse: @escaping (Response) -> Bool,
         completion: @escaping (RPCRequestOutcome<Response>) -> Void
     ) {
         var authorizedRequest = request
@@ -2024,6 +2135,19 @@ final class Solana {
             if let httpResponse = response as? HTTPURLResponse,
                httpResponse.statusCode == 401,
                let authorization {
+                if let decodedResponse,
+                   acceptsUnauthorizedResponse(decodedResponse) {
+                    Task {
+                        await self.authorizationProvider.invalidateAuthorization(
+                            afterUnauthorized: authorization,
+                            for: endpoint.url
+                        )
+                        DispatchQueue.main.async {
+                            completion(.response(decodedResponse))
+                        }
+                    }
+                    return
+                }
                 guard authorizationRecoveryBudget.claim() else {
                     Task {
                         await self.authorizationProvider.invalidateAuthorization(
@@ -2060,6 +2184,8 @@ final class Solana {
                             authorization: replacement,
                             authorizationRecoveryBudget:
                                 authorizationRecoveryBudget,
+                            acceptsUnauthorizedResponse:
+                                acceptsUnauthorizedResponse,
                             completion: completion
                         )
                     } catch {
@@ -2104,7 +2230,7 @@ final class Solana {
             return .failure(.invalidMessage)
         }
 
-        let (signaturesByteLength, didOverflow) = signaturesCount.length.multipliedReportingOverflow(by: signatureLength)
+        let (signaturesByteLength, didOverflow) = signaturesCount.length.multipliedReportingOverflow(by: Self.signatureLength)
         guard !didOverflow,
               let messageStartIndex = transactionData.index(signaturesCount.nextIndex,
                                                             offsetBy: signaturesByteLength,
@@ -2150,13 +2276,13 @@ final class Solana {
             return nil
         }
 
-        let (signatureOffset, didOverflow) = signatureIndex.multipliedReportingOverflow(by: signatureLength)
+        let (signatureOffset, didOverflow) = signatureIndex.multipliedReportingOverflow(by: Self.signatureLength)
         guard !didOverflow,
               let signatureStart = parsedTransaction.transactionData.index(parsedTransaction.signaturesStartIndex,
                                                                            offsetBy: signatureOffset,
                                                                            limitedBy: parsedTransaction.messageRange.lowerBound),
               let signatureEnd = parsedTransaction.transactionData.index(signatureStart,
-                                                                         offsetBy: signatureLength,
+                                                                         offsetBy: Self.signatureLength,
                                                                          limitedBy: parsedTransaction.messageRange.lowerBound)
         else {
             return nil
@@ -2239,6 +2365,7 @@ extension Data {
         while index < endIndex {
             let element = self[index]
             index = self.index(after: index)
+            guard distance(from: startIndex, to: index) <= 3 else { return nil }
 
             guard shift < UInt.bitWidth else { return nil }
             let multiplier = UInt(1) << shift
@@ -2249,7 +2376,10 @@ extension Data {
             length = newLength
 
             if element & 0x80 == 0 {
-                guard let intLength = Int(exactly: length) else { return nil }
+                guard length <= UInt(UInt16.max),
+                      let intLength = Int(exactly: length),
+                      subdata(in: startIndex..<index) == Self.encodeLength(intLength)
+                else { return nil }
                 return (length: intLength, nextIndex: index)
             }
 

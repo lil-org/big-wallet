@@ -12,8 +12,32 @@ struct Networks {
     }
     
     @discardableResult
-    static func add(networkFromDapp: EthereumNetworkFromDapp) -> Bool {
-        return SharedDefaults.addNetwork(networkFromDapp)
+    static func add(
+        networkFromDapp: EthereumNetworkFromDapp
+    ) -> CustomNetworkInsertionResult {
+        return SharedDefaults.insertNetwork(networkFromDapp)
+    }
+
+    static func existingCustomDefinitionResult(
+        networkFromDapp: EthereumNetworkFromDapp
+    ) -> CustomNetworkInsertionResult {
+        guard let chainId = Int(hexString: networkFromDapp.chainId),
+              let entry = CustomNetworkCache.shared.snapshot()
+                  .entriesByChainId[chainId] else {
+            return .unavailable
+        }
+        let requestedRPCURLs = CustomNetworkDefinition.requestedRPCURLs(
+            for: networkFromDapp
+        )
+        guard !requestedRPCURLs.isEmpty else { return .unavailable }
+        return requestedRPCURLs.contains(where: { requestedRPCURL in
+            CustomNetworkDefinition.matches(
+                requested: networkFromDapp,
+                requestedRPCURL: requestedRPCURL,
+                existing: entry.definition,
+                existingRPCURL: entry.rpcURL
+            )
+        }) ? .matching : .conflict
     }
     
     static func withChainIdHex(_ chainIdHex: String?) -> EthereumNetwork? {
@@ -43,5 +67,11 @@ struct Networks {
     private static let allBundled: [EthereumNetwork] = {
         return NetworkResolver.main.bundledNetworks
     }()
-    
+
+    // The order networks are offered in, everywhere. Not cached: custom networks are read live,
+    // so a chain added by a dapp shows up right away.
+    static var ordered: [EthereumNetwork] {
+        return pinned + custom + mainnets + testnets
+    }
+
 }

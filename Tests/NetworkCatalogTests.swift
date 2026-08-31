@@ -290,6 +290,22 @@ final class NetworkCatalogTests: XCTestCase {
         )
     }
 
+    func testEveryNetworkListSharesOneOrder() {
+        let ordered = Networks.ordered
+        XCTAssertEqual(
+            ordered.prefix(Networks.pinned.count).map(\.chainId),
+            Networks.pinned.map(\.chainId)
+        )
+        XCTAssertEqual(
+            ordered.suffix(Networks.testnets.count).map(\.chainId),
+            Networks.testnets.map(\.chainId)
+        )
+        XCTAssertEqual(
+            ordered.count,
+            Networks.pinned.count + Networks.custom.count + Networks.mainnets.count + Networks.testnets.count
+        )
+    }
+
     func testAcceptedConflictRecordsHaveExactOwnersAndMetadata() throws {
         let catalog = try loadedCatalog()
         let expectations: [Int: ConflictExpectation] = [
@@ -461,8 +477,7 @@ final class NetworkCatalogTests: XCTestCase {
                 customRecord(chainId: 1, name: "Archived Ethereum", rpcURL: "https://custom-ethereum.example"),
                 customRecord(chainId: 40, name: "Archived Telos", rpcURL: "https://custom-telos.example"),
                 customRecord(chainId: 64240, name: "Custom 64240", rpcURL: "https://custom-64240.example"),
-            ],
-            nodeURLForChainId: { _ in nil }
+            ]
         )
         var customSnapshotCount = 0
         let resolver = NetworkResolver(
@@ -508,8 +523,7 @@ final class NetworkCatalogTests: XCTestCase {
                     name: "Archived Ethereum",
                     rpcURL: "https://archived-custom-mainnet.example"
                 ),
-            ],
-            nodeURLForChainId: { _ in nil }
+            ]
         )
         var customSnapshotCount = 0
         let resolver = NetworkResolver(
@@ -621,12 +635,7 @@ final class NetworkCatalogTests: XCTestCase {
             customRecord(chainId: 40, name: "User Telos", rpcURL: "https://custom-telos.example"),
             customRecord(chainId: 64240, name: "Custom 64240", rpcURL: "https://custom-64240.example"),
         ]
-        let snapshot = CustomNetworkSnapshot(
-            records: records,
-            nodeURLForChainId: { chainId in
-                return chainId == 40 ? "https://stored-custom-telos.example" : nil
-            }
-        )
+        let snapshot = CustomNetworkSnapshot(records: records)
         let resolver = NetworkResolver(
             catalog: catalog,
             catalogOwnedChainIds: [1, 40],
@@ -651,10 +660,7 @@ final class NetworkCatalogTests: XCTestCase {
             customRecord(chainId: 1, name: "Archived Ethereum", rpcURL: "https://custom-ethereum.example"),
             customRecord(chainId: 64240, name: "Last 64240", rpcURL: "https://last-64240.example"),
         ]
-        let snapshot = CustomNetworkSnapshot(
-            records: records,
-            nodeURLForChainId: { _ in nil }
-        )
+        let snapshot = CustomNetworkSnapshot(records: records)
         let resolver = NetworkResolver(
             catalog: catalog,
             catalogOwnedChainIds: [1],
@@ -668,22 +674,6 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertEqual(resolver.visibleCustomNetworks.map(\.chainId), [64240])
         XCTAssertEqual(resolver.resolve(chainId: 123456789), .unknown)
 
-        let storedNodeSnapshot = CustomNetworkSnapshot(
-            records: records,
-            nodeURLForChainId: { chainId in
-                return chainId == 64240 ? "https://stored-64240.example" : "https://orphaned.example"
-            }
-        )
-        let storedNodeResolver = NetworkResolver(
-            catalog: catalog,
-            catalogOwnedChainIds: [1],
-            customSnapshot: { storedNodeSnapshot }
-        )
-        XCTAssertEqual(
-            storedNodeResolver.rpcURL(chainId: 64240)?.absoluteString,
-            "https://stored-64240.example"
-        )
-        XCTAssertEqual(storedNodeResolver.resolve(chainId: 123456789), .unknown)
     }
 
     func testArchivedCustomNetworkEncodingStillDecodes() throws {
@@ -705,7 +695,7 @@ final class NetworkCatalogTests: XCTestCase {
             """.utf8
         )
         let records = try JSONDecoder().decode([EthereumNetworkFromDapp].self, from: archivedData)
-        let snapshot = CustomNetworkSnapshot(records: records, nodeURLForChainId: { _ in nil })
+        let snapshot = CustomNetworkSnapshot(records: records)
 
         XCTAssertEqual(snapshot.orderedEntries.map(\.chainId), [64240])
         XCTAssertEqual(
@@ -715,15 +705,19 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertEqual(snapshot.entriesByChainId[64240]?.resolvedNetwork.network.symbol, "ARCH")
     }
 
-    func testCustomRPCURLsAllowHTTPButRejectUnsupportedOrRelativeURLs() throws {
+    func testStoredCustomRPCURLsRetainLegacyHTTPAndPrivateEndpoints() throws {
         let snapshot = CustomNetworkSnapshot(
             records: [
-                customRecord(chainId: 64240, name: "Local HTTP", rpcURL: "http://localhost:8545"),
+                customRecord(chainId: 64240, name: "Public HTTPS", rpcURL: "https://rpc.example:8545"),
                 customRecord(chainId: 64241, name: "Relative", rpcURL: "relative-endpoint"),
                 customRecord(chainId: 64242, name: "WebSocket", rpcURL: "ws://localhost:8546"),
                 customRecord(chainId: 64243, name: "File", rpcURL: "file:///tmp/rpc"),
-            ],
-            nodeURLForChainId: { _ in nil }
+                customRecord(chainId: 64244, name: "Localhost", rpcURL: "http://localhost:8545"),
+                customRecord(chainId: 64245, name: "Private IPv4", rpcURL: "https://10.0.0.1"),
+                customRecord(chainId: 64246, name: "Local IPv6", rpcURL: "https://[fe80::1]"),
+                customRecord(chainId: 64247, name: "Public Literal HTTP", rpcURL: "http://1.1.1.1:8545"),
+                customRecord(chainId: 64248, name: "Insecure Hostname", rpcURL: "http://rpc.example:8545"),
+            ]
         )
         let resolver = NetworkResolver(
             catalog: try NetworkCatalog(records: []),
@@ -731,10 +725,27 @@ final class NetworkCatalogTests: XCTestCase {
             customSnapshot: { snapshot }
         )
 
-        XCTAssertEqual(resolver.rpcURL(chainId: 64240)?.absoluteString, "http://localhost:8545")
+        XCTAssertEqual(resolver.rpcURL(chainId: 64240)?.absoluteString, "https://rpc.example:8545")
         XCTAssertEqual(resolver.resolve(chainId: 64241), .unknown)
         XCTAssertEqual(resolver.resolve(chainId: 64242), .unknown)
         XCTAssertEqual(resolver.resolve(chainId: 64243), .unknown)
+        XCTAssertEqual(
+            resolver.rpcURL(chainId: 64244)?.absoluteString,
+            "http://localhost:8545"
+        )
+        XCTAssertEqual(
+            resolver.rpcURL(chainId: 64245)?.absoluteString,
+            "https://10.0.0.1"
+        )
+        XCTAssertEqual(
+            resolver.rpcURL(chainId: 64246)?.absoluteString,
+            "https://[fe80::1]"
+        )
+        XCTAssertEqual(resolver.rpcURL(chainId: 64247)?.absoluteString, "http://1.1.1.1:8545")
+        XCTAssertEqual(
+            resolver.rpcURL(chainId: 64248)?.absoluteString,
+            "http://rpc.example:8545"
+        )
     }
 
     func testMissingOrInvalidCatalogNeverRevivesCatalogOwnedCustomRecords() throws {
@@ -744,8 +755,7 @@ final class NetworkCatalogTests: XCTestCase {
                 customRecord(chainId: 40, name: "Archived Telos", rpcURL: "https://custom-telos.example"),
                 customRecord(chainId: 300, name: "Archived ZKsync", rpcURL: "https://custom-zksync.example"),
                 customRecord(chainId: 64240, name: "Custom 64240", rpcURL: "https://custom-64240.example"),
-            ],
-            nodeURLForChainId: { _ in nil }
+            ]
         )
         var customSnapshotCount = 0
         let resolver = NetworkResolver(
@@ -781,8 +791,7 @@ final class NetworkCatalogTests: XCTestCase {
                 customRecord(chainId: 40, name: "Archived Telos", rpcURL: "https://custom-telos.example"),
                 customRecord(chainId: 300, name: "Archived ZKsync", rpcURL: "https://custom-zksync.example"),
                 customRecord(chainId: 64240, name: "Custom 64240", rpcURL: "https://custom-64240.example"),
-            ],
-            nodeURLForChainId: { _ in nil }
+            ]
         )
         let resolver = NetworkResolver(
             catalog: mismatchedCatalog,
@@ -834,8 +843,7 @@ final class NetworkCatalogTests: XCTestCase {
                     name: "Custom 64240",
                     rpcURL: "https://custom-64240.example"
                 ),
-            ],
-            nodeURLForChainId: { _ in nil }
+            ]
         )
         var customSnapshotCount = 0
         let resolver = NetworkResolver(
@@ -916,13 +924,12 @@ final class NetworkCatalogTests: XCTestCase {
         let snapshot = CustomNetworkSnapshot(
             records: [
                 customRecord(chainId: 64240, name: "Custom 64240", rpcURL: "https://custom-64240.example"),
-            ],
-            nodeURLForChainId: { _ in nil }
+            ]
         )
         var loadCount = 0
         let cache = CustomNetworkCache(loader: {
             loadCount += 1
-            return snapshot
+            return .loaded(snapshot)
         })
         let resolver = NetworkResolver(
             catalog: try NetworkCatalog(records: []),
@@ -947,18 +954,83 @@ final class NetworkCatalogTests: XCTestCase {
         XCTAssertEqual(loadCount, 2)
     }
 
+    func testCustomNetworkCacheRetainsLastGoodSnapshotAfterReloadFailure() throws {
+        let snapshot = CustomNetworkSnapshot(records: [
+            customRecord(
+                chainId: 64_240,
+                name: "Custom 64240",
+                rpcURL: "https://custom-64240.example"
+            ),
+        ])
+        var shouldFail = false
+        let cache = CustomNetworkCache(loader: {
+            return shouldFail ? .unavailable : .loaded(snapshot)
+        })
+
+        XCTAssertEqual(
+            cache.snapshot().entriesByChainId[64_240]?.rpcURL.absoluteString,
+            "https://custom-64240.example"
+        )
+        shouldFail = true
+        cache.invalidate()
+        XCTAssertEqual(
+            cache.snapshot().entriesByChainId[64_240]?.rpcURL.absoluteString,
+            "https://custom-64240.example"
+        )
+    }
+
+    func testCustomNetworkCacheRetriesUnavailableInitialLoad() {
+        let snapshot = CustomNetworkSnapshot(records: [
+            customRecord(
+                chainId: 64_240,
+                name: "Custom 64240",
+                rpcURL: "https://custom-64240.example"
+            ),
+        ])
+        var loadCount = 0
+        let cache = CustomNetworkCache(loader: {
+            loadCount += 1
+            return loadCount == 1 ? .unavailable : .loaded(snapshot)
+        })
+
+        XCTAssertTrue(cache.snapshot().orderedEntries.isEmpty)
+        XCTAssertNotNil(cache.snapshot().entriesByChainId[64_240])
+        XCTAssertEqual(loadCount, 2)
+    }
+
+    func testCustomNetworkCacheFailsClosedAfterCorruptReload() {
+        let snapshot = CustomNetworkSnapshot(records: [
+            customRecord(
+                chainId: 64_240,
+                name: "Custom 64240",
+                rpcURL: "https://custom-64240.example"
+            ),
+        ])
+        var loadCount = 0
+        var isCorrupt = false
+        let cache = CustomNetworkCache(loader: {
+            loadCount += 1
+            return isCorrupt ? .corrupt : .loaded(snapshot)
+        })
+
+        XCTAssertNotNil(cache.snapshot().entriesByChainId[64_240])
+        isCorrupt = true
+        cache.invalidate()
+        XCTAssertTrue(cache.snapshot().orderedEntries.isEmpty)
+        XCTAssertTrue(cache.snapshot().orderedEntries.isEmpty)
+        XCTAssertEqual(loadCount, 2)
+    }
+
     func testCustomNetworkCacheInvalidationPublishesNewGenerationToConcurrentReaders() {
         let generationA = CustomNetworkSnapshot(
             records: [
                 customRecord(chainId: 64240, name: "Generation A", rpcURL: "https://generation-a.example"),
-            ],
-            nodeURLForChainId: { _ in nil }
+            ]
         )
         let generationB = CustomNetworkSnapshot(
             records: [
                 customRecord(chainId: 64240, name: "Generation B", rpcURL: "https://generation-b.example"),
-            ],
-            nodeURLForChainId: { _ in nil }
+            ]
         )
         let stateLock = NSLock()
         var activeGeneration = generationA
@@ -977,7 +1049,7 @@ final class NetworkCatalogTests: XCTestCase {
                 firstLoadStarted.signal()
                 _ = allowFirstLoadToFinish.wait(timeout: .now() + 5)
             }
-            return snapshot
+            return .loaded(snapshot)
         })
 
         let initialReadFinished = expectation(description: "Initial cache read finished")
@@ -1669,42 +1741,16 @@ final class NetworkCatalogTests: XCTestCase {
         }
     }
 
-    func testSafariRPCClientRejectsNonReplayableAndAuthorizedRedirects()
-        throws {
+    func testSafariRPCClientRejectsAllRedirects() throws {
         let sourceURL = try XCTUnwrap(URL(string: "https://rpc.example/source"))
         let redirectURL = try XCTUnwrap(URL(string: "https://rpc.example/redirect"))
-        let rawTransactionBody = Data(
-            #"{"jsonrpc":"2.0","id":1,"method":"eth_sendRawTransaction","params":["0x01"]}"#.utf8
-        )
-        let readBody = Data(
-            #"{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}"#.utf8
-        )
-
-        XCTAssertFalse(
-            SafariRPCClient.allowsRedirect(
-                for: rawTransactionBody,
-                isAuthorized: false
-            )
-        )
-        XCTAssertFalse(
-            SafariRPCClient.allowsRedirect(
-                for: readBody,
-                isAuthorized: true
-            )
-        )
-        XCTAssertTrue(
-            SafariRPCClient.allowsRedirect(
-                for: readBody,
-                isAuthorized: false
-            )
-        )
 
         let session = URLSession(configuration: .ephemeral)
         defer {
             session.invalidateAndCancel()
         }
         let task = session.dataTask(with: sourceURL)
-        let delegate = SafariRPCRedirectDelegate(allowsRedirect: false)
+        let delegate = NoRedirectSessionDelegate()
 
         for statusCode in [307, 308] {
             let completion = expectation(
@@ -1731,13 +1777,16 @@ final class NetworkCatalogTests: XCTestCase {
         }
     }
 
-    func testSafariRPCClientFollowsReplaySafeRedirects() throws {
+    func testSafariRPCClientRejectsRedirectResponseBody() throws {
         let sourceURL = try XCTUnwrap(URL(string: "https://rpc.example/source"))
         let redirectURL = try XCTUnwrap(URL(string: "https://rpc.example/redirect"))
         SafariRedirectURLProtocol.configure(
             sourceURL: sourceURL,
             redirectURL: redirectURL,
-            statusCode: 307
+            statusCode: 307,
+            responseData: Data(
+                #"{"jsonrpc":"2.0","id":1,"result":"source"}"#.utf8
+            )
         )
         defer {
             SafariRedirectURLProtocol.reset()
@@ -1750,7 +1799,7 @@ final class NetworkCatalogTests: XCTestCase {
         }
         let client = SafariRPCClient(urlSession: session)
         let completion = expectation(
-            description: "Replay-safe redirect completed"
+            description: "Replay-safe redirect rejected"
         )
 
         client.send(
@@ -1760,15 +1809,15 @@ final class NetworkCatalogTests: XCTestCase {
             ),
             expectedResponseID: 1
         ) { response in
-            XCTAssertEqual(response?["result"] as? String, "redirected")
+            XCTAssertNil(response)
             completion.fulfill()
         }
 
         wait(for: [completion], timeout: 2)
-        XCTAssertEqual(SafariRedirectURLProtocol.requestCount, 2)
+        XCTAssertEqual(SafariRedirectURLProtocol.requestCount, 1)
         XCTAssertEqual(
             SafariRedirectURLProtocol.requestedURLs,
-            [sourceURL, redirectURL]
+            [sourceURL]
         )
     }
 
@@ -2518,6 +2567,7 @@ private final class SafariRedirectURLProtocol: URLProtocol {
     private static var configuredRedirectURL: URL?
     private static var configuredSourceURL: URL?
     private static var configuredStatusCode = 307
+    private static var configuredResponseData = Data()
     private static var recordedURLs = [URL]()
 
     static var requestCount: Int {
@@ -2535,12 +2585,14 @@ private final class SafariRedirectURLProtocol: URLProtocol {
     static func configure(
         sourceURL: URL,
         redirectURL: URL,
-        statusCode: Int
+        statusCode: Int,
+        responseData: Data
     ) {
         stateLock.lock()
         configuredSourceURL = sourceURL
         configuredRedirectURL = redirectURL
         configuredStatusCode = statusCode
+        configuredResponseData = responseData
         recordedURLs = []
         stateLock.unlock()
     }
@@ -2549,6 +2601,7 @@ private final class SafariRedirectURLProtocol: URLProtocol {
         stateLock.lock()
         configuredSourceURL = nil
         configuredRedirectURL = nil
+        configuredResponseData = Data()
         recordedURLs = []
         stateLock.unlock()
     }
@@ -2575,6 +2628,7 @@ private final class SafariRedirectURLProtocol: URLProtocol {
         let sourceURL = Self.configuredSourceURL
         let redirectURL = Self.configuredRedirectURL
         let statusCode = Self.configuredStatusCode
+        let responseData = Self.configuredResponseData
         Self.stateLock.unlock()
 
         guard url == sourceURL,
@@ -2596,6 +2650,13 @@ private final class SafariRedirectURLProtocol: URLProtocol {
             wasRedirectedTo: redirectRequest,
             redirectResponse: response
         )
+        client?.urlProtocol(
+            self,
+            didReceive: response,
+            cacheStoragePolicy: .notAllowed
+        )
+        client?.urlProtocol(self, didLoad: responseData)
+        client?.urlProtocolDidFinishLoading(self)
     }
 
     override func stopLoading() {}

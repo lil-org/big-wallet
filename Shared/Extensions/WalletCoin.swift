@@ -24,6 +24,15 @@ extension WalletCoin {
         }
     }
     
+    nonisolated var correspondingInpageProvider: InpageProvider {
+        switch self {
+        case .ethereum:
+            return .ethereum
+        case .solana:
+            return .solana
+        }
+    }
+
     nonisolated static func correspondingToInpageProvider(_ inpageProvider: InpageProvider) -> WalletCoin? {
         switch inpageProvider {
         case .ethereum:

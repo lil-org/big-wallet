@@ -699,24 +699,6 @@ struct GasSpeedConfiguration {
         feeChoice == .userSet
     }
 
-    func isSpeedSelectionAvailable(
-        for transaction: Transaction,
-        on chain: EthereumNetwork,
-        allowsMutation: Bool
-    ) -> Bool {
-        guard allowsMutation,
-              chain.isEthMainnet,
-              transaction.feeBasisBaseFeePerGas != nil,
-              info != nil else {
-            return false
-        }
-        guard transaction.preparedFee == nil else { return true }
-        if case .automatic = transaction.feeIntent {
-            return false
-        }
-        return true
-    }
-
     func speedPriorityFeePerGas(
         for transaction: Transaction
     ) -> BigUInt? {

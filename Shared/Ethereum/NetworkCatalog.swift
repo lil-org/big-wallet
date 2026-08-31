@@ -252,7 +252,7 @@ enum BundledNetworkOwnership {
 
 }
 
-enum RPCSource: Equatable {
+enum RPCSource: Equatable, Sendable {
 
     case alchemy
     case fallback
@@ -260,7 +260,7 @@ enum RPCSource: Equatable {
 
 }
 
-struct ResolvedEthereumNetwork: Equatable {
+struct ResolvedEthereumNetwork: Equatable, Sendable {
 
     let network: EthereumNetwork
     let source: RPCSource

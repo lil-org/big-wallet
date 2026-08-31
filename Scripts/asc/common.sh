@@ -58,11 +58,9 @@ ALCHEMY_JWT_PRELAUNCH_ANCHOR_VERSION="c5c74433-eb49-4998-979b-e78d17da74f8"
 VERSIONED_INFO_PLISTS=(
   "App iOS/Info.plist"
   "App macOS/Info.plist"
-  "Big Wallet Ambient/Info.plist"
 )
 WEB_EXTENSION_MANIFESTS=(
-  "Safari iOS/Resources/manifest.json"
-  "Safari macOS/Resources/manifest.json"
+  "Safari Shared/Resources/manifest.json"
 )
 
 log() {

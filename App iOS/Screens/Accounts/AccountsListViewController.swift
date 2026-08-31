@@ -1,7 +1,6 @@
 // ∅ 2026 lil org
 
 import UIKit
-import SwiftUI
 
 class AccountsListViewController: UIViewController, DataStateContainer {
     
@@ -27,47 +26,13 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     private var sections = [Section]()
     private let walletsManager = WalletsManager.shared
     
-    private var network: EthereumNetwork? = Networks.ethereum
-    var selectAccountAction: SelectAccountAction?
-    
     private var wallets: [WalletContainer] {
         return walletsManager.wallets
     }
-    
-    private var forWalletSelection: Bool {
-        return selectAccountAction != nil
-    }
 
-    private var adaptiveTitle: String {
-        if forWalletSelection {
-            if selectAccountAction?.initiallyConnectedProviders.isEmpty ?? true {
-                return Strings.selectAccount
-            } else {
-                return Strings.switchAccount
-            }
-        } else {
-            return Strings.wallets
-        }
-    }
-
-    private var canSelectEthereumNetwork: Bool {
-        return selectAccountAction?.canSelectEthereumNetwork == true
-    }
-    
-    private var didAppear = false
-    private var toDismissAfterResponse = [Int: UIViewController]()
     private var preferencesItem: UIBarButtonItem?
     private var addWalletItem: UIBarButtonItem?
-    private var didScrollToInitialSelection = false
-    private var didShowAddAccountToConnectAlert = false
-    
-    @IBOutlet weak var bottomOverlayView: UIVisualEffectView!
-    @IBOutlet weak var websiteLogoImageView: UIImageView!
-    @IBOutlet weak var websiteNameLabel: UILabel!
-    @IBOutlet weak var topOverlayView: UIView!
-    @IBOutlet weak var networkButton: UIButton!
-    @IBOutlet weak var secondaryButton: UIButton!
-    @IBOutlet weak var primaryButton: UIButton!
+
     @IBOutlet weak var tableView: UITableView! {
         didSet {
             tableView.delegate = self
@@ -84,154 +49,39 @@ class AccountsListViewController: UIViewController, DataStateContainer {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        primaryButton.setTitle(Strings.connect, for: .normal)
-        secondaryButton.setTitle(Strings.cancel, for: .normal)
-        
         if walletsManager.wallets.isEmpty {
             walletsManager.start()
         }
-        
-        prepareWebsitePanelForTableHeaderIfNeeded()
-        configureAdaptiveLargeTitle(adaptiveTitle,
-                                    tableView: tableView,
-                                    accessoryView: adaptiveTitleAccessoryView,
-                                    accessoryInsets: adaptiveTitleAccessoryInsets)
-        
+
+        configureAdaptiveLargeTitle(Strings.wallets, tableView: tableView)
+
         isModalInPresentation = true
         let addItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addWallet))
         let preferencesItem = UIBarButtonItem(image: Images.preferences, style: UIBarButtonItem.Style.plain, target: self, action: #selector(preferencesButtonTapped))
-        let cancelItem = UIBarButtonItem(title: Strings.cancel, style: .plain, target: self, action: #selector(cancelButtonTapped))
         self.addWalletItem = addItem
         self.preferencesItem = preferencesItem
-        navigationItem.rightBarButtonItems = forWalletSelection ? [addItem] : [addItem, preferencesItem]
-        if forWalletSelection {
-            navigationItem.leftBarButtonItem = cancelItem
-        }
+        navigationItem.rightBarButtonItems = [addItem, preferencesItem]
         configureDataState(.noData, description: Strings.nothingHere, buttonTitle: Strings.addWallet) { [weak self] in
             self?.addWallet()
         }
         dataStateShouldMoveWithKeyboard(false)
         updateCellModels()
         updateDataState()
-        NotificationCenter.default.addObserver(self, selector: #selector(processInput), name: UIApplication.didBecomeActiveNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(processInput), name: .receievedWalletRequest, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(walletsChanged), name: .walletsChanged, object: nil)
-        
-        bottomOverlayView.isHidden = !forWalletSelection
-        topOverlayView.isHidden = !forWalletSelection
-        if let selectAccountAction = selectAccountAction {
-            let bottomOverlayHeight: CGFloat = 70
-            tableView.contentInset.bottom += bottomOverlayHeight
-            tableView.verticalScrollIndicatorInsets.bottom += bottomOverlayHeight
-            if !selectAccountAction.initiallyConnectedProviders.isEmpty {
-                primaryButton.setTitle(Strings.ok, for: .normal)
-                secondaryButton.setTitle(Strings.disconnect, for: .normal)
-                secondaryButton.tintColor = .systemRed
-            }
-            updatePrimaryButton()
-            
-            if let network = selectAccountAction.network, self.network != network {
-                selectNetwork(network)
-            }
-            updateNetworkButtonVisibility()
-            
-            if let peer = selectAccountAction.peer {
-                websiteNameLabel.text = peer.name
-                if let urlString = peer.iconURLString, let url = URL(string: urlString) {
-                    websiteLogoImageView.setRemoteImage(with: url)
-                }
-            } else {
-                websiteNameLabel.text = Strings.unknownWebsite
-            }
-            
-            showAddAccountToConnectAlertIfNeeded()
-        }
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        updateAdaptiveLargeTitleLayout(adaptiveTitle,
-                                       tableView: tableView,
-                                       accessoryView: adaptiveTitleAccessoryView,
-                                       accessoryInsets: adaptiveTitleAccessoryInsets)
+        updateAdaptiveLargeTitleLayout(Strings.wallets, tableView: tableView)
     }
-    
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        processInput()
-        didAppear = true
         DispatchQueue.main.async { [weak self] in
             self?.navigationController?.navigationBar.sizeToFit()
-            self?.scrollToInitialSelectionIfNeeded()
         }
     }
 
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        showAddAccountToConnectAlertIfNeeded()
-    }
-
-    private func showAddAccountToConnectAlertIfNeeded() {
-        guard !didShowAddAccountToConnectAlert,
-              isViewLoaded,
-              view.window != nil,
-              let name = selectAccountAction?.coinType?.name,
-              selectAccountAction?.selectedAccounts.isEmpty == true,
-              !wallets.isEmpty
-        else { return }
-
-        didShowAddAccountToConnectAlert = true
-        showMessageAlert(text: String(format: Strings.addAccountToConnect, arguments: [name]))
-    }
-
-    private var adaptiveTitleAccessoryView: UIView? {
-        return forWalletSelection ? topOverlayView : nil
-    }
-
-    private var adaptiveTitleAccessoryInsets: UIEdgeInsets {
-        return forWalletSelection ? UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16) : .zero
-    }
-
-    private func prepareWebsitePanelForTableHeaderIfNeeded() {
-        guard forWalletSelection else { return }
-
-        let constraints = view.constraints.filter {
-            $0.firstItem === topOverlayView || $0.secondItem === topOverlayView
-        }
-        NSLayoutConstraint.deactivate(constraints)
-        topOverlayView.removeFromSuperview()
-        topOverlayView.translatesAutoresizingMaskIntoConstraints = true
-        topOverlayView.autoresizingMask = [.flexibleWidth]
-    }
-
-    private func scrollToTheFirst(_ specificWalletAccounts: Set<SpecificWalletAccount>) {
-        for (sectionIndex, section) in sections.enumerated() {
-            for (row, cellModel) in section.items.enumerated() {
-                let account: SpecificWalletAccount
-                switch cellModel {
-                case let .mnemonicAccount(walletIndex, accountIndex):
-                    account = SpecificWalletAccount(walletId: wallets[walletIndex].id, account: wallets[walletIndex].accounts[accountIndex])
-                case let .privateKeyAccount(walletIndex: walletIndex, account: privateKeyAccount):
-                    account = SpecificWalletAccount(walletId: wallets[walletIndex].id, account: privateKeyAccount)
-                }
-                if specificWalletAccounts.contains(account) {
-                    let indexPath = IndexPath(row: row, section: sectionIndex)
-                    tableView.scrollToRow(at: indexPath, at: .none, animated: false)
-                    return
-                }
-            }
-        }
-    }
-
-    private func scrollToInitialSelectionIfNeeded() {
-        guard didAppear, !didScrollToInitialSelection, !sections.isEmpty else { return }
-
-        didScrollToInitialSelection = true
-        if let selectedAccounts = selectAccountAction?.selectedAccounts {
-            scrollToTheFirst(selectedAccounts)
-        }
-    }
-    
     private func walletForIndexPath(_ indexPath: IndexPath) -> WalletContainer {
         let section = sections[indexPath.section]
         let items = section.items
@@ -263,11 +113,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
     }
     
-    private func updatePrimaryButton() {
-        primaryButton.isEnabled =
-            selectAccountAction?.canSubmitSelection(network: network) == true
-    }
-    
     private func updateCellModels() {
         sections = []
         var privateKeyAccountCellModels = [CellModel]()
@@ -292,175 +137,10 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         }
     }
     
-    @objc private func processInput() {
-        let inputLinkString = launchURL?.absoluteString
-        launchURL = nil
-        
-        guard let inputLinkString = inputLinkString else { return }
-        
-        let action: DappRequestAction
-        let id: Int
-        if let request = SafariRequest(urlString: inputLinkString) {
-            id = request.id
-            action = DappRequestProcessor.processSafariRequest(request) { [weak self] hash in
-                self?.redirectBack(requestId: id)
-            }
-        } else {
-            return
-        }
-        
-        switch action {
-        case .none, .justShowApp:
-            break
-        case .selectAccount(let action), .switchAccount(let action):
-            let selectAccountViewController = instantiate(AccountsListViewController.self, from: .main)
-            selectAccountViewController.selectAccountAction = action
-            presentForExternalRequest(selectAccountViewController.inNavigationController, id: id)
-        case .approveMessage(let action):
-            let approveViewController = ApproveViewController.with(subject: action.subject,
-                                                                   account: action.account,
-                                                                   walletId: action.walletId,
-                                                                   meta: action.meta,
-                                                                   peerMeta: action.peerMeta,
-                                                                   solanaClusterSelection: action.solanaClusterSelection,
-                                                                   completion: action.completion)
-            presentForExternalRequest(approveViewController.inNavigationController, id: id)
-        case .approveTransaction(let action):
-            let approveTransactionViewController = ApproveTransactionViewController.with(transaction: action.transaction,
-                                                                                         chain: action.chain,
-                                                                                         account: action.account,
-                                                                                         walletId: action.walletId,
-                                                                                         peerMeta: action.peerMeta,
-                                                                                         completion: action.completion)
-            presentForExternalRequest(approveTransactionViewController.inNavigationController, id: id)
-        case .addEthereumChain(let action):
-            let message = action.chainToAdd.chainName + "\n\n" + action.chainToAdd.defaultRpcUrl
-            let alert = UIAlertController(title: Strings.addNetwork, message: message, preferredStyle: .alert)
-            let okAction = UIAlertAction(title: Strings.ok, style: .default) { _ in
-                action.completion(true)
-            }
-            let cancelAction = UIAlertAction(title: Strings.cancel, style: .cancel) { _ in
-                action.completion(false)
-            }
-            alert.addAction(cancelAction)
-            alert.addAction(okAction)
-            presentForExternalRequest(alert, id: id)
-        case let .showMessage(message, subtitle, completion):
-            let alert = UIAlertController(title: message, message: subtitle, preferredStyle: .alert)
-            let okAction = UIAlertAction(title: Strings.ok, style: .default) { _ in
-                completion?()
-            }
-            alert.addAction(okAction)
-            presentForExternalRequest(alert, id: id)
-        }
-    }
-    
-    private func presentForExternalRequest(_ viewController: UIViewController, id: Int) {
-        var presentFrom: UIViewController = self
-        while let presented = presentFrom.presentedViewController, !isTransientPresentation(presented) {
-            presentFrom = presented
-        }
-
-        let requestPresenter = presentFrom
-        let presentRequest = { [weak self] in
-            requestPresenter.present(viewController, animated: true)
-            self?.toDismissAfterResponse[id] = viewController
-        }
-
-        if let transientPresentation = presentFrom.presentedViewController {
-            transientPresentation.dismiss(animated: false, completion: presentRequest)
-            return
-        }
-
-        presentRequest()
-    }
-
-    private func isTransientPresentation(_ viewController: UIViewController) -> Bool {
-        return viewController is UIAlertController
-    }
-    
-    private func redirectBack(requestId: Int) {
-        UIApplication.shared.openSafari()
-        closePopups(requestId: requestId)
-    }
-    
-    private func closePopups(requestId: Int) {
-#if os(iOS)
-        let isFullscreen = view.bounds.width == UIScreen.main.bounds.width
-#else
-        let isFullscreen = false
-#endif
-        let approvalScreenToDismiss = toDismissAfterResponse[requestId]
-        if let extra = approvalScreenToDismiss?.presentedViewController {
-            extra.dismiss(animated: !isFullscreen)
-        }
-        approvalScreenToDismiss?.dismiss(animated: !isFullscreen)
-        toDismissAfterResponse.removeValue(forKey: requestId)
-    }
-    
-    @IBAction func networkButtonTapped(_ sender: Any) {
-        guard canSelectEthereumNetwork else { return }
-        
-        showNetworksList()
-    }
-    
-    private func showNetworksList() {
-        let networksList = NetworksListView(selectedNetwork: network) { [weak self] newSelected in
-            guard let newSelected = newSelected else { return }
-            self?.selectNetwork(newSelected)
-        }
-        
-        let hostingController = UIHostingController(rootView: networksList)
-        present(hostingController, animated: true)
-    }
-    
-    private func selectNetwork(_ network: EthereumNetwork) {
-        self.network = network
-        var tintedConfiguration = UIButton.Configuration.tinted()
-        tintedConfiguration.image = networkButton.configuration?.image
-        networkButton.configuration = tintedConfiguration
-        updatePrimaryButton()
-    }
-
-    private func updateNetworkButtonVisibility() {
-        networkButton.isHidden = !canSelectEthereumNetwork
-    }
-    
-    @IBAction func secondaryButtonTapped(_ sender: Any) {
-        if selectAccountAction?.initiallyConnectedProviders.isEmpty == false {
-            selectAccountAction?.completion(network, [])
-        } else {
-            selectAccountAction?.completion(network, nil)
-        }
-    }
-    
-    @IBAction func primaryButtonTapped(_ sender: Any) {
-        selectAccountAction?.completion(network, selectAccountAction?.selectedAccounts.map { $0 })
-    }
-    
-    @objc private func cancelButtonTapped() {
-        selectAccountAction?.completion(network, nil)
-    }
-    
     @objc private func walletsChanged() {
-        validateSelectedAccounts()
-        updatePrimaryButton()
-        updateNetworkButtonVisibility()
         reloadData()
     }
-    
-    private func validateSelectedAccounts() {
-        guard let specificWalletAccounts = selectAccountAction?.selectedAccounts else { return }
-        for specificWalletAccount in specificWalletAccounts {
-            if let wallet = wallets.first(where: { $0.id == specificWalletAccount.walletId }),
-               wallet.accounts.contains(specificWalletAccount.account) {
-                continue
-            } else {
-                selectAccountAction?.selectedAccounts.remove(specificWalletAccount)
-            }
-        }
-    }
-    
+
     private func updateDataState() {
         let isEmpty = sections.isEmpty
         dataState = isEmpty ? .noData : .hasData
@@ -474,7 +154,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         updateCellModels()
         updateDataState()
         tableView.reloadData()
-        scrollToInitialSelectionIfNeeded()
     }
     
     @objc private func preferencesButtonTapped() {
@@ -581,7 +260,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         let editAction = UIAlertAction(title: Strings.editAccounts, style: .default) { [weak self] _ in
             let editAccountsViewController = instantiate(EditAccountsViewController.self, from: .main)
             editAccountsViewController.wallet = wallet
-            editAccountsViewController.selectAccountAction = self?.selectAccountAction
             self?.present(editAccountsViewController.inNavigationController, animated: true)
         }
         
@@ -751,28 +429,6 @@ class AccountsListViewController: UIViewController, DataStateContainer {
         present(alert, animated: true)
     }
     
-    private func didClickAccountInSelectionMode(specificWalletAccount: SpecificWalletAccount) {
-        let wasSelected = selectAccountAction?.selectedAccounts.contains(specificWalletAccount) == true
-        
-        if !wasSelected, let toDeselect = selectAccountAction?.selectedAccounts.first(where: { $0.account.coin == specificWalletAccount.account.coin }) {
-            selectAccountAction?.selectedAccounts.remove(toDeselect)
-        }
-        
-        if wasSelected {
-            selectAccountAction?.selectedAccounts.remove(specificWalletAccount)
-        } else {
-            selectAccountAction?.selectedAccounts.insert(specificWalletAccount)
-        }
-        
-        updatePrimaryButton()
-        updateNetworkButtonVisibility()
-        tableView.reloadData()
-    }
-    
-    private func accountCanBeSelected(_ account: WalletAccount) -> Bool {
-        return selectAccountAction?.coinType == nil || selectAccountAction?.coinType == account.coin
-    }
-    
 }
 
 extension AccountsListViewController: UITableViewDelegate {
@@ -797,14 +453,7 @@ extension AccountsListViewController: UITableViewDelegate {
         tableView.deselectRow(at: indexPath, animated: true)
         let wallet = walletForIndexPath(indexPath)
         let account = accountForIndexPath(indexPath)
-        if selectAccountAction != nil {
-            if accountCanBeSelected(account) {
-                let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
-                didClickAccountInSelectionMode(specificWalletAccount: specificWalletAccount)
-            }
-        } else {
-            showActionsForAccount(account, wallet: wallet, cell: tableView.cellForRow(at: indexPath) as? AccountTableViewCell)
-        }
+        showActionsForAccount(account, wallet: wallet, cell: tableView.cellForRow(at: indexPath) as? AccountTableViewCell)
     }
     
     func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
@@ -831,15 +480,10 @@ extension AccountsListViewController: UITableViewDataSource {
         let cell = tableView.dequeueReusableCellOfType(AccountTableViewCell.self, for: indexPath)
         let account = accountForIndexPath(indexPath)
         let wallet = walletForIndexPath(indexPath)
-        let specificWalletAccount = SpecificWalletAccount(walletId: wallet.id, account: account)
-        let isSelected = selectAccountAction?.selectedAccounts.contains(specificWalletAccount) == true
         cell.setup(title: account.nameOrCroppedAddress(walletId: wallet.id),
                    image: account.image,
-                   isDisabled: !accountCanBeSelected(account),
-                   customSelectionStyle: selectAccountAction != nil,
-                   isSelected: isSelected,
                    delegate: self)
-        
+
         return cell
     }
     

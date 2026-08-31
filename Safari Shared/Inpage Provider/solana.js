@@ -2,25 +2,28 @@
 
 "use strict";
 
-import Utils from "./utils";
-import IdMapping from "./id_mapping";
+import OperationRuntime from "./operation_runtime";
+import { outboundDataSnapshot } from "./outbound_snapshot";
 import Base58 from "./base58";
+import Utils from "./utils";
 import ProviderRpcError, {
-    decodeProviderErrorData,
     normalizeSolanaProviderError,
+    providerReplacementError,
 } from "./error";
+import { walletName } from "./wallet_standard";
 import { EventEmitter } from "events";
 
-const walletName = "Big Wallet";
 const walletStandardVersion = "1.0.0";
 const solanaSignMessageFeatureVersion = "1.1.0";
 const solanaMainnetChain = "solana:mainnet";
 const solanaDevnetChain = "solana:devnet";
 const solanaTestnetChain = "solana:testnet";
-const solanaChains = Object.freeze([solanaMainnetChain, solanaDevnetChain, solanaTestnetChain]);
+const solanaChains = Object.freeze([
+    solanaMainnetChain,
+    solanaDevnetChain,
+    solanaTestnetChain,
+]);
 const solanaSupportedTransactionVersions = Object.freeze(["legacy", 0]);
-const walletStandardRegisterEvent = "wallet-standard:register-wallet";
-const walletStandardAppReadyEvent = "wallet-standard:app-ready";
 const standardChangeEvent = "change";
 const standardConnect = "standard:connect";
 const standardDisconnect = "standard:disconnect";
@@ -28,31 +31,216 @@ const standardEvents = "standard:events";
 const solanaSignAndSendTransaction = "solana:signAndSendTransaction";
 const solanaSignTransaction = "solana:signTransaction";
 const solanaSignMessage = "solana:signMessage";
-const invalidSolanaMessageRequest = "Big Wallet could not normalize this Solana message request";
-const invalidSolanaSignatureResponse = "Big Wallet received an invalid Solana signature response";
-const invalidSolanaTransactionBatchRequest = "Big Wallet could not normalize this Solana transaction batch";
-const invalidSolanaTransactionRequest = "Big Wallet could not normalize this Solana transaction request";
-const invalidSolanaTransactionOptions = "Big Wallet received unsupported Solana transaction options";
-const ambiguousSolanaTransactionParams = "Big Wallet received ambiguous Solana transaction params";
-const mismatchedSolanaTransactionParams = "Big Wallet received mismatched Solana transaction params";
-const mismatchedSolanaTransactionSignatures = "Big Wallet received mismatched Solana transaction signatures";
-const providerNotReadyMessage = "provider is not ready";
-const solanaSignatureApplicationError = "Big Wallet could not apply the Solana signature";
-const unsupportedSolanaChain = "Big Wallet does not support this Solana chain";
 const solanaAccountFeatures = Object.freeze([
     solanaSignAndSendTransaction,
     solanaSignTransaction,
     solanaSignMessage,
 ]);
+const invalidSolanaMessageRequest =
+    "Big Wallet could not normalize this Solana message request";
+const invalidSolanaSignatureResponse =
+    "Big Wallet received an invalid Solana signature response";
+const invalidSolanaTransactionBatchRequest =
+    "Big Wallet could not normalize this Solana transaction batch";
+const invalidSolanaTransactionRequest =
+    "Big Wallet could not normalize this Solana transaction request";
+const invalidSolanaTransactionOptions =
+    "Big Wallet received unsupported Solana transaction options";
+const ambiguousSolanaTransactionParams =
+    "Big Wallet received ambiguous Solana transaction params";
+const mismatchedSolanaTransactionParams =
+    "Big Wallet received mismatched Solana transaction params";
+const mismatchedSolanaTransactionSignatures =
+    "Big Wallet received mismatched Solana transaction signatures";
+const providerNotReadyMessage = "provider is not ready";
+const solanaSignatureApplicationError =
+    "Big Wallet could not apply the Solana signature";
+const unsupportedSolanaChain = "Big Wallet does not support this Solana chain";
+const malformedSolanaResponse = "Failed to process Solana response";
+const maximumTransactionBatchSize = 64;
+const maximumCounter = Number.MAX_SAFE_INTEGER;
+const applyFunction = Reflect.apply;
+const emitNormally = EventEmitter.prototype.emit;
+const addSetEntryNormally = Set.prototype.add;
+const deleteSetEntryNormally = Set.prototype.delete;
+const clearMapNormally = Map.prototype.clear;
+const clearSetNormally = Set.prototype.clear;
+const forEachSetNormally = Set.prototype.forEach;
+const getMapEntryNormally = Map.prototype.get;
+const setMapEntryNormally = Map.prototype.set;
+const getOwnPropertyDescriptorNormally = Object.getOwnPropertyDescriptor;
+const arrayBufferByteLengthNormally = getOwnPropertyDescriptorNormally(
+    ArrayBuffer.prototype,
+    "byteLength"
+).get;
+const getPrototypeOfNormally = Object.getPrototypeOf;
+const definePropertyNormally = Object.defineProperty;
+const freezeObjectNormally = Object.freeze;
+const isArrayNormally = Array.isArray;
+const isArrayBufferViewNormally = ArrayBuffer.isView;
+const getWeakMapValueNormally = WeakMap.prototype.get;
+const setWeakMapValueNormally = WeakMap.prototype.set;
+const MapConstructor = Map;
+const SetConstructor = Set;
+const providerStates = new WeakMap;
+
+function getProviderState(provider) {
+    const state = applyFunction(getWeakMapValueNormally, providerStates, [provider]);
+    if (!state) {
+        throw new TypeError("Invalid Solana provider");
+    }
+    return state;
+}
+
+function providerState(provider) {
+    return applyFunction(getWeakMapValueNormally, providerStates, [provider]);
+}
+
+function setProviderState(provider, state) {
+    applyFunction(setWeakMapValueNormally, providerStates, [provider, state]);
+}
+
+function getMapEntry(map, key) {
+    return applyFunction(getMapEntryNormally, map, [key]);
+}
+
+function setMapEntry(map, key, value) {
+    applyFunction(setMapEntryNormally, map, [key, value]);
+}
+
+function addSetEntry(set, value) {
+    applyFunction(addSetEntryNormally, set, [value]);
+}
+
+function deleteSetEntry(set, value) {
+    return applyFunction(deleteSetEntryNormally, set, [value]);
+}
+
+function clearMap(map) {
+    applyFunction(clearMapNormally, map, []);
+}
+
+function clearSet(set) {
+    applyFunction(clearSetNormally, set, []);
+}
+
+function isArrayBuffer(value) {
+    try {
+        applyFunction(arrayBufferByteLengthNormally, value, []);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function byteView(value) {
+    try {
+        if (isArrayBuffer(value)) {
+            return new Uint8Array(value);
+        }
+        if (!isArrayBufferViewNormally(value) ||
+            value.BYTES_PER_ELEMENT !== 1 ||
+            typeof value.length !== "number") {
+            return null;
+        }
+        return new Uint8Array(
+            value.buffer,
+            value.byteOffset,
+            value.byteLength
+        );
+    } catch {
+        return null;
+    }
+}
+
+function isByteArray(value) {
+    return byteView(value) !== null;
+}
+
+function bytesSnapshot(value, message) {
+    const source = byteView(value);
+    if (!source) {
+        throw new ProviderRpcError(4200, message);
+    }
+    const snapshot = new Uint8Array(source.length);
+    for (let index = 0; index < source.length; index += 1) {
+        snapshot[index] = source[index];
+    }
+    return snapshot;
+}
+
+function signatureBytes(value) {
+    let decoded;
+    try {
+        decoded = Base58.decode(value);
+    } catch {
+        throw new ProviderRpcError(4200, invalidSolanaSignatureResponse);
+    }
+    if (decoded.length !== 64) {
+        throw new ProviderRpcError(4200, invalidSolanaSignatureResponse);
+    }
+    return decoded;
+}
+
+function validPublicKeyString(value) {
+    if (typeof value !== "string" || value.length === 0) { return false; }
+    try {
+        return Base58.decode(value).length === 32;
+    } catch {
+        return false;
+    }
+}
+
+function safePublicKeyString(value) {
+    if (!value || typeof value.toString !== "function") { return null; }
+    try {
+        const stringValue = value.toString();
+        return validPublicKeyString(stringValue) ? stringValue : null;
+    } catch {
+        return null;
+    }
+}
+
+function ownDataDescriptor(value, name) {
+    if (!value || (typeof value !== "object" && typeof value !== "function")) {
+        return null;
+    }
+    const descriptor = getOwnPropertyDescriptorNormally(value, name);
+    return descriptor && "value" in descriptor ? descriptor : null;
+}
+
+function emitProvider(provider, name, ...values) {
+    try {
+        applyFunction(emitNormally, provider, [name, ...values]);
+    } catch {
+    }
+}
+
+function emitStandardChange(provider, properties) {
+    const state = getProviderState(provider);
+    const listeners = [];
+    applyFunction(forEachSetNormally, state.standardChangeListeners, [listener => {
+        listeners[listeners.length] = listener;
+    }]);
+    for (let index = 0; index < listeners.length; index += 1) {
+        try {
+            listeners[index](properties);
+        } catch {
+        }
+    }
+}
 
 class PublicKey {
 
     constructor(value) {
+        if (!validPublicKeyString(value)) {
+            throw new ProviderRpcError(4200, providerNotReadyMessage);
+        }
         this.stringValue = value;
     }
 
     equals(publicKey) {
-        return this.stringValue === publicKey.toString();
+        return this.stringValue === safePublicKeyString(publicKey);
     }
 
     toBase58() {
@@ -74,31 +262,1272 @@ class PublicKey {
     toString() {
         return this.stringValue;
     }
+}
 
+function authorizationSnapshot(state) {
+    return {
+        accountRevision: state.accountRevision,
+        publicKey: state.publicKey?.toString() || null,
+        solanaAuthorizationEpoch: state.solanaAuthorizationEpoch,
+    };
+}
+
+function authorizationMatches(state, authorization) {
+    return !!authorization &&
+        authorization.accountRevision === state.accountRevision &&
+        authorization.publicKey === (state.publicKey?.toString() || null) &&
+        authorization.solanaAuthorizationEpoch === state.solanaAuthorizationEpoch;
+}
+
+function incrementRevision(state) {
+    if (state.accountRevision === maximumCounter) {
+        throw new ProviderRpcError(-32603, "Solana account revision exhausted");
+    }
+    state.accountRevision += 1;
+}
+
+function advanceEpoch(state) {
+    if (state.solanaAuthorizationEpoch === maximumCounter) {
+        throw new ProviderRpcError(-32603, "Solana authorization epoch exhausted");
+    }
+    state.solanaAuthorizationEpoch += 1;
+    return state.solanaAuthorizationEpoch;
+}
+
+function clearAuthorization(provider, tombstone, emitChanges = true) {
+    const state = getProviderState(provider);
+    const previousPublicKey = state.publicKey?.toString() || null;
+    const wasConnected = state.isConnected;
+    if (previousPublicKey !== null && state.accountRevision < maximumCounter) {
+        state.accountRevision += 1;
+    }
+    state.publicKey = null;
+    state.isConnected = false;
+    state.accountRevocationTombstone = tombstone === true;
+    clearMap(state.standardAccountsByAddress);
+    if (!emitChanges) { return; }
+    if (previousPublicKey !== null) {
+        emitProvider(provider, "accountChanged", null);
+        emitStandardChange(provider, {accounts: []});
+    }
+    if (wasConnected || previousPublicKey !== null) {
+        emitProvider(provider, "disconnect");
+    }
+}
+
+function operationIsCurrent(provider, record, approvalCommitted = false) {
+    const state = getProviderState(provider);
+    return state.runtime.owns(record) &&
+        state.transport.isCurrent() === true &&
+        (approvalCommitted ||
+            authorizationMatches(state, record.metadata.authorization));
+}
+
+function requireAuthorization(provider, authorization) {
+    const state = getProviderState(provider);
+    if (state.runtime.phase === "retired" ||
+        !authorizationMatches(state, authorization)) {
+        throw providerReplacementError();
+    }
+}
+
+function rejectOperation(provider, record, error) {
+    const state = getProviderState(provider);
+    return state.runtime.reject(
+        record,
+        error instanceof Error ? error : normalizeSolanaProviderError(error)
+    );
+}
+
+function normalizedBase58Value(value, message) {
+    if (typeof value === "string") {
+        try {
+            Base58.decode(value);
+            return value;
+        } catch {
+            throw new ProviderRpcError(4200, message);
+        }
+    }
+    return Base58.encode(bytesSnapshot(value, message));
+}
+
+function normalizedHexMessage(value) {
+    if (typeof value !== "string") {
+        return Utils.bufferToHex(bytesSnapshot(value, invalidSolanaMessageRequest));
+    }
+    const rawValue = value.startsWith("0x") ? value.slice(2) : value;
+    if (rawValue.length % 2 !== 0 || !/^[0-9a-fA-F]*$/.test(rawValue)) {
+        throw new ProviderRpcError(4200, invalidSolanaMessageRequest);
+    }
+    return `0x${rawValue}`;
+}
+
+function serializedMessage(adapter) {
+    let value;
+    try {
+        value = applyFunction(
+            adapter.serializeMessage,
+            adapter.messageOwner,
+            []
+        );
+    } catch {
+        throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
+    }
+    return bytesSnapshot(value, invalidSolanaTransactionRequest);
+}
+
+function inheritedDataFunction(value, name) {
+    let current = value;
+    while (current) {
+        const descriptor = getOwnPropertyDescriptorNormally(current, name);
+        if (descriptor) {
+            return "value" in descriptor && typeof descriptor.value === "function"
+                ? descriptor.value
+                : null;
+        }
+        current = getPrototypeOfNormally(current);
+    }
+    return null;
+}
+
+function capturedTransport(transport) {
+    if (!transport || typeof transport !== "object") {
+        throw new TypeError("Invalid Solana transport");
+    }
+    const isCurrentMethod = transport.isCurrent;
+    const postRequestMethod = transport.postRequest;
+    const postDisconnectMethod = transport.postDisconnect;
+    const synchronizeEpochMethod = transport.synchronizeSolanaEpoch;
+    if (typeof isCurrentMethod !== "function" ||
+        typeof postRequestMethod !== "function" ||
+        typeof postDisconnectMethod !== "function" ||
+        typeof synchronizeEpochMethod !== "function") {
+        throw new TypeError("Invalid Solana transport");
+    }
+    return freezeObjectNormally({
+        isCurrent() {
+            return applyFunction(isCurrentMethod, transport, []);
+        },
+        postRequest(message) {
+            return applyFunction(postRequestMethod, transport, [message]);
+        },
+        postDisconnect(message) {
+            return applyFunction(postDisconnectMethod, transport, [message]);
+        },
+        synchronizeSolanaEpoch(epoch) {
+            return applyFunction(synchronizeEpochMethod, transport, [epoch]);
+        },
+    });
+}
+
+function transactionAdapter(transaction, message = invalidSolanaTransactionRequest) {
+    if (!transaction || typeof transaction !== "object") {
+        throw new ProviderRpcError(4200, message);
+    }
+    const messageDescriptor = ownDataDescriptor(transaction, "message");
+    const versionedMessage = messageDescriptor?.value;
+    const headerDescriptor = ownDataDescriptor(versionedMessage, "header");
+    const keysDescriptor = ownDataDescriptor(versionedMessage, "staticAccountKeys");
+    const versionedSerialize = inheritedDataFunction(versionedMessage, "serialize");
+    const requiredSignatures = headerDescriptor?.value?.numRequiredSignatures;
+    if (headerDescriptor && keysDescriptor &&
+        isArrayNormally(keysDescriptor.value) &&
+        Number.isSafeInteger(requiredSignatures) &&
+        requiredSignatures > 0 &&
+        requiredSignatures <= keysDescriptor.value.length &&
+        typeof versionedSerialize === "function") {
+        const adapter = {
+            messageOwner: versionedMessage,
+            serializeMessage: versionedSerialize,
+            staticAccountKeys: keysDescriptor.value,
+            transaction,
+            type: "versioned",
+            requiredSignatures,
+        };
+        adapter.message = Base58.encode(serializedMessage(adapter));
+        const signaturesDescriptor = ownDataDescriptor(transaction, "signatures");
+        if (!signaturesDescriptor ||
+            !isArrayNormally(signaturesDescriptor.value) ||
+            requiredSignatures > signaturesDescriptor.value.length) {
+            throw new ProviderRpcError(4200, message);
+        }
+        adapter.signatures = signaturesDescriptor.value;
+        return adapter;
+    }
+    const serializeMessage = inheritedDataFunction(transaction, "serializeMessage");
+    if (typeof serializeMessage !== "function") {
+        throw new ProviderRpcError(4200, message);
+    }
+    const adapter = {
+        messageOwner: transaction,
+        serializeMessage,
+        transaction,
+        type: "legacy",
+    };
+    adapter.message = Base58.encode(serializedMessage(adapter));
+    const signaturesDescriptor = ownDataDescriptor(transaction, "signatures");
+    if (!signaturesDescriptor || !isArrayNormally(signaturesDescriptor.value)) {
+        throw new ProviderRpcError(4200, message);
+    }
+    const signatures = signaturesDescriptor.value;
+    adapter.signatures = signatures;
+    if (signatures.length === 0) {
+        throw new ProviderRpcError(4200, message);
+    }
+    for (let index = 0; index < signatures.length; index += 1) {
+        const entry = signatures[index];
+        const publicKeyDescriptor = ownDataDescriptor(entry, "publicKey");
+        const signatureDescriptor = ownDataDescriptor(entry, "signature");
+        if (!publicKeyDescriptor || !signatureDescriptor ||
+            !signatureDescriptor.writable ||
+            !safePublicKeyString(publicKeyDescriptor.value) ||
+            (signatureDescriptor.value !== null &&
+                !isByteArray(signatureDescriptor.value))) {
+            throw new ProviderRpcError(4200, message);
+        }
+    }
+    return adapter;
+}
+
+function transactionSerializerMatches(adapter) {
+    const method = adapter.type === "versioned"
+        ? "serialize"
+        : "serializeMessage";
+    return inheritedDataFunction(adapter.messageOwner, method) ===
+        adapter.serializeMessage;
+}
+
+function transactionMessageMatches(adapter) {
+    try {
+        if (!transactionSerializerMatches(adapter)) { return false; }
+        if (adapter.type === "versioned") {
+            const descriptor = ownDataDescriptor(
+                adapter.transaction,
+                "message"
+            );
+            if (!descriptor || descriptor.value !== adapter.messageOwner) {
+                return false;
+            }
+        }
+        const message = Base58.encode(serializedMessage(adapter));
+        if (!transactionSerializerMatches(adapter)) { return false; }
+        if (adapter.type === "versioned") {
+            const descriptor = ownDataDescriptor(
+                adapter.transaction,
+                "message"
+            );
+            if (!descriptor || descriptor.value !== adapter.messageOwner) {
+                return false;
+            }
+        }
+        return message === adapter.message;
+    } catch {
+        return false;
+    }
+}
+
+function transactionMessagesMatch(adapters) {
+    for (let index = 0; index < adapters.length; index += 1) {
+        if (!transactionMessageMatches(adapters[index])) { return false; }
+    }
+    return true;
+}
+
+function signerPlan(adapter, publicKey, signature) {
+    if (adapter.transaction.signatures !== adapter.signatures) {
+        throw new ProviderRpcError(4200, solanaSignatureApplicationError);
+    }
+    if (adapter.type === "versioned") {
+        let index = -1;
+        for (let candidate = 0;
+            candidate < adapter.requiredSignatures;
+            candidate += 1) {
+            if (safePublicKeyString(adapter.staticAccountKeys[candidate]) === publicKey) {
+                index = candidate;
+                break;
+            }
+        }
+        if (index < 0 || index >= adapter.signatures.length) {
+            throw new ProviderRpcError(4200, solanaSignatureApplicationError);
+        }
+        const descriptor = getOwnPropertyDescriptorNormally(
+            adapter.signatures,
+            `${index}`
+        );
+        if (!descriptor || !("value" in descriptor) || !descriptor.writable ||
+            !isByteArray(descriptor.value)) {
+            throw new ProviderRpcError(4200, solanaSignatureApplicationError);
+        }
+        return {adapter, descriptor, index, signature};
+    }
+    for (let index = 0; index < adapter.signatures.length; index += 1) {
+        const entry = adapter.signatures[index];
+        const publicKeyDescriptor = ownDataDescriptor(entry, "publicKey");
+        const signatureDescriptor = ownDataDescriptor(entry, "signature");
+        if (safePublicKeyString(publicKeyDescriptor?.value) === publicKey) {
+            if (!signatureDescriptor?.writable) {
+                throw new ProviderRpcError(4200, solanaSignatureApplicationError);
+            }
+            return {adapter, entry, signatureDescriptor, signature};
+        }
+    }
+    throw new ProviderRpcError(4200, solanaSignatureApplicationError);
+}
+
+function byteState(value) {
+    return isByteArray(value)
+        ? {bytes: bytesSnapshot(value, solanaSignatureApplicationError), value}
+        : null;
+}
+
+function transactionSignatureState(adapter) {
+    const transactionSignaturesDescriptor = ownDataDescriptor(
+        adapter.transaction,
+        "signatures"
+    );
+    if (!transactionSignaturesDescriptor ||
+        !isArrayNormally(transactionSignaturesDescriptor.value)) {
+        throw new ProviderRpcError(4200, solanaSignatureApplicationError);
+    }
+    const signatures = transactionSignaturesDescriptor.value;
+    const slots = [];
+    for (let index = 0; index < signatures.length; index += 1) {
+        const descriptor = getOwnPropertyDescriptorNormally(signatures, `${index}`);
+        if (!descriptor || !("value" in descriptor)) {
+            throw new ProviderRpcError(4200, solanaSignatureApplicationError);
+        }
+        const value = descriptor.value;
+        const slot = {descriptor, value, bytes: byteState(value)};
+        if (adapter.type === "legacy") {
+            const publicKeyDescriptor = ownDataDescriptor(value, "publicKey");
+            const signatureDescriptor = ownDataDescriptor(value, "signature");
+            if (!publicKeyDescriptor || !signatureDescriptor) {
+                throw new ProviderRpcError(4200, solanaSignatureApplicationError);
+            }
+            slot.publicKeyDescriptor = publicKeyDescriptor;
+            slot.signatureDescriptor = signatureDescriptor;
+            slot.signatureBytes = byteState(signatureDescriptor.value);
+        }
+        slots[slots.length] = slot;
+    }
+    return {
+        adapter,
+        length: signatures.length,
+        signatures,
+        slots,
+        transactionSignaturesDescriptor,
+    };
+}
+
+function restoreByteState(state) {
+    if (!state) {
+        return;
+    }
+    const destination = byteView(state.value);
+    if (!destination || destination.length !== state.bytes.length) {
+        return;
+    }
+    for (let index = 0; index < state.bytes.length; index += 1) {
+        destination[index] = state.bytes[index];
+    }
+}
+
+function restoreTransactionSignatures(states) {
+    for (let stateIndex = 0; stateIndex < states.length; stateIndex += 1) {
+        const state = states[stateIndex];
+        try {
+            for (let slotIndex = 0; slotIndex < state.slots.length; slotIndex += 1) {
+                const slot = state.slots[slotIndex];
+                restoreByteState(slot.bytes);
+                restoreByteState(slot.signatureBytes);
+                if (slot.publicKeyDescriptor) {
+                    definePropertyNormally(
+                        slot.value,
+                        "publicKey",
+                        slot.publicKeyDescriptor
+                    );
+                }
+                if (slot.signatureDescriptor) {
+                    definePropertyNormally(
+                        slot.value,
+                        "signature",
+                        slot.signatureDescriptor
+                    );
+                }
+            }
+            state.signatures.length = 0;
+            for (let slotIndex = 0; slotIndex < state.slots.length; slotIndex += 1) {
+                definePropertyNormally(
+                    state.signatures,
+                    `${slotIndex}`,
+                    state.slots[slotIndex].descriptor
+                );
+            }
+            state.signatures.length = state.length;
+            definePropertyNormally(
+                state.adapter.transaction,
+                "signatures",
+                state.transactionSignaturesDescriptor
+            );
+        } catch {
+        }
+    }
+}
+
+function applySignerPlan(plan) {
+    if (plan.adapter.type === "versioned") {
+        definePropertyNormally(plan.adapter.signatures, `${plan.index}`, {
+            ...plan.descriptor,
+            value: new Uint8Array(plan.signature),
+        });
+        return;
+    }
+    definePropertyNormally(plan.entry, "signature", {
+        ...plan.signatureDescriptor,
+        value: plan.signature,
+    });
+}
+
+function signerTargetsMatch(first, second) {
+    if (first.adapter.type !== second.adapter.type) { return false; }
+    return first.adapter.type === "versioned"
+        ? first.adapter.signatures === second.adapter.signatures &&
+            first.index === second.index
+        : first.entry === second.entry;
+}
+
+function normalizedTransactionBatch(transactions, message) {
+    if (!isArrayNormally(transactions) || transactions.length === 0 ||
+        transactions.length > maximumTransactionBatchSize) {
+        throw new ProviderRpcError(4200, message);
+    }
+    const adapters = [];
+    for (let index = 0; index < transactions.length; index += 1) {
+        adapters[index] = transactionAdapter(transactions[index], message);
+    }
+    return adapters;
+}
+
+function normalizedMessages(values, message) {
+    if (!isArrayNormally(values) || values.length === 0 ||
+        values.length > maximumTransactionBatchSize) {
+        throw new ProviderRpcError(4200, message);
+    }
+    const messages = [];
+    for (let index = 0; index < values.length; index += 1) {
+        messages[index] = normalizedBase58Value(values[index], message);
+    }
+    return messages;
+}
+
+function createMetadata(method) {
+    return {
+        adapters: null,
+        authorization: null,
+        dispatched: false,
+        messages: null,
+        method,
+        respondWithBuffer: false,
+    };
+}
+
+function normalizeRequest(method, params) {
+    const metadata = createMetadata(method);
+    let normalizedParams;
+    switch (method) {
+        case "connect":
+            normalizedParams = typeof params === "undefined"
+                ? undefined
+                : outboundDataSnapshot(params);
+            break;
+        case "signMessage": {
+            const raw = params || {};
+            if (!("message" in raw)) {
+                throw new ProviderRpcError(4200, invalidSolanaMessageRequest);
+            }
+            const signsUTF8 = typeof raw.message === "string" &&
+                typeof raw.display === "string" &&
+                raw.display.toLowerCase() === "utf8";
+            const message = signsUTF8
+                ? raw.message
+                : normalizedHexMessage(raw.message);
+            const snapshot = outboundDataSnapshot(raw);
+            snapshot.message = message;
+            snapshot.messageEncoding = signsUTF8 ? "utf8" : "hex";
+            normalizedParams = snapshot;
+            metadata.messages = [snapshot.message];
+            metadata.respondWithBuffer = true;
+            break;
+        }
+        case "signTransaction": {
+            const raw = params || {};
+            if (raw.transaction && typeof raw.transaction === "object" &&
+                !isByteArray(raw.transaction)) {
+                const adapter = transactionAdapter(raw.transaction);
+                const supplied = typeof raw.message === "undefined"
+                    ? adapter.message
+                    : normalizedBase58Value(
+                        raw.message,
+                        invalidSolanaTransactionRequest
+                    );
+                if (supplied !== adapter.message) {
+                    throw new ProviderRpcError(
+                        4200,
+                        mismatchedSolanaTransactionParams
+                    );
+                }
+                normalizedParams = outboundDataSnapshot({message: adapter.message});
+                metadata.adapters = [adapter];
+                metadata.messages = [adapter.message];
+            } else if (typeof raw.message !== "undefined") {
+                const message = normalizedBase58Value(
+                    raw.message,
+                    invalidSolanaTransactionRequest
+                );
+                normalizedParams = outboundDataSnapshot({message});
+                metadata.messages = [message];
+            } else {
+                throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
+            }
+            break;
+        }
+        case "signAllTransactions": {
+            const raw = params || {};
+            const hasMessages = typeof raw.messages !== "undefined";
+            const hasMessage = raw.message != null;
+            if (hasMessages && hasMessage) {
+                throw new ProviderRpcError(4200, ambiguousSolanaTransactionParams);
+            }
+            if (isArrayNormally(raw.transactions)) {
+                const adapters = normalizedTransactionBatch(
+                    raw.transactions,
+                    invalidSolanaTransactionBatchRequest
+                );
+                const messages = [];
+                for (let index = 0; index < adapters.length; index += 1) {
+                    messages[index] = adapters[index].message;
+                }
+                const suppliedValues = hasMessages
+                    ? raw.messages
+                    : hasMessage
+                        ? raw.message
+                        : messages;
+                const supplied = normalizedMessages(
+                    suppliedValues,
+                    invalidSolanaTransactionBatchRequest
+                );
+                if (supplied.length !== messages.length) {
+                    throw new ProviderRpcError(
+                        4200,
+                        mismatchedSolanaTransactionParams
+                    );
+                }
+                for (let index = 0; index < messages.length; index += 1) {
+                    if (messages[index] !== supplied[index]) {
+                        throw new ProviderRpcError(
+                            4200,
+                            mismatchedSolanaTransactionParams
+                        );
+                    }
+                }
+                normalizedParams = outboundDataSnapshot({messages});
+                metadata.adapters = adapters;
+                metadata.messages = messages;
+            } else {
+                const values = hasMessages ? raw.messages : raw.message;
+                const messages = normalizedMessages(
+                    values,
+                    invalidSolanaTransactionBatchRequest
+                );
+                normalizedParams = outboundDataSnapshot({messages});
+                metadata.messages = messages;
+            }
+            break;
+        }
+        case "signAndSendTransaction": {
+            const raw = params || {};
+            if (typeof raw.transaction === "undefined" &&
+                typeof raw.message === "undefined") {
+                throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
+            }
+            let transaction;
+            if (typeof raw.transaction === "object" &&
+                raw.transaction !== null && !isByteArray(raw.transaction)) {
+                const adapter = transactionAdapter(raw.transaction);
+                const serialize = inheritedDataFunction(
+                    raw.transaction,
+                    "serialize"
+                );
+                if (!serialize) {
+                    throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
+                }
+                let serialized;
+                try {
+                    serialized = adapter.type === "legacy"
+                        ? applyFunction(serialize, raw.transaction, [{
+                            requireAllSignatures: false,
+                            verifySignatures: false,
+                        }])
+                        : applyFunction(serialize, raw.transaction, []);
+                } catch {
+                    throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
+                }
+                transaction = Base58.encode(
+                    bytesSnapshot(serialized, invalidSolanaTransactionRequest)
+                );
+            } else if (typeof raw.transaction !== "undefined") {
+                transaction = normalizedBase58Value(
+                    raw.transaction,
+                    invalidSolanaTransactionRequest
+                );
+            }
+            const normalized = {};
+            if (transaction) { normalized.transaction = transaction; }
+            if (!transaction && typeof raw.message !== "undefined") {
+                normalized.message = normalizedBase58Value(
+                    raw.message,
+                    invalidSolanaTransactionRequest
+                );
+            }
+            if (typeof raw.options !== "undefined") {
+                normalized.options = outboundDataSnapshot(raw.options);
+            }
+            normalizedParams = outboundDataSnapshot(normalized);
+            metadata.messages = [transaction || normalized.message];
+            break;
+        }
+        default:
+            throw new ProviderRpcError(
+                4200,
+                `Big Wallet does not support ${method}`
+            );
+    }
+    return {metadata, params: normalizedParams};
+}
+
+function wirePayload(record) {
+    const payload = {id: record.wireId, method: record.metadata.method};
+    if (typeof record.payload.params !== "undefined") {
+        payload.params = record.payload.params;
+    }
+    return outboundDataSnapshot(payload);
+}
+
+function dispatchOperation(provider, record) {
+    const state = getProviderState(provider);
+    if (!state.runtime.owns(record)) { return false; }
+    if (state.transport.isCurrent() !== true) {
+        retire(provider, providerReplacementError());
+        return false;
+    }
+    const method = record.metadata.method;
+    if (method !== "connect" && !state.publicKey) {
+        rejectOperation(
+            provider,
+            record,
+            new ProviderRpcError(4100, providerNotReadyMessage)
+        );
+        return false;
+    }
+    if (method === "connect" && state.publicKey &&
+        !state.accountRevocationTombstone) {
+        const wasConnected = state.isConnected;
+        state.isConnected = true;
+        const settled = state.runtime.resolve(
+            record,
+            {publicKey: state.publicKey}
+        );
+        if (settled && !wasConnected) {
+            emitProvider(provider, "connect", state.publicKey);
+        }
+        return settled;
+    }
+    if (method === "connect" &&
+        record.payload.params?.onlyIfTrusted === true) {
+        rejectOperation(
+            provider,
+            record,
+            new ProviderRpcError(4100, providerNotReadyMessage)
+        );
+        return false;
+    }
+    const authorization = authorizationSnapshot(state);
+    record.metadata.authorization = authorization;
+    const message = {
+        accountRevision: authorization.accountRevision,
+        body: {
+            object: wirePayload(record),
+            publicKey: authorization.publicKey || "",
+        },
+        id: record.wireId,
+        name: method,
+        provider: "solana",
+        providerGeneration: state.generation,
+        solanaAuthorizationEpoch: authorization.solanaAuthorizationEpoch,
+    };
+    if (!state.runtime.owns(record)) {
+        return false;
+    }
+    if (state.transport.isCurrent() !== true) {
+        retire(provider, providerReplacementError());
+        return false;
+    }
+    let didPost = false;
+    try {
+        record.metadata.dispatched = true;
+        didPost = state.transport.postRequest(message) === true;
+    } catch (error) {
+        rejectOperation(provider, record, error);
+        return false;
+    }
+    if (!didPost) {
+        retire(provider, providerReplacementError());
+        return false;
+    }
+    return true;
+}
+
+function registerOperation(provider, method, params, originalId) {
+    const state = getProviderState(provider);
+    if (state.runtime.phase === "retired") {
+        return Promise.reject(providerReplacementError());
+    }
+    if (state.transport.isCurrent() !== true) {
+        retire(provider, providerReplacementError());
+        return Promise.reject(providerReplacementError());
+    }
+    const normalized = normalizeRequest(method, params);
+    if (state.runtime.phase === "retired" ||
+        state.transport.isCurrent() !== true) {
+        retire(provider, providerReplacementError());
+        return Promise.reject(providerReplacementError());
+    }
+    const record = state.runtime.register({
+        metadata: normalized.metadata,
+        originalId,
+        payload: {method, params: normalized.params},
+    });
+    if (state.runtime.phase === "ready") {
+        dispatchOperation(provider, record);
+    } else if (!state.runtime.enqueue(record)) {
+        rejectOperation(provider, record, providerReplacementError());
+    }
+    return record.promise;
+}
+
+function signedResult(
+    provider,
+    record,
+    encodedSignatures,
+    approvalCommitted = false
+) {
+    const state = getProviderState(provider);
+    const metadata = record.metadata;
+    if (!operationIsCurrent(provider, record, approvalCommitted)) {
+        rejectOperation(provider, record, providerReplacementError());
+        return false;
+    }
+    if (!metadata.messages ||
+        metadata.messages.length !== encodedSignatures.length) {
+        rejectOperation(
+            provider,
+            record,
+            new ProviderRpcError(4200, mismatchedSolanaTransactionSignatures)
+        );
+        return false;
+    }
+    let signatures;
+    let signerPublicKey;
+    try {
+        signatures = [];
+        for (let index = 0; index < encodedSignatures.length; index += 1) {
+            signatures[index] = signatureBytes(encodedSignatures[index]);
+        }
+        if (!validPublicKeyString(metadata.authorization?.publicKey)) {
+            throw providerReplacementError();
+        }
+        signerPublicKey = new PublicKey(metadata.authorization.publicKey);
+    } catch (error) {
+        rejectOperation(provider, record, error);
+        return false;
+    }
+    if (!metadata.adapters) {
+        if (metadata.method === "signAllTransactions") {
+            const encoded = [];
+            for (let index = 0; index < encodedSignatures.length; index += 1) {
+                encoded[index] = encodedSignatures[index];
+            }
+            return state.runtime.resolve(record, {
+                publicKey: signerPublicKey,
+                signatures: encoded,
+            });
+        }
+        const encoded = encodedSignatures[0];
+        return state.runtime.resolve(record, {
+            publicKey: signerPublicKey,
+            signature: metadata.respondWithBuffer
+                ? Utils.messageToBuffer(signatures[0])
+                : encoded,
+        });
+    }
+    if (metadata.adapters.length !== signatures.length) {
+        rejectOperation(
+            provider,
+            record,
+            new ProviderRpcError(4200, mismatchedSolanaTransactionSignatures)
+        );
+        return false;
+    }
+    const states = [];
+    const plans = [];
+    try {
+        for (let index = 0; index < metadata.adapters.length; index += 1) {
+            states[index] = transactionSignatureState(metadata.adapters[index]);
+        }
+        for (let index = 0; index < metadata.adapters.length; index += 1) {
+            const adapter = metadata.adapters[index];
+            if (!transactionMessageMatches(adapter)) {
+                throw new ProviderRpcError(
+                    4200,
+                    mismatchedSolanaTransactionSignatures
+                );
+            }
+            plans[index] = signerPlan(
+                adapter,
+                metadata.authorization.publicKey,
+                signatures[index]
+            );
+            for (let previous = 0; previous < index; previous += 1) {
+                if (signerTargetsMatch(plans[previous], plans[index])) {
+                    throw new ProviderRpcError(
+                        4200,
+                        solanaSignatureApplicationError
+                    );
+                }
+            }
+        }
+        for (let index = 0; index < plans.length; index += 1) {
+            if (!operationIsCurrent(provider, record, approvalCommitted)) {
+                throw providerReplacementError();
+            }
+            if (!transactionMessagesMatch(metadata.adapters)) {
+                throw new ProviderRpcError(
+                    4200,
+                    mismatchedSolanaTransactionSignatures
+                );
+            }
+            if (!operationIsCurrent(provider, record, approvalCommitted)) {
+                throw providerReplacementError();
+            }
+            applySignerPlan(plans[index]);
+            if (!operationIsCurrent(provider, record, approvalCommitted)) {
+                throw providerReplacementError();
+            }
+            if (!transactionMessagesMatch(metadata.adapters)) {
+                throw new ProviderRpcError(
+                    4200,
+                    mismatchedSolanaTransactionSignatures
+                );
+            }
+        }
+        if (!operationIsCurrent(provider, record, approvalCommitted)) {
+            throw providerReplacementError();
+        }
+        if (!transactionMessagesMatch(metadata.adapters)) {
+            throw new ProviderRpcError(
+                4200,
+                mismatchedSolanaTransactionSignatures
+            );
+        }
+        if (!operationIsCurrent(provider, record, approvalCommitted)) {
+            throw providerReplacementError();
+        }
+        let result = metadata.adapters[0].transaction;
+        if (metadata.method === "signAllTransactions") {
+            result = [];
+            for (let index = 0; index < metadata.adapters.length; index += 1) {
+                result[index] = metadata.adapters[index].transaction;
+            }
+        }
+        const settled = state.runtime.resolve(
+            record,
+            result
+        );
+        if (!settled) { throw providerReplacementError(); }
+        return true;
+    } catch (error) {
+        restoreTransactionSignatures(states);
+        if (state.runtime.owns(record)) {
+            rejectOperation(provider, record, error);
+        }
+        return false;
+    }
+}
+
+function normalizedConfiguration(configuration, current) {
+    if (!configuration || typeof configuration !== "object") {
+        throw new ProviderRpcError(-32603, "Invalid Solana configuration");
+    }
+    const publicKey = configuration.publicKey == null
+        ? null
+        : configuration.publicKey;
+    const accountRevision = configuration.accountRevision;
+    const solanaAuthorizationEpoch = configuration.solanaAuthorizationEpoch;
+    if ((publicKey !== null && !validPublicKeyString(publicKey)) ||
+        typeof configuration.isConnected !== "boolean" ||
+        !Number.isSafeInteger(accountRevision) || accountRevision < 0 ||
+        !Number.isSafeInteger(solanaAuthorizationEpoch) ||
+        solanaAuthorizationEpoch < 0) {
+        throw new ProviderRpcError(-32603, "Invalid Solana configuration");
+    }
+    if (accountRevision < current.accountRevision ||
+        solanaAuthorizationEpoch < current.solanaAuthorizationEpoch) {
+        return null;
+    }
+    return {
+        accountRevision,
+        isConnected: configuration.isConnected && publicKey !== null,
+        publicKey,
+        solanaAuthorizationEpoch,
+    };
+}
+
+function applyConfiguration(provider, envelope) {
+    const state = getProviderState(provider);
+    if (envelope.suppressUpdate === true) {
+        return state.runtime.phase === "ready";
+    }
+    const configuration = normalizedConfiguration(envelope.configuration, state);
+    const previousPublicKey = state.publicKey?.toString() || null;
+    const previousConnected = state.isConnected;
+    const preservesTombstone = state.accountRevocationTombstone &&
+        envelope.switchAccount !== true;
+    if (configuration && !preservesTombstone) {
+        const canClearTombstone = state.accountRevocationTombstone &&
+            envelope.switchAccount === true &&
+            configuration.publicKey !== null;
+        state.accountRevision = configuration.accountRevision;
+        state.solanaAuthorizationEpoch = configuration.solanaAuthorizationEpoch;
+        if (!state.accountRevocationTombstone || canClearTombstone) {
+            state.accountRevocationTombstone = false;
+            state.publicKey = configuration.publicKey
+                ? new PublicKey(configuration.publicKey)
+                : null;
+            state.isConnected = configuration.isConnected;
+        } else {
+            state.publicKey = null;
+            state.isConnected = false;
+        }
+    }
+    const configuredConnected = state.isConnected;
+    const nextPublicKey = state.publicKey?.toString() || null;
+    if (previousPublicKey !== nextPublicKey) {
+        clearMap(state.standardAccountsByAddress);
+        emitProvider(provider, "accountChanged", state.publicKey);
+        emitStandardChange(provider, {accounts: provider.standardAccounts()});
+    }
+    if (!previousConnected && configuredConnected && state.publicKey) {
+        emitProvider(provider, "connect", state.publicKey);
+    } else if (previousConnected && !configuredConnected) {
+        emitProvider(provider, "disconnect");
+    }
+    state.runtime.drain(record => dispatchOperation(provider, record));
+    return true;
+}
+
+function resultValue(envelope) {
+    return envelope?.result && typeof envelope.result === "object" &&
+        typeof envelope.result.signature === "string"
+        ? envelope.result.signature
+        : envelope.result;
+}
+
+function applyEnvelope(provider, envelope) {
+    const state = providerState(provider);
+    if (!state || state.runtime.phase === "retired") {
+        return false;
+    }
+    if (state.transport.isCurrent() !== true) {
+        retire(provider, providerReplacementError());
+        return false;
+    }
+    try {
+        envelope = outboundDataSnapshot(envelope);
+    } catch {
+        return false;
+    }
+    if (!envelope || typeof envelope !== "object") { return false; }
+    if (envelope.kind === "configuration") {
+        return applyConfiguration(provider, envelope);
+    }
+    if (!Number.isSafeInteger(envelope.id)) { return false; }
+    const record = state.runtime.operation(envelope.id);
+    if (!record || !state.runtime.owns(record) ||
+        record.metadata.dispatched !== true) {
+        return false;
+    }
+    const expectedName = record.metadata.method === "disconnect"
+        ? ["disconnect", "revokePermissions"]
+        : [record.metadata.method];
+    if (envelope.name !== expectedName[0] &&
+        envelope.name !== expectedName[1]) {
+        return state.runtime.reject(
+            record,
+            new ProviderRpcError(-32603, malformedSolanaResponse)
+        );
+    }
+    if (envelope.kind === "error") {
+        if (envelope.suppressUpdate !== true && envelope.authorizationFailure &&
+            authorizationMatches(state, record.metadata.authorization)) {
+            let synchronized = false;
+            try {
+                advanceEpoch(state);
+                synchronized = state.transport.synchronizeSolanaEpoch(
+                    state.solanaAuthorizationEpoch
+                ) !== false && state.transport.isCurrent() === true;
+            } catch {
+            }
+            if (!synchronized) {
+                retire(provider, providerReplacementError());
+                return false;
+            }
+            clearAuthorization(provider, true);
+        }
+        return state.runtime.reject(
+            record,
+            normalizeSolanaProviderError(
+                envelope.error,
+                envelope.error?.code,
+                envelope.error?.data
+            )
+        );
+    }
+    if (record.metadata.method === "disconnect") {
+        if (envelope.kind !== "result") {
+            return state.runtime.reject(
+                record,
+                new ProviderRpcError(-32603, malformedSolanaResponse)
+            );
+        }
+        return state.runtime.resolve(record, true);
+    }
+    if (envelope.kind === "batchResult") {
+        if (record.metadata.method !== "signAllTransactions" ||
+            !isArrayNormally(envelope.results) ||
+            envelope.results.length === 0 ||
+            envelope.results.length > maximumTransactionBatchSize) {
+            rejectOperation(
+                provider,
+                record,
+                new ProviderRpcError(4200, invalidSolanaSignatureResponse)
+            );
+            return false;
+        }
+        return signedResult(
+            provider,
+            record,
+            envelope.results,
+            envelope.approvalCommitted === true
+        );
+    }
+    if (envelope.kind !== "result") {
+        return state.runtime.reject(
+            record,
+            new ProviderRpcError(-32603, malformedSolanaResponse)
+        );
+    }
+    if (record.metadata.method === "connect") {
+        const publicKeyValue = envelope.result?.publicKey || envelope.result;
+        if (!validPublicKeyString(publicKeyValue)) {
+            return state.runtime.reject(
+                record,
+                new ProviderRpcError(4100, providerNotReadyMessage)
+            );
+        }
+        const resultPublicKey = new PublicKey(publicKeyValue);
+        if (envelope.configurationApplied === false) {
+            if (envelope.approvalCommitted === true) {
+                return state.runtime.resolve(record, {
+                    publicKey: resultPublicKey,
+                });
+            }
+            return rejectOperation(
+                provider,
+                record,
+                providerReplacementError()
+            );
+        }
+        const previousPublicKey = state.publicKey?.toString() || null;
+        const appliedConfigurationMatches =
+            envelope.configurationApplied === true &&
+            state.accountRevocationTombstone !== true &&
+            state.isConnected === true &&
+            previousPublicKey === publicKeyValue;
+        if (appliedConfigurationMatches) {
+            return state.runtime.resolve(record, {
+                publicKey: state.publicKey,
+            });
+        }
+        if (!authorizationMatches(state, record.metadata.authorization)) {
+            if (envelope.approvalCommitted === true) {
+                return state.runtime.resolve(record, {
+                    publicKey: resultPublicKey,
+                });
+            }
+            return rejectOperation(
+                provider,
+                record,
+                providerReplacementError()
+            );
+        }
+        const wasConnected = state.isConnected;
+        state.accountRevocationTombstone = false;
+        if (previousPublicKey !== publicKeyValue) {
+            try {
+                incrementRevision(state);
+            } catch (error) {
+                clearAuthorization(provider, true);
+                state.runtime.reject(record, error);
+                return false;
+            }
+            clearMap(state.standardAccountsByAddress);
+        }
+        state.publicKey = resultPublicKey;
+        state.isConnected = true;
+        const settled = state.runtime.resolve(
+            record,
+            {publicKey: state.publicKey}
+        );
+        if (settled && !wasConnected) {
+            emitProvider(provider, "connect", state.publicKey);
+        }
+        if (previousPublicKey !== publicKeyValue) {
+            emitProvider(provider, "accountChanged", state.publicKey);
+            emitStandardChange(provider, {accounts: provider.standardAccounts()});
+        }
+        return settled;
+    }
+    const value = resultValue(envelope);
+    if (record.metadata.method === "signMessage" ||
+        record.metadata.method === "signTransaction" ||
+        record.metadata.method === "signAndSendTransaction") {
+        if (typeof value !== "string") {
+            rejectOperation(
+                provider,
+                record,
+                new ProviderRpcError(4200, invalidSolanaSignatureResponse)
+            );
+            return false;
+        }
+        return signedResult(
+            provider,
+            record,
+            [value],
+            envelope.approvalCommitted === true
+        );
+    }
+    return state.runtime.resolve(record, envelope.result);
+}
+
+function retire(provider, error = providerReplacementError()) {
+    const state = providerState(provider);
+    if (!state || state.runtime.phase === "retired") { return 0; }
+    const count = state.runtime.retire(error);
+    state.activeDisconnect = null;
+    clearAuthorization(provider, true);
+    clearSet(state.standardChangeListeners);
+    return count;
+}
+
+function snapshot(provider) {
+    const state = providerState(provider);
+    if (!state) { return null; }
+    const publicKey = state.publicKey?.toString() || null;
+    if ((publicKey !== null && !validPublicKeyString(publicKey)) ||
+        !Number.isSafeInteger(state.accountRevision) ||
+        state.accountRevision < 0 ||
+        !Number.isSafeInteger(state.solanaAuthorizationEpoch) ||
+        state.solanaAuthorizationEpoch < 0) {
+        return null;
+    }
+    return freezeObjectNormally({
+        accountRevocationTombstone:
+            state.accountRevocationTombstone === true,
+        accountRevision: state.accountRevision,
+        isConnected: state.isConnected === true && publicKey !== null,
+        publicKey,
+        solanaAuthorizationEpoch: state.solanaAuthorizationEpoch,
+    });
+}
+
+function isReady(provider) {
+    return providerState(provider)?.runtime.phase === "ready";
+}
+
+function initialAuthorization(initialState) {
+    let initial = {};
+    if (initialState && typeof initialState === "object") {
+        try {
+            initial = outboundDataSnapshot(initialState);
+        } catch {
+        }
+    }
+    const accountRevision = Number.isSafeInteger(initial.accountRevision) &&
+        initial.accountRevision >= 0
+        ? initial.accountRevision
+        : 0;
+    const solanaAuthorizationEpoch = Number.isSafeInteger(
+        initial.solanaAuthorizationEpoch
+    ) && initial.solanaAuthorizationEpoch >= 0
+        ? initial.solanaAuthorizationEpoch
+        : 0;
+    const tombstone = initial.accountRevocationTombstone === true;
+    const publicKey = !tombstone && validPublicKeyString(initial.publicKey)
+        ? new PublicKey(initial.publicKey)
+        : null;
+    return {
+        accountRevision,
+        accountRevocationTombstone: tombstone,
+        isConnected: !!publicKey && initial.isConnected === true,
+        publicKey,
+        solanaAuthorizationEpoch,
+    };
 }
 
 class BigWalletSolana extends EventEmitter {
 
-    constructor() {
+    constructor(providerGeneration, transport, initialState = null) {
         super();
-
-        this.idMapping = new IdMapping();
-        this.callbacks = new Map();
-        this.pendingRequests = new Map();
-
-        this.isPhantom = true;
-        this.publicKey = null;
-        this.isConnected = false;
-        this.isBigWallet = true;
-
-        this.didGetLatestConfiguration = false;
-        this.pendingPayloads = [];
-        this.standardChangeListeners = new Set();
-        this.standardAccountsByAddress = new Map();
-        this.standardRegisteredHosts = typeof WeakSet !== "undefined" ? new WeakSet() : null;
-        this.standardWalletFeatures = null;
-        this.standardWallet = null;
-
+        if (typeof providerGeneration !== "string" ||
+            providerGeneration.length === 0) {
+            throw new TypeError("Invalid Solana provider generation");
+        }
+        const authorization = initialAuthorization(initialState);
+        setProviderState(this, {
+            activeDisconnect: null,
+            generation: providerGeneration,
+            runtime: new OperationRuntime(providerGeneration, {
+                firstWireId: 2,
+                wireIdStep: 2,
+            }),
+            standardAccountsByAddress: new MapConstructor,
+            standardChangeListeners: new SetConstructor,
+            standardFeatures: null,
+            transport: capturedTransport(transport),
+            ...authorization,
+        });
+        definePropertyNormally(this, "isPhantom", {
+            configurable: true,
+            enumerable: true,
+            value: true,
+            writable: true,
+        });
+        definePropertyNormally(this, "isBigWallet", {
+            configurable: true,
+            enumerable: true,
+            value: true,
+            writable: true,
+        });
         this.connect = this.connect.bind(this);
         this.disconnect = this.disconnect.bind(this);
         this.request = this.request.bind(this);
@@ -109,72 +1538,215 @@ class BigWalletSolana extends EventEmitter {
         this.standardConnect = this.standardConnect.bind(this);
         this.standardDisconnect = this.standardDisconnect.bind(this);
         this.standardOn = this.standardOn.bind(this);
-        this.standardSignAndSendTransaction = this.standardSignAndSendTransaction.bind(this);
-        this.standardSignTransaction = this.standardSignTransaction.bind(this);
         this.standardSignMessage = this.standardSignMessage.bind(this);
+        this.standardSignTransaction = this.standardSignTransaction.bind(this);
+        this.standardSignAndSendTransaction =
+            this.standardSignAndSendTransaction.bind(this);
+    }
+
+    get providerGeneration() {
+        return getProviderState(this).generation;
+    }
+
+    get publicKey() {
+        return getProviderState(this).publicKey;
+    }
+
+    set publicKey(_) {}
+
+    get isConnected() {
+        return getProviderState(this).isConnected;
+    }
+
+    set isConnected(_) {}
+
+    get didGetLatestConfiguration() {
+        return isReady(this);
+    }
+
+    set didGetLatestConfiguration(_) {}
+
+    get accountRevision() {
+        return getProviderState(this).accountRevision;
+    }
+
+    get accountRevocationTombstone() {
+        return getProviderState(this).accountRevocationTombstone;
+    }
+
+    get solanaAuthorizationEpoch() {
+        return getProviderState(this).solanaAuthorizationEpoch;
+    }
+
+    get retired() {
+        return getProviderState(this).runtime.phase === "retired";
+    }
+
+    set retired(value) {
+        if (value === true) { retire(this); }
     }
 
     connect(params) {
-        const payload = { method: "connect" };
-        if (typeof params !== "undefined") {
-            payload.params = params;
+        return this.request({method: "connect", params});
+    }
+
+    request(payload) {
+        try {
+            const shell = outboundDataSnapshot({
+                id: payload?.id,
+                method: payload?.method,
+            });
+            if (shell.method === "disconnect") {
+                return this.disconnect();
+            }
+            return registerOperation(
+                this,
+                shell.method,
+                payload?.params,
+                shell.id
+            );
+        } catch (error) {
+            return Promise.reject(error);
         }
-        return this.request(payload);
     }
 
     disconnect() {
-        window.bigwallet.disconnect("solana");
-        return this.performDisconnect();
+        const state = getProviderState(this);
+        if (state.runtime.phase === "retired") {
+            return Promise.resolve(true);
+        }
+        if (state.activeDisconnect &&
+            state.runtime.owns(state.activeDisconnect)) {
+            return state.activeDisconnect.promise;
+        }
+        if (state.solanaAuthorizationEpoch === maximumCounter) {
+            const error = providerReplacementError();
+            retire(this, error);
+            return Promise.reject(error);
+        }
+        const metadata = createMetadata("disconnect");
+        const record = state.runtime.register({
+            metadata,
+            payload: {method: "disconnect"},
+        });
+        state.activeDisconnect = record;
+        record.promise.then(
+            () => {
+                if (state.activeDisconnect === record) {
+                    state.activeDisconnect = null;
+                }
+            },
+            () => {
+                if (state.activeDisconnect === record) {
+                    state.activeDisconnect = null;
+                }
+            }
+        );
+        advanceEpoch(state);
+        metadata.authorization = authorizationSnapshot(state);
+        let synchronized = false;
+        try {
+            synchronized = state.transport.synchronizeSolanaEpoch(
+                state.solanaAuthorizationEpoch
+            ) !== false && state.transport.isCurrent() === true;
+        } catch {
+        }
+        if (!synchronized) {
+            retire(this, providerReplacementError());
+            return record.promise;
+        }
+        clearAuthorization(this, true);
+        let posted = false;
+        try {
+            metadata.dispatched = true;
+            posted = state.transport.postDisconnect({
+                id: record.wireId,
+                provider: "solana",
+                providerGeneration: state.generation,
+                solanaAuthorizationEpoch: state.solanaAuthorizationEpoch,
+            }) === true;
+        } catch (error) {
+            state.runtime.reject(record, error);
+            return record.promise;
+        }
+        if (!posted) {
+            retire(this, providerReplacementError());
+        }
+        return record.promise;
     }
 
     externalDisconnect() {
-        return this.performDisconnect();
-    }
-
-    performDisconnect() {
-        const didChangeAccount = this.publicKey !== null;
-        this.isConnected = false;
-        this.publicKey = null;
-        this.standardAccountsByAddress.clear();
-        if (didChangeAccount) {
-            this.emit("accountChanged", null);
+        const state = getProviderState(this);
+        if (state.runtime.phase === "retired") { return Promise.resolve(true); }
+        let synchronized = false;
+        try {
+            advanceEpoch(state);
+            synchronized = state.transport.synchronizeSolanaEpoch(
+                state.solanaAuthorizationEpoch
+            ) !== false && state.transport.isCurrent() === true;
+        } catch {
         }
-        this.emit("disconnect");
-        if (didChangeAccount) {
-            this.emitStandardChange({ accounts: this.standardAccounts() });
+        if (!synchronized) {
+            retire(this, providerReplacementError());
+            return Promise.resolve(true);
         }
+        clearAuthorization(this, true);
         return Promise.resolve(true);
     }
 
-    bytesFor(value) {
-        if (value instanceof Uint8Array) {
-            return value;
-        }
-
-        if (typeof ArrayBuffer !== "undefined") {
-            if (value instanceof ArrayBuffer) {
-                return new Uint8Array(value);
-            }
-
-            if (ArrayBuffer.isView(value)) {
-                return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
-            }
-        }
-
-        return null;
+    retire(error) {
+        return retire(this, error);
     }
 
-    standardPublicKeyBytes(publicKey) {
-        return new Uint8Array(publicKey.toBytes());
+    signMessage(message, display) {
+        const params = {message};
+        if (typeof display !== "undefined") { params.display = display; }
+        return this.request({method: "signMessage", params});
     }
 
-    standardAccountForPublicKey(publicKey) {
-        const address = publicKey.toString();
-        let account = this.standardAccountsByAddress.get(address);
+    signTransactionPayload(message) {
+        return {method: "signTransaction", params: {message}};
+    }
+
+    signTransaction(transaction) {
+        return this.request({
+            method: "signTransaction",
+            params: {transaction},
+        });
+    }
+
+    signAllTransactions(transactions) {
+        return this.request({
+            method: "signAllTransactions",
+            params: {transactions},
+        });
+    }
+
+    signAndSendTransaction(transaction, options) {
+        const params = {transaction};
+        if (typeof options !== "undefined") { params.options = options; }
+        return this.request({method: "signAndSendTransaction", params});
+    }
+
+    standardOn(event, listener) {
+        const state = getProviderState(this);
+        if (state.runtime.phase === "retired" ||
+            event !== standardChangeEvent || typeof listener !== "function") {
+            return () => {};
+        }
+        addSetEntry(state.standardChangeListeners, listener);
+        return () => deleteSetEntry(state.standardChangeListeners, listener);
+    }
+
+    standardAccounts() {
+        const state = getProviderState(this);
+        if (!state.publicKey) { return []; }
+        const address = state.publicKey.toString();
+        let account = getMapEntry(state.standardAccountsByAddress, address);
         if (!account) {
-            const publicKeyBytes = this.standardPublicKeyBytes(publicKey);
-            account = Object.freeze({
-                address: address,
+            const publicKeyBytes = new Uint8Array(state.publicKey.toBytes());
+            account = freezeObjectNormally({
+                address,
                 get publicKey() {
                     return publicKeyBytes.slice();
                 },
@@ -182,181 +1754,60 @@ class BigWalletSolana extends EventEmitter {
                 features: solanaAccountFeatures,
                 label: walletName,
             });
-            this.standardAccountsByAddress.set(address, account);
+            setMapEntry(state.standardAccountsByAddress, address, account);
         }
-        return account;
-    }
-
-    standardAccounts() {
-        return this.publicKey ? [this.standardAccountForPublicKey(this.publicKey)] : [];
-    }
-
-    currentPublicKeyString() {
-        return this.publicKey ? this.publicKey.toString() : null;
-    }
-
-    emitStandardAccountChangeIfNeeded(previousPublicKey) {
-        if (previousPublicKey !== this.currentPublicKeyString()) {
-            if (previousPublicKey) {
-                this.standardAccountsByAddress.delete(previousPublicKey);
-            }
-            this.emitStandardChange({ accounts: this.standardAccounts() });
-        }
+        return [account];
     }
 
     standardFeatures() {
-        if (this.standardWalletFeatures) {
-            return this.standardWalletFeatures;
-        }
-
-        this.standardWalletFeatures = Object.freeze({
-            [standardConnect]: Object.freeze({
+        const state = getProviderState(this);
+        if (state.standardFeatures) { return state.standardFeatures; }
+        state.standardFeatures = freezeObjectNormally({
+            [standardConnect]: freezeObjectNormally({
                 version: walletStandardVersion,
                 connect: this.standardConnect,
             }),
-            [standardDisconnect]: Object.freeze({
+            [standardDisconnect]: freezeObjectNormally({
                 version: walletStandardVersion,
                 disconnect: this.standardDisconnect,
             }),
-            [standardEvents]: Object.freeze({
+            [standardEvents]: freezeObjectNormally({
                 version: walletStandardVersion,
                 on: this.standardOn,
             }),
-            [solanaSignAndSendTransaction]: Object.freeze({
+            [solanaSignAndSendTransaction]: freezeObjectNormally({
                 version: walletStandardVersion,
                 supportedTransactionVersions: solanaSupportedTransactionVersions,
                 signAndSendTransaction: this.standardSignAndSendTransaction,
             }),
-            [solanaSignTransaction]: Object.freeze({
+            [solanaSignTransaction]: freezeObjectNormally({
                 version: walletStandardVersion,
                 supportedTransactionVersions: solanaSupportedTransactionVersions,
                 signTransaction: this.standardSignTransaction,
             }),
-            [solanaSignMessage]: Object.freeze({
+            [solanaSignMessage]: freezeObjectNormally({
                 version: solanaSignMessageFeatureVersion,
                 signMessage: this.standardSignMessage,
             }),
         });
-        return this.standardWalletFeatures;
-    }
-
-    registerWalletStandard(options) {
-        if (this.standardWallet) {
-            return this.standardWallet;
-        }
-
-        const icon = options && options.icon ? options.icon : "";
-        const provider = this;
-        this.standardWallet = Object.freeze({
-            get version() {
-                return walletStandardVersion;
-            },
-            get name() {
-                return walletName;
-            },
-            get icon() {
-                return icon;
-            },
-            get chains() {
-                return solanaChains;
-            },
-            get features() {
-                return provider.standardFeatures();
-            },
-            get accounts() {
-                return provider.standardAccounts();
-            },
-        });
-
-        this.dispatchWalletStandardRegistration(this.standardWallet);
-        return this.standardWallet;
-    }
-
-    dispatchWalletStandardRegistration(wallet) {
-        const registeredHosts = this.standardRegisteredHosts;
-        const callback = (registration) => {
-            if (registration && typeof registration.register === "function") {
-                if (registeredHosts && (typeof registration === "object" || typeof registration === "function")) {
-                    if (registeredHosts.has(registration)) {
-                        return;
-                    }
-                    registeredHosts.add(registration);
-                }
-                registration.register(wallet);
-            }
-        };
-        try {
-            window.dispatchEvent(new CustomEvent(walletStandardRegisterEvent, { detail: callback }));
-        } catch (error) {
-            try {
-                const event = new Event(walletStandardRegisterEvent, {
-                    bubbles: false,
-                    cancelable: false,
-                    composed: false,
-                });
-                Object.defineProperty(event, "detail", { value: callback });
-                window.dispatchEvent(event);
-            } catch (fallbackError) {
-                console.error("Big Wallet: wallet-standard registration failed", fallbackError);
-            }
-        }
-
-        try {
-            window.addEventListener(walletStandardAppReadyEvent, (event) => {
-                callback(event.detail);
-            });
-        } catch (error) {
-            console.error("Big Wallet: wallet-standard app-ready listener failed", error);
-        }
-
-        try {
-            window.navigator.wallets = window.navigator.wallets || [];
-            window.navigator.wallets.push(callback);
-        } catch (error) {
-        }
-    }
-
-    standardOn(event, listener) {
-        if (event !== standardChangeEvent) {
-            return () => {};
-        }
-
-        this.standardChangeListeners.add(listener);
-        return () => {
-            this.standardChangeListeners.delete(listener);
-        };
-    }
-
-    emitStandardChange(properties) {
-        for (const listener of this.standardChangeListeners) {
-            try {
-                listener(properties);
-            } catch (error) {
-                console.error("Big Wallet: wallet-standard change listener failed", error);
-            }
-        }
+        return state.standardFeatures;
     }
 
     async standardConnect(input) {
-        if (input && input.silent === true) {
-            if (this.didGetLatestConfiguration && !this.publicKey) {
-                return { accounts: [] };
-            }
-
-            try {
-                await this.connect({ onlyIfTrusted: true });
-            } catch (error) {
-                if (error && error.code === 4100) {
-                    return { accounts: [] };
-                }
-                throw error;
-            }
-
-            return { accounts: this.standardAccounts() };
+        if (input?.silent === true && isReady(this) && !this.publicKey) {
+            return {accounts: []};
         }
-
-        await this.connect();
-        return { accounts: this.standardAccounts() };
+        try {
+            await this.connect(input?.silent === true
+                ? {onlyIfTrusted: true}
+                : undefined);
+        } catch (error) {
+            if (input?.silent === true && error?.code === 4100) {
+                return {accounts: []};
+            }
+            throw error;
+        }
+        return {accounts: this.standardAccounts()};
     }
 
     async standardDisconnect() {
@@ -364,62 +1815,43 @@ class BigWalletSolana extends EventEmitter {
     }
 
     assertStandardAccount(account) {
-        if (!this.publicKey || !account || account.address !== this.publicKey.toString()) {
+        const publicKey = this.publicKey;
+        if (!publicKey || !account || account.address !== publicKey.toString()) {
             throw new ProviderRpcError(4100, providerNotReadyMessage);
         }
     }
 
     assertSupportedStandardChain(chain, isRequired) {
-        if ((!isRequired && typeof chain === "undefined") || solanaChains.includes(chain)) {
+        if ((!isRequired && typeof chain === "undefined") ||
+            (chain === solanaMainnetChain || chain === solanaDevnetChain ||
+                chain === solanaTestnetChain)) {
             return;
         }
-
         throw new ProviderRpcError(4200, unsupportedSolanaChain);
     }
 
-    normalizedStandardBytes(value, errorMessage) {
-        const bytes = this.bytesFor(value);
-        if (bytes) {
-            return bytes;
-        }
-
-        throw new ProviderRpcError(4200, errorMessage);
-    }
-
-    standardBytesSnapshot(value, errorMessage) {
-        return new Uint8Array(this.normalizedStandardBytes(value, errorMessage));
+    standardBytesSnapshot(value, message) {
+        return bytesSnapshot(value, message);
     }
 
     standardSignatureBytes(value) {
-        const signature = this.standardBytesSnapshot(value, invalidSolanaSignatureResponse);
+        const signature = bytesSnapshot(value, invalidSolanaSignatureResponse);
         if (signature.length !== 64) {
             throw new ProviderRpcError(4200, invalidSolanaSignatureResponse);
         }
-
         return signature;
     }
 
     standardBase58Signature(value) {
-        try {
-            return this.standardSignatureBytes(Base58.decode(value));
-        } catch (error) {
-            if (error instanceof ProviderRpcError) {
-                throw error;
-            }
-            throw new ProviderRpcError(4200, invalidSolanaSignatureResponse);
-        }
+        return this.standardSignatureBytes(signatureBytes(value));
     }
 
     standardSignAndSendOptions(input) {
-        const options = { ...((input && input.options) || {}) };
+        const options = outboundDataSnapshot(input?.options || {});
         if (typeof options.mode !== "undefined" && options.mode !== "serial") {
             throw new ProviderRpcError(4200, invalidSolanaTransactionOptions);
         }
-
-        if (input && input.chain) {
-            options.bigWalletCluster = input.chain;
-        }
-
+        if (input?.chain) { options.bigWalletCluster = input.chain; }
         return options;
     }
 
@@ -427,23 +1859,18 @@ class BigWalletSolana extends EventEmitter {
         let value = 0;
         let shift = 0;
         let cursor = offset;
-
         while (cursor < bytes.length) {
             const element = bytes[cursor];
             cursor += 1;
-
             if (shift >= 32) {
                 throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
             }
-
             value += (element & 0x7f) * Math.pow(2, shift);
             if ((element & 0x80) === 0) {
-                return { value: value, offset: cursor };
+                return {value, offset: cursor};
             }
-
             shift += 7;
         }
-
         throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
     }
 
@@ -451,11 +1878,9 @@ class BigWalletSolana extends EventEmitter {
         if (messageBytes.length === 0) {
             throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
         }
-
         const firstByte = messageBytes[0];
         let requiredSignaturesCount;
         let accountCountOffset;
-
         if ((firstByte & 0x80) === 0) {
             requiredSignaturesCount = firstByte;
             accountCountOffset = 3;
@@ -467,842 +1892,159 @@ class BigWalletSolana extends EventEmitter {
             requiredSignaturesCount = messageBytes[1];
             accountCountOffset = 4;
         }
-
-        const accountCount = this.decodeShortVec(messageBytes, accountCountOffset);
+        const accountCount = this.decodeShortVec(
+            messageBytes,
+            accountCountOffset
+        );
         if (accountCount.value < requiredSignaturesCount) {
             throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
         }
-
         const accountKeysStart = accountCount.offset;
-        const accountKeysLength = accountCount.value * 32;
-        if (accountKeysStart + accountKeysLength > messageBytes.length) {
+        if (accountKeysStart + accountCount.value * 32 > messageBytes.length) {
             throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
         }
-
-        for (let index = 0; index < requiredSignaturesCount; index++) {
+        for (let index = 0; index < requiredSignaturesCount; index += 1) {
             const keyOffset = accountKeysStart + index * 32;
-            let didMatch = true;
-            for (let byteIndex = 0; byteIndex < 32; byteIndex++) {
-                if (messageBytes[keyOffset + byteIndex] !== publicKeyBytes[byteIndex]) {
-                    didMatch = false;
+            let matches = true;
+            for (let byteIndex = 0; byteIndex < 32; byteIndex += 1) {
+                if (messageBytes[keyOffset + byteIndex] !==
+                    publicKeyBytes[byteIndex]) {
+                    matches = false;
                     break;
                 }
             }
-            if (didMatch) {
-                return {
-                    requiredSignaturesCount: requiredSignaturesCount,
-                    signerIndex: index,
-                };
+            if (matches) {
+                return {requiredSignaturesCount, signerIndex: index};
             }
         }
-
         throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
     }
 
     preparedStandardTransaction(transaction) {
-        const transactionBytes = this.standardBytesSnapshot(transaction, invalidSolanaTransactionRequest);
+        const transactionBytes = bytesSnapshot(
+            transaction,
+            invalidSolanaTransactionRequest
+        );
         const signatureCount = this.decodeShortVec(transactionBytes, 0);
         if (signatureCount.value <= 0) {
             throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
         }
-
         const signaturesStart = signatureCount.offset;
         const messageStart = signaturesStart + signatureCount.value * 64;
-        if (messageStart >= transactionBytes.length) {
+        if (messageStart >= transactionBytes.length || !this.publicKey) {
             throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
         }
-
         const messageBytes = transactionBytes.slice(messageStart);
-        const signerPublicKey = this.standardPublicKeyBytes(this.publicKey);
-        const signerDetails = this.signerDetailsForMessage(messageBytes, signerPublicKey);
-        if (signatureCount.value !== signerDetails.requiredSignaturesCount ||
-            signerDetails.signerIndex >= signatureCount.value) {
+        const signer = this.signerDetailsForMessage(
+            messageBytes,
+            new Uint8Array(this.publicKey.toBytes())
+        );
+        if (signatureCount.value !== signer.requiredSignaturesCount ||
+            signer.signerIndex >= signatureCount.value) {
             throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
         }
-
         return {
-            transactionBytes: transactionBytes,
-            messageBytes: messageBytes,
-            signatureOffset: signaturesStart + signerDetails.signerIndex * 64,
+            messageBytes,
+            signatureOffset: signaturesStart + signer.signerIndex * 64,
+            transactionBytes,
         };
     }
 
     async standardSignMessage(...inputs) {
+        if (inputs.length > maximumTransactionBatchSize) {
+            throw new ProviderRpcError(4200, invalidSolanaMessageRequest);
+        }
+        const authorization = authorizationSnapshot(getProviderState(this));
+        const prepared = [];
+        for (let index = 0; index < inputs.length; index += 1) {
+            const input = inputs[index];
+            this.assertStandardAccount(input?.account);
+            prepared[index] = bytesSnapshot(
+                input?.message,
+                invalidSolanaMessageRequest
+            );
+        }
         const outputs = [];
-        for (const input of inputs) {
-            this.assertStandardAccount(input && input.account);
-            const message = this.standardBytesSnapshot(input.message, invalidSolanaMessageRequest);
+        for (let index = 0; index < prepared.length; index += 1) {
+            const message = prepared[index];
+            requireAuthorization(this, authorization);
             const response = await this.signMessage(message);
-            outputs.push({
+            outputs[index] = {
                 signedMessage: message,
                 signature: this.standardSignatureBytes(response.signature),
-            });
+            };
         }
         return outputs;
     }
 
     async standardSignTransaction(...inputs) {
+        if (inputs.length > maximumTransactionBatchSize) {
+            throw new ProviderRpcError(4200, invalidSolanaTransactionBatchRequest);
+        }
+        const authorization = authorizationSnapshot(getProviderState(this));
+        const prepared = [];
+        for (let index = 0; index < inputs.length; index += 1) {
+            const input = inputs[index];
+            this.assertStandardAccount(input?.account);
+            this.assertSupportedStandardChain(input?.chain, false);
+            prepared[index] = this.preparedStandardTransaction(
+                input?.transaction
+            );
+        }
         const outputs = [];
-        for (const input of inputs) {
-            this.assertStandardAccount(input && input.account);
-            this.assertSupportedStandardChain(input && input.chain, false);
-            const prepared = this.preparedStandardTransaction(input.transaction);
-            const payload = this.signTransactionPayload(Base58.encode(prepared.messageBytes));
-            this.trackPendingRequest(payload.id);
-            const response = await this.request(payload);
+        for (let index = 0; index < prepared.length; index += 1) {
+            const transaction = prepared[index];
+            requireAuthorization(this, authorization);
+            const response = await this.request(
+                this.signTransactionPayload(Base58.encode(transaction.messageBytes))
+            );
             const signature = this.standardBase58Signature(response.signature);
-
-            const signedTransaction = new Uint8Array(prepared.transactionBytes);
-            signedTransaction.set(signature, prepared.signatureOffset);
-            outputs.push({ signedTransaction: signedTransaction });
+            const signedTransaction = new Uint8Array(
+                transaction.transactionBytes
+            );
+            signedTransaction.set(signature, transaction.signatureOffset);
+            outputs[index] = {signedTransaction};
         }
         return outputs;
     }
 
     async standardSignAndSendTransaction(...inputs) {
-        const preparedInputs = inputs.map((input) => {
-            this.assertStandardAccount(input && input.account);
-            this.assertSupportedStandardChain(input && input.chain, true);
-            return {
-                account: input.account,
-                transaction: this.standardBytesSnapshot(input.transaction, invalidSolanaTransactionRequest),
+        if (inputs.length > maximumTransactionBatchSize) {
+            throw new ProviderRpcError(4200, invalidSolanaTransactionBatchRequest);
+        }
+        const authorization = authorizationSnapshot(getProviderState(this));
+        const prepared = [];
+        for (let index = 0; index < inputs.length; index += 1) {
+            const input = inputs[index];
+            this.assertStandardAccount(input?.account);
+            this.assertSupportedStandardChain(input?.chain, true);
+            prepared[index] = {
                 options: this.standardSignAndSendOptions(input),
+                transaction: bytesSnapshot(
+                    input?.transaction,
+                    invalidSolanaTransactionRequest
+                ),
             };
-        });
-
+        }
         const outputs = [];
-        for (const preparedInput of preparedInputs) {
-            const response = await this.signAndSendTransaction(preparedInput.transaction, preparedInput.options);
-            outputs.push({
+        for (let index = 0; index < prepared.length; index += 1) {
+            requireAuthorization(this, authorization);
+            const response = await this.signAndSendTransaction(
+                prepared[index].transaction,
+                prepared[index].options
+            );
+            outputs[index] = {
                 signature: this.standardBase58Signature(response.signature),
-            });
+            };
         }
         return outputs;
     }
-
-    normalizedBase58Value(value, errorMessage) {
-        if (typeof value === "string") {
-            return value;
-        }
-
-        const bytes = this.bytesFor(value);
-        if (bytes) {
-            return Base58.encode(bytes);
-        }
-
-        throw new ProviderRpcError(4200, errorMessage);
-    }
-
-    normalizedBase58Messages(values, errorMessage) {
-        return values.map((value) => {
-            return this.normalizedBase58Value(value, errorMessage);
-        });
-    }
-
-    signAllTransactionsMessageParamName(normalizedParams) {
-        const hasParam = (name) => Object.prototype.hasOwnProperty.call(normalizedParams, name);
-        const hasMessages = hasParam("messages");
-        const hasMessage = hasParam("message") && normalizedParams.message != null;
-
-        if (hasMessages && hasMessage) {
-            throw new ProviderRpcError(4200, ambiguousSolanaTransactionParams);
-        }
-
-        if (hasMessages) {
-            return "messages";
-        }
-
-        if (hasMessage) {
-            return "message";
-        }
-
-        return null;
-    }
-
-    normalizedHexMessage(value, errorMessage) {
-        if (typeof value !== "string") {
-            throw new ProviderRpcError(4200, errorMessage);
-        }
-
-        const rawValue = value.startsWith("0x") ? value.slice(2) : value;
-        if (rawValue.length % 2 !== 0 || !/^[0-9a-fA-F]*$/.test(rawValue)) {
-            throw new ProviderRpcError(4200, errorMessage);
-        }
-
-        return `0x${rawValue}`;
-    }
-
-    preparedSignMessageParams(params) {
-        const normalizedParams = { ...(params || {}) };
-        const errorMessage = invalidSolanaMessageRequest;
-
-        if (!("message" in normalizedParams)) {
-            throw new ProviderRpcError(4200, errorMessage);
-        }
-
-        const signsUtf8Message = typeof normalizedParams.message === "string" &&
-            typeof normalizedParams.display === "string" &&
-            normalizedParams.display.toLowerCase() === "utf8";
-
-        if (signsUtf8Message) {
-            normalizedParams.messageEncoding = "utf8";
-            return normalizedParams;
-        }
-
-        if (typeof normalizedParams.message === "string") {
-            normalizedParams.message = this.normalizedHexMessage(normalizedParams.message, errorMessage);
-        } else {
-            try {
-                normalizedParams.message = Utils.bufferToHex(normalizedParams.message);
-            } catch (error) {
-                throw new ProviderRpcError(4200, errorMessage);
-            }
-        }
-
-        normalizedParams.messageEncoding = "hex";
-        return normalizedParams;
-    }
-
-    normalizeDerivedMessage(normalizedParams, derivedMessage, errorMessage) {
-        if ("message" in normalizedParams) {
-            const normalizedMessage = this.normalizedBase58Value(normalizedParams.message, errorMessage);
-            if (normalizedMessage !== derivedMessage) {
-                throw new ProviderRpcError(4200, mismatchedSolanaTransactionParams);
-            }
-            normalizedParams.message = normalizedMessage;
-        } else {
-            normalizedParams.message = derivedMessage;
-        }
-    }
-
-    canSerializeTransactionMessage(value) {
-        return !!value && (typeof value.serializeMessage === "function" ||
-            (value.message && typeof value.message.serialize === "function"));
-    }
-
-    canSerializeTransaction(value) {
-        return !!value && typeof value.serialize === "function";
-    }
-
-    canApplyTransactionSignature(value) {
-        return !!value && (typeof value.addSignature === "function" ||
-            this.canSetVersionedTransactionSignature(value));
-    }
-
-    canSetVersionedTransactionSignature(value) {
-        return !!value &&
-            Array.isArray(value.signatures) &&
-            this.versionedTransactionSignerPublicKeys(value) !== null &&
-            typeof value.message.header.numRequiredSignatures === "number";
-    }
-
-    versionedTransactionSignerPublicKeys(transaction) {
-        if (!transaction ||
-            !transaction.message ||
-            !transaction.message.header ||
-            !Array.isArray(transaction.message.staticAccountKeys)) {
-            return null;
-        }
-
-        return transaction.message.staticAccountKeys.slice(0,
-                                                          transaction.message.header.numRequiredSignatures);
-    }
-
-    isMatchingPublicKey(publicKey, value) {
-        return !!publicKey && !!value && typeof value.toString === "function" && publicKey.equals(value);
-    }
-
-    isTransactionObject(value) {
-        return this.canSerializeTransactionMessage(value) ||
-            this.canSerializeTransaction(value) ||
-            this.canApplyTransactionSignature(value);
-    }
-
-    assertCanSignTransactionObject(value, errorMessage) {
-        if (!this.canSerializeTransactionMessage(value) || !this.canApplyTransactionSignature(value)) {
-            throw new ProviderRpcError(4200, errorMessage);
-        }
-    }
-
-    preparedSignTransactionParams(params) {
-        const normalizedParams = { ...(params || {}) };
-        let pendingRequestMetadata = null;
-
-        if ("transaction" in normalizedParams && this.isTransactionObject(normalizedParams.transaction)) {
-            const transaction = normalizedParams.transaction;
-            this.assertCanSignTransactionObject(transaction, invalidSolanaTransactionRequest);
-            const derivedMessage = this.encodedMessageFor(transaction);
-            this.normalizeDerivedMessage(normalizedParams,
-                                         derivedMessage,
-                                         invalidSolanaTransactionRequest);
-            pendingRequestMetadata = { transactions: [transaction] };
-            delete normalizedParams.transaction;
-        } else if ("message" in normalizedParams) {
-            normalizedParams.message = this.normalizedBase58Value(normalizedParams.message, invalidSolanaTransactionRequest);
-        } else {
-            throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
-        }
-
-        return {
-            params: normalizedParams,
-            pendingRequestMetadata: pendingRequestMetadata,
-        };
-    }
-
-    preparedSignAllTransactionsParams(params) {
-        const normalizedParams = { ...(params || {}) };
-        let pendingRequestMetadata = null;
-        const suppliedMessageParamName = this.signAllTransactionsMessageParamName(normalizedParams);
-        const suppliedMessages = suppliedMessageParamName ? normalizedParams[suppliedMessageParamName] : null;
-
-        if (Array.isArray(normalizedParams.transactions)) {
-            const transactions = normalizedParams.transactions;
-            transactions.forEach((transaction) => {
-                this.assertCanSignTransactionObject(transaction, invalidSolanaTransactionBatchRequest);
-            });
-            const derivedMessages = transactions.map((transaction) => {
-                return this.encodedMessageFor(transaction);
-            });
-
-            if (suppliedMessageParamName) {
-                if (!Array.isArray(suppliedMessages) || suppliedMessages.length !== derivedMessages.length) {
-                    throw new ProviderRpcError(4200, mismatchedSolanaTransactionParams);
-                }
-
-                const normalizedMessages = this.normalizedBase58Messages(suppliedMessages,
-                                                                        invalidSolanaTransactionBatchRequest);
-                for (let index = 0; index < normalizedMessages.length; index++) {
-                    if (normalizedMessages[index] !== derivedMessages[index]) {
-                        throw new ProviderRpcError(4200, mismatchedSolanaTransactionParams);
-                    }
-                }
-                normalizedParams.messages = normalizedMessages;
-            } else {
-                normalizedParams.messages = derivedMessages;
-            }
-
-            pendingRequestMetadata = { transactions: transactions };
-            delete normalizedParams.transactions;
-            delete normalizedParams.message;
-        } else if (suppliedMessageParamName && Array.isArray(suppliedMessages)) {
-            normalizedParams.messages = this.normalizedBase58Messages(suppliedMessages,
-                                                                      invalidSolanaTransactionBatchRequest);
-            delete normalizedParams.message;
-        } else {
-            throw new ProviderRpcError(4200, invalidSolanaTransactionBatchRequest);
-        }
-
-        return {
-            params: normalizedParams,
-            pendingRequestMetadata: pendingRequestMetadata,
-        };
-    }
-
-    preparedSignAndSendTransactionParams(params) {
-        const normalizedParams = { ...(params || {}) };
-        const errorMessage = invalidSolanaTransactionRequest;
-
-        if ("transaction" in normalizedParams && this.isTransactionObject(normalizedParams.transaction)) {
-            const transaction = normalizedParams.transaction;
-            const encodedTransaction = this.encodedTransactionFor(transaction);
-            if (encodedTransaction !== null) {
-                if ("message" in normalizedParams && this.canSerializeTransactionMessage(transaction)) {
-                    this.normalizeDerivedMessage(normalizedParams,
-                                                 this.encodedMessageFor(transaction),
-                                                 errorMessage);
-                }
-                normalizedParams.transaction = encodedTransaction;
-            } else if (this.canSerializeTransactionMessage(transaction)) {
-                this.normalizeDerivedMessage(normalizedParams,
-                                             this.encodedMessageFor(transaction),
-                                             errorMessage);
-                delete normalizedParams.transaction;
-            } else {
-                throw new ProviderRpcError(4200, errorMessage);
-            }
-        } else if ("transaction" in normalizedParams) {
-            normalizedParams.transaction = this.normalizedBase58Value(normalizedParams.transaction, errorMessage);
-        } else if ("message" in normalizedParams) {
-            normalizedParams.message = this.normalizedBase58Value(normalizedParams.message, errorMessage);
-        } else {
-            throw new ProviderRpcError(4200, errorMessage);
-        }
-
-        return {
-            params: normalizedParams,
-            pendingRequestMetadata: {},
-        };
-    }
-
-    encodedMessageFor(transaction) {
-        return Base58.encode(this.serializedMessageFor(transaction));
-    }
-
-    encodedTransactionFor(transaction) {
-        const serializedTransaction = this.serializedTransactionFor(transaction);
-        if (serializedTransaction === null) {
-            return null;
-        }
-
-        try {
-            return Base58.encode(serializedTransaction);
-        } catch (error) {
-            return null;
-        }
-    }
-
-    serializedTransactionFor(transaction) {
-        if (!transaction || typeof transaction.serialize !== "function") {
-            return null;
-        }
-
-        try {
-            return transaction.serialize({
-                requireAllSignatures: false,
-                verifySignatures: false,
-            });
-        } catch (error) {
-            try {
-                return transaction.serialize();
-            } catch (fallbackError) {
-                return null;
-            }
-        }
-    }
-
-    serializedMessageFor(transaction) {
-        if (transaction && typeof transaction.serializeMessage === "function") {
-            return transaction.serializeMessage();
-        }
-
-        if (transaction && transaction.message && typeof transaction.message.serialize === "function") {
-            return transaction.message.serialize();
-        }
-
-        throw new ProviderRpcError(4200, "Big Wallet does not support this Solana transaction format");
-    }
-
-    nextPayloadId() {
-        let id = Utils.genId();
-        while (this.pendingRequests.has(id) || this.callbacks.has(id)) {
-            id += 1;
-        }
-        return id;
-    }
-
-    signTransactionPayload(message) {
-        return { method: "signTransaction", params: { message: message }, id: this.nextPayloadId() };
-    }
-
-    signTransaction(transaction) {
-        this.assertCanSignTransactionObject(transaction, "Big Wallet could not sign this Solana transaction");
-        const payload = this.signTransactionPayload(this.encodedMessageFor(transaction));
-        this.trackPendingRequest(payload.id, { transactions: [transaction] });
-        return this.request(payload);
-    }
-
-    signAllTransactions(transactions) {
-        transactions.forEach((transaction) => {
-            this.assertCanSignTransactionObject(transaction, "Big Wallet could not sign this Solana transaction batch");
-        });
-        const messages = transactions.map((transaction) => {
-            return this.encodedMessageFor(transaction);
-        });
-        const payload = { method: "signAllTransactions", params: { messages: messages }, id: this.nextPayloadId() };
-        this.trackPendingRequest(payload.id, { transactions: transactions });
-        return this.request(payload);
-    }
-
-    signAndSendTransaction(transaction, options) {
-        const params = { transaction: transaction };
-        if (typeof options !== "undefined") {
-            params.options = options;
-        }
-        const payload = { method: "signAndSendTransaction", params: params, id: this.nextPayloadId() };
-        this.trackPendingRequest(payload.id);
-        return this.request(payload);
-    }
-
-    signMessage(encodedMessage, display) {
-        const params = { message: encodedMessage };
-        if (typeof display !== "undefined") {
-            params.display = display;
-        }
-        const payload = { method: "signMessage", params: params, id: this.nextPayloadId() };
-        this.trackPendingRequest(payload.id, { respondWithBuffer: true });
-        return this.request(payload);
-    }
-
-    postPreparedPayload(payload, prepared) {
-        payload.params = prepared.params;
-        if (prepared.pendingRequestMetadata && !this.pendingRequests.has(payload.id)) {
-            this.trackPendingRequest(payload.id, prepared.pendingRequestMetadata);
-        }
-        this.postMessage(payload.method, payload.id, payload);
-    }
-
-    request(payload) {
-        if (payload.method === "disconnect") {
-            return this.disconnect();
-        }
-
-        const originalId = payload.id;
-        this.idMapping.tryFixId(payload);
-        this.movePendingRequest(originalId, payload.id);
-        return new Promise((resolve, reject) => {
-            if (payload.method === "signMessage" && !this.pendingRequests.has(payload.id)) {
-                this.trackPendingRequest(payload.id, { respondWithBuffer: true });
-            }
-
-            this.callbacks.set(payload.id, (error, data) => {
-                setTimeout(() => {
-                    if (error) {
-                        reject(error);
-                    } else {
-                        resolve(data);
-                    }
-                }, 1);
-            });
-
-            switch (payload.method) {
-            case "connect":
-            case "signMessage":
-            case "signTransaction":
-            case "signAllTransactions":
-            case "signAndSendTransaction":
-                return this.processPayloadSafely(payload);
-            default:
-                this.sendError(payload.id, new ProviderRpcError(4200, `Big Wallet does not support ${payload.method}`));
-            }
-        });
-    }
-
-    processPayloadSafely(payload) {
-        try {
-            this.processPayload(payload);
-        } catch (error) {
-            this.sendError(payload.id, error);
-        }
-    }
-
-    processPayload(payload) {
-        if (!this.didGetLatestConfiguration) {
-            this.pendingPayloads.push(payload);
-            return;
-        }
-
-        switch (payload.method) {
-        case "connect":
-            if (!this.publicKey) {
-                if (payload.params && payload.params.onlyIfTrusted) {
-                    this.sendError(payload.id, new ProviderRpcError(4100, "Click a button to connect"));
-                } else {
-                    this.postMessage("connect", payload.id, {});
-                }
-            } else {
-                this.isConnected = true;
-                this.emitConnect(this.publicKey);
-                this.sendResponse(payload.id, { publicKey: this.publicKey });
-            }
-            break;
-        case "signMessage":
-            payload.params = this.preparedSignMessageParams(payload.params);
-            this.postMessage("signMessage", payload.id, payload);
-            break;
-        case "signTransaction": {
-            this.postPreparedPayload(payload, this.preparedSignTransactionParams(payload.params));
-            break;
-        }
-        case "signAllTransactions": {
-            this.postPreparedPayload(payload, this.preparedSignAllTransactionsParams(payload.params));
-            break;
-        }
-        case "signAndSendTransaction": {
-            this.postPreparedPayload(payload, this.preparedSignAndSendTransactionParams(payload.params));
-            break;
-        }
-        default:
-            this.sendError(payload.id, new ProviderRpcError(4200, `Big Wallet does not support ${payload.method}`));
-        }
-    }
-
-    emitConnect(publicKey) {
-        this.emit("connect", publicKey);
-    }
-
-    trackPendingRequest(id, metadata = {}) {
-        const publicKey = this.publicKey ? this.publicKey.toString() : null;
-        this.pendingRequests.set(id, {
-            publicKey: publicKey,
-            ...metadata,
-        });
-    }
-
-    movePendingRequest(oldId, newId) {
-        if (typeof oldId === "undefined" || oldId === newId || !this.pendingRequests.has(oldId)) {
-            return;
-        }
-
-        const pendingRequest = this.pendingRequests.get(oldId);
-        this.pendingRequests.delete(oldId);
-        this.pendingRequests.set(newId, pendingRequest);
-    }
-
-    publicKeyForPendingRequest(pendingRequest) {
-        if (pendingRequest && typeof pendingRequest.publicKey === "string") {
-            return new PublicKey(pendingRequest.publicKey);
-        }
-
-        return this.publicKey;
-    }
-
-    shouldDisconnectForUnauthorizedResponse(response, pendingRequest) {
-        if (response.errorCode !== 4100 || !this.publicKey) {
-            return false;
-        }
-
-        if (typeof response.errorPublicKey === "string") {
-            return this.publicKey.toString() === response.errorPublicKey;
-        }
-
-        return pendingRequest &&
-            typeof pendingRequest.publicKey === "string" &&
-            this.publicKey.toString() === pendingRequest.publicKey;
-    }
-
-    signingPublicKeyForTransaction(transaction, publicKey) {
-        if (!transaction || !publicKey) {
-            return publicKey;
-        }
-
-        const signerPublicKeys = this.versionedTransactionSignerPublicKeys(transaction);
-        if (signerPublicKeys) {
-            for (let index = 0; index < signerPublicKeys.length; index++) {
-                if (this.isMatchingPublicKey(publicKey, signerPublicKeys[index])) {
-                    return signerPublicKeys[index];
-                }
-            }
-        }
-
-        if (Array.isArray(transaction.signatures)) {
-            for (let index = 0; index < transaction.signatures.length; index++) {
-                const signature = transaction.signatures[index];
-                if (this.isMatchingPublicKey(publicKey, signature && signature.publicKey)) {
-                    return signature.publicKey;
-                }
-            }
-        }
-
-        return publicKey;
-    }
-
-    attachCurrentPublicKeyToPendingRequest(id) {
-        const pendingRequest = this.pendingRequests.get(id);
-        if (!pendingRequest || pendingRequest.publicKey !== null || !this.publicKey) {
-            return;
-        }
-
-        pendingRequest.publicKey = this.publicKey.toString();
-        this.pendingRequests.set(id, pendingRequest);
-    }
-
-    applySignatureToTransaction(id, transaction, publicKey, encodedSignature) {
-        try {
-            const signature = Base58.decode(encodedSignature);
-            if (typeof transaction.addSignature === "function") {
-                transaction.addSignature(this.signingPublicKeyForTransaction(transaction, publicKey), signature);
-                return true;
-            }
-
-            if (this.applySignatureToVersionedTransaction(transaction, publicKey, signature)) {
-                return true;
-            }
-        } catch (error) {
-        }
-
-        this.sendError(id, new ProviderRpcError(4200, solanaSignatureApplicationError));
-        return false;
-    }
-
-    applySignatureToVersionedTransaction(transaction, publicKey, signature) {
-        if (signature.length !== 64 || !this.canSetVersionedTransactionSignature(transaction)) {
-            return false;
-        }
-
-        const signerIndex = this.signerIndexForVersionedTransaction(transaction, publicKey);
-        if (signerIndex === null || signerIndex >= transaction.signatures.length) {
-            return false;
-        }
-
-        transaction.signatures[signerIndex] = signature;
-        return true;
-    }
-
-    signerIndexForVersionedTransaction(transaction, publicKey) {
-        if (!publicKey || !this.canSetVersionedTransactionSignature(transaction)) {
-            return null;
-        }
-
-        const signerPublicKeys = this.versionedTransactionSignerPublicKeys(transaction);
-        for (let index = 0; index < signerPublicKeys.length; index++) {
-            const signerPublicKey = signerPublicKeys[index];
-            if (this.isMatchingPublicKey(publicKey, signerPublicKey)) {
-                return index;
-            }
-        }
-
-        return null;
-    }
-
-    processBigWalletResponse(id, response) {
-        if (response.name === "didLoadLatestConfiguration") {
-            const previousPublicKey = this.currentPublicKeyString();
-            this.didGetLatestConfiguration = true;
-
-            if ("publicKey" in response) {
-                this.publicKey = new PublicKey(response.publicKey);
-                this.isConnected = true;
-            } else {
-                this.publicKey = null;
-                this.isConnected = false;
-            }
-
-            this.emitStandardAccountChangeIfNeeded(previousPublicKey);
-
-            for (const payload of this.pendingPayloads) {
-                this.processPayloadSafely(payload);
-            }
-            this.pendingPayloads = [];
-            return;
-        }
-
-        const pendingRequest = this.pendingRequests.get(id);
-        const requestPublicKey = this.publicKeyForPendingRequest(pendingRequest);
-
-        if ("publicKey" in response) {
-            const previousPublicKey = this.currentPublicKeyString();
-            this.isConnected = true;
-            const publicKey = new PublicKey(response.publicKey);
-            this.publicKey = publicKey;
-            if (response.name !== "switchAccount") {
-                this.sendResponse(id, { publicKey: publicKey });
-            }
-            this.emitConnect(publicKey);
-            this.emitStandardAccountChangeIfNeeded(previousPublicKey);
-            if (response.name === "switchAccount") {
-                this.emit("accountChanged", publicKey);
-            }
-        } else if ("result" in response) {
-            if (response.name === "signTransaction" &&
-                pendingRequest &&
-                Array.isArray(pendingRequest.transactions)) {
-                if (!requestPublicKey) {
-                    this.sendError(id, new ProviderRpcError(4100, providerNotReadyMessage));
-                    return;
-                }
-                const transaction = pendingRequest.transactions[0];
-                if (!this.applySignatureToTransaction(id, transaction, requestPublicKey, response.result)) {
-                    return;
-                }
-                this.sendResponse(id, transaction);
-            } else if (pendingRequest && pendingRequest.respondWithBuffer === true) {
-                const signature = Utils.messageToBuffer(Base58.decode(response.result));
-                this.sendResponse(id, { signature: signature, publicKey: requestPublicKey });
-            } else {
-                this.sendResponse(id, { signature: response.result, publicKey: requestPublicKey });
-            }
-        } else if ("results" in response) {
-            if (!Array.isArray(response.results)) {
-                this.sendError(id, new ProviderRpcError(4200, invalidSolanaSignatureResponse));
-                return;
-            }
-
-            if (pendingRequest && Array.isArray(pendingRequest.transactions)) {
-                if (!requestPublicKey) {
-                    this.sendError(id, new ProviderRpcError(4100, providerNotReadyMessage));
-                    return;
-                }
-                const transactions = pendingRequest.transactions;
-                if (response.results.length !== transactions.length) {
-                    this.sendError(id, new ProviderRpcError(4200, mismatchedSolanaTransactionSignatures));
-                    return;
-                }
-
-                for (let index = 0; index < response.results.length; index++) {
-                    if (!this.applySignatureToTransaction(id, transactions[index], requestPublicKey, response.results[index])) {
-                        return;
-                    }
-                }
-                this.sendResponse(id, transactions);
-            } else {
-                this.sendResponse(id, {
-                    signatures: response.results,
-                    publicKey: requestPublicKey,
-                });
-            }
-        } else if ("error" in response) {
-            if (this.shouldDisconnectForUnauthorizedResponse(response, pendingRequest)) {
-                this.performDisconnect();
-            }
-            const decodedData = decodeProviderErrorData(response.errorDataJSON);
-            const data =
-                typeof decodedData !== "undefined"
-                    ? decodedData
-                    : typeof response.errorSignature === "string"
-                        ? { signature: response.errorSignature }
-                        : undefined;
-            this.sendError(
-                id,
-                response.error,
-                response.errorCode,
-                data
-            );
-        }
-    }
-
-    postMessage(handler, id, data) {
-        if (handler !== "connect" && !this.publicKey) {
-            this.sendError(id, new ProviderRpcError(4100, providerNotReadyMessage));
-            return;
-        }
-
-        this.attachCurrentPublicKeyToPendingRequest(id);
-
-        const publicKey = this.publicKey ? this.publicKey.toString() : "";
-        const object = {
-            object: data,
-            publicKey: publicKey,
-        };
-        window.bigwallet.postMessage(handler, id, object, "solana");
-    }
-
-    sendResponse(id, result) {
-        this.idMapping.tryPopId(id);
-        this.pendingRequests.delete(id);
-        const callback = this.callbacks.get(id);
-        if (callback) {
-            callback(null, result);
-            this.callbacks.delete(id);
-        } else {
-            console.log(`callback id: ${id} not found`);
-        }
-    }
-
-    sendError(id, error, code, data) {
-        const normalizedError = normalizeSolanaProviderError(
-            error,
-            code,
-            data
-        );
-        this.idMapping.tryPopId(id);
-        this.pendingRequests.delete(id);
-        const callback = this.callbacks.get(id);
-        if (callback) {
-            callback(normalizedError, null);
-            this.callbacks.delete(id);
-        }
-    }
-
 }
 
-module.exports = BigWalletSolana;
+BigWalletSolana.applyEnvelope = applyEnvelope;
+BigWalletSolana.retire = retire;
+BigWalletSolana.snapshot = snapshot;
+BigWalletSolana.isReady = isReady;
+
+export { applyEnvelope, isReady, retire, snapshot };
+export default BigWalletSolana;

@@ -1098,21 +1098,16 @@ invoke_artifact_validator \
 mac_artifact="$test_root/macOS release artifact"
 mac_app="$mac_artifact/Products/Applications/Big Wallet.app"
 mac_extension="$mac_app/Contents/PlugIns/Safari macOS.appex"
-ambient_app="$mac_app/Contents/Helpers/Big Wallet.app"
 /bin/mkdir -p \
     "$mac_app/Contents/Resources" \
-    "$mac_extension/Contents/Resources" \
-    "$ambient_app/Contents/Resources"
+    "$mac_extension/Contents/Resources"
 printf '%s' "$valid_key" \
     > "$mac_app/Contents/Resources/AlchemyJWTRequestProofKey"
 printf '%s' "$valid_key" \
     > "$mac_extension/Contents/Resources/AlchemyJWTRequestProofKey"
-printf '%s' "$valid_key" \
-    > "$ambient_app/Contents/Resources/AlchemyJWTRequestProofKey"
 /bin/chmod 0644 \
     "$mac_app/Contents/Resources/AlchemyJWTRequestProofKey" \
-    "$mac_extension/Contents/Resources/AlchemyJWTRequestProofKey" \
-    "$ambient_app/Contents/Resources/AlchemyJWTRequestProofKey"
+    "$mac_extension/Contents/Resources/AlchemyJWTRequestProofKey"
 invoke_artifact_validator \
     macos-directory \
     success \
@@ -1150,7 +1145,7 @@ invoke_artifact_validator \
     "$valid_key_file"
 
 /bin/ln -s "$valid_key_file" \
-    "$mac_app/Contents/Helpers/Big Wallet.app/Contents/Resources/UnexpectedProofLink"
+    "$mac_app/Contents/Resources/UnexpectedProofLink"
 invoke_artifact_validator \
     ignores-unrelated-symlink \
     success \
@@ -1219,11 +1214,11 @@ assert_bundle_phase_after_cleanup() {
 }
 
 assert_count \
-    7 \
+    6 \
     "/* Bundle Alchemy JWT Request Proof Key */ = {" \
     "$project_file"
 assert_count \
-    7 \
+    6 \
     'name = "Bundle Alchemy JWT Request Proof Key";' \
     "$project_file"
 assert_count \
@@ -1231,31 +1226,31 @@ assert_count \
     'ALCHEMY_JWT_REQUEST_PROOF_KEY_FILE' \
     "$project_file"
 assert_count \
-    7 \
+    6 \
     '"$(SRCROOT)/Scripts/alchemy_jwt_request_proof_key.sha256",' \
     "$project_file"
 assert_count \
-    7 \
+    6 \
     '"$(SRCROOT)/Scripts/alchemy_jwt_request_proof_key_common.sh",' \
     "$project_file"
 assert_count \
-    7 \
+    6 \
     '"$(SRCROOT)/Scripts/alchemy_login_keychain_supervisor.pl",' \
     "$project_file"
 assert_count \
-    7 \
+    6 \
     '"$(SRCROOT)/Scripts/bundle_alchemy_jwt_request_proof_key.sh",' \
     "$project_file"
 assert_count \
-    7 \
+    6 \
     '"$(SRCROOT)/Scripts/validate_alchemy_jwt_request_proof_key.sh",' \
     "$project_file"
 assert_count \
-    7 \
+    6 \
     '"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AlchemyJWTRequestProofKey",' \
     "$project_file"
 assert_count \
-    7 \
+    6 \
     'shellScript = "set -e\n/bin/sh \"$SRCROOT/Scripts/bundle_alchemy_jwt_request_proof_key.sh\"\n";' \
     "$project_file"
 
@@ -1265,7 +1260,6 @@ for phase_id in \
     2FA6A0010000000000000003 \
     2FA6A0010000000000000004 \
     2FA6A0010000000000000005 \
-    2FA6A0010000000000000006 \
     2FA6A0010000000000000007
 do
     /usr/bin/awk -v phase_id="$phase_id" '
@@ -1321,11 +1315,6 @@ assert_bundle_phase_after_cleanup \
     A0FB2A7A814343849A35549C \
     2FA6A0010000000000000005 \
     "Safari visionOS"
-assert_bundle_phase_after_cleanup \
-    2CB9B54E2FA23F0600F094FB \
-    D8E7DDB615794095B0AE5890 \
-    2FA6A0010000000000000006 \
-    "Big Wallet Ambient"
 assert_bundle_phase_after_cleanup \
     2CCEB82C27594E2A00768473 \
     0F74DBBAAD154CE0816A24C8 \

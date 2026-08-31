@@ -7,13 +7,11 @@ class PasswordViewController: NSViewController {
     static func with(
         mode: Mode,
         reason: AuthenticationReason? = nil,
-        windowCloseCompletion: (() -> Void)? = nil,
         completion: ((Bool) -> Void)?
     ) -> PasswordViewController {
         let new = instantiate(PasswordViewController.self)
         new.mode = mode
         new.reason = reason
-        new.windowCloseCompletion = windowCloseCompletion
         new.completion = completion
         return new
     }
@@ -26,7 +24,6 @@ class PasswordViewController: NSViewController {
     private var mode = Mode.create
     private var reason: AuthenticationReason?
     private var passwordToRepeat: String?
-    private var windowCloseCompletion: (() -> Void)?
     private var completion: ((Bool) -> Void)?
     private var didCallCompletion = false
 
@@ -101,10 +98,6 @@ class PasswordViewController: NSViewController {
         case .repeatAfterCreate:
             let repeated = passwordTextField.stringValue
             if repeated == passwordToRepeat {
-                guard CurrentApp.canCreatePassword else {
-                    callCompletion(result: false)
-                    return
-                }
                 guard keychain.password == nil else {
                     leaveCreateFlowForExistingPassword()
                     return
@@ -168,8 +161,6 @@ extension PasswordViewController: NSTextFieldDelegate {
 extension PasswordViewController: NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
-        windowCloseCompletion?()
-        windowCloseCompletion = nil
         callCompletion(result: false)
     }
     

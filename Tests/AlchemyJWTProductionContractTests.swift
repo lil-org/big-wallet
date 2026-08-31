@@ -292,7 +292,7 @@ final class AlchemyJWTProductionContractTests: XCTestCase {
         XCTAssertEqual(nonceSource.requestCount, 2)
     }
 
-    func testProductionTargetsOwnExactlySevenFingerprintPinnedBundlePhases()
+    func testProductionTargetsOwnExactlySixFingerprintPinnedBundlePhases()
         throws {
         let project = try Self.repositoryText(
             at: "Wallet.xcodeproj/project.pbxproj"
@@ -308,7 +308,6 @@ final class AlchemyJWTProductionContractTests: XCTestCase {
             "Safari visionOS",
             "Big Wallet",
             "Safari macOS",
-            "Big Wallet Ambient",
         ]
         let phaseComment = "Bundle Alchemy JWT Request Proof Key"
         let requiredInputPaths = [
@@ -387,13 +386,13 @@ final class AlchemyJWTProductionContractTests: XCTestCase {
             )
         }
 
-        XCTAssertEqual(phaseIDs.count, 7)
+        XCTAssertEqual(phaseIDs.count, 6)
         XCTAssertEqual(
             Self.occurrenceCount(
                 of: "/* \(phaseComment) */ = {",
                 in: project
             ),
-            7
+            6
         )
     }
 
@@ -413,7 +412,6 @@ final class AlchemyJWTProductionContractTests: XCTestCase {
             "Safari visionOS",
             "Big Wallet",
             "Safari macOS",
-            "Big Wallet Ambient",
         ]
         var projectOutsideProofPhases = project
 
