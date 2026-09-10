@@ -1748,6 +1748,50 @@ final class GasServiceTests: XCTestCase {
         XCTAssertEqual(transaction.editableGasPriceGwei, "1.23456789")
     }
 
+    func testTransactionEditableFieldsProjectCanonicalEditorValues() {
+        let empty = Transaction(
+            from: "0x0",
+            to: "0x1",
+            value: nil,
+            data: "0x"
+        )
+        XCTAssertEqual(
+            empty.editableFields,
+            Transaction.EditableFields(
+                nonce: "",
+                gasPriceGwei: "",
+                maxPriorityFeePerGasGwei: "",
+                maxFeePerGasGwei: ""
+            )
+        )
+
+        let legacy = Transaction(
+            from: "0x0",
+            to: "0x1",
+            nonce: "0x7",
+            value: nil,
+            data: "0x",
+            preparedFee: .legacy(gasPrice: 1_234_567_890)
+        )
+        XCTAssertEqual(legacy.editableFields.nonce, "7")
+        XCTAssertEqual(legacy.editableFields.gasPriceGwei, "1.23456789")
+
+        let dynamic = Transaction(
+            from: "0x0",
+            to: "0x1",
+            nonce: "0x8",
+            value: nil,
+            data: "0x",
+            preparedFee: .eip1559(
+                maxPriorityFeePerGas: 1_500_000_000,
+                maxFeePerGas: 2_000_000_000
+            )
+        )
+        XCTAssertEqual(dynamic.editableFields.nonce, "8")
+        XCTAssertEqual(dynamic.editableFields.maxPriorityFeePerGasGwei, "1.5")
+        XCTAssertEqual(dynamic.editableFields.maxFeePerGasGwei, "2")
+    }
+
     func testTransactionEditsApplyOnlyChangedFieldsToLatestTransaction() {
         var transaction = Transaction(from: "0x0", to: "0x1", value: nil, data: "0x")
         transaction.gasPrice = BigUInt(100).hexString
@@ -2074,32 +2118,19 @@ final class GasServiceTests: XCTestCase {
         let maximum = BigUInt(data: Data(repeating: 0xff, count: 32))
 
         XCTAssertTrue(
-            EditTransactionView.maximumNetworkFeeFitsUInt256(
-                gasLimit: nil,
-                fee: .legacy(gasPrice: maximum)
-            )
+            PreparedTransactionFee.legacy(gasPrice: maximum).maximumNetworkFeeFitsUInt256(gasLimit: nil)
         )
         for fee in [
             PreparedTransactionFee.legacy(gasPrice: 1),
             .eip1559(maxPriorityFeePerGas: 1, maxFeePerGas: 1),
         ] {
-            XCTAssertTrue(
-                EditTransactionView.maximumNetworkFeeFitsUInt256(
-                    gasLimit: maximum,
-                    fee: fee
-                )
-            )
+            XCTAssertTrue(fee.maximumNetworkFeeFitsUInt256(gasLimit: maximum))
         }
         for fee in [
             PreparedTransactionFee.legacy(gasPrice: 2),
             .eip1559(maxPriorityFeePerGas: 1, maxFeePerGas: 2),
         ] {
-            XCTAssertFalse(
-                EditTransactionView.maximumNetworkFeeFitsUInt256(
-                    gasLimit: maximum,
-                    fee: fee
-                )
-            )
+            XCTAssertFalse(fee.maximumNetworkFeeFitsUInt256(gasLimit: maximum))
         }
     }
 
@@ -2498,6 +2529,52 @@ final class GasServiceTests: XCTestCase {
             Transaction.editableGwei(fromWei: BigUInt(1_234_567_890)),
             "1.23456789"
         )
+    }
+
+    func testExactFeeGweiParserGuardsThePopupEditorInput() throws {
+        XCTAssertEqual(
+            Transaction.exactFeeWei(fromGwei: "1.5"),
+            BigUInt(1_500_000_000)
+        )
+        XCTAssertEqual(
+            Transaction.exactFeeWei(fromGwei: "1,5"),
+            BigUInt(1_500_000_000)
+        )
+        XCTAssertEqual(
+            Transaction.exactFeeWei(fromGwei: "0.000000001"),
+            BigUInt(1)
+        )
+
+        let maximum = Transaction.maximumUInt256
+        let maximumGwei = try XCTUnwrap(
+            Transaction.editableGwei(fromWei: maximum)
+        )
+        XCTAssertEqual(maximumGwei.utf8.count, 79)
+        XCTAssertEqual(
+            Transaction.exactFeeWei(fromGwei: maximumGwei),
+            maximum
+        )
+        XCTAssertEqual(
+            Transaction.exactFeeWei(
+                fromGwei: maximumGwei.replacingOccurrences(
+                    of: ".",
+                    with: ","
+                )
+            ),
+            maximum
+        )
+
+        let overflowGwei = try XCTUnwrap(
+            Transaction.editableGwei(fromWei: maximum + BigUInt(1))
+        )
+        XCTAssertEqual(overflowGwei.utf8.count, 79)
+        XCTAssertNil(Transaction.exactFeeWei(fromGwei: overflowGwei))
+        XCTAssertNil(
+            Transaction.exactFeeWei(fromGwei: "0" + maximumGwei)
+        )
+        XCTAssertNil(Transaction.exactFeeWei(fromGwei: "1.0000000001"))
+        XCTAssertNil(Transaction.exactFeeWei(fromGwei: "1.2.3"))
+        XCTAssertNil(Transaction.exactFeeWei(fromGwei: ""))
     }
 
     func testNonceOnlyEditPreservesLatestGasPrice() {
@@ -6951,6 +7028,46 @@ final class GasServiceTests: XCTestCase {
         XCTAssertEqual(
             RedirectingGasServiceURLProtocol.sourceRequestBodies.count,
             1
+        )
+    }
+
+    func testEthereumRPCBlocksReadRedirectOnInjectedSession() {
+        let sourceURL = rpcURL + "/read-redirect"
+        let targetURL = rpcURL + "/read-redirect-target"
+        RedirectingGasServiceURLProtocol.configure(
+            sourceURL: sourceURL,
+            targetURL: targetURL
+        )
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [
+            RedirectingGasServiceURLProtocol.self
+        ]
+        let session = URLSession(configuration: configuration)
+        let completionReceived = expectation(
+            description: "blocked read redirect completed"
+        )
+        defer {
+            session.invalidateAndCancel()
+            RedirectingGasServiceURLProtocol.reset()
+        }
+
+        EthereumRPC(urlSession: session).fetchGasPrice(
+            endpoint: endpoint(sourceURL)
+        ) { result in
+            if case .success(let gasPrice) = result {
+                XCTFail("Unexpected redirected gas price: \(gasPrice)")
+            }
+            completionReceived.fulfill()
+        }
+
+        wait(for: [completionReceived], timeout: 2)
+        XCTAssertEqual(
+            RedirectingGasServiceURLProtocol.sourceRequestCount,
+            1
+        )
+        XCTAssertEqual(
+            RedirectingGasServiceURLProtocol.targetRequestCount,
+            0
         )
     }
 

@@ -27,7 +27,7 @@ struct EditTransactionView: View {
     private let initialMaxPriorityFeeText: String
     private let initialMaxFeeText: String
     private let initialFeeProvenance: TransactionFeeProvenance
-    private let initialNonce: UInt?
+    private let initialNonce: BigUInt?
     private let initialNonceWasPresent: Bool
     private let initialNonceText: String
     private let gasLimit: BigUInt?
@@ -175,7 +175,13 @@ struct EditTransactionView: View {
         let maxFee = Transaction.editableGwei(
             fromWei: initialTransaction.maxFeePerGasValue
         ) ?? ""
-        let nonce = initialTransaction.decimalNonceString ?? ""
+        let initialNonce = initialTransaction.nonce.flatMap {
+            EthereumQuantity.parseUInt256(
+                $0,
+                allowPrefixless: true
+            )
+        }
+        let nonce = initialNonce?.description ?? ""
 
         self.chain = chain
         self.feeMode = feeMode
@@ -183,7 +189,7 @@ struct EditTransactionView: View {
         self.initialMaxPriorityFeeText = maxPriorityFee
         self.initialMaxFeeText = maxFee
         self.initialFeeProvenance = initialTransaction.feeProvenance
-        self.initialNonce = initialTransaction.nonce.flatMap(UInt.init(hexString:))
+        self.initialNonce = initialNonce
         self.initialNonceWasPresent = initialTransaction.nonce != nil
         self.initialNonceText = nonce
         self.gasLimit = initialTransaction.gasLimitValue

@@ -9,20 +9,20 @@ enum WalletKeyStoreError: Swift.Error {
     case accountNotFound
 }
 
-enum WalletCoin: UInt32, Hashable {
+enum WalletCoin: UInt32, Hashable, Sendable {
     case ethereum = 60
     case solana = 501
 
     var slip44Id: UInt32 { rawValue }
 }
 
-enum WalletDerivation: Hashable {
+enum WalletDerivation: Hashable, Sendable {
     case `default`
     case solanaSolana
     case custom
 }
 
-struct WalletAccount: Hashable {
+struct WalletAccount: Hashable, Sendable {
     let address: String
     let coin: WalletCoin
     let derivation: WalletDerivation
@@ -45,7 +45,7 @@ struct WalletAccount: Hashable {
     }
 }
 
-struct WalletPrivateKey {
+struct WalletPrivateKey: Sendable {
     private let keyData: Data
     fileprivate static let invalid = WalletPrivateKey(unchecked: Data())
 

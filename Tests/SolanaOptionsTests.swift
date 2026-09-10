@@ -296,6 +296,70 @@ final class SolanaOptionsTests: XCTestCase {
         XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
     }
 
+    func testSolanaSubmissionHonorsResultFrom401WithoutReplay() throws {
+        let configuration = Solana.RPCConfiguration.bundled
+        let recorder = SolanaRPCRequestRecorder()
+        let requestCount = LockedSolanaCounter()
+        let session = makeRPCSession { request in
+            _ = try recorder.record(request)
+            _ = requestCount.increment()
+            return (
+                try Self.httpResponse(for: request, statusCode: 401),
+                Data(
+                    #"{"jsonrpc":"2.0","id":1,"result":"test-signature"}"#.utf8
+                )
+            )
+        }
+        defer {
+            session.invalidateAndCancel()
+            SolanaOptionsURLProtocol.removeRequestHandler()
+        }
+
+        let authorizationProvider = SolanaAuthorizationProviderStub(
+            token: "accepted-then-rejected-token",
+            replacementToken: "unused-replacement-token"
+        )
+        let solana = Solana(
+            urlSession: session,
+            rpcConfiguration: configuration,
+            authorizationProvider: authorizationProvider
+        )
+        let prepared = try preparedTransaction(using: solana)
+        let privateKey = try XCTUnwrap(
+            WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey)
+        )
+        let completion = expectation(
+            description: "Successful submission returned before authorization replay"
+        )
+
+        solana.signAndSendTransaction(
+            preparedSerializedTransaction: prepared,
+            cluster: .mainnetBeta,
+            sendOptions: Solana.PreparedSendOptions(
+                clusterHint: .mainnetBeta,
+                rpcOptions: [
+                    "encoding": "base64",
+                    "skipPreflight": false,
+                ],
+                confirmationCommitment: nil
+            ),
+            privateKey: privateKey
+        ) { result in
+            XCTAssertEqual(result, .success("test-signature"))
+            completion.fulfill()
+        }
+
+        wait(for: [completion], timeout: 5)
+        XCTAssertEqual(requestCount.value, 1)
+        XCTAssertEqual(authorizationProvider.authorizationCallCount, 1)
+        XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
+        XCTAssertEqual(authorizationProvider.invalidationCallCount, 1)
+        XCTAssertEqual(
+            authorizationProvider.invalidatedTokens,
+            ["accepted-then-rejected-token"]
+        )
+    }
+
     func testSolanaMainnetReplaysSubmissionOnceWithReplacementAuthorizationAfter401()
         throws {
         let configuration = Solana.RPCConfiguration.bundled
