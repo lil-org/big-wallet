@@ -1045,6 +1045,51 @@ final class NativeApprovalCoordinatorTests: XCTestCase {
         XCTAssertEqual(completedNetwork, changedNetwork)
     }
 
+    func testAccountSelectionUsesCompactNetworkButtonWithAccessibleIdentity() throws {
+        let template = try XCTUnwrap(Networks.withChainId(58_008))
+        let network = EthereumNetwork(
+            chainId: template.chainId,
+            name: "Public Goods Network Sepolia With A Very Long Custom Name",
+            symbol: template.symbol,
+            rpcEndpoint: template.rpcEndpoint,
+            isTestnet: template.isTestnet,
+            mightShowPrice: template.mightShowPrice,
+            explorer: template.explorer
+        )
+        let identity = "\(network.chainIdHexString) · \(network.name)"
+        let action = SelectAccountAction(
+            coinType: .ethereum,
+            selectedAccounts: [],
+            initiallyConnectedProviders: [],
+            network: network,
+            resolve: { _, _ in fatalError() }
+        )
+        let controller = instantiate(AccountsListViewController.self)
+        controller.accountSelection = NativeAccountSelectionSession(
+            action: action,
+            mode: .selectAccount,
+            completion: { _, _ in }
+        )
+        controller.loadView()
+        controller.view.layoutSubtreeIfNeeded()
+
+        XCTAssertTrue(controller.networkButton.title.isEmpty)
+        XCTAssertEqual(controller.networkButton.imagePosition, .imageOnly)
+        XCTAssertNotNil(controller.networkButton.image)
+        XCTAssertEqual(controller.networkButton.toolTip, identity)
+        XCTAssertEqual(
+            controller.networkButton.accessibilityValue() as? String,
+            identity
+        )
+        XCTAssertTrue(
+            controller.bottomButtonsStackView.arrangedSubviews.contains(
+                controller.networkButton
+            )
+        )
+        XCTAssertEqual(controller.networkButton.frame.width, 32)
+        XCTAssertEqual(controller.accountsListBottomConstraint.constant, 62)
+    }
+
     func testWalletListHidesApprovalControls() {
         let controller = instantiate(AccountsListViewController.self)
         controller.loadView()

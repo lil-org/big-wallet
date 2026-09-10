@@ -54,12 +54,25 @@ class EditAccountsViewController: NSViewController {
     }
     
     private func appendPreviewAccounts(_ previewAccounts: [WalletAccount]) {
-        let newCellModels = previewAccounts.map { account in
+        let applicableAccounts = previewAccounts.filter { account in
+            previewCoin == nil || account.coin == previewCoin
+        }
+        let newCellModels = applicableAccounts.map { account in
             let isEnabled = enabledUndiscoveredAccountKeys.remove(account.previewAccountKey) != nil
             return PreviewAccountCellModel(account: account, isEnabled: isEnabled)
         }
         cellModels.append(contentsOf: newCellModels)
         updateOkButtonState()
+    }
+
+    static func insertionRange(
+        previousCount: Int,
+        currentCount: Int
+    ) -> Range<Int>? {
+        guard previousCount >= 0, currentCount > previousCount else {
+            return nil
+        }
+        return previousCount..<currentCount
     }
     
     @IBAction func cancelButtonTapped(_ sender: Any) {
@@ -109,7 +122,7 @@ class EditAccountsViewController: NSViewController {
 
     private func resetPreviewAccounts() {
         previewPager?.invalidate()
-        let previewPager = walletsManager.previewAccountsPager(wallet: wallet, coin: previewCoin)
+        let previewPager = walletsManager.previewAccountsPager(wallet: wallet)
         self.previewPager = previewPager
         toggledIndexes.removeAll()
         cellModels.removeAll()
@@ -194,14 +207,18 @@ class EditAccountsViewController: NSViewController {
     
     private func previewMoreAccountsIfNeeded() {
         guard let previewPager else { return }
-        previewPager.previewMoreIfNeeded { [weak self, weak previewPager] previewAccounts, range in
+        previewPager.previewMoreIfNeeded { [weak self, weak previewPager] previewAccounts, _ in
             guard let self,
                   let previewPager,
                   self.previewPager === previewPager
             else { return }
 
+            let previousCount = self.cellModels.count
             self.appendPreviewAccounts(previewAccounts)
-            if !previewAccounts.isEmpty {
+            if let range = Self.insertionRange(
+                previousCount: previousCount,
+                currentCount: self.cellModels.count
+            ) {
                 self.tableView.insertRows(at: IndexSet(integersIn: range))
             }
         }

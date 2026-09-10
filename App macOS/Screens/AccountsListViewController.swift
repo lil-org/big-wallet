@@ -130,6 +130,9 @@ class AccountsListViewController: NSViewController {
     @IBOutlet weak var networkButton: NSButton! {
         didSet {
             networkButton.image = Images.network.with(pointSize: 14, weight: .regular)
+            networkButton.imagePosition = .imageOnly
+            networkButton.setAccessibilityLabel(Strings.network)
+            networkButton.setAccessibilityHelp(Strings.selectNetwork)
         }
     }
     @IBOutlet weak var titleLabel: NSTextField!

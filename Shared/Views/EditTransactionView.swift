@@ -118,10 +118,7 @@ struct EditTransactionView: View {
 
     private var maximumNetworkFeeFitsUInt256: Bool {
         guard let candidateFee else { return true }
-        return Self.maximumNetworkFeeFitsUInt256(
-            gasLimit: gasLimit,
-            fee: candidateFee
-        )
+        return candidateFee.maximumNetworkFeeFitsUInt256(gasLimit: gasLimit)
     }
 
     private var suggestedGasPriceText: String? {
@@ -491,13 +488,6 @@ struct EditTransactionView: View {
         return Transaction.feeWei(fromGwei: text)
     }
 
-    static func maximumNetworkFeeFitsUInt256(
-        gasLimit: BigUInt?,
-        fee: PreparedTransactionFee
-    ) -> Bool {
-        guard let gasLimit else { return true }
-        return fee.maximumNetworkFee(gasLimit: gasLimit) != nil
-    }
 }
 
 private enum TransactionTextFieldKeyboard {
