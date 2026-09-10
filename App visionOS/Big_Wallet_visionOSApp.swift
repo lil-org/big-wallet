@@ -36,8 +36,14 @@ struct Big_Wallet_visionOSApp: App {
         }
         .defaultSize(CGSize(width: 420, height: 555))
         .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .active {
+            switch newPhase {
+            case .active:
                 AlchemyJWTProvider.prewarmForApplicationLifecycle()
+                WalletsManager.shared.handleExternalWalletStoreChange()
+            case .background, .inactive:
+                break
+            @unknown default:
+                break
             }
         }
     }
