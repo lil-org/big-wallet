@@ -549,6 +549,9 @@
 		2F5E10022FA5000000F0000 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */; };
 		2F5E10032FA5000000F0000 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */; };
 		2F5E10042FA5000000F0000 /* RemoteImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */; };
+		C2D100012FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */; };
+		C2D100022FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */; };
+		C2D100032FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -844,6 +847,7 @@
 		2F4D00A02FAB100000000000 /* ScryptBackend/big_wallet_scrypt_shim.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ScryptBackend/big_wallet_scrypt_shim.c; sourceTree = "<group>"; };
 		2F4E01002FAC000000000000 /* GasServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GasServiceTests.swift; sourceTree = "<group>"; };
 		2F5E10002FA5000000F0000 /* RemoteImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImageLoader.swift; sourceTree = "<group>"; };
+		C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossProcessLockTestFixture.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -932,6 +936,7 @@
 			isa = PBXGroup;
 			children = (
 				2FB200000000000000000001 /* AlchemyJWTProductionContractTests.swift */,
+				C2D100002FC2000000000001 /* CrossProcessLockTestFixture.swift */,
 				2FA400000000000000000001 /* AlchemyJWTProviderTests.swift */,
 				019DDEDE91F4418190B03EFB /* NetworkCatalogTests.swift */,
 				2FA200000000000000000001 /* CustomNetworkStorageTests.swift */,
@@ -2723,6 +2728,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2FB200000000000000000002 /* AlchemyJWTProductionContractTests.swift in Sources */,
+				C2D100012FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */,
 				2FA400000000000000000002 /* AlchemyJWTProviderTests.swift in Sources */,
 				2FA300000000000000000007 /* AlchemyJWTProvider.swift in Sources */,
 				31B7B994991C4E64B5DF44B5 /* NetworkCatalogTests.swift in Sources */,
@@ -2878,6 +2884,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2FB200000000000000000003 /* AlchemyJWTProductionContractTests.swift in Sources */,
+				C2D100022FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */,
 				2FA400000000000000000003 /* AlchemyJWTProviderTests.swift in Sources */,
 				2FA30000000000000000000A /* AlchemyJWTProvider.swift in Sources */,
 				80762825D41E4714A724F485 /* NetworkCatalogTests.swift in Sources */,
@@ -2907,6 +2914,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2FB200000000000000000004 /* AlchemyJWTProductionContractTests.swift in Sources */,
+				C2D100032FC2000000000001 /* CrossProcessLockTestFixture.swift in Sources */,
 				2FA400000000000000000004 /* AlchemyJWTProviderTests.swift in Sources */,
 				2FA30000000000000000000B /* AlchemyJWTProvider.swift in Sources */,
 				AAD675E18CDB4174B2B92C3D /* NetworkCatalogTests.swift in Sources */,
