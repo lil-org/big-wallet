@@ -3801,6 +3801,111 @@ test("inpage first install routes configuration, wallet, RPC, and error replies"
     assert.deepEqual(harness.listenerErrors, []);
 });
 
+test("inpage replaces nonconfigurable writable aliases without changing their flags", () => {
+    const phantom = {};
+    const aliases = ["bigwallet", "ethereum", "web3", "metamask", "solana", "phantom"];
+    const harness = inpageHarness({
+        beforeEvaluate(window) {
+            for (const name of aliases) {
+                Object.defineProperty(window, name, {
+                    value: name === "phantom" ? phantom : {},
+                    writable: true,
+                });
+            }
+            Object.defineProperty(phantom, "solana", {value: {}, writable: true});
+        },
+    });
+    const {window} = harness;
+    const record = window.bigWalletInpageStableFacadeRecord;
+    const expected = [record.bigwallet, record.ethereum, record.web3,
+        record.ethereum, record.solana, phantom];
+    for (let installation = 0; installation < 2; installation += 1) {
+        for (const [index, name] of aliases.entries()) {
+            assert.deepEqual(Object.getOwnPropertyDescriptor(window, name), {
+                configurable: false,
+                enumerable: false,
+                value: expected[index],
+                writable: true,
+            });
+        }
+        assert.deepEqual(Object.getOwnPropertyDescriptor(phantom, "solana"), {
+            configurable: false,
+            enumerable: false,
+            value: record.solana,
+            writable: true,
+        });
+        assert.equal(harness.registeredWallets.length, 1);
+        if (installation === 0) { harness.evaluate(); }
+    }
+});
+
+test("locked Ethereum aliases preserve provider activation and discovery on reinjection", async () => {
+    for (const accessor of [false, true]) {
+        let accessorCalls = 0;
+        const blockedAccess = () => { accessorCalls += 1; throw new Error("Locked"); };
+        const descriptor = accessor
+            ? {get: blockedAccess, set: blockedAccess}
+            : {value: {}, writable: false};
+        const harness = inpageHarness({
+            beforeEvaluate(window) {
+                Object.defineProperty(window, "ethereum", descriptor);
+            },
+        });
+        const {window} = harness;
+        const ethereum = window.bigwallet.eth;
+        const solana = window.bigwallet.solana;
+        const wallet = harness.registeredWallets[0];
+        for (let installation = 0; installation < 2; installation += 1) {
+            assert.deepEqual(Object.getOwnPropertyDescriptor(window, "ethereum"), {
+                configurable: false,
+                enumerable: false,
+                ...descriptor,
+            });
+            dispatchConfigurations(harness, {publicKey: firstSolanaKey});
+            assert.equal(await ethereum.request({method: "eth_chainId"}), "0x1");
+            assert.equal((await solana.connect()).publicKey.toString(), firstSolanaKey);
+            assert.equal(wallet.accounts[0].address, firstSolanaKey);
+            window.dispatchEvent(new HarnessEvent("eip6963:requestProvider"));
+            assert.equal(harness.announcements.at(-1).provider, ethereum);
+            assert.equal(harness.registeredWallets.length, 1);
+            assert.equal(harness.registeredWallets[0], wallet);
+            assert.equal(accessorCalls, 0);
+            if (installation === 0) { harness.evaluate(); }
+        }
+        assert.deepEqual(harness.listenerErrors, []);
+    }
+});
+
+test("Phantom aliases install without inspecting proxy property descriptors", () => {
+    const target = {};
+    const harness = inpageHarness({
+        beforeEvaluate(window) {
+            window.phantom = new Proxy(target, {
+                getOwnPropertyDescriptor() { throw new Error("Unsupported"); },
+            });
+        },
+    });
+    assert.equal(target.solana, harness.window.bigwallet.solana);
+});
+
+test("an unwritable Phantom namespace cannot abort provider activation", async () => {
+    for (const phantom of [Object.freeze({}), new Proxy({}, {
+        defineProperty() { throw new Error("Locked"); },
+    })]) {
+        const harness = inpageHarness({
+            beforeEvaluate(window) { window.phantom = phantom; },
+        });
+        dispatchConfigurations(harness, {publicKey: firstSolanaKey});
+        assert.equal(harness.window.phantom, phantom);
+        assert.equal(await harness.window.bigwallet.eth.request({
+            method: "eth_chainId",
+        }), "0x1");
+        assert.equal(harness.window.bigwallet.solana.publicKey.toString(), firstSolanaKey);
+        assert.equal(harness.announcements.length, 1);
+        assert.equal(harness.registeredWallets[0].accounts[0].address, firstSolanaKey);
+    }
+});
+
 test("configuration-changing terminal responses update state and settle", async () => {
     const harness = inpageHarness();
     const address = "0x0000000000000000000000000000000000000001";

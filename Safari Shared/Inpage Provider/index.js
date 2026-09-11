@@ -75,6 +75,14 @@ function defineValue(object, name, value) {
     });
 }
 
+function defineProviderAlias(object, name, value) {
+    try {
+        defineValue(object, name, value);
+    } catch {
+        try { definePropertyNormally(object, name, {value}); } catch {}
+    }
+}
+
 function trustedStableFacadeAnchor() {
     const anchorDescriptor = descriptor(window, stableFacadeAnchorProperty);
     if (!anchorDescriptor || !("value" in anchorDescriptor) ||
@@ -1046,7 +1054,7 @@ if (ownValue(window, announceSetupProperty) !== true) {
 const phantom = previousPhantom && typeof previousPhantom === "object"
     ? previousPhantom
     : {};
-defineValue(phantom, "solana", stableFacades.solana);
+defineProviderAlias(phantom, "solana", stableFacades.solana);
 defineValue(window, "bigWalletInpageProviderGenerationSerial", generationSerial);
 defineValue(window, "bigWalletInpageProviderGenerationToken", generation);
 defineValue(window, "bigWalletInpageProviderGeneration", {});
@@ -1056,12 +1064,12 @@ defineValue(window, contentSetupProperty, true);
 defineValue(window, announceHandlerProperty, () => stableFacades.announceEthereum());
 defineValue(window, announceSetupProperty, true);
 defineValue(window, "bigWalletInpageEIP6963ProviderState", stableFacades);
-defineValue(window, "bigwallet", stableFacades.bigwallet);
-defineValue(window, "ethereum", stableFacades.ethereum);
-defineValue(window, "web3", stableFacades.web3);
-defineValue(window, "metamask", stableFacades.ethereum);
-defineValue(window, "solana", stableFacades.solana);
-defineValue(window, "phantom", phantom);
+defineProviderAlias(window, "bigwallet", stableFacades.bigwallet);
+defineProviderAlias(window, "ethereum", stableFacades.ethereum);
+defineProviderAlias(window, "web3", stableFacades.web3);
+defineProviderAlias(window, "metamask", stableFacades.ethereum);
+defineProviderAlias(window, "solana", stableFacades.solana);
+defineProviderAlias(window, "phantom", phantom);
 committed = true;
 const facadePreviousTargets = facadeTransaction.commit();
 if (!facadePreviousTargets) { throw new Error("Facade commit failed"); }
