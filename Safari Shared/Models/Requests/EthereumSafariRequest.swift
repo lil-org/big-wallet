@@ -46,9 +46,9 @@ extension SafariRequest {
         
         var responseUpdatesStoredConfiguration: Bool {
             switch method {
-            case .switchEthereumChain, .addEthereumChain, .requestAccounts:
+            case .requestAccounts:
                 return true
-            case .ecRecover, .signMessage, .signPersonalMessage, .signTransaction, .signTypedMessage:
+            case .addEthereumChain, .ecRecover, .signMessage, .signPersonalMessage, .signTransaction, .signTypedMessage, .switchEthereumChain:
                 return false
             }
         }

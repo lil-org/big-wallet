@@ -4,6 +4,13 @@ import Cocoa
 import LocalAuthentication
 
 class ApproveTransactionViewController: NSViewController {
+
+    private enum SheetState {
+        case idle
+        case approvalAlert(NSAlert, TransactionApprovalAlertToken)
+        case transactionEditor(NSWindow)
+        case endingTransactionEditor(() -> Void)
+    }
     
     @IBOutlet weak var infoTextViewBottomConstraint: NSLayoutConstraint!
     @IBOutlet weak var speedContainerStackView: NSStackView!
@@ -35,33 +42,26 @@ class ApproveTransactionViewController: NSViewController {
     private var approvalSnapshot: TransactionApprovalSnapshot!
     private var chain: EthereumNetwork!
     private var completion: ((Transaction?) -> Void)!
-    private var peerMeta: PeerMeta?
     private var account: WalletAccount!
     private var walletId: String!
     private var balance: String?
     private var displayedGasSliderValue: Double?
     private var gasSliderInteractionStartValue: Double?
     private var gasSliderInteractionDidMove = false
-    private var presentedApprovalAlert: (
-        alert: NSAlert,
-        token: TransactionApprovalAlertToken
-    )?
+    private var sheetState = SheetState.idle
     private var pendingApprovalAlert: TransactionApprovalAlertIntent?
-    private var isEndingTransactionEditorSheet = false
-    private weak var transactionEditorWindow: NSWindow?
-    private var transactionEditorDismissalCompletion: (() -> Void)?
+    private var isNativeApprovalReviewInvalidated = false
 
     private var transaction: Transaction {
         approvalSnapshot.transaction
     }
     
-    static func with(transaction: Transaction, chain: EthereumNetwork, account: WalletAccount, walletId: String, peerMeta: PeerMeta?, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
+    static func with(transaction: Transaction, chain: EthereumNetwork, account: WalletAccount, walletId: String, completion: @escaping (Transaction?) -> Void) -> ApproveTransactionViewController {
         let new = instantiate(ApproveTransactionViewController.self)
         new.walletId = walletId
         new.account = account
         new.chain = chain
         new.completion = completion
-        new.peerMeta = peerMeta
         new.coordinator = TransactionApprovalCoordinator(
             transaction: transaction,
             network: chain,
@@ -107,29 +107,38 @@ class ApproveTransactionViewController: NSViewController {
             self?.updateTextView()
         }
         
-        if let peer = peerMeta {
-            peerNameLabel.stringValue = peer.name
-            if let urlString = peer.iconURLString, let url = URL(string: urlString) {
-                peerLogoImageView.setRemoteImage(with: url) { [weak peerLogoImageView] didLoad in
-                    if didLoad {
-                        peerLogoImageView?.layer?.backgroundColor = NSColor.clear.cgColor
-                        peerLogoImageView?.layer?.cornerRadius = 0
-                    }
-                }
-            }
-        }
+    }
+
+    override func viewWillDisappear() {
+        super.viewWillDisappear()
+        peerLogoImageView.cancelRemoteImageLoad()
     }
     
     override func viewDidAppear() {
         super.viewDidAppear()
+        updateRequester()
         view.window?.delegate = self
         view.window?.makeFirstResponder(view)
         presentPendingApprovalAlertIfNeeded()
     }
 
+    private func updateRequester() {
+        let peer = nativeApprovalPeer
+        peerNameLabel.stringValue = peer?.name ?? ""
+        peerNameLabel.superview?.isHidden = peer == nil
+        if peerLogoImageView.image == nil {
+            peerLogoImageView.setRemoteImage(with: peer?.iconURLString) { [weak peerLogoImageView] image in
+                guard image != nil else { return }
+                peerLogoImageView?.layer?.backgroundColor = NSColor.clear.cgColor
+                peerLogoImageView?.layer?.cornerRadius = 0
+            }
+        }
+    }
+
     private func handleApprovalOutput(
         _ output: TransactionApprovalOutput
     ) {
+        guard !isNativeApprovalReviewInvalidated else { return }
         switch output {
         case .snapshot(let snapshot):
             approvalSnapshot = snapshot
@@ -147,10 +156,7 @@ class ApproveTransactionViewController: NSViewController {
             presentTransactionEditor()
         case .completion(let result):
             pendingApprovalAlert = nil
-            presentedApprovalAlert = nil
-            transactionEditorWindow = nil
-            transactionEditorDismissalCompletion = nil
-            isEndingTransactionEditorSheet = false
+            sheetState = .idle
             resetGasSliderInteraction()
             completion(result)
         }
@@ -177,10 +183,11 @@ class ApproveTransactionViewController: NSViewController {
             reason: .sendTransaction,
             onWindowClose: { [weak self] in
                 self?.cancelAuthentication()
-                self?.coordinator.cancel()
+                self?.coordinator.invalidate()
             }
         ) { [weak self] succeeded in
-            guard let self else { return }
+            guard let self,
+                  !isNativeApprovalReviewInvalidated else { return }
             if authenticationToken == token {
                 authenticationContext = nil
                 authenticationToken = nil
@@ -202,9 +209,7 @@ class ApproveTransactionViewController: NSViewController {
         _ intent: TransactionApprovalAlertIntent
     ) {
         guard coordinator.isCurrentAlert(intent.token) else { return }
-        guard presentedApprovalAlert == nil,
-              transactionEditorWindow == nil,
-              !isEndingTransactionEditorSheet,
+        guard case .idle = sheetState,
               var window = view.window else {
             pendingApprovalAlert = intent
             return
@@ -219,7 +224,7 @@ class ApproveTransactionViewController: NSViewController {
             alert.addButton(withTitle: action.title)
         }
         alert.alertStyle = .informational
-        presentedApprovalAlert = (alert, intent.token)
+        sheetState = .approvalAlert(alert, intent.token)
 
         while let attachedSheet = window.attachedSheet {
             window = attachedSheet
@@ -227,11 +232,13 @@ class ApproveTransactionViewController: NSViewController {
         alert.beginSheetModal(for: window) {
             [weak self, weak alert] response in
             guard let self, let alert,
-                  self.presentedApprovalAlert?.alert === alert,
-                  self.presentedApprovalAlert?.token == intent.token else {
+                  case let .approvalAlert(currentAlert, currentToken) =
+                    self.sheetState,
+                  currentAlert === alert,
+                  currentToken == intent.token else {
                 return
             }
-            self.presentedApprovalAlert = nil
+            self.sheetState = .idle
             guard self.coordinator.isCurrentAlert(intent.token) else {
                 self.presentPendingApprovalAlertIfNeeded()
                 return
@@ -252,9 +259,7 @@ class ApproveTransactionViewController: NSViewController {
 
     private func presentPendingApprovalAlertIfNeeded() {
         guard approvalSnapshot.phase != .finished,
-              presentedApprovalAlert == nil,
-              transactionEditorWindow == nil,
-              !isEndingTransactionEditorSheet,
+              case .idle = sheetState,
               let pendingApprovalAlert else {
             return
         }
@@ -268,16 +273,16 @@ class ApproveTransactionViewController: NSViewController {
     private func endTransactionEditorSheet(
         completion: @escaping () -> Void = {}
     ) {
-        guard let window = view.window,
-              let sheet = window.attachedSheet else {
+        guard case let .transactionEditor(editorWindow) = sheetState,
+              let window = view.window,
+              window.attachedSheet === editorWindow else {
             completion()
             presentPendingApprovalAlertIfNeeded()
             return
         }
 
-        isEndingTransactionEditorSheet = true
-        transactionEditorDismissalCompletion = completion
-        window.endSheet(sheet)
+        sheetState = .endingTransactionEditor(completion)
+        window.endSheet(editorWindow)
     }
     
     private func updateInterface() {
@@ -301,7 +306,9 @@ class ApproveTransactionViewController: NSViewController {
     private lazy var accountImageAttachmentString = NSAttributedString.accountImageAttachment(account: account)
     
     private func updateTextView() {
-        let meta = approvalDescription(
+        let meta = Self.approvalDescription(
+            transaction: transaction,
+            chain: chain,
             price: priceService.forNetwork(chain)
         )
         let balanceString = balance ?? ""
@@ -322,7 +329,11 @@ class ApproveTransactionViewController: NSViewController {
         metaTextView.textStorage?.setAttributedString(fullString)
     }
 
-    private func approvalDescription(price: Double?) -> String {
+    static func approvalDescription(
+        transaction: Transaction,
+        chain: EthereumNetwork,
+        price: Double?
+    ) -> String {
         var result = ["🌐 " + chain.name]
         if let value = transaction.valueWithSymbol(
             chain: chain,
@@ -346,11 +357,17 @@ class ApproveTransactionViewController: NSViewController {
     }
     
     private var isSpeedConfigurationEnabled: Bool {
-        gasSpeedConfiguration.isSpeedSelectionAvailable(
-            for: transaction,
-            on: chain,
-            allowsMutation: approvalSnapshot.allowsMutation
-        )
+        guard approvalSnapshot.allowsMutation,
+              chain.isEthMainnet,
+              transaction.feeBasisBaseFeePerGas != nil,
+              gasSpeedConfiguration.info != nil else {
+            return false
+        }
+        guard transaction.preparedFee == nil else { return true }
+        if case .automatic = transaction.feeIntent {
+            return false
+        }
+        return true
     }
 
     private func updateSpeedConfigurationState() {
@@ -414,10 +431,10 @@ class ApproveTransactionViewController: NSViewController {
     }
 
     private func presentTransactionEditor() {
-        guard let snapshot = approvalSnapshot else { return }
-        guard snapshot.canEdit,
-              transactionEditorWindow == nil,
-              !isEndingTransactionEditorSheet else {
+        guard let snapshot = approvalSnapshot,
+              snapshot.canEdit,
+              case .idle = sheetState,
+              let window = view.window else {
             return
         }
         let editTransactionView = EditTransactionView(
@@ -428,7 +445,8 @@ class ApproveTransactionViewController: NSViewController {
                 snapshot.transaction.decimalNonceString,
             suggestedFee: snapshot.latestWalletSuggestedFee,
             completion: { [weak self] edits in
-                guard let self else { return }
+                guard let self,
+                      !isNativeApprovalReviewInvalidated else { return }
                 guard let edits else {
                     self.endTransactionEditorSheet()
                     return
@@ -468,8 +486,8 @@ class ApproveTransactionViewController: NSViewController {
         editWindow.setContentSize(
             NSSize(width: 300, height: editWindowHeight)
         )
-        transactionEditorWindow = editWindow
-        view.window?.beginSheet(editWindow)
+        sheetState = .transactionEditor(editWindow)
+        window.beginSheet(editWindow)
     }
     
     @IBAction func sliderValueChanged(_ sender: NSSlider) {
@@ -609,9 +627,27 @@ class ApproveTransactionViewController: NSViewController {
     
 }
 
+extension ApproveTransactionViewController:
+    NativeApprovalReviewTeardown {
+
+    func invalidateNativeApprovalReview() {
+        guard !isNativeApprovalReviewInvalidated else { return }
+        isNativeApprovalReviewInvalidated = true
+        peerLogoImageView?.cancelRemoteImageLoad()
+        cancelAuthentication()
+        pendingApprovalAlert = nil
+        sheetState = .idle
+        resetGasSliderInteraction()
+        coordinator.onOutput = { _ in }
+        coordinator.invalidate()
+    }
+
+}
+
 extension ApproveTransactionViewController: NSWindowDelegate {
 
     func windowDidResignKey(_ notification: Notification) {
+        guard !isNativeApprovalReviewInvalidated else { return }
         guard gasSliderInteractionStartValue != nil else { return }
         guard approvalSnapshot.allowsMutation else {
             finishGasSliderInteraction(
@@ -627,25 +663,26 @@ extension ApproveTransactionViewController: NSWindowDelegate {
     }
 
     func windowDidEndSheet(_ notification: Notification) {
-        guard isEndingTransactionEditorSheet else {
-            if transactionEditorWindow?.sheetParent == nil {
-                transactionEditorWindow = nil
+        guard !isNativeApprovalReviewInvalidated else { return }
+        switch sheetState {
+        case .endingTransactionEditor(let completion):
+            sheetState = .idle
+            completion()
+            presentPendingApprovalAlertIfNeeded()
+        case .transactionEditor(let editorWindow):
+            if editorWindow.sheetParent == nil {
+                sheetState = .idle
             }
             presentPendingApprovalAlertIfNeeded()
-            return
+        case .idle, .approvalAlert:
+            presentPendingApprovalAlertIfNeeded()
         }
-
-        isEndingTransactionEditorSheet = false
-        transactionEditorWindow = nil
-        let completion = transactionEditorDismissalCompletion
-        transactionEditorDismissalCompletion = nil
-        completion?()
-        presentPendingApprovalAlertIfNeeded()
     }
     
     func windowWillClose(_ notification: Notification) {
+        peerLogoImageView?.cancelRemoteImageLoad()
         cancelAuthentication()
-        coordinator.cancel()
+        coordinator.invalidate()
         endAllSheets()
     }
     

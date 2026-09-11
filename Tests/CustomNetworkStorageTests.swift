@@ -6,6 +6,37 @@ import XCTest
 
 final class CustomNetworkStorageTests: XCTestCase {
 
+#if os(macOS)
+    func testCustomRPCPlistsAllowNativePublicLiteralHTTPWithoutLocalNetworkUsageDescription() throws {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let extensionPlists = [
+            "Safari macOS/Info.plist",
+            "Safari iOS/Info.plist",
+            "Safari visionOS/Info.plist",
+        ]
+        let appPlists = [
+            "App macOS/Info.plist",
+            "App iOS/Info.plist",
+            "App visionOS/Info.plist",
+        ]
+
+        for relativePath in extensionPlists {
+            let plist = try propertyList(at: repositoryRoot.appendingPathComponent(relativePath))
+            XCTAssertEqual(
+                plist["NSAppTransportSecurity"] as? [String: Bool],
+                ["NSAllowsArbitraryLoads": true],
+                relativePath
+            )
+        }
+        for relativePath in appPlists {
+            let plist = try propertyList(at: repositoryRoot.appendingPathComponent(relativePath))
+            XCTAssertNil(plist["NSLocalNetworkUsageDescription"], relativePath)
+        }
+    }
+#endif
+
     func testUnreadableArchiveFailsClosedWithoutRepair() {
         let (defaults, suiteName) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }

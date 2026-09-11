@@ -1,15 +1,14 @@
 // ∅ 2026 lil org
 
 import Cocoa
-import Darwin
 
 @NSApplicationMain
+@MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     
     private let agent = Agent.shared
     private let priceService = PriceService.shared
     private let walletsManager = WalletsManager.shared
-    private let ambientTerminationRequestId = UUID().uuidString
     private var quitKeyboardShortcutMonitor: Any?
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -18,7 +17,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         clearAmbientPseudoLocalizationLaunchMode()
-        terminateAmbientHelpers()
         return .terminateNow
     }
     
@@ -28,7 +26,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 #endif
         AlchemyJWTProvider.prewarmForApplicationLifecycle()
         installQuitKeyboardShortcutMonitor()
-        agent.start(openOnLaunch: true)
+        agent.open()
         priceService.start()
         walletsManager.start()
     }
@@ -49,7 +47,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         clearAmbientPseudoLocalizationLaunchMode()
-        terminateAmbientHelpers()
         if let quitKeyboardShortcutMonitor {
             NSEvent.removeMonitor(quitKeyboardShortcutMonitor)
         }
@@ -57,20 +54,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func installQuitKeyboardShortcutMonitor() {
         quitKeyboardShortcutMonitor = NSEvent.addCommandQShortcutMonitor { _ in
-            self.terminateAmbientHelpers()
             NSApplication.shared.terminate(nil)
             return nil
-        }
-    }
-
-    private func terminateAmbientHelpers() {
-        DistributedNotificationCenter.default().postNotificationName(.ambientAgentMustTerminate,
-                                                                     object: ambientTerminationRequestId,
-                                                                     userInfo: AmbientAgentTerminationRequest.notificationUserInfo(from: AmbientAgentTerminationRequest.userInfo(for: .main)),
-                                                                     deliverImmediately: true)
-        NSRunningApplication.runningApplications(withBundleIdentifier: Identifiers.macOSAmbientBundle).forEach {
-            _ = Darwin.kill($0.processIdentifier, SIGKILL)
-            _ = $0.forceTerminate()
         }
     }
 

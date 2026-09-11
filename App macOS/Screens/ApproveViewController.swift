@@ -25,9 +25,9 @@ class ApproveViewController: NSViewController {
     private var account: WalletAccount!
     private var completion: ((Bool) -> Void)!
     private var didCallCompletion = false
-    private var peerMeta: PeerMeta?
     private var walletId: String!
     private var solanaClusterSelection: SolanaClusterSelection?
+    var localWindowCloseCompletion: (() -> Void)?
     private weak var clusterPopUpButton: NSPopUpButton?
     private var canApprove: Bool {
         guard let solanaClusterSelection else { return true }
@@ -38,7 +38,6 @@ class ApproveViewController: NSViewController {
                      meta: String,
                      account: WalletAccount,
                      walletId: String,
-                     peerMeta: PeerMeta?,
                      solanaClusterSelection: SolanaClusterSelection? = nil,
                      completion: @escaping (Bool) -> Void) -> ApproveViewController {
         let new = instantiate(ApproveViewController.self)
@@ -48,7 +47,6 @@ class ApproveViewController: NSViewController {
         new.meta = meta
         new.account = account
         new.approveTitle = subject.title
-        new.peerMeta = peerMeta
         new.solanaClusterSelection = solanaClusterSelection
         return new
     }
@@ -63,21 +61,25 @@ class ApproveViewController: NSViewController {
         updateDisplayedMeta()
         configureSolanaClusterSelectionIfNeeded()
         updateOkButtonState()
-        if let peer = peerMeta {
-            peerNameLabel.stringValue = peer.name
-            if let urlString = peer.iconURLString, let url = URL(string: urlString) {
-                peerLogoImageView.setRemoteImage(with: url) { [weak peerLogoImageView] didLoad in
-                    if didLoad {
-                        peerLogoImageView?.layer?.backgroundColor = NSColor.clear.cgColor
-                        peerLogoImageView?.layer?.cornerRadius = 0
-                    }
-                }
-            }
-        }
+    }
+
+    override func viewWillDisappear() {
+        super.viewWillDisappear()
+        peerLogoImageView.cancelRemoteImageLoad()
     }
     
     override func viewDidAppear() {
         super.viewDidAppear()
+        let peer = nativeApprovalPeer
+        peerNameLabel.stringValue = peer?.name ?? ""
+        peerNameLabel.superview?.isHidden = peer == nil
+        if peerLogoImageView.image == nil {
+            peerLogoImageView.setRemoteImage(with: peer?.iconURLString) { [weak peerLogoImageView] image in
+                guard image != nil else { return }
+                peerLogoImageView?.layer?.backgroundColor = NSColor.clear.cgColor
+                peerLogoImageView?.layer?.cornerRadius = 0
+            }
+        }
         view.window?.delegate = self
         view.window?.makeFirstResponder(view)
     }
@@ -166,10 +168,23 @@ class ApproveViewController: NSViewController {
     
 }
 
+extension ApproveViewController: NativeApprovalReviewTeardown {
+
+    func invalidateNativeApprovalReview() {
+        didCallCompletion = true
+        peerLogoImageView?.cancelRemoteImageLoad()
+        localWindowCloseCompletion?()
+        localWindowCloseCompletion = nil
+    }
+
+}
+
 extension ApproveViewController: NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
-        callCompletion(result: false)
+        peerLogoImageView?.cancelRemoteImageLoad()
+        localWindowCloseCompletion?()
+        localWindowCloseCompletion = nil
     }
     
 }

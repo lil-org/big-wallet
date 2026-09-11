@@ -6,5 +6,9 @@
     "extension_description": {
         "message": "Connect like MetaMask in Safari",
         "description": "description of what the extension does"
+    },
+    "private_browsing_unsupported": {
+        "message": "Big Wallet requests are unavailable in Private Browsing.",
+        "description": "error returned when a dapp requests wallet access in Private Browsing"
     }
 }

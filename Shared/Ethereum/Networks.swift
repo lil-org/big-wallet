@@ -12,8 +12,10 @@ struct Networks {
     }
     
     @discardableResult
-    static func add(networkFromDapp: EthereumNetworkFromDapp) -> Bool {
-        return SharedDefaults.addNetwork(networkFromDapp)
+    static func add(
+        networkFromDapp: EthereumNetworkFromDapp
+    ) -> CustomNetworkInsertionResult {
+        return SharedDefaults.insertNetwork(networkFromDapp)
     }
 
     static func existingCustomDefinitionResult(

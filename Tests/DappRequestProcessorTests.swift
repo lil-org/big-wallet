@@ -1,11 +1,86 @@
 // ∅ 2026 lil org
 
-import Dispatch
 import Foundation
 import XCTest
 @testable import Big_Wallet
 
+private let dappRequestAdmissionDeadline = 2_000_000_900_000
+
+private final class CancellableCallbackProbe<Value: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var callback: (@Sendable (Value) -> Void)?
+
+    func install(_ callback: @escaping @Sendable (Value) -> Void) {
+        lock.lock()
+        self.callback = callback
+        lock.unlock()
+    }
+
+    func wait() async -> @Sendable (Value) -> Void {
+        while true {
+            if let callback = current() {
+                return callback
+            }
+            await Task.yield()
+        }
+    }
+
+    private func current() -> (@Sendable (Value) -> Void)? {
+        lock.lock()
+        defer { lock.unlock() }
+        return callback
+    }
+}
+
 final class DappRequestProcessorTests: XCTestCase {
+
+    func testPrivateBrowsingContextExtractionDistinguishesMissingAndMalformed() {
+        var missing: [String: Any] = ["subject": "rpc"]
+        XCTAssertEqual(
+            ExtensionBridge.takePrivateBrowsing(from: &missing),
+            .missing
+        )
+
+        var regular: [String: Any] = ["__bwPrivateBrowsing": false]
+        XCTAssertEqual(
+            ExtensionBridge.takePrivateBrowsing(from: &regular),
+            .value(false)
+        )
+        XCTAssertNil(regular["__bwPrivateBrowsing"])
+
+        var privateMessage: [String: Any] = ["__bwPrivateBrowsing": true]
+        XCTAssertEqual(
+            ExtensionBridge.takePrivateBrowsing(from: &privateMessage),
+            .value(true)
+        )
+
+        for invalid in [1, "true", NSNull()] as [Any] {
+            var malformed: [String: Any] = ["__bwPrivateBrowsing": invalid]
+            XCTAssertEqual(
+                ExtensionBridge.takePrivateBrowsing(from: &malformed),
+                .malformed
+            )
+        }
+    }
+
+    func testPrivateBrowsingUnsupportedErrorIsSpecificAndCorrelated() throws {
+        let request = try ethereumRequest(method: "requestAccounts")
+        let response = ResponseToExtension(
+            for: request,
+            payload: .error(.privateBrowsingUnsupported)
+        )
+
+        XCTAssertEqual(response.json["id"] as? Int, request.id)
+        XCTAssertEqual(
+            response.json["error"] as? String,
+            Strings.privateBrowsingUnsupported
+        )
+        XCTAssertEqual(response.json["errorCode"] as? Int, 4200)
+        XCTAssertEqual(
+            response.json["provider"] as? String,
+            InpageProvider.ethereum.rawValue
+        )
+    }
 
     func testEthereumTransactionHashUsesSignedWireBytes() {
         let signedTransaction =
@@ -31,10 +106,273 @@ final class DappRequestProcessorTests: XCTestCase {
         XCTAssertNil(Ethereum.transactionHash(signedTransaction: "0xzz"))
     }
 
+    func testUnknownSubmissionResponsesExposeIdentifiersWithoutSuccess() throws {
+        XCTAssertEqual(
+            ProviderResponseError.transactionSubmissionUnknownCode,
+            ProviderResponseError.internalErrorCode
+        )
+        let transactionHash =
+            "0x33469b22e9f636356c4160a87eb19df52b7412e8eac32a4a55ffe88ea8350788"
+        let ethereumResponse = EthereumDappRequestProcessor
+            .transactionSubmissionUnknownResponse(
+                to: try ethereumRequest(method: "signTransaction"),
+                transactionHash: transactionHash
+            )
+        XCTAssertEqual(
+            ethereumResponse.json["error"] as? String,
+            Strings.transactionSubmissionStatusUnknown
+        )
+        XCTAssertEqual(
+            ethereumResponse.json["errorCode"] as? Int,
+            ProviderResponseError.transactionSubmissionUnknownCode
+        )
+        let encodedData = try XCTUnwrap(
+            ethereumResponse.json["errorDataJSON"] as? String
+        )
+        let decodedData = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(encodedData.utf8))
+                as? [String: String]
+        )
+        XCTAssertEqual(decodedData, ["transactionHash": transactionHash])
+        XCTAssertNil(ethereumResponse.json["result"])
+
+        let signature = "transaction-signature"
+        let solanaResponse = SolanaDappRequestProcessor
+            .transactionSubmissionUnknownResponse(
+                to: try solanaRequest(
+                    method: "signAndSendTransaction",
+                    publicKey: "public-key"
+                ),
+                signature: signature
+            )
+        XCTAssertEqual(
+            solanaResponse.json["error"] as? String,
+            Strings.transactionSubmissionStatusUnknown
+        )
+        XCTAssertEqual(
+            solanaResponse.json["errorCode"] as? Int,
+            ProviderResponseError.transactionSubmissionUnknownCode
+        )
+        XCTAssertEqual(solanaResponse.json["errorSignature"] as? String, signature)
+        XCTAssertNil(solanaResponse.json["errorDataJSON"])
+        XCTAssertNil(solanaResponse.json["result"])
+    }
+
+    func testEthereumBroadcastKeepsCheckpointForAmbiguousOutcomes() throws {
+        let request = try ethereumRequest(method: "signTransaction")
+        let expectedHash = "0xabc123"
+        let recovery = EthereumDappRequestProcessor
+            .transactionSubmissionUnknownResponse(
+                to: request,
+                transactionHash: expectedHash
+            )
+        let ambiguousResults: [Result<String, EthereumSendFailure>] = [
+            .success("0xdifferent"),
+            .failure(.transport),
+            .failure(.rpc(.unknown)),
+        ]
+        for result in ambiguousResults {
+            let response = EthereumDappRequestProcessor.transactionBroadcastResponse(
+                to: request,
+                expectedHash: expectedHash,
+                recoveryResponse: recovery,
+                result: result
+            )
+            XCTAssertEqual(
+                try encodedResponse(response),
+                try encodedResponse(recovery)
+            )
+        }
+
+        let success = EthereumDappRequestProcessor.transactionBroadcastResponse(
+            to: request,
+            expectedHash: expectedHash,
+            recoveryResponse: recovery,
+            result: .success("0XABC123")
+        )
+        XCTAssertEqual(success.json["result"] as? String, expectedHash)
+        XCTAssertNil(success.json["error"])
+
+        let serverFailure = EthereumDappRequestProcessor
+            .transactionBroadcastResponse(
+                to: request,
+                expectedHash: expectedHash,
+                recoveryResponse: recovery,
+                result: .failure(.rpc(.serverError(
+                    -32_000,
+                    "transaction rejected",
+                    dataJSON: #"{"reason":"nonce"}"#
+                )))
+            )
+        XCTAssertEqual(serverFailure.json["error"] as? String, "transaction rejected")
+        XCTAssertEqual(serverFailure.json["errorCode"] as? Int, -32_000)
+        XCTAssertEqual(
+            serverFailure.json["errorDataJSON"] as? String,
+            #"{"reason":"nonce"}"#
+        )
+
+        let notSubmitted = EthereumDappRequestProcessor
+            .transactionBroadcastResponse(
+                to: request,
+                expectedHash: expectedHash,
+                recoveryResponse: recovery,
+                result: .failure(.rpc(.notSubmitted))
+            )
+        XCTAssertEqual(notSubmitted.json["error"] as? String, Strings.failedToSend)
+        XCTAssertEqual(
+            notSubmitted.json["errorCode"] as? Int,
+            ProviderResponseError.internalErrorCode
+        )
+        XCTAssertNil(notSubmitted.json["errorDataJSON"])
+        XCTAssertNil(notSubmitted.json["result"])
+    }
+
+    func testEthereumBroadcastKeepsCheckpointForAlreadyKnownRPCError() throws {
+        let request = try ethereumRequest(method: "signTransaction")
+        let expectedHash = "0xabc123"
+        let recovery = EthereumDappRequestProcessor
+            .transactionSubmissionUnknownResponse(
+                to: request,
+                transactionHash: expectedHash
+            )
+
+        let response = EthereumDappRequestProcessor.transactionBroadcastResponse(
+            to: request,
+            expectedHash: expectedHash,
+            recoveryResponse: recovery,
+            result: .failure(.rpc(.serverError(
+                -32_000,
+                "already known",
+                dataJSON: nil
+            )))
+        )
+
+        XCTAssertEqual(
+            try encodedResponse(response),
+            try encodedResponse(recovery)
+        )
+    }
+
+    func testSolanaBroadcastKeepsCheckpointForAmbiguousOutcomes() throws {
+        let request = try solanaRequest(
+            method: "signAndSendTransaction",
+            publicKey: "public-key"
+        )
+        let expectedSignature = "expected-signature"
+        let recovery = SolanaDappRequestProcessor
+            .transactionSubmissionUnknownResponse(
+                to: request,
+                signature: expectedSignature
+            )
+        let ambiguousResults: [Result<String, Solana.SendTransactionError>] = [
+            .success("different-signature"),
+            .failure(.unknown),
+            .failure(.confirmationTimedOut(signature: "different-signature")),
+        ]
+        for result in ambiguousResults {
+            let response = SolanaDappRequestProcessor.transactionBroadcastResponse(
+                to: request,
+                expectedSignature: expectedSignature,
+                recoveryResponse: recovery,
+                result: result
+            )
+            XCTAssertEqual(
+                try encodedResponse(response),
+                try encodedResponse(recovery)
+            )
+        }
+
+        let success = SolanaDappRequestProcessor.transactionBroadcastResponse(
+            to: request,
+            expectedSignature: expectedSignature,
+            recoveryResponse: recovery,
+            result: .success(expectedSignature)
+        )
+        XCTAssertEqual(success.json["result"] as? String, expectedSignature)
+        XCTAssertNil(success.json["error"])
+
+        let confirmationFailure = SolanaDappRequestProcessor
+            .transactionBroadcastResponse(
+                to: request,
+                expectedSignature: expectedSignature,
+                recoveryResponse: recovery,
+                result: .failure(.confirmationTimedOut(
+                    signature: expectedSignature
+                ))
+            )
+        XCTAssertEqual(
+            confirmationFailure.json["error"] as? String,
+            Strings.solanaConfirmationTimedOut
+        )
+        XCTAssertEqual(
+            confirmationFailure.json["errorSignature"] as? String,
+            expectedSignature
+        )
+
+        let explicitFailure = SolanaDappRequestProcessor
+            .transactionBroadcastResponse(
+                to: request,
+                expectedSignature: expectedSignature,
+                recoveryResponse: recovery,
+                result: .failure(.rpcError(
+                    message: "transaction rejected",
+                    code: -32_003
+                ))
+            )
+        XCTAssertEqual(explicitFailure.json["error"] as? String, "transaction rejected")
+        XCTAssertEqual(explicitFailure.json["errorCode"] as? Int, -32_003)
+        XCTAssertNil(explicitFailure.json["errorSignature"])
+
+        let notSubmitted = SolanaDappRequestProcessor.transactionBroadcastResponse(
+            to: request,
+            expectedSignature: expectedSignature,
+            recoveryResponse: recovery,
+            result: .failure(.notSubmitted)
+        )
+        XCTAssertEqual(notSubmitted.json["error"] as? String, Strings.failedToSend)
+        XCTAssertEqual(
+            notSubmitted.json["errorCode"] as? Int,
+            ProviderResponseError.internalErrorCode
+        )
+        XCTAssertNil(notSubmitted.json["errorSignature"])
+        XCTAssertNil(notSubmitted.json["result"])
+    }
+
+    func testSolanaBroadcastKeepsCheckpointForAlreadyProcessedRPCError() throws {
+        let request = try solanaRequest(
+            method: "signAndSendTransaction",
+            publicKey: "public-key"
+        )
+        let expectedSignature = "expected-signature"
+        let recovery = SolanaDappRequestProcessor
+            .transactionSubmissionUnknownResponse(
+                to: request,
+                signature: expectedSignature
+            )
+        let alreadyProcessed =
+            "Transaction simulation failed: " +
+            "This transaction has already been processed"
+
+        let response = SolanaDappRequestProcessor.transactionBroadcastResponse(
+            to: request,
+            expectedSignature: expectedSignature,
+            recoveryResponse: recovery,
+            result: .failure(.rpcError(
+                message: alreadyProcessed,
+                code: -32_002
+            ))
+        )
+
+        XCTAssertEqual(
+            try encodedResponse(response),
+            try encodedResponse(recovery)
+        )
+    }
+
     func testEthereumSendProviderErrorPreservesRPCCodeMessageAndData() {
         let dataJSON =
             #"{"baseFeePerGas":"0x132","minimumPriorityFeePerGas":"0x1"}"#
-        let rpcError = DappRequestProcessor.ethereumProviderError(
+        let rpcError = EthereumDappRequestProcessor.providerError(
             for: .rpc(
                 .serverError(
                     -32_000,
@@ -52,23 +390,281 @@ final class DappRequestProcessorTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            DappRequestProcessor.ethereumProviderError(
-                for: .failedToSign
-            ).code,
+            EthereumDappRequestProcessor.providerError(for: .failedToSign).code,
             -32_603
         )
         XCTAssertEqual(
-            DappRequestProcessor.ethereumProviderError(
-                for: .transport
-            ).code,
+            EthereumDappRequestProcessor.providerError(for: .transport).code,
             -32_603
         )
         XCTAssertEqual(
-            DappRequestProcessor.ethereumProviderError(
-                for: .invalidTransaction
-            ).code,
+            EthereumDappRequestProcessor.providerError(for: .invalidTransaction).code,
             -32_603
         )
+    }
+
+    func testEthereumSendConnectivityFailureUsesGenericMessage() {
+        let transport = EthereumDappRequestProcessor.providerError(for: .transport)
+        let unknown = EthereumDappRequestProcessor.providerError(for: .rpc(.unknown))
+        let serverFailure = EthereumDappRequestProcessor.providerError(
+            for: .rpc(.serverError(-32_000, "server failure", dataJSON: nil))
+        )
+
+        XCTAssertEqual(transport.message, Strings.failedToSend)
+        XCTAssertEqual(unknown.message, Strings.failedToSend)
+        XCTAssertEqual(serverFailure.message, "server failure")
+        XCTAssertEqual(serverFailure.code, -32_000)
+    }
+
+    private func encodedResponse(_ response: ResponseToExtension) throws -> Data {
+        return try JSONSerialization.data(
+            withJSONObject: response.json,
+            options: [.sortedKeys]
+        )
+    }
+
+    private func ethereumRequest(
+        method: String,
+        address: String = "0x0000000000000000000000000000000000000001",
+        requestedChainId: String = "0x1"
+    ) throws -> SafariRequest {
+        let requestData = try JSONSerialization.data(withJSONObject: [
+            "id": 1,
+            "name": method,
+            "provider": "ethereum",
+            "host": "example.com",
+            "configurationKey": "example.com",
+            "enqueueAttempt": "00000000000000000000000000000001",
+            "admissionDeadline": dappRequestAdmissionDeadline,
+            "workflowVersion": ExtensionBridge.workflowVersion,
+            "body": [
+                "address": address,
+                "chainId": "0x1",
+                "object": ["chainId": requestedChainId],
+            ],
+        ])
+        return try XCTUnwrap(SafariRequest(data: requestData))
+    }
+
+    private func addEthereumChainRequest(
+        chainId: String
+    ) throws -> (request: SafariRequest, object: [String: Any]) {
+        let object: [String: Any] = [
+            "id": 3,
+            "name": "addEthereumChain",
+            "provider": "ethereum",
+            "host": "example.com",
+            "configurationKey": "example.com",
+            "enqueueAttempt": "00000000000000000000000000000003",
+            "admissionDeadline": dappRequestAdmissionDeadline,
+            "workflowVersion": ExtensionBridge.workflowVersion,
+            "revisions": ["ethereum": 0, "solana": 0],
+            "body": [
+                "address": "0x0000000000000000000000000000000000000003",
+                "chainId": "0x1",
+                "object": [
+                    "chainId": chainId,
+                    "rpcUrls": ["https://rpc.example"],
+                    "blockExplorerUrls": [],
+                    "nativeCurrency": [
+                        "decimals": 18,
+                        "name": "Test Ether",
+                        "symbol": "TETH",
+                    ],
+                    "chainName": "Test Network",
+                ],
+            ],
+        ]
+        let data = try JSONSerialization.data(withJSONObject: object)
+        return (try XCTUnwrap(SafariRequest(data: data)), object)
+    }
+
+    private func solanaRequest(
+        method: String,
+        publicKey: String,
+        parameters: [String: Any] = [:]
+    ) throws -> SafariRequest {
+        let requestData = try JSONSerialization.data(withJSONObject: [
+            "id": 2,
+            "name": method,
+            "provider": "solana",
+            "host": "example.com",
+            "configurationKey": "example.com",
+            "enqueueAttempt": "00000000000000000000000000000002",
+            "admissionDeadline": dappRequestAdmissionDeadline,
+            "workflowVersion": ExtensionBridge.workflowVersion,
+            "body": [
+                "publicKey": publicKey,
+                "object": ["params": parameters],
+            ],
+        ])
+        return try XCTUnwrap(SafariRequest(data: requestData))
+    }
+
+    func testOnlyEthereumAccountApprovalAdvertisesConfigurationStorage() throws {
+        let responseBody = ResponseToExtension.Body.ethereum(
+            .init(
+                results: ["0x0000000000000000000000000000000000000001"],
+                chainId: "0x1"
+            )
+        )
+
+        let requestAccountsResponse = ResponseToExtension(
+            for: try ethereumRequest(method: "requestAccounts"),
+            payload: .body(responseBody)
+        )
+        XCTAssertNotNil(requestAccountsResponse.json["configurationToStore"])
+
+        for method in ["addEthereumChain", "switchEthereumChain"] {
+            let response = ResponseToExtension(
+                for: try ethereumRequest(method: method),
+                payload: .body(responseBody)
+            )
+            XCTAssertNil(response.json["configurationToStore"], method)
+        }
+    }
+
+    func testSwitchAccountTreatsAccountlessEthereumAsDisconnectedButKeepsNetwork() async throws {
+        let requestData = try JSONSerialization.data(withJSONObject: [
+            "id": 1,
+            "name": "switchAccount",
+            "provider": "unknown",
+            "host": "example.com",
+            "configurationKey": "example.com",
+            "enqueueAttempt": "00000000000000000000000000000001",
+            "admissionDeadline": dappRequestAdmissionDeadline,
+            "workflowVersion": ExtensionBridge.workflowVersion,
+            "body": [
+                "latestConfigurations": [
+                    [
+                        "provider": "ethereum",
+                        "chainId": "0x1",
+                    ],
+                    [
+                        "provider": "ethereum",
+                        "results": [""],
+                        "chainId": "0x1",
+                    ],
+                ],
+            ],
+        ])
+        let request = try XCTUnwrap(SafariRequest(data: requestData))
+
+        guard case let .approval(.switchAccount(action)) = DappRequestProcessor.prepare(request) else {
+            return XCTFail("Expected switch-account action")
+        }
+
+        XCTAssertFalse(action.initiallyConnectedProviders.contains(.ethereum))
+        XCTAssertEqual(action.network?.chainId, EthereumNetwork.ethMainnetChainId)
+
+        let rejection = await action.resolve(nil, nil)
+        XCTAssertEqual(rejection.json["errorCode"] as? Int, 4001)
+    }
+
+    func testPrepareReturnsUnauthorizedForUnownedKnownChainSwitch() throws {
+        let request = try ethereumRequest(method: "switchEthereumChain")
+
+        guard case let .response(response) = DappRequestProcessor.prepare(request) else {
+            return XCTFail("Expected immediate response")
+        }
+
+        XCTAssertEqual(response.json["errorCode"] as? Int, 4100)
+        XCTAssertEqual(response.json["error"] as? String, Strings.providerNotReady)
+    }
+
+    func testPrepareWithoutWalletsReturnsDisconnectedKnownChainSwitch() throws {
+        let request = try ethereumRequest(
+            method: "switchEthereumChain",
+            address: ""
+        )
+
+        guard case let .response(response) =
+            DappRequestProcessor.prepareWithoutWallets(request) else {
+            return XCTFail("Expected wallet-independent response")
+        }
+
+        XCTAssertEqual(response.json["results"] as? [String], [])
+        XCTAssertEqual(response.json["chainId"] as? String, "0x1")
+        XCTAssertNil(response.json["error"])
+    }
+
+    func testPrepareReturnsUnrecognizedForUnknownChainSwitch() throws {
+        let request = try ethereumRequest(
+            method: "switchEthereumChain",
+            requestedChainId: "0x7fffffffffffffff"
+        )
+
+        for preparation in [
+            DappRequestProcessor.prepare(request),
+            try XCTUnwrap(DappRequestProcessor.prepareWithoutWallets(request)),
+        ] {
+            guard case let .response(response) = preparation else {
+                return XCTFail("Expected wallet-independent response")
+            }
+            XCTAssertEqual(response.json["errorCode"] as? Int, 4902)
+            XCTAssertEqual(response.json["error"] as? String, Strings.unrecognizedChainId)
+        }
+    }
+
+    func testPrepareSolanaConnectReturnsApprovalAndResolvesRejection() async throws {
+        let request = try solanaRequest(method: "connect", publicKey: "")
+
+        guard case let .approval(.selectAccount(action)) = DappRequestProcessor.prepare(request) else {
+            return XCTFail("Expected Solana account selection")
+        }
+
+        XCTAssertEqual(action.coinType, .solana)
+        let rejection = await action.resolve(nil, nil)
+        XCTAssertEqual(rejection.json["provider"] as? String, "solana")
+        XCTAssertEqual(rejection.json["errorCode"] as? Int, 4001)
+        XCTAssertEqual(rejection.json["error"] as? String, Strings.canceled)
+    }
+
+    func testPrepareSolanaSigningForUnknownAccountReturnsUnauthorizedResponse() throws {
+        let publicKey = "not-a-wallet-public-key"
+        let request = try solanaRequest(
+            method: "signMessage",
+            publicKey: publicKey,
+            parameters: [
+                "message": "hello",
+                "messageEncoding": "utf8",
+            ]
+        )
+
+        guard case let .response(response) = DappRequestProcessor.prepare(request) else {
+            return XCTFail("Expected unauthorized response")
+        }
+
+        XCTAssertEqual(response.json["provider"] as? String, "solana")
+        XCTAssertEqual(response.json["errorCode"] as? Int, 4100)
+        XCTAssertEqual(response.json["error"] as? String, Strings.providerNotReady)
+        XCTAssertEqual(response.json["errorPublicKey"] as? String, publicKey)
+    }
+
+    func testPrepareEthereumAccountRequestReturnsApprovalAndResolvesRejection() async throws {
+        let request = try ethereumRequest(method: "requestAccounts")
+
+        guard case let .approval(.selectAccount(action)) = DappRequestProcessor.prepare(request) else {
+            return XCTFail("Expected Ethereum account selection")
+        }
+
+        XCTAssertEqual(action.coinType, .ethereum)
+        let rejection = await action.resolve(nil, nil)
+        XCTAssertEqual(rejection.json["provider"] as? String, "ethereum")
+        XCTAssertEqual(rejection.json["errorCode"] as? Int, 4001)
+        XCTAssertEqual(rejection.json["error"] as? String, Strings.canceled)
+    }
+
+    func testPrepareMalformedEthereumSigningReturnsImmediateResponse() throws {
+        let request = try ethereumRequest(method: "signMessage")
+
+        guard case let .response(response) = DappRequestProcessor.prepare(request) else {
+            return XCTFail("Expected malformed-request response")
+        }
+
+        XCTAssertEqual(response.json["provider"] as? String, "ethereum")
+        XCTAssertEqual(response.json["error"] as? String, Strings.somethingWentWrong)
+        XCTAssertNil(response.json["errorCode"])
     }
 
     func testResponseToExtensionPreservesEncodedRPCErrorData() throws {
@@ -77,6 +673,10 @@ final class DappRequestProcessorTests: XCTestCase {
             "name": "signTransaction",
             "provider": "ethereum",
             "host": "example.com",
+            "configurationKey": "example.com",
+            "enqueueAttempt": "00000000000000000000000000000001",
+            "admissionDeadline": dappRequestAdmissionDeadline,
+            "workflowVersion": ExtensionBridge.workflowVersion,
             "body": [
                 "address":
                     "0x0000000000000000000000000000000000000001",
@@ -90,10 +690,7 @@ final class DappRequestProcessorTests: XCTestCase {
         let requestData = try JSONSerialization.data(
             withJSONObject: requestJSON
         )
-        let requestString = try XCTUnwrap(
-            String(data: requestData, encoding: .utf8)
-        )
-        let request = try XCTUnwrap(SafariRequest(query: requestString))
+        let request = try XCTUnwrap(SafariRequest(data: requestData))
         let response = ResponseToExtension(
             for: request,
             payload: .error(
@@ -400,13 +997,13 @@ final class DappRequestProcessorTests: XCTestCase {
     }
 
     func testEthereumTransactionParsingErrorsMapToProviderCodes() {
-        let invalidParameters = DappRequestProcessor
-            .ethereumTransactionProviderError(for: .invalidParameters)
+        let invalidParameters = EthereumDappRequestProcessor
+            .transactionProviderError(for: .invalidParameters)
         XCTAssertEqual(invalidParameters.message, Strings.somethingWentWrong)
         XCTAssertEqual(invalidParameters.code, -32_602)
 
-        let unsupportedType = DappRequestProcessor
-            .ethereumTransactionProviderError(for: .unsupportedTransactionType)
+        let unsupportedType = EthereumDappRequestProcessor
+            .transactionProviderError(for: .unsupportedTransactionType)
         XCTAssertEqual(unsupportedType.message, Strings.somethingWentWrong)
         XCTAssertEqual(unsupportedType.code, 4200)
     }
@@ -784,17 +1381,33 @@ final class DappRequestProcessorTests: XCTestCase {
 
     func testSolanaSignMessageDecodingUsesWireEncodingNotDisplayEncoding() {
         let encodedHello = "0x68656c6c6f"
-        XCTAssertEqual(DappRequestProcessor.decodedSolanaSignMessage(encodedHello,
-                                                                     messageEncoding: .hex),
-                       Data("hello".utf8))
-        XCTAssertEqual(DappRequestProcessor.decodedSolanaSignMessage("hello",
-                                                                     messageEncoding: .utf8),
-                       Data("hello".utf8))
-        XCTAssertEqual(DappRequestProcessor.decodedSolanaSignMessage("dead",
-                                                                     messageEncoding: .utf8),
-                       Data("dead".utf8))
-        XCTAssertNil(DappRequestProcessor.decodedSolanaSignMessage("hello",
-                                                                   messageEncoding: .hex))
+        XCTAssertEqual(
+            SolanaDappRequestProcessor.decodedSignMessage(
+                encodedHello,
+                messageEncoding: .hex
+            ),
+            Data("hello".utf8)
+        )
+        XCTAssertEqual(
+            SolanaDappRequestProcessor.decodedSignMessage(
+                "hello",
+                messageEncoding: .utf8
+            ),
+            Data("hello".utf8)
+        )
+        XCTAssertEqual(
+            SolanaDappRequestProcessor.decodedSignMessage(
+                "dead",
+                messageEncoding: .utf8
+            ),
+            Data("dead".utf8)
+        )
+        XCTAssertNil(
+            SolanaDappRequestProcessor.decodedSignMessage(
+                "hello",
+                messageEncoding: .hex
+            )
+        )
         XCTAssertEqual(solanaSignMessageEncoding(display: "utf8", messageEncoding: "hex"), .hex)
         XCTAssertEqual(solanaSignMessageEncoding(display: "utf8", messageEncoding: nil), .utf8)
         XCTAssertNil(solanaSignMessageEncoding(display: "utf8", messageEncoding: "base58"))
@@ -963,89 +1576,260 @@ final class DappRequestProcessorTests: XCTestCase {
         XCTAssertEqual(preselectedAccounts, [ethereumAccount])
     }
 
-    func testApprovedEthereumChainAdditionDoesNotOverwriteNetworkResolvedDuringApproval() {
-        var persistCallCount = 0
+    func testExistingCustomChainAdditionRequiresMatchingDefinition() throws {
+        let approvedNetwork = approvedEthereumNetwork()
+        let resolvedNetwork = try XCTUnwrap(
+            resolvedEthereumNetworkResolution().resolvedNetwork
+        )
+        var comparisonCallCount = 0
 
-        let didComplete = DappRequestProcessor.completeApprovedEthereumChainAddition(
-            resolution: { self.resolvedEthereumNetworkResolution() },
-            persist: {
-                persistCallCount += 1
-                return true
+        XCTAssertTrue(EthereumDappRequestProcessor.existingChainAdditionMatches(
+            approvedNetwork: approvedNetwork,
+            resolvedNetwork: resolvedNetwork,
+            customDefinitionResult: { network in
+                comparisonCallCount += 1
+                XCTAssertEqual(network.chainId, approvedNetwork.chainId)
+                return .matching
             }
-        )
+        ))
+        XCTAssertFalse(EthereumDappRequestProcessor.existingChainAdditionMatches(
+            approvedNetwork: approvedNetwork,
+            resolvedNetwork: resolvedNetwork,
+            customDefinitionResult: { _ in .conflict }
+        ))
+        XCTAssertFalse(EthereumDappRequestProcessor.existingChainAdditionMatches(
+            approvedNetwork: approvedNetwork,
+            resolvedNetwork: resolvedNetwork,
+            customDefinitionResult: { _ in .unavailable }
+        ))
+        XCTAssertEqual(comparisonCallCount, 1)
 
-        XCTAssertTrue(didComplete)
-        XCTAssertEqual(persistCallCount, 0)
+        let catalogNetwork = try XCTUnwrap(
+            resolvedEthereumNetworkResolution(source: .alchemy).resolvedNetwork
+        )
+        XCTAssertTrue(EthereumDappRequestProcessor.existingChainAdditionMatches(
+            approvedNetwork: approvedNetwork,
+            resolvedNetwork: catalogNetwork,
+            customDefinitionResult: { _ in
+                XCTFail("Catalog networks must not read custom definitions")
+                return .conflict
+            }
+        ))
     }
 
-    func testApprovedEthereumChainAdditionFailsWhenUnavailableOrPersistenceDoesNotResolve() {
-        var unavailablePersistCallCount = 0
-        XCTAssertFalse(
-            DappRequestProcessor.completeApprovedEthereumChainAddition(
-                resolution: { .catalogOwnedButUnavailable },
-                persist: {
-                    unavailablePersistCallCount += 1
-                    return true
-                }
-            )
+    func testExistingCustomChainAdditionAllowsGrandfatheredLocalDefinitionMatch() throws {
+        var approvedNetwork = approvedEthereumNetwork()
+        approvedNetwork.rpcUrls = [
+            "http://localhost:8545",
+            "https://safe.example",
+        ]
+        let resolvedNetwork = try XCTUnwrap(
+            resolvedEthereumNetworkResolution().resolvedNetwork
         )
-        XCTAssertEqual(unavailablePersistCallCount, 0)
+        XCTAssertEqual(
+            approvedNetwork.defaultRpcURL?.absoluteString,
+            "https://safe.example"
+        )
+        XCTAssertEqual(
+            CustomNetworkDefinition.requestedRPCURLs(for: approvedNetwork)
+                .map(\.absoluteString),
+            ["https://safe.example", "http://localhost:8545"]
+        )
 
-        var failedPersistCallCount = 0
-        XCTAssertFalse(
-            DappRequestProcessor.completeApprovedEthereumChainAddition(
-                resolution: { .unknown },
-                persist: {
-                    failedPersistCallCount += 1
-                    return false
-                }
-            )
-        )
-        XCTAssertEqual(failedPersistCallCount, 1)
-
-        var unresolvedPersistCallCount = 0
-        XCTAssertFalse(
-            DappRequestProcessor.completeApprovedEthereumChainAddition(
-                resolution: { .unknown },
-                persist: {
-                    unresolvedPersistCallCount += 1
-                    return true
-                }
-            )
-        )
-        XCTAssertEqual(unresolvedPersistCallCount, 1)
+        XCTAssertTrue(EthereumDappRequestProcessor.existingChainAdditionMatches(
+            approvedNetwork: approvedNetwork,
+            resolvedNetwork: resolvedNetwork,
+            customDefinitionResult: { network in
+                XCTAssertEqual(
+                    CustomNetworkDefinition.requestedRPCURLs(for: network)
+                        .map(\.absoluteString),
+                    ["https://safe.example", "http://localhost:8545"]
+                )
+                return .matching
+            }
+        ))
     }
 
-    func testConcurrentApprovedEthereumChainAdditionsPersistOnce() {
-        let resolvedResolution = resolvedEthereumNetworkResolution()
-        let resultsLock = NSLock()
-        var isResolved = false
-        var persistCallCount = 0
-        var results = [Bool]()
+    func testPopupOnlySubjectsDecodeOnlyWithoutWebPageFields() throws {
+        let popupMessage: [String: Any] = [
+            "id": 42,
+            "workflowVersion": ExtensionBridge.workflowVersion,
+            "subject": "approveRequest",
+            "requestToken": "00000000-0000-0000-0000-000000000001",
+            "reviewToken": "00000000-0000-0000-0000-000000000002",
+            "payload": [:],
+        ]
+        XCTAssertNoThrow(try decodeInternalRequest(popupMessage))
+        var withoutReviewToken = popupMessage
+        withoutReviewToken.removeValue(forKey: "reviewToken")
+        XCTAssertThrowsError(try decodeInternalRequest(withoutReviewToken))
 
-        DispatchQueue.concurrentPerform(iterations: 32) { _ in
-            let result = DappRequestProcessor.completeApprovedEthereumChainAddition(
-                resolution: {
-                    return isResolved ? resolvedResolution : .unknown
-                },
-                persist: {
-                    persistCallCount += 1
-                    isResolved = true
-                    return true
-                }
-            )
-
-            resultsLock.lock()
-            results.append(result)
-            resultsLock.unlock()
+        for field in [
+            "host",
+            "name",
+            "favicon",
+            "unexpected",
+            "enqueueAttempt",
+            "admissionDeadline",
+            "configurationKey",
+            "body",
+            "chainId",
+        ] {
+            var smuggled = popupMessage
+            smuggled[field] = "evil.example"
+            XCTAssertThrowsError(try decodeInternalRequest(smuggled))
         }
-
-        XCTAssertEqual(results.count, 32)
-        XCTAssertTrue(results.allSatisfy { $0 })
-        XCTAssertEqual(persistCallCount, 1)
     }
 
-    private func resolvedEthereumNetworkResolution() -> EthereumNetworkResolution {
+    func testConfigurationMutationClassificationUsesOneStrictContract() {
+        XCTAssertEqual(
+            ResponseToExtension.ConfigurationMutation.classify([
+                "name": "addEthereumChain",
+                "provider": "ethereum",
+                "chainId": "0x2a",
+            ]),
+            .addsEthereumChain(chainId: "0x2a")
+        )
+        XCTAssertEqual(
+            ResponseToExtension.ConfigurationMutation.classify([
+                "provider": "solana",
+                "errorCode": 4100,
+                "errorPublicKey": "public-key",
+            ]),
+            .removesSolanaAuthorization(publicKey: "public-key")
+        )
+        XCTAssertEqual(
+            ResponseToExtension.ConfigurationMutation.classify([
+                "configurationToStore": [["provider": "ethereum"]],
+            ]),
+            .storesConfiguration
+        )
+        for response: [String: Any] in [
+            ["name": "addEthereumChain", "chainId": "0x2a"],
+            ["name": "addEthereumChain", "provider": "solana", "chainId": "0x2a"],
+            [
+                "name": "addEthereumChain",
+                "provider": "ethereum",
+                "chainId": "0x2a",
+                "error": "failed",
+            ],
+            ["provider": "solana", "errorCode": 4100],
+        ] {
+            XCTAssertNil(ResponseToExtension.ConfigurationMutation.classify(response))
+        }
+    }
+
+    func testCancellableCallbackReturnsCallbackResultExactlyOnce() async {
+        let probe = CancellableCallbackProbe<Int>()
+        let task = Task {
+            await awaitCancellableCallback { probe.install($0) }
+        }
+        let callback = await probe.wait()
+        callback(42)
+        callback(43)
+        let result = await task.value
+        XCTAssertEqual(result, 42)
+    }
+
+    func testCancellableCallbackFinishesOnCancellationAndIgnoresLateCallback() async {
+        let probe = CancellableCallbackProbe<Int>()
+        let task = Task {
+            await awaitCancellableCallback { probe.install($0) }
+        }
+        let callback = await probe.wait()
+        task.cancel()
+        let cancelledResult = await task.value
+        XCTAssertNil(cancelledResult)
+        callback(42)
+        let lateResult = await task.value
+        XCTAssertNil(lateResult)
+    }
+
+    func testCancellableCallbackDoesNotStartAfterPriorCancellation() async {
+        var didStart = false
+        let value: Int? = await Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return await awaitCancellableCallback { _ in didStart = true }
+        }.value
+        XCTAssertNil(value)
+        XCTAssertFalse(didStart)
+    }
+
+    func testBackgroundOperationLeavesMainActor() async {
+        let ranOnMainThread = await Task { @MainActor in
+            await awaitBackgroundOperation { Thread.isMainThread }
+        }.value
+        XCTAssertEqual(ranOnMainThread, false)
+    }
+
+    func testCancellableCallbackStartsOnCallerActor() async {
+        let ranOnMainThread = await Task { @MainActor in
+            await awaitCancellableCallback { completion in
+                completion(Thread.isMainThread)
+            }
+        }.value
+        XCTAssertEqual(ranOnMainThread, true)
+    }
+
+    func testBackgroundOperationDoesNotStartAfterPriorCancellation() async {
+        let value = await Task { @MainActor in
+            withUnsafeCurrentTask { $0?.cancel() }
+            return await awaitBackgroundOperation { true }
+        }.value
+        XCTAssertNil(value)
+    }
+
+    func testPopupOnlySubjectsRefuseNonObjects() {
+        XCTAssertThrowsError(try decodeInternalRequest([
+            ["subject": "getApprovalState", "id": 42],
+        ]))
+        XCTAssertThrowsError(try decodeInternalRequest("rejectRequest"))
+    }
+
+    func testWebPageSubjectsStayReachableFromContentScripts() throws {
+        let responseMessage: [String: Any] = [
+            "subject": "getResponse",
+            "id": 42,
+            "workflowVersion": ExtensionBridge.workflowVersion,
+            "configurationKey": "wallet.example",
+            "requestToken": "00000000-0000-0000-0000-000000000001",
+            "executionDeadline": 1_700_000_160_000,
+            "revisions": ["ethereum": 0, "solana": 0],
+        ]
+        let responseRequest = try decodeInternalRequest(responseMessage)
+        guard case .page(.getResponse(let identity)) = responseRequest.command else {
+            return XCTFail("expected getResponse")
+        }
+        XCTAssertEqual(
+            identity.executionDeadline.timeIntervalSince1970,
+            1_700_000_160,
+            accuracy: 0.001
+        )
+        XCTAssertThrowsError(try decodeInternalRequest(
+            responseMessage.filter { $0.key != "executionDeadline" }
+        ))
+
+        let rpcMessage: [String: Any] = [
+            "subject": "rpc",
+            "id": 42,
+            "workflowVersion": ExtensionBridge.workflowVersion,
+            "body": "{}",
+            "chainId": "0x1",
+        ]
+        XCTAssertNoThrow(try decodeInternalRequest(rpcMessage))
+    }
+
+    private func decodeInternalRequest(_ value: Any) throws -> InternalSafariRequest {
+        let data = try JSONSerialization.data(
+            withJSONObject: value,
+            options: [.fragmentsAllowed]
+        )
+        return try JSONDecoder().decode(InternalSafariRequest.self, from: data)
+    }
+
+    private func resolvedEthereumNetworkResolution(
+        source: RPCSource = .custom
+    ) -> EthereumNetworkResolution {
         let rpcURL = URL(string: "https://custom.example")!
         let network = EthereumNetwork(
             chainId: 64_240,
@@ -1057,7 +1841,21 @@ final class DappRequestProcessorTests: XCTestCase {
             explorer: nil
         )
         return .resolved(
-            ResolvedEthereumNetwork(network: network, source: .custom)
+            ResolvedEthereumNetwork(network: network, source: source)
+        )
+    }
+
+    private func approvedEthereumNetwork() -> EthereumNetworkFromDapp {
+        return EthereumNetworkFromDapp(
+            chainId: String.hex(64_240, withPrefix: true),
+            rpcUrls: ["https://custom.example"],
+            blockExplorerUrls: [],
+            nativeCurrency: EthereumNetworkFromDapp.Currency(
+                decimals: 18,
+                name: "Custom Coin",
+                symbol: "CUSTOM"
+            ),
+            chainName: "Custom"
         )
     }
 

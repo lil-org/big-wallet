@@ -122,7 +122,6 @@ final class WalletCoreProxyDependencyBoundaryTests: XCTestCase {
             "App iOS",
             "App macOS",
             "App visionOS",
-            "Big Wallet Ambient",
             "Safari iOS",
             "Safari macOS",
             "Safari Shared",

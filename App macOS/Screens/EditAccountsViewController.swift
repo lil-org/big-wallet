@@ -11,7 +11,7 @@ class EditAccountsViewController: NSViewController {
     
     var wallet: WalletContainer!
     var getBackToRect: CGRect?
-    var selectAccountAction: SelectAccountAction?
+    var accountSelection: NativeAccountSelectionSession?
 
     private let walletsManager = WalletsManager.shared
     private var cellModels = [PreviewAccountCellModel]()
@@ -20,7 +20,7 @@ class EditAccountsViewController: NSViewController {
     private var enabledUndiscoveredAccountKeys = Set<WalletPreviewAccountKey>()
     private var previewPager: WalletsManager.PreviewAccountsPager?
     private var didAppear = false
-    private var previewCoin: WalletCoin? { selectAccountAction?.coinType }
+    private var previewCoin: WalletCoin? { accountSelection?.coinType }
     
     @IBOutlet weak var tableView: RightClickTableView! {
         didSet {
@@ -78,7 +78,7 @@ class EditAccountsViewController: NSViewController {
             try walletsManager.update(wallet: wallet, enabledAccounts: newAccounts)
             showAccountsList()
         } catch {
-            Alert.showWithMessage(Strings.somethingWentWrong, style: .informational)
+            presentMessageAlert(Strings.somethingWentWrong, style: .informational)
         }
     }
     
@@ -86,7 +86,7 @@ class EditAccountsViewController: NSViewController {
         invalidatePreviewAccounts()
         NotificationCenter.default.removeObserver(self, name: .walletsChanged, object: nil)
         let accountsListViewController = instantiate(AccountsListViewController.self)
-        accountsListViewController.selectAccountAction = selectAccountAction
+        accountsListViewController.accountSelection = accountSelection
         accountsListViewController.getBackToRect = getBackToRect
         view.window?.contentViewController = accountsListViewController
     }
@@ -217,6 +217,21 @@ extension EditAccountsViewController: PreviewAccountCellDelegate {
         toggleAccount(at: row)
     }
     
+}
+
+extension EditAccountsViewController: NativeApprovalReviewTeardown {
+
+    func invalidateNativeApprovalReview() {
+        invalidatePreviewAccounts()
+        accountSelection?.invalidate()
+        NotificationCenter.default.removeObserver(
+            self,
+            name: .walletsChanged,
+            object: nil
+        )
+        endAllSheets()
+    }
+
 }
 
 extension EditAccountsViewController: NSTableViewDelegate {

@@ -643,7 +643,7 @@ mkdir -p \
   "$submit_fixture/App iOS" \
   "$submit_fixture/App macOS" \
   "$submit_fixture/Big Wallet Ambient" \
-  "$submit_fixture/Safari iOS/Resources" \
+  "$submit_fixture/Safari Shared/Resources" \
   "$submit_fixture/Safari macOS/Resources"
 for relative_file in \
   Scripts/asc/common.sh \
@@ -659,7 +659,7 @@ for relative_file in \
   "App iOS/Info.plist" \
   "App macOS/Info.plist" \
   "Big Wallet Ambient/Info.plist" \
-  "Safari iOS/Resources/manifest.json" \
+  "Safari Shared/Resources/manifest.json" \
   "Safari macOS/Resources/manifest.json"
 do
   cp -p "$repository_directory/$relative_file" "$submit_fixture/$relative_file"

@@ -496,7 +496,7 @@ mkdir -p \
     "$publish_fixture_root/App iOS" \
     "$publish_fixture_root/App macOS" \
     "$publish_fixture_root/Big Wallet Ambient" \
-    "$publish_fixture_root/Safari iOS/Resources" \
+    "$publish_fixture_root/Safari Shared/Resources" \
     "$publish_fixture_root/Safari macOS/Resources" \
     "$publish_fixture_root/app-store-connect"
 for fixture_script in \
@@ -526,8 +526,8 @@ cp \
     "$repository_directory/Big Wallet Ambient/Info.plist" \
     "$publish_fixture_root/Big Wallet Ambient/Info.plist"
 cp \
-    "$repository_directory/Safari iOS/Resources/manifest.json" \
-    "$publish_fixture_root/Safari iOS/Resources/manifest.json"
+    "$repository_directory/Safari Shared/Resources/manifest.json" \
+    "$publish_fixture_root/Safari Shared/Resources/manifest.json"
 cp \
     "$repository_directory/Safari macOS/Resources/manifest.json" \
     "$publish_fixture_root/Safari macOS/Resources/manifest.json"

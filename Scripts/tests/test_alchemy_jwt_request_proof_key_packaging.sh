@@ -1098,7 +1098,7 @@ invoke_artifact_validator \
 mac_artifact="$test_root/macOS release artifact"
 mac_app="$mac_artifact/Products/Applications/Big Wallet.app"
 mac_extension="$mac_app/Contents/PlugIns/Safari macOS.appex"
-ambient_app="$mac_app/Contents/Helpers/Big Wallet.app"
+ambient_app="$mac_app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app"
 /bin/mkdir -p \
     "$mac_app/Contents/Resources" \
     "$mac_extension/Contents/Resources" \
@@ -1149,8 +1149,7 @@ invoke_artifact_validator \
     "$mac_pkg" \
     "$valid_key_file"
 
-/bin/ln -s "$valid_key_file" \
-    "$mac_app/Contents/Helpers/Big Wallet.app/Contents/Resources/UnexpectedProofLink"
+/bin/ln -s "$valid_key_file" "$mac_artifact/UnexpectedProofLink"
 invoke_artifact_validator \
     ignores-unrelated-symlink \
     success \

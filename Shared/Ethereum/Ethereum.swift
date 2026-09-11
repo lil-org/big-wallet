@@ -401,7 +401,7 @@ struct Ethereum {
         return .success(
             WalletCrypto.hexString(data: signedTransaction).withHexPrefix
         )
-        }
+    }
 
     static func transactionHash(signedTransaction: String) -> String? {
         guard let data = WalletCrypto.hexData(signedTransaction), !data.isEmpty else {

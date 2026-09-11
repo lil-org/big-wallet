@@ -61,7 +61,7 @@ VERSIONED_INFO_PLISTS=(
   "Big Wallet Ambient/Info.plist"
 )
 WEB_EXTENSION_MANIFESTS=(
-  "Safari iOS/Resources/manifest.json"
+  "Safari Shared/Resources/manifest.json"
   "Safari macOS/Resources/manifest.json"
 )
 

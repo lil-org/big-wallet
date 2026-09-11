@@ -8,10 +8,12 @@ struct Keychain {
         CFDictionary,
         UnsafeMutablePointer<CFTypeRef?>?
     ) -> OSStatus
-    
+
     enum KeychainError: Error {
         case failedToRead(OSStatus)
+        case failedToSave(OSStatus)
         case failedToUpdate
+        case failedToDelete(OSStatus)
     }
     
     private let copyMatching: CopyMatching
@@ -60,16 +62,43 @@ struct Keychain {
         }
     }
     
-    func save(password: String) {
-        guard let data = password.data(using: .utf8) else { return }
-        save(data: data, key: .password)
+    func readPasswordData() throws -> Data? {
+        try read(key: .password)
+    }
+
+    @discardableResult
+    func save(password: String) -> Bool {
+        guard let data = password.data(using: .utf8) else { return false }
+#if os(iOS) || os(visionOS)
+        do {
+            try SafariApprovalVaultHost.shared.performSourceMutation {
+                try save(data: data, key: .password)
+            }
+            return true
+        } catch {
+            return false
+        }
+#else
+        do {
+            try save(data: data, key: .password)
+            return true
+        } catch {
+            return false
+        }
+#endif
     }
 
     func createPasswordIfMissing(_ password: String) -> Bool {
         guard let data = password.data(using: .utf8) else { return false }
+#if os(iOS) || os(visionOS)
+        return (try? SafariApprovalVaultHost.shared.performSourceMutation {
+            saveIfMissing(data: data, key: .password)
+        }) ?? false
+#else
         return saveIfMissing(data: data, key: .password)
+#endif
     }
-    
+
     func readAllWalletIDs() throws -> [String] {
         let items = try allStoredItemAttributes()
         let missingCreationDate = Date.distantFuture
@@ -98,7 +127,7 @@ struct Keychain {
     }
     
     func saveWallet(id: String, data: Data) throws {
-        save(data: data, key: .wallet(id: id))
+        try save(data: data, key: .wallet(id: id))
     }
     
     func updateWallet(id: String, data: Data) throws {
@@ -106,7 +135,7 @@ struct Keychain {
     }
     
     func removeWallet(id: String) throws {
-        removeData(forKey: .wallet(id: id))
+        try removeData(forKey: .wallet(id: id))
     }
     
     private func update(data: Data, key: ItemKey) throws {
@@ -123,10 +152,19 @@ struct Keychain {
         guard status == errSecSuccess else { throw KeychainError.failedToUpdate }
     }
     
-    private func save(data: Data, key: ItemKey) {
+    private func save(data: Data, key: ItemKey) throws {
         let query = saveQuery(data: data, key: key)
-        SecItemDelete(query as CFDictionary)
-        SecItemAdd(query as CFDictionary, nil)
+        var deleteQuery = query
+        deleteQuery[kSecValueData as String] = nil
+        let deleteStatus = SecItemDelete(deleteQuery as CFDictionary)
+        guard deleteStatus == errSecSuccess ||
+                deleteStatus == errSecItemNotFound else {
+            throw KeychainError.failedToSave(deleteStatus)
+        }
+        let addStatus = SecItemAdd(query as CFDictionary, nil)
+        guard addStatus == errSecSuccess else {
+            throw KeychainError.failedToSave(addStatus)
+        }
     }
 
     private func saveIfMissing(data: Data, key: ItemKey) -> Bool {
@@ -167,14 +205,17 @@ struct Keychain {
         return items
     }
     
-    private func removeData(forKey key: ItemKey) {
+    private func removeData(forKey key: ItemKey) throws {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key.stringValue,
             kSecAttrAccessGroup as String: accessGroup,
             kSecUseDataProtectionKeychain as String: true
         ]
-        SecItemDelete(query as CFDictionary)
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw KeychainError.failedToDelete(status)
+        }
     }
     
     private func get(key: ItemKey) -> Data? {

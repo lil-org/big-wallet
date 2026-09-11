@@ -296,6 +296,63 @@ final class SolanaOptionsTests: XCTestCase {
         XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
     }
 
+    func testSolanaDoesNotSubmitWhenAuthorizationAcquisitionFails() throws {
+        let recorder = SolanaRPCRequestRecorder()
+        let session = makeRPCSession { request in
+            _ = try recorder.record(request)
+            return (
+                try Self.httpResponse(for: request),
+                Data(
+                    #"{"jsonrpc":"2.0","id":1,"result":"unexpected-signature"}"#.utf8
+                )
+            )
+        }
+        defer {
+            session.invalidateAndCancel()
+            SolanaOptionsURLProtocol.removeRequestHandler()
+        }
+
+        let authorizationProvider = SolanaAuthorizationProviderStub(
+            token: "unused-token",
+            authorizationErrorStartingAtCall: 1
+        )
+        let solana = Solana(
+            urlSession: session,
+            rpcConfiguration: .bundled,
+            authorizationProvider: authorizationProvider
+        )
+        let prepared = try preparedTransaction(using: solana)
+        let privateKey = try XCTUnwrap(
+            WalletPrivateKey(data: Vectors.solanaPreparedSignerPrivateKey)
+        )
+        let completion = expectation(
+            description: "Authorization failure returned before submission"
+        )
+
+        solana.signAndSendTransaction(
+            preparedSerializedTransaction: prepared,
+            cluster: .mainnetBeta,
+            sendOptions: Solana.PreparedSendOptions(
+                clusterHint: .mainnetBeta,
+                rpcOptions: [
+                    "encoding": "base64",
+                    "skipPreflight": false,
+                ],
+                confirmationCommitment: nil
+            ),
+            privateKey: privateKey
+        ) { result in
+            XCTAssertEqual(result, .failure(.notSubmitted))
+            completion.fulfill()
+        }
+
+        wait(for: [completion], timeout: 5)
+        XCTAssertTrue(recorder.snapshot().isEmpty)
+        XCTAssertEqual(authorizationProvider.authorizationCallCount, 1)
+        XCTAssertEqual(authorizationProvider.replacementCallCount, 0)
+        XCTAssertEqual(authorizationProvider.invalidationCallCount, 0)
+    }
+
     func testSolanaSubmissionHonorsResultFrom401WithoutReplay() throws {
         let configuration = Solana.RPCConfiguration.bundled
         let recorder = SolanaRPCRequestRecorder()

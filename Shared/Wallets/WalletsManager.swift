@@ -111,6 +111,38 @@ final class WalletsManager: NSObject {
         return true
     }
 
+#if os(iOS) || os(visionOS)
+    func safariApprovalSourceSnapshot() throws -> SafariApprovalSourceSnapshot? {
+        guard let password = try keychain.readPasswordData() else { return nil }
+        let walletIDs = try keychain.readAllWalletIDs()
+        var wallets = [WalletContainer]()
+        var records = [SafariApprovalWalletRecord]()
+        wallets.reserveCapacity(walletIDs.count)
+        records.reserveCapacity(walletIDs.count)
+
+        for id in walletIDs {
+            guard let data = try keychain.readWalletData(id: id),
+                  let wallet = walletContainer(id: id, data: data) else {
+                throw Error.keychainAccessFailure
+            }
+            wallets.append(wallet)
+            records.append(SafariApprovalWalletRecord(
+                walletID: id,
+                storedKeyJSON: data
+            ))
+        }
+        let catalog = WalletAccountCatalog(
+            accounts: SourceWalletAccess.descriptors(for: wallets)
+        )
+        guard catalog.isValid else { throw Error.invalidInput }
+        return SafariApprovalSourceSnapshot(
+            catalog: catalog,
+            password: password,
+            wallets: records
+        )
+    }
+#endif
+
     func validateWalletInput(_ input: String) -> InputValidationResult {
         let trimmedInput = input.singleSpaced
         if WalletCrypto.isValidMnemonic(mnemonic: trimmedInput) {
@@ -366,7 +398,6 @@ final class WalletsManager: NSObject {
         let id = makeNewWalletId()
         let wallet = WalletContainer(id: id, key: key)
         try addDefaultMnemonicAccounts(to: wallet, password: password)
-        wallets.append(wallet)
         try save(wallet: wallet, isUpdate: false)
         return wallet
     }
@@ -393,10 +424,11 @@ final class WalletsManager: NSObject {
         let id = makeNewWalletId()
         let wallet = WalletContainer(id: id, key: newKey)
         _ = try wallet.getAccount(password: password, coin: coin)
-        if !onlyToKeychain {
-            wallets.append(wallet)
-        }
-        try save(wallet: wallet, isUpdate: false)
+        try save(
+            wallet: wallet,
+            isUpdate: false,
+            includeInMemory: !onlyToKeychain
+        )
         return wallet
     }
 
@@ -405,7 +437,6 @@ final class WalletsManager: NSObject {
         let id = makeNewWalletId()
         let wallet = WalletContainer(id: id, key: key)
         try addDefaultMnemonicAccounts(to: wallet, password: encryptPassword)
-        wallets.append(wallet)
         try save(wallet: wallet, isUpdate: false)
         return wallet
     }
@@ -538,10 +569,15 @@ final class WalletsManager: NSObject {
         guard let index = wallets.firstIndex(of: wallet) else { throw WalletKeyStoreError.accountNotFound }
         guard var privateKey = wallet.key.decryptPrivateKey(password: Data(password.utf8)) else { throw WalletKeyStoreError.invalidKey }
         defer { privateKey.resetBytes(in: 0..<privateKey.count) }
-        wallets.remove(at: index)
-        try keychain.removeWallet(id: wallet.id)
-        WalletsMetadataService.removeMetadataForWallet(wallet, postChange: false)
-        postWalletsChangedNotification()
+        try performSafariApprovalSourceMutation {
+            try keychain.removeWallet(id: wallet.id)
+            wallets.remove(at: index)
+            WalletsMetadataService.removeMetadataForWallet(
+                wallet,
+                postChange: false
+            )
+            postWalletsChangedNotification()
+        }
     }
 
     private func reloadWalletsFromKeychain() -> Bool {
@@ -622,17 +658,37 @@ final class WalletsManager: NSObject {
         try save(wallet: wallet, isUpdate: true)
     }
 
-    private func save(wallet: WalletContainer, isUpdate: Bool) throws {
+    private func save(
+        wallet: WalletContainer,
+        isUpdate: Bool,
+        includeInMemory: Bool = true
+    ) throws {
         guard let data = wallet.key.exportJSON() else { throw WalletKeyStoreError.invalidPassword }
-        if isUpdate {
-            try keychain.updateWallet(id: wallet.id, data: data)
-        } else {
-            try keychain.saveWallet(id: wallet.id, data: data)
+        try performSafariApprovalSourceMutation {
+            if isUpdate {
+                try keychain.updateWallet(id: wallet.id, data: data)
+            } else {
+                try keychain.saveWallet(id: wallet.id, data: data)
+            }
+            if let index = wallets.firstIndex(of: wallet) {
+                wallets[index] = wallet
+            } else if includeInMemory {
+                wallets.append(wallet)
+            }
+            postWalletsChangedNotification()
         }
-        if let index = wallets.firstIndex(of: wallet) {
-            wallets[index] = wallet
-        }
-        postWalletsChangedNotification()
+    }
+
+    private func performSafariApprovalSourceMutation<Result>(
+        _ operation: () throws -> Result
+    ) throws -> Result {
+#if os(iOS) || os(visionOS)
+        return try SafariApprovalVaultHost.shared.performSourceMutation(
+            operation
+        )
+#else
+        return try operation()
+#endif
     }
 
     private func postWalletsChangedNotification() {

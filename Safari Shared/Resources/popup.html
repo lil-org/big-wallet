@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<div id="screen-loading" class="screen">
+    <div class="spinner"></div>
+</div>
+
+<div id="screen-idle" class="screen hidden">
+    <div class="header">
+        <div class="peer-info">
+            <div id="idle-host" class="peer-host"></div>
+        </div>
+    </div>
+    <div id="idle-connection" class="idle-connection" role="status" aria-live="polite" aria-atomic="true"></div>
+    <div id="idle-pending-spinner" class="spinner idle-pending-spinner hidden" aria-hidden="true"></div>
+    <div class="buttons">
+        <button id="idle-open-app" data-string="openBigWallet" class="button primary hidden">Open Big Wallet</button>
+        <button id="idle-switch-account" data-string="switchAccount" class="button primary">Switch Account</button>
+        <button id="idle-check-status" data-string="refresh" class="button secondary hidden">Refresh</button>
+    </div>
+</div>
+
+<div id="screen-request" class="screen hidden">
+    <div id="queue-indicator" class="queue-indicator hidden"></div>
+    <div class="header">
+        <div class="peer-info">
+            <img id="request-favicon" class="peer-icon hidden" alt="" aria-hidden="true">
+            <div id="request-host" class="peer-host"></div>
+        </div>
+        <h1 id="request-title" class="title"></h1>
+    </div>
+
+    <div id="section-accounts" class="section hidden">
+        <div id="network-row" class="network-row hidden">
+            <label data-string="network" class="field-label" for="network-select">Network</label>
+            <select id="network-select"></select>
+        </div>
+        <div id="accounts-list" class="accounts-list"></div>
+        <div id="accounts-empty" class="hint hidden"></div>
+    </div>
+
+    <div id="section-message" class="section hidden">
+        <div id="signing-account" class="account-row"></div>
+        <pre id="message-meta" class="message-meta"></pre>
+        <div id="clusters" class="clusters hidden"></div>
+    </div>
+
+    <div id="section-transaction" class="section hidden">
+        <div id="tx-account" class="account-row"></div>
+        <div class="info-row"><span id="tx-network-label" data-string="network" class="info-label">Network</span><span id="tx-network" class="info-value inspectable-value" role="region" tabindex="0" aria-labelledby="tx-network-label"></span></div>
+        <div id="tx-balance-row" class="info-row hidden"><span data-string="balance" class="info-label">Balance</span><span id="tx-balance" class="info-value"></span></div>
+        <div id="tx-value-row" class="info-row hidden"><span id="tx-value" class="info-value strong"></span></div>
+        <div id="tx-fee-lines" class="fee-lines"></div>
+        <div id="tx-slider-row" class="slider-row hidden">
+            <label data-string="fee" class="visually-hidden" for="tx-slider">Fee</label>
+            <span class="slider-emoji" aria-hidden="true">🐢</span>
+            <input type="range" id="tx-slider" min="0" max="200" step="1">
+            <span class="slider-emoji" aria-hidden="true">🐇</span>
+        </div>
+        <details id="tx-data-details" class="details hidden">
+            <summary data-string="data">Data</summary>
+            <pre id="tx-data" class="message-meta"></pre>
+        </details>
+        <details id="tx-editor" class="details hidden">
+            <summary data-string="advanced">Advanced</summary>
+            <div class="editor">
+                <div id="editor-legacy" class="hidden">
+                    <label data-string="gasPrice" class="field-label" for="edit-gas-price">Gas price (gwei)</label>
+                    <input type="text" id="edit-gas-price" inputmode="decimal">
+                </div>
+                <div id="editor-eip1559" class="hidden">
+                    <label data-string="maxPriorityFee" class="field-label" for="edit-max-priority">Max priority fee (gwei)</label>
+                    <input type="text" id="edit-max-priority" inputmode="decimal">
+                    <label data-string="maxFee" class="field-label" for="edit-max-fee">Max fee (gwei)</label>
+                    <input type="text" id="edit-max-fee" inputmode="decimal">
+                </div>
+                <label data-string="nonce" class="field-label" for="edit-nonce">Nonce</label>
+                <input type="text" id="edit-nonce" inputmode="numeric">
+                <div id="edits-error" data-string="invalidValues" class="error hidden">Invalid values</div>
+                <div class="editor-buttons">
+                    <button id="editor-suggested" data-string="reset" class="button secondary hidden">Reset</button>
+                    <button id="editor-apply" data-string="apply" class="button secondary">Apply</button>
+                </div>
+            </div>
+        </details>
+    </div>
+
+    <div id="section-chain" class="section hidden">
+        <div class="info-row"><span id="chain-name-label" data-string="network" class="info-label">Network</span><span id="chain-name" class="info-value inspectable-value" role="region" tabindex="0" aria-labelledby="chain-name-label"></span></div>
+        <div class="info-row"><span id="chain-rpc-label" data-string="rpc" class="info-label">RPC</span><span id="chain-rpc" class="info-value inspectable-value" role="region" tabindex="0" aria-labelledby="chain-rpc-label"></span></div>
+    </div>
+
+    <div id="request-error" class="error hidden"></div>
+
+    <div class="buttons">
+        <button id="button-reject" data-string="cancel" class="button secondary">Cancel</button>
+        <button id="button-approve" data-string="ok" class="button primary">OK</button>
+    </div>
+</div>
+
+<div id="working-overlay" class="overlay hidden">
+    <div class="spinner"></div>
+</div>
+
+<div id="alert-overlay" class="overlay hidden">
+    <div id="alert-box" class="alert-box" role="alertdialog" aria-modal="true" aria-labelledby="alert-title" aria-describedby="alert-message" tabindex="-1">
+        <div id="alert-title" class="alert-title"></div>
+        <div id="alert-message" class="alert-message"></div>
+        <div id="alert-buttons" class="alert-buttons"></div>
+    </div>
+</div>
+
+<script src="bridge_wire.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

@@ -980,6 +980,7 @@ final class Solana {
         case confirmationTimedOut(signature: String)
         case rpcError(message: String, code: Int?)
         case rpcUnavailable
+        case notSubmitted
         case unknown
     }
 
@@ -1563,8 +1564,8 @@ final class Solana {
         case .success(let signedTransaction):
             sendSignedTransaction(
                 signedTransaction,
-                            endpoint: endpoint,
-                            sendOptions: sendOptions,
+                endpoint: endpoint,
+                sendOptions: sendOptions,
                 completion: completion
             )
         }
@@ -1588,8 +1589,8 @@ final class Solana {
         case .success(let signedTransaction):
             sendSignedTransaction(
                 signedTransaction,
-                        endpoint: endpoint,
-                        sendOptions: sendOptions,
+                endpoint: endpoint,
+                sendOptions: sendOptions,
                 completion: completion
             )
         }
@@ -1777,7 +1778,7 @@ final class Solana {
             case .retryableFailure:
                 completion(.failure(.unknown))
             case .authorizationAcquisitionFailed:
-                completion(.failure(.unknown))
+                completion(.failure(.notSubmitted))
             case .authorizationRecoveryFailed(
                 let statusCode,
                 let response
@@ -2027,7 +2028,8 @@ final class Solana {
             return .confirmationFailed(signature: signature,
                                        message: Strings.solanaBlockhashNotFound,
                                        code: -32003)
-        case .invalidMessage, .invalidSendOptions, .unsupportedMultiSignature, .rpcUnavailable, .unknown:
+        case .invalidMessage, .invalidSendOptions, .unsupportedMultiSignature,
+             .rpcUnavailable, .notSubmitted, .unknown:
             return .confirmationFailed(signature: signature,
                                        message: Strings.failedToSend,
                                        code: nil)
@@ -2039,8 +2041,8 @@ final class Solana {
     }
 
     private static func compileTransactionData(messageData: Data,
-                                        parsedMessage: SolanaWireMessage,
-                                        signatureData: Data) -> String? {
+                                               parsedMessage: SolanaWireMessage,
+                                               signatureData: Data) -> String? {
         guard signatureData.count == Self.signatureLength
         else { return nil }
 
@@ -2061,8 +2063,8 @@ final class Solana {
     }
 
     private static func compileTransactionData(transactionData: Data,
-                                        signerSignatureRange: Range<Data.Index>,
-                                        signatureData: Data) -> String? {
+                                               signerSignatureRange: Range<Data.Index>,
+                                               signatureData: Data) -> String? {
         guard signatureData.count == Self.signatureLength
         else { return nil }
 

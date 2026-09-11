@@ -1,5 +1,5 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "default_locale": "en",
   "name": "__MSG_extension_name__",
   "description": "__MSG_extension_description__",
@@ -12,10 +12,7 @@
     "512": "images/icon-512.png"
   },
   "background": {
-    "scripts": [
-      "service_worker.js"
-    ],
-    "persistent": false
+    "service_worker": "service_worker.js"
   },
   "content_scripts": [
     {
@@ -27,12 +24,12 @@
       "run_at": "document_start",
       "all_frames": false,
       "js": [
-        "macos_specific_content.js",
+        "bridge_wire.js",
         "content.js"
       ]
     }
   ],
-  "browser_action": {
+  "action": {
     "default_icon": {
       "16": "images/toolbar-icon-16.png",
       "19": "images/toolbar-icon-19.png",
@@ -41,13 +38,20 @@
     }
   },
   "permissions": [
-    "webNavigation",
+    "alarms",
     "nativeMessaging",
     "storage",
     "activeTab",
     "tabs"
   ],
   "web_accessible_resources": [
-    "inpage.js"
+    {
+      "resources": [
+        "inpage.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
   ]
 }

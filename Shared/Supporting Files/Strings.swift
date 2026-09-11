@@ -81,16 +81,17 @@ struct Strings {
     static let publicRPC = loc("Public RPC")
     static let solanaBlockhashNotFound = loc("Solana blockhash not found. Check the selected network and try again.")
     static let solanaConfirmationTimedOut = loc("Solana transaction was sent, but confirmation timed out.")
+    static let transactionSubmissionStatusUnknown = loc("Transaction submission status is unknown. Check the transaction ID before trying again.")
     static let unsupportedSolanaSendOptions = loc("Unsupported Solana send options")
+    static let privateBrowsingUnsupported = loc("Big Wallet requests are unavailable in Private Browsing.")
+    static let secureApprovalSetupRequired = loc("Open Big Wallet once to enable secure Safari approvals.")
     static let unrecognizedChainId = loc("Unrecognized chain ID")
     static let providerNotReady = loc("provider is not ready")
-    static let addAccountToConnect = loc("Add %@ account to connect")
     static let done = loc("Done")
     static let pinned = loc("Pinned")
     static let mainnets = loc("Mainnets")
     static let nonce = loc("Nonce")
     static let gasPrice = loc("Gas price")
-    static let networkFees = loc("Network fees")
     static let maxPriorityFee = loc("Max priority fee")
     static let priorityFee = loc("Priority fee")
     static let maxFee = loc("Max fee")
@@ -119,9 +120,53 @@ struct Strings {
     static let editName = loc("Edit Name")
     
     static let bigWallet = "Big Wallet"
+    static let network = loc("Network")
+    static let balance = loc("Balance")
+    static let advanced = loc("Advanced")
+    static let invalidValues = loc("Invalid values")
+    static let noActivePage = loc("No active page")
+    static let openBigWallet = loc("Open Big Wallet")
+    static let notConnected = loc("Not connected")
+    static let connectWallet = loc("Connect Wallet")
+    static let addAccountToConnect = loc("Add %@ account to connect")
+    static let queuePosition = loc("%1$@ of %2$@")
+
     static let viewOnGithub = "GitHub"
     static let viewOnX = "𝕏"
     static let gwei = "gwei"
+    static let rpc = "RPC"
+
+    // The Safari popup is HTML, so its chrome cannot read the string catalog itself.
+    // These ride along with the first native response and are applied to the static labels.
+    static var popup: [String: String] {
+        return [
+            "switchAccount": switchAccount,
+            "network": network,
+            "balance": balance,
+            "fee": fee,
+            "data": data,
+            "advanced": advanced,
+            "gasPrice": gasPrice + " (" + gwei + ")",
+            "maxPriorityFee": maxPriorityFee + " (" + gwei + ")",
+            "maxFee": maxFee + " (" + gwei + ")",
+            "nonce": nonce,
+            "invalidValues": invalidValues,
+            "reset": reset,
+            "apply": apply,
+            "rpc": rpc,
+            "cancel": cancel,
+            "ok": ok,
+            "noActivePage": noActivePage,
+            "openBigWallet": openBigWallet,
+            "notConnected": notConnected,
+            "privateBrowsingUnsupported": privateBrowsingUnsupported,
+            "somethingWentWrong": somethingWentWrong,
+            "failedToLoad": failedToLoad,
+            "refresh": refresh,
+            "calculating": calculating.withEllipsis,
+            "queuePosition": queuePosition,
+        ]
+    }
     
     private static func loc(_ string: String.LocalizationValue) -> String {
         return String(localized: string)

@@ -2,7 +2,6 @@
 
 import UIKit
 
-var launchURL: URL?
 private let feedbackShortcutItemType = "org.lil.wallet.feedback"
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
@@ -19,32 +18,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         if screenshotMode {
             window?.backgroundColor = UIColor(white: 0.137, alpha: 1)
         }
-        
-        if let url = connectionOptions.userActivities.first?.webpageURL ?? connectionOptions.urlContexts.first?.url {
-            wasOpenedWithURL(url)
-        }
     }
 
     func sceneWillEnterForeground(_ scene: UIScene) {
         AlchemyJWTProvider.prewarmForApplicationLifecycle()
         WalletsManager.shared.handleExternalWalletStoreChange()
-    }
-    
-    func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
-        if let url = userActivity.webpageURL {
-            wasOpenedWithURL(url)
-        }
-    }
-
-    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-        if let url = URLContexts.first?.url {
-            wasOpenedWithURL(url)
-        }
-    }
-    
-    private func wasOpenedWithURL(_ url: URL) {
-        launchURL = url
-        NotificationCenter.default.post(name: .receievedWalletRequest, object: nil)
+        SafariApprovalVaultHost.shared.reconcile()
     }
     
     func windowScene(_ windowScene: UIWindowScene, performActionFor shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {

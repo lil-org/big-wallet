@@ -290,6 +290,21 @@ final class NetworkCatalogTests: XCTestCase {
         )
     }
 
+    func testEveryNetworkListSharesOneOrder() {
+        let ordered = Networks.ordered
+        XCTAssertEqual(
+            ordered.prefix(Networks.pinned.count).map(\.chainId),
+            Networks.pinned.map(\.chainId)
+        )
+        XCTAssertEqual(
+            ordered.suffix(Networks.testnets.count).map(\.chainId),
+            Networks.testnets.map(\.chainId)
+        )
+        XCTAssertEqual(
+            ordered.count,
+            Networks.pinned.count + Networks.custom.count + Networks.mainnets.count + Networks.testnets.count
+        )
+    }
 
     func testAcceptedConflictRecordsHaveExactOwnersAndMetadata() throws {
         let catalog = try loadedCatalog()
@@ -1726,42 +1741,16 @@ final class NetworkCatalogTests: XCTestCase {
         }
     }
 
-    func testSafariRPCClientRejectsNonReplayableAndAuthorizedRedirects()
-        throws {
+    func testSafariRPCClientRejectsAllRedirects() throws {
         let sourceURL = try XCTUnwrap(URL(string: "https://rpc.example/source"))
         let redirectURL = try XCTUnwrap(URL(string: "https://rpc.example/redirect"))
-        let rawTransactionBody = Data(
-            #"{"jsonrpc":"2.0","id":1,"method":"eth_sendRawTransaction","params":["0x01"]}"#.utf8
-        )
-        let readBody = Data(
-            #"{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}"#.utf8
-        )
-
-        XCTAssertFalse(
-            SafariRPCClient.allowsRedirect(
-                for: rawTransactionBody,
-                isAuthorized: false
-            )
-        )
-        XCTAssertFalse(
-            SafariRPCClient.allowsRedirect(
-                for: readBody,
-                isAuthorized: true
-            )
-        )
-        XCTAssertTrue(
-            SafariRPCClient.allowsRedirect(
-                for: readBody,
-                isAuthorized: false
-            )
-        )
 
         let session = URLSession(configuration: .ephemeral)
         defer {
             session.invalidateAndCancel()
         }
         let task = session.dataTask(with: sourceURL)
-        let delegate = SafariRPCRedirectDelegate(allowsRedirect: false)
+        let delegate = NoRedirectSessionDelegate()
 
         for statusCode in [307, 308] {
             let completion = expectation(
@@ -1788,13 +1777,16 @@ final class NetworkCatalogTests: XCTestCase {
         }
     }
 
-    func testSafariRPCClientFollowsReplaySafeRedirects() throws {
+    func testSafariRPCClientRejectsRedirectResponseBody() throws {
         let sourceURL = try XCTUnwrap(URL(string: "https://rpc.example/source"))
         let redirectURL = try XCTUnwrap(URL(string: "https://rpc.example/redirect"))
         SafariRedirectURLProtocol.configure(
             sourceURL: sourceURL,
             redirectURL: redirectURL,
-            statusCode: 307
+            statusCode: 307,
+            responseData: Data(
+                #"{"jsonrpc":"2.0","id":1,"result":"source"}"#.utf8
+            )
         )
         defer {
             SafariRedirectURLProtocol.reset()
@@ -1807,7 +1799,7 @@ final class NetworkCatalogTests: XCTestCase {
         }
         let client = SafariRPCClient(urlSession: session)
         let completion = expectation(
-            description: "Replay-safe redirect completed"
+            description: "Replay-safe redirect rejected"
         )
 
         client.send(
@@ -1817,15 +1809,15 @@ final class NetworkCatalogTests: XCTestCase {
             ),
             expectedResponseID: 1
         ) { response in
-            XCTAssertEqual(response?["result"] as? String, "redirected")
+            XCTAssertNil(response)
             completion.fulfill()
         }
 
         wait(for: [completion], timeout: 2)
-        XCTAssertEqual(SafariRedirectURLProtocol.requestCount, 2)
+        XCTAssertEqual(SafariRedirectURLProtocol.requestCount, 1)
         XCTAssertEqual(
             SafariRedirectURLProtocol.requestedURLs,
-            [sourceURL, redirectURL]
+            [sourceURL]
         )
     }
 
@@ -2575,6 +2567,7 @@ private final class SafariRedirectURLProtocol: URLProtocol {
     private static var configuredRedirectURL: URL?
     private static var configuredSourceURL: URL?
     private static var configuredStatusCode = 307
+    private static var configuredResponseData = Data()
     private static var recordedURLs = [URL]()
 
     static var requestCount: Int {
@@ -2592,12 +2585,14 @@ private final class SafariRedirectURLProtocol: URLProtocol {
     static func configure(
         sourceURL: URL,
         redirectURL: URL,
-        statusCode: Int
+        statusCode: Int,
+        responseData: Data
     ) {
         stateLock.lock()
         configuredSourceURL = sourceURL
         configuredRedirectURL = redirectURL
         configuredStatusCode = statusCode
+        configuredResponseData = responseData
         recordedURLs = []
         stateLock.unlock()
     }
@@ -2606,6 +2601,7 @@ private final class SafariRedirectURLProtocol: URLProtocol {
         stateLock.lock()
         configuredSourceURL = nil
         configuredRedirectURL = nil
+        configuredResponseData = Data()
         recordedURLs = []
         stateLock.unlock()
     }
@@ -2632,6 +2628,7 @@ private final class SafariRedirectURLProtocol: URLProtocol {
         let sourceURL = Self.configuredSourceURL
         let redirectURL = Self.configuredRedirectURL
         let statusCode = Self.configuredStatusCode
+        let responseData = Self.configuredResponseData
         Self.stateLock.unlock()
 
         guard url == sourceURL,
@@ -2653,6 +2650,13 @@ private final class SafariRedirectURLProtocol: URLProtocol {
             wasRedirectedTo: redirectRequest,
             redirectResponse: response
         )
+        client?.urlProtocol(
+            self,
+            didReceive: response,
+            cacheStoragePolicy: .notAllowed
+        )
+        client?.urlProtocol(self, didLoad: responseData)
+        client?.urlProtocolDidFinishLoading(self)
     }
 
     override func stopLoading() {}

@@ -9,7 +9,7 @@ struct PeerMeta {
         return title ?? Strings.unknownWebsite
     }
     
-    init(title: String?, iconURLString: String?) {
+    init(title: String?, iconURLString: String? = nil) {
         self.title = title
         self.iconURLString = iconURLString
     }
