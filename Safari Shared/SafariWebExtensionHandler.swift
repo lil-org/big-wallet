@@ -176,12 +176,12 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 _,
                 let nativeDeliveryNonce
             ):
-                if !approvalRequired {
+                if ingress.replayOnly || !approvalRequired {
                     Self.respond(
                         with: Self.admissionResponse(
                             request: request,
                             handle: handle,
-                            approvalRequired: false,
+                            approvalRequired: approvalRequired,
                             revisions: revisions
                         ),
                         context: context

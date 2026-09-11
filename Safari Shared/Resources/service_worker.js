@@ -1585,30 +1585,31 @@ async function handleDappRequest(request, sender) {
     );
     const message = validatedDappMessage(request, sender, state);
     if (!message) { return undefined; }
-    if (!isAuthorized(message, state)) {
-        return {
-            id: message.id,
-            name: message.name,
-            provider: message.provider,
-            error: "Authorization changed while the request was pending",
-            errorCode: 4100,
-            latestConfigurations: publicConfigurations(state),
-            revisions: {...state.revisions},
-        };
-    }
+    const authorized = isAuthorized(message, state);
     const directResponseRevisions = {...message.revisions};
     const response = await WIRE.withTimeout(
-        sendNativeMessage(message, false),
+        sendNativeMessage(authorized ? message : {...message, replayOnly: true}, false),
         TRANSPORT_TIMEOUT
     );
     if (WIRE.isNativeEnqueueAcknowledgement(response, message.id)) {
-        if (response.approvalRequired) {
+        if (authorized && response.approvalRequired) {
             notifyPendingRequestAvailable();
             cuePopup();
         }
         return response;
     }
     if (WIRE.isCorrelatedDappResponse(response, message.id)) {
+        if (!authorized) {
+            return {
+                id: message.id,
+                name: message.name,
+                provider: message.provider,
+                error: "Authorization changed while the request was pending",
+                errorCode: 4100,
+                latestConfigurations: publicConfigurations(state),
+                revisions: {...state.revisions},
+            };
+        }
         return applyDappResponse(
             message.configurationKey,
             response,

@@ -2165,9 +2165,10 @@ test("manual owner intent requires the exact trusted content identity", async ()
     assert.equal(harness.nativeMessages.length, 0);
 });
 
-test("returns current configuration immediately for stale account-bound operations", async () => {
-    const harness = makeHarness({native: () => {
-        throw new Error("must not reach native");
+test("rejects stale account-bound operations when native has no matching attempt", async () => {
+    const harness = makeHarness({native: message => {
+        assert.equal(message.replayOnly, true);
+        return {id: message.id, name: message.name, error: "No matching attempt", errorCode: -32603};
     }});
     const response = await harness.dispatch(request(8, {message: {
         name: "signMessage",
@@ -2181,7 +2182,7 @@ test("returns current configuration immediately for stale account-bound operatio
     assert.equal(response.provider, "ethereum");
     assert.equal(response.errorCode, 4100);
     assert.deepEqual(clone(response.latestConfigurations), []);
-    assert.equal(harness.nativeMessages.length, 0);
+    assert.equal(harness.nativeMessages.length, 1);
 });
 
 test("forwards an account-bound operation with current stored authorization", async () => {
@@ -2231,8 +2232,9 @@ test("rejects account-bearing chain mutations without stored authorization", asy
         [32, "addEthereumChain"],
         [33, "switchEthereumChain"],
     ]) {
-        const harness = makeHarness({native: () => {
-            throw new Error("must not reach native");
+        const harness = makeHarness({native: message => {
+            assert.equal(message.replayOnly, true);
+            return {id: message.id, name: message.name, error: "No matching attempt", errorCode: -32603};
         }});
         const response = await harness.dispatch(request(id, {message: {
             name,
@@ -2245,7 +2247,7 @@ test("rejects account-bearing chain mutations without stored authorization", asy
 
         assert.equal(response.errorCode, 4100, name);
         assert.deepEqual(clone(response.latestConfigurations), [], name);
-        assert.equal(harness.nativeMessages.length, 0, name);
+        assert.equal(harness.nativeMessages.length, 1, name);
         assert.deepEqual(harness.storageWrites, [], name);
     }
 });
@@ -2531,6 +2533,83 @@ test("lost enqueue replies reuse the same native enqueue attempt after restart",
     assert.equal(response.requestToken, requestToken);
     assert.deepEqual(seen, [attempt, attempt]);
     assert.equal(storage.size, 0);
+});
+
+test("lost signing acknowledgments recover committed results after disconnect and restart", async () => {
+    const address = "0x0000000000000000000000000000000000000001";
+    for (const [provider, name, body, configuration] of [
+        ["ethereum", "signTransaction", {address, chainId: "0x1"}, {
+            provider: "ethereum", chainId: "0x1", results: [address],
+        }],
+        ["solana", "signAndSendTransaction", {publicKey: firstSolanaPublicKey}, {
+            provider: "solana", publicKey: firstSolanaPublicKey,
+        }],
+    ]) {
+        const storage = new Map([["https://wallet.example", {
+            latestConfigurations: [configuration],
+            revisions: {ethereum: 0, solana: 0},
+            workflowVersion: 3,
+        }]]);
+        let admitted;
+        const native = message => {
+            if (!message.subject) {
+                if (!admitted) {
+                    assert.equal(message.replayOnly, undefined);
+                    admitted = clone(message);
+                    return undefined;
+                }
+                assert.equal(message.replayOnly, true);
+                assert.equal(message.enqueueAttempt, admitted.enqueueAttempt);
+                assert.deepEqual(clone(message.body), admitted.body);
+                return nativeAcknowledgement(message.id, admitted.revisions, false);
+            }
+            if (message.subject === "getResponse") {
+                return {
+                    id: message.id, name, provider, result: "committed-transaction",
+                    __bwApprovalCommitted: true,
+                };
+            }
+        };
+        const original = request(9, {message: {provider, name, body}});
+        const first = makeHarness({storage, native});
+        assert.equal(await first.dispatch(original), undefined);
+        await first.dispatch({
+            subject: "disconnect", id: 10, provider,
+            host: "wallet.example", configurationKey: "https://wallet.example",
+            workflowVersion: 3,
+        });
+
+        const restarted = makeHarness({storage, native});
+        const acknowledgement = await restarted.dispatch(original);
+        assert.equal(acknowledgement.requestToken, requestToken);
+        assert.deepEqual(clone(acknowledgement.revisions), admitted.revisions);
+        assert.equal(acknowledgement.approvalRequired, false);
+        const response = await restarted.dispatch({
+            subject: "getResponse", id: 9,
+            configurationKey: "https://wallet.example", requestToken,
+            revisions: acknowledgement.revisions, workflowVersion: 3,
+        });
+        assert.equal(response.result, "committed-transaction");
+        assert.equal(response.__bwApprovalCommitted, true);
+        assert.deepEqual(storage.get("https://wallet.example").latestConfigurations, []);
+        assert.deepEqual(restarted.popupCalls, []);
+    }
+});
+
+test("unauthorized recovery keeps retrying unavailable transport and does not cue active approvals", async () => {
+    for (const reply of [undefined, nativeAcknowledgement(9)]) {
+        const harness = makeHarness({native: message => {
+            assert.equal(message.replayOnly, true);
+            return reply;
+        }});
+        const response = await harness.dispatch(request(9, {message: {
+            name: "signMessage",
+            body: {address: "0x0000000000000000000000000000000000000001"},
+        }}));
+        assert.deepEqual(clone(response), reply);
+        assert.deepEqual(harness.popupCalls, []);
+        assert.deepEqual(harness.runtimeMessages, []);
+    }
 });
 
 test("lost enqueue acknowledgement keeps native revisions across disconnect drift", async () => {

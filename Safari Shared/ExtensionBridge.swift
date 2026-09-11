@@ -204,6 +204,7 @@ actor ExtensionBridge {
         let canonicalData: Data
         let fingerprint: Data
         let revisions: ProviderRevisions
+        let replayOnly: Bool
     }
 
     final class OperationLease: @unchecked Sendable {
@@ -445,6 +446,15 @@ actor ExtensionBridge {
         request: SafariRequest,
         rawObject: [String: Any]
     ) -> DappIngressResult {
+        var rawObject = rawObject
+        let replayOnly: Bool
+        if let value = rawObject.removeValue(forKey: "replayOnly") {
+            guard CFGetTypeID(value as CFTypeRef) == CFBooleanGetTypeID(),
+                  let flag = value as? Bool else { return .invalid }
+            replayOnly = flag
+        } else {
+            replayOnly = false
+        }
         let allowedFields = Set([
             "id", "name", "provider", "body", "host", "configurationKey",
             "favicon", "enqueueAttempt", "admissionDeadline", "revisions",
@@ -471,7 +481,8 @@ actor ExtensionBridge {
             request: request,
             canonicalData: canonicalData,
             fingerprint: fingerprint,
-            revisions: revisions
+            revisions: revisions,
+            replayOnly: replayOnly
         ))
     }
 

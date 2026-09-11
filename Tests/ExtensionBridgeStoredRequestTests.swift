@@ -198,6 +198,146 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
     }
 
+    func testReplayOnlyRejectsMissingOrMismatchedRequests() async throws {
+        let replay = try makeFixture(id: 2, replayOnly: true)
+        guard case .rejected = await bridge.enqueue(
+            ingress: replay.ingress,
+            profileIdentifier: nil
+        ) else { return XCTFail("Recovery must not admit a new request") }
+
+        let admission = try accepted(await bridge.enqueue(
+            ingress: try makeFixture(id: 2).ingress,
+            profileIdentifier: nil
+        ))
+        XCTAssertEqual(admission.admissionKind, .new)
+        for (fixture, profile) in [
+            (try makeFixture(id: 2, message: "0x00", replayOnly: true), nil),
+            (replay, UUID()),
+        ] {
+            guard case .rejected = await bridge.enqueue(
+                ingress: fixture.ingress,
+                profileIdentifier: profile
+            ) else { return XCTFail("Recovery must match the request and profile") }
+        }
+        guard case .available(let snapshots) = await bridge.list(
+            profileIdentifier: nil
+        ) else { return XCTFail("Expected list") }
+        XCTAssertEqual(snapshots.count, 1)
+    }
+
+    func testReplayOnlyRejectsQueuedRequestsAndRecoversCompletedResponseAfterAdmissionDeadline() async throws {
+        let fixture = try makeFixture(id: 2)
+        let replay = try makeFixture(
+            id: 2,
+            revisions: ["ethereum": 1, "solana": 0],
+            replayOnly: true
+        )
+        let original = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress,
+            profileIdentifier: nil
+        ))
+        guard case .rejected = await bridge.enqueue(
+            ingress: replay.ingress,
+            profileIdentifier: nil
+        ) else { return XCTFail("Queued unauthorized requests must not keep polling") }
+        let completion = await bridge.complete(
+            handle: original.handle,
+            response: ResponseToExtension(
+                for: fixture.request,
+                payload: .body(.ethereum(.init(result: "signed")))
+            )
+        )
+        XCTAssertEqual(completion, .persisted)
+        clock.now.addTimeInterval(ExtensionBridge.requestTTL + 1)
+        bridge = makeBridge(clock: { self.clock.now })
+
+        let recovered = try accepted(await bridge.enqueue(
+            ingress: replay.ingress,
+            profileIdentifier: nil
+        ))
+        XCTAssertEqual(recovered.handle, original.handle)
+        XCTAssertEqual(recovered.revisions, original.revisions)
+        XCTAssertEqual(recovered.admissionKind, .replay)
+        XCTAssertFalse(recovered.approvalRequired)
+        guard case .response(let response) = await bridge.readResponse(
+            id: fixture.request.id,
+            configurationKey: fixture.request.configurationKey,
+            requestToken: recovered.handle.requestToken,
+            profileIdentifier: nil
+        ) else { return XCTFail("Expected the stored result") }
+        XCTAssertEqual(response["result"] as? String, "signed")
+    }
+
+    func testReplayOnlyWaitsForClaimResolutionAndRecoversDroppedBroadcast() async throws {
+        let fixture = try makeFixture(id: 2)
+        let replay = try makeFixture(id: 2, replayOnly: true)
+        let original = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress,
+            profileIdentifier: nil
+        ))
+        let claim = try approvalClaim(await bridge.claim(handle: original.handle))
+        guard case .unavailable = await bridge.enqueue(
+            ingress: replay.ingress,
+            profileIdentifier: nil
+        ) else { return XCTFail("An uncommitted claim must keep admission retrying") }
+        let release = await bridge.release(claim: claim)
+        XCTAssertEqual(release, .persisted)
+        guard case .rejected = await bridge.enqueue(
+            ingress: replay.ingress,
+            profileIdentifier: nil
+        ) else { return XCTFail("A released claim must reject the unauthorized retry") }
+
+        let nextClaim = try approvalClaim(await bridge.claim(handle: original.handle))
+        let permit = try executionPermit(await bridge.begin(claim: nextClaim))
+        let checkpoint = await bridge.prepareBroadcast(
+            permit: permit,
+            recoveryResponse: ambiguousSubmissionResponse(
+                for: fixture.request,
+                transactionHash: "0x1234"
+            ),
+            authority: .ordinary
+        )
+        XCTAssertEqual(checkpoint, .persisted)
+        let broadcasting = try accepted(await bridge.enqueue(
+            ingress: replay.ingress,
+            profileIdentifier: nil
+        ))
+        XCTAssertEqual(broadcasting.handle, original.handle)
+        XCTAssertTrue(broadcasting.approvalRequired)
+        permit.releaseLease()
+
+        let recovered = try accepted(await bridge.enqueue(
+            ingress: replay.ingress,
+            profileIdentifier: nil
+        ))
+        XCTAssertEqual(recovered.handle, original.handle)
+        XCTAssertFalse(recovered.approvalRequired)
+        let response = try responseJSON(await bridge.readResponse(
+            id: fixture.request.id,
+            configurationKey: fixture.request.configurationKey,
+            requestToken: recovered.handle.requestToken,
+            profileIdentifier: nil
+        ))
+        XCTAssertEqual(
+            response["errorCode"] as? Int,
+            ProviderResponseError.transactionSubmissionUnknownCode
+        )
+    }
+
+    func testReplayOnlyFlagRequiresABoolean() throws {
+        let fixture = try makeFixture(id: 2)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: fixture.ingress.canonicalData
+        ) as? [String: Any])
+        for value: Any in [0, 1, "true", NSNull()] {
+            object["replayOnly"] = value
+            guard case .invalid = ExtensionBridge.dappIngressResult(
+                request: fixture.request,
+                rawObject: object
+            ) else { return XCTFail("Expected malformed recovery flag rejection") }
+        }
+    }
+
     func testNativeDeliveryReceiptIsIdempotentOwnedAndClearedAtCompletion() async throws {
         let fixture = try makeFixture(id: 82)
         let admission = try accepted(await bridge.enqueue(
@@ -4409,10 +4549,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         admissionDeadline: Date? = nil,
         message: String = "0x48656c6c6f",
         favicon: String = "",
-        revisions: [String: Int] = ["ethereum": 0, "solana": 0]
+        revisions: [String: Int] = ["ethereum": 0, "solana": 0],
+        replayOnly: Bool = false
     ) throws -> Fixture {
         let configurationKey = configurationKey ?? "https://\(host)"
-        let object: [String: Any] = [
+        var object: [String: Any] = [
             "id": id,
             "name": "signPersonalMessage",
             "provider": "ethereum",
@@ -4432,6 +4573,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
                 "object": ["data": message],
             ],
         ]
+        if replayOnly { object["replayOnly"] = true }
         let request = try XCTUnwrap(SafariRequest(json: object))
         guard case .accepted(let ingress) = ExtensionBridge.dappIngressResult(
             request: request,

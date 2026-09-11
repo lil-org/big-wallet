@@ -224,6 +224,16 @@ final class ExtensionRequestFileStore {
                       existing.requestFingerprint == ingress.fingerprint else {
                     return .rejected
                 }
+                if ingress.replayOnly {
+                    switch existing.state {
+                    case .pending:
+                        return .rejected
+                    case .claimed:
+                        return .unavailable
+                    case .broadcastPrepared, .completed:
+                        break
+                    }
+                }
                 let approvalRequired: Bool
                 if case .completed = existing.state {
                     approvalRequired = false
@@ -238,6 +248,8 @@ final class ExtensionRequestFileStore {
                     nativeDeliveryNonce: existing.nativeDeliveryNonce
                 )
             }
+
+            guard !ingress.replayOnly else { return .rejected }
 
             switch ExtensionBridge.admissionDeadlineDisposition(
                 ingress.request.admissionDeadline,
