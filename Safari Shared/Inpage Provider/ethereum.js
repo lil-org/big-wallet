@@ -36,6 +36,8 @@ const pushArrayNormally = Array.prototype.push;
 const rawListenersNormally = EventEmitter.prototype.rawListeners;
 const setWeakMapValueNormally = WeakMap.prototype.set;
 const spliceArrayNormally = Array.prototype.splice;
+const stringStartsWithNormally = String.prototype.startsWith;
+const stringToLowerCaseNormally = String.prototype.toLowerCase;
 const bigIntegerNormally = BigInt;
 const bigIntegerToStringNormally = BigInt.prototype.toString;
 const setTimeoutNormally = setTimeout;
@@ -694,13 +696,24 @@ function dispatchOperation(provider, record) {
                 transaction
             );
         }
-        case "wallet_switchEthereumChain": {
+        case "wallet_switchEthereumChain":
+        case "wallet_addEthereumChain": {
             const request = requireParameter(params, 0);
             if (!request || typeof request !== "object" ||
-                !validChainId(request.chainId)) {
+                typeof request.chainId !== "string" ||
+                !applyFunction(stringStartsWithNormally, request.chainId, ["0x"])) {
                 throw invalidParameters();
             }
-            if (request.chainId === state.chainId) {
+            request.chainId = applyFunction(
+                stringToLowerCaseNormally,
+                request.chainId,
+                []
+            );
+            if (!validChainId(request.chainId)) { throw invalidParameters(); }
+            const name = method === "wallet_switchEthereumChain"
+                ? "switchEthereumChain"
+                : "addEthereumChain";
+            if (name === "switchEthereumChain" && request.chainId === state.chainId) {
                 return settleResult(state, record, localAccounts(state));
             }
             record.metadata.requestedChainId = request.chainId;
@@ -708,22 +721,7 @@ function dispatchOperation(provider, record) {
                 provider,
                 state,
                 record,
-                "switchEthereumChain",
-                request
-            );
-        }
-        case "wallet_addEthereumChain": {
-            const request = requireParameter(params, 0);
-            if (!request || typeof request !== "object" ||
-                !validChainId(request.chainId)) {
-                throw invalidParameters();
-            }
-            record.metadata.requestedChainId = request.chainId;
-            return postWalletRequest(
-                provider,
-                state,
-                record,
-                "addEthereumChain",
+                name,
                 request
             );
         }

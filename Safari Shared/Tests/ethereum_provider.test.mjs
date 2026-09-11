@@ -1127,10 +1127,81 @@ test("Ethereum queued switches compare the loaded chain without granting account
     assert.equal(harness.provider.selectedAddress, null);
 });
 
-test("Ethereum rejects noncanonical chain IDs before wallet transport", async () => {
+test("Ethereum normalizes external chain IDs without mutating caller data", async () => {
+    for (const method of ["wallet_addEthereumChain", "wallet_switchEthereumChain"]) {
+        for (const chainId of ["0xA", "0xaB"]) {
+            const harness = ethereumHarness();
+            applyEthereumConfiguration(harness);
+            const input = Object.freeze({chainId, chainName: "Test chain"});
+            const pending = harness.provider.request({method, params: [input]});
+            const request = harness.requests[0];
+            assert.deepEqual(normalized(request.data), {
+                chainId: chainId.toLowerCase(),
+                chainName: input.chainName,
+            });
+            assert.equal(input.chainId, chainId);
+            harness.Ethereum.applyEnvelope(harness.provider, {
+                id: request.id,
+                kind: "result",
+                name: request.name,
+                result: [],
+            });
+            assert.deepEqual(normalized(await pending), []);
+            assert.equal(harness.provider.chainId, chainId.toLowerCase());
+        }
+    }
+});
+
+test("Ethereum normalizes uppercase IDs before comparing the current chain", async () => {
+    const harness = ethereumHarness();
+    applyEthereumConfiguration(harness, "", "0xa");
+    const result = await harness.provider.request({
+        method: "wallet_switchEthereumChain",
+        params: [{chainId: "0xA"}],
+    });
+    assert.deepEqual(normalized(result), []);
+    assert.equal(harness.requests.length, 0);
+    assert.equal(harness.provider.chainId, "0xa");
+});
+
+test("Ethereum chain requests ignore later String prototype changes", async () => {
+    for (const method of ["wallet_addEthereumChain", "wallet_switchEthereumChain"]) {
+        for (const name of ["startsWith", "toLowerCase"]) {
+            const harness = ethereumHarness();
+            applyEthereumConfiguration(harness);
+            const prototype = vm.runInContext("String.prototype", harness.context);
+            const original = prototype[name];
+            prototype[name] = name === "startsWith" ? () => false : () => "0x1";
+            let pending;
+            try {
+                pending = harness.provider.request({
+                    method,
+                    params: [{chainId: "0xA"}],
+                });
+                pending.catch(() => {});
+                assert.equal(harness.requests.length, 1);
+                assert.equal(harness.requests[0].data.chainId, "0xa");
+            } finally {
+                prototype[name] = original;
+            }
+            const request = harness.requests[0];
+            harness.Ethereum.applyEnvelope(harness.provider, {
+                id: request.id,
+                kind: "result",
+                name: request.name,
+                result: [],
+            });
+            assert.deepEqual(normalized(await pending), []);
+            assert.equal(harness.provider.chainId, "0xa");
+        }
+    }
+});
+
+test("Ethereum rejects invalid chain IDs before wallet transport", async () => {
     const invalidChainIds = [
-        "0xA",
+        "0XA",
         "0x01",
+        "0x0A",
         "0x0",
         "0x8000000000000000",
     ];
