@@ -477,6 +477,103 @@ final class AlchemyJWTProductionContractTests: XCTestCase {
         )
     }
 
+    func testMacOSReleaseValidatorAuthenticatesEmbeddedAmbientHelper() throws {
+        let validator = try Self.repositoryText(
+            at: "Scripts/assert_bundled_alchemy_jwt_request_proof_key.sh"
+        )
+        for requiredContract in [
+            "Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app",
+            "the macOS app must not contain legacy outer helper bundles",
+            "macos-helper-apps",
+            "the macOS app must contain exactly one helper app",
+            "org.lil.wallet.ambient",
+            "CFBundleIdentifier",
+            "LSUIElement",
+            "CFBundleExecutable",
+            "CFBundleShortVersionString",
+            "CFBundleVersion",
+            "codesign --verify --strict --deep",
+            "TeamIdentifier=",
+            "the Ambient helper signing team does not match the macOS app",
+        ] {
+            XCTAssertTrue(
+                validator.contains(requiredContract),
+                "The macOS validator is missing \(requiredContract)"
+            )
+        }
+    }
+
+    func testAmbientEmbedPhasePurgesOnlyKnownHelperBundleNames() throws {
+        let project = try Self.repositoryText(
+            at: "Wallet.xcodeproj/project.pbxproj"
+        )
+        let phase = try Self.projectObject(
+            commented: "Copy Embedded Ambient Agent",
+            in: project
+        )
+        let nativeTargets = try Self.projectSection(
+            named: "PBXNativeTarget",
+            in: project
+        )
+        let extensionTarget = try Self.projectObject(
+            commented: "Safari macOS",
+            in: nativeTargets
+        )
+        let appTarget = try Self.projectObject(
+            commented: "Big Wallet",
+            in: nativeTargets
+        )
+        XCTAssertEqual(
+            Self.objectReferenceIDs(
+                commented: "Copy Embedded Ambient Agent",
+                in: extensionTarget
+            ).count,
+            1
+        )
+        XCTAssertTrue(Self.objectReferenceIDs(
+            commented: "Copy Embedded Ambient Agent",
+            in: appTarget
+        ).isEmpty)
+        let cleanupPhase = try Self.projectObject(
+            commented: "Clean Legacy Ambient Helpers",
+            in: project
+        )
+        XCTAssertTrue(cleanupPhase.contains("cleanup-legacy"))
+        XCTAssertEqual(Self.objectReferenceIDs(
+            commented: "Clean Legacy Ambient Helpers",
+            in: appTarget
+        ).count, 1)
+        XCTAssertEqual(
+            Self.occurrenceCount(
+                of: "/bin/sh \\\"$PROJECT_DIR/Scripts/embed_ambient_helper.sh\\\"\\n",
+                in: phase
+            ),
+            1
+        )
+        let embedScript = try Self.repositoryText(
+            at: "Scripts/embed_ambient_helper.sh"
+        )
+        for requiredFragment in [
+            "set -eu",
+            "Safari macOS.appex/Contents",
+            "cleanup-legacy)",
+            "$helpers_directory/Big Wallet.app",
+            "$helpers_directory/Big Wallet Helper.app",
+            "$helpers_directory/Big Wallet Ambient.app",
+            "/bin/sh \"$PROJECT_DIR/Scripts/terminate_ambient_agents.sh\"",
+            "/usr/bin/ditto \"$source_app\" \"$destination_app\"",
+        ] {
+            XCTAssertTrue(
+                embedScript.contains(requiredFragment),
+                "The Ambient embed script is missing \(requiredFragment)"
+            )
+        }
+        XCTAssertFalse(
+            embedScript.contains("$helpers_directory/*"),
+            "The Ambient embed script must not delete arbitrary helper children"
+        )
+    }
+
     func testCommittedProofKeyFingerprintIsCanonical() throws {
         let fingerprintURL = Self.repositoryRoot.appendingPathComponent(
             "Scripts/alchemy_jwt_request_proof_key.sha256"

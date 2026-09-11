@@ -513,6 +513,11 @@ do
         "$repository_directory/$fixture_script" \
         "$publish_fixture_root/$fixture_script"
 done
+# Signature and entitlement checks have dedicated packaging tests.
+/usr/bin/perl -0pi -e '
+    s/(validate_mobile_entitlements\(\) \{\n)/$1    return 0\n/
+        or die "missing mobile signature validation fixture hook\n";
+' "$publish_fixture_root/Scripts/assert_bundled_alchemy_jwt_request_proof_key.sh"
 cp \
     "$repository_directory/Wallet.xcodeproj/project.pbxproj" \
     "$publish_fixture_root/Wallet.xcodeproj/project.pbxproj"
@@ -531,6 +536,9 @@ cp \
 cp \
     "$repository_directory/Safari macOS/Resources/manifest.json" \
     "$publish_fixture_root/Safari macOS/Resources/manifest.json"
+cp \
+    "$repository_directory/Safari Shared/Resources/bridge_wire.js" \
+    "$publish_fixture_root/Safari Shared/Resources/bridge_wire.js"
 cp \
     "$repository_directory/app-store-connect/export-options-app-store.plist" \
     "$publish_fixture_root/app-store-connect/export-options-app-store.plist"

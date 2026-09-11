@@ -99,7 +99,7 @@
         },
         {
           "name": "publish_preflight_ios",
-          "run": "Scripts/asc/publish_check.sh"
+          "run": "Scripts/asc/publish_check.sh IOS"
         },
         {
           "name": "upload_release_build_ios",
@@ -126,7 +126,7 @@
         },
         {
           "name": "publish_preflight_macos",
-          "run": "Scripts/asc/publish_check.sh"
+          "run": "Scripts/asc/publish_check.sh MAC_OS"
         },
         {
           "name": "upload_release_build_macos",
@@ -153,7 +153,7 @@
         },
         {
           "name": "publish_preflight_visionos",
-          "run": "Scripts/asc/publish_check.sh"
+          "run": "Scripts/asc/publish_check.sh VISION_OS"
         },
         {
           "name": "upload_release_build_visionos",
@@ -175,6 +175,10 @@
     "release": {
       "description": "Run iOS, macOS, then visionOS release workflows.",
       "steps": [
+        {
+          "name": "confirm_macos_app_sandbox_information",
+          "run": "source Scripts/asc/common.sh && validate_macos_app_sandbox_information_confirmation MAC_OS"
+        },
         {
           "workflow": "release_ios"
         },

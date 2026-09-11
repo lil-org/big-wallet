@@ -12,13 +12,15 @@ esac
 source "$_asc_entrypoint_directory/common.sh"
 unset _asc_entrypoint_source _asc_entrypoint_directory
 
+platform="${1:-${PLATFORM:-IOS}}"
+build_id="${2:-${BUILD_ID:-}}"
+validate_macos_app_sandbox_information_confirmation "$platform"
+
 require_cmd asc
 require_cmd curl
 require_cmd jq
 export ASC_TIMEOUT="${ASC_TIMEOUT:-120s}"
 
-platform="${1:-${PLATFORM:-IOS}}"
-build_id="${2:-${BUILD_ID:-}}"
 local_version="$(current_local_version)"
 build_number="$(current_local_build_number)"
 version="${VERSION:-$local_version}"

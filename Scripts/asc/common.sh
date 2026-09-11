@@ -52,6 +52,7 @@ ASC_TMP_DIR="${ASC_TMP_DIR:-$ASC_RUNTIME_ROOT/tmp}"
 ASC_REPORTS_DIR="${ASC_REPORTS_DIR:-$ASC_RUNTIME_ROOT/reports}"
 ASC_TEAM_ID="${ASC_TEAM_ID:-8DXC3N7E7P}"
 ASC_WORKFLOW_FILE="$REPO_ROOT/.asc/workflow.json"
+ASC_MACOS_APP_SANDBOX_FEEDBACK_ID_FILE="$REPO_ROOT/app-store-connect/macos-app-sandbox-feedback-id.txt"
 ALCHEMY_JWT_WORKER_DIR="$REPO_ROOT/Workers/alchemy-jwt"
 ALCHEMY_JWT_RECEIPTS_DIR="$ASC_REPORTS_DIR/validated-builds"
 ALCHEMY_JWT_PRELAUNCH_ANCHOR_VERSION="c5c74433-eb49-4998-979b-e78d17da74f8"
@@ -64,6 +65,8 @@ WEB_EXTENSION_MANIFESTS=(
   "Safari Shared/Resources/manifest.json"
   "Safari macOS/Resources/manifest.json"
 )
+WEB_EXTENSION_BUILD_VERSION_FILE="Safari Shared/Resources/bridge_wire.js"
+WEB_EXTENSION_GENERATED_FILE="Safari Shared/Resources/inpage.js"
 
 log() {
   printf '[asc] %s\n' "$*" >&2
@@ -72,6 +75,38 @@ log() {
 die() {
   printf '[asc] error: %s\n' "$*" >&2
   exit 1
+}
+
+tracked_macos_app_sandbox_feedback_id() {
+  local feedback_id
+
+  [[ -f "$ASC_MACOS_APP_SANDBOX_FEEDBACK_ID_FILE" &&
+      ! -L "$ASC_MACOS_APP_SANDBOX_FEEDBACK_ID_FILE" ]] \
+    || die "missing tracked macOS App Sandbox Feedback Assistant configuration: $ASC_MACOS_APP_SANDBOX_FEEDBACK_ID_FILE"
+  feedback_id="$(/usr/bin/perl -0ne '
+    exit 1 unless /\A([^\r\n]+)\n\z/;
+    print $1;
+  ' "$ASC_MACOS_APP_SANDBOX_FEEDBACK_ID_FILE")" \
+    || die "$ASC_MACOS_APP_SANDBOX_FEEDBACK_ID_FILE must contain exactly one newline-terminated value"
+  [[ "$feedback_id" != "PENDING" ]] \
+    || die "macOS release is blocked until the real Feedback Assistant ID replaces PENDING in $ASC_MACOS_APP_SANDBOX_FEEDBACK_ID_FILE"
+  [[ "$feedback_id" =~ ^FB[0-9]+$ ]] \
+    || die "$ASC_MACOS_APP_SANDBOX_FEEDBACK_ID_FILE must contain a reviewed Feedback Assistant ID in FB-number format"
+
+  printf '%s\n' "$feedback_id"
+}
+
+validate_macos_app_sandbox_information_confirmation() {
+  local platform="$1"
+  local expected_target="org.lil.wallet.ambient"
+  local expected_feedback_id
+
+  [[ "$platform" != "MAC_OS" ]] && return 0
+  expected_feedback_id="$(tracked_macos_app_sandbox_feedback_id)"
+  [[ "${ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED:-}" == "$expected_target" ]] \
+    || die "macOS release requires App Store Connect App Sandbox Information for the temporary Apple-events exception; confirm the exception targets $expected_target, then set ASC_MACOS_APP_SANDBOX_INFORMATION_CONFIRMED=$expected_target for this invocation"
+  [[ "${ASC_MACOS_APP_SANDBOX_FEEDBACK_ID:-}" == "$expected_feedback_id" ]] \
+    || die "macOS release requires the reviewed Feedback Assistant ID from $ASC_MACOS_APP_SANDBOX_FEEDBACK_ID_FILE; set ASC_MACOS_APP_SANDBOX_FEEDBACK_ID=$expected_feedback_id for this invocation"
 }
 
 alchemy_jwt_request_proof_key_fail() {
@@ -618,6 +653,40 @@ set_web_extension_manifest_versions() {
   done
 }
 
+web_extension_build_version() {
+  local version="$1"
+  local build_number="$2"
+  printf '%s+%s\n' "$version" "$build_number"
+}
+
+set_web_extension_build_version() {
+  local expected
+  expected="$(web_extension_build_version "$1" "$2")"
+
+  [[ -f "$WEB_EXTENSION_BUILD_VERSION_FILE" ]] || die \
+    "missing web extension build-version file: $WEB_EXTENSION_BUILD_VERSION_FILE"
+  BUILD_VERSION_VALUE="$expected" /usr/bin/perl -0pi -e '
+    my $replacement = qq{const BUILD_VERSION = "$ENV{BUILD_VERSION_VALUE}";};
+    my $count = s/const BUILD_VERSION = "[^"\n]*";/$replacement/g;
+    die "expected one BUILD_VERSION declaration in $ARGV\n" unless $count == 1;
+  ' "$WEB_EXTENSION_BUILD_VERSION_FILE" || die \
+    "could not update BUILD_VERSION in $WEB_EXTENSION_BUILD_VERSION_FILE"
+}
+
+validate_generated_web_extension_build_version() {
+  local expected
+  expected="$(web_extension_build_version "$1" "$2")"
+
+  [[ -f "$WEB_EXTENSION_GENERATED_FILE" ]] || die \
+    "missing generated web extension file: $WEB_EXTENSION_GENERATED_FILE"
+  GENERATED_BUILD_VERSION_VALUE="$expected" /usr/bin/perl -0ne '
+    my $needle = $ENV{GENERATED_BUILD_VERSION_VALUE};
+    my $count = () = /\Q$needle\E/g;
+    exit 1 unless $count == 1;
+  ' "$WEB_EXTENSION_GENERATED_FILE" || die \
+    "$WEB_EXTENSION_GENERATED_FILE must embed BUILD_VERSION=$expected exactly once"
+}
+
 sync_local_version_sources() {
   local version="$1"
   local build_number="$2"
@@ -626,6 +695,7 @@ sync_local_version_sources() {
   set_project_build_setting MARKETING_VERSION "$version"
   set_project_build_setting CURRENT_PROJECT_VERSION "$build_number"
   set_versioned_info_plist_placeholders
+  set_web_extension_build_version "$version" "$build_number"
 
   if [[ "$mode" == "version" ]]; then
     set_web_extension_manifest_versions "$version"
@@ -655,6 +725,8 @@ validate_local_version_sources() {
   local plist
   local manifest
   local manifest_version
+  local marker
+  local expected_marker
 
   require_single_project_build_setting MARKETING_VERSION "$version"
   require_single_project_build_setting CURRENT_PROJECT_VERSION "$build_number"
@@ -669,6 +741,18 @@ validate_local_version_sources() {
     [[ "$manifest_version" == "$version" ]] \
       || die "$manifest must set version=$version; found ${manifest_version:-missing}"
   done
+
+  expected_marker="$(web_extension_build_version "$version" "$build_number")"
+  [[ -f "$WEB_EXTENSION_BUILD_VERSION_FILE" ]] || die \
+    "missing web extension build-version file: $WEB_EXTENSION_BUILD_VERSION_FILE"
+  marker="$(/usr/bin/perl -0ne '
+    my @values = /const BUILD_VERSION = "([^"\n]*)";/g;
+    exit 1 unless @values == 1;
+    print $values[0];
+  ' "$WEB_EXTENSION_BUILD_VERSION_FILE")" || die \
+    "$WEB_EXTENSION_BUILD_VERSION_FILE must contain exactly one BUILD_VERSION declaration"
+  [[ "$marker" == "$expected_marker" ]] || die \
+    "$WEB_EXTENSION_BUILD_VERSION_FILE must set BUILD_VERSION=$expected_marker; found ${marker:-missing}"
 }
 
 target_version() {

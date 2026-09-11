@@ -56,6 +56,45 @@ printf '%s\n' "$valid_fingerprint" \
 validator="$fixture_scripts_directory/validate_alchemy_jwt_request_proof_key.sh"
 bundler="$fixture_scripts_directory/bundle_alchemy_jwt_request_proof_key.sh"
 artifact_validator="$fixture_scripts_directory/assert_bundled_alchemy_jwt_request_proof_key.sh"
+fixture_codesign="$test_root/codesign"
+printf '%s\n' \
+    '#!/bin/sh' \
+    'bundle=' \
+    'bundle_contents=' \
+    'entitlements=false' \
+    'for argument in "$@"; do' \
+    '    bundle=$argument' \
+    '    [ "$argument" = --entitlements ] && entitlements=true' \
+    'done' \
+    'if [ -d "$bundle/Contents" ]; then' \
+    '    bundle_contents="$bundle/Contents"' \
+    'else' \
+    '    bundle_contents="$bundle"' \
+    'fi' \
+    'case "${1:-}" in' \
+    '    --verify)' \
+    '        [ ! -e "$bundle_contents/InvalidSignature" ]' \
+    '        ;;' \
+    '    -d)' \
+    '        if [ "$entitlements" = true ]; then' \
+    '            entitlements_file="$bundle_contents/SignedEntitlements.plist"' \
+    '            [ -f "$entitlements_file" ] || exit 1' \
+    '            /bin/cat "$entitlements_file"' \
+    '            exit' \
+    '        fi' \
+    '        team_file="$bundle_contents/SigningTeam"' \
+    '        [ -f "$team_file" ] || exit 1' \
+    '        IFS= read -r team < "$team_file" || exit 1' \
+    '        [ -n "$team" ] || exit 1' \
+    '        printf "TeamIdentifier=%s\n" "$team" >&2' \
+    '        ;;' \
+    '    *) exit 64 ;;' \
+    'esac' \
+    > "$fixture_codesign"
+/bin/chmod 0755 "$fixture_codesign"
+FIXTURE_CODESIGN="$fixture_codesign" /usr/bin/perl -pi -e '
+    s{\Q/usr/bin/codesign\E}{$ENV{FIXTURE_CODESIGN}}g
+' "$artifact_validator"
 last_stdout=""
 last_stderr=""
 
@@ -578,6 +617,77 @@ invoke_artifact_validator() {
     esac
 }
 
+write_macos_entitlements() {
+    wme_bundle=$1
+    wme_identifier=$2
+    wme_role=$3
+    wme_plist="$wme_bundle/Contents/SignedEntitlements.plist"
+    /usr/bin/plutil -create xml1 "$wme_plist"
+    /usr/libexec/PlistBuddy \
+        -c "Add :com.apple.application-identifier string TESTTEAM.$wme_identifier" \
+        -c "Add :com.apple.developer.team-identifier string TESTTEAM" \
+        -c "Add :com.apple.security.app-sandbox bool true" \
+        -c "Add :com.apple.security.network.client bool true" \
+        -c "Add :com.apple.security.application-groups array" \
+        -c "Add :com.apple.security.application-groups:0 string TESTTEAM.group.org.lil.wallet" \
+        -c "Add :keychain-access-groups array" \
+        "$wme_plist"
+    case "$wme_role" in
+        cloudkit)
+            /usr/libexec/PlistBuddy \
+                -c "Add :keychain-access-groups:0 string TESTTEAM.org.lil.keychain" \
+                -c "Add :keychain-access-groups:1 string TESTTEAM.org.lil.wallet.rpc-auth" \
+                -c "Add :com.apple.developer.icloud-container-identifiers array" \
+                -c "Add :com.apple.developer.icloud-container-identifiers:0 string iCloud.org.lil.wallet" \
+                -c "Add :com.apple.developer.icloud-services array" \
+                -c "Add :com.apple.developer.icloud-services:0 string CloudKit" \
+                "$wme_plist"
+            ;;
+        safari)
+            /usr/libexec/PlistBuddy \
+                -c "Add :keychain-access-groups:0 string TESTTEAM.org.lil.wallet.rpc-auth" \
+                -c "Add :com.apple.security.temporary-exception.apple-events array" \
+                -c "Add :com.apple.security.temporary-exception.apple-events:0 string org.lil.wallet.ambient" \
+                "$wme_plist"
+            ;;
+        *) fail "invalid macOS entitlement fixture role $wme_role" ;;
+    esac
+}
+
+write_mobile_entitlements() {
+    wmobile_bundle=$1
+    wmobile_identifier=$2
+    wmobile_role=$3
+    wmobile_plist="$wmobile_bundle/SignedEntitlements.plist"
+    /usr/bin/plutil -create xml1 "$wmobile_plist"
+    /usr/libexec/PlistBuddy \
+        -c "Add :application-identifier string TESTTEAM.$wmobile_identifier" \
+        -c "Add :com.apple.developer.team-identifier string TESTTEAM" \
+        -c "Add :com.apple.security.application-groups array" \
+        -c "Add :com.apple.security.application-groups:0 string group.org.lil.wallet" \
+        -c "Add :keychain-access-groups array" \
+        "$wmobile_plist"
+    case "$wmobile_role" in
+        app)
+            /usr/libexec/PlistBuddy \
+                -c "Add :keychain-access-groups:0 string TESTTEAM.org.lil.keychain" \
+                -c "Add :keychain-access-groups:1 string TESTTEAM.org.lil.wallet.safari-approval" \
+                -c "Add :keychain-access-groups:2 string TESTTEAM.org.lil.wallet.rpc-auth" \
+                "$wmobile_plist"
+            ;;
+        safari)
+            /usr/libexec/PlistBuddy \
+                -c "Add :keychain-access-groups:0 string TESTTEAM.org.lil.wallet.safari-approval" \
+                -c "Add :keychain-access-groups:1 string TESTTEAM.org.lil.wallet.rpc-auth" \
+                "$wmobile_plist"
+            ;;
+        *)
+            fail "unknown mobile entitlement fixture role"
+            ;;
+    esac
+    printf '%s\n' TESTTEAM > "$wmobile_bundle/SigningTeam"
+}
+
 for executable in "$validator" "$bundler" "$artifact_validator"; do
     [ -x "$executable" ] || fail "$executable is not executable"
 done
@@ -968,6 +1078,8 @@ ios_artifact="$test_root/iOS release artifact"
 ios_app="$ios_artifact/Products/Applications/Big Wallet.app"
 ios_extension="$ios_app/PlugIns/Safari iOS.appex"
 /bin/mkdir -p "$ios_extension"
+write_mobile_entitlements "$ios_app" org.lil.wallet app
+write_mobile_entitlements "$ios_extension" org.lil.wallet.Safari safari
 printf '%s' "$valid_key" > "$ios_app/AlchemyJWTRequestProofKey"
 printf '%s' "$valid_key" > "$ios_extension/AlchemyJWTRequestProofKey"
 /bin/chmod 0644 \
@@ -979,6 +1091,51 @@ invoke_artifact_validator \
     IOS \
     "$ios_artifact" \
     "$valid_key_file"
+
+ios_source_keychain_artifact="$test_root/iOS extension source keychain group"
+/usr/bin/ditto "$ios_artifact" "$ios_source_keychain_artifact"
+/usr/libexec/PlistBuddy \
+    -c "Add :keychain-access-groups:2 string TESTTEAM.org.lil.keychain" \
+    "$ios_source_keychain_artifact/Products/Applications/Big Wallet.app/PlugIns/Safari iOS.appex/SignedEntitlements.plist"
+invoke_artifact_validator \
+    ios-extension-source-keychain-group failure IOS \
+    "$ios_source_keychain_artifact" "$valid_key_file"
+
+ios_missing_approval_artifact="$test_root/iOS extension missing approval group"
+/usr/bin/ditto "$ios_artifact" "$ios_missing_approval_artifact"
+/usr/libexec/PlistBuddy \
+    -c "Delete :keychain-access-groups:0" \
+    "$ios_missing_approval_artifact/Products/Applications/Big Wallet.app/PlugIns/Safari iOS.appex/SignedEntitlements.plist"
+invoke_artifact_validator \
+    ios-extension-missing-approval-group failure IOS \
+    "$ios_missing_approval_artifact" "$valid_key_file"
+
+ios_missing_rpc_artifact="$test_root/iOS extension missing RPC group"
+/usr/bin/ditto "$ios_artifact" "$ios_missing_rpc_artifact"
+/usr/libexec/PlistBuddy \
+    -c "Delete :keychain-access-groups:1" \
+    "$ios_missing_rpc_artifact/Products/Applications/Big Wallet.app/PlugIns/Safari iOS.appex/SignedEntitlements.plist"
+invoke_artifact_validator \
+    ios-extension-missing-rpc-group failure IOS \
+    "$ios_missing_rpc_artifact" "$valid_key_file"
+
+ios_extra_group_artifact="$test_root/iOS extension extra keychain group"
+/usr/bin/ditto "$ios_artifact" "$ios_extra_group_artifact"
+/usr/libexec/PlistBuddy \
+    -c "Add :keychain-access-groups:2 string TESTTEAM.org.lil.wallet.unexpected" \
+    "$ios_extra_group_artifact/Products/Applications/Big Wallet.app/PlugIns/Safari iOS.appex/SignedEntitlements.plist"
+invoke_artifact_validator \
+    ios-extension-extra-keychain-group failure IOS \
+    "$ios_extra_group_artifact" "$valid_key_file"
+
+ios_host_missing_source_artifact="$test_root/iOS host missing source keychain group"
+/usr/bin/ditto "$ios_artifact" "$ios_host_missing_source_artifact"
+/usr/libexec/PlistBuddy \
+    -c "Delete :keychain-access-groups:0" \
+    "$ios_host_missing_source_artifact/Products/Applications/Big Wallet.app/SignedEntitlements.plist"
+invoke_artifact_validator \
+    ios-host-missing-source-keychain-group failure IOS \
+    "$ios_host_missing_source_artifact" "$valid_key_file"
 
 /bin/chmod 0600 "$ios_extension/AlchemyJWTRequestProofKey"
 invoke_artifact_validator \
@@ -1083,6 +1240,8 @@ vision_artifact="$test_root/visionOS release artifact"
 vision_app="$vision_artifact/Products/Applications/Big Wallet.app"
 vision_extension="$vision_app/PlugIns/Safari visionOS.appex"
 /bin/mkdir -p "$vision_extension"
+write_mobile_entitlements "$vision_app" org.lil.wallet app
+write_mobile_entitlements "$vision_extension" org.lil.wallet.Safari safari
 printf '%s' "$valid_key" > "$vision_app/AlchemyJWTRequestProofKey"
 printf '%s' "$valid_key" > "$vision_extension/AlchemyJWTRequestProofKey"
 /bin/chmod 0644 \
@@ -1095,14 +1254,76 @@ invoke_artifact_validator \
     "$vision_artifact" \
     "$valid_key_file"
 
+vision_source_keychain_artifact="$test_root/visionOS extension source keychain group"
+/usr/bin/ditto "$vision_artifact" "$vision_source_keychain_artifact"
+/usr/libexec/PlistBuddy \
+    -c "Add :keychain-access-groups:2 string TESTTEAM.org.lil.keychain" \
+    "$vision_source_keychain_artifact/Products/Applications/Big Wallet.app/PlugIns/Safari visionOS.appex/SignedEntitlements.plist"
+invoke_artifact_validator \
+    visionos-extension-source-keychain-group failure VISION_OS \
+    "$vision_source_keychain_artifact" "$valid_key_file"
+
+vision_host_missing_approval_artifact="$test_root/visionOS host missing approval group"
+/usr/bin/ditto "$vision_artifact" "$vision_host_missing_approval_artifact"
+/usr/libexec/PlistBuddy \
+    -c "Delete :keychain-access-groups:1" \
+    "$vision_host_missing_approval_artifact/Products/Applications/Big Wallet.app/SignedEntitlements.plist"
+invoke_artifact_validator \
+    visionos-host-missing-approval-group failure VISION_OS \
+    "$vision_host_missing_approval_artifact" "$valid_key_file"
+
 mac_artifact="$test_root/macOS release artifact"
 mac_app="$mac_artifact/Products/Applications/Big Wallet.app"
 mac_extension="$mac_app/Contents/PlugIns/Safari macOS.appex"
 ambient_app="$mac_app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app"
 /bin/mkdir -p \
     "$mac_app/Contents/Resources" \
+    "$mac_app/Contents/MacOS" \
     "$mac_extension/Contents/Resources" \
-    "$ambient_app/Contents/Resources"
+    "$ambient_app/Contents/Resources" \
+    "$ambient_app/Contents/MacOS"
+/bin/cp \
+    "$repository_directory/App macOS/Info.plist" \
+    "$mac_app/Contents/Info.plist"
+/usr/bin/plutil -replace CFBundleIdentifier -string org.lil.wallet \
+    "$mac_app/Contents/Info.plist"
+/usr/bin/plutil -replace CFBundleExecutable -string "Big Wallet" \
+    "$mac_app/Contents/Info.plist"
+/usr/bin/plutil -replace CFBundlePackageType -string APPL \
+    "$mac_app/Contents/Info.plist"
+/usr/bin/plutil -replace CFBundleShortVersionString -string 1.0.99 \
+    "$mac_app/Contents/Info.plist"
+/usr/bin/plutil -replace CFBundleVersion -string 148 \
+    "$mac_app/Contents/Info.plist"
+/bin/cp \
+    "$repository_directory/Big Wallet Ambient/Info.plist" \
+    "$ambient_app/Contents/Info.plist"
+/usr/bin/plutil -replace CFBundleIdentifier -string org.lil.wallet.ambient \
+    "$ambient_app/Contents/Info.plist"
+/usr/bin/plutil -replace CFBundleExecutable -string "Big Wallet" \
+    "$ambient_app/Contents/Info.plist"
+/usr/bin/plutil -replace CFBundlePackageType -string APPL \
+    "$ambient_app/Contents/Info.plist"
+/usr/bin/plutil -replace CFBundleShortVersionString -string 1.0.99 \
+    "$ambient_app/Contents/Info.plist"
+/usr/bin/plutil -replace CFBundleVersion -string 148 \
+    "$ambient_app/Contents/Info.plist"
+/bin/cp \
+    "$repository_directory/Safari macOS/Info.plist" \
+    "$mac_extension/Contents/Info.plist"
+/usr/bin/plutil -insert CFBundleIdentifier -string org.lil.wallet.Safari \
+    "$mac_extension/Contents/Info.plist"
+/bin/cp /usr/bin/true "$mac_app/Contents/MacOS/Big Wallet"
+/bin/cp /usr/bin/true "$ambient_app/Contents/MacOS/Big Wallet"
+/bin/chmod 0755 \
+    "$mac_app/Contents/MacOS/Big Wallet" \
+    "$ambient_app/Contents/MacOS/Big Wallet"
+printf '%s\n' TESTTEAM > "$mac_app/Contents/SigningTeam"
+printf '%s\n' TESTTEAM > "$ambient_app/Contents/SigningTeam"
+printf '%s\n' TESTTEAM > "$mac_extension/Contents/SigningTeam"
+write_macos_entitlements "$mac_app" org.lil.wallet cloudkit
+write_macos_entitlements "$ambient_app" org.lil.wallet.ambient cloudkit
+write_macos_entitlements "$mac_extension" org.lil.wallet.Safari safari
 printf '%s' "$valid_key" \
     > "$mac_app/Contents/Resources/AlchemyJWTRequestProofKey"
 printf '%s' "$valid_key" \
@@ -1120,25 +1341,92 @@ invoke_artifact_validator \
     "$mac_artifact" \
     "$valid_key_file"
 
+empty_outer_helpers_artifact="$test_root/macOS empty outer Helpers"
+/usr/bin/ditto "$mac_artifact" "$empty_outer_helpers_artifact"
+/bin/mkdir "$empty_outer_helpers_artifact/Products/Applications/Big Wallet.app/Contents/Helpers"
+invoke_artifact_validator \
+    macos-empty-outer-helpers success MAC_OS \
+    "$empty_outer_helpers_artifact" "$valid_key_file"
+
+legacy_index=0
+for legacy_name in "Big Wallet.app" "Big Wallet Helper.app" "Big Wallet Ambient.app"; do
+    legacy_index=$((legacy_index + 1))
+    outer_helper_artifact="$test_root/macOS outer helper $legacy_index"
+    /usr/bin/ditto "$mac_artifact" "$outer_helper_artifact"
+    /bin/mkdir -p "$outer_helper_artifact/Products/Applications/Big Wallet.app/Contents/Helpers/$legacy_name"
+    invoke_artifact_validator \
+        "macos-stale-outer-helper-$legacy_index" failure MAC_OS \
+        "$outer_helper_artifact" "$valid_key_file"
+done
+
+missing_sandbox_artifact="$test_root/macOS missing app sandbox"
+/usr/bin/ditto "$mac_artifact" "$missing_sandbox_artifact"
+/usr/libexec/PlistBuddy \
+    -c "Delete :com.apple.security.app-sandbox" \
+    "$missing_sandbox_artifact/Products/Applications/Big Wallet.app/Contents/SignedEntitlements.plist"
+invoke_artifact_validator \
+    macos-missing-app-sandbox failure MAC_OS \
+    "$missing_sandbox_artifact" "$valid_key_file"
+
+wrong_app_group_artifact="$test_root/macOS wrong helper app group"
+/usr/bin/ditto "$mac_artifact" "$wrong_app_group_artifact"
+/usr/libexec/PlistBuddy \
+    -c "Set :com.apple.security.application-groups:0 TESTTEAM.group.org.lil.wrong" \
+    "$wrong_app_group_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app/Contents/SignedEntitlements.plist"
+invoke_artifact_validator \
+    macos-wrong-helper-app-group failure MAC_OS \
+    "$wrong_app_group_artifact" "$valid_key_file"
+
+missing_keychain_group_artifact="$test_root/macOS missing extension keychain group"
+/usr/bin/ditto "$mac_artifact" "$missing_keychain_group_artifact"
+/usr/libexec/PlistBuddy \
+    -c "Delete :keychain-access-groups:0" \
+    "$missing_keychain_group_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/SignedEntitlements.plist"
+invoke_artifact_validator \
+    macos-missing-extension-keychain-group failure MAC_OS \
+    "$missing_keychain_group_artifact" "$valid_key_file"
+
+source_keychain_group_artifact="$test_root/macOS extension source keychain group"
+/usr/bin/ditto "$mac_artifact" "$source_keychain_group_artifact"
+/usr/libexec/PlistBuddy \
+    -c "Add :keychain-access-groups:1 string TESTTEAM.org.lil.keychain" \
+    "$source_keychain_group_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/SignedEntitlements.plist"
+invoke_artifact_validator \
+    macos-extension-source-keychain-group failure MAC_OS \
+    "$source_keychain_group_artifact" "$valid_key_file"
+
+wrong_apple_events_artifact="$test_root/macOS wrong Apple-events target"
+/usr/bin/ditto "$mac_artifact" "$wrong_apple_events_artifact"
+/usr/libexec/PlistBuddy \
+    -c "Set :com.apple.security.temporary-exception.apple-events:0 org.lil.wallet" \
+    "$wrong_apple_events_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/SignedEntitlements.plist"
+invoke_artifact_validator \
+    macos-wrong-apple-events-target failure MAC_OS \
+    "$wrong_apple_events_artifact" "$valid_key_file"
+
+extra_apple_events_artifact="$test_root/macOS extra Apple-events target"
+/usr/bin/ditto "$mac_artifact" "$extra_apple_events_artifact"
+/usr/libexec/PlistBuddy \
+    -c "Add :com.apple.security.temporary-exception.apple-events:1 string com.apple.Safari" \
+    "$extra_apple_events_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/SignedEntitlements.plist"
+invoke_artifact_validator \
+    macos-extra-apple-events-target failure MAC_OS \
+    "$extra_apple_events_artifact" "$valid_key_file"
+
+misplaced_apple_events_artifact="$test_root/macOS misplaced Apple-events exception"
+/usr/bin/ditto "$mac_artifact" "$misplaced_apple_events_artifact"
+/usr/libexec/PlistBuddy \
+    -c "Add :com.apple.security.temporary-exception.apple-events array" \
+    -c "Add :com.apple.security.temporary-exception.apple-events:0 string org.lil.wallet.ambient" \
+    "$misplaced_apple_events_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app/Contents/SignedEntitlements.plist"
+invoke_artifact_validator \
+    macos-helper-apple-events-exception failure MAC_OS \
+    "$misplaced_apple_events_artifact" "$valid_key_file"
+
 mac_pkg_source="$test_root/macOS pkg source"
 mac_pkg="$test_root/macOS release.pkg"
 /bin/mkdir -p "$mac_pkg_source"
 /usr/bin/ditto "$mac_app" "$mac_pkg_source/Big Wallet.app"
-/bin/cp \
-    "$repository_directory/App macOS/Info.plist" \
-    "$mac_pkg_source/Big Wallet.app/Contents/Info.plist"
-/usr/bin/plutil -replace CFBundleIdentifier \
-    -string org.lil.big-wallet.proof-packaging-test \
-    "$mac_pkg_source/Big Wallet.app/Contents/Info.plist"
-/usr/bin/plutil -replace CFBundlePackageType \
-    -string APPL \
-    "$mac_pkg_source/Big Wallet.app/Contents/Info.plist"
-/usr/bin/plutil -replace CFBundleShortVersionString \
-    -string 1.0 \
-    "$mac_pkg_source/Big Wallet.app/Contents/Info.plist"
-/usr/bin/plutil -replace CFBundleVersion \
-    -string 1 \
-    "$mac_pkg_source/Big Wallet.app/Contents/Info.plist"
 /usr/bin/productbuild \
     --component "$mac_pkg_source/Big Wallet.app" /Applications \
     "$mac_pkg" >/dev/null
@@ -1148,6 +1436,131 @@ invoke_artifact_validator \
     MAC_OS \
     "$mac_pkg" \
     "$valid_key_file"
+
+missing_info_artifact="$test_root/macOS missing helper Info"
+/usr/bin/ditto "$mac_artifact" "$missing_info_artifact"
+/bin/rm "$missing_info_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app/Contents/Info.plist"
+invoke_artifact_validator \
+    macos-missing-helper-info failure MAC_OS \
+    "$missing_info_artifact" "$valid_key_file"
+
+wrong_identifier_artifact="$test_root/macOS wrong helper identifier"
+/usr/bin/ditto "$mac_artifact" "$wrong_identifier_artifact"
+/usr/bin/plutil -replace CFBundleIdentifier -string org.lil.wallet.wrong \
+    "$wrong_identifier_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app/Contents/Info.plist"
+invoke_artifact_validator \
+    macos-wrong-helper-identifier failure MAC_OS \
+    "$wrong_identifier_artifact" "$valid_key_file"
+
+non_agent_artifact="$test_root/macOS helper not UI element"
+/usr/bin/ditto "$mac_artifact" "$non_agent_artifact"
+/usr/bin/plutil -replace LSUIElement -bool false \
+    "$non_agent_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app/Contents/Info.plist"
+invoke_artifact_validator \
+    macos-helper-not-ui-element failure MAC_OS \
+    "$non_agent_artifact" "$valid_key_file"
+
+missing_executable_artifact="$test_root/macOS missing helper executable"
+/usr/bin/ditto "$mac_artifact" "$missing_executable_artifact"
+/bin/rm "$missing_executable_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app/Contents/MacOS/Big Wallet"
+invoke_artifact_validator \
+    macos-missing-helper-executable failure MAC_OS \
+    "$missing_executable_artifact" "$valid_key_file"
+
+version_mismatch_artifact="$test_root/macOS helper version mismatch"
+/usr/bin/ditto "$mac_artifact" "$version_mismatch_artifact"
+/usr/bin/plutil -replace CFBundleShortVersionString -string 1.0.98 \
+    "$version_mismatch_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app/Contents/Info.plist"
+invoke_artifact_validator \
+    macos-helper-version-mismatch failure MAC_OS \
+    "$version_mismatch_artifact" "$valid_key_file"
+
+build_mismatch_artifact="$test_root/macOS helper build mismatch"
+/usr/bin/ditto "$mac_artifact" "$build_mismatch_artifact"
+/usr/bin/plutil -replace CFBundleVersion -string 147 \
+    "$build_mismatch_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app/Contents/Info.plist"
+invoke_artifact_validator \
+    macos-helper-build-mismatch failure MAC_OS \
+    "$build_mismatch_artifact" "$valid_key_file"
+
+invalid_signature_artifact="$test_root/macOS invalid helper signature"
+/usr/bin/ditto "$mac_artifact" "$invalid_signature_artifact"
+/usr/bin/touch "$invalid_signature_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app/Contents/InvalidSignature"
+invoke_artifact_validator \
+    macos-invalid-helper-signature failure MAC_OS \
+    "$invalid_signature_artifact" "$valid_key_file"
+
+team_mismatch_artifact="$test_root/macOS helper team mismatch"
+/usr/bin/ditto "$mac_artifact" "$team_mismatch_artifact"
+printf '%s\n' OTHERTEAM \
+    > "$team_mismatch_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app/Contents/SigningTeam"
+invoke_artifact_validator \
+    macos-helper-team-mismatch failure MAC_OS \
+    "$team_mismatch_artifact" "$valid_key_file"
+
+legacy_helper_artifact="$test_root/macOS legacy Helper name"
+/usr/bin/ditto "$mac_artifact" "$legacy_helper_artifact"
+/bin/mv \
+    "$legacy_helper_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app" \
+    "$legacy_helper_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet Helper.app"
+invoke_artifact_validator \
+    macos-legacy-helper-name failure MAC_OS \
+    "$legacy_helper_artifact" "$valid_key_file"
+
+legacy_ambient_artifact="$test_root/macOS legacy Ambient name"
+/usr/bin/ditto "$mac_artifact" "$legacy_ambient_artifact"
+/bin/mv \
+    "$legacy_ambient_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app" \
+    "$legacy_ambient_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet Ambient.app"
+invoke_artifact_validator \
+    macos-legacy-ambient-name failure MAC_OS \
+    "$legacy_ambient_artifact" "$valid_key_file"
+
+unexpected_helper_artifact="$test_root/macOS unexpected helper"
+/usr/bin/ditto "$mac_artifact" "$unexpected_helper_artifact"
+/bin/mkdir \
+    "$unexpected_helper_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Unexpected.app"
+invoke_artifact_validator \
+    macos-unexpected-helper-without-proof failure MAC_OS \
+    "$unexpected_helper_artifact" "$valid_key_file"
+
+nested_helper_artifact="$test_root/macOS nested unexpected helper"
+/usr/bin/ditto "$mac_artifact" "$nested_helper_artifact"
+/bin/mkdir -p \
+    "$nested_helper_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Nested/Unexpected.app"
+invoke_artifact_validator \
+    macos-nested-unexpected-helper failure MAC_OS \
+    "$nested_helper_artifact" "$valid_key_file"
+
+nested_symlink_artifact="$test_root/macOS nested helper symlink"
+/usr/bin/ditto "$mac_artifact" "$nested_symlink_artifact"
+nested_symlink_target="$nested_symlink_artifact/helper-target"
+/bin/mkdir -p "$nested_symlink_target/Unexpected.app"
+/bin/ln -s "$nested_symlink_target" \
+    "$nested_symlink_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Nested"
+invoke_artifact_validator \
+    macos-nested-helper-symlink failure MAC_OS \
+    "$nested_symlink_artifact" "$valid_key_file"
+
+multiple_helpers_artifact="$test_root/macOS multiple helpers"
+/usr/bin/ditto "$mac_artifact" "$multiple_helpers_artifact"
+/usr/bin/ditto \
+    "$multiple_helpers_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app" \
+    "$multiple_helpers_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet Helper.app"
+invoke_artifact_validator \
+    macos-multiple-helper-apps failure MAC_OS \
+    "$multiple_helpers_artifact" "$valid_key_file"
+
+symlink_helper_artifact="$test_root/macOS symlink helper"
+/usr/bin/ditto "$mac_artifact" "$symlink_helper_artifact"
+/bin/mv \
+    "$symlink_helper_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app" \
+    "$symlink_helper_artifact/helper-target"
+/bin/ln -s "$symlink_helper_artifact/helper-target" \
+    "$symlink_helper_artifact/Products/Applications/Big Wallet.app/Contents/PlugIns/Safari macOS.appex/Contents/Helpers/Big Wallet.app"
+invoke_artifact_validator \
+    macos-symlink-helper failure MAC_OS \
+    "$symlink_helper_artifact" "$valid_key_file"
 
 /bin/ln -s "$valid_key_file" "$mac_artifact/UnexpectedProofLink"
 invoke_artifact_validator \
