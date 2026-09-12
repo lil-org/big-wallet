@@ -6,39 +6,24 @@ export const walletName = "Big Wallet";
 export const walletStandardRegisterEvent = "wallet-standard:register-wallet";
 
 export function makeWalletStandardRegistrationCallback({
-    isActive,
     onError,
-    registeredHosts = new WeakSet,
-    registrationDisposers = new Set,
     wallet,
 }) {
-    let active = true;
-    const callback = registration => {
-        if (!active || !isActive() || !registration ||
+    const registeredHosts = new WeakSet;
+    return registration => {
+        if (!registration ||
             typeof registration.register !== "function" ||
             registeredHosts.has(registration)) {
             return;
         }
         registeredHosts.add(registration);
         try {
-            const unregister = registration.register(wallet);
-            if (typeof unregister === "function") {
-                registrationDisposers.add(unregister);
-            }
+            registration.register(wallet);
         } catch (error) {
             registeredHosts.delete(registration);
             onError?.(error);
         }
     };
-    const deactivate = () => {
-        if (!active) { return; }
-        active = false;
-        for (const unregister of registrationDisposers) {
-            try { unregister(); } catch {}
-        }
-        registrationDisposers.clear();
-    };
-    return {callback, deactivate};
 }
 
 export function dispatchWalletStandardRegistrationEvent(callback, onError) {

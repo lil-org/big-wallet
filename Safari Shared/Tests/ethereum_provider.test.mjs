@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -43,6 +44,10 @@ const ethereumSource = bundle("ethereum-harness.js", "cjs", `
 const solanaSource = bundle("solana.js");
 const stableFacadesSource = bundle("stable_facades.js");
 const inpageSource = bundle("index.js", "iife");
+const previousStableFacadesSource = readFileSync(
+    new URL("./fixtures/stable_facades_v2.cjs", import.meta.url),
+    "utf8"
+);
 
 class HarnessEvent {
     constructor(type, options = {}) {
@@ -95,6 +100,7 @@ function ethereumHarness(initialState = null) {
     const disconnects = [];
     let current = true;
     let rpcObserver = null;
+    let requestObserver = null;
     const transport = {
         isCurrent() { return current; },
         postDisconnect(message) {
@@ -103,6 +109,7 @@ function ethereumHarness(initialState = null) {
         },
         postRequest(message) {
             requests.push(message);
+            requestObserver?.(message);
             return current;
         },
         postRPC(message, generation) {
@@ -140,6 +147,7 @@ function ethereumHarness(initialState = null) {
         rpc,
         setCurrent(value) { current = value; },
         setRPCObserver(value) { rpcObserver = value; },
+        setRequestObserver(value) { requestObserver = value; },
     };
 }
 
@@ -775,6 +783,175 @@ test("Ethereum returns faithful native JSON object shapes", async () => {
     const result = await request;
     assert.deepEqual(Object.getOwnPropertyNames(result), ["number"]);
     assert.equal(Object.hasOwn(result, "toJSON"), false);
+});
+
+test("queued Ethereum wallet payloads retain caller JSON semantics and owned data", async () => {
+    const harness = ethereumHarness();
+    let serializationCalls = 0;
+    const boxed = new Number(3);
+    boxed.valueOf = () => 4;
+    const transaction = {
+        value: "0x1",
+        boxed,
+        custom: {toJSON() { serializationCalls += 1; return {value: 5}; }},
+        date: new Date("2026-08-23T00:00:00.000Z"),
+        omitted: undefined,
+        sparse: [, undefined, 3],
+        toJSON: "literal",
+        ["__proto__"]: {value: 6},
+    };
+    const request = harness.provider.request({
+        method: "eth_sendTransaction",
+        params: [transaction],
+    });
+    transaction.value = "0xff";
+    transaction.custom.toJSON = () => { throw new Error("Caller reread"); };
+    transaction.sparse[2] = 9;
+    const objectPrototype = vm.runInContext("Object.prototype", harness.context);
+    const arrayPrototype = vm.runInContext("Array.prototype", harness.context);
+    objectPrototype.toJSON = () => { throw new Error("Object prototype called"); };
+    arrayPrototype.toJSON = () => { throw new Error("Array prototype called"); };
+    try {
+        applyEthereumConfiguration(harness);
+        assert.equal(serializationCalls, 1);
+        assert.deepEqual(normalized(harness.requests[0].data), {
+            value: "0x1",
+            boxed: 4,
+            custom: {value: 5},
+            date: "2026-08-23T00:00:00.000Z",
+            sparse: [null, null, 3],
+            toJSON: "literal",
+            ["__proto__"]: {value: 6},
+        });
+    } finally {
+        delete objectPrototype.toJSON;
+        delete arrayPrototype.toJSON;
+    }
+    harness.applyEnvelope({
+        id: harness.requests[0].id,
+        kind: "result",
+        name: "signTransaction",
+        result: "0xhash",
+    });
+    assert.equal(await request, "0xhash");
+
+    const cycle = {};
+    cycle.self = cycle;
+    for (const invalid of [cycle, {value: 1n}]) {
+        await assert.rejects(harness.provider.request({
+            method: "eth_sendTransaction",
+            params: [invalid],
+        }), error => error.code === -32602);
+    }
+    assert.equal(harness.requests.length, 1);
+});
+
+test("Ethereum wallet dispatch tolerates synchronous settlement and retirement", async () => {
+    const harness = ethereumHarness();
+    applyEthereumConfiguration(harness);
+    let settlements = 0;
+    harness.setRequestObserver(message => {
+        harness.applyEnvelope({
+            id: message.id,
+            kind: "result",
+            name: message.name,
+            result: "0xhash",
+        });
+        harness.retire(new Error("Replaced"));
+    });
+    const request = harness.provider.request({
+        method: "eth_sendTransaction",
+        params: [{value: "0x1"}],
+    }).then(value => { settlements += 1; return value; });
+    assert.equal(await request, "0xhash");
+    assert.equal(settlements, 1);
+    assert.equal(harness.requests.length, 1);
+    assert.equal(harness.provider.selectedAddress, null);
+});
+
+test("Ethereum transaction values cannot be rewritten by inherited descriptor getters", async () => {
+    const harness = ethereumHarness();
+    applyEthereumConfiguration(harness);
+    const prototype = vm.runInContext("Object.prototype", harness.context);
+    let calls = 0;
+    Object.defineProperty(prototype, "configurable", {
+        configurable: true,
+        get() {
+            calls += 1;
+            if (this.value === "0x1") { this.value = "0x2"; }
+            return false;
+        },
+    });
+    let pending;
+    try {
+        pending = harness.provider.request({
+            method: "eth_sendTransaction",
+            params: [{value: "0x1"}],
+        });
+        assert.equal(structuredClone(harness.requests[0].data).value, "0x1");
+        assert.equal(calls, 0);
+    } finally {
+        delete prototype.configurable;
+    }
+    harness.applyEnvelope({
+        id: harness.requests[0].id,
+        kind: "result",
+        name: "signTransaction",
+        result: "0xhash",
+    });
+    assert.equal(await pending, "0xhash");
+});
+
+test("Ethereum chain request arrays retain their original wire shape", async () => {
+    for (const method of ["wallet_addEthereumChain", "wallet_switchEthereumChain"]) {
+        const harness = ethereumHarness();
+        const pending = harness.provider.request({method, params: [[]]});
+        const rejected = assert.rejects(pending, error => error.code === -32603);
+        const prototype = vm.runInContext("Array.prototype", harness.context);
+        prototype.chainId = "0x2";
+        try {
+            applyEthereumConfiguration(harness);
+            assert.deepEqual(structuredClone(harness.requests[0].data), []);
+        } finally {
+            delete prototype.chainId;
+        }
+        harness.applyEnvelope({
+            id: harness.requests[0].id,
+            kind: "error",
+            name: harness.requests[0].name,
+            error: {code: -32603, message: "Invalid chain request"},
+        });
+        await rejected;
+    }
+});
+
+test("Ethereum personal signing snapshots data after buffer conversion hooks", async () => {
+    const harness = ethereumHarness();
+    const pending = harness.provider.request({
+        method: "personal_sign",
+        params: [{type: "Buffer", data: [65]}],
+    });
+    const prototype = vm.runInContext("Object.prototype", harness.context);
+    const original = prototype.valueOf;
+    prototype.valueOf = function () {
+        if (this.type === "Buffer") { this.extra = () => {}; }
+        return original.call(this);
+    };
+    try {
+        applyEthereumConfiguration(harness);
+        assert.deepEqual(structuredClone(harness.requests[0].data), {
+            data: {type: "Buffer", data: [65]},
+        });
+    } finally {
+        prototype.valueOf = original;
+    }
+    harness.applyEnvelope({
+        id: harness.requests[0].id,
+        kind: "result",
+        name: "signPersonalMessage",
+        result: "0xsignature",
+    });
+    assert.equal(await pending, "0xsignature");
 });
 
 test("Ethereum emits authoritative deltas from copied state", () => {
@@ -2271,6 +2448,235 @@ test("Solana accepts raw ArrayBuffer messages", async () => {
     assert.equal((await signing).signature.length, 64);
 });
 
+test("queued Solana generated payloads reuse normalized data without extra hooks", async () => {
+    const cases = [
+        {method: "signTransaction", params: {transaction: legacyTransaction(1).transaction}, expected: {message: "2"}},
+        {method: "signTransaction", params: {message: "2"}, expected: {message: "2"}},
+        {method: "signAllTransactions", params: {transactions: [legacyTransaction(1).transaction]}, expected: {messages: ["2"]}},
+        {method: "signAllTransactions", params: {messages: ["2"]}, expected: {messages: ["2"]}},
+        {method: "signAndSendTransaction", params: {transaction: "2", options: {skipPreflight: false}}, expected: {transaction: "2", options: {skipPreflight: false}}},
+    ];
+    for (const {method, params, expected} of cases) {
+        const authorization = {
+            accountRevision: 1,
+            isConnected: true,
+            publicKey: firstSolanaKey,
+            solanaAuthorizationEpoch: 1,
+        };
+        const harness = solanaHarness(authorization);
+        const pending = harness.provider.request({method, params});
+        const rejected = assert.rejects(pending, error => error.code === 4001);
+        if (params.options) { params.options.skipPreflight = true; }
+        if (params.messages) { params.messages[0] = "3"; }
+        const objectPrototype = vm.runInContext("Object.prototype", harness.context);
+        const arrayPrototype = vm.runInContext("Array.prototype", harness.context);
+        let objectCalls = 0;
+        objectPrototype.toJSON = function () { objectCalls += 1; return this; };
+        arrayPrototype.toJSON = () => { throw new Error("Array prototype called"); };
+        try {
+            applySolanaConfiguration(harness, authorization);
+            assert.equal(harness.requests.length, 1, method);
+            assert.deepEqual(normalized(harness.requests[0].body.object.params), expected);
+            assert.equal(objectCalls, 1, "Only the final wire envelope uses its JSON hook");
+        } finally {
+            delete objectPrototype.toJSON;
+            delete arrayPrototype.toJSON;
+        }
+        harness.Solana.applyEnvelope(harness.provider, {
+            id: harness.requests[0].id,
+            kind: "error",
+            name: method,
+            error: {code: 4001, message: "Canceled"},
+        });
+        await rejected;
+    }
+});
+
+test("Solana send options remain private when generated fields have inherited setters", async () => {
+    for (const field of ["transaction", "message", "options"]) {
+        const authorization = {
+            accountRevision: 1,
+            isConnected: true,
+            publicKey: firstSolanaKey,
+            solanaAuthorizationEpoch: 1,
+        };
+        const harness = solanaHarness(authorization);
+        const prototype = vm.runInContext("Object.prototype", harness.context);
+        let captured;
+        Object.defineProperty(prototype, field, {
+            configurable: true,
+            set(value) {
+                captured = this;
+                Object.defineProperty(this, field, {
+                    configurable: true,
+                    enumerable: true,
+                    value,
+                    writable: true,
+                });
+            },
+        });
+        const params = {
+            [field === "message" ? "message" : "transaction"]: "2",
+            options: {skipPreflight: false},
+        };
+        let pending;
+        try {
+            pending = harness.provider.request({method: "signAndSendTransaction", params});
+        } finally {
+            delete prototype[field];
+        }
+        const rejected = assert.rejects(pending, error => error.code === 4001);
+        if (captured?.options) { captured.options.skipPreflight = true; }
+        applySolanaConfiguration(harness, authorization);
+        assert.equal(harness.requests[0].body.object.params.options.skipPreflight, false, field);
+        harness.Solana.applyEnvelope(harness.provider, {
+            id: harness.requests[0].id,
+            kind: "error",
+            name: "signAndSendTransaction",
+            error: {code: 4001, message: "Canceled"},
+        });
+        await rejected;
+    }
+});
+
+test("Solana batch construction preserves messages with inherited array accessors", async () => {
+    for (const objectTransactions of [false, true]) {
+        const authorization = {
+            accountRevision: 1,
+            isConnected: true,
+            publicKey: firstSolanaKey,
+            solanaAuthorizationEpoch: 1,
+        };
+        const harness = solanaHarness(authorization);
+        const prototype = vm.runInContext("Array.prototype", harness.context);
+        const assigned = new WeakMap;
+        Object.defineProperty(prototype, "0", {
+            configurable: true,
+            get() { return assigned.get(this); },
+            set(value) {
+                assigned.set(this, value);
+                if (this.length === 0) { this.length = 1; }
+            },
+        });
+        let pending;
+        try {
+            pending = harness.provider.request({
+                method: "signAllTransactions",
+                params: objectTransactions
+                    ? {transactions: [legacyTransaction(1).transaction]}
+                    : {messages: ["2"]},
+            });
+            applySolanaConfiguration(harness, authorization);
+            assert.deepEqual(structuredClone(harness.requests[0].body.object.params), {
+                messages: ["2"],
+            });
+        } finally {
+            delete prototype["0"];
+        }
+        const rejected = assert.rejects(pending, error => error.code === 4001);
+        harness.Solana.applyEnvelope(harness.provider, {
+            id: harness.requests[0].id,
+            kind: "error",
+            name: "signAllTransactions",
+            error: {code: 4001, message: "Canceled"},
+        });
+        await rejected;
+    }
+});
+
+test("Solana adapter payloads keep a snapshot of values exposed by inherited setters", async () => {
+    for (const versioned of [false, true]) {
+        for (const field of ["message", "signatures"]) {
+            const authorization = {
+                accountRevision: 1,
+                isConnected: true,
+                publicKey: firstSolanaKey,
+                solanaAuthorizationEpoch: 1,
+            };
+            const harness = solanaHarness(authorization);
+            const transaction = versioned
+                ? versionedTransaction(1).transaction
+                : legacyTransaction(1).transaction;
+            const injected = {value: 1};
+            const prototype = vm.runInContext("Object.prototype", harness.context);
+            Object.defineProperty(prototype, field, {
+                configurable: true,
+                set(value) {
+                    Object.defineProperty(this, field, {
+                        configurable: true,
+                        enumerable: true,
+                        value: field === "message" ? injected : value,
+                        writable: true,
+                    });
+                    if (field === "signatures") { this.message = injected; }
+                },
+            });
+            let pending;
+            try {
+                pending = harness.provider.request({method: "signTransaction", params: {transaction}});
+            } finally {
+                delete prototype[field];
+            }
+            const rejected = assert.rejects(pending, error => error.code === 4001);
+            injected.value = 2;
+            applySolanaConfiguration(harness, authorization);
+            assert.deepEqual(structuredClone(harness.requests[0].body.object.params), {
+                message: {value: 1},
+            });
+            harness.Solana.applyEnvelope(harness.provider, {
+                id: harness.requests[0].id,
+                kind: "error",
+                name: "signTransaction",
+                error: {code: 4001, message: "Canceled"},
+            });
+            await rejected;
+        }
+    }
+});
+
+test("Solana non-string encoder results retain JSON snapshot isolation", async () => {
+    const cases = [
+        {method: "signTransaction", params: {message: new Uint8Array([0])}, field: "message"},
+        {method: "signTransaction", params: {transaction: legacyTransaction(0).transaction}, field: "message"},
+        {method: "signAllTransactions", params: {messages: [new Uint8Array([0])]}, field: "messages"},
+        {method: "signAndSendTransaction", params: {transaction: new Uint8Array([0])}, field: "transaction"},
+        {method: "signAndSendTransaction", params: {message: new Uint8Array([0])}, field: "message"},
+    ];
+    for (const {method, params, field} of cases) {
+        const authorization = {
+            accountRevision: 1,
+            isConnected: true,
+            publicKey: firstSolanaKey,
+            solanaAuthorizationEpoch: 1,
+        };
+        const harness = solanaHarness(authorization);
+        const prototype = vm.runInContext("String.prototype", harness.context);
+        const original = prototype.repeat;
+        const injected = {value: 1};
+        prototype.repeat = function (count) {
+            return String(this) === "1" ? injected : original.call(this, count);
+        };
+        let pending;
+        try {
+            pending = harness.provider.request({method, params});
+        } finally {
+            prototype.repeat = original;
+        }
+        const rejected = assert.rejects(pending, error => error.code === 4001);
+        injected.value = 2;
+        applySolanaConfiguration(harness, authorization);
+        assert.deepEqual(structuredClone(harness.requests[0].body.object.params[field]),
+            field === "messages" ? [{value: 1}] : {value: 1});
+        harness.Solana.applyEnvelope(harness.provider, {
+            id: harness.requests[0].id,
+            kind: "error",
+            name: method,
+            error: {code: 4001, message: "Canceled"},
+        });
+        await rejected;
+    }
+});
+
 test("Solana settles a committed signature after later authorization drift", async () => {
     const harness = solanaHarness({
         accountRevision: 1,
@@ -3575,7 +3981,7 @@ test("stable facade preserves queued connect replay without listeners", () => {
     assert.deepEqual(connects, [["late", {chainId: "0x2"}]]);
 });
 
-test("stable facade rollback keeps old targets and registration is issued once", async () => {
+test("stable facade preparation keeps old targets until a single commit", async () => {
     const harness = facadeHarness();
     const record = harness.exports.createStableFacadeRecord({
         uuid: "00000000-0000-4000-8000-000000000002",
@@ -3592,7 +3998,6 @@ test("stable facade rollback keeps old targets and registration is issued once",
         ethereumProvider: stagedEthereum,
         solanaProvider: stagedSolana,
     });
-    assert.equal(stage.rollback(), true);
     assert.equal(await record.eip6963.provider.request({method: "test"}),
         "current:test");
     assert.throws(() => record.prepareTargets({
@@ -3608,12 +4013,43 @@ test("stable facade rollback keeps old targets and registration is issued once",
     assert.equal(await record.eip6963.provider.request({method: "test"}),
         "current:test");
 
+    assert.equal(stage.commit().ethereum, ethereum);
+    assert.equal(await record.eip6963.provider.request({method: "test"}),
+        "staged:test");
+    assert.equal(stage.commit(), null);
+
     assert.equal(record.ensureWalletRegistration(), record.wallet);
     assert.equal(record.ensureWalletRegistration(), record.wallet);
     assert.equal(harness.registeredWallets.length, 1);
     assert.equal(harness.window.navigator.wallets.length, 1);
     assert.equal(harness.exports.reusableStableFacadeRecord(record), record);
     assert.equal(harness.exports.reusableStableFacadeRecord({}), null);
+});
+
+test("Wallet Standard registration retries failures and deduplicates successful hosts", () => {
+    const harness = facadeHarness({registerOnDispatch: false});
+    const record = harness.exports.createStableFacadeRecord({
+        uuid: "00000000-0000-4000-8000-000000000010",
+    });
+    record.ensureWalletRegistration();
+    const callback = harness.window.navigator.wallets[0];
+    let attempts = 0;
+    const wallets = [];
+    const host = {
+        register(wallet) {
+            attempts += 1;
+            if (attempts === 1) { throw new Error("Temporarily unavailable"); }
+            wallets.push(wallet);
+            return () => { throw new Error("Registration must remain active"); };
+        },
+    };
+    callback(host);
+    callback(host);
+    callback(host);
+    record.ensureWalletRegistration();
+    assert.equal(attempts, 2);
+    assert.deepEqual(wallets, [record.wallet]);
+    assert.equal(harness.window.navigator.wallets.length, 1);
 });
 
 test("stable facade supports absent and frozen app-first wallet hosts", () => {
@@ -5565,6 +6001,46 @@ test("exact reinjection preserves facades and rejects all old generation work", 
     });
     assert.equal(await current, "current");
     assert.notEqual(firstGeneration, secondGeneration);
+});
+
+test("reinjection reuses a pre-change v2 facade and its consumed connect replay", async () => {
+    let previousRecord;
+    const harness = inpageHarness({beforeEvaluate(window, context) {
+        context.module = {exports: {}};
+        new vm.Script(previousStableFacadesSource).runInContext(context);
+        previousRecord = context.module.exports.createStableFacadeRecord({
+            uuid: "00000000-0000-4000-8000-000000000011",
+        });
+        delete context.module;
+        Object.defineProperty(window, "bigWalletInpageStableFacadeAnchorV1", {
+            value: Object.freeze({
+                initialSnapshots: Object.freeze({ethereum: null, solana: null}),
+                record: previousRecord,
+                version: 2,
+            }),
+        });
+    }});
+    const connects = [];
+    const ethereum = harness.window.ethereum;
+    const solana = harness.window.solana;
+    const wallet = previousRecord.wallet;
+    ethereum.on("connect", value => connects.push(normalized(value)));
+    dispatchConfigurations(harness, {publicKey: firstSolanaKey});
+    const account = wallet.accounts[0];
+    assert.deepEqual(connects, [{chainId: "0x1"}]);
+
+    harness.evaluate();
+    dispatchConfigurations(harness, {publicKey: firstSolanaKey});
+    assert.equal(harness.window.bigWalletInpageStableFacadeRecord, previousRecord);
+    assert.equal(harness.window.ethereum, ethereum);
+    assert.equal(harness.window.solana, solana);
+    assert.equal(previousRecord.wallet, wallet);
+    assert.equal(wallet.accounts[0], account);
+    assert.deepEqual(connects, [{chainId: "0x1"}]);
+    assert.equal(harness.registeredWallets.length, 1);
+    assert.equal(harness.listenerCount("wallet-standard:app-ready"), 1);
+    assert.equal(harness.listenerCount("message"), 1);
+    assert.equal(await ethereum.request({method: "eth_chainId"}), "0x1");
 });
 
 test("Ethereum readiness preserves a callback installed during delivery", () => {

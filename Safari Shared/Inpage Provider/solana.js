@@ -4,6 +4,7 @@
 
 import {
     applyFunction,
+    createObjectNormally,
     definePropertyNormally,
     freezeObjectNormally,
     getOwnPropertyDescriptorNormally,
@@ -16,7 +17,11 @@ import {
 } from "./intrinsics";
 
 import OperationRuntime from "./operation_runtime";
-import { outboundDataSnapshot } from "./outbound_snapshot";
+import {
+    outboundDataSnapshot,
+    trustedOutboundArray,
+    trustedOutboundRecord,
+} from "./outbound_snapshot";
 import Base58 from "./base58";
 import Utils from "./utils";
 import ProviderRpcError, {
@@ -711,9 +716,30 @@ function normalizedMessages(values, message) {
     }
     const messages = [];
     for (let index = 0; index < values.length; index += 1) {
-        messages[index] = normalizedBase58Value(values[index], message);
+        definePropertyNormally(messages, index, {
+            configurable: true,
+            enumerable: true,
+            value: normalizedBase58Value(values[index], message),
+            writable: true,
+        });
     }
     return messages;
+}
+
+function messagePayload(message) {
+    const payload = {message};
+    return typeof message === "string"
+        ? trustedOutboundRecord(payload)
+        : outboundDataSnapshot(payload);
+}
+
+function messagesPayload(messages) {
+    for (let index = 0; index < messages.length; index += 1) {
+        if (typeof messages[index] !== "string") {
+            return outboundDataSnapshot({messages});
+        }
+    }
+    return trustedOutboundRecord({messages: trustedOutboundArray(messages)});
 }
 
 function createMetadata(method) {
@@ -772,7 +798,7 @@ function normalizeRequest(method, params) {
                         mismatchedSolanaTransactionParams
                     );
                 }
-                normalizedParams = outboundDataSnapshot({message: adapter.message});
+                normalizedParams = messagePayload(adapter.message);
                 metadata.adapters = [adapter];
                 metadata.messages = [adapter.message];
             } else if (typeof raw.message !== "undefined") {
@@ -780,7 +806,7 @@ function normalizeRequest(method, params) {
                     raw.message,
                     invalidSolanaTransactionRequest
                 );
-                normalizedParams = outboundDataSnapshot({message});
+                normalizedParams = messagePayload(message);
                 metadata.messages = [message];
             } else {
                 throw new ProviderRpcError(4200, invalidSolanaTransactionRequest);
@@ -801,7 +827,12 @@ function normalizeRequest(method, params) {
                 );
                 const messages = [];
                 for (let index = 0; index < adapters.length; index += 1) {
-                    messages[index] = adapters[index].message;
+                    definePropertyNormally(messages, index, {
+                        configurable: true,
+                        enumerable: true,
+                        value: adapters[index].message,
+                        writable: true,
+                    });
                 }
                 const suppliedValues = hasMessages
                     ? raw.messages
@@ -826,7 +857,7 @@ function normalizeRequest(method, params) {
                         );
                     }
                 }
-                normalizedParams = outboundDataSnapshot({messages});
+                normalizedParams = messagesPayload(messages);
                 metadata.adapters = adapters;
                 metadata.messages = messages;
             } else {
@@ -835,7 +866,7 @@ function normalizeRequest(method, params) {
                     values,
                     invalidSolanaTransactionBatchRequest
                 );
-                normalizedParams = outboundDataSnapshot({messages});
+                normalizedParams = messagesPayload(messages);
                 metadata.messages = messages;
             }
             break;
@@ -877,7 +908,7 @@ function normalizeRequest(method, params) {
                     invalidSolanaTransactionRequest
                 );
             }
-            const normalized = {};
+            const normalized = createObjectNormally(null);
             if (transaction) { normalized.transaction = transaction; }
             if (!transaction && typeof raw.message !== "undefined") {
                 normalized.message = normalizedBase58Value(
@@ -888,7 +919,9 @@ function normalizeRequest(method, params) {
             if (typeof raw.options !== "undefined") {
                 normalized.options = outboundDataSnapshot(raw.options);
             }
-            normalizedParams = outboundDataSnapshot(normalized);
+            normalizedParams = typeof (transaction || normalized.message) === "string"
+                ? trustedOutboundRecord(normalized)
+                : outboundDataSnapshot(normalized);
             metadata.messages = [transaction || normalized.message];
             break;
         }

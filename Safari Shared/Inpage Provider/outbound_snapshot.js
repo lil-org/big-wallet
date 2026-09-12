@@ -4,7 +4,9 @@
 
 import {
     applyFunction,
+    createObjectNormally,
     definePropertyNormally,
+    freezeObjectNormally,
     getOwnPropertyDescriptorNormally,
     TypeErrorConstructor,
 } from "./intrinsics";
@@ -65,4 +67,40 @@ function outboundDataSnapshot(value) {
     return neutralizeSnapshot(nativeJSONClone(value));
 }
 
-export { nativeJSONClone, outboundDataSnapshot, outboundJSONSerialize };
+function trustedOutboundRecord(values) {
+    const record = createObjectNormally(null);
+    const names = getOwnPropertyNamesNormally(values);
+    for (let index = 0; index < names.length; index += 1) {
+        const name = names[index];
+        const descriptor = getOwnPropertyDescriptorNormally(values, name);
+        if (descriptor.enumerable && "value" in descriptor) {
+            definePropertyNormally(record, name, {
+                __proto__: null,
+                enumerable: true,
+                value: descriptor.value,
+            });
+        }
+    }
+    return freezeObjectNormally(record);
+}
+
+function trustedOutboundArray(values) {
+    const array = [];
+    for (let index = 0; index < values.length; index += 1) {
+        definePropertyNormally(array, index, {
+            __proto__: null,
+            enumerable: true,
+            value: getOwnPropertyDescriptorNormally(values, index)?.value,
+        });
+    }
+    definePropertyNormally(array, "toJSON", {__proto__: null, value: undefined});
+    return freezeObjectNormally(array);
+}
+
+export {
+    nativeJSONClone,
+    outboundDataSnapshot,
+    outboundJSONSerialize,
+    trustedOutboundArray,
+    trustedOutboundRecord,
+};

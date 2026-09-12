@@ -13,7 +13,11 @@ const source = buildSync({
         contents: `
             export * as intrinsics from "./intrinsics";
             export {default as OperationRuntime} from "./operation_runtime";
-            export {outboundDataSnapshot} from "./outbound_snapshot";
+            export {
+                outboundDataSnapshot,
+                trustedOutboundArray,
+                trustedOutboundRecord,
+            } from "./outbound_snapshot";
         `,
         resolveDir: fileURLToPath(providerDirectory),
     },
@@ -75,13 +79,17 @@ for (const family of ["reflection", "collections"]) {
         const context = harness();
         context.family = family;
         const result = await new vm.Script(`(async () => {
-            const {intrinsics: i, OperationRuntime, outboundDataSnapshot} = module.exports;
+            const {
+                intrinsics: i, OperationRuntime, outboundDataSnapshot,
+                trustedOutboundArray, trustedOutboundRecord,
+            } = module.exports;
             const runtime = new OperationRuntime("generation");
             const weak = new WeakMap;
             const key = {};
             const targets = family === "reflection" ? [
                 [Reflect, "apply"], [Object, "create"], [Object, "defineProperty"],
                 [Object, "freeze"], [Object, "getOwnPropertyDescriptor"],
+                [Object, "getOwnPropertyNames"],
                 [Object.prototype, "hasOwnProperty"], [Array, "isArray"],
                 [Array.prototype, "push"], [Number, "isSafeInteger"],
                 [globalThis, "TypeError"],
@@ -115,7 +123,9 @@ for (const family of ["reflection", "collections"]) {
                     array: i.isArrayNormally(snapshot.items),
                     integer: i.isSafeIntegerNormally(7),
                     error: new i.TypeErrorConstructor("captured").name,
-                    snapshot,
+                    snapshot: trustedOutboundRecord({
+                        items: trustedOutboundArray(snapshot.items),
+                    }),
                 };
             } finally {
                 for (let index = 0; index < targets.length; index += 1) {
@@ -136,3 +146,75 @@ for (const family of ["reflection", "collections"]) {
         });
     });
 }
+
+test("trusted payload containers preserve normalized data under prototype changes", () => {
+    const result = new vm.Script(`(() => {
+        const {outboundDataSnapshot, trustedOutboundArray, trustedOutboundRecord} =
+            module.exports;
+        let calls = 0;
+        const normalized = outboundDataSnapshot({
+            nested: {toJSON() { calls += 1; return {value: 7}; }},
+            toJSON: "literal",
+            ["__proto__"]: {value: 8},
+        });
+        Object.prototype.toJSON = () => { throw new Error("Object toJSON called"); };
+        Array.prototype.toJSON = () => { throw new Error("Array toJSON called"); };
+        const array = trustedOutboundArray([normalized]);
+        const record = trustedOutboundRecord(normalized);
+        const payload = trustedOutboundRecord({array, record});
+        const serialized = JSON.stringify(payload);
+        delete Object.prototype.toJSON;
+        delete Array.prototype.toJSON;
+        return {
+            serialized,
+            calls,
+            frozen: [payload, array, record].every(Object.isFrozen),
+            sharedNestedData: record.nested === normalized.nested,
+            nullPrototype: Object.getPrototypeOf(record) === null,
+            arrayIdentity: Array.isArray(array),
+        };
+    })()`).runInContext(harness());
+    assert.deepEqual(JSON.parse(JSON.stringify(result)), {
+        serialized: JSON.stringify({
+            array: [{nested: {value: 7}, toJSON: "literal", ["__proto__"]: {value: 8}}],
+            record: {nested: {value: 7}, toJSON: "literal", ["__proto__"]: {value: 8}},
+        }),
+        calls: 1,
+        frozen: true,
+        sharedNestedData: true,
+        nullPrototype: true,
+        arrayIdentity: true,
+    });
+});
+
+test("trusted payload definitions ignore inherited descriptor getters", () => {
+    const result = new vm.Script(`(() => {
+        const {trustedOutboundArray, trustedOutboundRecord} = module.exports;
+        const fields = ["configurable", "writable", "enumerable", "get", "set"];
+        for (const field of fields) {
+            Object.defineProperty(Object.prototype, field, {
+                __proto__: null,
+                configurable: true,
+                get() { throw new Error("Inherited descriptor getter: " + field); },
+            });
+        }
+        try {
+            const record = trustedOutboundRecord({value: "0x1"});
+            const array = trustedOutboundArray(["2"]);
+            return {
+                record,
+                array,
+                frozen: Object.isFrozen(record) && Object.isFrozen(array),
+                toJSON: Object.getOwnPropertyDescriptor(array, "toJSON"),
+            };
+        } finally {
+            for (const field of fields) { delete Object.prototype[field]; }
+        }
+    })()`).runInContext(harness());
+    assert.deepEqual(JSON.parse(JSON.stringify(result)), {
+        record: {value: "0x1"},
+        array: ["2"],
+        frozen: true,
+        toJSON: {writable: false, enumerable: false, configurable: false},
+    });
+});

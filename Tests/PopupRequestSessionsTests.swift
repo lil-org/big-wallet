@@ -43,13 +43,17 @@ final class PopupRequestSessionsTests: XCTestCase {
             handle: session.handle,
             value: UUID()
         )
+        XCTAssertNil(session.approvalClaim)
+        XCTAssertFalse(session.beginAuthentication(claim: claim, token: token))
         XCTAssertTrue(session.acceptClaim(claim, token: token))
+        XCTAssertEqual(session.approvalClaim, claim)
         XCTAssertTrue(session.beginAuthentication(claim: claim, token: token))
         XCTAssertEqual(session.state, .authenticating)
         XCTAssertTrue(session.finishAuthentication(claim: claim, token: token))
         XCTAssertEqual(session.state, .working)
         XCTAssertTrue(session.returnToReview(token: token))
         XCTAssertEqual(session.state, .review)
+        XCTAssertNil(session.approvalClaim)
 
         session.fail("Unavailable")
         XCTAssertEqual(session.state, .error)
@@ -89,6 +93,62 @@ final class PopupRequestSessionsTests: XCTestCase {
         let source = try source(named: "Safari Shared/PopupRequestSessions.swift")
         XCTAssertTrue(source.contains("case .snapshot, .verifiedFeeEstimate, .editorRequest:"))
         XCTAssertTrue(source.contains("case .alert:"))
+    }
+
+    func testSessionPreservesFeedbackAndRecoveryAcrossAuthentication() throws {
+        let session = try makeSession()
+        session.setFeedback("Choose an account")
+        XCTAssertEqual(session.errorText, "Choose an account")
+        let token = try XCTUnwrap(session.beginApproval())
+        XCTAssertNil(session.errorText)
+        let claim = ExtensionBridge.ApprovalClaim(
+            handle: session.handle,
+            value: UUID()
+        )
+        XCTAssertTrue(session.acceptClaim(claim, token: token))
+        session.setFeedback("Try again")
+        XCTAssertTrue(session.beginAuthentication(claim: claim, token: token))
+        XCTAssertEqual(session.errorText, "Try again")
+        session.requireRematerializationAfterAuthentication()
+        XCTAssertTrue(session.finishAuthentication(claim: claim, token: token))
+        XCTAssertTrue(session.takeAuthenticationRematerializationRequirement())
+        XCTAssertFalse(session.takeAuthenticationRematerializationRequirement())
+        XCTAssertTrue(session.returnToReview(token: token))
+        XCTAssertEqual(session.errorText, "Try again")
+        XCTAssertNil(session.approvalClaim)
+        XCTAssertEqual(session.reviewToken, token)
+        session.retry()
+        XCTAssertNil(session.errorText)
+        XCTAssertNotEqual(session.reviewToken, token)
+    }
+
+    func testSessionCanReturnToReviewFromUnclaimedAndFailedAttempts() throws {
+        let session = try makeSession()
+        let token = try XCTUnwrap(session.beginApproval())
+        XCTAssertTrue(session.returnToReview(token: token))
+        XCTAssertEqual(session.state, .review)
+        session.fail("Unavailable", token: token)
+        XCTAssertTrue(session.returnToReview(token: token))
+        XCTAssertEqual(session.errorText, "Unavailable")
+        XCTAssertNil(session.approvalClaim)
+    }
+
+    func testImmediateResponseSessionStartsWorkingWithoutApprovalAuthority() throws {
+        let snapshot = try popupSnapshot(id: 475)
+        let session = PopupRequestSession(
+            handle: snapshot.handle,
+            request: try XCTUnwrap(snapshot.request),
+            purpose: .immediateResponsePersistence
+        )
+        XCTAssertEqual(session.state, .working)
+        XCTAssertTrue(session.isImmediateResponsePersistence)
+        XCTAssertNil(session.approvalClaim)
+        XCTAssertNil(session.approvalAction)
+        XCTAssertNil(session.beginApproval())
+        XCTAssertNil(session.errorText)
+        session.fail("Unavailable")
+        XCTAssertEqual(session.state, .error)
+        XCTAssertEqual(session.errorText, "Unavailable")
     }
 
     func testNativeControllerHasNoDurableCoordinatorOrRetryEngine() throws {
@@ -743,7 +803,13 @@ final class PopupRequestSessionsTests: XCTestCase {
         return PopupRequestSession(
             handle: handle,
             request: request,
-            purpose: .immediateResponsePersistence
+            purpose: .approval(.switchAccount(SelectAccountAction(
+                coinType: nil,
+                selectedAccounts: [],
+                initiallyConnectedProviders: [],
+                network: nil,
+                resolve: { _, _ in request.response(error: .userRejected) }
+            )))
         )
     }
 
@@ -1500,6 +1566,20 @@ extension PopupRequestSessionsTests {
             XCTAssertEqual(response["status"] as? String, "ok")
             XCTAssertEqual(resolveCount, 0)
             XCTAssertTrue(events.isEmpty)
+            let stateRequest = try popupCommand(
+                subject: "getApprovalState",
+                id: snapshot.handle.id,
+                requestToken: snapshot.handle.requestToken,
+                payload: ["mode": "poll"]
+            )
+            let state = await controller.dispatch(
+                try popupCommandValue(stateRequest),
+                request: stateRequest,
+                profileIdentifier: nil
+            )
+            XCTAssertEqual(state["state"] as? String, "review")
+            XCTAssertEqual(state["error"] as? String, Strings.somethingWentWrong)
+            XCTAssertEqual(state["reviewToken"] as? String, token)
         }
     }
 
@@ -1732,6 +1812,78 @@ extension PopupRequestSessionsTests {
             profileIdentifier: nil
         )
         XCTAssertEqual(state["state"] as? String, "review")
+    }
+
+    func testFailedClaimReleaseDoesNotRestoreActionableReview() async throws {
+        for result in [
+            ExtensionBridge.StoreMutationResult.retryablePersistenceFailure,
+            .ownershipLost,
+        ] {
+            let store = CompactPopupStore()
+            let snapshot = try popupSnapshot(id: 476)
+            await store.insert(snapshot)
+            await store.forceNextReleaseResult(result)
+            var authenticatedSession: PopupRequestSession?
+            let controller = PopupRequestSessions(
+                store: store,
+                requestProcessor: CompactPopupProcessor { request in
+                    .approval(.approveMessage(SignMessageAction(
+                        subject: .signMessage,
+                        walletId: "wallet",
+                        account: popupTestAccount(),
+                        meta: "message",
+                        resolve: { _ in
+                            XCTFail("A failed release must not sign")
+                            return request.response(error: .internalError)
+                        }
+                    )))
+                },
+                walletEnvironment: TestPopupWalletEnvironment(
+                    authenticate: { session, _, completion in
+                        authenticatedSession = session
+                        completion(false)
+                    }
+                ),
+                loadsTransactionContext: false
+            )
+            let token = try await materializeToken(controller: controller, snapshot: snapshot)
+            let approve = try popupCommand(
+                subject: "approveRequest",
+                id: snapshot.handle.id,
+                requestToken: snapshot.handle.requestToken,
+                reviewToken: token,
+                payload: ["revisions": snapshot.revisions.json]
+            )
+            _ = await controller.dispatch(
+                try popupCommandValue(approve),
+                request: approve,
+                profileIdentifier: nil
+            )
+            let session = try XCTUnwrap(authenticatedSession)
+            if result == .retryablePersistenceFailure {
+                XCTAssertEqual(session.state, .error)
+                XCTAssertEqual(session.errorText, Strings.failedToLoad)
+                XCTAssertNil(session.approvalClaim)
+            } else {
+                XCTAssertEqual(session.state, .working)
+                XCTAssertNotNil(session.approvalClaim)
+            }
+            let stateRequest = try popupCommand(
+                subject: "getApprovalState",
+                id: snapshot.handle.id,
+                requestToken: snapshot.handle.requestToken,
+                payload: ["mode": "full"]
+            )
+            let state = await controller.dispatch(
+                try popupCommandValue(stateRequest),
+                request: stateRequest,
+                profileIdentifier: nil
+            )
+            XCTAssertEqual(state["state"] as? String, "working")
+            XCTAssertNil(state["reviewToken"])
+            let events = await store.events()
+            XCTAssertEqual(events, ["claim", "release"])
+        }
     }
 
     func testSigningApprovalRequiresCurrentBoundedExecutionDeadline()
@@ -2472,6 +2624,60 @@ extension PopupRequestSessionsTests {
         )
         XCTAssertEqual(state["secureSetupRequired"] as? Bool, true)
         XCTAssertNil(state["reviewToken"])
+    }
+
+    func testChangedVaultDuringAuthenticationReleasesBeforeRematerializing() async throws {
+        let store = CompactPopupStore()
+        let snapshot = try popupSnapshot(id: 477)
+        await store.insert(snapshot)
+        let account = popupTestAccount()
+        let original = CompactWalletAccess(account: account)
+        let replacement = CompactWalletAccess(account: account)
+        var currentCatalog: WalletAccess = original
+        var preparedCatalogs = [WalletCatalogIdentity]()
+        let controller = PopupRequestSessions(
+            store: store,
+            requestProcessor: CompactPopupAccessProcessor { request, access in
+                preparedCatalogs.append(access.catalogIdentity)
+                return .approval(.approveMessage(SignMessageAction(
+                    subject: .signMessage,
+                    walletId: "wallet",
+                    account: account,
+                    meta: "message",
+                    resolve: { _ in
+                        XCTFail("A changed catalog must be reviewed before signing")
+                        return request.response(error: .internalError)
+                    }
+                )))
+            },
+            walletEnvironment: VaultPopupWalletEnvironment(
+                catalogAccess: { currentCatalog },
+                unlockWalletAccess: { _ in
+                    currentCatalog = replacement
+                    return .unlocked(RequestScopedWalletAccess(replacement))
+                }
+            ),
+            loadsTransactionContext: false
+        )
+        let token = try await materializeToken(controller: controller, snapshot: snapshot)
+        let approve = try popupCommand(
+            subject: "approveRequest",
+            id: snapshot.handle.id,
+            requestToken: snapshot.handle.requestToken,
+            reviewToken: token,
+            payload: ["revisions": snapshot.revisions.json]
+        )
+        _ = await controller.dispatch(
+            try popupCommandValue(approve),
+            request: approve,
+            profileIdentifier: nil
+        )
+        let events = await store.events()
+        XCTAssertEqual(events, ["claim", "release"])
+        XCTAssertEqual(preparedCatalogs, [original.catalogIdentity])
+        let nextToken = try await materializeToken(controller: controller, snapshot: snapshot)
+        XCTAssertNotEqual(nextToken, token)
+        XCTAssertEqual(preparedCatalogs, [original.catalogIdentity, replacement.catalogIdentity])
     }
 
     func testCachedSigningAndSelectionReviewsDetectVaultTombstone()
@@ -5534,6 +5740,7 @@ private actor CompactPopupStore: NativeApprovalStore {
     private var committedCompletions = Set<ExtensionBridge.Handle>()
     private var committedCheckpoints = Set<ExtensionBridge.Handle>()
     private var nextRejectResult: ExtensionBridge.StoreMutationResult?
+    private var nextReleaseResult: ExtensionBridge.StoreMutationResult?
     private var nextCompletionOwnershipReceipt:
         ExtensionBridge.NativeDeliveryReceipt?
     private var shouldFailNextBegin = false
@@ -5600,6 +5807,9 @@ private actor CompactPopupStore: NativeApprovalStore {
     }
     func forceNextRejectResult(_ result: ExtensionBridge.StoreMutationResult) {
         nextRejectResult = result
+    }
+    func forceNextReleaseResult(_ result: ExtensionBridge.StoreMutationResult) {
+        nextReleaseResult = result
     }
     func forceNextCompletionOwnershipLoss(
         receipt: ExtensionBridge.NativeDeliveryReceipt
@@ -5754,6 +5964,10 @@ private actor CompactPopupStore: NativeApprovalStore {
             return .ownershipLost
         }
         eventValues.append("release")
+        if let result = nextReleaseResult {
+            nextReleaseResult = nil
+            return result
+        }
         claims[claim.handle] = nil
         records[claim.handle] = replacing(snapshot, phase: .queued, request: snapshot.request)
         return .persisted

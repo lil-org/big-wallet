@@ -23,6 +23,7 @@ import OperationRuntime from "./operation_runtime";
 import {
     nativeJSONClone,
     outboundDataSnapshot,
+    trustedOutboundRecord,
 } from "./outbound_snapshot";
 import Utils from "./utils";
 import isUtf8 from "isutf8";
@@ -356,11 +357,15 @@ function setDispatchAuthorization(state, record) {
 }
 
 function walletMessage(state, record, name, data) {
+    const requiresSnapshot = name === "signPersonalMessage" ||
+        name === "switchEthereumChain" || name === "addEthereumChain";
     return {
         accountRevision: state.accountRevision,
         address: state.address,
         chainId: state.chainId,
-        data: outboundDataSnapshot(data),
+        data: requiresSnapshot
+            ? outboundDataSnapshot(data)
+            : trustedOutboundRecord(data),
         generation: state.runtime.generation,
         id: record.wireId,
         kind: "request",

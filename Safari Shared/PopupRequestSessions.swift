@@ -64,30 +64,99 @@ final class PopupRequestSession {
         case immediateResponsePersistence
     }
 
+    private enum Lifecycle {
+        case review(feedback: String?)
+        case claiming
+        case working(ApprovalContext)
+        case authenticating(ApprovalContext)
+        case persistingImmediateResponse
+        case error(message: String)
+    }
+
+    private struct ApprovalContext {
+        let claim: ExtensionBridge.ApprovalClaim
+        var feedback: String?
+        var reviewRecovery: ReviewRecovery = .reuse
+    }
+
+    private enum ReviewRecovery {
+        case reuse
+        case rematerialize
+    }
+
     let handle: ExtensionBridge.Handle
     let request: SafariRequest
     var walletAccess: WalletAccess?
     private(set) var purpose: Purpose
-    var errorText: String?
     var transaction: PopupTransactionSession?
-    private(set) var state: State
+    private var lifecycle: Lifecycle
     private(set) var reviewToken = UUID()
     private(set) var presentationRevision: UInt64 = 0
-    private(set) var approvalClaim: ExtensionBridge.ApprovalClaim?
-    private var rematerializeAfterAuthentication = false
 
     init(
         handle: ExtensionBridge.Handle,
         request: SafariRequest,
         purpose: Purpose,
-        walletAccess: WalletAccess? = nil,
-        initialState: State = .review
+        walletAccess: WalletAccess? = nil
     ) {
         self.handle = handle
         self.request = request
         self.purpose = purpose
         self.walletAccess = walletAccess
-        state = initialState
+        switch purpose {
+        case .approval:
+            lifecycle = .review(feedback: nil)
+        case .immediateResponsePersistence:
+            lifecycle = .persistingImmediateResponse
+        }
+    }
+
+    var state: State {
+        switch lifecycle {
+        case .review:
+            return .review
+        case .claiming, .working, .persistingImmediateResponse:
+            return .working
+        case .authenticating:
+            return .authenticating
+        case .error:
+            return .error
+        }
+    }
+
+    var approvalClaim: ExtensionBridge.ApprovalClaim? {
+        switch lifecycle {
+        case .working(let context), .authenticating(let context):
+            return context.claim
+        case .review, .claiming, .persistingImmediateResponse, .error:
+            return nil
+        }
+    }
+
+    var errorText: String? {
+        switch lifecycle {
+        case .review(let feedback):
+            return feedback
+        case .working(let context), .authenticating(let context):
+            return context.feedback
+        case .error(let message):
+            return message
+        case .claiming, .persistingImmediateResponse:
+            return nil
+        }
+    }
+
+    func setFeedback(_ message: String) {
+        switch lifecycle {
+        case .review:
+            lifecycle = .review(feedback: message)
+        case .working, .authenticating:
+            updateApprovalContext { $0.feedback = message }
+        case .error:
+            lifecycle = .error(message: message)
+        case .claiming, .persistingImmediateResponse:
+            break
+        }
     }
 
     var approvalAction: DappRequestAction? {
@@ -118,11 +187,9 @@ final class PopupRequestSession {
     }
 
     func beginApproval() -> UUID? {
-        guard state == .review else { return nil }
-        state = .working
-        errorText = nil
+        guard case .review = lifecycle else { return nil }
+        lifecycle = .claiming
         reviewToken = UUID()
-        rematerializeAfterAuthentication = false
         return reviewToken
     }
 
@@ -134,8 +201,8 @@ final class PopupRequestSession {
         _ claim: ExtensionBridge.ApprovalClaim,
         token: UUID
     ) -> Bool {
-        guard state == .working, isCurrent(token) else { return false }
-        approvalClaim = claim
+        guard case .claiming = lifecycle, isCurrent(token) else { return false }
+        lifecycle = .working(ApprovalContext(claim: claim))
         return true
     }
 
@@ -143,10 +210,11 @@ final class PopupRequestSession {
         claim: ExtensionBridge.ApprovalClaim,
         token: UUID
     ) -> Bool {
-        guard state == .working, isCurrent(token), approvalClaim == claim else {
+        guard case .working(let context) = lifecycle,
+              isCurrent(token), context.claim == claim else {
             return false
         }
-        state = .authenticating
+        lifecycle = .authenticating(context)
         return true
     }
 
@@ -154,31 +222,27 @@ final class PopupRequestSession {
         claim: ExtensionBridge.ApprovalClaim,
         token: UUID
     ) -> Bool {
-        guard state == .authenticating, isCurrent(token), approvalClaim == claim else {
+        guard case .authenticating(let context) = lifecycle,
+              isCurrent(token), context.claim == claim else {
             return false
         }
-        state = .working
+        lifecycle = .working(context)
         return true
     }
 
     func returnToReview(token: UUID) -> Bool {
         guard isCurrent(token) else { return false }
-        approvalClaim = nil
-        state = .review
+        lifecycle = .review(feedback: errorText)
         return true
     }
 
     func fail(_ message: String, token: UUID? = nil) {
         guard token.map(isCurrent) ?? true else { return }
-        approvalClaim = nil
-        errorText = message
-        state = .error
+        lifecycle = .error(message: message)
     }
 
     func retry() {
-        approvalClaim = nil
-        errorText = nil
-        state = .review
+        lifecycle = .review(feedback: nil)
         reviewToken = UUID()
     }
 
@@ -189,12 +253,31 @@ final class PopupRequestSession {
     }
 
     func requireRematerializationAfterAuthentication() {
-        rematerializeAfterAuthentication = true
+        updateApprovalContext { $0.reviewRecovery = .rematerialize }
     }
 
     func takeAuthenticationRematerializationRequirement() -> Bool {
-        defer { rematerializeAfterAuthentication = false }
-        return rematerializeAfterAuthentication
+        var rematerialize = false
+        updateApprovalContext { context in
+            rematerialize = context.reviewRecovery == .rematerialize
+            context.reviewRecovery = .reuse
+        }
+        return rematerialize
+    }
+
+    private func updateApprovalContext(
+        _ update: (inout ApprovalContext) -> Void
+    ) {
+        switch lifecycle {
+        case .working(var context):
+            update(&context)
+            lifecycle = .working(context)
+        case .authenticating(var context):
+            update(&context)
+            lifecycle = .authenticating(context)
+        case .review, .claiming, .persistingImmediateResponse, .error:
+            break
+        }
     }
 
 }
@@ -686,8 +769,7 @@ final class PopupRequestSessions {
             let session = PopupRequestSession(
                 handle: snapshot.handle,
                 request: request,
-                purpose: .immediateResponsePersistence,
-                initialState: .working
+                purpose: .immediateResponsePersistence
             )
             sessions[snapshot.handle] = session
             Task { [weak self, weak session] in
@@ -1086,7 +1168,7 @@ final class PopupRequestSessions {
             requiredCoin: action.coinType,
             walletAccess: reviewedWalletAccess
         ) else {
-            session.errorText = Strings.somethingWentWrong
+            session.setFeedback(Strings.somethingWentWrong)
             return true
         }
         let selectedChainId = chainId ?? action.network?.chainIdHexString
@@ -1098,17 +1180,17 @@ final class PopupRequestSessions {
         )
         guard session.replaceSelectionAction(updatedAction) else { return false }
         if resolved.isEmpty && updatedAction.initiallyConnectedProviders.isEmpty {
-            session.errorText = Strings.somethingWentWrong
+            session.setFeedback(Strings.somethingWentWrong)
             return true
         }
         if !resolved.isEmpty,
            !updatedAction.canSubmitSelection(network: network) {
-            session.errorText = Strings.somethingWentWrong
+            session.setFeedback(Strings.somethingWentWrong)
             return true
         }
         guard let approval = await beginAndClaimApproval(for: session) else { return false }
         guard refreshWalletsAndNetworks() else {
-            session.errorText = Strings.somethingWentWrong
+            session.setFeedback(Strings.somethingWentWrong)
             await releaseApproval(
                 approval.claim,
                 for: session,
@@ -1149,7 +1231,7 @@ final class PopupRequestSessions {
                     network: refreshedNetwork
                 )
             )
-            session.errorText = Strings.somethingWentWrong
+            session.setFeedback(Strings.somethingWentWrong)
             await releaseApproval(
                 approval.claim,
                 for: session,
@@ -1167,7 +1249,7 @@ final class PopupRequestSessions {
                   refreshedNetwork != nil),
               (refreshedAccounts.isEmpty ||
                   refreshedAction.canSubmitSelection(network: refreshedNetwork)) else {
-            session.errorText = Strings.somethingWentWrong
+            session.setFeedback(Strings.somethingWentWrong)
             await releaseApproval(
                 approval.claim,
                 for: session,
@@ -1237,7 +1319,7 @@ final class PopupRequestSessions {
         executionDeadline: Date
     ) async -> Bool {
         guard (action.solanaClusterSelection != nil) == (cluster != nil) else {
-            session.errorText = Strings.somethingWentWrong
+            session.setFeedback(Strings.somethingWentWrong)
             return true
         }
         guard let approval = await beginAndClaimApproval(for: session) else { return false }
@@ -1473,10 +1555,10 @@ final class PopupRequestSessions {
                 if currentIdentity != reviewedIdentity {
                     session.requireRematerializationAfterAuthentication()
                 } else {
-                    session.errorText = Strings.somethingWentWrong
+                    session.setFeedback(Strings.somethingWentWrong)
                 }
             } else {
-                session.errorText = Strings.secureApprovalSetupRequired
+                session.setFeedback(Strings.secureApprovalSetupRequired)
                 session.requireRematerializationAfterAuthentication()
             }
             return nil

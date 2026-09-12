@@ -464,11 +464,6 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
                 replayConnect();
                 return previous;
             },
-            rollback() {
-                if (finished) { return false; }
-                finished = true;
-                return true;
-            },
         });
     }
 
@@ -488,21 +483,18 @@ export function createStableFacadeRecord({icon = "", uuid} = {}) {
     function ensureWalletRegistration() {
         if (registration) { return wallet; }
         registration = makeWalletStandardRegistrationCallback({
-            isActive: () => true,
-            registeredHosts: new WeakSet,
-            registrationDisposers: new Set,
             wallet,
         });
-        dispatchWalletStandardRegistrationEvent(registration.callback);
+        dispatchWalletStandardRegistrationEvent(registration);
         window.addEventListener(
             "wallet-standard:app-ready",
-            event => registration.callback(event.detail)
+            event => registration(event.detail)
         );
         const host = window.navigator?.wallets;
         if (host == null) {
-            window.navigator.wallets = [registration.callback];
+            window.navigator.wallets = [registration];
         } else if (typeof host.push === "function") {
-            host.push(registration.callback);
+            host.push(registration);
         }
         return wallet;
     }
