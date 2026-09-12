@@ -1090,7 +1090,10 @@ actor NativeAgentLauncher {
             expectedVersion: expectedVersion,
             helpers: runningHelpers,
             identity: { AmbientRuntimeIdentity.load(processIdentifier: $0) },
-            validate: validateEmbeddedHelper
+            validate: { runtimeURL in
+                runtimeURL.standardizedFileURL == expectedURL ||
+                    validateEmbeddedHelper(runtimeURL)
+            }
         )
     }
 
