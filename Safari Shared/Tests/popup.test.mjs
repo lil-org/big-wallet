@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
-import { popupElement } from "./test_helpers.mjs";
+import { deferred, normalized, popupElement } from "./test_helpers.mjs";
 
 const [source, wireSource, markup] = await Promise.all([
     readFile(new URL("../Resources/popup.js", import.meta.url), "utf8"),
@@ -40,17 +40,6 @@ test("popup never renders or transports a wallet password", () => {
     assert.match(source, /Password payloads are not supported/);
 });
 
-test("uses one read channel and one action channel", () => {
-    assert.match(source, /nativeChannels = \{ read: Promise\.resolve\(\), action: Promise\.resolve\(\) \}/);
-    assert.doesNotMatch(source, /nativeMessageDispatcher|unsettledNativeCalls|capacityFailure/);
-});
-
-test("uses review tokens for approval and mutation actions", () => {
-    assert.match(source, /approvalLifecycle\.current\?\.reviewToken/);
-    assert.match(source, /message\.reviewToken = reviewToken/);
-    assert.doesNotMatch(source, /approvalGeneration/);
-});
-
 test("uses the direct sender except for serialized approval", () => {
     assert.match(source, /createTrustedNativeMessageSender\(\{\s*sendRawNativeMessage,\s*\}\)/);
     assert.match(source, /subject: "approveRequestWithCurrentRevisions"/);
@@ -67,38 +56,6 @@ test("manual Switch Account is a stateless content intent", () => {
 
 test("configuration reads carry trusted tab identity", () => {
     assert.match(source, /subject: "getLatestConfiguration",\s+host: tab\.host,\s+configurationKey: tab\.configurationKey,\s+workflowVersion: WORKFLOW_VERSION/);
-});
-
-test("keeps FIFO queue rendering and terminal actions", () => {
-    assert.match(source, /queueTab\.index = 0/);
-    assert.doesNotMatch(source, /requests\.sort\(/);
-    assert.match(source, /submitCurrentDecision\("approveRequest"/);
-    assert.match(source, /submitCurrentDecision\("rejectRequest"/);
-});
-
-test("keeps transaction fee editing, slider, and alert actions", () => {
-    assert.match(source, /setTransactionSpeed/);
-    assert.match(source, /applyTransactionEdits/);
-    assert.match(source, /resolveApprovalAlert/);
-    assert.match(source, /beginSliderInteraction/);
-    assert.match(source, /startSliderCommand/);
-    assert.doesNotMatch(source, /queueSliderEvent|responseMode = "status"/);
-    const pointerStart = source.indexOf('slider.addEventListener("pointerdown"');
-    const pointerEnd = source.indexOf('slider.addEventListener("input"', pointerStart);
-    const pointerHandler = source.slice(pointerStart, pointerEnd);
-    assert.match(pointerHandler, /beginSliderInteraction/);
-    assert.doesNotMatch(pointerHandler, /startSliderCommand|setTransactionSpeed/);
-    const inputEnd = source.indexOf("const endDrag", pointerEnd);
-    const inputHandler = source.slice(pointerEnd, inputEnd);
-    assert.match(inputHandler, /beginSliderInteraction/);
-    assert.doesNotMatch(inputHandler, /startSliderCommand|setTransactionSpeed/);
-});
-
-test("communication failures expose manual refresh", () => {
-    assert.match(source, /state: "error"/);
-    assert.match(source, /idle-check-status/);
-    assert.match(source, /await fetchAndRenderState\(queueTab\.items\[queueTab\.index\]\)/);
-    assert.doesNotMatch(source, /APPROVAL_STATE_RETRY|retryTimer|retryAttempts/);
 });
 
 test("defines the bounded extension-message transport used during boot", () => {
@@ -310,50 +267,7 @@ test("compact rejectable approval states are tokenless, exact, and reject-only",
         assert.equal(context.isCompactRejectableApprovalState(invalid), false);
     }
 
-    const approve = {disabled: false};
-    context.document = {getElementById: () => approve};
-    context.updateApproveEnabled = vm.runInContext(
-        `(${extractedFunction("updateApproveEnabled")})`,
-        context
-    );
-    context.updateApproveEnabled(state);
-    assert.equal(approve.disabled, true);
-});
 
-test("approval polling adopts an error and stops", async () => {
-    const request = {id: 7, requestToken: "request"};
-    const error = {id: 7, state: "error", error: "Failed"};
-    const callbacks = [];
-    let adopted = null;
-    let overlayHidden = false;
-    const context = {
-        APPROVAL_POLL_INTERVAL: 1,
-        NATIVE_MESSAGE_CANCELLED: Symbol("cancelled"),
-        approvalLifecycle: {current: {state: "working"}, generation: 1, pollTimer: null},
-        requestFor: () => request,
-        isCurrentRequest: () => true,
-        stopTimers: () => {},
-        setTimeout: callback => { callbacks.push(callback); return 1; },
-        approvalState: async () => error,
-        isRenderableApprovalState: () => true,
-        handleMissingState: () => false,
-        hide: id => { if (id === "working-overlay") { overlayHidden = true; } },
-        adoptState: state => { adopted = state; },
-        acceptRenderableApprovalState: () => assert.fail("error must not enter review handling"),
-        canRejectApprovalState: () => assert.fail("error must not become rejectable"),
-    };
-    vm.createContext(context);
-    context.pollApproval = vm.runInContext(
-        `(${extractedFunction("pollApproval")})`,
-        context
-    );
-
-    context.pollApproval(request);
-    assert.equal(callbacks.length, 1);
-    await callbacks[0]();
-    assert.equal(adopted, error);
-    assert.equal(overlayHidden, true);
-    assert.equal(callbacks.length, 1);
 });
 
 function extractedFunction(name) {
@@ -516,114 +430,6 @@ test("update recovery ignores private, denied, and receiverless tabs", async () 
         await receiverless.context.updateRecoveryTabFor(receiverless.tab),
         null
     );
-});
-
-test("stranded update refreshes approvals before showing the idle cue", async () => {
-    const hidden = new Map;
-    const texts = new Map;
-    const switchButton = {disabled: false};
-    const tab = {
-        configurationKey: "https://wallet.example",
-        host: "wallet.example",
-        id: 7,
-        incognito: false,
-        url: "https://wallet.example/dapp",
-    };
-    let flagReads = 0;
-    let probes = 0;
-    let queueRefreshes = 0;
-    const context = {
-        IS_DESKTOP_POPUP: true,
-        approvalLifecycle: {current: {}},
-        currentActiveTab: async () => tab,
-        currentPrivateBrowsing: () => false,
-        document: {getElementById: id => id === "idle-switch-account"
-            ? switchButton
-            : {classList: {contains: () => true}}},
-        hide() {},
-        localized: (_, fallback) => fallback,
-        queueTab: {
-            activeTab: null,
-            booting: true,
-            contentScriptUnavailableTab: null,
-            items: [],
-            snapshotStatus: "unknown",
-            updateRecoveryTab: null,
-        },
-        readUpdateRecoveryFlag: async () => {
-            flagReads += 1;
-            return true;
-        },
-        readLatestConfiguration: () => assert.fail("recovery must not read configuration"),
-        refreshQueue: async () => {
-            queueRefreshes += 1;
-            context.queueTab.items = [{id: 1}];
-            context.queueTab.snapshotStatus = "nonempty";
-        },
-        sameTab: () => false,
-        schedulePendingQueueRefresh() {},
-        selectionRender: {idleGeneration: 0},
-        setHidden: (id, value) => hidden.set(id, value),
-        setText: (id, value) => texts.set(id, value),
-        show() {},
-        updateRecoveryTabFor: async () => {
-            probes += 1;
-            return tab;
-        },
-    };
-    vm.createContext(context);
-    context.canBeginIdleSwitch = vm.runInContext(
-        `(${extractedFunction("canBeginIdleSwitch")})`, context
-    );
-    context.shouldShowUpdateRecovery = vm.runInContext(
-        `(${extractedFunction("shouldShowUpdateRecovery")})`, context
-    );
-    context.renderIdleSwitchControls = vm.runInContext(
-        `(${extractedFunction("renderIdleSwitchControls")})`, context
-    );
-    context.showIdle = vm.runInContext(
-        `(${extractedFunction("showIdle")})`, context
-    );
-    const boot = vm.runInContext(`(${extractedFunction("boot")})`, context);
-
-    await boot();
-    assert.equal(context.queueTab.booting, false);
-    assert.equal(context.queueTab.updateRecoveryTab, tab);
-    assert.equal(flagReads, 1);
-    assert.equal(probes, 1);
-    assert.equal(queueRefreshes, 1);
-    assert.equal(context.queueTab.snapshotStatus, "nonempty");
-    assert.equal(texts.has("idle-connection"), false);
-
-    context.queueTab.items = [];
-    context.queueTab.snapshotStatus = "empty";
-    await context.showIdle();
-    assert.equal(texts.get("idle-connection"), "Failed to load");
-    assert.equal(hidden.get("idle-check-status"), false);
-    assert.equal(hidden.get("idle-switch-account"), true);
-    assert.equal(switchButton.disabled, true);
-});
-
-test("update recovery keeps the popup open after the queue drains", async () => {
-    let closes = 0;
-    const context = {
-        queueTab: {
-            refreshInFlight: null,
-            refreshRequested: false,
-            refreshTimer: null,
-            snapshotStatus: "empty",
-        },
-        refreshQueue: async () => [],
-        shouldShowUpdateRecovery: () => true,
-        stopTimers() {},
-        window: {close: () => { closes += 1; }},
-    };
-    vm.createContext(context);
-    const closeIfNothingIsLeft = vm.runInContext(
-        `(${extractedFunction("closeIfNothingIsLeft")})`, context
-    );
-    await closeIfNothingIsLeft();
-    assert.equal(closes, 0);
 });
 
 function idleRecoveryRefreshHarness(reload, options = {}) {
@@ -800,407 +606,6 @@ test("queue notifications win the click probe without clearing recovery", async 
     assert.equal(raced.refreshes(), 1);
 });
 
-function approvalDecisionHarness({
-    actionGate = null,
-    kind = "signMessage",
-    onActionScheduled = null,
-    refreshGate = null,
-    sliderGate = null,
-    sliderResult = true,
-    workerResponse,
-} = {}) {
-    const request = {
-        configurationKey: "https://wallet.example",
-        host: "wallet.example",
-        id: 7,
-        provider: "ethereum",
-        requestToken: "request",
-    };
-    const extensionMessages = [];
-    const nativeCalls = [];
-    const renderedStates = [];
-    let failed = false;
-    let polled = false;
-    let authoritativeRefreshes = 0;
-    let timerStops = 0;
-    let workingOverlayVisible = false;
-    const approveButton = {disabled: false};
-    const context = {
-        WORKFLOW_VERSION: 3,
-        approvalLifecycle: {
-            current: {id: 7, kind, reviewToken: "review", state: "review"},
-            generation: 0,
-        },
-        browser: {runtime: {sendMessage(message) {
-            extensionMessages.push(message);
-            return Promise.resolve(workerResponse);
-        }}},
-        canSubmitDecision: () => true,
-        discardSliderCommands: () => {},
-        failClosedApprovalState: () => { failed = true; },
-        fetchAndRenderState: async () => {
-            authoritativeRefreshes += 1;
-            if (refreshGate) { await refreshGate; }
-            approveButton.disabled = false;
-        },
-        finishSliderDragForDecision: () => {},
-        hasExactKeys: (value, keys) => value !== null &&
-            typeof value === "object" &&
-            Object.keys(value).length === keys.length &&
-            keys.every(key => Object.hasOwn(value, key)),
-        isCurrentRequest: value => value === request,
-        isProviderRevisions: value => value !== null &&
-            typeof value === "object" &&
-            Number.isSafeInteger(value.ethereum) && value.ethereum >= 0 &&
-            Number.isSafeInteger(value.solana) && value.solana >= 0,
-        isCompactRejectableApprovalState: state => state?.state === "working" &&
-            state.kind === undefined && state.canReject === true,
-        isRecord: value => value !== null && typeof value === "object" &&
-            !Array.isArray(value),
-        isRequestToken: () => true,
-        requestFor: value => value === request || value === request.id ? request : null,
-        pollApproval: () => { polled = true; },
-        document: {getElementById: () => approveButton},
-        queueTab: {items: [request], index: 0},
-        renderState: state => { renderedStates.push(state); },
-        scheduleNativeMessage(kindValue, subject, id, payload, requestToken, options = {}) {
-            return {
-                result: (async () => {
-                    onActionScheduled?.();
-                    if (actionGate) { await actionGate; }
-                    if (options.isValid && !options.isValid()) {
-                        return {status: "cancelled"};
-                    }
-                    nativeCalls.push({
-                        kind: kindValue,
-                        subject,
-                        id,
-                        payload,
-                        requestToken,
-                        reviewToken: options.reviewToken,
-                        approvalRequest: options.approvalRequest,
-                    });
-                    return {status: "response", response: {ok: true}};
-                })(),
-            };
-        },
-        settleExtensionMessage: async pending => ({
-            response: await pending,
-            status: "response",
-        }),
-        show: id => {
-            if (id === "working-overlay") { workingOverlayVisible = true; }
-        },
-        stopTimers: () => { timerStops += 1; },
-        waitForSliderCommands: async () => {
-            if (sliderGate) { await sliderGate; }
-            return sliderResult;
-        },
-    };
-    vm.createContext(context);
-    context.submitCurrentDecision = vm.runInContext(
-        `(${extractedFunction("submitCurrentDecision")})`,
-        context
-    );
-    return {
-        context,
-        approveButton,
-        authoritativeRefreshes: () => authoritativeRefreshes,
-        extensionMessages,
-        failed: () => failed,
-        nativeCalls,
-        polled: () => polled,
-        renderedStates,
-        timerStops: () => timerStops,
-        workingOverlayVisible: () => workingOverlayVisible,
-    };
-}
-
-test("approve delegates revision selection to the worker proxy", async () => {
-    const harness = approvalDecisionHarness();
-    await harness.context.submitCurrentDecision("approveRequest", {password: "secret"});
-    assert.deepEqual(harness.extensionMessages, []);
-    assert.deepEqual(JSON.parse(JSON.stringify(harness.nativeCalls[0].payload)), {});
-    assert.equal(harness.nativeCalls[0].requestToken, "request");
-    assert.equal(
-        harness.nativeCalls[0].approvalRequest,
-        harness.context.queueTab.items[0]
-    );
-    assert.equal(harness.nativeCalls[0].reviewToken, "review");
-    assert.equal(harness.failed(), false);
-    assert.equal(harness.polled(), true);
-});
-
-test("terminal decisions fence stale refresh and poll after their native reply", async () => {
-    for (const subject of ["approveRequest", "rejectRequest"]) {
-        let releaseAction;
-        const actionGate = new Promise(resolve => { releaseAction = resolve; });
-        let markScheduled;
-        const actionScheduled = new Promise(resolve => { markScheduled = resolve; });
-        let resolveRefresh;
-        const staleRefresh = new Promise(resolve => { resolveRefresh = resolve; });
-        const harness = approvalDecisionHarness({
-            actionGate,
-            onActionScheduled: markScheduled,
-            workerResponse: {revisions: {ethereum: 4, solana: 9}},
-        });
-        harness.context.approvalState = () => staleRefresh;
-        harness.context.refreshTransactionState = vm.runInContext(
-            `(${extractedFunction("refreshTransactionState")})`,
-            harness.context
-        );
-        const request = harness.context.queueTab.items[0];
-        const refresh = harness.context.refreshTransactionState(request);
-        const submission = harness.context.submitCurrentDecision(
-            subject,
-            subject === "approveRequest" ? {} : undefined
-        );
-
-        await actionScheduled;
-        assert.equal(harness.context.approvalLifecycle.generation, 1);
-        assert.equal(harness.timerStops(), 1);
-        assert.equal(harness.workingOverlayVisible(), true);
-        assert.equal(harness.polled(), false);
-
-        resolveRefresh({
-            id: request.id,
-            kind: "signMessage",
-            reviewToken: "stale-review",
-            state: "review",
-        });
-        await refresh;
-        assert.deepEqual(harness.renderedStates, []);
-        assert.equal(harness.context.approvalLifecycle.current.reviewToken, "review");
-        assert.equal(harness.polled(), false);
-
-        releaseAction();
-        await submission;
-        assert.equal(harness.nativeCalls[0].subject, subject);
-        assert.equal(harness.polled(), true);
-    }
-});
-
-test("approval stops when the review token rotates while queued", async () => {
-    let releaseAction;
-    const actionGate = new Promise(resolve => { releaseAction = resolve; });
-    let markScheduled;
-    const actionScheduled = new Promise(resolve => { markScheduled = resolve; });
-    const harness = approvalDecisionHarness({
-        actionGate,
-        onActionScheduled: markScheduled,
-        workerResponse: {revisions: {ethereum: 4, solana: 9}},
-    });
-    const submission = harness.context.submitCurrentDecision("approveRequest", {});
-    await actionScheduled;
-    harness.context.approvalLifecycle.current = {
-        ...harness.context.approvalLifecycle.current,
-        reviewToken: "rotated-review",
-    };
-    releaseAction();
-    await submission;
-
-    assert.equal(harness.nativeCalls.length, 0);
-    assert.equal(harness.failed(), false);
-    assert.equal(harness.polled(), false);
-    assert.equal(harness.renderedStates.at(-1).reviewToken, "rotated-review");
-});
-
-test("approval uses state recaptured after slider settlement", async () => {
-    let releaseSlider;
-    const sliderGate = new Promise(resolve => { releaseSlider = resolve; });
-    const harness = approvalDecisionHarness({sliderGate});
-    const submission = harness.context.submitCurrentDecision("approveRequest", {
-        revisions: {ethereum: 99, solana: 99},
-    });
-    harness.context.approvalLifecycle.current = {
-        kind: "addChain",
-        reviewToken: "updated-review",
-        state: "review",
-    };
-    releaseSlider();
-    await submission;
-
-    assert.equal(harness.extensionMessages.length, 0);
-    assert.deepEqual(JSON.parse(JSON.stringify(harness.nativeCalls[0].payload)), {});
-    assert.equal(harness.nativeCalls[0].reviewToken, "updated-review");
-});
-
-test("failed terminal slider settlement blocks approval", async () => {
-    const harness = approvalDecisionHarness({sliderResult: false});
-
-    await harness.context.submitCurrentDecision("approveRequest", {});
-
-    assert.equal(harness.extensionMessages.length, 0);
-    assert.equal(harness.nativeCalls.length, 0);
-    assert.equal(harness.polled(), false);
-});
-
-test("caller-supplied provider revisions are stripped before approval proxying", async () => {
-    const harness = approvalDecisionHarness();
-    await harness.context.submitCurrentDecision("approveRequest", {
-        revisions: {ethereum: 99, solana: 99},
-    });
-    assert.deepEqual(
-        JSON.parse(JSON.stringify(harness.nativeCalls[0].payload)),
-        {}
-    );
-    assert.equal(harness.failed(), false);
-});
-
-test("add-chain approval and rejection bypass revision preflight", async () => {
-    const addChain = approvalDecisionHarness({kind: "addChain"});
-    await addChain.context.submitCurrentDecision("approveRequest", {
-        revisions: {ethereum: 99, solana: 99},
-    });
-    assert.equal(addChain.extensionMessages.length, 0);
-    assert.deepEqual(JSON.parse(JSON.stringify(addChain.nativeCalls[0].payload)), {});
-
-    const rejection = approvalDecisionHarness();
-    await rejection.context.submitCurrentDecision("rejectRequest");
-    assert.equal(rejection.extensionMessages.length, 0);
-    assert.equal(rejection.nativeCalls[0].payload, undefined);
-    assert.equal(rejection.nativeCalls[0].reviewToken, undefined);
-});
-
-test("compact rejectable state submits tokenless Reject without refreshing", async () => {
-    const harness = approvalDecisionHarness();
-    harness.context.approvalLifecycle.current = {
-        id: 7,
-        state: "working",
-        error: "Too much data to display",
-        canReject: true,
-    };
-    harness.context.canRejectApprovalState = vm.runInContext(
-        `(${extractedFunction("canRejectApprovalState")})`,
-        harness.context
-    );
-    harness.context.canSubmitDecision = vm.runInContext(
-        `(${extractedFunction("canSubmitDecision")})`,
-        harness.context
-    );
-
-    await harness.context.submitCurrentDecision("rejectRequest");
-
-    assert.equal(harness.nativeCalls.length, 1);
-    assert.equal(harness.nativeCalls[0].subject, "rejectRequest");
-    assert.equal(harness.nativeCalls[0].reviewToken, undefined);
-    assert.equal(harness.extensionMessages.length, 0);
-    assert.equal(harness.authoritativeRefreshes(), 0);
-});
-
-test("review rejection remains valid across review-token rotation", async () => {
-    let releaseAction;
-    const actionGate = new Promise(resolve => { releaseAction = resolve; });
-    const harness = approvalDecisionHarness();
-    harness.context.scheduleNativeMessage = (_kind, subject, _id, _payload,
-        _requestToken, options = {}) => ({result: (async () => {
-            await actionGate;
-            assert.equal(options.isValid(), true);
-            assert.equal(options.reviewToken, undefined);
-            return {status: "response", response: {status: "ok", subject}};
-        })()});
-    const rejection = harness.context.submitCurrentDecision("rejectRequest");
-    harness.context.approvalLifecycle.current.reviewToken = "review-b";
-    releaseAction();
-    await rejection;
-
-    assert.equal(harness.polled(), true);
-});
-
-test("alert buttons pass the click-time review token", async () => {
-    const actions = [{title: "Cancel", action: "cancel"}];
-    const state = {
-        alert: {title: "Review fees", message: "", actions},
-        reviewToken: "review-a",
-        state: "review",
-    };
-    let click;
-    let resolveMutation;
-    let mutationArguments;
-    let adoptedState;
-    const pendingMutation = new Promise(resolve => { resolveMutation = resolve; });
-    const buttons = {
-        children: [],
-        set innerHTML(_value) { this.children = []; },
-        appendChild(button) { this.children.push(button); },
-    };
-    const elements = {
-        "alert-overlay": {classList: {contains: () => true}},
-        "alert-buttons": buttons,
-        "screen-request": {inert: false},
-        "alert-box": {focus() {}},
-    };
-    const context = {
-        approvalLifecycle: {current: state},
-        selectionRender: {alertKey: null, alertReturnFocus: null},
-        document: {
-            activeElement: null,
-            createElement() {
-                return {
-                    addEventListener(_name, handler) { click = handler; },
-                    focus() {},
-                };
-            },
-            getElementById: id => elements[id],
-        },
-        closeAlert: () => {},
-        setText: () => {},
-        show: () => {},
-        isRequestToken: value => typeof value === "string",
-        mutateState: async (...args) => {
-            mutationArguments = args;
-            return pendingMutation;
-        },
-        adoptState: state => { adoptedState = state; },
-        keepFollowingTransaction: () => {},
-    };
-    vm.createContext(context);
-    const renderAlertIfNeeded = vm.runInContext(
-        `(${extractedFunction("renderAlertIfNeeded")})`,
-        context
-    );
-
-    renderAlertIfNeeded(state);
-    const pending = click();
-    context.approvalLifecycle.current = {...state, reviewToken: "review-b"};
-    resolveMutation({id: 7, state: "review"});
-    await pending;
-
-    assert.equal(mutationArguments[0], "resolveApprovalAlert");
-    assert.equal(mutationArguments[3], "review-a");
-    assert.equal(adoptedState, undefined);
-});
-
-test("alert mutations forward the explicit review token to native dispatch", async () => {
-    const request = {id: 7, requestToken: "request"};
-    let scheduledOptions;
-    const context = {
-        requestFor: () => request,
-        isCurrentRequest: () => true,
-        scheduleNativeMessage(_kind, _subject, _id, _payload, _token, options) {
-            scheduledOptions = options;
-            return {result: Promise.resolve({status: "response", response: {ok: true}})};
-        },
-    };
-    vm.createContext(context);
-    const requestState = vm.runInContext(
-        `(${extractedFunction("requestState")})`,
-        context
-    );
-
-    await requestState(
-        "resolveApprovalAlert",
-        {action: "cancel"},
-        request,
-        "mutation",
-        null,
-        null,
-        "review-a"
-    );
-
-    assert.equal(scheduledOptions.reviewToken, "review-a");
-});
-
 test("completed-response apply uses the exact worker contract", async () => {
     const messages = [];
     let workerResponse = {applied: true};
@@ -1246,97 +651,6 @@ test("completed-response apply uses the exact worker contract", async () => {
         revisions: {ethereum: 3, solana: 5},
         workflowVersion: 3,
     });
-});
-
-function missingReconciliationHarness() {
-    const request = {id: 7, requestToken: "first"};
-    let refreshes = 0;
-    let reconciliation;
-    let settleRefresh;
-    let stopped = 0;
-    const requestScreen = {classList: {contains: () => false}};
-    const idleScreen = {classList: {contains: () => true}};
-    const context = {
-        approvalLifecycle: {completion: null},
-        closeAlert: () => {},
-        document: {getElementById(id) {
-            if (id === "screen-request") { return requestScreen; }
-            if (id === "screen-idle") { return idleScreen; }
-            throw new Error(`Unexpected element: ${id}`);
-        }},
-        isCurrentRequest: request => request === context.queueTab.items[context.queueTab.index],
-        queueTab: {
-            index: 0,
-            items: [request],
-            refreshInFlight: null,
-            refreshRequested: false,
-            refreshTimer: null,
-            snapshotStatus: "nonempty",
-        },
-        refreshQueue: () => {
-            refreshes += 1;
-            return new Promise(resolve => { settleRefresh = resolve; });
-        },
-        requestFor: value => value,
-        sameRequest: (left, right) => !!left && !!right &&
-            left.id === right.id && left.requestToken === right.requestToken,
-        shouldShowUpdateRecovery: () => false,
-        stopTimers: () => { stopped += 1; },
-        window: {close: () => assert.fail("nonempty queue must remain open")},
-    };
-    vm.createContext(context);
-    context.shouldDeferQueueRefreshForCurrentRequest = vm.runInContext(
-        `(${extractedFunction("shouldDeferQueueRefreshForCurrentRequest")})`,
-        context
-    );
-    context.closeIfNothingIsLeft = vm.runInContext(
-        `(${extractedFunction("closeIfNothingIsLeft")})`,
-        context
-    );
-    const reconcileMissingRequest = vm.runInContext(
-        `(${extractedFunction("reconcileMissingRequest")})`,
-        context
-    );
-    context.reconcileMissingRequest = value => {
-        const operation = reconcileMissingRequest(value);
-        reconciliation ??= operation;
-        return operation;
-    };
-    context.handleMissingState = vm.runInContext(
-        `(${extractedFunction("handleMissingState")})`,
-        context
-    );
-    return {
-        context,
-        reconciliation: () => reconciliation,
-        refreshes: () => refreshes,
-        request,
-        resolveRefresh(value) { settleRefresh(value); },
-        stopped: () => stopped,
-    };
-}
-
-test("missing approval state reconciles through the authoritative queue once", async () => {
-    const harness = missingReconciliationHarness();
-    assert.equal(harness.context.shouldDeferQueueRefreshForCurrentRequest(), true);
-
-    assert.equal(
-        harness.context.handleMissingState({state: "missing"}, harness.request),
-        true
-    );
-    assert.equal(harness.context.approvalLifecycle.completion, harness.request);
-    assert.equal(harness.context.shouldDeferQueueRefreshForCurrentRequest(), false);
-    assert.equal(harness.refreshes(), 1);
-    assert.equal(harness.stopped(), 2);
-
-    assert.equal(
-        harness.context.handleMissingState({state: "missing"}, harness.request),
-        true
-    );
-    assert.equal(harness.refreshes(), 1);
-    harness.resolveRefresh([harness.request]);
-    await harness.reconciliation();
-    assert.equal(harness.context.approvalLifecycle.completion, null);
 });
 
 function recoveredQueueHarness({
@@ -1539,7 +853,7 @@ function queueNotificationHarness(fetchPendingResponse) {
             context.queueTab.items = requests ?? [];
             context.queueTab.snapshotStatus = requests?.length ? "nonempty" : "empty";
         },
-        stopTimers() {},
+        currentRequestController: null,
     };
     vm.createContext(context);
     for (const name of [
@@ -1590,171 +904,6 @@ test("a pending-request notification fences a stale initial empty queue", async 
     await bootRefresh;
     assert.equal(reads, 2);
     assert.deepEqual(harness.rendered, [[request]]);
-});
-
-test("approval uses the long timeout and holds its action channel until reply", async () => {
-    const calls = [];
-    const nativeOperationFlags = [];
-    let resolveApproval;
-    const pendingApproval = new Promise(resolve => { resolveApproval = resolve; });
-    const context = {
-        approvalLifecycle: {current: {reviewToken: "review"}},
-        nativeChannels: {read: Promise.resolve(), action: Promise.resolve()},
-        nativeMessage(subject) {
-            calls.push(subject);
-            return subject === "approveRequest"
-                ? pendingApproval
-                : Promise.resolve(`${subject}-response`);
-        },
-        settleNativeMessage(pending, nativeOperation) {
-            nativeOperationFlags.push(nativeOperation);
-            return nativeOperation
-                ? pending
-                : Promise.reject(new Error("bounded timeout"));
-        },
-    };
-    vm.createContext(context);
-    const scheduleNativeMessage = vm.runInContext(
-        `(${extractedFunction("scheduleNativeMessage")})`,
-        context
-    );
-
-    const approval = scheduleNativeMessage("action", "approveRequest", 1);
-    for (let index = 0; index < 5 && calls.length === 0; index += 1) {
-        await Promise.resolve();
-    }
-    const rejection = scheduleNativeMessage("action", "rejectRequest", 2);
-    await Promise.resolve();
-    assert.deepEqual(calls, ["approveRequest"]);
-    assert.deepEqual(nativeOperationFlags, [true]);
-
-    resolveApproval("approved");
-    assert.equal((await approval.result).response, "approved");
-    assert.equal((await rejection.result).status, "failure");
-    assert.deepEqual(calls, ["approveRequest", "rejectRequest"]);
-    assert.deepEqual(nativeOperationFlags, [true, false]);
-});
-
-test("timed-out actions release their channel before raw settlement", async () => {
-    const calls = [];
-    let resolveFirst;
-    const firstRaw = new Promise(resolve => { resolveFirst = resolve; });
-    const context = {
-        approvalLifecycle: {current: {reviewToken: "review"}},
-        nativeChannels: {read: Promise.resolve(), action: Promise.resolve()},
-        nativeMessage(subject) {
-            calls.push(subject);
-            return subject === "first"
-                ? firstRaw
-                : Promise.resolve(`${subject}-response`);
-        },
-        settleNativeMessage(pending) {
-            return calls.at(-1) === "first"
-                ? Promise.reject(new Error("bounded timeout"))
-                : pending;
-        },
-    };
-    vm.createContext(context);
-    const scheduleNativeMessage = vm.runInContext(
-        `(${extractedFunction("scheduleNativeMessage")})`,
-        context
-    );
-
-    const first = scheduleNativeMessage("mutation", "first", 1);
-    assert.equal((await first.result).status, "failure");
-    const second = scheduleNativeMessage("mutation", "second", 2);
-    assert.equal((await second.result).response, "second-response");
-    assert.deepEqual(calls, ["first", "second"]);
-    resolveFirst("late-first-response");
-    await Promise.resolve();
-    assert.deepEqual(calls, ["first", "second"]);
-});
-
-test("queued actions capture the current review token at dispatch", async () => {
-    let releasePredecessor;
-    const predecessor = new Promise(resolve => { releasePredecessor = resolve; });
-    const observedTokens = [];
-    const context = {
-        approvalLifecycle: {current: {reviewToken: "old-token"}},
-        nativeChannels: {read: Promise.resolve(), action: predecessor},
-        nativeMessage(_subject, _id, _payload, _requestToken, reviewToken) {
-            observedTokens.push(reviewToken);
-            return Promise.resolve("ok");
-        },
-        settleNativeMessage: pending => pending,
-    };
-    vm.createContext(context);
-    const scheduleNativeMessage = vm.runInContext(
-        `(${extractedFunction("scheduleNativeMessage")})`,
-        context
-    );
-    const action = scheduleNativeMessage("action", "approveRequest", 1);
-    context.approvalLifecycle.current.reviewToken = "new-token";
-    releasePredecessor();
-    assert.equal((await action.result).response, "ok");
-    assert.deepEqual(observedTokens, ["new-token"]);
-});
-
-test("queued actions honor an explicit review token at dispatch", async () => {
-    let releasePredecessor;
-    const predecessor = new Promise(resolve => { releasePredecessor = resolve; });
-    const observedTokens = [];
-    const context = {
-        approvalLifecycle: {current: {reviewToken: "old-token"}},
-        nativeChannels: {read: Promise.resolve(), action: predecessor},
-        nativeMessage(_subject, _id, _payload, _requestToken, reviewToken) {
-            observedTokens.push(reviewToken);
-            return Promise.resolve("ok");
-        },
-        settleNativeMessage: pending => pending,
-    };
-    vm.createContext(context);
-    const scheduleNativeMessage = vm.runInContext(
-        `(${extractedFunction("scheduleNativeMessage")})`,
-        context
-    );
-    const action = scheduleNativeMessage(
-        "action",
-        "approveRequest",
-        1,
-        undefined,
-        undefined,
-        {reviewToken: "reviewed-token"}
-    );
-    context.approvalLifecycle.current.reviewToken = "new-token";
-    releasePredecessor();
-    assert.equal((await action.result).response, "ok");
-    assert.deepEqual(observedTokens, ["reviewed-token"]);
-});
-
-test("tokenless actions suppress the dynamic review token at dispatch", async () => {
-    const observedTokens = [];
-    const context = {
-        approvalLifecycle: {current: {reviewToken: "current-token"}},
-        nativeChannels: {read: Promise.resolve(), action: Promise.resolve()},
-        nativeMessage(_subject, _id, _payload, _requestToken, reviewToken) {
-            observedTokens.push(reviewToken);
-            return Promise.resolve("ok");
-        },
-        settleNativeMessage: pending => pending,
-    };
-    vm.createContext(context);
-    const scheduleNativeMessage = vm.runInContext(
-        `(${extractedFunction("scheduleNativeMessage")})`,
-        context
-    );
-
-    const action = scheduleNativeMessage(
-        "action",
-        "rejectRequest",
-        1,
-        undefined,
-        "request-token",
-        {reviewToken: undefined}
-    );
-
-    assert.equal((await action.result).response, "ok");
-    assert.deepEqual(observedTokens, [undefined]);
 });
 
 function manualSwitchHarness(sendMessage) {
@@ -1928,277 +1077,6 @@ test("manual Switch Account repeats the same intent after transport failure", as
     assert.equal(harness.refreshes(), 1);
 });
 
-test("error-screen Refresh fetches the visible request directly", async () => {
-    const request = {id: 7};
-    let fetched = null;
-    const context = {
-        approvalLifecycle: {current: {id: 7, state: "error"}},
-        queueTab: {items: [request], index: 0},
-        document: {getElementById: () => ({disabled: false})},
-        show: () => {},
-        fetchAndRenderState: async value => { fetched = value; },
-        refreshQueue: () => assert.fail("error refresh must not enter queue deferral"),
-    };
-    vm.createContext(context);
-    const approveCurrent = vm.runInContext(
-        `(${extractedFunction("approveCurrent")})`,
-        context
-    );
-    await approveCurrent();
-    assert.equal(fetched, request);
-});
-
-test("terminal slider mutation adopts the rotated review state", async () => {
-    const request = { id: 9, requestToken: "request" };
-    let mutationArguments;
-    let adoptedState;
-    const context = {
-        approvalLifecycle: { current: { reviewToken: "old" } },
-        transactionInteraction: { generation: 1 },
-        requestFor: value => value,
-        isCurrentRequest: () => true,
-        mutateState: async (...args) => {
-            mutationArguments = args;
-            return {
-                id: 9,
-                state: "review",
-                reviewToken: "00000000-0000-0000-0000-000000000001",
-            };
-        },
-        isRequestToken: value => typeof value === "string" && value.length > 0,
-        fetchAndRenderState: () => assert.fail("current token must not refresh"),
-        adoptState: state => { adoptedState = state; },
-        keepFollowingTransaction: () => {},
-    };
-    vm.createContext(context);
-    const sendSliderEvent = vm.runInContext(
-        `(${extractedFunction("sendSliderEvent")})`,
-        context
-    );
-
-    assert.equal(await sendSliderEvent("ended", 10, request, 1, "old"), true);
-    assert.equal(
-        adoptedState.reviewToken,
-        "00000000-0000-0000-0000-000000000001"
-    );
-    assert.equal(mutationArguments[3], "old");
-});
-
-test("stale terminal slider tokens refresh without applying a fee", async () => {
-    const request = {id: 9, requestToken: "request"};
-    let refreshes = 0;
-    const context = {
-        approvalLifecycle: {current: {reviewToken: "review-b"}},
-        transactionInteraction: {generation: 1},
-        requestFor: value => value,
-        isCurrentRequest: () => true,
-        isRequestToken: value => typeof value === "string",
-        mutateState: () => assert.fail("stale terminal command must stay local"),
-        fetchAndRenderState: async value => {
-            assert.equal(value, request);
-            refreshes += 1;
-        },
-    };
-    vm.createContext(context);
-    const sendSliderEvent = vm.runInContext(
-        `(${extractedFunction("sendSliderEvent")})`,
-        context
-    );
-
-    assert.equal(
-        await sendSliderEvent("ended", 140, request, 1, "review-a"),
-        false
-    );
-    assert.equal(refreshes, 1);
-});
-
-test("ignored terminal slider mutations refresh and resolve false", async () => {
-    const request = {id: 9, requestToken: "request"};
-    let refreshes = 0;
-    const context = {
-        approvalLifecycle: {current: {reviewToken: "review-a"}},
-        transactionInteraction: {generation: 1},
-        requestFor: value => value,
-        isCurrentRequest: () => true,
-        isRequestToken: value => typeof value === "string",
-        mutateState: async () => null,
-        fetchAndRenderState: async () => { refreshes += 1; },
-    };
-    vm.createContext(context);
-    const sendSliderEvent = vm.runInContext(
-        `(${extractedFunction("sendSliderEvent")})`,
-        context
-    );
-
-    assert.equal(
-        await sendSliderEvent("ended", 140, request, 1, "review-a"),
-        false
-    );
-    assert.equal(refreshes, 1);
-});
-
-test("transaction refresh defers rendering while a slider command is active", async () => {
-    const request = {id: 9, requestToken: "request"};
-    const state = {
-        id: 9,
-        kind: "sendTransaction",
-        state: "review",
-        slider: {visible: true, position: 175},
-    };
-    for (const lastStateJSON of ["different", JSON.stringify(state)]) {
-        let renders = 0;
-        let sliderWrites = 0;
-        const slider = {set value(_value) { sliderWrites += 1; }};
-        const context = {
-            NATIVE_MESSAGE_CANCELLED: Symbol("cancelled"),
-            approvalLifecycle: {
-                current: {id: 9, kind: "sendTransaction", state: "review"},
-                generation: 1,
-            },
-            selectionRender: {lastStateJSON},
-            transactionInteraction: {
-                activeCommand: {},
-                sliderDragging: false,
-            },
-            requestFor: () => request,
-            isCurrentRequest: () => true,
-            approvalState: async () => state,
-            isRenderableApprovalState: () => true,
-            failClosedApprovalState: () => assert.fail("state is renderable"),
-            handleMissingState: () => false,
-            renderState: () => { renders += 1; },
-            document: {getElementById: () => slider},
-            updateTransactionRefreshBackoff: () => {},
-            shouldPollApprovalState: () => false,
-            pollApproval: () => assert.fail("review state must not poll"),
-            scheduleTransactionRefresh: () => {},
-        };
-        vm.createContext(context);
-        const refreshTransactionState = vm.runInContext(
-            `(${extractedFunction("refreshTransactionState")})`,
-            context
-        );
-
-        await refreshTransactionState(request);
-
-        assert.equal(renders, 0);
-        assert.equal(sliderWrites, 0);
-        assert.equal(context.approvalLifecycle.current, state);
-    }
-});
-
-test("keyboard slider inputs stay local and send one terminal mutation", async () => {
-    const request = {id: 9, requestToken: "request"};
-    const slider = {disabled: false, value: "100"};
-    const calls = [];
-    let releaseTerminal;
-    const terminalGate = new Promise(resolve => { releaseTerminal = resolve; });
-    const context = {
-        approvalLifecycle: {current: {reviewToken: "review-a"}},
-        transactionInteraction: {
-            activeCommand: null,
-            generation: 1,
-            ignoreSliderUntilRelease: false,
-            sliderDragging: false,
-            sliderRequest: null,
-            sliderReviewToken: null,
-        },
-        requestFor: value => value,
-        isCurrentRequest: value => value === request,
-        sameRequest: (left, right) => left === right,
-        isRequestToken: value => typeof value === "string",
-        document: {getElementById: () => slider},
-        async sendSliderEvent(...arguments_) {
-            calls.push(arguments_);
-            await terminalGate;
-            return true;
-        },
-    };
-    vm.createContext(context);
-    context.finishSliderCommand = vm.runInContext(
-        `(${extractedFunction("finishSliderCommand")})`,
-        context
-    );
-    context.beginSliderInteraction = vm.runInContext(
-        `(${extractedFunction("beginSliderInteraction")})`,
-        context
-    );
-    context.startSliderCommand = vm.runInContext(
-        `(${extractedFunction("startSliderCommand")})`,
-        context
-    );
-    context.finishSliderInteraction = vm.runInContext(
-        `(${extractedFunction("finishSliderInteraction")})`,
-        context
-    );
-
-    assert.equal(context.beginSliderInteraction(request), true);
-    slider.value = "120";
-    slider.value = "145";
-    assert.equal(calls.length, 0);
-    const completion = context.finishSliderInteraction("ended");
-    assert.equal(calls.length, 1);
-    assert.deepEqual(calls[0].slice(0, 3), ["ended", 145, request]);
-    assert.equal(context.beginSliderInteraction(request), false);
-    assert.equal(slider.disabled, true);
-
-    releaseTerminal();
-    assert.equal(await completion, true);
-    assert.equal(context.transactionInteraction.activeCommand, null);
-});
-
-test("slider mutation validity is fenced to its queued review token", async () => {
-    const request = {id: 9, requestToken: "request"};
-    let releaseRequest;
-    const requestGate = new Promise(resolve => { releaseRequest = resolve; });
-    let remainsValid;
-    const cancelled = Symbol("cancelled");
-    const context = {
-        NATIVE_MESSAGE_CANCELLED: cancelled,
-        approvalLifecycle: {
-            current: {reviewToken: "review-a"},
-            generation: 0,
-            mutation: null,
-        },
-        transactionInteraction: {activeCommand: null},
-        requestFor: value => value,
-        isCurrentRequest: () => true,
-        sameRequest: (left, right) => left === right,
-        waitForSliderCommands: async () => true,
-        resetTransactionRefreshBackoff: () => {},
-        async requestState(_subject, _payload, _request, _kind, _owner, validity) {
-            remainsValid = validity;
-            await requestGate;
-            return validity() ? {id: 9, state: "review"} : cancelled;
-        },
-        isRenderableApprovalState: () => true,
-        isApprovalStateEnvelope: () => true,
-        isRecord: value => value !== null && typeof value === "object",
-        failClosedApprovalState: () => assert.fail("stale token must cancel"),
-        handleMissingState: () => false,
-    };
-    vm.createContext(context);
-    const mutateState = vm.runInContext(
-        `(${extractedFunction("mutateState")})`,
-        context
-    );
-
-    const pending = mutateState(
-        "setTransactionSpeed",
-        {interaction: "ended", value: 140},
-        request,
-        "review-a"
-    );
-    for (let attempt = 0; attempt < 5 && !remainsValid; attempt += 1) {
-        await Promise.resolve();
-    }
-    assert.equal(remainsValid(), true);
-    context.approvalLifecycle.current.reviewToken = "review-b";
-    assert.equal(remainsValid(), false);
-    releaseRequest();
-    assert.equal(await pending, null);
-});
-
 for (const recovery of ["queue failure", "extension update"]) {
     test(`queue refresh preserves Refresh after ${recovery}`, async () => {
         const elements = new Map;
@@ -2265,139 +1143,1220 @@ for (const recovery of ["queue failure", "extension update"]) {
     });
 }
 
-test("full popup boot renders a queued review request", async () => {
+function requestToken(value) {
+    return `00000000-0000-0000-0000-${String(value).padStart(12, "0")}`;
+}
+
+function pendingRequest(id = 7, token = 1) {
+    return {
+        configurationKey: "https://wallet.example",
+        host: "wallet.example",
+        id,
+        provider: "ethereum",
+        receivedAt: Date.now(),
+        requestToken: requestToken(token),
+        revisions: {ethereum: 0, solana: 0},
+        sequence: 0,
+    };
+}
+
+function messageState(request = pendingRequest(), overrides = {}) {
+    return {
+        account: {name: "Primary", croppedAddress: "0x1234"},
+        host: request.host,
+        id: request.id,
+        kind: "signMessage",
+        meta: "Hello from the dapp",
+        reviewToken: requestToken(101),
+        state: "review",
+        title: "Sign message",
+        ...overrides,
+    };
+}
+
+function transactionState(request = pendingRequest(), overrides = {}) {
+    return {
+        account: {name: "Primary", croppedAddress: "0x1234"},
+        canApprove: true,
+        canEdit: true,
+        editor: {
+            gasPriceGwei: "2",
+            nonce: "1",
+            suggestedGasPriceGwei: "3",
+            usesEIP1559: false,
+        },
+        feeLines: ["Network fee: 0.001 ETH"],
+        host: request.host,
+        id: request.id,
+        kind: "sendTransaction",
+        networkName: "Ethereum",
+        phase: "ready",
+        reviewToken: requestToken(101),
+        slider: {enabled: true, maximum: 200, position: 100, visible: true},
+        state: "review",
+        title: "Send transaction",
+        transactionMutationAllowed: true,
+        ...overrides,
+    };
+}
+
+async function flushPopup() {
+    for (let index = 0; index < 3; index += 1) {
+        await new Promise(resolve => setImmediate(resolve));
+    }
+}
+
+function popupHarness(options = {}) {
+    const nativeMessages = [];
+    const workerMessages = [];
+    const tabMessages = [];
+    const focusCalls = [];
+    const textWrites = [];
     const elements = new Map;
     const documentListeners = new Map;
-    const nativeSubjects = [];
-    const requestToken = "00000000-0000-0000-0000-000000000001";
-    const reviewToken = "00000000-0000-0000-0000-000000000002";
-    const documentElement = popupElement("document-element");
-    const document = {
-        documentElement,
+    const runtimeListeners = [];
+    const timers = new Map;
+    const timerHistory = [];
+    const states = new Map;
+    const handlers = {
+        native: options.native,
+        worker: options.worker,
+        tab: options.tab,
+    };
+    const model = {
+        closed: 0,
+        completed: [],
+        requests: options.requests || [],
+        updateRecovery: options.updateRecovery === true,
+    };
+    let nextTimer = 0;
+    let nextElement = 0;
+    let randomValue = 0;
+    const tab = {
+        id: 3,
+        incognito: false,
+        url: "https://wallet.example/path",
+    };
+    let document;
+    function element(id) {
+        const classes = new Set(id === "screen-loading" ? [] : ["hidden"]);
+        const listeners = new Map;
+        let textContent = "";
+        const value = {
+            id,
+            children: [],
+            classList: {
+                add: name => classes.add(name),
+                contains: name => classes.has(name),
+                remove: name => classes.delete(name),
+            },
+            dataset: {},
+            disabled: false,
+            inert: false,
+            isConnected: true,
+            open: false,
+            src: "",
+            textContent: "",
+            value: "",
+            addEventListener(name, listener) { listeners.set(name, listener); },
+            appendChild(child) { this.children.push(child); return child; },
+            emit(name) { return listeners.get(name)?.({target: this}); },
+            focus() { document.activeElement = this; focusCalls.push(id); },
+            setAttribute(name, attribute) { this[name] = attribute; },
+        };
+        Object.defineProperty(value, "textContent", {
+            get() { return textContent; },
+            set(text) { textContent = text; textWrites.push({id, text}); },
+        });
+        Object.defineProperty(value, "innerHTML", {
+            get() { return ""; },
+            set() {
+                for (const child of value.children) { child.isConnected = false; }
+                value.children = [];
+            },
+        });
+        return value;
+    }
+    document = {
+        activeElement: null,
+        documentElement: element("document-element"),
         addEventListener(name, listener) { documentListeners.set(name, listener); },
-        createElement: () => popupElement("created"),
+        createElement: name => element(`${name}-${++nextElement}`),
         getElementById(id) {
-            if (!elements.has(id)) { elements.set(id, popupElement(id)); }
+            if (!elements.has(id)) { elements.set(id, element(id)); }
             return elements.get(id);
         },
         querySelectorAll: () => [],
     };
-    const pendingRequest = {
-        configurationKey: "https://wallet.example",
-        host: "wallet.example",
-        id: 7,
-        provider: "ethereum",
-        receivedAt: Date.now(),
-        requestToken,
-        revisions: {ethereum: 0, solana: 0},
-        sequence: 0,
+    const defaultNative = message => {
+        if (message.subject === "getPendingRequests") {
+            return {completedResponses: model.completed, requests: model.requests};
+        }
+        if (message.subject === "getApprovalState") {
+            return states.get(message.requestToken) || messageState({
+                id: message.id, host: "wallet.example",
+            });
+        }
+        if (message.subject === "openApp") { return {id: message.id, opened: true}; }
+        return {status: "ok"};
+    };
+    const defaultWorker = message => {
+        if (message.subject === "getLatestConfiguration") {
+            return {latestConfigurations: [], revisions: {ethereum: 0, solana: 0}};
+        }
+        if (message.subject === "applyCompletedResponse") {
+            model.completed = model.completed.filter(item =>
+                item.requestToken !== message.requestToken
+            );
+            return {applied: true};
+        }
+        return {status: "ok"};
     };
     const browser = {
         extension: {inIncognitoContext: false},
+        permissions: {contains: async () => true},
         runtime: {
-            getManifest: () => ({version: "1.0.99"}),
-            onMessage: {addListener() {}},
-            sendMessage: async () => undefined,
-            async sendNativeMessage(_application, message) {
-                nativeSubjects.push(message.subject);
-                if (message.subject === "getPendingRequests") {
-                    return {completedResponses: [], requests: [pendingRequest]};
-                }
-                if (message.subject === "getApprovalState") {
-                    return {
-                        account: {name: "Primary", croppedAddress: "0x1234"},
-                        host: "wallet.example",
-                        id: 7,
-                        kind: "signMessage",
-                        meta: "Hello from the dapp",
-                        reviewToken,
-                        state: "review",
-                        title: "Sign message",
-                    };
-                }
-                throw new Error(`Unexpected native subject: ${message.subject}`);
+            onMessage: {addListener(listener) { runtimeListeners.push(listener); }},
+            sendMessage(message) {
+                workerMessages.push(normalized(message));
+                return Promise.resolve(handlers.worker
+                    ? handlers.worker(message, defaultWorker)
+                    : defaultWorker(message));
+            },
+            sendNativeMessage(application, message) {
+                assert.equal(application, "org.lil.wallet");
+                nativeMessages.push(normalized(message));
+                return Promise.resolve(handlers.native
+                    ? handlers.native(message, defaultNative)
+                    : defaultNative(message));
             },
         },
+        storage: {local: {get: async () => ({
+            workflowUpdateRecoveryNeeded: model.updateRecovery,
+        })}},
         tabs: {
-            query: async () => [{
-                id: 3,
-                incognito: false,
-                url: "https://wallet.example/path",
-            }],
+            query: async () => [tab],
+            sendMessage(id, message) {
+                tabMessages.push({id, message: normalized(message)});
+                return Promise.resolve(handlers.tab ? handlers.tab(message) : {
+                    buildVersion: packagedBuildVersion,
+                    nonce: message.nonce,
+                    subject: "workflowProbe",
+                    workflowVersion: 3,
+                });
+            },
         },
-    };
-    const isRecord = value => value !== null && typeof value === "object" &&
-        !Array.isArray(value);
-    const BigWalletBridgeWire = {
-        BUILD_VERSION: packagedBuildVersion,
-        MANUAL_SWITCH_INTENT_SUBJECT: "manualSwitchIntent",
-        MAX_RESPONSE_READY_IDS: 16,
-        WORKFLOW_POLICY: {
-            maximumNativeChainIdHex: "7fffffffffffffff",
-            maximumRetainedRequests: 16,
-            selectionAccountCoins: ["ethereum", "solana"],
-            solanaClusterValues: ["mainnetBeta", "devnet", "testnet"],
-        },
-        WORKFLOW_VERSION: 3,
-        configurationIdentityForURL: () => ({
-            configurationKey: "https://wallet.example",
-            host: "wallet.example",
-            legacyConfigurationKey: "wallet.example",
-        }),
-        createTrustedNativeMessageSender: ({sendRawNativeMessage}) => message =>
-            sendRawNativeMessage(message),
-        genId: (() => { let id = 100; return () => ++id; })(),
-        genPrivateToken: () => "00000001000000020000000300000004",
-        hasExactKeys: (value, keys) => isRecord(value) &&
-            Object.keys(value).length === keys.length &&
-            keys.every(key => Object.hasOwn(value, key)),
-        isConfiguration: value => isRecord(value) &&
-            (value.provider === "ethereum" || value.provider === "solana"),
-        isCanonicalEthereumChainId: value =>
-            typeof value === "string" && /^0x[1-9a-f][0-9a-f]*$/.test(value),
-        isManualSwitchAcknowledgement: () => false,
-        isManualSwitchInFlightStatus: () => false,
-        isManualSwitchTerminalResponse: () => false,
-        isPendingRequestAvailable: () => false,
-        isPrivateToken: value => typeof value === "string",
-        isProviderRevisions: value => isRecord(value) &&
-            Number.isSafeInteger(value.ethereum) &&
-            Number.isSafeInteger(value.solana),
-        isRecord,
-        isRequestToken: value => typeof value === "string" && value.length > 0,
-        isValidRequestId: Number.isSafeInteger,
-        withTimeout: pending => Promise.resolve(pending),
     };
     const context = vm.createContext({
-        BigWalletBridgeWire,
+        URL,
         browser,
-        clearTimeout() {},
-        console: {error() {}, log() {}},
+        clearTimeout: id => timers.delete(id),
+        crypto: {getRandomValues(values) {
+            for (let index = 0; index < values.length; index += 1) {
+                values[index] = ++randomValue;
+            }
+            return values;
+        }},
         document,
-        navigator: {maxTouchPoints: 0},
-        setTimeout: () => 1,
-        window: {close() {}},
+        navigator: {maxTouchPoints: 5},
+        setTimeout(callback, delay) {
+            const timer = {callback, delay, id: ++nextTimer};
+            timers.set(timer.id, timer);
+            timerHistory.push(timer);
+            return timer.id;
+        },
+        window: {close() { model.closed += 1; }},
     });
+    new vm.Script(wireSource, {filename: "bridge_wire.js"}).runInContext(context);
     new vm.Script(source, {filename: "popup.js"}).runInContext(context);
-    documentListeners.get("DOMContentLoaded")();
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-        await new Promise(resolve => setImmediate(resolve));
-        if (!document.getElementById("screen-request").classList.contains("hidden")) {
-            break;
-        }
+    return {
+        browser,
+        context,
+        document,
+        focusCalls,
+        handlers,
+        model,
+        nativeMessages,
+        states,
+        tab,
+        tabMessages,
+        textWrites,
+        timerHistory,
+        timers,
+        workerMessages,
+        get controller() { return vm.runInContext("currentRequestController", context); },
+        get queue() { return vm.runInContext("queueTab", context); },
+        get(name) { return document.getElementById(name); },
+        call(name, ...arguments_) { return vm.runInContext(name, context)(...arguments_); },
+        setState(request, state) { states.set(request.requestToken, state); },
+        async boot() {
+            documentListeners.get("DOMContentLoaded")();
+            await flushPopup();
+        },
+        async show(requests) {
+            model.requests = requests;
+            this.call("showQueue", requests);
+            await flushPopup();
+            return this.controller;
+        },
+        async fire(id) {
+            const timer = timers.get(id);
+            assert.ok(timer, `Expected live timer ${id}`);
+            timers.delete(id);
+            timer.callback();
+            await flushPopup();
+        },
+        notify() {
+            for (const listener of runtimeListeners) {
+                listener({subject: "pendingRequestAvailable", workflowVersion: 3});
+            }
+        },
+        clearMessages() {
+            nativeMessages.length = 0;
+            workerMessages.length = 0;
+            tabMessages.length = 0;
+        },
+        visibleSnapshot() {
+            return [...elements].map(([id, item]) => ({
+                id,
+                text: item.textContent,
+                value: item.value,
+                disabled: item.disabled,
+                hidden: item.classList.contains("hidden"),
+                inert: item.inert,
+                open: item.open,
+                children: item.children.map(child => [child.id, child.textContent]),
+            }));
+        },
+    };
+}
+
+async function reviewedPopup(stateFor = messageState) {
+    const request = pendingRequest();
+    const harness = popupHarness({requests: [request]});
+    harness.setState(request, stateFor(request));
+    await harness.boot();
+    harness.controller.stopTimers();
+    harness.clearMessages();
+    return harness;
+}
+
+test("full popup boot renders FIFO requests through the production controller", async () => {
+    const first = pendingRequest(9, 1);
+    const second = {...pendingRequest(1, 2), sequence: 1};
+    const harness = popupHarness({requests: [first, second]});
+    harness.setState(first, messageState(first));
+    harness.setState(second, messageState(second, {title: "Second request"}));
+
+    await harness.boot();
+
+    assert.equal(harness.controller.constructor.name, "PopupRequestController");
+    assert.equal(harness.controller.request.requestToken, first.requestToken);
+    assert.equal(harness.get("queue-indicator").textContent, "1 of 2");
+    assert.equal(harness.get("request-title").textContent, "Sign message");
+    assert.equal(harness.get("section-message").classList.contains("hidden"), false);
+    assert.equal(harness.get("working-overlay").classList.contains("hidden"), true);
+    assert.deepEqual(harness.nativeMessages.map(message => message.subject), [
+        "getPendingRequests", "getApprovalState",
+    ]);
+    assert.ok(harness.nativeMessages.every(message => message.__bwPrivateBrowsing === false));
+});
+
+test("controller approval strips caller revisions and passwords at the actual worker boundary", async () => {
+    for (const kind of ["signMessage", "addChain"]) {
+        const harness = await reviewedPopup(request => kind === "addChain" ? {
+            id: request.id,
+            host: request.host,
+            kind,
+            state: "review",
+            reviewToken: requestToken(101),
+            title: "Add network",
+            chainName: "Custom",
+            rpcURL: "https://rpc.example",
+        } : messageState(request));
+        const request = harness.controller.request;
+
+        await harness.controller.submitCurrentDecision("approveRequest", {
+            password: "must-stay-local",
+            revisions: {ethereum: 99, solana: 99},
+        });
+
+        assert.deepEqual(harness.nativeMessages, []);
+        assert.deepEqual(harness.workerMessages, [{
+            subject: "approveRequestWithCurrentRevisions",
+            id: request.id,
+            host: request.host,
+            configurationKey: request.configurationKey,
+            requestToken: request.requestToken,
+            reviewToken: requestToken(101),
+            payload: {},
+            privateBrowsing: false,
+            workflowVersion: 3,
+        }]);
+        assert.equal(harness.controller.followUpMode, "poll");
+        assert.equal(harness.timers.get(harness.controller.followUpTimer).delay, 400);
     }
-    assert.deepEqual(nativeSubjects, ["getPendingRequests", "getApprovalState"]);
-    assert.equal(
-        document.getElementById("screen-request").classList.contains("hidden"),
-        false
-    );
-    assert.equal(document.getElementById("request-title").textContent, "Sign message");
-    assert.equal(
-        document.getElementById("section-message").classList.contains("hidden"),
-        false
-    );
-    assert.equal(
-        document.getElementById("working-overlay").classList.contains("hidden"),
-        true
-    );
+});
+
+test("controller compact errors refresh the visible request without entering the queue", async () => {
+    const harness = await reviewedPopup();
+    const controller = harness.controller;
+    controller.adoptState({id: controller.request.id, state: "error", error: "Failed"});
+    assert.equal(harness.get("button-approve").disabled, false);
+    assert.equal(harness.get("button-approve").textContent, "Refresh");
+    assert.equal(harness.get("button-reject").disabled, true);
+    assert.equal(controller.followUpTimer, null);
+
+    await harness.get("button-approve").emit("click");
+
+    assert.deepEqual(harness.nativeMessages, [{
+        subject: "getApprovalState",
+        id: controller.request.id,
+        workflowVersion: 3,
+        requestToken: controller.request.requestToken,
+        payload: {mode: "full"},
+        __bwPrivateBrowsing: false,
+    }]);
+    assert.equal(controller.state.state, "review");
+    assert.equal(harness.get("working-overlay").classList.contains("hidden"), true);
+});
+
+test("compact rejectable states submit tokenless Reject without a refresh", async () => {
+    const harness = await reviewedPopup();
+    const controller = harness.controller;
+    controller.adoptState({
+        id: controller.request.id,
+        state: "working",
+        host: controller.request.host,
+        error: "Too much data to display",
+        canReject: true,
+    });
+    assert.equal(harness.get("button-approve").disabled, true);
+    assert.equal(harness.get("button-reject").disabled, false);
+    assert.equal(controller.followUpTimer, null);
+
+    await harness.get("button-reject").emit("click");
+
+    assert.deepEqual(harness.workerMessages, []);
+    assert.deepEqual(harness.nativeMessages, [{
+        subject: "rejectRequest",
+        id: controller.request.id,
+        workflowVersion: 3,
+        requestToken: controller.request.requestToken,
+        __bwPrivateBrowsing: false,
+    }]);
+    assert.equal(controller.followUpMode, "poll");
+});
+
+test("approval polling adopts an error and stops its only follow-up timer", async () => {
+    const harness = await reviewedPopup();
+    const controller = harness.controller;
+    harness.setState(controller.request, {id: controller.request.id, state: "error", error: "Failed"});
+    controller.adoptState({id: controller.request.id, state: "working"});
+    controller.pollApproval();
+
+    await harness.fire(controller.followUpTimer);
+
+    assert.equal(controller.state.state, "error");
+    assert.equal(harness.get("request-error").textContent, "Failed");
+    assert.equal(harness.get("working-overlay").classList.contains("hidden"), true);
+    assert.equal(controller.followUpTimer, null);
+    assert.equal(harness.timers.size, 0);
+});
+
+test("the production approval lane uses the long timeout while reads remain independent", async () => {
+    const harness = await reviewedPopup();
+    const gate = deferred();
+    harness.handlers.worker = (message, fallback) =>
+        message.subject === "approveRequestWithCurrentRevisions" ? gate.promise : fallback(message);
+    const controller = harness.controller;
+    const approval = controller.submitCurrentDecision("approveRequest", {});
+    await flushPopup();
+    assert.equal(harness.workerMessages.length, 1);
+    assert.ok([...harness.timers.values()].some(timer => timer.delay === 190_000));
+
+    const queued = controller.dispatch("mutation", "applyTransactionEdits", {mode: "suggested"});
+    const read = controller.approvalState();
+    await read;
+    assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["getApprovalState"]);
+
+    gate.resolve({status: "ok"});
+    await approval;
+    assert.equal((await queued).status, "response");
+    assert.deepEqual(harness.nativeMessages.map(message => message.subject), [
+        "getApprovalState", "applyTransactionEdits",
+    ]);
+});
+
+test("timed-out native actions release their real lane before raw settlement", async () => {
+    const harness = await reviewedPopup();
+    const gate = deferred();
+    harness.handlers.native = (message, fallback) =>
+        message.subject === "applyTransactionEdits" ? gate.promise : fallback(message);
+    const first = harness.controller.dispatch("mutation", "applyTransactionEdits", {mode: "suggested"});
+    await flushPopup();
+    const second = harness.controller.dispatch("action", "rejectRequest", undefined, {reviewToken: undefined});
+    await flushPopup();
+    assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["applyTransactionEdits"]);
+    const timeout = [...harness.timers.values()].find(timer => timer.delay === 5000);
+
+    await harness.fire(timeout.id);
+
+    assert.equal((await first).status, "failure");
+    assert.equal((await second).status, "response");
+    assert.deepEqual(harness.nativeMessages.map(message => message.subject), [
+        "applyTransactionEdits", "rejectRequest",
+    ]);
+    const beforeLateReply = harness.visibleSnapshot();
+    gate.resolve({status: "ok"});
+    await flushPopup();
+    assert.deepEqual(harness.visibleSnapshot(), beforeLateReply);
+    assert.equal(harness.timers.size, 0);
+});
+
+test("queued transport actions distinguish dispatch-time explicit and tokenless review tokens", async () => {
+    for (const [options, expected] of [
+        [{}, requestToken(102)],
+        [{reviewToken: requestToken(101)}, requestToken(101)],
+        [{reviewToken: undefined}, undefined],
+    ]) {
+        const harness = await reviewedPopup();
+        const gate = deferred();
+        harness.handlers.native = (message, fallback) =>
+            message.subject === "openApp" ? gate.promise : fallback(message);
+        const predecessor = harness.call("scheduleNativeMessage", "app", "openApp", 99);
+        await flushPopup();
+        const queued = harness.controller.dispatch("mutation", "applyTransactionEdits", {}, options);
+        harness.controller.adoptState(messageState(harness.controller.request, {reviewToken: requestToken(102)}));
+
+        gate.resolve({id: 99, opened: true});
+        await predecessor.result;
+        await queued;
+
+        assert.equal(harness.nativeMessages.at(-1).subject, "applyTransactionEdits");
+        assert.equal(harness.nativeMessages.at(-1).reviewToken, expected);
+    }
+});
+
+test("queued approval cancels on review rotation while tokenless rejection remains valid", async () => {
+    for (const subject of ["approveRequest", "rejectRequest"]) {
+        const harness = await reviewedPopup();
+        const controller = harness.controller;
+        const gate = deferred();
+        harness.handlers.native = (message, fallback) =>
+            message.subject === "openApp" ? gate.promise : fallback(message);
+        const predecessor = harness.call("scheduleNativeMessage", "app", "openApp", 99);
+        await flushPopup();
+        const decision = controller.submitCurrentDecision(subject, subject === "approveRequest" ? {} : undefined);
+        await flushPopup();
+        controller.adoptState(messageState(controller.request, {reviewToken: requestToken(102)}));
+
+        gate.resolve({id: 99, opened: true});
+        await predecessor.result;
+        await decision;
+
+        assert.deepEqual(harness.workerMessages, []);
+        if (subject === "approveRequest") {
+            assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["openApp"]);
+            assert.equal(controller.phase, "displaying");
+            assert.equal(controller.followUpTimer, null);
+        } else {
+            assert.equal(harness.nativeMessages.at(-1).subject, "rejectRequest");
+            assert.equal(harness.nativeMessages.at(-1).reviewToken, undefined);
+            assert.equal(controller.followUpMode, "poll");
+        }
+        assert.equal(controller.state.reviewToken, requestToken(102));
+    }
+});
+
+test("terminal decisions fence an older read and poll only after their native reply", async () => {
+    for (const subject of ["approveRequest", "rejectRequest"]) {
+        const harness = await reviewedPopup();
+        const readGate = deferred();
+        const actionGate = deferred();
+        const controller = harness.controller;
+        harness.handlers.native = (message, fallback) => {
+            if (message.subject === "getApprovalState") { return readGate.promise; }
+            if (message.subject === "rejectRequest") { return actionGate.promise; }
+            return fallback(message);
+        };
+        harness.handlers.worker = (message, fallback) =>
+            message.subject === "approveRequestWithCurrentRevisions" ? actionGate.promise : fallback(message);
+        const refresh = controller.refreshTransactionState();
+        await flushPopup();
+        const decision = controller.submitCurrentDecision(subject, subject === "approveRequest" ? {} : undefined);
+        await flushPopup();
+        assert.equal(controller.phase, "submitting");
+        assert.equal(controller.followUpTimer, null);
+        assert.equal(harness.get("working-overlay").classList.contains("hidden"), false);
+
+        readGate.resolve(messageState(controller.request, {reviewToken: requestToken(999), title: "Stale"}));
+        await refresh;
+
+        assert.equal(controller.state.reviewToken, requestToken(101));
+        assert.equal(harness.get("request-title").textContent, "Sign message");
+        assert.equal(harness.get("working-overlay").classList.contains("hidden"), false);
+        assert.equal(controller.followUpTimer, null);
+        actionGate.resolve({status: "ok"});
+        await decision;
+        assert.equal(controller.followUpMode, "poll");
+    }
+});
+
+test("replacement with the same numeric id disposes old reads actions and mutations", async () => {
+    for (const operation of ["read", "approval", "mutation"]) {
+        const harness = await reviewedPopup(transactionState);
+        const first = harness.controller;
+        const replacement = pendingRequest(first.request.id, 2);
+        const gate = deferred();
+        harness.handlers.native = (message, fallback) => {
+            if (message.requestToken === first.request.requestToken &&
+                message.subject === (operation === "read" ? "getApprovalState" : "applyTransactionEdits")) {
+                return gate.promise;
+            }
+            return fallback(message);
+        };
+        harness.handlers.worker = (message, fallback) =>
+            operation === "approval" && message.subject === "approveRequestWithCurrentRevisions"
+                ? gate.promise : fallback(message);
+        const pending = operation === "read" ? first.refreshTransactionState()
+            : operation === "approval" ? first.submitCurrentDecision("approveRequest", {})
+            : first.applyEdits();
+        await flushPopup();
+        harness.setState(replacement, transactionState(replacement, {
+            title: "Replacement B", reviewToken: requestToken(202),
+        }));
+        await harness.show([replacement]);
+        const second = harness.controller;
+        const before = harness.visibleSnapshot();
+        const focusCount = harness.focusCalls.length;
+        const writeCount = harness.textWrites.length;
+
+        gate.resolve(operation === "approval" ? {status: "ok"} : transactionState(first.request, {
+            title: "Late A",
+            reviewToken: requestToken(999),
+            alert: {title: "Old alert", message: "", actions: [{title: "Cancel", action: "cancel"}]},
+        }));
+        await pending;
+        await flushPopup();
+
+        assert.equal(first.phase, "disposed");
+        assert.equal(first.isActive, false);
+        assert.equal(first.followUpTimer, null);
+        assert.equal(first.tickets.size, 0);
+        assert.equal(harness.controller, second);
+        assert.equal(second.request.requestToken, replacement.requestToken);
+        assert.equal(second.state.reviewToken, requestToken(202));
+        assert.equal(harness.get("request-title").textContent, "Replacement B");
+        assert.equal(harness.focusCalls.length, focusCount);
+        assert.ok(!harness.textWrites.slice(writeCount).some(write => write.text === "Late A"));
+        if (operation !== "read") { assert.deepEqual(harness.visibleSnapshot(), before); }
+        assert.equal(harness.timers.size, 1);
+        assert.ok(harness.timers.has(second.followUpTimer));
+    }
+});
+
+test("disposing a queued approval prevents its native dispatch and preserves the replacement", async () => {
+    const harness = await reviewedPopup();
+    const gate = deferred();
+    harness.handlers.native = (message, fallback) =>
+        message.subject === "openApp" ? gate.promise : fallback(message);
+    const predecessor = harness.call("scheduleNativeMessage", "app", "openApp", 99);
+    await flushPopup();
+    const first = harness.controller;
+    const queued = first.submitCurrentDecision("approveRequest", {});
+    await flushPopup();
+    const replacement = pendingRequest(first.request.id, 2);
+    harness.setState(replacement, messageState(replacement, {title: "Replacement B"}));
+    await harness.show([replacement]);
+    const second = harness.controller;
+    const next = second.submitCurrentDecision("approveRequest", {});
+    await flushPopup();
+    assert.deepEqual(harness.workerMessages.filter(message => message.subject === "approveRequestWithCurrentRevisions"), []);
+
+    gate.resolve({id: 99, opened: true});
+    await predecessor.result;
+    await queued;
+    await next;
+
+    assert.deepEqual(harness.workerMessages.filter(message => message.subject === "approveRequestWithCurrentRevisions")
+        .map(message => message.requestToken), [replacement.requestToken]);
+    assert.equal(first.phase, "disposed");
+    assert.equal(first.followUpTimer, null);
+    assert.equal(second.followUpMode, "poll");
+    assert.equal(harness.get("request-title").textContent, "Replacement B");
+});
+
+test("disposing a dispatched approval keeps its lane occupied until reply or timeout", async () => {
+    for (const outcome of ["reply", "timeout"]) {
+        const harness = await reviewedPopup();
+        const first = harness.controller;
+        const gate = deferred();
+        harness.handlers.worker = (message, fallback) =>
+            message.subject === "approveRequestWithCurrentRevisions" &&
+                message.requestToken === first.request.requestToken
+                ? gate.promise : fallback(message);
+        const dispatched = first.submitCurrentDecision("approveRequest", {});
+        await flushPopup();
+        const firstTimeout = [...harness.timers.values()].find(timer => timer.delay === 190_000);
+        const replacement = pendingRequest(first.request.id, 2);
+        harness.setState(replacement, messageState(replacement, {title: "Replacement B"}));
+        await harness.show([replacement]);
+        const second = harness.controller;
+        const queued = second.submitCurrentDecision("approveRequest", {});
+        await flushPopup();
+        const approvals = () => harness.workerMessages.filter(message =>
+            message.subject === "approveRequestWithCurrentRevisions"
+        );
+        assert.equal(approvals().length, 1);
+        assert.ok(harness.timers.has(firstTimeout.id));
+        assert.equal(second.phase, "submitting");
+
+        if (outcome === "reply") { gate.resolve({status: "ok"}); }
+        else { await harness.fire(firstTimeout.id); }
+        await dispatched;
+        await queued;
+
+        assert.deepEqual(approvals().map(message => message.requestToken), [
+            first.request.requestToken, replacement.requestToken,
+        ]);
+        assert.equal(first.phase, "disposed");
+        assert.equal(first.followUpTimer, null);
+        assert.equal(second.followUpMode, "poll");
+        const beforeLateReply = harness.visibleSnapshot();
+        const followUp = second.followUpTimer;
+        gate.resolve({status: "ok"});
+        await flushPopup();
+        assert.deepEqual(harness.visibleSnapshot(), beforeLateReply);
+        assert.equal(second.followUpTimer, followUp);
+    }
+});
+
+test("one follow-up timer owns polling and refresh including stale callbacks", async () => {
+    const harness = await reviewedPopup(transactionState);
+    const controller = harness.controller;
+    controller.scheduleTransactionRefresh();
+    const old = harness.timers.get(controller.followUpTimer);
+    controller.pollApproval();
+    const current = controller.followUpTimer;
+    assert.equal(harness.timers.size, 1);
+    assert.equal(controller.followUpMode, "poll");
+
+    old.callback();
+    controller.keepFollowingTransaction();
+    await flushPopup();
+
+    assert.equal(controller.followUpTimer, current);
+    assert.equal(harness.nativeMessages.length, 0);
+    harness.setState(controller.request, {id: controller.request.id, state: "working"});
+    await harness.fire(current);
+    assert.equal(harness.timers.size, 1);
+    assert.equal(controller.followUpMode, "poll");
+    harness.setState(controller.request, transactionState(controller.request));
+    await harness.fire(controller.followUpTimer);
+    assert.equal(harness.timers.size, 1);
+    assert.equal(controller.followUpMode, "refresh");
+    assert.equal(harness.timers.get(controller.followUpTimer).delay, 600);
+    controller.dispose();
+    assert.equal(controller.followUpTimer, null);
+    assert.equal(harness.timers.size, 0);
+});
+
+test("missing-state reconciliation shares one authoritative queue refresh", async () => {
+    const harness = await reviewedPopup();
+    const controller = harness.controller;
+    const gate = deferred();
+    const replacement = pendingRequest(controller.request.id, 2);
+    harness.setState(replacement, messageState(replacement, {title: "Replacement B"}));
+    harness.handlers.native = (message, fallback) =>
+        message.subject === "getPendingRequests" ? gate.promise : fallback(message);
+
+    const completion = controller.reconcileMissingRequest();
+    const repeated = controller.reconcileMissingRequest();
+    await flushPopup();
+
+    assert.equal(completion, repeated);
+    assert.equal(controller.phase, "reconciling");
+    assert.equal(controller.isActive, false);
+    assert.equal(harness.call("shouldDeferQueueRefreshForCurrentRequest"), false);
+    assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["getPendingRequests"]);
+    gate.resolve({completedResponses: [], requests: [replacement]});
+    await completion;
+    await flushPopup();
+    assert.equal(controller.phase, "disposed");
+    assert.equal(harness.controller.request.requestToken, replacement.requestToken);
+    assert.equal(harness.get("request-title").textContent, "Replacement B");
+    assert.equal(harness.model.closed, 0);
+});
+
+test("reconciliation during the slider-await microtask prevents approval and rich mutation dispatch", async () => {
+    for (const operation of ["approval", "mutation"]) {
+        const harness = await reviewedPopup(transactionState);
+        const controller = harness.controller;
+        const queueGate = deferred();
+        harness.handlers.native = (message, fallback) =>
+            message.subject === "getPendingRequests" ? queueGate.promise : fallback(message);
+
+        const pending = operation === "approval"
+            ? controller.submitCurrentDecision("approveRequest", {})
+            : controller.applyEdits();
+        const completion = controller.reconcileMissingRequest();
+        const before = harness.visibleSnapshot();
+        await pending;
+        await flushPopup();
+
+        assert.equal(controller.phase, "reconciling");
+        assert.equal(controller.isActive, false);
+        assert.equal(controller.followUpTimer, null);
+        assert.equal(controller.tickets.size, 0);
+        assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["getPendingRequests"]);
+        assert.deepEqual(harness.workerMessages, []);
+        assert.deepEqual(harness.visibleSnapshot(), before);
+        queueGate.resolve({completedResponses: [], requests: []});
+        await completion;
+    }
+});
+
+test("queued and dispatched decisions cannot leave reconciliation after their late outcome", async () => {
+    for (const stage of ["queued", "dispatched"]) {
+        const harness = await reviewedPopup();
+        const controller = harness.controller;
+        const actionGate = deferred();
+        const queueGate = deferred();
+        harness.handlers.native = (message, fallback) => {
+            if (message.subject === "getPendingRequests") { return queueGate.promise; }
+            if (message.subject === "openApp") { return actionGate.promise; }
+            return fallback(message);
+        };
+        harness.handlers.worker = (message, fallback) =>
+            message.subject === "approveRequestWithCurrentRevisions" ? actionGate.promise : fallback(message);
+        const predecessor = stage === "queued"
+            ? harness.call("scheduleNativeMessage", "app", "openApp", 99)
+            : null;
+        if (predecessor) { await flushPopup(); }
+        const decision = controller.submitCurrentDecision("approveRequest", {});
+        await flushPopup();
+        const completion = controller.reconcileMissingRequest();
+        await flushPopup();
+        const before = harness.visibleSnapshot();
+        const focusCount = harness.focusCalls.length;
+
+        actionGate.resolve({status: "ok"});
+        if (predecessor) { await predecessor.result; }
+        await decision;
+
+        assert.equal(controller.phase, "reconciling");
+        assert.equal(controller.isActive, false);
+        assert.equal(controller.followUpTimer, null);
+        assert.deepEqual(harness.visibleSnapshot(), before);
+        assert.equal(harness.focusCalls.length, focusCount);
+        assert.equal(harness.workerMessages.filter(message =>
+            message.subject === "approveRequestWithCurrentRevisions"
+        ).length, stage === "queued" ? 0 : 1);
+        queueGate.resolve({completedResponses: [], requests: []});
+        await completion;
+        assert.equal(controller.phase, "disposed");
+    }
+});
+
+test("update recovery renders pending approvals first and keeps a drained popup open", async () => {
+    const request = pendingRequest();
+    const harness = popupHarness({
+        requests: [request],
+        updateRecovery: true,
+        tab: message => ({
+            buildVersion: previousBuildVersion,
+            nonce: message.nonce,
+            subject: "workflowProbe",
+            workflowVersion: 3,
+        }),
+    });
+    harness.setState(request, messageState(request));
+    await harness.boot();
+    assert.equal(harness.get("request-title").textContent, "Sign message");
+    assert.equal(harness.get("screen-request").classList.contains("hidden"), false);
+    assert.ok(harness.queue.updateRecoveryTab);
+    assert.equal(harness.tabMessages.length, 1);
+
+    harness.model.requests = [];
+    await harness.controller.reconcileMissingRequest();
+
+    assert.equal(harness.model.closed, 0);
+    assert.equal(harness.get("idle-connection").textContent, "Failed to load");
+    assert.equal(harness.get("idle-check-status").classList.contains("hidden"), false);
+    assert.equal(harness.get("idle-switch-account").disabled, true);
+    assert.equal(harness.workerMessages.filter(message => message.subject === "getLatestConfiguration").length, 0);
+});
+
+test("keyboard slider input stays local and one terminal command adopts its rotated token", async () => {
+    const harness = await reviewedPopup(transactionState);
+    const controller = harness.controller;
+    const gate = deferred();
+    harness.handlers.native = (message, fallback) =>
+        message.subject === "setTransactionSpeed" ? gate.promise : fallback(message);
+    const slider = harness.get("tx-slider");
+    slider.value = "120";
+    slider.emit("input");
+    slider.value = "145";
+    slider.emit("input");
+    await flushPopup();
+    assert.equal(controller.transaction.sliderDragging, true);
+    assert.deepEqual(harness.nativeMessages, []);
+    slider.emit("change");
+    const completion = controller.transaction.activeCommand.completion;
+    await flushPopup();
+    assert.equal(slider.disabled, true);
+    assert.equal(controller.beginSliderInteraction(), false);
+    assert.deepEqual(harness.nativeMessages, [{
+        subject: "setTransactionSpeed",
+        id: controller.request.id,
+        workflowVersion: 3,
+        requestToken: controller.request.requestToken,
+        reviewToken: requestToken(101),
+        payload: {interaction: "ended", value: 145},
+        __bwPrivateBrowsing: false,
+    }]);
+
+    gate.resolve(transactionState(controller.request, {
+        reviewToken: requestToken(102),
+        slider: {enabled: true, maximum: 200, position: 145, visible: true},
+    }));
+    assert.equal(await completion, true);
+    assert.equal(controller.transaction.activeCommand, null);
+    assert.equal(controller.state.reviewToken, requestToken(102));
+    assert.equal(controller.followUpMode, "refresh");
+    assert.equal(Number(slider.value), 145);
+});
+
+test("approval waits for the drag result and ignores the old gesture's late terminal events", async () => {
+    const harness = await reviewedPopup(transactionState);
+    const controller = harness.controller;
+    const gate = deferred();
+    harness.handlers.native = (message, fallback) =>
+        message.subject === "setTransactionSpeed" ? gate.promise : fallback(message);
+    const slider = harness.get("tx-slider");
+    slider.emit("pointerdown");
+    slider.value = "160";
+    slider.emit("input");
+    const approval = harness.get("button-approve").emit("click");
+    await flushPopup();
+    assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["setTransactionSpeed"]);
+    assert.deepEqual(harness.workerMessages, []);
+
+    gate.resolve(transactionState(controller.request, {reviewToken: requestToken(102)}));
+    await approval;
+
+    assert.equal(harness.workerMessages[0].subject, "approveRequestWithCurrentRevisions");
+    assert.equal(harness.workerMessages[0].reviewToken, requestToken(102));
+    assert.equal(controller.followUpMode, "poll");
+    slider.emit("pointerup");
+    slider.emit("change");
+    await flushPopup();
+    assert.equal(harness.nativeMessages.filter(message => message.subject === "setTransactionSpeed").length, 1);
+    assert.equal(harness.workerMessages.length, 1);
+});
+
+test("stale or ignored terminal slider commands refresh and do not approve", async () => {
+    for (const stale of [true, false]) {
+        const harness = await reviewedPopup(transactionState);
+        const controller = harness.controller;
+        const fresh = transactionState(controller.request, {reviewToken: requestToken(102)});
+        harness.setState(controller.request, fresh);
+        harness.handlers.native = (message, fallback) =>
+            message.subject === "setTransactionSpeed" ? {status: "ignored"} : fallback(message);
+        const slider = harness.get("tx-slider");
+        slider.emit("pointerdown");
+        slider.value = "140";
+        if (stale) { controller.adoptState(fresh); }
+
+        await controller.submitCurrentDecision("approveRequest", {});
+
+        assert.deepEqual(harness.nativeMessages.map(message => message.subject), stale
+            ? ["getApprovalState"] : ["setTransactionSpeed", "getApprovalState"]);
+        assert.deepEqual(harness.workerMessages, []);
+        assert.equal(controller.state.reviewToken, requestToken(102));
+        assert.equal(controller.transaction.activeCommand, null);
+        assert.equal(controller.followUpMode, "refresh");
+    }
+});
+
+test("queued slider commands are fenced by their captured review token", async () => {
+    const harness = await reviewedPopup(transactionState);
+    const controller = harness.controller;
+    const gate = deferred();
+    harness.handlers.native = (message, fallback) =>
+        message.subject === "openApp" ? gate.promise : fallback(message);
+    const predecessor = harness.call("scheduleNativeMessage", "app", "openApp", 99);
+    await flushPopup();
+    const slider = harness.get("tx-slider");
+    slider.emit("pointerdown");
+    slider.value = "140";
+    slider.emit("change");
+    const completion = controller.transaction.activeCommand.completion;
+    await flushPopup();
+    const fresh = transactionState(controller.request, {reviewToken: requestToken(102)});
+    harness.setState(controller.request, fresh);
+    controller.adoptState(fresh);
+
+    gate.resolve({id: 99, opened: true});
+    await predecessor.result;
+
+    assert.equal(await completion, false);
+    assert.deepEqual(harness.nativeMessages.map(message => message.subject), ["openApp", "getApprovalState"]);
+    assert.equal(controller.state.reviewToken, requestToken(102));
+});
+
+test("replacement consumes the old drag's trailing events before accepting a new gesture", async () => {
+    const harness = await reviewedPopup(transactionState);
+    const first = harness.controller;
+    const slider = harness.get("tx-slider");
+    slider.emit("pointerdown");
+    slider.value = "140";
+    slider.emit("input");
+    const replacement = pendingRequest(first.request.id, 2);
+    const fresh = transactionState(replacement, {reviewToken: requestToken(202)});
+    harness.setState(replacement, fresh);
+    harness.handlers.native = (message, fallback) =>
+        message.subject === "setTransactionSpeed" ? fresh : fallback(message);
+    await harness.show([replacement]);
+    harness.clearMessages();
+
+    slider.emit("input");
+    slider.emit("pointerup");
+    slider.emit("change");
+    await flushPopup();
+
+    assert.equal(first.phase, "disposed");
+    assert.equal(harness.controller.transaction.sliderDragging, false);
+    assert.deepEqual(harness.nativeMessages, []);
+    slider.emit("pointerdown");
+    slider.value = "180";
+    slider.emit("pointercancel");
+    const completion = harness.controller.transaction.activeCommand.completion;
+    assert.equal(await completion, true);
+    assert.equal(harness.nativeMessages[0].requestToken, replacement.requestToken);
+    assert.equal(harness.nativeMessages[0].reviewToken, requestToken(202));
+    assert.deepEqual(harness.nativeMessages[0].payload, {interaction: "cancelled", value: 180});
+});
+
+test("transaction refresh leaves rendered fees and slider value alone during a terminal command", async () => {
+    for (const changed of [false, true]) {
+        const harness = await reviewedPopup(transactionState);
+        const controller = harness.controller;
+        const gate = deferred();
+        const refreshed = transactionState(controller.request, changed ? {
+            title: "Refreshed fees",
+            slider: {enabled: true, maximum: 200, position: 175, visible: true},
+        } : {});
+        harness.setState(controller.request, refreshed);
+        harness.handlers.native = (message, fallback) =>
+            message.subject === "setTransactionSpeed" ? gate.promise : fallback(message);
+        const completion = controller.startSliderCommand("ended", 145, controller.request);
+        await flushPopup();
+        harness.get("tx-slider").value = "145";
+        const before = harness.visibleSnapshot();
+
+        await controller.refreshTransactionState();
+
+        assert.deepEqual(harness.visibleSnapshot(), before);
+        assert.equal(controller.state.title, refreshed.title);
+        gate.resolve(refreshed);
+        assert.equal(await completion, true);
+        assert.equal(harness.get("request-title").textContent, refreshed.title);
+    }
+});
+
+test("editor inputs survive refresh and custom or suggested edits use exact native payloads", async () => {
+    for (const usesEIP1559 of [false, true]) {
+        const editor = usesEIP1559 ? {
+            usesEIP1559: true,
+            nonce: "1",
+            maxPriorityFeePerGasGwei: "2",
+            maxFeePerGasGwei: "20",
+            suggestedMaxPriorityFeePerGasGwei: "3",
+            suggestedMaxFeePerGasGwei: "30",
+        } : {usesEIP1559: false, nonce: "1", gasPriceGwei: "2", suggestedGasPriceGwei: "3"};
+        const harness = await reviewedPopup(request => transactionState(request, {editor}));
+        const controller = harness.controller;
+        harness.get("tx-editor").open = true;
+        harness.get("edit-nonce").value = "9";
+        harness.get("edit-nonce").emit("input");
+        const custom = usesEIP1559
+            ? {maxPriorityFeePerGasGwei: "5", maxFeePerGasGwei: "40"}
+            : {gasPriceGwei: "5"};
+        if (usesEIP1559) {
+            harness.get("edit-max-priority").value = custom.maxPriorityFeePerGasGwei;
+            harness.get("edit-max-fee").value = custom.maxFeePerGasGwei;
+        } else {
+            harness.get("edit-gas-price").value = custom.gasPriceGwei;
+        }
+        harness.setState(controller.request, transactionState(controller.request, {
+            editor: {...editor, nonce: "2"}, reviewToken: requestToken(102),
+        }));
+
+        await controller.refreshTransactionState();
+
+        assert.equal(harness.get("edit-nonce").value, "9");
+        assert.equal(controller.transaction.editorDirty, true);
+        assert.equal(harness.get(usesEIP1559 ? "edit-max-priority" : "edit-gas-price").value, "5");
+        const committed = transactionState(controller.request, {
+            editor: {...editor, ...custom, nonce: "9"}, reviewToken: requestToken(103),
+        });
+        harness.handlers.native = (message, fallback) =>
+            message.subject === "applyTransactionEdits" ? committed : fallback(message);
+        harness.clearMessages();
+
+        await harness.get("editor-apply").emit("click");
+
+        assert.deepEqual(harness.nativeMessages, [{
+            subject: "applyTransactionEdits",
+            id: controller.request.id,
+            workflowVersion: 3,
+            requestToken: controller.request.requestToken,
+            reviewToken: requestToken(102),
+            payload: {mode: "custom", nonce: "9", ...custom},
+            __bwPrivateBrowsing: false,
+        }]);
+        assert.equal(harness.get("tx-editor").open, false);
+        assert.equal(controller.transaction.editorDirty, false);
+        assert.equal(controller.state.reviewToken, requestToken(103));
+        harness.clearMessages();
+
+        await harness.get("editor-suggested").emit("click");
+
+        assert.equal(harness.nativeMessages[0].reviewToken, requestToken(103));
+        assert.deepEqual(harness.nativeMessages[0].payload, {mode: "suggested"});
+        assert.deepEqual(harness.workerMessages, []);
+    }
+});
+
+test("an edit error preserves the open editor and typed values", async () => {
+    const harness = await reviewedPopup(transactionState);
+    const controller = harness.controller;
+    harness.get("tx-editor").open = true;
+    harness.get("edit-nonce").value = "invalid";
+    harness.get("edit-nonce").emit("input");
+    harness.handlers.native = (message, fallback) => message.subject === "applyTransactionEdits"
+        ? transactionState(controller.request, {editsError: true}) : fallback(message);
+
+    await harness.get("editor-apply").emit("click");
+
+    assert.equal(harness.get("tx-editor").open, true);
+    assert.equal(harness.get("edit-nonce").value, "invalid");
+    assert.equal(harness.get("edits-error").classList.contains("hidden"), false);
+    assert.equal(controller.transaction.editorDirty, true);
+    assert.equal(controller.followUpMode, "refresh");
+});
+
+test("alert clicks send the click-time review token and ignore a superseded response", async () => {
+    const harness = await reviewedPopup(transactionState);
+    const controller = harness.controller;
+    const alert = {title: "Review fees", message: "", actions: [{title: "Cancel", action: "cancel"}]};
+    harness.get("edit-nonce").focus();
+    controller.adoptState(transactionState(controller.request, {alert}));
+    const button = harness.get("alert-buttons").children[0];
+    const gate = deferred();
+    harness.handlers.native = (message, fallback) =>
+        message.subject === "resolveApprovalAlert" ? gate.promise : fallback(message);
+
+    const clicked = button.emit("click");
+    await flushPopup();
+
+    assert.deepEqual(harness.nativeMessages, [{
+        subject: "resolveApprovalAlert",
+        id: controller.request.id,
+        workflowVersion: 3,
+        requestToken: controller.request.requestToken,
+        reviewToken: requestToken(101),
+        payload: {action: "cancel"},
+        __bwPrivateBrowsing: false,
+    }]);
+    controller.adoptState(transactionState(controller.request, {alert, reviewToken: requestToken(102)}));
+    const before = harness.visibleSnapshot();
+    const focusCount = harness.focusCalls.length;
+    gate.resolve(transactionState(controller.request, {reviewToken: requestToken(999)}));
+    await clicked;
+    assert.equal(controller.state.reviewToken, requestToken(102));
+    assert.deepEqual(harness.visibleSnapshot(), before);
+    assert.equal(harness.focusCalls.length, focusCount);
+});
+
+test("disposed alert callbacks cannot close or focus the replacement request", async () => {
+    const alert = {title: "Review fees", message: "", actions: [{title: "Cancel", action: "cancel"}]};
+    const harness = await reviewedPopup(request => transactionState(request, {alert}));
+    const first = harness.controller;
+    const button = harness.get("alert-buttons").children[0];
+    const gate = deferred();
+    harness.handlers.native = (message, fallback) =>
+        message.subject === "resolveApprovalAlert" ? gate.promise : fallback(message);
+    const clicked = button.emit("click");
+    await flushPopup();
+    const replacement = pendingRequest(first.request.id, 2);
+    harness.setState(replacement, transactionState(replacement, {
+        alert: {...alert, title: "Replacement alert"},
+        reviewToken: requestToken(202),
+    }));
+    await harness.show([replacement]);
+    const before = harness.visibleSnapshot();
+    const focusCount = harness.focusCalls.length;
+    const timer = harness.controller.followUpTimer;
+
+    gate.resolve(transactionState(first.request));
+    await clicked;
+    await button.emit("click");
+    await flushPopup();
+
+    assert.deepEqual(harness.visibleSnapshot(), before);
+    assert.equal(harness.focusCalls.length, focusCount);
+    assert.equal(harness.controller.followUpTimer, timer);
+    assert.equal(harness.get("screen-request").inert, true);
+    assert.equal(harness.get("alert-title").textContent, "Replacement alert");
+    assert.equal(harness.nativeMessages.filter(message => message.subject === "resolveApprovalAlert").length, 1);
+});
+
+test("account selection belongs to one controller and old rows cannot change its replacement", async () => {
+    const accounts = [
+        {name: "Ethereum", croppedAddress: "0x1234", address: "0x" + "1".repeat(40),
+            walletId: "wallet", coin: "ethereum", derivationPath: "m/44'/60'/0'/0/0", isSelected: false},
+        {name: "Solana", croppedAddress: "So1234", address: "SolanaAddress",
+            walletId: "wallet", coin: "solana", derivationPath: "m/44'/501'/0'/0'", isSelected: false},
+    ];
+    const selectionState = (request, selected = null) => ({
+        id: request.id,
+        host: request.host,
+        state: "review",
+        kind: "switchAccount",
+        title: "Switch account",
+        reviewToken: requestToken(101),
+        accounts: accounts.map(account => ({...account, isSelected: account.coin === selected})),
+        allowsEmptySelection: false,
+        canSelectNetwork: true,
+        networks: [{chainId: "0x1", name: "Ethereum", isSelected: true}],
+    });
+    const harness = await reviewedPopup(selectionState);
+    const first = harness.controller;
+    const oldRow = harness.get("accounts-list").children[0];
+    await oldRow.emit("click");
+    assert.equal(first.presentation.accounts[0].coin, "ethereum");
+    const replacement = pendingRequest(first.request.id, 2);
+    harness.setState(replacement, selectionState(replacement, "solana"));
+    await harness.show([replacement]);
+    const focusCount = harness.focusCalls.length;
+
+    await oldRow.emit("click");
+
+    assert.deepEqual(normalized(harness.controller.presentation.accounts).map(account => account.coin), ["solana"]);
+    assert.equal(harness.focusCalls.length, focusCount);
+    harness.clearMessages();
+    await harness.get("button-approve").emit("click");
+    assert.equal(harness.workerMessages[0].requestToken, replacement.requestToken);
+    assert.deepEqual(harness.workerMessages[0].payload, {
+        chainId: "0x1",
+        selectedAccounts: [{
+            address: accounts[1].address,
+            coin: "solana",
+            derivationPath: accounts[1].derivationPath,
+            walletId: "wallet",
+        }],
+    });
 });

@@ -554,10 +554,8 @@ class Agent: NSObject {
             showWaiting(for: handle, coordinator: coordinator)
         case .rejecting:
             showFailureSurface(for: handle, coordinator: coordinator)
-        case .finished:
-            finishApproval(handle: handle, coordinator: coordinator)
-        case .superseded:
-            discardApproval(handle: handle, coordinator: coordinator)
+        case .finished, .superseded:
+            closeApproval(handle: handle, coordinator: coordinator)
         }
     }
 
@@ -929,7 +927,7 @@ class Agent: NSObject {
         }
     }
 
-    private func finishApproval(
+    private func closeApproval(
         handle: ExtensionBridge.Handle,
         coordinator: NativeApprovalCoordinator
     ) {
@@ -960,29 +958,6 @@ class Agent: NSObject {
             if !activateOldestPresentedApproval() {
                 Window.activateBrowser(specific: .safari)
             }
-        }
-    }
-
-    private func discardApproval(
-        handle: ExtensionBridge.Handle,
-        coordinator: NativeApprovalCoordinator
-    ) {
-        guard let approval = activeApproval(
-            for: handle,
-            coordinator: coordinator
-        ) else { return }
-        let window = approval.windowController?.window
-        let windowNumber = window?.windowNumber
-        let shouldActivateAfterClose = window?.isVisible == true ||
-            window?.isMiniaturized == true
-        approval.disableRejectionOnWindowClose()
-        approval.endReview()
-        removeActiveApproval(for: handle, coordinator: coordinator)
-        window?.delegate = nil
-        Self.dismissApprovalSheets(in: window)
-        Window.closeWindow(idToClose: windowNumber)
-        if !activateOldestPresentedApproval(), shouldActivateAfterClose {
-            Window.activateBrowser(specific: .safari)
         }
     }
 

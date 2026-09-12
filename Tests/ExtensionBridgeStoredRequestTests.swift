@@ -23,7 +23,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     override func setUpWithError() throws {
         try super.setUpWithError()
         rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "extension-bridge-v6-\(UUID().uuidString)",
+            "extension-bridge-v7-\(UUID().uuidString)",
             isDirectory: true
         )
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
@@ -80,30 +80,57 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     }
     #endif
 
-    func testStoreUsesV6AndIgnoresUnreleasedV5Profiles() async throws {
-        let oldDirectory = rootURL.appendingPathComponent(
-            "profiles-v5",
-            isDirectory: true
-        )
-        try FileManager.default.createDirectory(
-            at: oldDirectory,
-            withIntermediateDirectories: true
-        )
-        let oldProfileURL = oldDirectory.appendingPathComponent("default.state")
-        let oldProfile = try PropertyListSerialization.data(
-            fromPropertyList: [
-                "schemaVersion": 5,
-                "workflowVersion": ExtensionBridge.workflowVersion,
-                "records": [],
-            ],
-            format: .binary,
-            options: 0
-        )
-        try oldProfile.write(to: oldProfileURL, options: .atomic)
+    func testStoreUsesV7AndLeavesIntermediateStoresAndUnrelatedFilesUntouched()
+        async throws {
+        var preservedFiles = [URL: Data]()
+        for version in [5, 6] {
+            let oldDirectory = rootURL.appendingPathComponent(
+                "profiles-v\(version)",
+                isDirectory: true
+            )
+            try FileManager.default.createDirectory(
+                at: oldDirectory,
+                withIntermediateDirectories: true
+            )
+            let oldProfileURL = oldDirectory.appendingPathComponent("default.state")
+            let oldProfile = try PropertyListSerialization.data(
+                fromPropertyList: [
+                    "schemaVersion": version,
+                    "workflowVersion": ExtensionBridge.workflowVersion,
+                    "records": [],
+                ],
+                format: .binary,
+                options: 0
+            )
+            try oldProfile.write(to: oldProfileURL, options: .atomic)
+            preservedFiles[oldProfileURL] = oldProfile
+            for name in ["operation-locks", "native-execution-fences"] {
+                let directory = rootURL.appendingPathComponent(
+                    "\(name)-v\(version)",
+                    isDirectory: true
+                )
+                try FileManager.default.createDirectory(
+                    at: directory,
+                    withIntermediateDirectories: true
+                )
+                let url = directory.appendingPathComponent("intermediate.lock")
+                let data = Data("intermediate lock".utf8)
+                try data.write(to: url)
+                preservedFiles[url] = data
+            }
+            let oldLockURL = rootURL.appendingPathComponent("bridge-v\(version).lock")
+            let oldLock = Data("intermediate store lock".utf8)
+            try oldLock.write(to: oldLockURL)
+            preservedFiles[oldLockURL] = oldLock
+        }
+        let unrelatedURL = rootURL.appendingPathComponent("unrelated.data")
+        let unrelated = Data("preserve unrelated data".utf8)
+        try unrelated.write(to: unrelatedURL)
+        preservedFiles[unrelatedURL] = unrelated
 
         guard case .available(let initial) = await bridge.list(
             profileIdentifier: nil
-        ) else { return XCTFail("Expected V6 store") }
+        ) else { return XCTFail("Expected V7 store") }
         XCTAssertTrue(initial.isEmpty)
 
         _ = try accepted(await bridge.enqueue(
@@ -111,20 +138,22 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             profileIdentifier: nil
         ))
         let profile = try storedProfile()
-        XCTAssertEqual(profile["schemaVersion"] as? Int, 6)
-        XCTAssertTrue(FileManager.default.fileExists(atPath: oldProfileURL.path))
+        XCTAssertEqual(profile["schemaVersion"] as? Int, 7)
+        _ = await bridge.list(profileIdentifier: nil)
+        for (url, data) in preservedFiles {
+            XCTAssertEqual(try Data(contentsOf: url), data)
+        }
         XCTAssertTrue(FileManager.default.fileExists(atPath: defaultProfileURL.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: rootURL
-            .appendingPathComponent("operation-locks-v6", isDirectory: true)
+            .appendingPathComponent("operation-locks-v7", isDirectory: true)
             .path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: rootURL
             .appendingPathComponent(
-                "native-execution-fences-v6",
+                "native-execution-fences-v7",
                 isDirectory: true
             ).path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: rootURL
-            .appendingPathComponent("operation-locks-v5", isDirectory: true)
-            .path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: rootURL
+            .appendingPathComponent("bridge-v7.lock").path))
     }
 
     func testStoreExcludesBridgeRootFromBackup() async throws {
@@ -143,6 +172,88 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
 
         let values = try rootURL.resourceValues(forKeys: [.isExcludedFromBackupKey])
         XCTAssertEqual(values.isExcludedFromBackup, true)
+    }
+
+    func testV7OrdinaryStatesRoundTripWithoutChangingRequestOrResponseBytes()
+        async throws {
+        let fixture = try makeFixture(id: 85)
+        let handle = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress,
+            profileIdentifier: nil
+        )).handle
+        XCTAssertEqual(
+            try Data(contentsOf: defaultProfileURL).prefix(8),
+            Data("bplist00".utf8)
+        )
+        XCTAssertEqual(
+            try firstStoredState("pending")["request"] as? Data,
+            fixture.ingress.canonicalData
+        )
+        bridge = makeBridge(clock: { self.clock.now })
+        guard case .found(let pending) = await bridge.load(handle: handle) else {
+            return XCTFail("Expected pending request after restart")
+        }
+        XCTAssertEqual(pending.phase, .queued)
+
+        let claim = try approvalClaim(await bridge.claim(handle: handle))
+        XCTAssertEqual(
+            try firstStoredState("claimed")["request"] as? Data,
+            fixture.ingress.canonicalData
+        )
+        bridge = makeBridge(clock: { self.clock.now })
+        guard case .found(let claimed) = await bridge.load(handle: handle) else {
+            return XCTFail("Expected held claim after restart")
+        }
+        XCTAssertEqual(claimed.phase, .approving)
+        XCTAssertFalse(claimed.nativeDecisionStaged)
+        XCTAssertNil(claimed.nativeExecutionContext)
+
+        let permit = try executionPermit(await bridge.begin(claim: claim))
+        let recovery = ambiguousSubmissionResponse(
+            for: fixture.request,
+            transactionHash: "0x1234"
+        ).markingApprovalCommitted()
+        let checkpoint = await bridge.prepareBroadcast(
+            permit: permit,
+            recoveryResponse: recovery,
+            authority: .ordinary
+        )
+        XCTAssertEqual(checkpoint, .persisted)
+        let broadcast = try firstStoredState("broadcastPrepared")
+        XCTAssertEqual(broadcast["request"] as? Data, fixture.ingress.canonicalData)
+        XCTAssertEqual(
+            broadcast["recoveryResponse"] as? Data,
+            ExtensionBridge.payloadData(recovery.json, options: [.sortedKeys])
+        )
+        bridge = makeBridge(clock: { self.clock.now })
+        guard case .found(let prepared) = await bridge.load(handle: handle) else {
+            return XCTFail("Expected held broadcast after restart")
+        }
+        XCTAssertEqual(prepared.phase, .approving)
+
+        let response = response(for: fixture.request).markingApprovalCommitted()
+        let completion = await bridge.complete(
+            permit: permit,
+            response: response,
+            authority: .ordinary
+        )
+        XCTAssertEqual(completion, .persisted)
+        let completed = try firstStoredState("completed")
+        XCTAssertEqual(Set(completed.keys), ["since", "response", "acknowledged"])
+        XCTAssertEqual(completed["acknowledged"] as? Bool, false)
+        XCTAssertEqual(
+            completed["response"] as? Data,
+            ExtensionBridge.payloadData(response.json, options: [.sortedKeys])
+        )
+        bridge = makeBridge(clock: { self.clock.now })
+        guard case .found(let terminal) = await bridge.load(handle: handle) else {
+            return XCTFail("Expected completed response after restart")
+        }
+        XCTAssertEqual(terminal.phase, .responded)
+        XCTAssertNil(terminal.request)
+        XCTAssertFalse(terminal.nativeDecisionStaged)
+        XCTAssertNil(terminal.nativeDeliveryReceipt)
+        XCTAssertNil(terminal.nativeExecutionContext)
     }
 
     func testLostEnqueueReplyDeduplicatesTheExactAttempt() async throws {
@@ -375,6 +486,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             runtimeInstanceIdentifier: secondRuntime
         )
         XCTAssertEqual(conflictingRecord, .ownershipLost)
+        bridge = makeBridge(clock: { self.clock.now })
         guard case .found(let owned) = await bridge.load(
             handle: admission.handle
         ) else { return XCTFail("Expected owned delivery") }
@@ -415,6 +527,16 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             decision: .message(.init(solanaCluster: nil))
         )
         XCTAssertEqual(staged, .persisted)
+        bridge = makeBridge(clock: { self.clock.now })
+        guard case .found(let stagedSnapshot) = await bridge.load(
+            handle: admission.handle
+        ) else { return XCTFail("Expected staged delivery after restart") }
+        XCTAssertTrue(stagedSnapshot.nativeDecisionStaged)
+        XCTAssertEqual(
+            stagedSnapshot.nativeDeliveryReceipt?.runtimeInstanceIdentifier,
+            secondRuntime
+        )
+        XCTAssertNil(stagedSnapshot.nativeExecutionContext)
         let execution = try await makeNativeDecisionExecutable(
             handle: admission.handle,
             configurationKey: fixture.request.configurationKey,
@@ -436,6 +558,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             authority: .native(execution.context)
         )
         XCTAssertEqual(completion, .persisted)
+        bridge = makeBridge(clock: { self.clock.now })
         guard case .found(let completed) = await bridge.load(
             handle: admission.handle
         ) else { return XCTFail("Expected completed delivery") }
@@ -1117,11 +1240,12 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             response: response(for: fixture.request)
         )
         XCTAssertEqual(completion, .persisted)
-        let profile = try storedProfile()
-        let records = try XCTUnwrap(profile["records"] as? [[String: Any]])
-        XCTAssertNil(records[0]["responseAcknowledged"])
+        XCTAssertEqual(
+            try firstStoredState("completed")["acknowledged"] as? Bool,
+            false
+        )
         guard case .available(let initial) = await bridge.list(profileIdentifier: nil)
-        else { return XCTFail("Expected legacy-compatible unacknowledged listing") }
+        else { return XCTFail("Expected unacknowledged listing") }
         XCTAssertNotNil(initial[handle])
 
         clock.now.addTimeInterval(60)
@@ -1130,6 +1254,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             configurationKey: fixture.request.configurationKey
         )
         XCTAssertEqual(acknowledged, .persisted)
+        XCTAssertEqual(
+            try firstStoredState("completed")["acknowledged"] as? Bool,
+            true
+        )
         let observer = makeBridge(clock: { self.clock.now })
         guard case .available(let listed) = await observer.list(profileIdentifier: nil)
         else { return XCTFail("Expected acknowledged listing") }
@@ -1521,31 +1649,69 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(completion, .persisted)
     }
 
-    func testAdmissionReservesSpaceForBroadcastAndCompletion() async throws {
+    func testAdmissionReservesSpaceForNativeBroadcastAndCompletion() async throws {
         let fixture = try makeFixture(
             id: 1000,
             host: "signing.example",
             message: "0x" + String(repeating: "ab", count: 120 * 1024)
         )
-        let handle = try accepted(await bridge.enqueue(
+        let admission = try accepted(await bridge.enqueue(
             ingress: fixture.ingress,
             profileIdentifier: nil
-        )).handle
-        let claim = try approvalClaim(await bridge.claim(handle: handle))
-        let permit = try executionPermit(await bridge.begin(claim: claim))
+        ))
+        let runtime = UUID()
+        let owner = try XCTUnwrap(ExtensionBridge.NativeDeliveryOwner(
+            bundleURL: URL(fileURLWithPath: "/" + String(repeating: "a", count: 4000) + ".app"),
+            marketingVersion: String(repeating: "v", count: 128),
+            buildVersion: String(repeating: "b", count: 128)
+        ))
+        let delivered = await bridge.recordNativeDeliveryReceipt(
+            handle: admission.handle,
+            nativeDeliveryNonce: admission.nativeDeliveryNonce,
+            runtimeInstanceIdentifier: runtime,
+            owner: owner
+        )
+        XCTAssertEqual(delivered, .persisted)
+        let staged = await bridge.stageNativeDecision(
+            handle: admission.handle,
+            nativeDeliveryNonce: admission.nativeDeliveryNonce,
+            runtimeInstanceIdentifier: runtime,
+            decision: .message(.init(solanaCluster: nil))
+        )
+        XCTAssertEqual(staged, .persisted)
+        let execution = try await makeNativeDecisionExecutable(
+            handle: admission.handle,
+            configurationKey: fixture.request.configurationKey,
+            revisions: admission.revisions
+        )
+        defer { execution.fence.release() }
+        guard case .claimed(let claim) = await bridge.claimExecutableNativeDecision(
+            handle: admission.handle
+        ) else { return XCTFail("Expected native claim") }
+        let permit = try executionPermit(await bridge.begin(claim: claim.approvalClaim))
         _ = try await fillCompletedByteCapacity()
         let prepared = await bridge.prepareBroadcast(
             permit: permit,
             recoveryResponse: largeResponse(for: fixture.request),
-            authority: .ordinary
+            authority: .native(execution.context)
         )
         XCTAssertEqual(prepared, .persisted)
+        guard case .found(let checkpoint) = await bridge.load(handle: admission.handle) else {
+            return XCTFail("Expected prepared native broadcast")
+        }
+        XCTAssertTrue(checkpoint.nativeDecisionStaged)
+        XCTAssertEqual(checkpoint.nativeDeliveryReceipt?.owner, owner)
+        XCTAssertNil(checkpoint.nativeExecutionContext)
         let completion = await bridge.complete(
             permit: permit,
             response: largeResponse(for: fixture.request),
             authority: .ordinary
         )
         XCTAssertEqual(completion, .persisted)
+        XCTAssertLessThanOrEqual(
+            try Data(contentsOf: defaultProfileURL).count,
+            ExtensionBridge.maximumRetainedBytes + 64 * 1024
+        )
     }
 
     func testAllActiveCapacityRejectsWithoutEviction() async throws {
@@ -1969,6 +2135,79 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         _ = try executionPermit(await bridge.begin(claim: claim))
         let repeatedBegin = await bridge.begin(claim: claim)
         XCTAssertEqual(repeatedBegin, .ownershipLost)
+    }
+
+    func testExecutionWriteFailuresRecoverAccordingToThePersistedPhase()
+        async throws {
+        for (operationIndex, checkpointsBroadcast) in [false, true].enumerated() {
+            for (failureIndex, persistsBeforeFailure) in [false, true].enumerated() {
+                bridge = makeBridge(clock: { self.clock.now })
+                let fixture = try makeFixture(id: 740 + operationIndex * 2 + failureIndex)
+                let handle = try accepted(await bridge.enqueue(
+                    ingress: fixture.ingress,
+                    profileIdentifier: nil
+                )).handle
+                let claim = try approvalClaim(await bridge.claim(handle: handle))
+                let permit = try executionPermit(await bridge.begin(claim: claim))
+                let failingWriter = makeBridge(
+                    clock: { self.clock.now },
+                    atomicWrite: { data, url in
+                        if persistsBeforeFailure {
+                            try ExtensionRequestFileStore.defaultAtomicWrite(data, url)
+                        }
+                        throw Failure.injectedWrite
+                    }
+                )
+                let expectedResponse = checkpointsBroadcast
+                    ? ambiguousSubmissionResponse(
+                        for: fixture.request,
+                        transactionHash: "0x1234"
+                    ).markingApprovalCommitted()
+                    : response(for: fixture.request).markingApprovalCommitted()
+                let result: ExtensionBridge.StoreMutationResult
+                if checkpointsBroadcast {
+                    result = await failingWriter.prepareBroadcast(
+                        permit: permit,
+                        recoveryResponse: expectedResponse,
+                        authority: .ordinary
+                    )
+                } else {
+                    result = await failingWriter.complete(
+                        permit: permit,
+                        response: expectedResponse,
+                        authority: .ordinary
+                    )
+                }
+                XCTAssertEqual(result, .retryablePersistenceFailure)
+                let observer = makeBridge(clock: { self.clock.now })
+                guard case .found(let held) = await observer.load(handle: handle) else {
+                    return XCTFail("Expected retained failed execution")
+                }
+                XCTAssertEqual(
+                    held.phase,
+                    persistsBeforeFailure && !checkpointsBroadcast ? .responded : .approving
+                )
+
+                permit.releaseLease()
+                let restarted = makeBridge(clock: { self.clock.now })
+                guard case .found(let recovered) = await restarted.load(handle: handle) else {
+                    return XCTFail("Expected recoverable persisted phase")
+                }
+                XCTAssertEqual(recovered.phase, persistsBeforeFailure ? .responded : .queued)
+                if persistsBeforeFailure {
+                    let response = try responseJSON(await restarted.readResponse(
+                        id: handle.id,
+                        configurationKey: fixture.request.configurationKey,
+                        requestToken: handle.requestToken,
+                        profileIdentifier: nil
+                    ))
+                    XCTAssertEqual(
+                        NSDictionary(dictionary: response),
+                        NSDictionary(dictionary: expectedResponse.json)
+                    )
+                }
+            }
+        }
     }
 
     func testExecutionDeadlineRejectsCommitAtExactStoreBoundary()
@@ -2403,6 +2642,110 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: defaultProfileURL), corrupt)
     }
 
+    func testV7RejectsIntermediateSchemaInItsOwnDirectoryWithoutOverwriting()
+        async throws {
+        _ = try accepted(await bridge.enqueue(
+            ingress: makeFixture(id: 730).ingress,
+            profileIdentifier: nil
+        ))
+        var profile = try storedProfile()
+        profile["schemaVersion"] = 6
+        try PropertyListSerialization.data(
+            fromPropertyList: profile,
+            format: .binary,
+            options: 0
+        ).write(to: defaultProfileURL, options: .atomic)
+
+        try await assertStoredProfileUnavailableAndUnchanged()
+    }
+
+    func testMalformedStagedApprovalIsUnavailableWithoutOverwriting()
+        async throws {
+        let handle = try accepted(await bridge.enqueue(
+            ingress: makeFixture(id: 731).ingress,
+            profileIdentifier: nil
+        )).handle
+        let staged = await bridge.stageNativeDecision(
+            handle: handle,
+            decision: .message(.init(solanaCluster: nil))
+        )
+        XCTAssertEqual(staged, .persisted)
+        let original = try Data(contentsOf: defaultProfileURL)
+        let invalidFields: [(String, Any?)] = [
+            ("decision", nil),
+            ("stagedAt", nil),
+            ("decision", Data("invalid decision".utf8)),
+            ("stagedAt", clock.now.addingTimeInterval(-1)),
+        ]
+        for (field, value) in invalidFields {
+            try original.write(to: defaultProfileURL, options: .atomic)
+            try mutateFirstStoredState("pending") { pending in
+                var ownership = try XCTUnwrap(pending["approval"] as? [String: Any])
+                var staged = try XCTUnwrap(ownership["staged"] as? [String: Any])
+                var approval = try XCTUnwrap(staged["_0"] as? [String: Any])
+                approval[field] = value
+                staged["_0"] = approval
+                ownership["staged"] = staged
+                pending["approval"] = ownership
+            }
+            try await assertStoredProfileUnavailableAndUnchanged()
+        }
+    }
+
+    func testNativeClaimRequiresAValidExecutionContextAfterRestart()
+        async throws {
+        let execution = try await makeExecutableNativePermit(id: 732)
+        defer { execution.fence.release() }
+        let original = try Data(contentsOf: defaultProfileURL)
+        let claimed = try firstStoredState("claimed")
+        let ownership = try XCTUnwrap(claimed["approval"] as? [String: Any])
+        let native = try XCTUnwrap(ownership["native"] as? [String: Any])
+        let context = try XCTUnwrap(native["context"] as? [String: Any])
+        var beforeStaging = context
+        beforeStaging["observedAt"] = clock.now.addingTimeInterval(-1)
+        var reversedDeadline = context
+        reversedDeadline["executionDeadline"] = clock.now.addingTimeInterval(-1)
+        var invalidRevisions = context
+        invalidRevisions["revisions"] = ["ethereum": -1, "solana": 0]
+        let invalidContexts: [[String: Any]?] = [
+            nil, beforeStaging, reversedDeadline, invalidRevisions,
+        ]
+        for context in invalidContexts {
+            try original.write(to: defaultProfileURL, options: .atomic)
+            try mutateFirstStoredState("claimed") { claimed in
+                var ownership = try XCTUnwrap(claimed["approval"] as? [String: Any])
+                var native = try XCTUnwrap(ownership["native"] as? [String: Any])
+                native["context"] = context
+                ownership["native"] = native
+                claimed["approval"] = ownership
+            }
+            try await assertStoredProfileUnavailableAndUnchanged()
+        }
+    }
+
+    func testCompletedStateRequiresBooleanAcknowledgementAfterRestart()
+        async throws {
+        let fixture = try makeFixture(id: 733)
+        let handle = try accepted(await bridge.enqueue(
+            ingress: fixture.ingress,
+            profileIdentifier: nil
+        )).handle
+        let completion = await bridge.complete(
+            handle: handle,
+            response: response(for: fixture.request)
+        )
+        XCTAssertEqual(completion, .persisted)
+        let original = try Data(contentsOf: defaultProfileURL)
+        let invalidAcknowledgements: [Any?] = [nil, "false"]
+        for value in invalidAcknowledgements {
+            try original.write(to: defaultProfileURL, options: .atomic)
+            try mutateFirstStoredState("completed") { completed in
+                completed["acknowledged"] = value
+            }
+            try await assertStoredProfileUnavailableAndUnchanged()
+        }
+    }
+
     func testNativeDecisionStagingIsProfileScopedAndInvisibleToPopupClaims() async throws {
         let profile = UUID()
         let fixture = try makeFixture(id: 720)
@@ -2748,8 +3091,14 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         )
         XCTAssertEqual(staged, .persisted)
         let future = clock.now.addingTimeInterval(60 * 60)
-        try mutateFirstStoredRecord { record in
-            record["nativeDecisionStagedAt"] = future
+        try mutateFirstStoredState("pending") { pending in
+            var ownership = try XCTUnwrap(pending["approval"] as? [String: Any])
+            var staged = try XCTUnwrap(ownership["staged"] as? [String: Any])
+            var approval = try XCTUnwrap(staged["_0"] as? [String: Any])
+            approval["stagedAt"] = future
+            staged["_0"] = approval
+            ownership["staged"] = staged
+            pending["approval"] = ownership
         }
         let fenceToken = UUID()
         let acquiredFence = await bridge.acquireNativeExecutionFence(
@@ -2785,6 +3134,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             decision: decision
         )
         XCTAssertEqual(staged, .persisted)
+        let originalApproval = try firstStoredNativeApproval("pending")
+        let originalDecision = try XCTUnwrap(originalApproval["decision"] as? Data)
+        let originalStagedAt = try XCTUnwrap(originalApproval["stagedAt"] as? Date)
+        XCTAssertNil(originalApproval["receipt"])
         let execution = try await makeNativeDecisionExecutable(
             handle: handle,
             configurationKey: fixture.request.configurationKey,
@@ -2803,6 +3156,10 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             return XCTFail("Expected native claim")
         }
         XCTAssertNotNil(nativeClaim)
+        XCTAssertEqual(
+            try firstStoredNativeApproval("claimed")["decision"] as? Data,
+            originalDecision
+        )
         nativeClaim = nil
         let observer = makeBridge(clock: { self.clock.now })
         guard case .found(let recovered) = await observer.load(handle: handle) else {
@@ -2810,6 +3167,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         }
         XCTAssertEqual(recovered.phase, .queued)
         XCTAssertTrue(recovered.nativeDecisionStaged)
+        XCTAssertNil(recovered.nativeDeliveryReceipt)
+        XCTAssertEqual(recovered.nativeExecutionContext, execution.context)
+        let recoveredApproval = try firstStoredNativeApproval("pending")
+        XCTAssertEqual(recoveredApproval["decision"] as? Data, originalDecision)
+        XCTAssertEqual(recoveredApproval["stagedAt"] as? Date, originalStagedAt)
 
         var reclaimed: ExtensionBridge.NativeDecisionClaim?
         switch await observer.claimExecutableNativeDecision(handle: handle) {
@@ -2829,6 +3191,9 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             authority: .native(execution.context)
         )
         XCTAssertEqual(prepared, .persisted)
+        let preparedApproval = try firstStoredNativeApproval("broadcastPrepared")
+        XCTAssertEqual(preparedApproval["decision"] as? Data, originalDecision)
+        XCTAssertEqual(preparedApproval["stagedAt"] as? Date, originalStagedAt)
         permit = nil
         let recoveryObserver = makeBridge(clock: { self.clock.now })
         guard case .found(let completed) = await recoveryObserver.load(
@@ -2836,6 +3201,11 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
         ) else { return XCTFail("Expected broadcast recovery") }
         XCTAssertEqual(completed.phase, .responded)
         XCTAssertFalse(completed.nativeDecisionStaged)
+        XCTAssertNil(completed.nativeExecutionContext)
+        XCTAssertEqual(
+            Set(try firstStoredState("completed").keys),
+            ["since", "response", "acknowledged"]
+        )
         let delivered = try responseJSON(await recoveryObserver.readResponse(
             id: handle.id,
             configurationKey: fixture.request.configurationKey,
@@ -4437,7 +4807,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     func testSeparateProcessStoreLockFencesAccess() async throws {
         let fixture = try makeFixture(id: 80)
         let readyURL = rootURL.appendingPathComponent("holder-ready")
-        let lockURL = rootURL.appendingPathComponent("bridge-v6.lock")
+        let lockURL = rootURL.appendingPathComponent("bridge-v7.lock")
         try await CrossProcessLockTestFixture.withHeldLock(
             at: lockURL,
             readyURL: readyURL
@@ -4836,7 +5206,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     private func profileURL(_ profileIdentifier: UUID?) -> URL {
         let name = profileIdentifier?.uuidString.lowercased() ?? "default"
         return rootURL
-            .appendingPathComponent("profiles-v6", isDirectory: true)
+            .appendingPathComponent("profiles-v7", isDirectory: true)
             .appendingPathComponent(name)
             .appendingPathExtension("state")
     }
@@ -4844,7 +5214,7 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
     private func operationLockURL(_ handle: ExtensionBridge.Handle) -> URL {
         let profile = handle.profileIdentifier?.uuidString.lowercased() ?? "default"
         return rootURL
-            .appendingPathComponent("operation-locks-v6", isDirectory: true)
+            .appendingPathComponent("operation-locks-v7", isDirectory: true)
             .appendingPathComponent("\(profile)-\(handle.token.rawValue)")
             .appendingPathExtension("lock")
     }
@@ -4869,6 +5239,53 @@ final class ExtensionBridgeStoredRequestTests: XCTestCase {
             options: 0
         )
         try data.write(to: defaultProfileURL, options: .atomic)
+    }
+
+    private func firstStoredState(_ name: String) throws -> [String: Any] {
+        let profile = try storedProfile()
+        let records = try XCTUnwrap(profile["records"] as? [[String: Any]])
+        let state = try XCTUnwrap(records.first?["state"] as? [String: Any])
+        return try XCTUnwrap(state[name] as? [String: Any])
+    }
+
+    private func assertStoredProfileUnavailableAndUnchanged(
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        let original = try Data(contentsOf: defaultProfileURL)
+        let observer = makeBridge(clock: { self.clock.now })
+        guard case .unavailable = await observer.list(profileIdentifier: nil) else {
+            return XCTFail("Expected malformed profile to be unavailable", file: file, line: line)
+        }
+        guard case .unavailable = await observer.enqueue(
+            ingress: try makeFixture(id: 734).ingress,
+            profileIdentifier: nil
+        ) else {
+            return XCTFail("Expected admission to preserve malformed profile", file: file, line: line)
+        }
+        XCTAssertEqual(try Data(contentsOf: defaultProfileURL), original, file: file, line: line)
+    }
+
+    private func firstStoredNativeApproval(_ state: String) throws -> [String: Any] {
+        let payload = try firstStoredState(state)
+        let approval = try XCTUnwrap(payload["approval"] as? [String: Any])
+        let native = try XCTUnwrap(
+            approval[state == "pending" ? "staged" : "native"] as? [String: Any]
+        )
+        return try XCTUnwrap(native["_0"] as? [String: Any])
+    }
+
+    private func mutateFirstStoredState(
+        _ name: String,
+        _ mutation: (inout [String: Any]) throws -> Void
+    ) throws {
+        try mutateFirstStoredRecord { record in
+            var state = try XCTUnwrap(record["state"] as? [String: Any])
+            var payload = try XCTUnwrap(state[name] as? [String: Any])
+            try mutation(&payload)
+            state[name] = payload
+            record["state"] = state
+        }
     }
 
     private func storedProfile() throws -> [String: Any] {

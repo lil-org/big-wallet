@@ -1,3 +1,4 @@
+
 // ∅ 2026 lil org
 
 const IS_DESKTOP_POPUP = navigator.maxTouchPoints === 0;
@@ -66,6 +67,7 @@ const queueTab = {
     domReady: false,
     items: [],
     index: 0,
+    idleGeneration: 0,
     lastRefreshFailed: false,
     privateBrowsing: extensionPrivateBrowsing(),
     refreshGeneration: 0,
@@ -75,41 +77,1066 @@ const queueTab = {
     snapshotStatus: "unknown",
     updateRecoveryTab: null,
 };
-const approvalLifecycle = {
-    current: null,
-    pollTimer: null,
-    refreshTimer: null,
-    completion: null,
-    mutation: null,
-    generation: 0,
-};
-const selectionRender = {
-    accounts: null,
-    chainId: null,
-    networksKey: null,
-    cluster: null,
-    idleGeneration: 0,
-    lastStateJSON: null,
-    strings: {},
-    alertKey: null,
-    alertReturnFocus: null,
-};
-const transactionInteraction = {
-    sliderDragging: false,
-    sliderRequest: null,
-    sliderReviewToken: null,
-    ignoreSliderUntilRelease: false,
-    activeCommand: null,
-    generation: 0,
-    lastEditorRequestKey: null,
-    editorDirty: false,
-};
-const transactionRefresh = {
-    delay: TRANSACTION_REFRESH_INTERVAL,
-};
+let currentRequestController = null;
+let popupStrings = {};
+let ignoreSliderUntilRelease = false;
+
 const NATIVE_MESSAGE_CANCELLED = Symbol("nativeMessageCancelled");
 const nativeChannels = { read: Promise.resolve(), action: Promise.resolve() };
 let unresolvedOpenAppCall = null;
+
+class PopupRequestController {
+    constructor(request) {
+        this.request = request;
+        this.state = null;
+        this.phase = "loading";
+        this.responseEpoch = 0;
+        this.completion = null;
+        this.mutation = null;
+        this.followUpTimer = null;
+        this.followUpMode = null;
+        this.refreshDelay = TRANSACTION_REFRESH_INTERVAL;
+        this.tickets = new Set();
+        this.presentation = {
+            accounts: null,
+            chainId: null,
+            networksKey: null,
+            cluster: null,
+            lastStateJSON: null,
+            alertKey: null,
+            alertReturnFocus: null,
+        };
+        this.transaction = {
+            sliderDragging: false,
+            sliderRequest: null,
+            sliderReviewToken: null,
+            activeCommand: null,
+            generation: 0,
+            lastEditorRequestKey: null,
+            editorDirty: false,
+        };
+    }
+
+    get isActive() {
+        return currentRequestController === this &&
+            this.phase !== "disposed" && this.phase !== "reconciling" &&
+            sameRequest(this.request, queueTab.items[queueTab.index]);
+    }
+
+    requestFor(value) {
+        if (!this.isActive) { return null; }
+        return typeof value === "undefined" || value === this.request.id ||
+            sameRequest(value, this.request) ? this.request : null;
+    }
+
+    isCurrentRequest(request) {
+        return this.isActive && sameRequest(request, this.request);
+    }
+
+    start() {
+        if (!this.isActive) { return; }
+        show("working-overlay");
+        document.getElementById("tx-editor").open = false;
+        return this.fetchAndRenderState();
+    }
+
+    dispose() {
+        if (this.phase === "disposed") { return; }
+        this.phase = "disposed";
+        this.invalidateOperations();
+        this.closeAlert(false);
+    }
+
+    invalidateOperations() {
+        this.responseEpoch += 1;
+        this.stopTimers();
+        for (const ticket of this.tickets) {
+            cancelNativeMessageTicket(ticket);
+        }
+        this.discardSliderCommands(this.request);
+    }
+
+    async dispatch(kind, subject, payload, options = {}, ticketOwner = null) {
+        if (!this.isActive) { return {status: "cancelled"}; }
+        const ticket = scheduleNativeMessage(
+            kind,
+            subject,
+            this.request.id,
+            payload,
+            this.request.requestToken,
+            {...options, isValid: () => this.isActive &&
+                (!options.isValid || options.isValid())}
+        );
+        this.tickets.add(ticket);
+        if (ticketOwner) { ticketOwner.nativeTicket = ticket; }
+        try {
+            return await ticket.result;
+        } finally {
+            this.tickets.delete(ticket);
+        }
+    }
+
+    closeAlert(restoreFocus) {
+        if (currentRequestController !== this) { return; }
+        const overlay = document.getElementById("alert-overlay");
+        const wasOpen = this.presentation.alertKey !== null || !overlay.classList.contains("hidden");
+        const focusTarget = this.presentation.alertReturnFocus;
+        hide("alert-overlay");
+        document.getElementById("screen-request").inert = false;
+        document.getElementById("alert-buttons").innerHTML = "";
+        this.presentation.alertKey = null;
+        this.presentation.alertReturnFocus = null;
+        if (restoreFocus && wasOpen && focusTarget &&
+            focusTarget.isConnected !== false && focusTarget.disabled !== true &&
+            typeof focusTarget.focus === "function") {
+            focusTarget.focus();
+        }
+    }
+
+    scheduleTransactionRefresh(value) {
+        if (!this.requestFor(value)) { return; }
+        this.scheduleFollowUp("refresh", this.refreshDelay);
+    }
+
+    scheduleFollowUp(mode, delay) {
+        if (!this.isActive || this.phase === "submitting") { return; }
+        this.stopTimers();
+        this.followUpMode = mode;
+        this.phase = mode === "poll" ? "following" : "displaying";
+        const timer = setTimeout(() => {
+            if (this.followUpTimer !== timer) { return; }
+            this.followUpTimer = null;
+            if (!this.isActive || this.followUpMode !== mode) { return; }
+            if (mode === "poll") {
+                void this.pollState();
+            } else {
+                void this.refreshTransactionState();
+            }
+        }, delay);
+        this.followUpTimer = timer;
+    }
+
+    resetTransactionRefreshBackoff() {
+        this.refreshDelay = TRANSACTION_REFRESH_INTERVAL;
+    }
+
+    updateTransactionRefreshBackoff(state, unchanged) {
+        if (!unchanged || !STABLE_TRANSACTION_PHASES.has(state.phase)) {
+            this.resetTransactionRefreshBackoff();
+            return;
+        }
+        this.refreshDelay = Math.min(
+            this.refreshDelay * 2,
+            TRANSACTION_REFRESH_MAX_INTERVAL
+        );
+    }
+
+    async approvalState(value, mode) {
+        const generation = this.responseEpoch;
+        const payload = { mode: typeof mode === "undefined" ? "full" : mode };
+        return this.requestState(
+            "getApprovalState",
+            payload,
+            value,
+            "approval",
+            null,
+            () => generation === this.responseEpoch
+        );
+    }
+
+    async fetchAndRenderState(value) {
+        this.stopTimers();
+        const request = this.requestFor(value);
+        if (!request || !this.isCurrentRequest(request)) { return; }
+        const generation = this.responseEpoch;
+        const state = await this.approvalState(request);
+        if (!this.acceptResponse(state, generation)) { return; }
+        this.adoptState(state);
+        if (state.kind === "sendTransaction" && state.state === "review") {
+            this.resetTransactionRefreshBackoff();
+            this.scheduleTransactionRefresh(request);
+        } else if (shouldPollApprovalState(state)) {
+            this.pollApproval(request);
+        }
+    }
+
+    async refreshTransactionState(value) {
+        const request = this.requestFor(value);
+        if (!request || !this.isCurrentRequest(request) || !this.state || this.state.id !== request.id) { return; }
+        // A state fetched before an approve or reject describes the screen that click replaced;
+        // adopting it would drop the working overlay while the wallet is still authenticating.
+        const generation = this.responseEpoch;
+        const state = await this.approvalState(request);
+        if (!this.acceptResponse(state, generation)) { return; }
+        if (this.state && this.state.id === request.id) {
+            const stateJSON = JSON.stringify(state);
+            const unchanged = stateJSON === this.presentation.lastStateJSON;
+            this.state = state;
+            // Most ticks return a state identical to the one on display, and rebuilding the DOM for
+            // those wipes the user's text selection. The slider still follows the wallet so a stale
+            // local value snaps back instead of silently diverging from the fee.
+            if (!this.transaction.sliderDragging &&
+                !this.transaction.activeCommand) {
+                if (!unchanged) {
+                    this.renderState(state);
+                } else if (state.slider && state.slider.visible) {
+                    document.getElementById("tx-slider").value = state.slider.position ?? 100;
+                }
+            }
+            this.updateTransactionRefreshBackoff(state, unchanged);
+        }
+        if (shouldPollApprovalState(state)) {
+            this.pollApproval(request);
+            return;
+        }
+        if (this.isCurrentRequest(request) && this.state &&
+            this.state.id === request.id && this.state.state === "review") {
+            this.scheduleTransactionRefresh(request);
+        }
+    }
+
+    renderState(state) {
+        if (!this.isActive) { return; }
+        this.presentation.lastStateJSON = JSON.stringify(state);
+        show("screen-request");
+        hide("screen-idle");
+        setText("request-title", state.title || "");
+        setText("request-host", state.host || "");
+        const favicon = document.getElementById("request-favicon");
+        if (state.iconURL && favicon.src !== state.iconURL) {
+            favicon.src = state.iconURL;
+        }
+        setHidden("request-favicon", !state.iconURL);
+        document.getElementById("button-approve").textContent =
+            state.state === "error" || shouldRefreshAccountSelection(state)
+                ? localized("refresh", "Refresh")
+                : state.primaryTitle || localized("ok", "OK");
+        document.getElementById("button-reject").disabled = !canRejectApprovalState(state);
+
+        hide("section-accounts");
+        hide("section-message");
+        hide("section-transaction");
+        hide("section-chain");
+
+        const isBusy = state.state === "working" && !canRejectApprovalState(state) ||
+            state.state === "authenticating";
+        setHidden("working-overlay", !isBusy);
+
+        setOptionalText("request-error", "request-error", state.error);
+
+        switch (state.kind) {
+            case "selectAccount":
+            case "switchAccount":
+                this.renderAccountSelection(state);
+                break;
+            case "signMessage":
+                this.renderSignMessage(state);
+                break;
+            case "sendTransaction":
+                this.renderTransaction(state);
+                break;
+            case "addChain":
+                renderAddChain(state);
+                break;
+        }
+
+        this.updateApproveEnabled(state);
+        this.renderAlertIfNeeded(state);
+
+    }
+
+    renderAccountSelection(state) {
+        show("section-accounts");
+        this.reconcileAccountSelection(state);
+
+        if (state.canSelectNetwork && state.networks) {
+            show("network-row");
+            const select = document.getElementById("network-select");
+            const networksKey = JSON.stringify(state.networks.map(network => [
+                network.chainId,
+                network.name,
+                network.isCustom === true,
+            ]));
+            if (networksKey !== this.presentation.networksKey) {
+                this.presentation.networksKey = networksKey;
+                select.innerHTML = "";
+                for (const network of state.networks) {
+                    const option = document.createElement("option");
+                    option.value = network.chainId;
+                    // A dapp picks the name of a chain it adds, so the chain id is what tells a
+                    // dapp-added network apart from a bundled one wearing the same name.
+                    option.textContent = network.isCustom === true
+                        ? network.name + " (" + network.chainId + ")"
+                        : network.name;
+                    select.appendChild(option);
+                }
+            }
+            if (this.presentation.chainId !== null) {
+                select.value = this.presentation.chainId;
+            }
+        } else {
+            hide("network-row");
+        }
+
+        setOptionalText("accounts-empty", "accounts-empty", state.emptyMessage);
+
+        this.renderCheckedList("accounts-list", state.accounts || [], "account-row",
+                          (row, account) => { fillAccountRow(row, account, true); },
+                          account => this.isSelectedAccount(account),
+                          account => this.toggleAccount(account));
+    }
+
+    reconcileAccountSelection(state) {
+        const availableAccounts = state.accounts || [];
+        if (this.presentation.accounts === null) {
+            this.presentation.accounts = availableAccounts
+                .filter(account => account.isSelected)
+                .map(accountIdentity);
+        } else {
+            this.presentation.accounts = this.presentation.accounts
+                .map(selected => availableAccounts.find(account => sameAccount(selected, account)))
+                .filter(account => typeof account !== "undefined")
+                .map(accountIdentity);
+        }
+
+        if (!state.canSelectNetwork || !Array.isArray(state.networks)) {
+            this.presentation.chainId = null;
+            return;
+        }
+        const selectedNetwork = state.networks.find(
+            network => network.chainId === this.presentation.chainId
+        ) || state.networks.find(network => network.isSelected) || state.networks[0];
+        this.presentation.chainId = selectedNetwork ? selectedNetwork.chainId : null;
+    }
+
+    renderCheckedList(containerId, items, rowClass, fillRow, isSelected, select) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = "";
+        for (const [index, item] of items.entries()) {
+            const row = document.createElement("button");
+            const selected = isSelected(item);
+            row.type = "button";
+            row.className = rowClass;
+            row.setAttribute("aria-pressed", selected ? "true" : "false");
+            fillRow(row, item);
+            const check = document.createElement("span");
+            check.className = "account-check";
+            check.textContent = selected ? "✓" : "";
+            check.setAttribute("aria-hidden", "true");
+            row.appendChild(check);
+            row.addEventListener("click", () => {
+                if (!this.isActive) { return; }
+                select(item);
+                this.renderState(this.state);
+                const replacement = document.getElementById(containerId).children[index];
+                if (replacement && typeof replacement.focus === "function") {
+                    replacement.focus();
+                }
+            });
+            container.appendChild(row);
+        }
+    }
+
+    isSelectedAccount(account) {
+        return this.presentation.accounts.some(selected => sameAccount(selected, account));
+    }
+
+    toggleAccount(account) {
+        if (this.isSelectedAccount(account)) {
+            this.presentation.accounts = this.presentation.accounts.filter(selected => !sameAccount(selected, account));
+        } else {
+            this.presentation.accounts = this.presentation.accounts.filter(selected => selected.coin !== account.coin);
+            this.presentation.accounts.push(accountIdentity(account));
+        }
+    }
+
+    canApproveAccountSelection(state) {
+        if (!Array.isArray(this.presentation.accounts)) {
+            return false;
+        }
+        if (this.presentation.accounts.length === 0) {
+            return state.allowsEmptySelection === true;
+        }
+        const selectedEthereum = this.presentation.accounts.some(account => account.coin === "ethereum");
+        return !selectedEthereum || isCanonicalEthereumChainId(this.presentation.chainId);
+    }
+
+    updateApproveEnabled(state) {
+        const approve = document.getElementById("button-approve");
+        if (state.state === "error") {
+            approve.disabled = false;
+        } else if (state.state !== "review") {
+            approve.disabled = true;
+        } else if (state.kind === "selectAccount" || state.kind === "switchAccount") {
+            approve.disabled = !shouldRefreshAccountSelection(state) &&
+                !this.canApproveAccountSelection(state);
+        } else if (state.kind === "sendTransaction") {
+            approve.disabled = state.canApprove !== true;
+        } else if (state.kind === "signMessage") {
+            approve.disabled = state.requiresClusterSelection === true && this.presentation.cluster === null;
+        } else if (state.kind === "addChain") {
+            approve.disabled = false;
+        } else {
+            approve.disabled = true;
+        }
+    }
+
+    renderSignMessage(state) {
+        show("section-message");
+        renderAccountRow("signing-account", state.account);
+        setText("message-meta", state.meta || "");
+        const clusters = state.clusters || [];
+        setHidden("clusters", !(clusters.length > 0));
+        if (clusters.length > 0) {
+            const current = clusters.find(cluster => cluster.value === this.presentation.cluster);
+            if (!current) {
+                const selected = clusters.find(c => c.isSelected);
+                this.presentation.cluster = selected ? selected.value : null;
+            }
+            this.renderCheckedList("clusters", clusters, "cluster-row",
+                              (row, cluster) => {
+                                  const label = document.createElement("span");
+                                  label.textContent = cluster.label;
+                                  row.appendChild(label);
+                              },
+                              cluster => cluster.value === this.presentation.cluster,
+                              cluster => { this.presentation.cluster = cluster.value; });
+        } else {
+            this.presentation.cluster = null;
+        }
+    }
+
+    renderTransaction(state) {
+        show("section-transaction");
+        renderAccountRow("tx-account", state.account);
+        setText("tx-network", state.networkName || "");
+        setOptionalText("tx-balance", "tx-balance-row", state.balance);
+        setOptionalText("tx-value", "tx-value-row", state.valueLine);
+        const feeLines = document.getElementById("tx-fee-lines");
+        feeLines.innerHTML = "";
+        for (const line of state.feeLines || []) {
+            const div = document.createElement("div");
+            div.className = "fee-line";
+            div.textContent = line;
+            feeLines.appendChild(div);
+        }
+        if (state.phase === "preparing" || state.phase === "idle") {
+            const div = document.createElement("div");
+            div.className = "fee-line";
+            div.textContent = localized("calculating", "Calculating...");
+            feeLines.appendChild(div);
+        }
+
+        const sliderState = state.slider && state.slider.visible ? state.slider : null;
+        setHidden("tx-slider-row", !sliderState);
+        if (sliderState) {
+            const slider = document.getElementById("tx-slider");
+            const firstFeeLine = feeLines.children[0]?.textContent ||
+                localized("calculating", "Calculating...");
+            slider.max = sliderState.maximum || 200;
+            if (!this.transaction.sliderDragging) {
+                slider.value = sliderState.position ?? 100;
+            }
+            slider.disabled = sliderState.enabled !== true;
+            slider.setAttribute("aria-valuetext", firstFeeLine);
+        }
+
+        setOptionalText("tx-data", "tx-data-details", state.dataInterpretation);
+
+        const canApplyEdits = state.transactionMutationAllowed === true && state.canEdit === true;
+        document.getElementById("editor-apply").disabled = !canApplyEdits;
+        document.getElementById("editor-suggested").disabled = !canApplyEdits;
+        const editorDetails = document.getElementById("tx-editor");
+        if (state.transactionMutationAllowed !== true) {
+            this.discardSliderCommands(this.request);
+            this.transaction.editorDirty = false;
+            hide("edits-error");
+            editorDetails.open = false;
+            hide("tx-editor");
+        } else if (state.canEdit || editorDetails.open) {
+            show("tx-editor");
+            // An open editor keeps whatever the user typed, but until they type it follows the fee:
+            // applying fields left over from before a slider move would silently undo that move.
+            if (!this.transaction.editorDirty) {
+                this.populateEditor(state);
+            }
+            const request = this.request;
+            const requestToken = request && request.id === state.id
+                ? request.requestToken || ""
+                : "";
+            const editorRequestKey = typeof state.editorRequestToken === "number"
+                ? requestToken + ":" + state.id + ":" + state.editorRequestToken
+                : null;
+            if (editorRequestKey !== null && editorRequestKey !== this.transaction.lastEditorRequestKey) {
+                this.transaction.lastEditorRequestKey = editorRequestKey;
+                editorDetails.open = true;
+            }
+        } else {
+            hide("tx-editor");
+        }
+    }
+
+    populateEditor(state) {
+        this.transaction.editorDirty = false;
+        const editor = state.editor || {};
+        if (editor.usesEIP1559) {
+            show("editor-eip1559");
+            hide("editor-legacy");
+            document.getElementById("edit-max-priority").value = editor.maxPriorityFeePerGasGwei ?? "";
+            document.getElementById("edit-max-fee").value = editor.maxFeePerGasGwei ?? "";
+        } else {
+            show("editor-legacy");
+            hide("editor-eip1559");
+            document.getElementById("edit-gas-price").value = editor.gasPriceGwei ?? "";
+        }
+        document.getElementById("edit-nonce").value = editor.nonce ?? "";
+        const hasSuggested = editor.suggestedGasPriceGwei != null || editor.suggestedMaxFeePerGasGwei != null;
+        setHidden("editor-suggested", !hasSuggested);
+        hide("edits-error");
+    }
+
+    async approveCurrent() {
+        if (!this.isActive || this.phase === "submitting") { return; }
+        if (!this.state) { return; }
+        if (this.state.state === "error") {
+            document.getElementById("button-approve").disabled = true;
+            show("working-overlay");
+            await this.fetchAndRenderState();
+            return;
+        }
+        if (shouldRefreshAccountSelection(this.state)) {
+            document.getElementById("button-approve").disabled = true;
+            await this.fetchAndRenderState(this.state.id);
+            return;
+        }
+        const payload = {};
+        if (this.state.kind === "selectAccount" || this.state.kind === "switchAccount") {
+            if (!this.canApproveAccountSelection(this.state)) { return; }
+            payload.selectedAccounts = this.presentation.accounts;
+            if (this.state.canSelectNetwork &&
+                isCanonicalEthereumChainId(this.presentation.chainId)) {
+                payload.chainId = this.presentation.chainId;
+            }
+        } else if (this.state.kind === "signMessage" && this.presentation.cluster) {
+            payload.cluster = this.presentation.cluster;
+        }
+        await this.submitCurrentDecision("approveRequest", payload);
+    }
+
+    async rejectCurrent() {
+        await this.submitCurrentDecision("rejectRequest");
+    }
+
+    async submitCurrentDecision(subject, payload) {
+        if (!this.isActive || this.phase === "submitting") { return; }
+        const request = this.request;
+        const initialState = this.state;
+        if (!request || !canSubmitDecision(subject, initialState)) { return; }
+        const rerenderCurrentReview = () => {
+            const currentState = this.state;
+            if (this.isCurrentRequest(request) && currentState?.state === "review") {
+                this.renderState(currentState);
+            }
+        };
+        if (subject === "approveRequest") {
+            this.finishSliderDragForDecision(request);
+            if (!await this.waitForSliderCommands(request)) { return; }
+        } else {
+            this.discardSliderCommands(request);
+        }
+        if (!this.isActive || this.phase === "submitting") { return; }
+        const state = this.state;
+        if (!this.isCurrentRequest(request) || !canSubmitDecision(subject, state)) {
+            rerenderCurrentReview();
+            return;
+        }
+        const reviewToken = subject === "approveRequest"
+            ? state.reviewToken
+            : undefined;
+        const remainsCurrent = () => this.isCurrentRequest(request) &&
+            canSubmitDecision(subject, this.state) &&
+            (subject !== "approveRequest" ||
+                this.state?.reviewToken === reviewToken);
+        show("working-overlay");
+        let decisionPayload = payload;
+        if (subject === "approveRequest") {
+            decisionPayload = {...(isRecord(payload) ? payload : {})};
+            delete decisionPayload.revisions;
+            delete decisionPayload.password;
+        }
+        this.responseEpoch += 1;
+        this.stopTimers();
+        this.phase = "submitting";
+        const outcome = await this.dispatch(
+            "action", subject, decisionPayload,
+            {isValid: remainsCurrent, reviewToken, approvalRequest: request}
+        );
+        if (!this.isCurrentRequest(request)) { return; }
+        if (outcome.status === "cancelled") {
+            this.phase = "displaying";
+            rerenderCurrentReview();
+            return;
+        }
+        if (outcome.status !== "response" || !isRecord(outcome.response)) {
+            this.failClosedApprovalState(request);
+            return;
+        }
+        this.phase = "following";
+        this.pollApproval(request);
+    }
+
+    pollApproval(value) {
+        if (!this.requestFor(value)) { return; }
+        this.scheduleFollowUp("poll", APPROVAL_POLL_INTERVAL);
+    }
+
+    async pollState() {
+        const request = this.requestFor();
+        if (!request) { return; }
+        const generation = this.responseEpoch;
+        const state = await this.approvalState(request, "poll");
+        if (!this.isActive) { return; }
+        if (generation !== this.responseEpoch) {
+            this.pollApproval();
+            return;
+        }
+        if (!this.acceptResponse(state, generation)) { return; }
+        if (state.state === "error") {
+            this.stopTimers();
+            this.adoptState(state);
+        } else if (state.state === "review") {
+            this.stopTimers();
+            this.adoptState(state);
+            if (state.kind === "sendTransaction") {
+                this.resetTransactionRefreshBackoff();
+                this.scheduleTransactionRefresh();
+            }
+        } else if (canRejectApprovalState(state)) {
+            const retainedError = isCompactRejectableApprovalState(this.state)
+                ? this.state.error : null;
+            this.stopTimers();
+            this.adoptState(retainedError === null ? state : {...state, error: retainedError});
+            if (shouldPollApprovalState(state)) { this.pollApproval(); }
+        } else {
+            this.pollApproval();
+        }
+    }
+
+    reconcileMissingRequest(value) {
+        if (this.completion !== null) { return this.completion; }
+        if (!this.requestFor(value)) { return Promise.resolve(); }
+        this.phase = "reconciling";
+        this.invalidateOperations();
+        this.closeAlert(false);
+        this.completion = closeIfNothingIsLeft();
+        return this.completion;
+    }
+
+    stopTimers() {
+        if (this.followUpTimer !== null) {
+            clearTimeout(this.followUpTimer);
+            this.followUpTimer = null;
+        }
+        this.followUpMode = null;
+    }
+
+    async requestState(
+        subject,
+        payload,
+        value,
+        nativeCallKind = "approval",
+        ticketOwner = null,
+        remainsValid = null,
+        reviewToken
+    ) {
+        if (!this.requestFor(value)) { return null; }
+        const options = {isValid: remainsValid};
+        if (typeof reviewToken !== "undefined") {
+            options.reviewToken = reviewToken;
+        }
+        const outcome = await this.dispatch(
+            nativeCallKind, subject, payload, options, ticketOwner
+        );
+        if (outcome.status === "cancelled") { return NATIVE_MESSAGE_CANCELLED; }
+        return outcome.status === "response" ? outcome.response : null;
+    }
+
+    acceptResponse(state, generation = this.responseEpoch) {
+        if (!this.isActive || generation !== this.responseEpoch ||
+            state === NATIVE_MESSAGE_CANCELLED) { return false; }
+        if (!isRenderableApprovalState(state, this.request)) {
+            this.failClosedApprovalState(this.request);
+            return false;
+        }
+        return !this.handleMissingState(state, this.request);
+    }
+
+    async mutateState(subject, payload, value, reviewToken) {
+        if (!this.isActive || this.phase === "submitting") { return null; }
+        const request = this.requestFor(value);
+        if (!request || !this.isCurrentRequest(request)) { return null; }
+        const isRichMutation = subject !== "setTransactionSpeed";
+        if (isRichMutation && sameRequest(this.mutation?.request, request)) {
+            return null;
+        }
+        const mutation = { request: request, subject: subject };
+        if (isRichMutation) {
+            this.mutation = mutation;
+        }
+        try {
+            if (isRichMutation && !await this.waitForSliderCommands(request)) { return null; }
+            if (!this.isActive || this.phase === "submitting") { return null; }
+            if (!this.isCurrentRequest(request)) { return null; }
+            if (isRichMutation && this.mutation !== mutation) {
+                return null;
+            }
+            if (subject === "applyTransactionEdits" &&
+                this.state?.canEdit !== true) { return null; }
+            this.responseEpoch += 1;
+            this.resetTransactionRefreshBackoff();
+            const generation = this.responseEpoch;
+            const ticketOwner = isRichMutation ? mutation : this.transaction.activeCommand;
+            const state = await this.requestState(
+                subject,
+                payload,
+                request,
+                "mutation",
+                ticketOwner,
+                () => generation === this.responseEpoch &&
+                    (typeof reviewToken === "undefined" ||
+                        this.state?.reviewToken === reviewToken),
+                reviewToken
+            );
+            if (generation !== this.responseEpoch) { return null; }
+            if (!this.isCurrentRequest(request)) { return null; }
+            if (state === NATIVE_MESSAGE_CANCELLED) { return null; }
+            if (!isRenderableApprovalState(state, request)) {
+                if ((subject === "resolveApprovalAlert" ||
+                    subject === "setTransactionSpeed") && isRecord(state) &&
+                    state.status === "ignored" && Object.keys(state).length === 1) {
+                    return null;
+                }
+                this.failClosedApprovalState(request);
+                return null;
+            }
+            if (this.handleMissingState(state, request)) { return null; }
+            return state;
+        } finally {
+            if (this.mutation === mutation) {
+                this.mutation = null;
+            }
+        }
+    }
+
+    handleMissingState(state, value) {
+        if (!state || state.state !== "missing") { return false; }
+        const request = this.requestFor(value);
+        if (!request || !this.isCurrentRequest(request)) { return true; }
+        void this.reconcileMissingRequest(request);
+        return true;
+    }
+
+    failClosedApprovalState(request) {
+        if (!request || !this.isCurrentRequest(request)) { return; }
+        this.responseEpoch += 1;
+        const previous = this.state || {};
+        this.presentation.lastStateJSON = null;
+        this.resetTransactionRefreshBackoff();
+        this.stopTimers();
+        this.closeAlert(false);
+        document.getElementById("tx-editor").open = false;
+        this.transaction.editorDirty = false;
+        hide("edits-error");
+        document.getElementById("button-approve").disabled = true;
+        this.state = {
+            id: request.id,
+            state: "error",
+            ...(typeof previous.host === "string" && previous.host.length > 0
+                ? {host: previous.host}
+                : {}),
+            error: localized("failedToLoad", "Failed to load"),
+        };
+        this.phase = "displaying";
+        this.renderState(this.state);
+    }
+
+    keepFollowingTransaction() {
+        if (!this.isActive || this.followUpMode === "poll") { return; }
+        if (this.state?.kind === "sendTransaction" && this.state.state === "review") {
+            this.scheduleTransactionRefresh();
+        }
+    }
+
+    adoptState(state) {
+        if (!this.isActive || !state?.state) { return; }
+        this.state = state;
+        this.phase = shouldPollApprovalState(state) ? "following" : "displaying";
+        this.renderState(state);
+    }
+
+    async sendSliderEvent(
+        interaction,
+        value,
+        request,
+        commandGeneration = this.transaction.generation,
+        reviewToken = this.state?.reviewToken
+    ) {
+        const capturedRequest = this.requestFor(request);
+        if (!capturedRequest || !this.isCurrentRequest(capturedRequest)) { return false; }
+        let refreshed = false;
+        const refreshAuthoritativeState = async () => {
+            if (!refreshed && commandGeneration === this.transaction.generation &&
+                this.isCurrentRequest(capturedRequest)) {
+                refreshed = true;
+                await this.fetchAndRenderState(capturedRequest);
+            }
+            return false;
+        };
+        if (!isRequestToken(reviewToken) ||
+            this.state?.reviewToken !== reviewToken) {
+            return await refreshAuthoritativeState();
+        }
+        const state = await this.mutateState(
+            "setTransactionSpeed",
+            {value, interaction},
+            capturedRequest,
+            reviewToken
+        );
+        if (commandGeneration !== this.transaction.generation ||
+            !this.isCurrentRequest(capturedRequest)) {
+            return false;
+        }
+        if (!state) { return await refreshAuthoritativeState(); }
+        this.adoptState(state);
+        this.keepFollowingTransaction();
+        return true;
+    }
+
+    beginSliderInteraction(
+        request,
+        reviewToken = this.state?.reviewToken
+    ) {
+        const capturedRequest = this.requestFor(request);
+        if (this.transaction.activeCommand ||
+            this.transaction.sliderDragging ||
+            !capturedRequest || !this.isCurrentRequest(capturedRequest) ||
+            !isRequestToken(reviewToken)) {
+            return false;
+        }
+        ignoreSliderUntilRelease = false;
+        this.transaction.sliderDragging = true;
+        this.transaction.sliderRequest = capturedRequest;
+        this.transaction.sliderReviewToken = reviewToken;
+        return true;
+    }
+
+    startSliderCommand(
+        interaction,
+        value,
+        request,
+        reviewToken = this.state?.reviewToken
+    ) {
+        const capturedRequest = this.requestFor(request);
+        if (!capturedRequest || !this.isCurrentRequest(capturedRequest) ||
+            !isRequestToken(reviewToken) || this.transaction.activeCommand) {
+            return null;
+        }
+        let resolveCompletion;
+        const command = {
+            commandGeneration: this.transaction.generation,
+            completion: new Promise(resolve => { resolveCompletion = resolve; }),
+            interaction: interaction,
+            request: capturedRequest,
+            reviewToken: reviewToken,
+            resolveCompletion: null,
+            value: value,
+        };
+        command.resolveCompletion = resolveCompletion;
+        this.transaction.activeCommand = command;
+        document.getElementById("tx-slider").disabled = true;
+        void (async () => {
+            let succeeded = false;
+            try {
+                succeeded = await this.sendSliderEvent(
+                    command.interaction,
+                    command.value,
+                    command.request,
+                    command.commandGeneration,
+                    command.reviewToken
+                );
+            } finally {
+                if (this.transaction.activeCommand === command) {
+                    this.transaction.activeCommand = null;
+                }
+                finishSliderCommand(command, succeeded);
+            }
+        })();
+        return command.completion;
+    }
+
+    async waitForSliderCommands(request) {
+        const generation = this.transaction.generation;
+        if (this.transaction.sliderDragging &&
+            sameRequest(this.transaction.sliderRequest, request)) {
+            return false;
+        }
+        const command = this.transaction.activeCommand;
+        if (!command) { return true; }
+        if (command.commandGeneration !== generation ||
+            !sameRequest(command.request, request)) { return false; }
+        const succeeded = await command.completion;
+        return succeeded === true && generation === this.transaction.generation &&
+            this.isCurrentRequest(request);
+    }
+
+    discardSliderCommands(request) {
+        this.transaction.generation += 1;
+        const command = this.transaction.activeCommand;
+        if (sameRequest(command?.request, request)) {
+            cancelNativeMessageTicket(command.nativeTicket);
+            finishSliderCommand(command, false);
+            this.transaction.activeCommand = null;
+        }
+        if (sameRequest(this.transaction.sliderRequest, request)) {
+            ignoreSliderUntilRelease = true;
+            this.transaction.sliderDragging = false;
+            this.transaction.sliderRequest = null;
+            this.transaction.sliderReviewToken = null;
+        }
+    }
+
+    finishSliderInteraction(interaction, request) {
+        if (!this.transaction.sliderDragging ||
+            (request && !sameRequest(this.transaction.sliderRequest, request))) {
+            return null;
+        }
+        const capturedRequest = this.transaction.sliderRequest;
+        const value = Number(document.getElementById("tx-slider").value);
+        const reviewToken = this.transaction.sliderReviewToken;
+        this.transaction.sliderDragging = false;
+        this.transaction.sliderRequest = null;
+        this.transaction.sliderReviewToken = null;
+        return this.startSliderCommand(
+            interaction,
+            value,
+            capturedRequest,
+            reviewToken
+        );
+    }
+
+    finishSliderDragForDecision(request) {
+        if (!this.transaction.sliderDragging ||
+            !sameRequest(this.transaction.sliderRequest, request)) { return; }
+        ignoreSliderUntilRelease = true;
+        this.finishSliderInteraction("ended", request);
+    }
+
+    async applyEdits() {
+        if (!this.isActive) { return; }
+        if (this.state?.canEdit !== true ||
+            this.state.transactionMutationAllowed !== true) { return; }
+        const editor = (this.state.editor || {});
+        const payload = {
+            mode: "custom",
+            nonce: document.getElementById("edit-nonce").value,
+        };
+        if (editor.usesEIP1559) {
+            payload.maxPriorityFeePerGasGwei = document.getElementById("edit-max-priority").value;
+            payload.maxFeePerGasGwei = document.getElementById("edit-max-fee").value;
+        } else {
+            payload.gasPriceGwei = document.getElementById("edit-gas-price").value;
+        }
+        this.handleTransactionEditResult(await this.mutateState("applyTransactionEdits", payload));
+    }
+
+    async applySuggested() {
+        if (!this.isActive) { return; }
+        if (this.state?.canEdit !== true ||
+            this.state.transactionMutationAllowed !== true) { return; }
+        this.handleTransactionEditResult(await this.mutateState(
+            "applyTransactionEdits",
+            { mode: "suggested" }
+        ));
+    }
+
+    handleTransactionEditResult(state) {
+        if (!this.isActive) { return; }
+        if (state && state.editsError) {
+            show("edits-error");
+        } else {
+            this.closeEditorAndAdopt(state);
+        }
+        this.keepFollowingTransaction();
+    }
+
+    closeEditorAndAdopt(state) {
+        if (!this.isActive) { return; }
+        if (!state || !state.state) { return; }
+        this.transaction.editorDirty = false;
+        hide("edits-error");
+        document.getElementById("tx-editor").open = false;
+        this.adoptState(state);
+    }
+
+    renderAlertIfNeeded(state) {
+        if (!state.alert) {
+            this.closeAlert(state.state === "review");
+            return;
+        }
+        const title = state.alert.title || "";
+        const message = state.alert.message || "";
+        const actions = state.alert.actions;
+        const alertKey = JSON.stringify([
+            title,
+            message,
+            actions.map(action => [action.title, action.action]),
+        ]);
+        const overlay = document.getElementById("alert-overlay");
+        if (this.presentation.alertKey === alertKey && !overlay.classList.contains("hidden")) {
+            return;
+        }
+        if (this.presentation.alertKey === null) {
+            const activeElement = document.activeElement;
+            this.presentation.alertReturnFocus = activeElement && typeof activeElement.focus === "function"
+                ? activeElement
+                : null;
+        }
+        this.presentation.alertKey = alertKey;
+        setText("alert-title", title);
+        setText("alert-message", message);
+        const buttons = document.getElementById("alert-buttons");
+        buttons.innerHTML = "";
+        for (const action of actions) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "button primary";
+            button.textContent = action.title;
+            button.addEventListener("click", async () => {
+                if (!this.isActive) { return; }
+                const reviewToken = this.state?.reviewToken;
+                const currentAlert = this.state?.alert;
+                if (!isRequestToken(reviewToken) || !currentAlert ||
+                    !currentAlert.actions.some(currentAction =>
+                        currentAction.action === action.action &&
+                        currentAction.title === action.title
+                    )) {
+                    return;
+                }
+                const state = await this.mutateState("resolveApprovalAlert", {
+                    action: action.action,
+                }, undefined, reviewToken);
+                if (this.state?.reviewToken !== reviewToken) { return; }
+                this.adoptState(state);
+                this.keepFollowingTransaction();
+            });
+            buttons.appendChild(button);
+        }
+        document.getElementById("screen-request").inert = true;
+        show("alert-overlay");
+        const focusTarget = buttons.children[0] || document.getElementById("alert-box");
+        focusTarget.focus();
+    }
+}
 
 function extensionPrivateBrowsing() {
     return browser.extension?.inIncognitoContext === true;
@@ -209,7 +1236,7 @@ function scheduleNativeMessage(kind, subject, id, payload, requestToken, options
         const reviewToken = channel === "action"
             ? Object.prototype.hasOwnProperty.call(options, "reviewToken")
                 ? options.reviewToken
-                : approvalLifecycle.current?.reviewToken
+                : currentRequestController?.state?.reviewToken
             : undefined;
         ticket.state = "dispatched";
         let pendingResponse;
@@ -298,24 +1325,8 @@ function setOptionalText(textId, rowId, value) {
     setHidden(rowId, !value);
 }
 
-function closeAlert(restoreFocus) {
-    const overlay = document.getElementById("alert-overlay");
-    const wasOpen = selectionRender.alertKey !== null || !overlay.classList.contains("hidden");
-    const focusTarget = selectionRender.alertReturnFocus;
-    hide("alert-overlay");
-    document.getElementById("screen-request").inert = false;
-    document.getElementById("alert-buttons").innerHTML = "";
-    selectionRender.alertKey = null;
-    selectionRender.alertReturnFocus = null;
-    if (restoreFocus && wasOpen && focusTarget &&
-        focusTarget.isConnected !== false && focusTarget.disabled !== true &&
-        typeof focusTarget.focus === "function") {
-        focusTarget.focus();
-    }
-}
-
 function localized(key, fallback) {
-    return selectionRender.strings[key] || fallback;
+    return popupStrings[key] || fallback;
 }
 
 function formatted(template, ...values) {
@@ -329,9 +1340,9 @@ function formatted(template, ...values) {
 // The English in popup.html stays as the fallback for when that response never arrives.
 function applyStrings(dictionary) {
     if (!dictionary) { return; }
-    selectionRender.strings = dictionary;
+    popupStrings = dictionary;
     for (const element of document.querySelectorAll("[data-string]")) {
-        const text = selectionRender.strings[element.dataset.string];
+        const text = popupStrings[element.dataset.string];
         if (text) {
             element.textContent = text;
         }
@@ -386,7 +1397,7 @@ function requestPendingQueueRefresh() {
 
 function shouldDeferQueueRefreshForCurrentRequest() {
     const currentRequest = queueTab.items[queueTab.index];
-    if (!currentRequest || sameRequest(approvalLifecycle.completion, currentRequest)) {
+    if (!currentRequest || currentRequestController?.phase === "reconciling") {
         return false;
     }
     return !document.getElementById("screen-request").classList.contains("hidden") ||
@@ -637,7 +1648,7 @@ function refreshQueue() {
     if (queueTab.refreshInFlight !== null) {
         return queueTab.refreshInFlight;
     }
-    stopTimers();
+    currentRequestController?.stopTimers();
     queueTab.snapshotStatus = "unknown";
     if (queueTab.domReady) {
         document.getElementById("idle-switch-account").disabled = true;
@@ -662,9 +1673,9 @@ function refreshQueue() {
 }
 
 function showQueue(requests) {
-    approvalLifecycle.generation += 1;
-    selectionRender.idleGeneration += 1;
-    closeAlert(false);
+    currentRequestController?.dispose();
+    currentRequestController = null;
+    queueTab.idleGeneration += 1;
     const fetchFailed = requests === null;
     if (fetchFailed) {
         requests = [];
@@ -708,8 +1719,9 @@ function canBeginIdleSwitch() {
 }
 
 async function showIdle(queueFetchFailed = false) {
-    const generation = ++selectionRender.idleGeneration;
-    approvalLifecycle.current = null;
+    const generation = ++queueTab.idleGeneration;
+    currentRequestController?.dispose();
+    currentRequestController = null;
     hide("screen-request");
     hide("working-overlay");
     show("screen-idle");
@@ -747,7 +1759,7 @@ async function showIdle(queueFetchFailed = false) {
         return;
     }
     const configuration = await readLatestConfiguration(queueTab.activeTab);
-    if (generation !== selectionRender.idleGeneration) { return; }
+    if (generation !== queueTab.idleGeneration) { return; }
     if (configuration) {
         const latest = configuration.latestConfigurations;
         const lines = [];
@@ -798,26 +1810,16 @@ function showCurrentRequest() {
     } else {
         hide("queue-indicator");
     }
-    resetSelections();
-    fetchAndRenderState(request);
-}
-
-function requestFor(value) {
-    const request = queueTab.items[queueTab.index];
-    if (!request) { return null; }
-    if (typeof value === "undefined") { return request; }
-    if (isRecord(value)) { return value; }
-    return request.id === value ? request : null;
+    currentRequestController?.dispose();
+    const controller = new PopupRequestController(request);
+    currentRequestController = controller;
+    controller.start();
 }
 
 function sameRequest(left, right) {
     return !!left && !!right &&
         left.id === right.id &&
         left.requestToken === right.requestToken;
-}
-
-function isCurrentRequest(request) {
-    return sameRequest(request, queueTab.items[queueTab.index]);
 }
 
 function isApprovalStateEnvelope(state, request) {
@@ -1108,286 +2110,9 @@ function shouldPollApprovalState(state) {
             !isCompactRejectableApprovalState(state);
 }
 
-// The previous request's screen stays on display until this one renders, so it keeps the overlay
-// up and drops the state behind it: a click landing in that window must not reach the wallet.
-function resetSelections() {
-    closeAlert(false);
-    approvalLifecycle.current = null;
-    selectionRender.lastStateJSON = null;
-    resetTransactionRefreshBackoff();
-    show("working-overlay");
-    document.getElementById("tx-editor").open = false;
-    transactionInteraction.editorDirty = false;
-    if (transactionInteraction.sliderDragging) {
-        transactionInteraction.ignoreSliderUntilRelease = true;
-    }
-    transactionInteraction.sliderDragging = false;
-    transactionInteraction.sliderRequest = null;
-    transactionInteraction.sliderReviewToken = null;
-    transactionInteraction.generation += 1;
-    const activeCommand = transactionInteraction.activeCommand;
-    if (activeCommand) {
-        cancelNativeMessageTicket(activeCommand.nativeTicket);
-        finishSliderCommand(activeCommand, false);
-        transactionInteraction.activeCommand = null;
-    }
-    selectionRender.accounts = null;
-    selectionRender.chainId = null;
-    selectionRender.cluster = null;
-}
-
-// Clear-first, so every scheduling path converges on a single refresh chain instead of
-// leaking a second timer it can no longer cancel.
-function scheduleTransactionRefresh(value) {
-    const request = requestFor(value);
-    if (!request || !isCurrentRequest(request)) { return; }
-    if (approvalLifecycle.refreshTimer) {
-        clearTimeout(approvalLifecycle.refreshTimer);
-    }
-    approvalLifecycle.refreshTimer = setTimeout(() => {
-        approvalLifecycle.refreshTimer = null;
-        refreshTransactionState(request);
-    }, transactionRefresh.delay);
-}
-
-function resetTransactionRefreshBackoff() {
-    transactionRefresh.delay = TRANSACTION_REFRESH_INTERVAL;
-}
-
-function updateTransactionRefreshBackoff(state, unchanged) {
-    if (!unchanged || !STABLE_TRANSACTION_PHASES.has(state.phase)) {
-        resetTransactionRefreshBackoff();
-        return;
-    }
-    transactionRefresh.delay = Math.min(
-        transactionRefresh.delay * 2,
-        TRANSACTION_REFRESH_MAX_INTERVAL
-    );
-}
-
-async function approvalState(value, mode) {
-    const generation = approvalLifecycle.generation;
-    const payload = { mode: typeof mode === "undefined" ? "full" : mode };
-    return requestState(
-        "getApprovalState",
-        payload,
-        value,
-        "approval",
-        null,
-        () => generation === approvalLifecycle.generation
-    );
-}
-
-async function fetchAndRenderState(value) {
-    stopTimers();
-    const request = requestFor(value);
-    if (!request || !isCurrentRequest(request)) { return; }
-    const generation = approvalLifecycle.generation;
-    const state = await approvalState(request);
-    if (generation !== approvalLifecycle.generation) { return; }
-    if (!isCurrentRequest(request)) { return; }
-    if (state === NATIVE_MESSAGE_CANCELLED) { return; }
-    if (!isRenderableApprovalState(state, request)) {
-        failClosedApprovalState(request);
-        return;
-    }
-    if (handleMissingState(state, request)) {
-        return;
-    }
-    adoptState(state);
-    if (state.kind === "sendTransaction" && state.state === "review") {
-        resetTransactionRefreshBackoff();
-        scheduleTransactionRefresh(request);
-    } else if (shouldPollApprovalState(state)) {
-        pollApproval(request);
-    }
-}
-
-async function refreshTransactionState(value) {
-    const request = requestFor(value);
-    if (!request || !isCurrentRequest(request) || !approvalLifecycle.current || approvalLifecycle.current.id !== request.id) { return; }
-    // A state fetched before an approve or reject describes the screen that click replaced;
-    // adopting it would drop the working overlay while the wallet is still authenticating.
-    const generation = approvalLifecycle.generation;
-    const state = await approvalState(request);
-    if (generation !== approvalLifecycle.generation) { return; }
-    if (!isCurrentRequest(request)) { return; }
-    if (state === NATIVE_MESSAGE_CANCELLED) { return; }
-    if (!isRenderableApprovalState(state, request)) {
-        failClosedApprovalState(request);
-        return;
-    }
-    if (handleMissingState(state, request)) { return; }
-    if (approvalLifecycle.current && approvalLifecycle.current.id === request.id) {
-        const stateJSON = JSON.stringify(state);
-        const unchanged = stateJSON === selectionRender.lastStateJSON;
-        approvalLifecycle.current = state;
-        // Most ticks return a state identical to the one on display, and rebuilding the DOM for
-        // those wipes the user's text selection. The slider still follows the wallet so a stale
-        // local value snaps back instead of silently diverging from the fee.
-        if (!transactionInteraction.sliderDragging &&
-            !transactionInteraction.activeCommand) {
-            if (!unchanged) {
-                renderState(state);
-            } else if (state.slider && state.slider.visible) {
-                document.getElementById("tx-slider").value = state.slider.position ?? 100;
-            }
-        }
-        updateTransactionRefreshBackoff(state, unchanged);
-    }
-    if (shouldPollApprovalState(state)) {
-        pollApproval(request);
-        return;
-    }
-    if (isCurrentRequest(request) && approvalLifecycle.current &&
-        approvalLifecycle.current.id === request.id && approvalLifecycle.current.state === "review") {
-        scheduleTransactionRefresh(request);
-    }
-}
-
-function renderState(state) {
-    selectionRender.lastStateJSON = JSON.stringify(state);
-    show("screen-request");
-    hide("screen-idle");
-    setText("request-title", state.title || "");
-    setText("request-host", state.host || "");
-    const favicon = document.getElementById("request-favicon");
-    if (state.iconURL && favicon.src !== state.iconURL) {
-        favicon.src = state.iconURL;
-    }
-    setHidden("request-favicon", !state.iconURL);
-    document.getElementById("button-approve").textContent =
-        state.state === "error" || shouldRefreshAccountSelection(state)
-            ? localized("refresh", "Refresh")
-            : state.primaryTitle || localized("ok", "OK");
-    document.getElementById("button-reject").disabled = !canRejectApprovalState(state);
-
-    hide("section-accounts");
-    hide("section-message");
-    hide("section-transaction");
-    hide("section-chain");
-
-    const isBusy = state.state === "working" && !canRejectApprovalState(state) ||
-        state.state === "authenticating";
-    setHidden("working-overlay", !isBusy);
-
-    setOptionalText("request-error", "request-error", state.error);
-
-    switch (state.kind) {
-        case "selectAccount":
-        case "switchAccount":
-            renderAccountSelection(state);
-            break;
-        case "signMessage":
-            renderSignMessage(state);
-            break;
-        case "sendTransaction":
-            renderTransaction(state);
-            break;
-        case "addChain":
-            renderAddChain(state);
-            break;
-    }
-
-    updateApproveEnabled(state);
-    renderAlertIfNeeded(state);
-
-}
-
 function canRejectApprovalState(state) {
     return state?.state === "review" ||
         isCompactRejectableApprovalState(state);
-}
-
-function renderAccountSelection(state) {
-    show("section-accounts");
-    reconcileAccountSelection(state);
-
-    if (state.canSelectNetwork && state.networks) {
-        show("network-row");
-        const select = document.getElementById("network-select");
-        const networksKey = JSON.stringify(state.networks.map(network => [
-            network.chainId,
-            network.name,
-            network.isCustom === true,
-        ]));
-        if (networksKey !== selectionRender.networksKey) {
-            selectionRender.networksKey = networksKey;
-            select.innerHTML = "";
-            for (const network of state.networks) {
-                const option = document.createElement("option");
-                option.value = network.chainId;
-                // A dapp picks the name of a chain it adds, so the chain id is what tells a
-                // dapp-added network apart from a bundled one wearing the same name.
-                option.textContent = network.isCustom === true
-                    ? network.name + " (" + network.chainId + ")"
-                    : network.name;
-                select.appendChild(option);
-            }
-        }
-        if (selectionRender.chainId !== null) {
-            select.value = selectionRender.chainId;
-        }
-    } else {
-        hide("network-row");
-    }
-
-    setOptionalText("accounts-empty", "accounts-empty", state.emptyMessage);
-
-    renderCheckedList("accounts-list", state.accounts || [], "account-row",
-                      (row, account) => { fillAccountRow(row, account, true); },
-                      isSelectedAccount,
-                      toggleAccount);
-}
-
-function reconcileAccountSelection(state) {
-    const availableAccounts = state.accounts || [];
-    if (selectionRender.accounts === null) {
-        selectionRender.accounts = availableAccounts
-            .filter(account => account.isSelected)
-            .map(accountIdentity);
-    } else {
-        selectionRender.accounts = selectionRender.accounts
-            .map(selected => availableAccounts.find(account => sameAccount(selected, account)))
-            .filter(account => typeof account !== "undefined")
-            .map(accountIdentity);
-    }
-
-    if (!state.canSelectNetwork || !Array.isArray(state.networks)) {
-        selectionRender.chainId = null;
-        return;
-    }
-    const selectedNetwork = state.networks.find(
-        network => network.chainId === selectionRender.chainId
-    ) || state.networks.find(network => network.isSelected) || state.networks[0];
-    selectionRender.chainId = selectedNetwork ? selectedNetwork.chainId : null;
-}
-
-function renderCheckedList(containerId, items, rowClass, fillRow, isSelected, select) {
-    const container = document.getElementById(containerId);
-    container.innerHTML = "";
-    for (const [index, item] of items.entries()) {
-        const row = document.createElement("button");
-        const selected = isSelected(item);
-        row.type = "button";
-        row.className = rowClass;
-        row.setAttribute("aria-pressed", selected ? "true" : "false");
-        fillRow(row, item);
-        const check = document.createElement("span");
-        check.className = "account-check";
-        check.textContent = selected ? "✓" : "";
-        check.setAttribute("aria-hidden", "true");
-        row.appendChild(check);
-        row.addEventListener("click", () => {
-            select(item);
-            renderState(approvalLifecycle.current);
-            const replacement = document.getElementById(containerId).children[index];
-            if (replacement && typeof replacement.focus === "function") {
-                replacement.focus();
-            }
-        });
-        container.appendChild(row);
-    }
 }
 
 function accountIdentity(account) {
@@ -1403,79 +2128,10 @@ function sameAccount(left, right) {
     return accountIdentityKey(left) === accountIdentityKey(right);
 }
 
-function isSelectedAccount(account) {
-    return selectionRender.accounts.some(selected => sameAccount(selected, account));
-}
-
-function toggleAccount(account) {
-    if (isSelectedAccount(account)) {
-        selectionRender.accounts = selectionRender.accounts.filter(selected => !sameAccount(selected, account));
-    } else {
-        selectionRender.accounts = selectionRender.accounts.filter(selected => selected.coin !== account.coin);
-        selectionRender.accounts.push(accountIdentity(account));
-    }
-}
-
-function canApproveAccountSelection(state) {
-    if (!Array.isArray(selectionRender.accounts)) {
-        return false;
-    }
-    if (selectionRender.accounts.length === 0) {
-        return state.allowsEmptySelection === true;
-    }
-    const selectedEthereum = selectionRender.accounts.some(account => account.coin === "ethereum");
-    return !selectedEthereum || isCanonicalEthereumChainId(selectionRender.chainId);
-}
-
 function shouldRefreshAccountSelection(state) {
     return (state.kind === "selectAccount" || state.kind === "switchAccount") &&
         Array.isArray(state.accounts) && state.accounts.length === 0 &&
         state.allowsEmptySelection === false;
-}
-
-function updateApproveEnabled(state) {
-    const approve = document.getElementById("button-approve");
-    if (state.state === "error") {
-        approve.disabled = false;
-    } else if (state.state !== "review") {
-        approve.disabled = true;
-    } else if (state.kind === "selectAccount" || state.kind === "switchAccount") {
-        approve.disabled = !shouldRefreshAccountSelection(state) &&
-            !canApproveAccountSelection(state);
-    } else if (state.kind === "sendTransaction") {
-        approve.disabled = state.canApprove !== true;
-    } else if (state.kind === "signMessage") {
-        approve.disabled = state.requiresClusterSelection === true && selectionRender.cluster === null;
-    } else if (state.kind === "addChain") {
-        approve.disabled = false;
-    } else {
-        approve.disabled = true;
-    }
-}
-
-function renderSignMessage(state) {
-    show("section-message");
-    renderAccountRow("signing-account", state.account);
-    setText("message-meta", state.meta || "");
-    const clusters = state.clusters || [];
-    setHidden("clusters", !(clusters.length > 0));
-    if (clusters.length > 0) {
-        const current = clusters.find(cluster => cluster.value === selectionRender.cluster);
-        if (!current) {
-            const selected = clusters.find(c => c.isSelected);
-            selectionRender.cluster = selected ? selected.value : null;
-        }
-        renderCheckedList("clusters", clusters, "cluster-row",
-                          (row, cluster) => {
-                              const label = document.createElement("span");
-                              label.textContent = cluster.label;
-                              row.appendChild(label);
-                          },
-                          cluster => cluster.value === selectionRender.cluster,
-                          cluster => { selectionRender.cluster = cluster.value; });
-    } else {
-        selectionRender.cluster = null;
-    }
 }
 
 function renderAccountRow(elementId, account) {
@@ -1508,267 +2164,16 @@ function fillAccountRow(container, account, alwaysShowAddress) {
     container.appendChild(text);
 }
 
-function renderTransaction(state) {
-    show("section-transaction");
-    renderAccountRow("tx-account", state.account);
-    setText("tx-network", state.networkName || "");
-    setOptionalText("tx-balance", "tx-balance-row", state.balance);
-    setOptionalText("tx-value", "tx-value-row", state.valueLine);
-    const feeLines = document.getElementById("tx-fee-lines");
-    feeLines.innerHTML = "";
-    for (const line of state.feeLines || []) {
-        const div = document.createElement("div");
-        div.className = "fee-line";
-        div.textContent = line;
-        feeLines.appendChild(div);
-    }
-    if (state.phase === "preparing" || state.phase === "idle") {
-        const div = document.createElement("div");
-        div.className = "fee-line";
-        div.textContent = localized("calculating", "Calculating...");
-        feeLines.appendChild(div);
-    }
-
-    const sliderState = state.slider && state.slider.visible ? state.slider : null;
-    setHidden("tx-slider-row", !sliderState);
-    if (sliderState) {
-        const slider = document.getElementById("tx-slider");
-        const firstFeeLine = feeLines.children[0]?.textContent ||
-            localized("calculating", "Calculating...");
-        slider.max = sliderState.maximum || 200;
-        if (!transactionInteraction.sliderDragging) {
-            slider.value = sliderState.position ?? 100;
-        }
-        slider.disabled = sliderState.enabled !== true;
-        slider.setAttribute("aria-valuetext", firstFeeLine);
-    }
-
-    setOptionalText("tx-data", "tx-data-details", state.dataInterpretation);
-
-    const canApplyEdits = state.transactionMutationAllowed === true && state.canEdit === true;
-    document.getElementById("editor-apply").disabled = !canApplyEdits;
-    document.getElementById("editor-suggested").disabled = !canApplyEdits;
-    const editorDetails = document.getElementById("tx-editor");
-    if (state.transactionMutationAllowed !== true) {
-        const request = queueTab.items[queueTab.index];
-        if (request) {
-            discardSliderCommands(request);
-        }
-        transactionInteraction.editorDirty = false;
-        hide("edits-error");
-        editorDetails.open = false;
-        hide("tx-editor");
-    } else if (state.canEdit || editorDetails.open) {
-        show("tx-editor");
-        // An open editor keeps whatever the user typed, but until they type it follows the fee:
-        // applying fields left over from before a slider move would silently undo that move.
-        if (!transactionInteraction.editorDirty) {
-            populateEditor(state);
-        }
-        const request = queueTab.items[queueTab.index];
-        const requestToken = request && request.id === state.id
-            ? request.requestToken || ""
-            : "";
-        const editorRequestKey = typeof state.editorRequestToken === "number"
-            ? requestToken + ":" + state.id + ":" + state.editorRequestToken
-            : null;
-        if (editorRequestKey !== null && editorRequestKey !== transactionInteraction.lastEditorRequestKey) {
-            transactionInteraction.lastEditorRequestKey = editorRequestKey;
-            editorDetails.open = true;
-        }
-    } else {
-        hide("tx-editor");
-    }
-}
-
-function populateEditor(state) {
-    transactionInteraction.editorDirty = false;
-    const editor = state.editor || {};
-    if (editor.usesEIP1559) {
-        show("editor-eip1559");
-        hide("editor-legacy");
-        document.getElementById("edit-max-priority").value = editor.maxPriorityFeePerGasGwei ?? "";
-        document.getElementById("edit-max-fee").value = editor.maxFeePerGasGwei ?? "";
-    } else {
-        show("editor-legacy");
-        hide("editor-eip1559");
-        document.getElementById("edit-gas-price").value = editor.gasPriceGwei ?? "";
-    }
-    document.getElementById("edit-nonce").value = editor.nonce ?? "";
-    const hasSuggested = editor.suggestedGasPriceGwei != null || editor.suggestedMaxFeePerGasGwei != null;
-    setHidden("editor-suggested", !hasSuggested);
-    hide("edits-error");
-}
-
 function renderAddChain(state) {
     show("section-chain");
     setText("chain-name", state.chainName || "");
     setText("chain-rpc", state.rpcURL || "");
 }
 
-async function approveCurrent() {
-    if (!approvalLifecycle.current) { return; }
-    if (approvalLifecycle.current.state === "error") {
-        document.getElementById("button-approve").disabled = true;
-        show("working-overlay");
-        await fetchAndRenderState(queueTab.items[queueTab.index]);
-        return;
-    }
-    if (shouldRefreshAccountSelection(approvalLifecycle.current)) {
-        document.getElementById("button-approve").disabled = true;
-        await fetchAndRenderState(approvalLifecycle.current.id);
-        return;
-    }
-    const payload = {};
-    if (approvalLifecycle.current.kind === "selectAccount" || approvalLifecycle.current.kind === "switchAccount") {
-        if (!canApproveAccountSelection(approvalLifecycle.current)) { return; }
-        payload.selectedAccounts = selectionRender.accounts;
-        if (approvalLifecycle.current.canSelectNetwork &&
-            isCanonicalEthereumChainId(selectionRender.chainId)) {
-            payload.chainId = selectionRender.chainId;
-        }
-    } else if (approvalLifecycle.current.kind === "signMessage" && selectionRender.cluster) {
-        payload.cluster = selectionRender.cluster;
-    }
-    await submitCurrentDecision("approveRequest", payload);
-}
-
-async function rejectCurrent() {
-    await submitCurrentDecision("rejectRequest");
-}
-
 function canSubmitDecision(subject, state) {
     return subject === "rejectRequest"
         ? canRejectApprovalState(state)
         : state?.state === "review" && isRequestToken(state.reviewToken);
-}
-
-async function submitCurrentDecision(subject, payload) {
-    const request = queueTab.items[queueTab.index];
-    const initialState = approvalLifecycle.current;
-    if (!request || !canSubmitDecision(subject, initialState)) { return; }
-    const rerenderCurrentReview = () => {
-        const currentState = approvalLifecycle.current;
-        if (isCurrentRequest(request) && currentState?.state === "review") {
-            renderState(currentState);
-        }
-    };
-    if (subject === "approveRequest") {
-        finishSliderDragForDecision(request);
-        if (!await waitForSliderCommands(request)) { return; }
-    } else {
-        discardSliderCommands(request);
-    }
-    const state = approvalLifecycle.current;
-    if (!isCurrentRequest(request) || !canSubmitDecision(subject, state)) {
-        rerenderCurrentReview();
-        return;
-    }
-    const reviewToken = subject === "approveRequest"
-        ? state.reviewToken
-        : undefined;
-    const remainsCurrent = () => isCurrentRequest(request) &&
-        canSubmitDecision(subject, approvalLifecycle.current) &&
-        (subject !== "approveRequest" ||
-            approvalLifecycle.current?.reviewToken === reviewToken);
-    show("working-overlay");
-    let decisionPayload = payload;
-    if (subject === "approveRequest") {
-        decisionPayload = {...(isRecord(payload) ? payload : {})};
-        delete decisionPayload.revisions;
-        delete decisionPayload.password;
-    }
-    approvalLifecycle.generation += 1;
-    stopTimers();
-    const ticket = scheduleNativeMessage(
-        "action",
-        subject,
-        request.id,
-        decisionPayload,
-        request.requestToken,
-        {isValid: remainsCurrent, reviewToken, approvalRequest: request}
-    );
-    const outcome = await ticket.result;
-    if (outcome.status === "cancelled") {
-        rerenderCurrentReview();
-        return;
-    }
-    if (!isCurrentRequest(request)) { return; }
-    if (outcome.status !== "response" || !isRecord(outcome.response)) {
-        failClosedApprovalState(request);
-        return;
-    }
-    pollApproval(request);
-}
-
-function pollApproval(value) {
-    const request = requestFor(value);
-    if (!request || !isCurrentRequest(request)) { return; }
-    stopTimers();
-    approvalLifecycle.pollTimer = setTimeout(async () => {
-        approvalLifecycle.pollTimer = null;
-        const generation = approvalLifecycle.generation;
-        const state = await approvalState(request, "poll");
-        if (!isCurrentRequest(request)) {
-            return;
-        }
-        // A mutation landing mid-fetch supersedes this state, but the wallet still owes the
-        // request an outcome — the poll keeps following instead of stranding the overlay.
-        if (generation !== approvalLifecycle.generation) {
-            pollApproval(request);
-            return;
-        }
-        if (state === NATIVE_MESSAGE_CANCELLED) { return; }
-        if (!isRenderableApprovalState(state, request)) {
-            failClosedApprovalState(request);
-            return;
-        }
-        if (handleMissingState(state, request)) {
-            return;
-        }
-        if (state.state === "error") {
-            hide("working-overlay");
-            adoptState(state);
-            return;
-        }
-        if (state.state === "review") {
-            hide("working-overlay");
-            adoptState(state);
-            if (state.kind === "sendTransaction") {
-                resetTransactionRefreshBackoff();
-                scheduleTransactionRefresh(request);
-            }
-        } else if (canRejectApprovalState(state)) {
-            hide("working-overlay");
-            const retainedError = approvalLifecycle.current?.state === "working" &&
-                approvalLifecycle.current.kind === undefined &&
-                approvalLifecycle.current.canReject === true &&
-                typeof approvalLifecycle.current.error === "string"
-                ? approvalLifecycle.current.error
-                : null;
-            adoptState(retainedError === null ? state : { ...state, error: retainedError });
-            if (shouldPollApprovalState(state)) {
-                pollApproval(request);
-            }
-        } else {
-            pollApproval(request);
-        }
-    }, APPROVAL_POLL_INTERVAL);
-}
-
-async function reconcileMissingRequest(value) {
-    const request = requestFor(value);
-    if (!request || !isCurrentRequest(request) || sameRequest(approvalLifecycle.completion, request)) { return; }
-    stopTimers();
-    closeAlert(false);
-    approvalLifecycle.completion = request;
-    try {
-        await closeIfNothingIsLeft();
-    } finally {
-        if (sameRequest(approvalLifecycle.completion, request)) {
-            approvalLifecycle.completion = null;
-        }
-    }
 }
 
 async function applyCompletedResponse(request) {
@@ -1803,7 +2208,7 @@ async function applyCompletedResponse(request) {
 // a request that arrived in the meantime gets shown instead of being left behind. A fetch
 // failure keeps the popup open too — an unreachable wallet does not mean the queue drained.
 async function closeIfNothingIsLeft() {
-    stopTimers();
+    currentRequestController?.stopTimers();
     const requests = await refreshQueue();
     if (requests !== null && requests.length === 0 &&
         !shouldShowUpdateRecovery() &&
@@ -1815,421 +2220,11 @@ async function closeIfNothingIsLeft() {
     }
 }
 
-// Both slots get cleared: an approve landing mid-refresh can leave a poll and a refresh
-// outstanding at once, and whichever finishes the request has to cancel the other.
-function stopTimers() {
-    if (approvalLifecycle.pollTimer) {
-        clearTimeout(approvalLifecycle.pollTimer);
-        approvalLifecycle.pollTimer = null;
-    }
-    if (approvalLifecycle.refreshTimer) {
-        clearTimeout(approvalLifecycle.refreshTimer);
-        approvalLifecycle.refreshTimer = null;
-    }
-}
-
-async function requestState(
-    subject,
-    payload,
-    value,
-    nativeCallKind = "approval",
-    ticketOwner = null,
-    remainsValid = null,
-    reviewToken
-) {
-    const request = requestFor(value);
-    if (!request || !isCurrentRequest(request)) { return null; }
-    const options = {
-        isValid: () => isCurrentRequest(request) && (!remainsValid || remainsValid()),
-    };
-    if (typeof reviewToken !== "undefined") {
-        options.reviewToken = reviewToken;
-    }
-    const ticket = scheduleNativeMessage(
-        nativeCallKind,
-        subject,
-        request.id,
-        payload,
-        request.requestToken,
-        options
-    );
-    if (ticketOwner) {
-        ticketOwner.nativeTicket = ticket;
-    }
-    const outcome = await ticket.result;
-    if (outcome.status === "cancelled") { return NATIVE_MESSAGE_CANCELLED; }
-    return outcome.status === "response" ? outcome.response : null;
-}
-
-// Every user-initiated mutation advances the generation, so a state fetched before it — a
-// refresh tick or an earlier mutation still in flight — reports null instead of landing on
-// top of the newer interaction and resurrecting the screen it replaced.
-async function mutateState(subject, payload, value, reviewToken) {
-    const request = requestFor(value);
-    if (!request || !isCurrentRequest(request)) { return null; }
-    const isRichMutation = subject !== "setTransactionSpeed";
-    if (isRichMutation && sameRequest(approvalLifecycle.mutation?.request, request)) {
-        return null;
-    }
-    const mutation = { request: request, subject: subject };
-    if (isRichMutation) {
-        approvalLifecycle.mutation = mutation;
-    }
-    try {
-        if (isRichMutation && !await waitForSliderCommands(request)) { return null; }
-        if (!isCurrentRequest(request)) { return null; }
-        if (isRichMutation && approvalLifecycle.mutation !== mutation) {
-            return null;
-        }
-        if (subject === "applyTransactionEdits" &&
-            approvalLifecycle.current?.canEdit !== true) { return null; }
-        approvalLifecycle.generation += 1;
-        resetTransactionRefreshBackoff();
-        const generation = approvalLifecycle.generation;
-        const ticketOwner = isRichMutation ? mutation : transactionInteraction.activeCommand;
-        const state = await requestState(
-            subject,
-            payload,
-            request,
-            "mutation",
-            ticketOwner,
-            () => generation === approvalLifecycle.generation &&
-                (typeof reviewToken === "undefined" ||
-                    approvalLifecycle.current?.reviewToken === reviewToken),
-            reviewToken
-        );
-        if (generation !== approvalLifecycle.generation) { return null; }
-        if (!isCurrentRequest(request)) { return null; }
-        if (state === NATIVE_MESSAGE_CANCELLED) { return null; }
-        if (!isRenderableApprovalState(state, request)) {
-            if ((subject === "resolveApprovalAlert" ||
-                subject === "setTransactionSpeed") && isRecord(state) &&
-                state.status === "ignored" && Object.keys(state).length === 1) {
-                return null;
-            }
-            failClosedApprovalState(request);
-            return null;
-        }
-        if (handleMissingState(state, request)) { return null; }
-        return state;
-    } finally {
-        if (approvalLifecycle.mutation === mutation) {
-            approvalLifecycle.mutation = null;
-        }
-    }
-}
-
-function handleMissingState(state, value) {
-    if (!state || state.state !== "missing") { return false; }
-    const request = requestFor(value);
-    if (!request || !isCurrentRequest(request)) { return true; }
-    void reconcileMissingRequest(request);
-    return true;
-}
-
-function failClosedApprovalState(request) {
-    if (!request || !isCurrentRequest(request)) { return; }
-    approvalLifecycle.generation += 1;
-    const previous = approvalLifecycle.current || {};
-    selectionRender.lastStateJSON = null;
-    resetTransactionRefreshBackoff();
-    stopTimers();
-    closeAlert(false);
-    document.getElementById("tx-editor").open = false;
-    transactionInteraction.editorDirty = false;
-    hide("edits-error");
-    document.getElementById("button-approve").disabled = true;
-    approvalLifecycle.current = {
-        id: request.id,
-        state: "error",
-        ...(typeof previous.host === "string" && previous.host.length > 0
-            ? {host: previous.host}
-            : {}),
-        error: localized("failedToLoad", "Failed to load"),
-    };
-    renderState(approvalLifecycle.current);
-}
-
-// A mutation can strand the review screen: the tick it superseded was dropped without
-// rescheduling, and its own response may have been superseded or failed in turn. Whatever
-// the outcome, the refresh loop keeps following the wallet — unless an approval poll owns
-// the request now.
-function keepFollowingTransaction() {
-    if (approvalLifecycle.pollTimer) { return; }
-    if (approvalLifecycle.current && approvalLifecycle.current.kind === "sendTransaction" && approvalLifecycle.current.state === "review") {
-        scheduleTransactionRefresh(approvalLifecycle.current.id);
-    }
-}
-
-function adoptState(state) {
-    if (!state || !state.state) { return; }
-    approvalLifecycle.current = state;
-    renderState(state);
-}
-
-async function sendSliderEvent(
-    interaction,
-    value,
-    request,
-    commandGeneration = transactionInteraction.generation,
-    reviewToken = approvalLifecycle.current?.reviewToken
-) {
-    const capturedRequest = requestFor(request);
-    if (!capturedRequest || !isCurrentRequest(capturedRequest)) { return false; }
-    let refreshed = false;
-    const refreshAuthoritativeState = async () => {
-        if (!refreshed && commandGeneration === transactionInteraction.generation &&
-            isCurrentRequest(capturedRequest)) {
-            refreshed = true;
-            await fetchAndRenderState(capturedRequest);
-        }
-        return false;
-    };
-    if (!isRequestToken(reviewToken) ||
-        approvalLifecycle.current?.reviewToken !== reviewToken) {
-        return await refreshAuthoritativeState();
-    }
-    const state = await mutateState(
-        "setTransactionSpeed",
-        {value, interaction},
-        capturedRequest,
-        reviewToken
-    );
-    if (commandGeneration !== transactionInteraction.generation ||
-        !isCurrentRequest(capturedRequest)) {
-        return false;
-    }
-    if (!state) { return await refreshAuthoritativeState(); }
-    adoptState(state);
-    keepFollowingTransaction();
-    return true;
-}
-
-function beginSliderInteraction(
-    request,
-    reviewToken = approvalLifecycle.current?.reviewToken
-) {
-    const capturedRequest = requestFor(request);
-    if (transactionInteraction.activeCommand ||
-        transactionInteraction.sliderDragging ||
-        !capturedRequest || !isCurrentRequest(capturedRequest) ||
-        !isRequestToken(reviewToken)) {
-        return false;
-    }
-    transactionInteraction.ignoreSliderUntilRelease = false;
-    transactionInteraction.sliderDragging = true;
-    transactionInteraction.sliderRequest = capturedRequest;
-    transactionInteraction.sliderReviewToken = reviewToken;
-    return true;
-}
-
-function startSliderCommand(
-    interaction,
-    value,
-    request,
-    reviewToken = approvalLifecycle.current?.reviewToken
-) {
-    const capturedRequest = requestFor(request);
-    if (!capturedRequest || !isCurrentRequest(capturedRequest) ||
-        !isRequestToken(reviewToken) || transactionInteraction.activeCommand) {
-        return null;
-    }
-    let resolveCompletion;
-    const command = {
-        commandGeneration: transactionInteraction.generation,
-        completion: new Promise(resolve => { resolveCompletion = resolve; }),
-        interaction: interaction,
-        request: capturedRequest,
-        reviewToken: reviewToken,
-        resolveCompletion: null,
-        value: value,
-    };
-    command.resolveCompletion = resolveCompletion;
-    transactionInteraction.activeCommand = command;
-    document.getElementById("tx-slider").disabled = true;
-    void (async () => {
-        let succeeded = false;
-        try {
-            succeeded = await sendSliderEvent(
-                command.interaction,
-                command.value,
-                command.request,
-                command.commandGeneration,
-                command.reviewToken
-            );
-        } finally {
-            if (transactionInteraction.activeCommand === command) {
-                transactionInteraction.activeCommand = null;
-            }
-            finishSliderCommand(command, succeeded);
-        }
-    })();
-    return command.completion;
-}
-
 function finishSliderCommand(command, succeeded) {
     if (!command?.resolveCompletion) { return; }
     const resolve = command.resolveCompletion;
     command.resolveCompletion = null;
     resolve(succeeded);
-}
-
-async function waitForSliderCommands(request) {
-    const generation = transactionInteraction.generation;
-    if (transactionInteraction.sliderDragging &&
-        sameRequest(transactionInteraction.sliderRequest, request)) {
-        return false;
-    }
-    const command = transactionInteraction.activeCommand;
-    if (!command) { return true; }
-    if (command.commandGeneration !== generation ||
-        !sameRequest(command.request, request)) { return false; }
-    const succeeded = await command.completion;
-    return succeeded === true && generation === transactionInteraction.generation &&
-        isCurrentRequest(request);
-}
-
-function discardSliderCommands(request) {
-    transactionInteraction.generation += 1;
-    const command = transactionInteraction.activeCommand;
-    if (sameRequest(command?.request, request)) {
-        cancelNativeMessageTicket(command.nativeTicket);
-        finishSliderCommand(command, false);
-        transactionInteraction.activeCommand = null;
-    }
-    if (sameRequest(transactionInteraction.sliderRequest, request)) {
-        transactionInteraction.ignoreSliderUntilRelease = true;
-        transactionInteraction.sliderDragging = false;
-        transactionInteraction.sliderRequest = null;
-        transactionInteraction.sliderReviewToken = null;
-    }
-}
-
-function finishSliderInteraction(interaction, request) {
-    if (!transactionInteraction.sliderDragging ||
-        (request && !sameRequest(transactionInteraction.sliderRequest, request))) {
-        return null;
-    }
-    const capturedRequest = transactionInteraction.sliderRequest;
-    const value = Number(document.getElementById("tx-slider").value);
-    const reviewToken = transactionInteraction.sliderReviewToken;
-    transactionInteraction.sliderDragging = false;
-    transactionInteraction.sliderRequest = null;
-    transactionInteraction.sliderReviewToken = null;
-    return startSliderCommand(
-        interaction,
-        value,
-        capturedRequest,
-        reviewToken
-    );
-}
-
-function finishSliderDragForDecision(request) {
-    if (!transactionInteraction.sliderDragging ||
-        !sameRequest(transactionInteraction.sliderRequest, request)) { return; }
-    transactionInteraction.ignoreSliderUntilRelease = true;
-    finishSliderInteraction("ended", request);
-}
-
-async function applyEdits() {
-    if (approvalLifecycle.current?.canEdit !== true ||
-        approvalLifecycle.current.transactionMutationAllowed !== true) { return; }
-    const editor = (approvalLifecycle.current.editor || {});
-    const payload = {
-        mode: "custom",
-        nonce: document.getElementById("edit-nonce").value,
-    };
-    if (editor.usesEIP1559) {
-        payload.maxPriorityFeePerGasGwei = document.getElementById("edit-max-priority").value;
-        payload.maxFeePerGasGwei = document.getElementById("edit-max-fee").value;
-    } else {
-        payload.gasPriceGwei = document.getElementById("edit-gas-price").value;
-    }
-    handleTransactionEditResult(await mutateState("applyTransactionEdits", payload));
-}
-
-async function applySuggested() {
-    if (approvalLifecycle.current?.canEdit !== true ||
-        approvalLifecycle.current.transactionMutationAllowed !== true) { return; }
-    handleTransactionEditResult(await mutateState(
-        "applyTransactionEdits",
-        { mode: "suggested" }
-    ));
-}
-
-function handleTransactionEditResult(state) {
-    if (state && state.editsError) {
-        show("edits-error");
-    } else {
-        closeEditorAndAdopt(state);
-    }
-    keepFollowingTransaction();
-}
-
-function closeEditorAndAdopt(state) {
-    if (!state || !state.state) { return; }
-    transactionInteraction.editorDirty = false;
-    hide("edits-error");
-    document.getElementById("tx-editor").open = false;
-    adoptState(state);
-}
-
-function renderAlertIfNeeded(state) {
-    if (!state.alert) {
-        closeAlert(state.state === "review");
-        return;
-    }
-    const title = state.alert.title || "";
-    const message = state.alert.message || "";
-    const actions = state.alert.actions;
-    const alertKey = JSON.stringify([
-        title,
-        message,
-        actions.map(action => [action.title, action.action]),
-    ]);
-    const overlay = document.getElementById("alert-overlay");
-    if (selectionRender.alertKey === alertKey && !overlay.classList.contains("hidden")) {
-        return;
-    }
-    if (selectionRender.alertKey === null) {
-        const activeElement = document.activeElement;
-        selectionRender.alertReturnFocus = activeElement && typeof activeElement.focus === "function"
-            ? activeElement
-            : null;
-    }
-    selectionRender.alertKey = alertKey;
-    setText("alert-title", title);
-    setText("alert-message", message);
-    const buttons = document.getElementById("alert-buttons");
-    buttons.innerHTML = "";
-    for (const action of actions) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "button primary";
-        button.textContent = action.title;
-        button.addEventListener("click", async () => {
-            const reviewToken = approvalLifecycle.current?.reviewToken;
-            const currentAlert = approvalLifecycle.current?.alert;
-            if (!isRequestToken(reviewToken) || !currentAlert ||
-                !currentAlert.actions.some(currentAction =>
-                    currentAction.action === action.action &&
-                    currentAction.title === action.title
-                )) {
-                return;
-            }
-            const state = await mutateState("resolveApprovalAlert", {
-                action: action.action,
-            }, undefined, reviewToken);
-            if (approvalLifecycle.current?.reviewToken !== reviewToken) { return; }
-            adoptState(state);
-            keepFollowingTransaction();
-        });
-        buttons.appendChild(button);
-    }
-    document.getElementById("screen-request").inert = true;
-    show("alert-overlay");
-    const focusTarget = buttons.children[0] || document.getElementById("alert-box");
-    focusTarget.focus();
 }
 
 async function switchAccountFromIdle() {
@@ -2392,37 +2387,42 @@ async function openBigWallet() {
 document.addEventListener("DOMContentLoaded", () => {
     queueTab.domReady = true;
     browser.runtime.onMessage.addListener(handlePopupRuntimeMessage);
-    document.getElementById("button-approve").addEventListener("click", approveCurrent);
-    document.getElementById("button-reject").addEventListener("click", rejectCurrent);
+    document.getElementById("button-approve").addEventListener("click", () => currentRequestController?.approveCurrent());
+    document.getElementById("button-reject").addEventListener("click", () => currentRequestController?.rejectCurrent());
     document.getElementById("idle-open-app").addEventListener("click", openBigWallet);
     document.getElementById("idle-switch-account").addEventListener("click", switchAccountFromIdle);
     document.getElementById("idle-check-status").addEventListener("click", refreshIdleStatus);
-    document.getElementById("editor-apply").addEventListener("click", applyEdits);
-    document.getElementById("editor-suggested").addEventListener("click", applySuggested);
+    document.getElementById("editor-apply").addEventListener("click", () => currentRequestController?.applyEdits());
+    document.getElementById("editor-suggested").addEventListener("click", () => currentRequestController?.applySuggested());
     document.getElementById("network-select").addEventListener("change", () => {
-        selectionRender.chainId = document.getElementById("network-select").value;
+        if (currentRequestController?.isActive) {
+            currentRequestController.presentation.chainId = document.getElementById("network-select").value;
+        }
     });
     for (const fieldId of ["edit-gas-price", "edit-max-priority", "edit-max-fee", "edit-nonce"]) {
-        document.getElementById(fieldId).addEventListener("input", () => { transactionInteraction.editorDirty = true; });
+        document.getElementById(fieldId).addEventListener("input", () => {
+            if (currentRequestController?.isActive) {
+                currentRequestController.transaction.editorDirty = true;
+            }
+        });
     }
 
     const slider = document.getElementById("tx-slider");
     slider.addEventListener("pointerdown", () => {
-        beginSliderInteraction(queueTab.items[queueTab.index]);
+        currentRequestController?.beginSliderInteraction();
     });
     slider.addEventListener("input", () => {
-        if (transactionInteraction.ignoreSliderUntilRelease) { return; }
-        if (!transactionInteraction.sliderDragging) {
-            beginSliderInteraction(queueTab.items[queueTab.index]);
+        if (ignoreSliderUntilRelease) { return; }
+        if (!currentRequestController?.transaction.sliderDragging) {
+            currentRequestController?.beginSliderInteraction();
         }
     });
     const endDrag = interaction => {
-        if (transactionInteraction.ignoreSliderUntilRelease) {
-            transactionInteraction.ignoreSliderUntilRelease = false;
-            transactionInteraction.sliderReviewToken = null;
+        if (ignoreSliderUntilRelease) {
+            ignoreSliderUntilRelease = false;
             return;
         }
-        finishSliderInteraction(interaction);
+        currentRequestController?.finishSliderInteraction(interaction);
     };
     slider.addEventListener("pointerup", () => { endDrag("ended"); });
     slider.addEventListener("pointercancel", () => {

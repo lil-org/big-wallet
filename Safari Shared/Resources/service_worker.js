@@ -1220,6 +1220,51 @@ async function applyDappResponse(
     );
 }
 
+function readStoredResponse(context) {
+    return withProviderRevisionLease(
+        context.configurationKey,
+        context.legacyConfigurationKey,
+        lease => sendNativeMessage({
+            subject: "getResponse",
+            id: context.id,
+            configurationKey: context.configurationKey,
+            requestToken: context.requestToken,
+            executionDeadline: lease.expiresAt,
+            revisions: {...lease.revisions},
+            workflowVersion: WORKFLOW_VERSION,
+        }, false)
+    );
+}
+
+async function completeResponse(context, response, {
+    validate = WIRE.isCorrelatedDappResponse,
+    prepareCommit = () => context.revisions,
+} = {}) {
+    if (!validate(response, context.id)) { return undefined; }
+    const applied = await queueConfigurationOperation(
+        context.configurationKey,
+        async state => {
+            const revisions = await prepareCommit();
+            return revisions === MANUAL_SWITCH_MISSING
+                ? {value: MANUAL_SWITCH_MISSING}
+                : applyDappResponseToState(state, response, revisions);
+        },
+        context.legacyConfigurationKey
+    );
+    if (applied === MANUAL_SWITCH_MISSING) { return MANUAL_SWITCH_MISSING; }
+    if (!validate(applied, context.id)) { return undefined; }
+    return {
+        response: applied,
+        acknowledgement: context.requestToken
+            ? acknowledgeCompletedResponse(
+                context.id,
+                context.configurationKey,
+                context.requestToken
+            )
+            : Promise.resolve(true),
+    };
+}
+
 async function readAndApplyDappResponse(
     id,
     configurationKey,
@@ -1235,40 +1280,13 @@ async function readAndApplyDappResponse(
             ? existing.promise
             : undefined;
     }
+    const context = {
+        id, configurationKey, requestToken, revisions, legacyConfigurationKey,
+    };
     const promise = (async () => {
-        const response = await withProviderRevisionLease(
-            configurationKey,
-            legacyConfigurationKey,
-            lease => sendNativeMessage({
-                subject: "getResponse",
-                id,
-                configurationKey,
-                requestToken,
-                executionDeadline: lease.expiresAt,
-                revisions: {...lease.revisions},
-                workflowVersion: WORKFLOW_VERSION,
-            }, false)
-        );
-        if (WIRE.hasExactKeys(response, ["id", "missing"]) &&
-            response.id === id && response.missing === true) {
-            return {response};
-        }
-        if (!WIRE.isCorrelatedDappResponse(response, id)) { return undefined; }
-        const applied = await applyDappResponse(
-            configurationKey,
-            response,
-            revisions,
-            legacyConfigurationKey
-        );
-        if (!WIRE.isCorrelatedDappResponse(applied, id)) { return undefined; }
-        return {
-            response: applied,
-            acknowledgement: acknowledgeCompletedResponse(
-                id,
-                configurationKey,
-                requestToken
-            ),
-        };
+        const response = await readStoredResponse(context);
+        if (isMissingStoredResponse(response, id)) { return {response}; }
+        return completeResponse(context, response);
     })();
     const entry = {promise, revisions: {...revisions}};
     responseReadFlights.set(key, entry);
@@ -1301,7 +1319,7 @@ async function acknowledgeCompletedResponse(id, configurationKey, requestToken) 
     }
 }
 
-function isMissingManualSwitchResponse(response, id) {
+function isMissingStoredResponse(response, id) {
     return WIRE.hasExactKeys(response, ["id", "missing"]) &&
         response.id === id && response.missing === true;
 }
@@ -1357,60 +1375,28 @@ async function broadcastManualSwitchResult(configurationKey, response) {
 }
 
 async function applyOwnedManualSwitchTerminal(owner, response) {
-    if (!WIRE.isManualSwitchTerminalResponse(response, owner.id)) { return null; }
     const identity = WIRE.configurationIdentityForURL(owner.configurationKey);
-    const applied = await queueConfigurationOperation(
-        owner.configurationKey,
-        async state => {
+    const completed = await completeResponse({
+        ...owner,
+        legacyConfigurationKey: identity?.legacyConfigurationKey,
+    }, response, {
+        validate: WIRE.isManualSwitchTerminalResponse,
+        async prepareCommit() {
             const current = await matchingManualSwitchOwner(owner);
             const flight = manualSwitchResumeFlights.get(
                 manualSwitchResumeKey(owner)
             );
-            if (!current || !flight) {
-                return {value: MANUAL_SWITCH_MISSING};
-            }
+            if (!current || !flight) { return MANUAL_SWITCH_MISSING; }
             flight.commitProtected = true;
-            return applyDappResponseToState(state, response, current.revisions);
+            return current.revisions;
         },
-        identity?.legacyConfigurationKey
-    );
-    if (applied === MANUAL_SWITCH_MISSING) { return MANUAL_SWITCH_MISSING; }
-    if (!WIRE.isManualSwitchTerminalResponse(applied, owner.id)) { return null; }
-    if (owner.requestToken && !await acknowledgeCompletedResponse(
-        owner.id,
-        owner.configurationKey,
-        owner.requestToken
-    )) { return null; }
+    });
+    if (completed === MANUAL_SWITCH_MISSING) { return MANUAL_SWITCH_MISSING; }
+    if (!completed || !await completed.acknowledgement) { return null; }
     const removed = await updateManualSwitchOwner(owner, null);
     if (removed !== true) { return MANUAL_SWITCH_MISSING; }
-    await broadcastManualSwitchResult(owner.configurationKey, applied);
-    return applied;
-}
-
-async function readOwnedManualSwitchResponse(owner) {
-    const identity = WIRE.configurationIdentityForURL(owner.configurationKey);
-    return withProviderRevisionLease(
-        owner.configurationKey,
-        identity?.legacyConfigurationKey,
-        async lease => {
-            const response = await sendNativeMessage({
-                subject: "getResponse",
-                id: owner.id,
-                configurationKey: owner.configurationKey,
-                requestToken: owner.requestToken,
-                executionDeadline: lease.expiresAt,
-                revisions: {...lease.revisions},
-                workflowVersion: WORKFLOW_VERSION,
-            }, false);
-            if (isMissingManualSwitchResponse(response, owner.id)) {
-                return response;
-            }
-            return WIRE.isManualSwitchTerminalResponse(
-                response,
-                owner.id
-            ) ? response : undefined;
-        }
-    );
+    await broadcastManualSwitchResult(owner.configurationKey, completed.response);
+    return completed.response;
 }
 
 async function performManualSwitchResume(initialOwner) {
@@ -1451,14 +1437,18 @@ async function performManualSwitchResume(initialOwner) {
     }
     let response;
     try {
-        response = await readOwnedManualSwitchResponse(owner);
+        const identity = WIRE.configurationIdentityForURL(owner.configurationKey);
+        response = await readStoredResponse({
+            ...owner,
+            legacyConfigurationKey: identity?.legacyConfigurationKey,
+        });
     } catch {
         owner = await matchingManualSwitchOwner(owner);
         return owner ? manualSwitchAcknowledgement(owner) : MANUAL_SWITCH_MISSING;
     }
     owner = await matchingManualSwitchOwner(owner);
     if (!owner) { return MANUAL_SWITCH_MISSING; }
-    if (isMissingManualSwitchResponse(response, owner.id)) {
+    if (isMissingStoredResponse(response, owner.id)) {
         await updateManualSwitchOwner(owner, null);
         return MANUAL_SWITCH_MISSING;
     }
@@ -1718,8 +1708,7 @@ async function applyCompletedResponse(request, sender) {
         identity.legacyConfigurationKey
     );
     const response = completed?.response;
-    if (WIRE.hasExactKeys(response, ["id", "missing"]) &&
-        response.id === request.id && response.missing === true) {
+    if (isMissingStoredResponse(response, request.id)) {
         return response;
     }
     return WIRE.isCorrelatedDappResponse(response, request.id) &&

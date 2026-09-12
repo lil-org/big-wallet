@@ -1218,12 +1218,41 @@ test("noninteractive manual admission acknowledges before durable finalization",
     ]);
 });
 
-test("manual completion retains its owner until acknowledgement succeeds", async () => {
+test("direct manual terminals complete without an admission token or acknowledgement", async () => {
+    const configuration = completedAccountFixture().configuration;
+    const harness = makeHarness({
+        tabs: [contentSender().tab],
+        native: message => ({
+            id: message.id,
+            name: "switchAccount",
+            provider: "multiple",
+            bodies: [configuration],
+            providersToDisconnect: [],
+            configurationToStore: [configuration],
+        }),
+    });
+
+    const response = await harness.dispatch(manualSwitchIntent(), contentSender());
+
+    assert.equal(response.name, "switchAccount");
+    assert.equal(response.error, undefined);
+    assert.equal(harness.storage.has(manualOwnerStorageKey), false);
+    assert.equal(harness.storage.get("https://wallet.example").revisions.ethereum, 1);
+    assert.equal(harness.nativeMessages.length, 1);
+    assert.equal(harness.nativeMessages[0].message.subject, undefined);
+    assert.equal(harness.tabMessages.some(value =>
+        value.message.subject === "manualSwitchResult"
+    ), true);
+});
+
+test("manual completion retains ownership and defers broadcast until acknowledgement succeeds", async () => {
     const storage = new Map;
     const configuration = completedAccountFixture().configuration;
+    const firstAcknowledgement = deferred();
     let acknowledgementAvailable = false;
     const harness = makeHarness({
         storage,
+        tabs: [contentSender().tab],
         native: message => message.subject === "getResponse"
             ? {
                 id: message.id,
@@ -1238,13 +1267,27 @@ test("manual completion retains its owner until acknowledgement succeeds", async
             assert.equal(storage.get("https://wallet.example").revisions.ethereum, 1);
             return acknowledgementAvailable
                 ? {id: message.id, acknowledged: true}
-                : undefined;
+                : firstAcknowledgement.promise;
         },
     });
     const admitted = await harness.dispatch(manualSwitchIntent(), contentSender());
     const ready = {subject: "responseReady", id: admitted.id, workflowVersion: 3};
 
-    await harness.dispatch(ready, {});
+    let completed = false;
+    const completion = harness.dispatch(ready, {}).then(() => { completed = true; });
+    await settle();
+    assert.equal(completed, false);
+    assert.equal(storage.get("https://wallet.example").revisions.ethereum, 1);
+    assert.equal(storage.get(manualOwnerStorageKey).owners[0].requestToken, requestToken);
+    assert.equal(harness.nativeMessages.filter(value =>
+        value.message.subject === "acknowledgeResponse"
+    ).length, 1);
+    assert.equal(harness.tabMessages.some(value =>
+        value.message.subject === "manualSwitchResult"
+    ), false);
+
+    firstAcknowledgement.resolve(undefined);
+    await completion;
     assert.equal(storage.get(manualOwnerStorageKey).owners[0].requestToken, requestToken);
     acknowledgementAvailable = true;
     await harness.dispatch(ready, {});
@@ -1253,6 +1296,9 @@ test("manual completion retains its owner until acknowledgement succeeds", async
     assert.equal(harness.nativeMessages.filter(value =>
         value.message.subject === "acknowledgeResponse"
     ).length, 2);
+    assert.equal(harness.tabMessages.some(value =>
+        value.message.subject === "manualSwitchResult"
+    ), true);
 });
 
 test("worker startup resumes a persisted pre-transport owner exactly", async () => {
@@ -2038,6 +2084,39 @@ test("the next intent wakes lost response-ready reconciliation", async () => {
         await settle();
     }
     assert.equal(storage.has(manualOwnerStorageKey), false);
+});
+
+test("manual admission and completion reject ordinary dapp terminal responses", async () => {
+    for (const phase of ["admission", "completion"]) {
+        const configuration = completedAccountFixture().configuration;
+        const harness = makeHarness({native: message =>
+            phase === "completion" && message.subject !== "getResponse"
+                ? nativeAcknowledgement(message.id, message.revisions)
+                : {
+                    id: message.id,
+                    name: "requestAccounts",
+                    provider: "ethereum",
+                    results: configuration.results,
+                    configurationToStore: configuration,
+                }});
+        const response = await harness.dispatch(manualSwitchIntent(), contentSender());
+        if (phase === "completion") {
+            await harness.dispatch({
+                subject: "responseReady",
+                id: response.id,
+                workflowVersion: 3,
+            }, {});
+        }
+
+        assert.equal(harness.storage.get(manualOwnerStorageKey).owners.length, 1, phase);
+        assert.equal(harness.storage.has("https://wallet.example"), false, phase);
+        assert.equal(harness.nativeMessages.some(value =>
+            value.message.subject === "acknowledgeResponse"
+        ), false, phase);
+        assert.equal(harness.tabMessages.some(value =>
+            value.message.subject === "manualSwitchResult"
+        ), false, phase);
+    }
 });
 
 test("malformed terminal and registry data fail closed", async () => {
