@@ -471,6 +471,7 @@
 		507E85CFCBFEC94679A1C9DC /* TransactionApprovalCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA801002FBE000000000001 /* TransactionApprovalCoordinator.swift */; };
 		509007B205C635C0ADD89B3A /* SolanaResponseToExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1A00022E20000100A1A001 /* SolanaResponseToExtension.swift */; };
 		5120574DEEFEEC2EF4401F4D /* PopupRequestSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00112FB2000000000000 /* PopupRequestSessions.swift */; };
+		3AED825DAAAD493D9417B990 /* PopupWalletEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */; };
 		521739D67137E0C51C520435 /* EthereumAccessListEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA700012FBD000000000001 /* EthereumAccessListEntry.swift */; };
 		524B29428DE7AE12532F2955 /* PopupApprovalStatePresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */; };
 		534E85F01D5C14194B602B89 /* GasService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C4C268A033100D0926A /* GasService.swift */; };
@@ -643,7 +644,9 @@
 		BF3C00022FB2000000000000 /* DeviceAuthentication.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00012FB2000000000000 /* DeviceAuthentication.swift */; };
 		BF3C00032FB2000000000000 /* DeviceAuthentication.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00012FB2000000000000 /* DeviceAuthentication.swift */; };
 		BF3C00122FB2000000000000 /* PopupRequestSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00112FB2000000000000 /* PopupRequestSessions.swift */; };
+		6B09353D062B4A18AF585777 /* PopupWalletEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */; };
 		BF3C00132FB2000000000000 /* PopupRequestSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00112FB2000000000000 /* PopupRequestSessions.swift */; };
+		4CFC396D859F42529D24FD82 /* PopupWalletEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */; };
 		BF3C00212FB2000000000000 /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */; };
 		BF3C00222FB2000000000000 /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C4768AD2826ECE5005E8D4D /* SharedAssets.xcassets */; };
 		BF3C00322FB2000000000000 /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = BF3C00312FB2000000000000 /* popup.html */; };
@@ -656,6 +659,7 @@
 		BF3C00632FB2000000000000 /* ExtensionBridgeStoredRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00612FB2000000000000 /* ExtensionBridgeStoredRequestTests.swift */; };
 		BF3C00642FB2000000000000 /* ExtensionBridgeStoredRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00612FB2000000000000 /* ExtensionBridgeStoredRequestTests.swift */; };
 		BF3D00012FB3000000000000 /* PopupRequestSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00112FB2000000000000 /* PopupRequestSessions.swift */; };
+		AB16AB7CC4BA407EB7F29E86 /* PopupWalletEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */; };
 		BF3D00022FB3000000000000 /* DeviceAuthentication.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00012FB2000000000000 /* DeviceAuthentication.swift */; };
 		BF3D00032FB3000000000000 /* DappRequestProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C264BEA27B6B50700234393 /* DappRequestProcessor.swift */; };
 		BF3D00042FB3000000000000 /* GasService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C901C4C268A033100D0926A /* GasService.swift */; };
@@ -716,8 +720,11 @@
 		BF4100032FB7000000000000 /* bridge_wire.js in Resources */ = {isa = PBXBuildFile; fileRef = BF4100012FB7000000000000 /* bridge_wire.js */; };
 		BF4100042FB7000000000000 /* bridge_wire.js in Resources */ = {isa = PBXBuildFile; fileRef = BF4100012FB7000000000000 /* bridge_wire.js */; };
 		BF5C00012FB5000000000000 /* PopupRequestSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00112FB2000000000000 /* PopupRequestSessions.swift */; };
+		09A140789AB54750B3ECD793 /* PopupWalletEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */; };
 		BF5C00022FB5000000000000 /* PopupRequestSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00112FB2000000000000 /* PopupRequestSessions.swift */; };
+		05650BE638214FFD8A06173E /* PopupWalletEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */; };
 		BF5C00032FB5000000000000 /* PopupRequestSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3C00112FB2000000000000 /* PopupRequestSessions.swift */; };
+		BAF4BC0B7CE643988625263B /* PopupWalletEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */; };
 		BF5C00042FB5000000000000 /* InternalSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */; };
 		BF5C00052FB5000000000000 /* InternalSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */; };
 		BF5C00062FB5000000000000 /* InternalSafariRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C90E61C27B2C5C100C8991E /* InternalSafariRequest.swift */; };
@@ -1075,6 +1082,7 @@
 		AB0A96C0EB9F43119A1BE09C /* NetworkCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkCatalog.swift; sourceTree = "<group>"; };
 		BF3C00012FB2000000000000 /* DeviceAuthentication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceAuthentication.swift; sourceTree = "<group>"; };
 		BF3C00112FB2000000000000 /* PopupRequestSessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupRequestSessions.swift; sourceTree = "<group>"; };
+		7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupWalletEnvironment.swift; sourceTree = "<group>"; };
 		BF3C00312FB2000000000000 /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = popup.html; sourceTree = "<group>"; };
 		BF3C00412FB2000000000000 /* popup.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = popup.css; sourceTree = "<group>"; };
 		BF3C00512FB2000000000000 /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = popup.js; sourceTree = "<group>"; };
@@ -1548,6 +1556,7 @@
 				2C773F5D27450B97007B04E7 /* ExtensionBridge.swift */,
 				A2F100012FC1000000000001 /* ExtensionRequestFileStore.swift */,
 				BF3C00112FB2000000000000 /* PopupRequestSessions.swift */,
+				7B1B2BD170C54966B8B08CF1 /* PopupWalletEnvironment.swift */,
 				A2F100022FC1000000000001 /* PopupTransactionSession.swift */,
 				C1D000022FC1000000000001 /* PopupApprovalStatePresenter.swift */,
 				2C9B2C6A2D38415F00D56607 /* SharedDefaults.swift */,
@@ -2640,6 +2649,7 @@
 			files = (
 				D0A101012FD1000000000001 /* WalletAccess.swift in Sources */,
 				BF3D00012FB3000000000000 /* PopupRequestSessions.swift in Sources */,
+				AB16AB7CC4BA407EB7F29E86 /* PopupWalletEnvironment.swift in Sources */,
 				A2F101012FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
 				A2F102012FC1000000000001 /* PopupTransactionSession.swift in Sources */,
 				C1D002012FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */,
@@ -2725,6 +2735,7 @@
 				D0A201012FD1000000000001 /* SafariApprovalVault.swift in Sources */,
 				D0A101022FD1000000000001 /* WalletAccess.swift in Sources */,
 				BF5C00032FB5000000000000 /* PopupRequestSessions.swift in Sources */,
+				BAF4BC0B7CE643988625263B /* PopupWalletEnvironment.swift in Sources */,
 				A2F101062FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
 				A2F102062FC1000000000001 /* PopupTransactionSession.swift in Sources */,
 				C1D002062FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */,
@@ -2823,6 +2834,7 @@
 			files = (
 				D0A101032FD1000000000001 /* WalletAccess.swift in Sources */,
 				BF5C00012FB5000000000000 /* PopupRequestSessions.swift in Sources */,
+				09A140789AB54750B3ECD793 /* PopupWalletEnvironment.swift in Sources */,
 				A2F101042FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
 				A2F102042FC1000000000001 /* PopupTransactionSession.swift in Sources */,
 				C1D002042FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */,
@@ -2940,6 +2952,7 @@
 				D0A201022FD1000000000001 /* SafariApprovalVault.swift in Sources */,
 				D0A101042FD1000000000001 /* WalletAccess.swift in Sources */,
 				BF5C00022FB5000000000000 /* PopupRequestSessions.swift in Sources */,
+				05650BE638214FFD8A06173E /* PopupWalletEnvironment.swift in Sources */,
 				A2F101052FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
 				A2F102052FC1000000000001 /* PopupTransactionSession.swift in Sources */,
 				C1D002052FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */,
@@ -3040,6 +3053,7 @@
 				D0A201032FD1000000000001 /* SafariApprovalVault.swift in Sources */,
 				D0A101052FD1000000000001 /* WalletAccess.swift in Sources */,
 				BF3C00132FB2000000000000 /* PopupRequestSessions.swift in Sources */,
+				4CFC396D859F42529D24FD82 /* PopupWalletEnvironment.swift in Sources */,
 				A2F101032FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
 				A2F102032FC1000000000001 /* PopupTransactionSession.swift in Sources */,
 				C1D002032FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */,
@@ -3155,6 +3169,7 @@
 				D0A101062FD1000000000001 /* WalletAccess.swift in Sources */,
 				FA86DF9CB5F9EB40DF73ED7C /* AppDelegate.swift in Sources */,
 				5120574DEEFEEC2EF4401F4D /* PopupRequestSessions.swift in Sources */,
+				3AED825DAAAD493D9417B990 /* PopupWalletEnvironment.swift in Sources */,
 				9537DFE804784E44D508C1C3 /* ExtensionRequestFileStore.swift in Sources */,
 				119114F00C583856DF846F3E /* PopupTransactionSession.swift in Sources */,
 				524B29428DE7AE12532F2955 /* PopupApprovalStatePresenter.swift in Sources */,
@@ -3270,6 +3285,7 @@
 				D0A201042FD1000000000001 /* SafariApprovalVault.swift in Sources */,
 				D0A101072FD1000000000001 /* WalletAccess.swift in Sources */,
 				BF3C00122FB2000000000000 /* PopupRequestSessions.swift in Sources */,
+				6B09353D062B4A18AF585777 /* PopupWalletEnvironment.swift in Sources */,
 				A2F101022FC1000000000001 /* ExtensionRequestFileStore.swift in Sources */,
 				A2F102022FC1000000000001 /* PopupTransactionSession.swift in Sources */,
 				C1D002022FC1000000000001 /* PopupApprovalStatePresenter.swift in Sources */,

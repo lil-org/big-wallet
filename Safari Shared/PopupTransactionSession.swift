@@ -27,7 +27,6 @@ final class PopupTransactionSession {
     var editorRequestToken = 0
     var balance: String?
     var onOutput: (TransactionApprovalOutput) -> Void = { _ in }
-    private var pendingAuthenticationMode: PopupRequestSession.AuthenticationMode?
 
     init(
         action: SendTransactionAction,
@@ -66,20 +65,8 @@ final class PopupTransactionSession {
     }
 
     @discardableResult
-    func approve(
-        authenticationMode: PopupRequestSession.AuthenticationMode
-    ) -> Bool {
-        pendingAuthenticationMode = authenticationMode
-        guard coordinator.approve() else {
-            pendingAuthenticationMode = nil
-            return false
-        }
-        return true
-    }
-
-    func takeAuthenticationMode() -> PopupRequestSession.AuthenticationMode {
-        defer { pendingAuthenticationMode = nil }
-        return pendingAuthenticationMode ?? .biometrics
+    func approve() -> Bool {
+        return coordinator.approve()
     }
 
     func authenticationCompleted(

@@ -2,6 +2,16 @@
 
 "use strict";
 
+import {
+    applyFunction,
+    definePropertyNormally,
+    freezeObjectNormally,
+    getOwnPropertyDescriptorNormally,
+    isArrayNormally,
+    isSafeIntegerNormally,
+    hasOwnProperty as hasOwn,
+} from "./intrinsics";
+
 import BigWalletEthereum, {
     requestConnectReplay as ethereumRequestConnectReplay,
 } from "./ethereum";
@@ -28,14 +38,7 @@ const {
     hasExactKeys,
 } = BigWalletBridgeWire;
 
-const applyFunction = Reflect.apply;
-const definePropertyNormally = Object.defineProperty;
-const freezeObjectNormally = Object.freeze;
-const getOwnPropertyDescriptorNormally = Object.getOwnPropertyDescriptor;
-const hasOwnPropertyNormally = Object.prototype.hasOwnProperty;
 const isFrozenNormally = Object.isFrozen;
-const isArrayNormally = Array.isArray;
-const isSafeIntegerNormally = Number.isSafeInteger;
 const postWindowMessageNormally = window.postMessage;
 const addWindowEventListenerNormally = window.addEventListener;
 const maximumEnvelopeItems = 64;
@@ -60,10 +63,6 @@ function ownValue(object, name) {
     return valueDescriptor && "value" in valueDescriptor
         ? valueDescriptor.value
         : undefined;
-}
-
-function hasOwn(object, name) {
-    return applyFunction(hasOwnPropertyNormally, object, [name]);
 }
 
 function defineValue(object, name, value) {

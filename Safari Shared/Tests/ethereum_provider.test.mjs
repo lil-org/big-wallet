@@ -13,10 +13,18 @@ const providerRequire = createRequire(
 const { buildSync } = providerRequire("esbuild");
 const providerDirectory = new URL("../Inpage Provider/", import.meta.url);
 
-function bundle(entryPoint, format = "cjs") {
+function bundle(entryPoint, format = "cjs", contents) {
     return buildSync({
         bundle: true,
-        entryPoints: [fileURLToPath(new URL(entryPoint, providerDirectory))],
+        ...(contents ? {
+            stdin: {
+                contents,
+                resolveDir: fileURLToPath(providerDirectory),
+                sourcefile: entryPoint,
+            },
+        } : {
+            entryPoints: [fileURLToPath(new URL(entryPoint, providerDirectory))],
+        }),
         format,
         logLevel: "silent",
         platform: "browser",
@@ -28,7 +36,10 @@ function bundle(entryPoint, format = "cjs") {
 const operationRuntimeSource = bundle("operation_runtime.js");
 const rpcSource = bundle("rpc.js");
 const rpcResponseSource = bundle("rpc_response.js");
-const ethereumSource = bundle("ethereum.js");
+const ethereumSource = bundle("ethereum-harness.js", "cjs", `
+    export {default, requestConnectReplay} from "./ethereum";
+    export {createStableFacadeRecord} from "./stable_facades";
+`);
 const solanaSource = bundle("solana.js");
 const stableFacadesSource = bundle("stable_facades.js");
 const inpageSource = bundle("index.js", "iife");
@@ -101,12 +112,30 @@ function ethereumHarness(initialState = null) {
         },
     };
     const Ethereum = module.exports.default;
-    const provider = new Ethereum("ethereum-generation", transport, initialState);
+    const engine = new Ethereum("ethereum-generation", transport, initialState);
+    const record = module.exports.createStableFacadeRecord({
+        uuid: "00000000-0000-4000-8000-000000000001",
+    });
+    record.prepareTargets({
+        ethereumProvider: {
+            provider: engine,
+            requestConnectReplay: listener => module.exports.requestConnectReplay(
+                engine,
+                listener
+            ),
+            retire: error => Ethereum.retire(engine, error),
+            snapshot: () => Ethereum.snapshot(engine),
+        },
+        solanaProvider: {provider: {standardAccounts: () => []}},
+    }).commit();
     return {
         ...module,
         disconnects,
-        Ethereum,
-        provider,
+        applyEnvelope: envelope => Ethereum.applyEnvelope(engine, envelope),
+        snapshot: () => Ethereum.snapshot(engine),
+        retire: error => Ethereum.retire(engine, error),
+        isReady: () => Ethereum.isReady(engine),
+        provider: record.ethereum,
         requests,
         rpc,
         setCurrent(value) { current = value; },
@@ -158,7 +187,7 @@ function solanaHarness(initialState = null) {
 }
 
 function applyEthereumConfiguration(harness, address = "", chainId = "0x1") {
-    return harness.Ethereum.applyEnvelope(harness.provider, {
+    return harness.applyEnvelope({
         kind: "configuration",
         configuration: {address, chainId},
     });
@@ -482,7 +511,7 @@ test("Ethereum waits for configuration and supports local and RPC methods", asyn
         params: [],
     });
 
-    assert.equal(harness.Ethereum.isReady(harness.provider), false);
+    assert.equal(harness.isReady(), false);
     assert.equal(harness.rpc.length, 0);
     applyEthereumConfiguration(harness, "", "0x2");
     assert.equal(await chain, "0x2");
@@ -495,7 +524,7 @@ test("Ethereum waits for configuration and supports local and RPC methods", asyn
         method: "eth_blockNumber",
         params: [],
     });
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         id: harness.rpc[0].message.id,
         kind: "result",
         result: "0x10",
@@ -525,7 +554,7 @@ test("Ethereum ignores terminal envelopes until an operation is dispatched", asy
         method: "eth_sendTransaction",
         params: [{value: "0x1"}],
     });
-    assert.equal(harness.Ethereum.applyEnvelope(harness.provider, {
+    assert.equal(harness.applyEnvelope({
         id: 1,
         kind: "result",
         name: "signTransaction",
@@ -534,7 +563,7 @@ test("Ethereum ignores terminal envelopes until an operation is dispatched", asy
     assert.equal(harness.requests.length, 0);
     applyEthereumConfiguration(harness);
     assert.equal(harness.requests.length, 1);
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         id: harness.requests[0].id,
         kind: "result",
         name: "signTransaction",
@@ -551,7 +580,7 @@ test("Ethereum rejects wallet-named terminals for RPC operations", async () => {
         method: "eth_blockNumber",
         params: [],
     });
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         id: harness.rpc[0].message.id,
         kind: "result",
         name: "requestAccounts",
@@ -586,7 +615,7 @@ test("Ethereum keeps the standard legacy adapters and public properties", async 
 
     const enabled = harness.provider.enable();
     assert.equal(harness.requests.at(-1).name, "requestAccounts");
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         id: harness.requests.at(-1).id,
         kind: "result",
         name: "requestAccounts",
@@ -648,7 +677,7 @@ test("Ethereum preserves native JSON semantics without mutating callers", async 
         sparse: [null, null, 3],
     }]);
     assert.equal(Object.hasOwn(params, "jsonrpc"), false);
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         id: harness.rpc[0].message.id,
         kind: "result",
         result: true,
@@ -704,12 +733,12 @@ test("queued Ethereum snapshots ignore later inherited toJSON changes", async ()
             {value: 1},
         ]);
         assert.deepEqual(normalized(harness.requests[0].data), {value: "0x1"});
-        harness.Ethereum.applyEnvelope(harness.provider, {
+        harness.applyEnvelope({
             id: harness.rpc[0].message.id,
             kind: "result",
             result: true,
         });
-        harness.Ethereum.applyEnvelope(harness.provider, {
+        harness.applyEnvelope({
             id: harness.requests[0].id,
             kind: "result",
             name: "signTransaction",
@@ -738,7 +767,7 @@ test("Ethereum returns faithful native JSON object shapes", async () => {
         method: "eth_getBlockByNumber",
         params: ["latest", false],
     });
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         id: harness.rpc[0].message.id,
         kind: "result",
         result: {number: "0x1"},
@@ -817,7 +846,7 @@ test("Ethereum compares reentrant first-drain state to the copied baseline", asy
         harness.setRPCObserver(() => {
             if (reentered) { return; }
             reentered = true;
-            harness.Ethereum.applyEnvelope(harness.provider, {
+            harness.applyEnvelope({
                 configuration: {
                     address: testCase.nestedAddress,
                     chainId: testCase.nestedChainId,
@@ -828,7 +857,7 @@ test("Ethereum compares reentrant first-drain state to the copied baseline", asy
         });
         applyEthereumConfiguration(harness, secondAddress, "0x2");
         assert.deepEqual(events, testCase.expected);
-        harness.Ethereum.applyEnvelope(harness.provider, {
+        harness.applyEnvelope({
             id: harness.rpc[0].message.id,
             kind: "result",
             result: true,
@@ -860,7 +889,7 @@ test("Ethereum retains its copied baseline through malformed first-drain state",
     });
     const rejected = assert.rejects(request, error => error.code === -32603);
     harness.setRPCObserver(() => {
-        harness.Ethereum.applyEnvelope(harness.provider, {
+        harness.applyEnvelope({
             configuration: null,
             kind: "configuration",
         });
@@ -882,23 +911,26 @@ test("Ethereum emits guarded state changes and keeps the newest epoch", () => {
     const thirdAddress = "0x0000000000000000000000000000000000000003";
     applyEthereumConfiguration(harness, firstAddress, "0x1");
     let laterListener = 0;
+    const chains = [];
+    harness.provider.on("chainChanged", chainId => chains.push(chainId));
     harness.provider.on("accountsChanged", () => {
         throw new Error("listener failed");
     });
     harness.provider.on("accountsChanged", () => {
         laterListener += 1;
     });
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         kind: "configuration",
         switchAccount: true,
         configuration: {address: secondAddress, chainId: "0x2"},
     });
-    assert.equal(laterListener, 1);
+    assert.equal(laterListener, 0);
     assert.equal(harness.provider.selectedAddress, secondAddress);
+    assert.deepEqual(chains, ["0x2"]);
 
     const reentrant = {
         toJSON() {
-            harness.Ethereum.applyEnvelope(harness.provider, {
+            harness.applyEnvelope({
                 kind: "configuration",
                 switchAccount: true,
                 configuration: {address: thirdAddress, chainId: "0x3"},
@@ -906,13 +938,14 @@ test("Ethereum emits guarded state changes and keeps the newest epoch", () => {
             return {address: firstAddress, chainId: "0x4"};
         },
     };
-    assert.equal(harness.Ethereum.applyEnvelope(harness.provider, {
+    assert.equal(harness.applyEnvelope({
         kind: "configuration",
         switchAccount: true,
         configuration: reentrant,
     }), false);
     assert.equal(harness.provider.selectedAddress, thirdAddress);
     assert.equal(harness.provider.chainId, "0x3");
+    assert.deepEqual(chains, ["0x2", "0x3"]);
 });
 
 test("Ethereum posts wallet requests, settles errors, and retires with 4900", async () => {
@@ -926,7 +959,7 @@ test("Ethereum posts wallet requests, settles errors, and retires with 4900", as
     });
     assert.equal(harness.requests[0].name, "signTransaction");
     assert.deepEqual(normalized(harness.requests[0].data), transaction);
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         id: harness.requests[0].id,
         kind: "error",
         name: "signTransaction",
@@ -938,11 +971,11 @@ test("Ethereum posts wallet requests, settles errors, and retires with 4900", as
         method: "personal_sign",
         params: ["0x01"],
     });
-    assert.equal(harness.Ethereum.retire(harness.provider), true);
+    assert.equal(harness.retire(), true);
     await assert.rejects(pending, error => error.code === 4900);
     assert.equal(harness.provider.isConnected(), false);
-    assert.equal(harness.Ethereum.snapshot(harness.provider).phase, "retired");
-    assert.equal(harness.Ethereum.applyEnvelope(harness.provider, {
+    assert.equal(harness.snapshot().phase, "retired");
+    assert.equal(harness.applyEnvelope({
         id: harness.requests.at(-1).id,
         kind: "result",
         name: harness.requests.at(-1).name,
@@ -958,7 +991,7 @@ test("Ethereum authorization failures revoke only their captured account", async
         method: "eth_blockNumber",
         params: [],
     });
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         authorizationFailure: true,
         error: {code: 4100, message: "Unauthorized"},
         id: harness.rpc[0].message.id,
@@ -973,12 +1006,12 @@ test("Ethereum authorization failures revoke only their captured account", async
         method: "eth_blockNumber",
         params: [],
     });
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         kind: "configuration",
         switchAccount: true,
         configuration: {address: currentAddress, chainId: "0x2"},
     });
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         authorizationFailure: true,
         error: {code: 4100, message: "Stale unauthorized"},
         id: harness.rpc.at(-1).message.id,
@@ -1009,7 +1042,7 @@ test("Ethereum chain responses update only an already-authorized account", async
             params: [{chainId: "0x2"}],
         });
         const message = harness.requests[0];
-        harness.Ethereum.applyEnvelope(harness.provider, {
+        harness.applyEnvelope({
             id: message.id,
             kind: "result",
             name: message.name,
@@ -1029,7 +1062,7 @@ test("Ethereum chain responses update only an already-authorized account", async
             params: [{chainId: "0x3"}],
         });
         const accountlessMessage = harness.requests.at(-1);
-        harness.Ethereum.applyEnvelope(harness.provider, {
+        harness.applyEnvelope({
             id: accountlessMessage.id,
             kind: "result",
             name: accountlessMessage.name,
@@ -1054,7 +1087,7 @@ test("Ethereum chain responses update only an already-authorized account", async
         method: "wallet_switchEthereumChain",
         params: [{chainId: "0x2"}],
     });
-    accountless.Ethereum.applyEnvelope(accountless.provider, {
+    accountless.applyEnvelope({
         id: accountless.requests[0].id,
         kind: "result",
         name: accountless.requests[0].name,
@@ -1075,7 +1108,7 @@ test("Ethereum same-chain switches preserve pending signing without wallet trans
         params: ["0x01"],
     });
     const signingRequest = harness.requests[0];
-    const before = normalized(harness.Ethereum.snapshot(harness.provider));
+    const before = normalized(harness.snapshot());
     const events = [];
     harness.provider.on("accountsChanged", accounts => events.push(accounts));
     harness.provider.on("chainChanged", chainId => events.push(chainId));
@@ -1087,9 +1120,9 @@ test("Ethereum same-chain switches preserve pending signing without wallet trans
 
     assert.deepEqual(normalized(result), [address]);
     assert.equal(harness.requests.length, 1);
-    assert.deepEqual(normalized(harness.Ethereum.snapshot(harness.provider)), before);
+    assert.deepEqual(normalized(harness.snapshot()), before);
     assert.deepEqual(events, []);
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         id: signingRequest.id,
         kind: "result",
         name: signingRequest.name,
@@ -1116,7 +1149,7 @@ test("Ethereum queued switches compare the loaded chain without granting account
     assert.equal(harness.requests.length, 1);
     const request = harness.requests[0];
     assert.equal(request.data.chainId, "0x1");
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         id: request.id,
         kind: "result",
         name: request.name,
@@ -1140,7 +1173,7 @@ test("Ethereum normalizes external chain IDs without mutating caller data", asyn
                 chainName: input.chainName,
             });
             assert.equal(input.chainId, chainId);
-            harness.Ethereum.applyEnvelope(harness.provider, {
+            harness.applyEnvelope({
                 id: request.id,
                 kind: "result",
                 name: request.name,
@@ -1185,7 +1218,7 @@ test("Ethereum chain requests ignore later String prototype changes", async () =
                 prototype[name] = original;
             }
             const request = harness.requests[0];
-            harness.Ethereum.applyEnvelope(harness.provider, {
+            harness.applyEnvelope({
                 id: request.id,
                 kind: "result",
                 name: request.name,
@@ -1234,7 +1267,7 @@ test("Ethereum rejects malformed account-bearing results without state changes",
         method: "eth_requestAccounts",
         params: [],
     });
-    accountsHarness.Ethereum.applyEnvelope(accountsHarness.provider, {
+    accountsHarness.applyEnvelope({
         id: accountsHarness.requests[0].id,
         kind: "result",
         name: "requestAccounts",
@@ -1249,7 +1282,7 @@ test("Ethereum rejects malformed account-bearing results without state changes",
         method: "wallet_switchEthereumChain",
         params: [{chainId: "0x2"}],
     });
-    chainHarness.Ethereum.applyEnvelope(chainHarness.provider, {
+    chainHarness.applyEnvelope({
         id: chainHarness.requests[0].id,
         kind: "result",
         name: "switchEthereumChain",
@@ -1265,7 +1298,7 @@ test("Ethereum request normalization cannot bypass a configuration failure", asy
     applyEthereumConfiguration(harness);
     const trigger = {
         toJSON() {
-            harness.Ethereum.applyEnvelope(harness.provider, {
+            harness.applyEnvelope({
                 kind: "configuration",
                 configuration: null,
             });
@@ -1278,7 +1311,7 @@ test("Ethereum request normalization cannot bypass a configuration failure", asy
     });
     await assert.rejects(request, error => error.code === -32603);
     assert.equal(harness.rpc.length, 0);
-    assert.equal(harness.Ethereum.isReady(harness.provider), false);
+    assert.equal(harness.isReady(), false);
 });
 
 test("Ethereum retires queued work when normalization sees stale transport", async () => {
@@ -1301,7 +1334,7 @@ test("Ethereum retires queued work when normalization sees stale transport", asy
         queuedRejected,
         assert.rejects(current, error => error.code === 4900),
     ]);
-    assert.equal(harness.Ethereum.snapshot(harness.provider).phase, "retired");
+    assert.equal(harness.snapshot().phase, "retired");
 });
 
 test("late Ethereum revocation preserves newer account authorization", async () => {
@@ -1316,7 +1349,7 @@ test("late Ethereum revocation preserves newer account authorization", async () 
                 params: [{eth_accounts: {}}],
             });
             applyEthereumConfiguration(harness);
-            harness.Ethereum.applyEnvelope(harness.provider, {
+            harness.applyEnvelope({
                 kind: "configuration",
                 configuration: {address, chainId: "0x1"},
                 switchAccount: true,
@@ -1328,7 +1361,7 @@ test("late Ethereum revocation preserves newer account authorization", async () 
             const settled = kind === "result"
                 ? assert.doesNotReject(revocation)
                 : assert.rejects(revocation, error => error.code === -32603);
-            harness.Ethereum.applyEnvelope(harness.provider, {
+            harness.applyEnvelope({
                 id: harness.disconnects[0].id,
                 kind,
                 name: "revokePermissions",
@@ -1340,7 +1373,7 @@ test("late Ethereum revocation preserves newer account authorization", async () 
             applyEthereumConfiguration(harness, address);
             assert.equal(harness.provider.selectedAddress, address);
             assert.equal(
-                harness.Ethereum.snapshot(harness.provider).accountRevocationTombstone,
+                harness.snapshot().accountRevocationTombstone,
                 false
             );
             assert.deepEqual(accountChanges, []);
@@ -1358,14 +1391,14 @@ test("Ethereum revoke acknowledgement preserves a pending reconnect", async () =
     });
     applyEthereumConfiguration(harness);
     const reconnect = harness.provider.request({method: "eth_requestAccounts"});
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         id: harness.disconnects[0].id,
         kind: "result",
         name: "revokePermissions",
         result: null,
     });
     await revocation;
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         id: harness.requests.at(-1).id,
         kind: "result",
         name: "requestAccounts",
@@ -1383,7 +1416,7 @@ test("empty requestAccounts success preserves a revocation tombstone", async () 
         method: "wallet_revokePermissions",
         params: [{eth_accounts: {}}],
     });
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         id: harness.disconnects[0].id,
         kind: "result",
         name: "revokePermissions",
@@ -1391,7 +1424,7 @@ test("empty requestAccounts success preserves a revocation tombstone", async () 
     });
     await revocation;
     assert.equal(
-        harness.Ethereum.snapshot(harness.provider)
+        harness.snapshot()
             .accountRevocationTombstone,
         true
     );
@@ -1400,7 +1433,7 @@ test("empty requestAccounts success preserves a revocation tombstone", async () 
         method: "eth_requestAccounts",
         params: [],
     });
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         id: harness.requests.at(-1).id,
         kind: "result",
         name: "requestAccounts",
@@ -1408,7 +1441,7 @@ test("empty requestAccounts success preserves a revocation tombstone", async () 
     });
     assert.deepEqual(normalized(await accounts), []);
     assert.equal(
-        harness.Ethereum.snapshot(harness.provider)
+        harness.snapshot()
             .accountRevocationTombstone,
         true
     );
@@ -1424,7 +1457,7 @@ test("successful requestAccounts explicitly reauthorizes a revoked account", asy
         method: "wallet_revokePermissions",
         params: [{eth_accounts: {}}],
     });
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         id: harness.disconnects[0].id,
         kind: "result",
         name: "revokePermissions",
@@ -1433,7 +1466,7 @@ test("successful requestAccounts explicitly reauthorizes a revoked account", asy
     await revocation;
 
     const reconnect = harness.provider.request({method: "eth_requestAccounts"});
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         id: harness.requests.at(-1).id,
         kind: "result",
         name: "requestAccounts",
@@ -1442,7 +1475,7 @@ test("successful requestAccounts explicitly reauthorizes a revoked account", asy
     assert.deepEqual(normalized(await reconnect), [address]);
     assert.equal(harness.provider.selectedAddress, address);
     assert.equal(
-        harness.Ethereum.snapshot(harness.provider).accountRevocationTombstone,
+        harness.snapshot().accountRevocationTombstone,
         false
     );
 });
@@ -1457,12 +1490,12 @@ test("Ethereum rejects signing results after account authorization drifts", asyn
         params: ["0x01"],
     });
     const request = harness.requests.at(-1);
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         configuration: {address: secondAddress, chainId: "0x1"},
         kind: "configuration",
         switchAccount: true,
     });
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         id: request.id,
         kind: "result",
         name: request.name,
@@ -1477,7 +1510,7 @@ test("Ethereum rejects signing results after account authorization drifts", asyn
     });
     const currentRequest = harness.requests.at(-1);
     applyEthereumConfiguration(harness, secondAddress, "0x2");
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         id: currentRequest.id,
         kind: "result",
         name: currentRequest.name,
@@ -1496,12 +1529,12 @@ test("Ethereum settles a committed signature after later authorization drift", a
         params: ["0x01"],
     });
     const request = harness.requests.at(-1);
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         configuration: {address: secondAddress, chainId: "0x1"},
         kind: "configuration",
         switchAccount: true,
     });
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         approvalCommitted: true,
         id: request.id,
         kind: "result",
@@ -1521,12 +1554,12 @@ test("Ethereum settles committed account approval without replacing newer state"
     applyEthereumConfiguration(harness, "");
     const accounts = harness.provider.request({method: "eth_requestAccounts"});
     const request = harness.requests.at(-1);
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         configuration: {address: newerAddress, chainId: "0x1"},
         kind: "configuration",
         switchAccount: true,
     });
-    harness.Ethereum.applyEnvelope(harness.provider, {
+    harness.applyEnvelope({
         approvalCommitted: true,
         id: request.id,
         kind: "result",
@@ -1546,7 +1579,7 @@ test("suppressed initial configuration neither drains nor emits connect", async 
     const chain = harness.provider.request({method: "eth_chainId"});
     let settled = false;
     chain.finally(() => { settled = true; });
-    assert.equal(harness.Ethereum.applyEnvelope(harness.provider, {
+    assert.equal(harness.applyEnvelope({
         kind: "configuration",
         suppressUpdate: true,
         configuration: {
@@ -1557,7 +1590,7 @@ test("suppressed initial configuration neither drains nor emits connect", async 
     await Promise.resolve();
     assert.equal(settled, false);
     assert.equal(connects, 0);
-    assert.equal(harness.Ethereum.isReady(harness.provider), false);
+    assert.equal(harness.isReady(), false);
     applyEthereumConfiguration(harness, "", "0x3");
     assert.equal(await chain, "0x3");
     assert.equal(connects, 1);
@@ -1565,7 +1598,7 @@ test("suppressed initial configuration neither drains nor emits connect", async 
     assert.equal(connects, 1);
 });
 
-test("Ethereum replays one authoritative connect to late direct listeners", () => {
+test("Ethereum replays one authoritative connect to late public listeners", () => {
     const harness = ethereumHarness();
     applyEthereumConfiguration(harness, "", "0x2");
     const connects = [];
@@ -1585,7 +1618,7 @@ test("Ethereum replays one authoritative connect to late direct listeners", () =
     assert.deepEqual(connects, [["late", {chainId: "0x2"}]]);
 });
 
-test("public connect emits do not consume the direct authoritative replay", () => {
+test("public connect emits do not consume the authoritative replay", () => {
     const harness = ethereumHarness();
     applyEthereumConfiguration(harness, "", "0x3");
     const connects = [];
@@ -1593,21 +1626,15 @@ test("public connect emits do not consume the direct authoritative replay", () =
         connects.push(normalized(value));
     });
 
-    harness.provider.emit("connect", {chainId: "0x999"});
+    assert.equal(harness.provider.emit("connect", {chainId: "0x999"}), false);
     harness.runTimers();
 
-    assert.deepEqual(connects, [
-        {chainId: "0x999"},
-        {chainId: "0x3"},
-    ]);
+    assert.deepEqual(connects, [{chainId: "0x3"}]);
     harness.provider.on("connect", value => {
         connects.push(["later", normalized(value)]);
     });
     harness.runTimers();
-    assert.deepEqual(connects, [
-        {chainId: "0x999"},
-        {chainId: "0x3"},
-    ]);
+    assert.deepEqual(connects, [{chainId: "0x3"}]);
 });
 
 test("Ethereum removeAllListeners preserves argument count and tracking", () => {
@@ -1731,7 +1758,7 @@ test("Ethereum connect replay waits for copied state and fences retirement", () 
     applyEthereumConfiguration(retired, "", "0x5");
     let retiredConnects = 0;
     retired.provider.on("connect", () => { retiredConnects += 1; });
-    retired.Ethereum.retire(retired.provider);
+    retired.retire();
     retired.runTimers();
     assert.equal(retiredConnects, 0);
 });
@@ -1739,7 +1766,7 @@ test("Ethereum connect replay waits for copied state and fences retirement", () 
 test("Ethereum connect replay waits for configuration recovery", () => {
     const harness = ethereumHarness();
     applyEthereumConfiguration(harness, "", "0x6");
-    assert.equal(harness.Ethereum.applyEnvelope(harness.provider, {
+    assert.equal(harness.applyEnvelope({
         configuration: null,
         kind: "configuration",
     }), false);
@@ -5539,3 +5566,118 @@ test("exact reinjection preserves facades and rejects all old generation work", 
     assert.equal(await current, "current");
     assert.notEqual(firstGeneration, secondGeneration);
 });
+
+test("Ethereum readiness preserves a callback installed during delivery", () => {
+    const module = moduleHarness(ethereumSource);
+    const Ethereum = module.exports.default;
+    const engine = new Ethereum("readiness-generation", {
+        isCurrent: () => true,
+        postDisconnect: () => true,
+        postRequest: () => true,
+        postRPC: () => true,
+    });
+    const deliveries = [];
+    const second = payload => {
+        deliveries.push(["second", payload.chainId]);
+        return true;
+    };
+    module.exports.requestConnectReplay(engine, payload => {
+        deliveries.push(["first", payload.chainId]);
+        module.exports.requestConnectReplay(engine, second);
+        return true;
+    });
+    Ethereum.applyEnvelope(engine, {
+        kind: "configuration",
+        configuration: {address: "", chainId: "0x2"},
+    });
+    assert.deepEqual(deliveries, [["first", "0x2"]]);
+
+    module.runTimers();
+    assert.deepEqual(deliveries, [["first", "0x2"], ["second", "0x2"]]);
+    Ethereum.applyEnvelope(engine, {
+        kind: "configuration",
+        configuration: {address: "", chainId: "0x3"},
+    });
+    module.runTimers();
+    assert.equal(deliveries.length, 2);
+});
+
+for (const consumedConnect of [false, true]) {
+    test(`preexisting frozen v2 facade adopts the new engine with connect consumed=${consumedConnect}`, async () => {
+        let record;
+        let account;
+        const connects = [];
+        const chains = [];
+        const oldEthereum = ethereumFacadeTarget("old");
+        const oldSolana = solanaFacadeTarget("old");
+        const oldSnapshot = oldEthereum.snapshot;
+        oldEthereum.snapshot = () => ({...oldSnapshot(), didEmitConnect: true});
+        oldEthereum.requestConnectReplay = listener => consumedConnect
+            ? listener(Object.freeze({chainId: "0x1"}))
+            : false;
+        const harness = inpageHarness({
+            beforeEvaluate(window, context) {
+                const originalFacade = new vm.Script(`(() => {
+                    "use strict";
+                    const module = {exports: {}};
+                    ${stableFacadesSource}
+                    return module.exports;
+                })()`).runInContext(context);
+                record = originalFacade.createStableFacadeRecord({
+                    uuid: "00000000-0000-4000-8000-000000000088",
+                });
+                record.prepareTargets({
+                    ethereumProvider: oldEthereum,
+                    solanaProvider: oldSolana,
+                }).commit();
+                account = record.wallet.accounts[0];
+                record.ethereum.on("connect", payload => connects.push(payload.chainId));
+                record.ethereum.on("chainChanged", chainId => chains.push(chainId));
+                record.ensureWalletRegistration();
+                record.announceEthereum();
+                Object.defineProperty(window, "bigWalletInpageStableFacadeAnchorV1", {
+                    value: Object.freeze({
+                        initialSnapshots: record.snapshots(),
+                        record,
+                        version: 2,
+                    }),
+                });
+            },
+        });
+        const provider = record.ethereum;
+        const wallet = record.wallet;
+        const uuid = record.eip6963.uuid;
+        assert.equal(harness.window.ethereum, provider);
+        assert.equal(harness.window.bigWalletInpageStableFacadeRecord, record);
+        assert.equal(wallet.accounts[0], account);
+        assert.equal(oldEthereum.retired(), 1);
+        assert.equal(oldSolana.retired(), 1);
+
+        dispatchConfigurations(harness, {chainId: "0x2", publicKey: firstSolanaKey});
+        harness.runTimers();
+        assert.deepEqual(connects, [consumedConnect ? "0x1" : "0x2"]);
+        assert.deepEqual(chains, ["0x2"]);
+        oldEthereum.provider.emit("chainChanged", "stale");
+        assert.deepEqual(chains, ["0x2"]);
+        assert.equal(await provider.request({method: "eth_chainId"}), "0x2");
+
+        const pending = provider.request({method: "eth_blockNumber"});
+        const rejected = assert.rejects(pending, error => error.code === 4900);
+        harness.evaluate();
+        await rejected;
+        dispatchConfigurations(harness, {chainId: "0x3", publicKey: firstSolanaKey});
+        harness.runTimers();
+        assert.deepEqual(chains, ["0x2", "0x3"]);
+        assert.deepEqual(connects, [consumedConnect ? "0x1" : "0x2"]);
+        assert.equal(harness.window.ethereum, provider);
+        assert.equal(harness.window.bigWalletInpageStableFacadeRecord, record);
+        assert.equal(record.eip6963.uuid, uuid);
+        assert.equal(record.wallet, wallet);
+        assert.equal(wallet.accounts[0], account);
+        assert.deepEqual(harness.registeredWallets, [wallet]);
+        assert.equal(harness.listenerCount("wallet-standard:app-ready"), 1);
+        assert.equal(harness.listenerCount("message"), 1);
+        assert.equal(harness.listenerCount("eip6963:requestProvider"), 1);
+        assert.equal(await provider.request({method: "eth_chainId"}), "0x3");
+    });
+}

@@ -2,6 +2,19 @@
 
 "use strict";
 
+import {
+    applyFunction,
+    definePropertyNormally,
+    freezeObjectNormally,
+    getOwnPropertyDescriptorNormally,
+    isArrayNormally,
+    MapConstructor,
+    getWeakMapValue,
+    setWeakMapValue,
+    getMapEntry,
+    setMapEntry,
+} from "./intrinsics";
+
 import OperationRuntime from "./operation_runtime";
 import { outboundDataSnapshot } from "./outbound_snapshot";
 import Base58 from "./base58";
@@ -59,33 +72,23 @@ const unsupportedSolanaChain = "Big Wallet does not support this Solana chain";
 const malformedSolanaResponse = "Failed to process Solana response";
 const maximumTransactionBatchSize = 64;
 const maximumCounter = Number.MAX_SAFE_INTEGER;
-const applyFunction = Reflect.apply;
 const emitNormally = EventEmitter.prototype.emit;
 const addSetEntryNormally = Set.prototype.add;
 const deleteSetEntryNormally = Set.prototype.delete;
 const clearMapNormally = Map.prototype.clear;
 const clearSetNormally = Set.prototype.clear;
 const forEachSetNormally = Set.prototype.forEach;
-const getMapEntryNormally = Map.prototype.get;
-const setMapEntryNormally = Map.prototype.set;
-const getOwnPropertyDescriptorNormally = Object.getOwnPropertyDescriptor;
 const arrayBufferByteLengthNormally = getOwnPropertyDescriptorNormally(
     ArrayBuffer.prototype,
     "byteLength"
 ).get;
 const getPrototypeOfNormally = Object.getPrototypeOf;
-const definePropertyNormally = Object.defineProperty;
-const freezeObjectNormally = Object.freeze;
-const isArrayNormally = Array.isArray;
 const isArrayBufferViewNormally = ArrayBuffer.isView;
-const getWeakMapValueNormally = WeakMap.prototype.get;
-const setWeakMapValueNormally = WeakMap.prototype.set;
-const MapConstructor = Map;
 const SetConstructor = Set;
 const providerStates = new WeakMap;
 
 function getProviderState(provider) {
-    const state = applyFunction(getWeakMapValueNormally, providerStates, [provider]);
+    const state = getWeakMapValue(providerStates, provider);
     if (!state) {
         throw new TypeError("Invalid Solana provider");
     }
@@ -93,19 +96,11 @@ function getProviderState(provider) {
 }
 
 function providerState(provider) {
-    return applyFunction(getWeakMapValueNormally, providerStates, [provider]);
+    return getWeakMapValue(providerStates, provider);
 }
 
 function setProviderState(provider, state) {
-    applyFunction(setWeakMapValueNormally, providerStates, [provider, state]);
-}
-
-function getMapEntry(map, key) {
-    return applyFunction(getMapEntryNormally, map, [key]);
-}
-
-function setMapEntry(map, key, value) {
-    applyFunction(setMapEntryNormally, map, [key, value]);
+    setWeakMapValue(providerStates, provider, state);
 }
 
 function addSetEntry(set, value) {

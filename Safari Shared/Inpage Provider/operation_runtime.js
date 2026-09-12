@@ -2,21 +2,24 @@
 
 "use strict";
 
-const applyFunction = Reflect.apply;
-const pushArrayNormally = Array.prototype.push;
+import {
+    applyFunction,
+    freezeObjectNormally,
+    pushArrayNormally,
+    MapConstructor,
+    TypeErrorConstructor,
+    getWeakMapValue,
+    setWeakMapValue,
+    getMapEntry,
+    setMapEntry,
+} from "./intrinsics";
+
 const deleteMapEntryNormally = Map.prototype.delete;
 const forEachMapNormally = Map.prototype.forEach;
-const getMapEntryNormally = Map.prototype.get;
 const hasMapEntryNormally = Map.prototype.has;
-const setMapEntryNormally = Map.prototype.set;
-const freezeObjectNormally = Object.freeze;
 const setPrototypeOfNormally = Object.setPrototypeOf;
-const getWeakMapValueNormally = WeakMap.prototype.get;
-const setWeakMapValueNormally = WeakMap.prototype.set;
 const ErrorConstructor = Error;
-const MapConstructor = Map;
 const RangeErrorConstructor = RangeError;
-const TypeErrorConstructor = TypeError;
 const defaultMaximumLoadingOperations = 64;
 const maximumWireId = Number.MAX_SAFE_INTEGER;
 const recordStates = new WeakMap;
@@ -27,16 +30,8 @@ function operationQueue() {
     return queue;
 }
 
-function getMapEntry(map, key) {
-    return applyFunction(getMapEntryNormally, map, [key]);
-}
-
 function hasMapEntry(map, key) {
     return applyFunction(hasMapEntryNormally, map, [key]);
-}
-
-function setMapEntry(map, key, value) {
-    applyFunction(setMapEntryNormally, map, [key, value]);
 }
 
 function deleteMapEntry(map, key) {
@@ -116,7 +111,7 @@ class OperationRuntime {
             wireId,
         });
         setMapEntry(this.#operations, wireId, record);
-        applyFunction(setWeakMapValueNormally, recordStates, [record, {
+        setWeakMapValue(recordStates, record, {
             dispatching: false,
             owned: true,
             queued: false,
@@ -124,12 +119,12 @@ class OperationRuntime {
             resolvePromise,
             runtime: this,
             wireId,
-        }]);
+        });
         return record;
     }
 
     owns(record) {
-        const state = applyFunction(getWeakMapValueNormally, recordStates, [record]);
+        const state = getWeakMapValue(recordStates, record);
         return !!state && state.runtime === this && state.owned &&
             getMapEntry(this.#operations, state.wireId) === record;
     }
@@ -144,7 +139,7 @@ class OperationRuntime {
             !this.owns(record)) {
             return false;
         }
-        const state = applyFunction(getWeakMapValueNormally, recordStates, [record]);
+        const state = getWeakMapValue(recordStates, record);
         if (state.queued || state.dispatching) { return false; }
         if (this.#loadingAdmissionCount >= this.#maximumLoadingOperations) {
             return false;
@@ -178,11 +173,7 @@ class OperationRuntime {
                 const record = drainingQueue[queueIndex];
                 drainingQueue[queueIndex] = null;
                 queueIndex += 1;
-                const state = applyFunction(
-                    getWeakMapValueNormally,
-                    recordStates,
-                    [record]
-                );
+                const state = getWeakMapValue(recordStates, record);
                 if (!state || state.runtime !== this || !state.owned ||
                     !state.queued || !this.owns(record)) {
                     continue;
@@ -233,11 +224,7 @@ class OperationRuntime {
         const settlements = operationQueue();
         for (let index = 0; index < records.length; index += 1) {
             const record = records[index];
-            const state = applyFunction(
-                getWeakMapValueNormally,
-                recordStates,
-                [record]
-            );
+            const state = getWeakMapValue(recordStates, record);
             if (!state || state.runtime !== this || !state.owned) { continue; }
             state.dispatching = false;
             state.owned = false;
@@ -266,7 +253,7 @@ class OperationRuntime {
     }
 
     #take(record) {
-        const state = applyFunction(getWeakMapValueNormally, recordStates, [record]);
+        const state = getWeakMapValue(recordStates, record);
         if (!state || state.runtime !== this || !state.owned ||
             !hasMapEntry(this.#operations, state.wireId) ||
             getMapEntry(this.#operations, state.wireId) !== record) {

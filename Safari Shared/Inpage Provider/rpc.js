@@ -2,19 +2,22 @@
 
 "use strict";
 
+import {
+    applyFunction,
+    createObjectNormally,
+    freezeObjectNormally,
+    getOwnPropertyDescriptorNormally,
+    TypeErrorConstructor,
+    getWeakMapValue,
+    setWeakMapValue,
+} from "./intrinsics";
+
 import { outboundJSONSerialize } from "./outbound_snapshot";
 
-const applyFunction = Reflect.apply;
-const createObjectNormally = Object.create;
-const freezeObjectNormally = Object.freeze;
-const getOwnPropertyDescriptorNormally = Object.getOwnPropertyDescriptor;
-const getWeakMapValueNormally = WeakMap.prototype.get;
-const setWeakMapValueNormally = WeakMap.prototype.set;
-const TypeErrorConstructor = TypeError;
 const rpcStates = new WeakMap;
 
 function rpcState(server) {
-    return applyFunction(getWeakMapValueNormally, rpcStates, [server]);
+    return getWeakMapValue(rpcStates, server);
 }
 
 function requestSnapshot(payload) {
@@ -41,13 +44,11 @@ class RPCServer {
         if (typeof transport !== "function") {
             throw new TypeErrorConstructor("RPC transport must be a function");
         }
-        applyFunction(setWeakMapValueNormally, rpcStates, [this,
-            freezeObjectNormally({
-                chainId,
-                providerGeneration,
-                transport,
-            })
-        ]);
+        setWeakMapValue(rpcStates, this, freezeObjectNormally({
+            chainId,
+            providerGeneration,
+            transport,
+        }));
     }
 
     get chainId() {

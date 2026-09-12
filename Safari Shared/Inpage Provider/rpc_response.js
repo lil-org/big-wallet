@@ -2,17 +2,15 @@
 
 "use strict";
 
-const applyFunction = Reflect.apply;
-const createObjectNormally = Object.create;
-const hasOwnPropertyNormally = Object.prototype.hasOwnProperty;
-const isArrayNormally = Array.isArray;
+import {
+    createObjectNormally,
+    isArrayNormally,
+    hasOwnProperty,
+} from "./intrinsics";
+
 const isFiniteNormally = Number.isFinite;
 const malformedResponseCode = -32603;
 const malformedResponseMessage = "Failed to process RPC response";
-
-function hasOwnProperty(object, name) {
-    return applyFunction(hasOwnPropertyNormally, object, [name]);
-}
 
 function validId(value) {
     return typeof value === "number" && isFiniteNormally(value);

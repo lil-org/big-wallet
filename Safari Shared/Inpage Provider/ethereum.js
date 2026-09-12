@@ -2,6 +2,18 @@
 
 "use strict";
 
+import {
+    applyFunction,
+    createObjectNormally,
+    freezeObjectNormally,
+    getOwnPropertyDescriptorNormally,
+    isArrayNormally,
+    isSafeIntegerNormally,
+    getWeakMapValue,
+    setWeakMapValue,
+    hasOwnProperty,
+} from "./intrinsics";
+
 import RPCServer from "./rpc";
 import ProviderRpcError, {
     normalizeEthereumProviderError,
@@ -13,29 +25,10 @@ import {
     outboundDataSnapshot,
 } from "./outbound_snapshot";
 import Utils from "./utils";
-import { EventEmitter } from "events";
 import isUtf8 from "isutf8";
 import BigWalletBridgeWire from "../Resources/bridge_wire";
 
-const applyFunction = Reflect.apply;
-const isArrayNormally = Array.isArray;
-const isSafeIntegerNormally = Number.isSafeInteger;
-const createObjectNormally = Object.create;
-const freezeObjectNormally = Object.freeze;
-const getOwnPropertyDescriptorNormally = Object.getOwnPropertyDescriptor;
-const getWeakMapValueNormally = WeakMap.prototype.get;
-const hasOwnPropertyNormally = Object.prototype.hasOwnProperty;
 const objectKeysNormally = Object.keys;
-const eventAddListenerNormally = EventEmitter.prototype.addListener;
-const eventOnNormally = EventEmitter.prototype.on;
-const eventPrependListenerNormally = EventEmitter.prototype.prependListener;
-const eventRemoveAllListenersNormally =
-    EventEmitter.prototype.removeAllListeners;
-const eventRemoveListenerNormally = EventEmitter.prototype.removeListener;
-const pushArrayNormally = Array.prototype.push;
-const rawListenersNormally = EventEmitter.prototype.rawListeners;
-const setWeakMapValueNormally = WeakMap.prototype.set;
-const spliceArrayNormally = Array.prototype.splice;
 const stringStartsWithNormally = String.prototype.startsWith;
 const stringToLowerCaseNormally = String.prototype.toLowerCase;
 const bigIntegerNormally = BigInt;
@@ -47,12 +40,8 @@ const providerStateMessage = "Failed to update provider state";
 const authorizationChangedMessage =
     "Authorization changed while the request was pending";
 
-function hasOwnProperty(object, name) {
-    return applyFunction(hasOwnPropertyNormally, object, [name]);
-}
-
 function stateFor(provider) {
-    return applyFunction(getWeakMapValueNormally, providerStates, [provider]);
+    return getWeakMapValue(providerStates, provider);
 }
 
 function dataProperty(object, name) {
@@ -137,131 +126,29 @@ function transportIsCurrent(state) {
 }
 
 function emitSafely(provider, eventName, values, isCurrent = null) {
-    let listeners;
+    const listener = stateFor(provider)?.eventForwarders[eventName];
+    if (typeof listener !== "function" || isCurrent && !isCurrent()) {
+        return false;
+    }
     try {
-        listeners = applyFunction(rawListenersNormally, provider, [eventName]);
+        applyFunction(listener, provider, values);
     } catch (error) {
         reportListenerError(error);
-        return false;
     }
-    for (let index = 0; index < listeners.length; index += 1) {
-        if (typeof isCurrent === "function" && !isCurrent()) { break; }
-        try {
-            applyFunction(listeners[index], provider, values);
-        } catch (error) {
-            reportListenerError(error);
-        }
-    }
-    return listeners.length > 0;
+    return true;
 }
 
-function directConnectListenerIndex(listeners, listener) {
-    for (let index = listeners.length - 1;
-        index >= 0;
-        index -= 1) {
-        if (listeners[index] === listener) { return index; }
-    }
-    return -1;
-}
-
-function reconcileDirectConnectListeners(provider, state, rawListeners = null) {
-    const current = rawListeners || applyFunction(
-        rawListenersNormally,
-        provider,
-        ["connect"]
-    );
-    const remaining = [];
-    const active = [];
-    for (let index = 0; index < state.directConnectListeners.length; index += 1) {
-        applyFunction(pushArrayNormally, remaining, [
-            state.directConnectListeners[index],
-        ]);
-    }
-    for (let index = 0; index < current.length; index += 1) {
-        const trackedIndex = directConnectListenerIndex(remaining, current[index]);
-        if (trackedIndex === -1) { continue; }
-        applyFunction(pushArrayNormally, active, [current[index]]);
-        applyFunction(spliceArrayNormally, remaining, [trackedIndex, 1]);
-    }
-    state.directConnectListeners = active;
-    return active;
-}
-
-function isDirectConnectListener(listeners, listener) {
-    return directConnectListenerIndex(
-        listeners,
-        listener
-    ) !== -1;
-}
-
-function addDirectListener(provider, method, eventName, listener, prepend) {
-    const state = stateFor(provider);
-    if (!state) {
-        return applyFunction(method, provider, [eventName, listener]);
-    }
-    const result = applyFunction(method, provider, [eventName, listener]);
-    if (eventName === "connect") {
-        const listeners = applyFunction(
-            rawListenersNormally,
-            provider,
-            [eventName]
-        );
-        const added = prepend ? listeners[0] : listeners[listeners.length - 1];
-        if (typeof added === "function") {
-            applyFunction(pushArrayNormally, state.directConnectListeners, [
-                added,
-            ]);
-            scheduleSubscriptionConnect(provider);
-        }
-    }
-    return result;
-}
-
-function removeDirectListener(provider, eventName, listener) {
-    try {
-        return applyFunction(eventRemoveListenerNormally, provider, [
-            eventName,
-            listener,
-        ]);
-    } finally {
-        const state = stateFor(provider);
-        if (state && eventName === "connect") {
-            reconcileDirectConnectListeners(provider, state);
-        }
-    }
-}
-
-function removeAllDirectListeners(provider, arguments_) {
-    try {
-        return applyFunction(
-            eventRemoveAllListenersNormally,
-            provider,
-            arguments_
-        );
-    } finally {
-        const state = stateFor(provider);
-        if (state &&
-            (arguments_.length === 0 || arguments_[0] === "connect")) {
-            reconcileDirectConnectListeners(provider, state);
-        }
-    }
-}
-
-function deliverFacadeConnect(state, payload, isCurrent) {
-    const listener = state.facadeConnectListener;
-    if (state.didDeliverFacadeConnect || typeof listener !== "function" ||
-        !isCurrent()) {
-        return false;
-    }
+function deliverPendingConnect(state, payload, isCurrent) {
+    const listener = state.pendingConnect;
+    if (typeof listener !== "function" || !isCurrent()) { return false; }
     let delivered = false;
     try {
         delivered = applyFunction(listener, undefined, [payload]) === true;
     } catch (error) {
         reportListenerError(error);
     }
-    if (delivered && isCurrent()) {
-        state.didDeliverFacadeConnect = true;
-        state.facadeConnectListener = null;
+    if (delivered && state.pendingConnect === listener) {
+        state.pendingConnect = null;
     }
     return delivered;
 }
@@ -271,47 +158,13 @@ function emitSubscriptionConnect(provider) {
     if (!state || !isReady(provider) || !transportIsCurrent(state)) {
         return false;
     }
-    let listeners;
-    try {
-        listeners = applyFunction(rawListenersNormally, provider, ["connect"]);
-        reconcileDirectConnectListeners(provider, state, listeners);
-    } catch (error) {
-        reportListenerError(error);
-        return false;
-    }
-    const directListeners = [];
-    for (let index = 0; index < state.directConnectListeners.length; index += 1) {
-        applyFunction(pushArrayNormally, directListeners, [
-            state.directConnectListeners[index],
-        ]);
-    }
-    const direct = directListeners.length > 0 &&
-        !state.didDeliverDirectConnect;
-    const facade = typeof state.facadeConnectListener === "function" &&
-        !state.didDeliverFacadeConnect;
-    if (!direct && !facade) { return false; }
-    state.didDeliverDirectConnect ||= direct;
     const epoch = state.stateEpoch;
-    const lifecycleCurrent = () => stateFor(provider) === state &&
-        !state.retired && transportIsCurrent(state);
-    const current = () => lifecycleCurrent() && state.stateEpoch === epoch;
-    const payload = freezeObjectNormally({chainId: state.chainId});
-    if (direct) {
-        for (let index = 0; index < listeners.length; index += 1) {
-            if (!lifecycleCurrent()) { break; }
-            const listener = listeners[index];
-            if (!isDirectConnectListener(directListeners, listener)) { continue; }
-            try {
-                applyFunction(listener, provider, [payload]);
-            } catch (error) {
-                reportListenerError(error);
-            }
-        }
-    }
-    const facadeDelivered = facade && current()
-        ? deliverFacadeConnect(state, payload, current)
-        : false;
-    return direct || facadeDelivered;
+    return deliverPendingConnect(
+        state,
+        freezeObjectNormally({chainId: state.chainId}),
+        () => stateFor(provider) === state && !state.retired &&
+            state.stateEpoch === epoch && transportIsCurrent(state)
+    );
 }
 
 function scheduleSubscriptionConnect(provider) {
@@ -334,8 +187,7 @@ function requestConnectReplay(provider, listener) {
     if (!state || state.retired || typeof listener !== "function") {
         return false;
     }
-    state.facadeConnectListener = listener;
-    state.didDeliverFacadeConnect = false;
+    state.pendingConnect = listener;
     scheduleSubscriptionConnect(provider);
     return true;
 }
@@ -803,8 +655,6 @@ function flushConfigurationEvents(provider) {
         return latest === state && !state.retired &&
             state.stateEpoch === pending.epoch;
     };
-    const lifecycleCurrent = () => stateFor(provider) === state &&
-        !state.retired && transportIsCurrent(state);
     if (pending.accountsChanged && current()) {
         emitSafely(provider, "accountsChanged", [localAccounts(state)], current);
     }
@@ -821,21 +671,8 @@ function flushConfigurationEvents(provider) {
     }
     if (pending.connect && current()) {
         state.didEmitConnect = true;
-        try {
-            reconcileDirectConnectListeners(provider, state);
-        } catch (error) {
-            reportListenerError(error);
-        }
-        state.didDeliverDirectConnect ||=
-            state.directConnectListeners.length > 0;
         const payload = freezeObjectNormally({chainId: state.chainId});
-        emitSafely(
-            provider,
-            "connect",
-            [payload],
-            lifecycleCurrent
-        );
-        deliverFacadeConnect(
+        deliverPendingConnect(
             state,
             payload,
             () => current() && transportIsCurrent(state)
@@ -1123,8 +960,6 @@ function applyEnvelope(provider, envelope) {
         state.stateEpoch += 1;
         state.pendingConfigurationEvent = null;
         state.didEmitConnect = false;
-        state.didDeliverDirectConnect = false;
-        state.didDeliverFacadeConnect = false;
         emitSafely(provider, "disconnect", [error]);
         return true;
     }
@@ -1147,6 +982,7 @@ function retire(provider, error = providerReplacementError()) {
     state.address = "";
     state.accountRevision += 1;
     state.runtime.retire(error);
+    state.pendingConnect = null;
     emitSafely(provider, "disconnect", [error]);
     if (hadAccount) { emitSafely(provider, "accountsChanged", [[]]); }
     return true;
@@ -1181,10 +1017,9 @@ const metamaskAPI = freezeObjectNormally({
     },
 });
 
-class BigWalletEthereum extends EventEmitter {
+class BigWalletEthereum {
 
     constructor(providerGeneration, transport, initialState = null) {
-        super();
         const capturedTransport = captureTransport(transport);
         let initial = null;
         if (initialState !== null) {
@@ -1218,11 +1053,9 @@ class BigWalletEthereum extends EventEmitter {
             configurationError: false,
             connectReplayScheduled: false,
             copiedStateBaseline: null,
-            didDeliverDirectConnect: false,
-            didDeliverFacadeConnect: false,
             didEmitConnect: initial?.didEmitConnect === true,
-            directConnectListeners: [],
-            facadeConnectListener: null,
+            eventForwarders: createObjectNormally(null),
+            pendingConnect: null,
             initialized: true,
             networkVersion: normalizedNetworkVersion(chainId),
             pendingConfigurationEvent: null,
@@ -1243,7 +1076,13 @@ class BigWalletEthereum extends EventEmitter {
                 chainId: state.chainId,
             };
         }
-        applyFunction(setWeakMapValueNormally, providerStates, [this, state]);
+        state.eventForwarders.accountsChanged = null;
+        state.eventForwarders.chainChanged = null;
+        state.eventForwarders.disconnect = null;
+        state.eventForwarders.message = null;
+        state.eventForwarders.networkChanged = null;
+        state.eventForwarders._initialized = null;
+        setWeakMapValue(providerStates, this, state);
         state.rpc = createRPCServer(state);
         try {
             applyFunction(setTimeoutNormally, undefined, [() => {
@@ -1265,46 +1104,25 @@ class BigWalletEthereum extends EventEmitter {
     get ready() { return !!stateFor(this)?.address; }
     get selectedAddress() { return stateFor(this)?.address || null; }
 
-    addListener(eventName, listener) {
-        return addDirectListener(
-            this,
-            eventAddListenerNormally,
-            eventName,
-            listener,
-            false
-        );
-    }
-
+    // Frozen v2 facades install one private forwarder for each ordinary event.
     on(eventName, listener) {
-        return addDirectListener(
-            this,
-            eventOnNormally,
-            eventName,
-            listener,
-            false
-        );
-    }
-
-    prependListener(eventName, listener) {
-        return addDirectListener(
-            this,
-            eventPrependListenerNormally,
-            eventName,
-            listener,
-            true
-        );
+        const state = stateFor(this);
+        if (state && typeof eventName === "string" &&
+            hasOwnProperty(state.eventForwarders, eventName) &&
+            typeof listener === "function") {
+            state.eventForwarders[eventName] = listener;
+        }
+        return this;
     }
 
     removeListener(eventName, listener) {
-        return removeDirectListener(this, eventName, listener);
-    }
-
-    off(eventName, listener) {
-        return removeDirectListener(this, eventName, listener);
-    }
-
-    removeAllListeners(...arguments_) {
-        return removeAllDirectListeners(this, arguments_);
+        const state = stateFor(this);
+        if (state && typeof eventName === "string" &&
+            hasOwnProperty(state.eventForwarders, eventName) &&
+            state.eventForwarders[eventName] === listener) {
+            state.eventForwarders[eventName] = null;
+        }
+        return this;
     }
 
     request(payload) {

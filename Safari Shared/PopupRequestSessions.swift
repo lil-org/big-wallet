@@ -64,10 +64,6 @@ final class PopupRequestSession {
         case immediateResponsePersistence
     }
 
-    enum AuthenticationMode: Equatable {
-        case biometrics
-    }
-
     let handle: ExtensionBridge.Handle
     let request: SafariRequest
     var walletAccess: WalletAccess?
@@ -283,133 +279,68 @@ final class PopupRequestSessions {
     static let shared = PopupRequestSessions(
         store: ExtensionBridge.shared,
         requestProcessor: ProductionPopupRequestProcessor(),
-        managesWallets: false,
-        loadsTransactionContext: true,
-        catalogAccess: { SafariApprovalVault.shared.catalogAccess() },
-        unlockWalletAccess: {
-            await SafariApprovalVault.shared.unlockResult(reason: $0)
-        }
+        walletEnvironment: VaultPopupWalletEnvironment(
+            catalogAccess: { SafariApprovalVault.shared.catalogAccess() },
+            unlockWalletAccess: {
+                await SafariApprovalVault.shared.unlockResult(reason: $0)
+            }
+        ),
+        loadsTransactionContext: true
     )
 #else
     static let shared = PopupRequestSessions(
         store: ExtensionBridge.shared,
-        requestProcessor: ProductionPopupRequestProcessor()
+        requestProcessor: ProductionPopupRequestProcessor(),
+        walletEnvironment: SourcePopupWalletEnvironment(),
+        loadsTransactionContext: true
     )
 #endif
 
     private let store: PopupRequestStore
     private let requestProcessor: PopupRequestProcessing
-    private let authenticationOverride: ((PopupRequestSession, PopupRequestSession.AuthenticationMode, String, @escaping (Bool) -> Void) -> Void)?
-    private let canUseBiometrics: () -> Bool
-    private let attemptBiometrics: (
-        String,
-        @escaping (DeviceAuthentication.Outcome) -> Void
-    ) -> Void
+    private let walletEnvironment: PopupWalletEnvironment
     private let transactionApprovalOperations: TransactionApprovalOperations
-    private let managesWallets: Bool
     private let loadsTransactionContext: Bool
-    private let startWalletsManager: () -> Bool
-    private let reloadWalletsManager: () -> Bool
-    private let selectionStateRefresh: () -> Bool
-    private let selectionAccountResolver: (InternalSafariRequest.SelectedAccount) -> SpecificWalletAccount?
+    private let invalidateNetworkCache: () -> Void
     private let selectionNetworkResolver: (String) -> EthereumNetwork?
-    private let catalogAccess: (() -> WalletAccess?)?
-    private let unlockWalletAccess: ((String) async -> WalletUnlockResult)?
     private let clock: () -> Date
     private let durableApprovalExecutor: DurableApprovalExecutor
-    private let walletsManager = WalletsManager.shared
     private let presenter: PopupApprovalStatePresenter
     private var sessions = [ExtensionBridge.Handle: PopupRequestSession]()
     private var transactionApprovalResolutions = [
         ExtensionBridge.Handle: TransactionApprovalResolution
     ]()
-    private var didStartWalletsManager = false
 
     init(
         store: PopupRequestStore,
         requestProcessor: PopupRequestProcessing,
-        authenticationOverride: ((PopupRequestSession, PopupRequestSession.AuthenticationMode, String, @escaping (Bool) -> Void) -> Void)? = nil,
-        canUseBiometrics: @escaping () -> Bool = {
-            DeviceAuthentication.canUseBiometrics
-        },
-        attemptBiometrics: @escaping (
-            String,
-            @escaping (DeviceAuthentication.Outcome) -> Void
-        ) -> Void = { reason, completion in
-            DeviceAuthentication.attemptBiometrics(
-                reason: reason,
-                completion: completion
-            )
-        },
+        walletEnvironment: PopupWalletEnvironment,
+        loadsTransactionContext: Bool,
         transactionApprovalOperations: TransactionApprovalOperations = .live(),
-        managesWallets: Bool = true,
-        loadsTransactionContext: Bool? = nil,
-        walletManagerStart: (() -> Bool)? = nil,
-        walletManagerReload: (() -> Bool)? = nil,
-        selectionStateRefresh: (() -> Bool)? = nil,
-        selectionAccountResolver: ((InternalSafariRequest.SelectedAccount) -> SpecificWalletAccount?)? = nil,
-        selectionNetworkResolver: ((String) -> EthereumNetwork?)? = nil,
+        invalidateNetworkCache: @escaping () -> Void = {
+            CustomNetworkCache.shared.invalidate()
+        },
+        selectionNetworkResolver: @escaping (String) -> EthereumNetwork? = {
+            Networks.withChainIdHex($0)
+        },
         broadcastTimeoutNanoseconds: UInt64 =
             DurableApprovalExecutor.defaultBroadcastTimeoutNanoseconds,
-        catalogAccess: (() -> WalletAccess?)? = nil,
-        unlockWalletAccess: ((String) async -> WalletUnlockResult)? = nil,
         clock: @escaping () -> Date = Date.init
     ) {
         self.store = store
         self.requestProcessor = requestProcessor
-        self.authenticationOverride = authenticationOverride
-        self.canUseBiometrics = canUseBiometrics
-        self.attemptBiometrics = attemptBiometrics
+        self.walletEnvironment = walletEnvironment
         self.transactionApprovalOperations = transactionApprovalOperations
-        self.catalogAccess = catalogAccess.map { loadCatalog in
-            {
-                WalletsMetadataService.reload()
-                return loadCatalog()
-            }
-        }
-        self.unlockWalletAccess = unlockWalletAccess
+        self.loadsTransactionContext = loadsTransactionContext
+        self.invalidateNetworkCache = invalidateNetworkCache
+        self.selectionNetworkResolver = selectionNetworkResolver
         self.clock = clock
         durableApprovalExecutor = DurableApprovalExecutor(
             store: store,
             broadcastTimeoutNanoseconds: broadcastTimeoutNanoseconds,
             clock: clock
         )
-        self.managesWallets = managesWallets
-        self.loadsTransactionContext = loadsTransactionContext ?? managesWallets
-        let startWalletsManager = walletManagerStart ?? {
-            WalletsManager.shared.start()
-        }
-        let reloadWalletsManager = walletManagerReload ?? {
-            WalletsManager.shared.reloadFromStore()
-        }
-        self.startWalletsManager = startWalletsManager
-        self.reloadWalletsManager = reloadWalletsManager
         presenter = PopupApprovalStatePresenter()
-        if catalogAccess != nil {
-            self.selectionStateRefresh = selectionStateRefresh ?? {
-                CustomNetworkCache.shared.invalidate()
-                return true
-            }
-        } else {
-            self.selectionStateRefresh = selectionStateRefresh ?? {
-                let walletsAvailable = !managesWallets || reloadWalletsManager()
-                CustomNetworkCache.shared.invalidate()
-                return walletsAvailable
-            }
-        }
-        self.selectionAccountResolver = selectionAccountResolver ?? { item in
-            guard let coin = WalletCoin.correspondingToInpageProvider(item.coin),
-                  let wallet = WalletsManager.shared.currentWallet(id: item.walletId),
-                  let account = wallet.accounts.first(where: {
-                      $0.coin == coin && $0.address == item.address
-                  }) else {
-                return nil
-            }
-            return SpecificWalletAccount(walletId: item.walletId, account: account)
-        }
-        self.selectionNetworkResolver = selectionNetworkResolver ?? {
-            Networks.withChainIdHex($0)
-        }
     }
 
     static func dispatch(
@@ -492,8 +423,8 @@ final class PopupRequestSessions {
                 queued: .approvalRequired
             )
         } else {
-            guard let walletAccess = prepareWalletsForNewSession() else {
-                if catalogAccess != nil {
+            guard let walletAccess = walletEnvironment.prepareForNewSession() else {
+                if walletEnvironment.reviewPolicy == .versionedCatalog {
                     return await currentAdmissionDisposition(
                         handle: handle,
                         queued: .approvalRequired
@@ -653,16 +584,10 @@ final class PopupRequestSessions {
         return presenter.state(id: id, state: state)
     }
 
-    private func prepareWalletsForNewSession() -> WalletAccess? {
-        if let catalogAccess {
-            return catalogAccess()
-        }
-        guard managesWallets else { return SourceWalletAccess.shared }
-        if didStartWalletsManager {
-            return reloadWalletsManager() ? SourceWalletAccess.shared : nil
-        }
-        didStartWalletsManager = true
-        return startWalletsManager() ? SourceWalletAccess.shared : nil
+    private func refreshWalletsAndNetworks() -> Bool {
+        let walletsAvailable = walletEnvironment.refreshWallets()
+        invalidateNetworkCache()
+        return walletsAvailable
     }
 
     private func pendingRequestsResponse(
@@ -719,8 +644,8 @@ final class PopupRequestSessions {
             if snapshot.phase == .queued,
                session.state == .review,
                let reviewedAccess = session.walletAccess,
-               let catalogAccess {
-                guard let currentAccess = catalogAccess() else {
+               walletEnvironment.reviewPolicy == .versionedCatalog {
+                guard let currentAccess = walletEnvironment.currentReviewAccess() else {
                     discardSession(handle: snapshot.handle)
                     return .secureSetupRequired
                 }
@@ -744,8 +669,8 @@ final class PopupRequestSessions {
             isWalletIndependent = true
         } else {
             isWalletIndependent = false
-            guard let walletAccess = prepareWalletsForNewSession() else {
-                return catalogAccess == nil
+            guard let walletAccess = walletEnvironment.prepareForNewSession() else {
+                return walletEnvironment.reviewPolicy == .liveSource
                     ? .unavailable
                     : .secureSetupRequired
             }
@@ -777,7 +702,7 @@ final class PopupRequestSessions {
             return .absent
         case .approval(let action):
             if !isWalletIndependent && preparedWalletAccess == nil {
-                return catalogAccess == nil
+                return walletEnvironment.reviewPolicy == .liveSource
                     ? .unavailable
                     : .secureSetupRequired
             }
@@ -953,12 +878,11 @@ final class PopupRequestSessions {
     private func refreshSelectionSessionIfNeeded(
         _ session: PopupRequestSession
     ) -> Bool {
-        guard selectionStateRefresh() else { return false }
-        if catalogAccess != nil {
+        guard refreshWalletsAndNetworks() else { return false }
+        if walletEnvironment.reviewPolicy == .versionedCatalog {
             return true
         }
-        let refreshedAccess: WalletAccess
-        refreshedAccess = SourceWalletAccess.shared
+        guard let refreshedAccess = walletEnvironment.currentReviewAccess() else { return false }
         if refreshedAccess.catalogIdentity == session.walletAccess?.catalogIdentity {
             return true
         }
@@ -1013,7 +937,6 @@ final class PopupRequestSessions {
         ) else {
             return ignoredResponse()
         }
-        let authenticationMode = PopupRequestSession.AuthenticationMode.biometrics
         switch action {
         case .selectAccount(let selectAction), .switchAccount(let selectAction):
             guard let selectedAccounts = payload.selectedAccounts else {
@@ -1031,7 +954,6 @@ final class PopupRequestSessions {
                 session: session,
                 action: signAction,
                 cluster: payload.cluster,
-                authenticationMode: authenticationMode,
                 expectedRevisions: payload.revisions,
                 executionDeadline: executionDeadline
             ) else { return ignoredResponse() }
@@ -1047,7 +969,6 @@ final class PopupRequestSessions {
             switch await transactionApprovalDecision(
                 for: session,
                 transactionSession: transactionSession,
-                authenticationMode: authenticationMode,
                 approval: approval
             ) {
             case .refused, .alert:
@@ -1186,7 +1107,7 @@ final class PopupRequestSessions {
             return true
         }
         guard let approval = await beginAndClaimApproval(for: session) else { return false }
-        guard selectionStateRefresh() else {
+        guard refreshWalletsAndNetworks() else {
             session.errorText = Strings.somethingWentWrong
             await releaseApproval(
                 approval.claim,
@@ -1196,8 +1117,8 @@ final class PopupRequestSessions {
             return true
         }
         let refreshedWalletAccess: WalletAccess
-        if let catalogAccess {
-            guard let value = catalogAccess(),
+        if walletEnvironment.reviewPolicy == .versionedCatalog {
+            guard let value = walletEnvironment.currentReviewAccess(),
                   value.catalogIdentity == reviewedWalletAccess.catalogIdentity else {
                 await releaseApproval(
                     approval.claim,
@@ -1209,7 +1130,11 @@ final class PopupRequestSessions {
             }
             refreshedWalletAccess = value
         } else {
-            refreshedWalletAccess = SourceWalletAccess.shared
+            guard let value = walletEnvironment.currentReviewAccess() else {
+                await releaseApproval(approval.claim, for: session, token: approval.token)
+                return true
+            }
+            refreshedWalletAccess = value
         }
         let refreshedNetwork = selectedChainId.flatMap(selectionNetworkResolver)
         guard let refreshedAccounts = resolvedSelectionAccounts(
@@ -1274,19 +1199,10 @@ final class PopupRequestSessions {
         for item in selectedAccounts {
             guard let coin = WalletCoin.correspondingToInpageProvider(item.coin),
                   requiredCoin == nil || coin == requiredCoin else { return nil }
-            let account: SpecificWalletAccount?
-            if catalogAccess != nil {
-                let normalized = coin.normalizedAddress(item.address)
-                let matches = walletAccess.orderedAccounts.filter {
-                    $0.walletId == item.walletId &&
-                        $0.account.coin == coin &&
-                        coin.normalizedAddress($0.account.address) == normalized &&
-                        $0.account.derivationPath == item.derivationPath
-                }
-                account = matches.count == 1 ? matches[0] : nil
-            } else {
-                account = selectionAccountResolver(item)
-            }
+            let account = walletEnvironment.resolveSelectedAccount(
+                item,
+                reviewedAccess: walletAccess
+            )
             guard let account,
                   account.walletId == item.walletId,
                   account.account.coin == coin,
@@ -1317,7 +1233,6 @@ final class PopupRequestSessions {
         session: PopupRequestSession,
         action: SignMessageAction,
         cluster: Solana.Cluster?,
-        authenticationMode: PopupRequestSession.AuthenticationMode,
         expectedRevisions: ExtensionBridge.ProviderRevisions?,
         executionDeadline: Date
     ) async -> Bool {
@@ -1339,7 +1254,6 @@ final class PopupRequestSessions {
         }
         guard let walletAccess = await authenticate(
             session: session,
-            authenticationMode: authenticationMode,
             reason: action.subject.title
         ) else {
             _ = session.finishAuthentication(
@@ -1449,7 +1363,7 @@ final class PopupRequestSessions {
                   expectedRevisions: expectedRevisions,
                   executionDeadline: executionDeadline
               ),
-              selectionStateRefresh(),
+              refreshWalletsAndNetworks(),
               session.walletAccess?.catalogIdentity ==
                 walletAccess.catalogIdentity,
               case .approval(let freshAction) = requestProcessor.prepare(
@@ -1547,77 +1461,36 @@ final class PopupRequestSessions {
 
     private func authenticate(
         session: PopupRequestSession,
-        authenticationMode: PopupRequestSession.AuthenticationMode,
         reason: String
     ) async -> RequestScopedWalletAccess? {
-        if let authenticationOverride {
-            let succeeded = await withCheckedContinuation { continuation in
-                var didComplete = false
-                let completeOnce: (Bool) -> Void = { succeeded in
-                    guard !didComplete else { return }
-                    didComplete = true
-                    continuation.resume(returning: succeeded)
-                }
-                authenticationOverride(
-                    session,
-                    authenticationMode,
-                    reason,
-                    completeOnce
-                )
-            }
-            guard succeeded, let access = session.walletAccess else { return nil }
-            return RequestScopedWalletAccess(access)
-        }
-
-        if let unlockWalletAccess {
-            switch await unlockWalletAccess(reason) {
-            case .canceled:
-                return nil
-            case .unavailable:
-                let reviewedIdentity = session.walletAccess?.catalogIdentity
-                if let currentIdentity = catalogAccess?()?.catalogIdentity {
-                    if currentIdentity != reviewedIdentity {
-                        session.requireRematerializationAfterAuthentication()
-                    } else {
-                        session.errorText = Strings.somethingWentWrong
-                    }
-                } else {
-                    session.errorText = Strings.secureApprovalSetupRequired
+        switch await walletEnvironment.unlock(for: session, reason: reason) {
+        case .canceled:
+            return nil
+        case .unavailable:
+            guard walletEnvironment.reviewPolicy == .versionedCatalog else { return nil }
+            let reviewedIdentity = session.walletAccess?.catalogIdentity
+            if let currentIdentity = walletEnvironment.currentReviewAccess()?.catalogIdentity {
+                if currentIdentity != reviewedIdentity {
                     session.requireRematerializationAfterAuthentication()
+                } else {
+                    session.errorText = Strings.somethingWentWrong
                 }
-                return nil
-            case .unlocked(let unlocked):
+            } else {
+                session.errorText = Strings.secureApprovalSetupRequired
+                session.requireRematerializationAfterAuthentication()
+            }
+            return nil
+        case .unlocked(let unlocked):
+            if walletEnvironment.reviewPolicy == .versionedCatalog {
                 guard let reviewedIdentity = session.walletAccess?.catalogIdentity,
                       unlocked.catalogIdentity == reviewedIdentity else {
                     unlocked.invalidate()
                     session.requireRematerializationAfterAuthentication()
                     return nil
                 }
-                return unlocked
             }
+            return unlocked
         }
-
-        let succeeded = await withCheckedContinuation { continuation in
-            var didComplete = false
-            let completeOnce: (Bool) -> Void = { succeeded in
-                guard !didComplete else { return }
-                didComplete = true
-                continuation.resume(returning: succeeded)
-            }
-            switch authenticationMode {
-            case .biometrics:
-                guard canUseBiometrics() else {
-                    completeOnce(false)
-                    return
-                }
-                self.attemptBiometrics(reason) { outcome in
-                    MainActor.assumeIsolated {
-                        completeOnce(outcome == .succeeded)
-                    }
-                }
-            }
-        }
-        return succeeded ? RequestScopedWalletAccess(SourceWalletAccess.shared) : nil
     }
 
     private func reject(
@@ -1646,7 +1519,6 @@ final class PopupRequestSessions {
     private func transactionApprovalDecision(
         for session: PopupRequestSession,
         transactionSession: PopupTransactionSession,
-        authenticationMode: PopupRequestSession.AuthenticationMode,
         approval: ClaimedApproval
     ) async -> TransactionApprovalDecision {
         return await withCheckedContinuation { continuation in
@@ -1655,9 +1527,7 @@ final class PopupRequestSessions {
                 continuation: continuation
             )
             transactionApprovalResolutions[session.handle] = resolution
-            guard transactionSession.approve(
-                authenticationMode: authenticationMode
-            ) else {
+            guard transactionSession.approve() else {
                 finishTransactionApproval(
                     resolution,
                     for: session,
@@ -1850,11 +1720,9 @@ final class PopupRequestSessions {
                 }
                 return
             }
-            let authenticationMode = transactionSession.takeAuthenticationMode()
             Task { @MainActor in
                 let walletAccess = await authenticate(
                     session: session,
-                    authenticationMode: authenticationMode,
                     reason: Strings.sendTransaction
                 )
                 guard transactionApprovalResolutions[session.handle] === resolution else {

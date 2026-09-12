@@ -2,13 +2,16 @@
 
 "use strict";
 
-const applyFunction = Reflect.apply;
-const definePropertyNormally = Object.defineProperty;
+import {
+    applyFunction,
+    definePropertyNormally,
+    getOwnPropertyDescriptorNormally,
+    TypeErrorConstructor,
+} from "./intrinsics";
+
 const getOwnPropertyNamesNormally = Object.getOwnPropertyNames;
-const getOwnPropertyDescriptorNormally = Object.getOwnPropertyDescriptor;
 const parseJSONNormally = JSON.parse;
 const stringifyJSONNormally = JSON.stringify;
-const TypeErrorConstructor = TypeError;
 
 function neutralizeSnapshot(value) {
     if (!value || typeof value !== "object") { return value; }

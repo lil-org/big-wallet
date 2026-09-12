@@ -13,6 +13,24 @@ private enum PopupRequestSessionsTestError: Error {
 @MainActor
 final class PopupRequestSessionsTests: XCTestCase {
 
+    func testSourceWalletEnvironmentReloadsAfterFailedInitialStart() {
+        var events = [String]()
+        let environment = SourcePopupWalletEnvironment(
+            startWalletsManager: {
+                events.append("start")
+                return false
+            },
+            reloadWalletsManager: {
+                events.append("reload")
+                return true
+            }
+        )
+
+        XCTAssertNil(environment.prepareForNewSession())
+        XCTAssertNotNil(environment.prepareForNewSession())
+        XCTAssertEqual(events, ["start", "reload"])
+    }
+
     func testSessionUsesFourDisposablePhasesAndOneReviewToken() throws {
         let session = try makeSession()
         let initialToken = session.reviewToken
@@ -835,8 +853,10 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: CompactPopupProcessor(),
-            managesWallets: true,
-            walletManagerStart: { false }
+            walletEnvironment: SourcePopupWalletEnvironment(
+                startWalletsManager: { false }
+            ),
+            loadsTransactionContext: false
         )
         let request = try popupCommand(
             subject: "getApprovalState",
@@ -879,11 +899,13 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            managesWallets: true,
-            walletManagerStart: {
-                walletStarts += 1
-                return true
-            }
+            walletEnvironment: SourcePopupWalletEnvironment(
+                startWalletsManager: {
+                    walletStarts += 1
+                    return true
+                }
+            ),
+            loadsTransactionContext: false
         )
 
         let disposition = await controller.materializeAfterAdmission(
@@ -911,11 +933,13 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: ProductionPopupRequestProcessor(),
-            managesWallets: true,
-            walletManagerStart: {
-                walletStarts += 1
-                return false
-            }
+            walletEnvironment: SourcePopupWalletEnvironment(
+                startWalletsManager: {
+                    walletStarts += 1
+                    return false
+                }
+            ),
+            loadsTransactionContext: false
         )
 
         let disposition = await controller.materializeAfterAdmission(
@@ -949,11 +973,13 @@ extension PopupRequestSessionsTests {
                 preparations += 1
                 return .response(request.response(error: .internalError))
             },
-            managesWallets: true,
-            walletManagerStart: {
-                walletStarts += 1
-                return false
-            }
+            walletEnvironment: SourcePopupWalletEnvironment(
+                startWalletsManager: {
+                    walletStarts += 1
+                    return false
+                }
+            ),
+            loadsTransactionContext: false
         )
 
         let disposition = await controller.materializeAfterAdmission(
@@ -981,11 +1007,13 @@ extension PopupRequestSessionsTests {
                 preparations += 1
                 return .response(request.response(error: .internalError))
             },
-            managesWallets: true,
-            walletManagerStart: {
-                walletStarts += 1
-                return true
-            }
+            walletEnvironment: SourcePopupWalletEnvironment(
+                startWalletsManager: {
+                    walletStarts += 1
+                    return true
+                }
+            ),
+            loadsTransactionContext: false
         )
 
         let disposition = await controller.materializeAfterAdmission(
@@ -1014,11 +1042,13 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            managesWallets: true,
-            walletManagerStart: {
-                walletStarts += 1
-                return true
-            }
+            walletEnvironment: SourcePopupWalletEnvironment(
+                startWalletsManager: {
+                    walletStarts += 1
+                    return true
+                }
+            ),
+            loadsTransactionContext: false
         )
 
         let disposition = await controller.materializeAfterAdmission(
@@ -1049,7 +1079,8 @@ extension PopupRequestSessionsTests {
                 preparations += 1
                 return .response(request.response(error: .internalError))
             },
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(),
+            loadsTransactionContext: false
         )
 
         let disposition = await controller.materializeAfterAdmission(
@@ -1075,11 +1106,13 @@ extension PopupRequestSessionsTests {
                 preparations += 1
                 return .response(request.response(error: .internalError))
             },
-            managesWallets: true,
-            walletManagerStart: {
-                XCTFail("A staged decision must not restart admission")
-                return false
-            }
+            walletEnvironment: SourcePopupWalletEnvironment(
+                startWalletsManager: {
+                    XCTFail("A staged decision must not restart admission")
+                    return false
+                }
+            ),
+            loadsTransactionContext: false
         )
 
         let disposition = await controller.materializeAfterAdmission(
@@ -1102,7 +1135,8 @@ extension PopupRequestSessionsTests {
             requestProcessor: CompactPopupProcessor { request in
                 .response(request.response(error: .userRejected))
             },
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(),
+            loadsTransactionContext: false
         )
         let stateRequest = try popupCommand(
             subject: "getApprovalState",
@@ -1158,7 +1192,8 @@ extension PopupRequestSessionsTests {
                     resolve: { _ in request.response(error: .userRejected) }
                 )))
             },
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(),
+            loadsTransactionContext: false
         )
         let request = try popupCommand(
             subject: "getApprovalState",
@@ -1193,7 +1228,8 @@ extension PopupRequestSessionsTests {
                     resolve: { _ in request.response(error: .userRejected) }
                 )))
             },
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(),
+            loadsTransactionContext: false
         )
         let request = try popupCommand(
             subject: "getApprovalState",
@@ -1254,7 +1290,8 @@ extension PopupRequestSessionsTests {
                     resolve: { _ in request.response(error: .userRejected) }
                 )))
             },
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(),
+            loadsTransactionContext: false
         )
         let stateRequest = try popupCommand(
             subject: "getApprovalState",
@@ -1321,6 +1358,7 @@ extension PopupRequestSessionsTests {
     }
 
     func testSelectionRefreshFailureReturnsCompactError() async throws {
+        var refreshEvents = [String]()
         let store = CompactPopupStore()
         let snapshot = try popupSnapshot(id: 21)
         await store.insert(snapshot)
@@ -1336,8 +1374,14 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            managesWallets: false,
-            selectionStateRefresh: { false }
+            walletEnvironment: TestPopupWalletEnvironment(
+                refresh: {
+                    refreshEvents.append("refresh")
+                    return false
+                }
+            ),
+            loadsTransactionContext: false,
+            invalidateNetworkCache: { refreshEvents.append("invalidate") }
         )
         let request = try popupCommand(
             subject: "getApprovalState",
@@ -1359,6 +1403,7 @@ extension PopupRequestSessionsTests {
         XCTAssertEqual(Set(response.keys), ["id", "state", "host", "error"])
         XCTAssertEqual(response["state"] as? String, "error")
         XCTAssertNil(response["reviewToken"])
+        XCTAssertEqual(refreshEvents, ["refresh", "invalidate"])
     }
 
     func testAccountSelectionRejectsDuplicateSameCoinAndWrongCoinAccountsBeforeClaim() async throws {
@@ -1409,17 +1454,19 @@ extension PopupRequestSessionsTests {
             let controller = PopupRequestSessions(
                 store: store,
                 requestProcessor: processor,
-                managesWallets: false,
-                selectionStateRefresh: { true },
-                selectionAccountResolver: { item in
-                    guard let account = accountsByAddress[item.address] else {
-                        return nil
+                walletEnvironment: TestPopupWalletEnvironment(
+                    refresh: { true },
+                    resolve: { item in
+                        guard let account = accountsByAddress[item.address] else {
+                            return nil
+                        }
+                        return SpecificWalletAccount(
+                            walletId: item.walletId,
+                            account: account
+                        )
                     }
-                    return SpecificWalletAccount(
-                        walletId: item.walletId,
-                        account: account
-                    )
-                }
+                ),
+                loadsTransactionContext: false
             )
             let token = try await materializeToken(
                 controller: controller,
@@ -1568,7 +1615,8 @@ extension PopupRequestSessionsTests {
                     resolve: { _ in request.response(error: .userRejected) }
                 )))
             },
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(),
+            loadsTransactionContext: false
         )
         let reject = try popupCommand(
             subject: "rejectRequest",
@@ -1606,7 +1654,8 @@ extension PopupRequestSessionsTests {
                         resolve: { _ in request.response(error: .userRejected) }
                     )))
                 },
-                managesWallets: false
+                walletEnvironment: TestPopupWalletEnvironment(),
+                loadsTransactionContext: false
             )
             let originalToken = try await materializeToken(
                 controller: controller,
@@ -1651,8 +1700,10 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            authenticationOverride: { _, _, _, completion in completion(false) },
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(
+                authenticate: { _, _, completion in completion(false) }
+            ),
+            loadsTransactionContext: false
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -1700,10 +1751,12 @@ extension PopupRequestSessionsTests {
                     resolve: { _ in request.response(error: .internalError) }
                 )))
             },
-            authenticationOverride: { _, _, _, _ in
-                XCTFail("Invalid deadline must fail before authentication")
-            },
-            managesWallets: false,
+            walletEnvironment: TestPopupWalletEnvironment(
+                authenticate: { _, _, _ in
+                    XCTFail("Invalid deadline must fail before authentication")
+                }
+            ),
+            loadsTransactionContext: false,
             clock: { now }
         )
         let token = try await materializeToken(
@@ -1764,16 +1817,21 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            authenticationOverride: { _, _, _, completion in
-                events.append("authenticate")
-                authenticationCompletion = completion
-            },
-            walletManagerStart: { true },
-            walletManagerReload: {
-                reloads += 1
-                events.append("reload")
-                return true
-            }
+            walletEnvironment: TestPopupWalletEnvironment(
+                base: SourcePopupWalletEnvironment(
+                    startWalletsManager: { true },
+                    reloadWalletsManager: {
+                        reloads += 1
+                        events.append("reload")
+                        return true
+                    }
+                ),
+                authenticate: { _, _, completion in
+                    events.append("authenticate")
+                    authenticationCompletion = completion
+                }
+            ),
+            loadsTransactionContext: false
         )
         let token = try await materializeToken(
             controller: controller,
@@ -1835,11 +1893,13 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            authenticationOverride: { _, _, _, completion in
-                authenticationCount += 1
-                completion(true)
-            },
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(
+                authenticate: { _, _, completion in
+                    authenticationCount += 1
+                    completion(true)
+                }
+            ),
+            loadsTransactionContext: false
         )
         let token = try await materializeToken(
             controller: controller,
@@ -1885,10 +1945,12 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            authenticationOverride: { _, _, _, completion in
-                authenticationCompletion = completion
-            },
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(
+                authenticate: { _, _, completion in
+                    authenticationCompletion = completion
+                }
+            ),
+            loadsTransactionContext: false
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -1949,11 +2011,13 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            authenticationOverride: { session, _, _, completion in
-                approvalSession = session
-                completion(true)
-            },
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(
+                authenticate: { session, _, completion in
+                    approvalSession = session
+                    completion(true)
+                }
+            ),
+            loadsTransactionContext: false
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -2009,8 +2073,10 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            authenticationOverride: { _, _, _, completion in completion(true) },
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(
+                authenticate: { _, _, completion in completion(true) }
+            ),
+            loadsTransactionContext: false
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -2067,11 +2133,13 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            managesWallets: false,
-            catalogAccess: { catalog },
-            unlockWalletAccess: { _ in
-                .unlocked(RequestScopedWalletAccess(catalog))
-            }
+            walletEnvironment: VaultPopupWalletEnvironment(
+                catalogAccess: { catalog },
+                unlockWalletAccess: { _ in
+                    .unlocked(RequestScopedWalletAccess(catalog))
+                }
+            ),
+            loadsTransactionContext: false
         )
         let token = try await materializeToken(
             controller: controller,
@@ -2134,13 +2202,15 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            managesWallets: false,
-            catalogAccess: { catalog },
-            unlockWalletAccess: { _ in
-                .unlocked(RequestScopedWalletAccess(catalog) {
-                    accessIsCurrent
-                })
-            }
+            walletEnvironment: VaultPopupWalletEnvironment(
+                catalogAccess: { catalog },
+                unlockWalletAccess: { _ in
+                    .unlocked(RequestScopedWalletAccess(catalog) {
+                        accessIsCurrent
+                    })
+                }
+            ),
+            loadsTransactionContext: false
         )
         let token = try await materializeToken(
             controller: controller,
@@ -2219,13 +2289,15 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            managesWallets: false,
-            catalogAccess: { catalog },
-            unlockWalletAccess: { _ in
-                authenticationStarted = true
-                await authenticationGate.wait()
-                return .unlocked(RequestScopedWalletAccess(catalog))
-            },
+            walletEnvironment: VaultPopupWalletEnvironment(
+                catalogAccess: { catalog },
+                unlockWalletAccess: { _ in
+                    authenticationStarted = true
+                    await authenticationGate.wait()
+                    return .unlocked(RequestScopedWalletAccess(catalog))
+                }
+            ),
+            loadsTransactionContext: false,
             clock: { now }
         )
         let token = try await materializeToken(
@@ -2288,9 +2360,11 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            managesWallets: false,
-            catalogAccess: { catalog },
-            unlockWalletAccess: { _ in .canceled }
+            walletEnvironment: VaultPopupWalletEnvironment(
+                catalogAccess: { catalog },
+                unlockWalletAccess: { _ in .canceled }
+            ),
+            loadsTransactionContext: false
         )
         let token = try await materializeToken(
             controller: controller,
@@ -2351,12 +2425,14 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            managesWallets: false,
-            catalogAccess: { currentCatalog },
-            unlockWalletAccess: { _ in
-                currentCatalog = nil
-                return .unavailable
-            }
+            walletEnvironment: VaultPopupWalletEnvironment(
+                catalogAccess: { currentCatalog },
+                unlockWalletAccess: { _ in
+                    currentCatalog = nil
+                    return .unavailable
+                }
+            ),
+            loadsTransactionContext: false
         )
         let token = try await materializeToken(
             controller: controller,
@@ -2433,8 +2509,14 @@ extension PopupRequestSessionsTests {
             let controller = PopupRequestSessions(
                 store: store,
                 requestProcessor: processor,
-                managesWallets: false,
-                catalogAccess: { currentCatalog }
+                walletEnvironment: VaultPopupWalletEnvironment(
+                    catalogAccess: { currentCatalog },
+                    unlockWalletAccess: { _ in
+                        XCTFail("Unexpected wallet unlock")
+                        return .unavailable
+                    }
+                ),
+                loadsTransactionContext: false
             )
             _ = try await materializeToken(
                 controller: controller,
@@ -2497,8 +2579,14 @@ extension PopupRequestSessionsTests {
             let controller = PopupRequestSessions(
                 store: store,
                 requestProcessor: processor,
-                managesWallets: false,
-                catalogAccess: { catalog }
+                walletEnvironment: VaultPopupWalletEnvironment(
+                    catalogAccess: { catalog },
+                    unlockWalletAccess: { _ in
+                        XCTFail("Unexpected wallet unlock")
+                        return .unavailable
+                    }
+                ),
+                loadsTransactionContext: false
             )
             let first = try popupSnapshot(id: 418)
             let next = try popupSnapshot(id: 419)
@@ -2547,8 +2635,14 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            managesWallets: false,
-            catalogAccess: { nil }
+            walletEnvironment: VaultPopupWalletEnvironment(
+                catalogAccess: { nil },
+                unlockWalletAccess: { _ in
+                    XCTFail("Unexpected wallet unlock")
+                    return .unavailable
+                }
+            ),
+            loadsTransactionContext: false
         )
         let stateRequest = try popupCommand(
             subject: "getApprovalState",
@@ -2596,8 +2690,10 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            authenticationOverride: { _, _, _, completion in completion(true) },
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(
+                authenticate: { _, _, completion in completion(true) }
+            ),
+            loadsTransactionContext: false
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -2674,11 +2770,13 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            authenticationOverride: { _, _, _, completion in
-                authenticationCompletion = completion
-            },
-            transactionApprovalOperations: operations,
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(
+                authenticate: { _, _, completion in
+                    authenticationCompletion = completion
+                }
+            ),
+            loadsTransactionContext: false,
+            transactionApprovalOperations: operations
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -2772,9 +2870,11 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            authenticationOverride: { _, _, _, completion in completion(true) },
-            transactionApprovalOperations: operations,
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(
+                authenticate: { _, _, completion in completion(true) }
+            ),
+            loadsTransactionContext: false,
+            transactionApprovalOperations: operations
         )
         let token = try await materializeToken(
             controller: controller,
@@ -2853,12 +2953,14 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            authenticationOverride: { _, _, _, completion in
-                authenticationCount += 1
-                completion(true)
-            },
-            transactionApprovalOperations: operations,
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(
+                authenticate: { _, _, completion in
+                    authenticationCount += 1
+                    completion(true)
+                }
+            ),
+            loadsTransactionContext: false,
+            transactionApprovalOperations: operations
         )
         let token = try await materializeToken(
             controller: controller,
@@ -2933,11 +3035,13 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            authenticationOverride: { _, _, _, completion in
-                completion(true)
-            },
-            transactionApprovalOperations: operations,
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(
+                authenticate: { _, _, completion in
+                    completion(true)
+                }
+            ),
+            loadsTransactionContext: false,
+            transactionApprovalOperations: operations
         )
         let token = try await materializeToken(
             controller: controller,
@@ -3001,9 +3105,11 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            authenticationOverride: { _, _, _, completion in completion(true) },
-            transactionApprovalOperations: operations,
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(
+                authenticate: { _, _, completion in completion(true) }
+            ),
+            loadsTransactionContext: false,
+            transactionApprovalOperations: operations
         )
         let firstToken = try await materializeToken(
             controller: controller,
@@ -3105,12 +3211,14 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            authenticationOverride: { _, _, _, completion in
-                authenticationCount += 1
-                completion(true)
-            },
-            transactionApprovalOperations: operations,
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(
+                authenticate: { _, _, completion in
+                    authenticationCount += 1
+                    completion(true)
+                }
+            ),
+            loadsTransactionContext: false,
+            transactionApprovalOperations: operations
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -3190,9 +3298,11 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            authenticationOverride: { _, _, _, completion in completion(true) },
-            transactionApprovalOperations: operations,
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(
+                authenticate: { _, _, completion in completion(true) }
+            ),
+            loadsTransactionContext: false,
+            transactionApprovalOperations: operations
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -3258,8 +3368,10 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            authenticationOverride: { _, _, _, completion in completion(true) },
-            managesWallets: false,
+            walletEnvironment: TestPopupWalletEnvironment(
+                authenticate: { _, _, completion in completion(true) }
+            ),
+            loadsTransactionContext: false,
             broadcastTimeoutNanoseconds: 1_000_000
         )
         let token = try await materializeToken(
@@ -3320,11 +3432,13 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            authenticationOverride: { _, _, _, completion in
-                authenticationCount += 1
-                completion(true)
-            },
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(
+                authenticate: { _, _, completion in
+                    authenticationCount += 1
+                    completion(true)
+                }
+            ),
+            loadsTransactionContext: false
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -3376,8 +3490,10 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            authenticationOverride: { _, _, _, completion in completion(true) },
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(
+                authenticate: { _, _, completion in completion(true) }
+            ),
+            loadsTransactionContext: false
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -3422,11 +3538,13 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            authenticationOverride: { _, _, _, completion in
-                authenticationCount += 1
-                completion(true)
-            },
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(
+                authenticate: { _, _, completion in
+                    authenticationCount += 1
+                    completion(true)
+                }
+            ),
+            loadsTransactionContext: false
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -3468,10 +3586,12 @@ extension PopupRequestSessionsTests {
         let controller = PopupRequestSessions(
             store: store,
             requestProcessor: processor,
-            authenticationOverride: { _, _, _, _ in
-                XCTFail("Stale approval must not authenticate")
-            },
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(
+                authenticate: { _, _, _ in
+                    XCTFail("Stale approval must not authenticate")
+                }
+            ),
+            loadsTransactionContext: false
         )
         let token = try await materializeToken(controller: controller, snapshot: snapshot)
         let approve = try popupCommand(
@@ -5197,7 +5317,8 @@ extension PopupRequestSessionsTests {
         return PopupRequestSessions(
             store: store,
             requestProcessor: CompactPopupProcessor(),
-            managesWallets: false
+            walletEnvironment: TestPopupWalletEnvironment(),
+            loadsTransactionContext: false
         )
     }
 
@@ -6082,4 +6203,74 @@ private func popupCommandValue(
         throw CocoaError(.coderInvalidValue)
     }
     return command
+}
+
+@MainActor
+private final class TestPopupWalletEnvironment: PopupWalletEnvironment {
+    private let base: PopupWalletEnvironment?
+    private let refresh: (() -> Bool)?
+    private let resolve: ((InternalSafariRequest.SelectedAccount) -> SpecificWalletAccount?)?
+    private let authenticate: ((PopupRequestSession, String, @escaping (Bool) -> Void) -> Void)?
+
+    init(
+        base: PopupWalletEnvironment? = nil,
+        refresh: (() -> Bool)? = nil,
+        resolve: ((InternalSafariRequest.SelectedAccount) -> SpecificWalletAccount?)? = nil,
+        authenticate: ((PopupRequestSession, String, @escaping (Bool) -> Void) -> Void)? = nil
+    ) {
+        self.base = base
+        self.refresh = refresh
+        self.resolve = resolve
+        self.authenticate = authenticate
+    }
+
+    var reviewPolicy: PopupWalletReviewPolicy {
+        base?.reviewPolicy ?? .liveSource
+    }
+
+    func prepareForNewSession() -> WalletAccess? {
+        if let base { return base.prepareForNewSession() }
+        return SourceWalletAccess.shared
+    }
+
+    func currentReviewAccess() -> WalletAccess? {
+        if let base { return base.currentReviewAccess() }
+        return SourceWalletAccess.shared
+    }
+
+    func refreshWallets() -> Bool {
+        if let refresh { return refresh() }
+        return base?.refreshWallets() ?? true
+    }
+
+    func resolveSelectedAccount(
+        _ item: InternalSafariRequest.SelectedAccount,
+        reviewedAccess: WalletAccess
+    ) -> SpecificWalletAccount? {
+        if let resolve { return resolve(item) }
+        return (base ?? SourcePopupWalletEnvironment()).resolveSelectedAccount(
+            item,
+            reviewedAccess: reviewedAccess
+        )
+    }
+
+    func unlock(
+        for session: PopupRequestSession,
+        reason: String
+    ) async -> WalletUnlockResult {
+        guard let authenticate else {
+            if let base { return await base.unlock(for: session, reason: reason) }
+            return .canceled
+        }
+        let succeeded = await withCheckedContinuation { continuation in
+            var completed = false
+            authenticate(session, reason) { succeeded in
+                guard !completed else { return }
+                completed = true
+                continuation.resume(returning: succeeded)
+            }
+        }
+        guard succeeded, let access = session.walletAccess else { return .canceled }
+        return .unlocked(RequestScopedWalletAccess(access))
+    }
 }
